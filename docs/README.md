@@ -89,7 +89,8 @@
    ```
    依賴策略詳見 [dependency_management.md](./01-guides/dependency_management.md)；若出現 WebRTC 問題，請參考 [webrtc_troubleshooting.md](./01-guides/webrtc_troubleshooting.md)。
 
-3. **設定連線與遠端 GPU**  
+3. **設定連線與遠端 GPU（每天開工的「刷卡」動作）**  
+   - **先跑 `connect_dog`**：這會刷新 `enp0s2` 的靜態 IP/路由並關閉 ufw。手動 `sudo ip addr add...` 的網卡設定是暫時性的，VM 每次重開都會遺失，所以每天登入 Ubuntu 後要先執行一次。  
    - 實機連線：`bash start_go2_simple.sh` → `ros2 topic list` 應收到低頻狀態  
    - 遠端 GPU：依 [remote_gpu_setup.md](./01-guides/remote_gpu_setup.md) 建置 Mac → Windows VM → RTX 8000 拓樸  
    - Nav2 驗證：`ros2 launch go2_robot_sdk robot.launch.py slam:=true nav2:=true`

@@ -7,6 +7,11 @@
 
 set -e
 
+# 若使用者以 bash 執行，重新以 zsh 啟動以避免 setup.zsh 語法錯誤
+if [ -z "$ZSH_VERSION" ]; then
+  exec /usr/bin/env zsh "$0" "$@"
+fi
+
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 WORKSPACE_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 
