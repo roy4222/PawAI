@@ -15,6 +15,7 @@ NC='\033[0m' # No Color
 # 專案路徑
 PROJECT_DIR="/home/roy422/ros2_ws/src/elder_and_dog"
 MAP_DIR="$PROJECT_DIR/src/go2_robot_sdk/maps"
+CONNECT_IF="${CONNECT_IF:-enp0s1}"   # 可透過環境變數覆蓋實際連狗的網卡
 
 # ROS2 環境載入函數
 load_ros_env() {
@@ -24,6 +25,8 @@ load_ros_env() {
     source install/setup.zsh
     export CONN_TYPE=webrtc
     export ROBOT_IP="192.168.12.1"
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    export CYCLONEDDS_URI=file:///home/roy422/cyclonedds.xml
     echo -e "${GREEN}✅ 環境已載入${NC}"
 }
 
@@ -48,10 +51,9 @@ step_env() {
 # ==========================================
 # Go2 機器狗網路配置 alias
 # ==========================================
-alias connect_dog='sudo ip addr flush dev enp0s2 && \
-sudo ip addr add 192.168.12.222/24 dev enp0s2 && \
-sudo ip link set enp0s2 up && \
-sudo ip route add 192.168.12.0/24 dev enp0s2 && \
+alias connect_dog='sudo ip addr flush dev enp0s1 && \
+sudo ip addr add 192.168.12.222/24 dev enp0s1 && \
+sudo ip link set enp0s1 up && \
 echo "✅ Go2 網路已配置完成 (192.168.12.222)"'
 EOF
         echo -e "${GREEN}✅ connect_dog alias 已寫入 ~/.zshrc${NC}"
@@ -62,11 +64,10 @@ EOF
 
     # 直接執行網卡配置（不管 alias 是否生效）
     echo -e "${YELLOW}配置網卡...${NC}"
-    sudo ip addr flush dev enp0s2
-    sudo ip addr add 192.168.12.222/24 dev enp0s2
-    sudo ip link set enp0s2 up
-    sudo ip route add 192.168.12.0/24 dev enp0s2
-    echo -e "${GREEN}✅ Go2 網路已配置完成 (192.168.12.222)${NC}"
+    sudo ip addr flush dev "$CONNECT_IF"
+    sudo ip addr add 192.168.12.222/24 dev "$CONNECT_IF"
+    sudo ip link set "$CONNECT_IF" up
+    echo -e "${GREEN}✅ Go2 網路已配置完成 (192.168.12.222) on $CONNECT_IF${NC}"
 
     # 測試雙通
     echo -e "${YELLOW}3. 測試網路連通性...${NC}"
@@ -83,7 +84,18 @@ EOF
         echo -e "${GREEN}   ✅ Go2 機器狗連線正常${NC}"
     else
         echo -e "${RED}   ❌ 無法連接 Go2 機器狗 (192.168.12.1)${NC}"
+        echo -e "${YELLOW}   請確認：${NC}"
+        echo -e "${YELLOW}     1. Mac 主機已連接 Go2-xxxx Wi-Fi${NC}"
+        echo -e "${YELLOW}     2. UTM Network 0 已橋接至 Wi-Fi (en0)${NC}"
         exit 1
+    fi
+
+    echo -e "${BLUE}   測試 Windows 連線...${NC}"
+    if ping -c 1 192.168.1.146 > /dev/null 2>&1; then
+        echo -e "${GREEN}   ✅ Windows 連線正常 (192.168.1.146)${NC}"
+    else
+        echo -e "${YELLOW}   ⚠️  無法連接 Windows (192.168.1.146)${NC}"
+        echo -e "${YELLOW}   Windows RViz2 可能無法使用，但實機測試可繼續${NC}"
     fi
 
     echo -e "${GREEN}========================================${NC}"
