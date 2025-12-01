@@ -26,8 +26,9 @@ load_ros_env() {
     export CONN_TYPE=webrtc
     export ROBOT_IP="192.168.12.1"
     export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    export CYCLONEDDS_URI=file:///home/roy422/cyclonedds.xml
-    echo -e "${GREEN}✅ 環境已載入${NC}"
+    # 若外部已設定 CYCLONEDDS_URI 則沿用，否則預設用 local_only_v2.xml 方便雙網卡環境
+    export CYCLONEDDS_URI="${CYCLONEDDS_URI:-/home/roy422/local_only_v2.xml}"
+    echo -e "${GREEN}✅ 環境已載入 (CycloneDDS: $CYCLONEDDS_URI)${NC}"
 }
 
 # 步驟零：環境檢查
@@ -115,11 +116,14 @@ step_t1() {
     echo -e "${BLUE}Terminal 1: 啟動 Go2 驅動${NC}"
     echo -e "${BLUE}========================================${NC}"
 
-    cd $PROJECT_DIR
+    # ⚠️ 關鍵修正：必須載入環境，否則 RMW/CYCLONEDDS 設定會丟失
+    load_ros_env
+
     echo -e "${YELLOW}執行: zsh start_go2_simple.sh${NC}"
     echo -e "${YELLOW}請等待看到 'Video frame received'...${NC}\n"
 
-    zsh start_go2_simple.sh
+    # 使用 source 而非 zsh，讓環境變數可以傳遞
+    source start_go2_simple.sh
 }
 
 # Terminal 2: 監控頻率
@@ -313,7 +317,7 @@ step_check() {
     echo -e "\n${BLUE}5. 檢查 Foxglove Bridge...${NC}"
     if ros2 node list | grep -q "foxglove_bridge"; then
         echo -e "   ${GREEN}✅ Foxglove Bridge 運行中${NC}"
-        echo -e "   ${YELLOW}   連線位址: ws://192.168.64.2:8765${NC}"
+        echo -e "   ${YELLOW}   連線位址: ws://192.168.1.200:8765 (家用網段)${NC}"
     else
         echo -e "   ${RED}❌ Foxglove Bridge 未運行${NC}"
     fi

@@ -5,7 +5,8 @@
       "Bash(pip show:*)",
       "Bash(git commit:*)",
       "Bash(find:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(git -C /home/roy422/ros2_ws/src/elder_and_dog show --stat 29538ea)"
     ],
     "deny": [],
     "ask": []

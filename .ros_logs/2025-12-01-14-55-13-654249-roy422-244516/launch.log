@@ -1,0 +1,63 @@
+1764600913.6548648 [INFO] [launch]: All log files can be found below /home/roy422/ros2_ws/src/elder_and_dog/.ros_logs/2025-12-01-14-55-13-654249-roy422-244516
+1764600913.6549909 [INFO] [launch]: Default logging verbosity is set to INFO
+1764600913.8236156 [INFO] [robot_state_publisher-1]: process started with pid [244517]
+1764600913.8237414 [INFO] [pointcloud_to_laserscan_node-2]: process started with pid [244519]
+1764600913.8237820 [INFO] [go2_driver_node-3]: process started with pid [244521]
+1764600913.8238156 [INFO] [lidar_to_pointcloud-4]: process started with pid [244523]
+1764600913.8238468 [INFO] [pointcloud_aggregator-5]: process started with pid [244529]
+1764600913.8238754 [INFO] [tts_node-6]: process started with pid [244531]
+1764600913.8692780 [tts_node-6] /usr/local/lib/python3.10/dist-packages/pydub/utils.py:170: RuntimeWarning: Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work
+1764600913.8693831 [tts_node-6]   warn("Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work", RuntimeWarning)
+1764600914.1984067 [pointcloud_aggregator-5] 1764600914.197913 [0] pointcloud: failed to enumerate interfaces for "udp": -1
+1764600914.1986439 [pointcloud_aggregator-5] [ERROR] [1764600914.197961116] [rmw_cyclonedds_cpp]: rmw_create_node: failed to create domain, error Error
+1764600914.1987236 [pointcloud_aggregator-5] 
+1764600914.1987953 [pointcloud_aggregator-5] >>> [rcutils|error_handling.c:108] rcutils_set_error_state()
+1764600914.1988661 [pointcloud_aggregator-5] This error state is being overwritten:
+1764600914.1989348 [pointcloud_aggregator-5] 
+1764600914.1990311 [pointcloud_aggregator-5]   'error not set, at ./src/rcl/node.c:263'
+1764600914.1990979 [pointcloud_aggregator-5] 
+1764600914.1991777 [pointcloud_aggregator-5] with this new error message:
+1764600914.1992471 [pointcloud_aggregator-5] 
+1764600914.1993134 [pointcloud_aggregator-5]   'rcl node's rmw handle is invalid, at ./src/rcl/node.c:415'
+1764600914.1993792 [pointcloud_aggregator-5] 
+1764600914.1994579 [pointcloud_aggregator-5] rcutils_reset_error() should be called after error handling to avoid this.
+1764600914.1995239 [pointcloud_aggregator-5] <<<
+1764600914.1995902 [pointcloud_aggregator-5] [ERROR] [1764600914.197990283] [rcl]: Failed to fini publisher for node: 1
+1764600914.1999578 [pointcloud_aggregator-5] Error running aggregator: error creating node: rcl node's rmw handle is invalid, at ./src/rcl/node.c:415
+1764600914.2276623 [INFO] [pointcloud_aggregator-5]: process has finished cleanly [pid 244529]
+1764600914.3606026 [tts_node-6] 1764600914.359501 [0]   tts_node: failed to enumerate interfaces for "udp": -1
+1764600914.3615463 [tts_node-6] [ERROR] [1764600914.361472943] [rmw_cyclonedds_cpp]: rmw_create_node: failed to create domain, error Error
+1764600914.3618391 [tts_node-6] 
+1764600914.3618872 [tts_node-6] >>> [rcutils|error_handling.c:108] rcutils_set_error_state()
+1764600914.3619220 [tts_node-6] This error state is being overwritten:
+1764600914.3619609 [tts_node-6] 
+1764600914.3619931 [tts_node-6]   'error not set, at ./src/rcl/node.c:263'
+1764600914.3620186 [tts_node-6] 
+1764600914.3620555 [tts_node-6] with this new error message:
+1764600914.3620872 [tts_node-6] 
+1764600914.3621209 [tts_node-6]   'rcl node's rmw handle is invalid, at ./src/rcl/node.c:415'
+1764600914.3621440 [tts_node-6] 
+1764600914.3621635 [tts_node-6] rcutils_reset_error() should be called after error handling to avoid this.
+1764600914.3621836 [tts_node-6] <<<
+1764600914.3623745 [tts_node-6] [ERROR] [1764600914.362317729] [rcl]: Failed to fini publisher for node: 1
+1764600914.3751731 [tts_node-6] ❌ TTS Node error: error creating node: rcl node's rmw handle is invalid, at ./src/rcl/node.c:415
+1764600914.7501581 [INFO] [tts_node-6]: process has finished cleanly [pid 244531]
+1764600914.8404872 [ERROR] [robot_state_publisher-1]: process has died [pid 244517, exit code -6, cmd '/opt/ros/humble/lib/robot_state_publisher/robot_state_publisher /home/roy422/ros2_ws/install/go2_robot_sdk/share/go2_robot_sdk/urdf/go2.urdf --ros-args -r __node:=go2_robot_state_publisher --params-file /tmp/launch_params_w856mb15'].
+1764600914.9348023 [lidar_to_pointcloud-4] 1764600914.934596 [0] lidar_to_p: failed to enumerate interfaces for "udp": -1
+1764600914.9348965 [lidar_to_pointcloud-4] [ERROR] [1764600914.934619705] [rmw_cyclonedds_cpp]: rmw_create_node: failed to create domain, error Error
+1764600914.9349566 [lidar_to_pointcloud-4] 
+1764600914.9350014 [lidar_to_pointcloud-4] >>> [rcutils|error_handling.c:108] rcutils_set_error_state()
+1764600914.9350336 [lidar_to_pointcloud-4] This error state is being overwritten:
+1764600914.9350617 [lidar_to_pointcloud-4] 
+1764600914.9350827 [lidar_to_pointcloud-4]   'error not set, at ./src/rcl/node.c:263'
+1764600914.9351082 [lidar_to_pointcloud-4] 
+1764600914.9351361 [lidar_to_pointcloud-4] with this new error message:
+1764600914.9351714 [lidar_to_pointcloud-4] 
+1764600914.9352033 [lidar_to_pointcloud-4]   'rcl node's rmw handle is invalid, at ./src/rcl/node.c:415'
+1764600914.9352238 [lidar_to_pointcloud-4] 
+1764600914.9352448 [lidar_to_pointcloud-4] rcutils_reset_error() should be called after error handling to avoid this.
+1764600914.9352851 [lidar_to_pointcloud-4] <<<
+1764600914.9353063 [lidar_to_pointcloud-4] [ERROR] [1764600914.934634621] [rcl]: Failed to fini publisher for node: 1
+1764600914.9354920 [lidar_to_pointcloud-4] Error running lidar processor: error creating node: rcl node's rmw handle is invalid, at ./src/rcl/node.c:415
+1764600914.9901743 [INFO] [lidar_to_pointcloud-4]: process has finished cleanly [pid 244523]
+1764600915.8638129 [ERROR] [pointcloud_to_laserscan_node-2]: process has died [pid 244519, exit code -6, cmd '/opt/ros/humble/lib/pointcloud_to_laserscan/pointcloud_to_laserscan_node --ros-args -r __node:=go2_pointcloud_to_laserscan --params-file /tmp/launch_params_ragcdv4s -r cloud_in:=point_cloud2 -r scan:=scan'].
