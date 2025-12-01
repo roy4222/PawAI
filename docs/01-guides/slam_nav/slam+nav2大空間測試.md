@@ -116,6 +116,23 @@ connect_dog
 
 ## ⚡ 快速模式：一鍵腳本（推薦新手）
 
+**⚠️ 重要提醒（2025/12/01 更新）：**
+
+如果使用 `phase1_test.sh` 遇到以下問題：
+- Terminal 2 執行 `ros2 topic list` 只看到 `/parameter_events` 和 `/rosout`
+- Terminal 2 執行 `ros2 topic hz /scan` 完全無輸出
+
+**原因：** 腳本尚未更新為新的 CycloneDDS 配置（`local_only_v2.xml`），導致雙網卡環境下 DDS 通訊失敗。
+
+**臨時解決方案：** 在每個終端手動設定環境變數：
+```bash
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+```
+
+**詳細說明請參考：** [問題 6：雙網卡環境下的 DDS 通訊問題](#問題-6雙網卡環境下的-dds-通訊問題)
+
+---
+
 如果你覺得手動貼指令太麻煩，可以使用自動化腳本 `phase1_test.sh`：
 
 ### **步驟 1：環境檢查（開機後執行一次即可）**
@@ -504,6 +521,127 @@ ros2 run nav2_map_server map_saver_cli -f /home/roy422/ros2_ws/src/elder_and_dog
 
 ---
 
+### 問題 6：雙網卡環境下的 DDS 通訊問題（🔥 重要！2025/12/01 新增）
+
+**症狀：**
+- Terminal 1 啟動 `go2_driver_node` 成功，可以看到 "Video frame received"
+- Terminal 2 執行 `ros2 node list` 可以看到 `go2_driver_node`（Discovery 成功）
+- Terminal 2 執行 `ros2 topic list` **只看到** `/parameter_events` 和 `/rosout`
+- Terminal 2 執行 `ros2 topic hz /scan` 完全無輸出（Data Transfer 失敗）
+
+**問題診斷：**
+
+1. **確認 Discovery 正常：**
+   ```bash
+   ros2 node list
+   # 如果看到 go2_driver_node，表示 Discovery 正常
+   ```
+
+2. **確認 Data Transfer 失敗：**
+   ```bash
+   ros2 topic list
+   # 如果只看到 /parameter_events 和 /rosout，表示 Data Transfer 失敗
+   ```
+
+3. **檢查網卡配置：**
+   ```bash
+   ip addr show | grep -E "^[0-9]|inet "
+   # 檢查是否有多個網卡和多個 IP
+   ```
+
+**根本原因：**
+
+VM 有多張網卡（`lo`、`enp0s1`、`enp0s2`），CycloneDDS 在沒有明確指定網卡時會自動選擇：
+- Terminal 1（驅動）可能選擇 `enp0s1`（Go2 網段）發送數據
+- Terminal 2（監控）可能選擇 `enp0s2`（家用網段）監聽數據
+- **結果：Discovery 封包透過 multicast 廣播成功，但 Data Transfer 走錯網卡**
+
+**解決方案：強制使用 Loopback（推薦）**
+
+**步驟 1：建立 loopback 配置檔案**
+
+```bash
+cat > /home/roy422/local_only_v2.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+    <Domain>
+        <General>
+            <Interfaces>
+                <NetworkInterface name="lo"/>
+            </Interfaces>
+            <AllowMulticast>false</AllowMulticast>
+        </General>
+        <Discovery>
+            <ParticipantIndex>auto</ParticipantIndex>
+            <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
+            <Peers>
+                <Peer address="127.0.0.1"/>
+            </Peers>
+        </Discovery>
+    </Domain>
+</CycloneDDS>
+EOF
+```
+
+**步驟 2：驗證配置（Talker/Listener 測試）**
+
+```bash
+# Terminal 1
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+ros2 run demo_nodes_cpp talker
+
+# Terminal 2（新終端）
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+ros2 run demo_nodes_cpp listener
+```
+
+**預期結果：** Listener 應該看到 "I heard: [Hello World: X]"
+
+**步驟 3：使用新配置啟動 Go2 驅動**
+
+```bash
+# Terminal 1
+cd ~/ros2_ws/src/elder_and_dog
+source /opt/ros/humble/setup.zsh
+source install/setup.zsh
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+export ROBOT_IP="192.168.12.1"
+export CONN_TYPE=webrtc
+
+ros2 launch go2_robot_sdk robot.launch.py slam:=false nav2:=false rviz2:=false foxglove:=false
+
+# Terminal 2（新終端）
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+ros2 topic list  # 應該看到所有 topics
+ros2 topic hz /scan  # 應該看到 ~7 Hz
+```
+
+**重要提醒：**
+- ⚠️ **所有 Terminal 必須使用相同的 `CYCLONEDDS_URI`**
+- ⚠️ 使用 loopback 配置後，**無法支援跨機器通訊**（如 Windows RViz2）
+- ⚠️ 如需跨機器通訊，需要建立新的 XML 配置（參考開發日誌 2025/12/01）
+
+**技術細節：**
+
+**為什麼 Discovery 成功但 Data Transfer 失敗？**
+- **Discovery（節點發現）：** 使用 UDP multicast，廣播到所有網卡
+- **Data Transfer（數據傳輸）：** 使用 unicast，必須指定正確的 IP 和網卡
+
+**CycloneDDS 新版語法（重要）：**
+- ❌ 舊語法（已棄用）：`<NetworkInterfaceAddress>127.0.0.1</NetworkInterfaceAddress>`
+- ✅ 新語法：`<Interfaces><NetworkInterface name="lo"/></Interfaces>`
+
+**參考資料：**
+- [CycloneDDS Issue #1434](https://github.com/eclipse-cyclonedds/cyclonedds/issues/1434)
+- [Configuration File Reference](https://cyclonedds.io/docs/cyclonedds/latest/config/config_file_reference.html)
+- 開發日誌：`docs/04-notes/dev_notes/2025-12-01-dev.md`
+
+---
+
 ## 📝 完成後的動作
 
 1. **記錄結果**：
@@ -537,7 +675,7 @@ source install/setup.zsh
 export CONN_TYPE=webrtc
 export ROBOT_IP="192.168.12.1"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI=/home/roy422/cyclonedds.xml
+export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml  # 使用 loopback 配置（2025/12/01 更新）
 ```
 
 **建議（可選）**：
@@ -621,7 +759,8 @@ export CYCLONEDDS_URI=/home/roy422/cyclonedds.xml
 - **測試報告模板**：`docs/03-testing/slam-phase1_test_results_ROY.md`
 
 ### 配置檔案
-- **VM CycloneDDS**：`~/cyclonedds.xml`
+- **VM CycloneDDS（開發用）**：`~/local_only_v2.xml`（強制 loopback，避免雙網卡問題，**2025/12/01 推薦**）
+- **VM CycloneDDS（跨機器）**：`~/cyclonedds.xml`（支援 Windows RViz2 連線，待開發）
 - **Windows CycloneDDS**：`C:\dev\cyclonedds.xml`
 - **RViz2 配置**：`go2_robot_sdk/config/single_robot_conf.rviz`
 
