@@ -197,6 +197,7 @@ step_t4() {
     echo -e "  ${BLUE}left${NC}     - 左轉 3 秒"
     echo -e "  ${BLUE}right${NC}    - 右轉 3 秒"
     echo -e "  ${BLUE}stop${NC}     - 停止"
+    echo -e "  ${BLUE}balance${NC}  - 平衡站立"
     echo -e "  ${BLUE}sit${NC}      - 趴下"
     echo -e "  ${BLUE}stand${NC}    - 站起來"
     echo -e "  ${BLUE}help${NC}     - 顯示所有指令"
@@ -232,7 +233,7 @@ step_t4() {
                 cd $PROJECT_DIR
                 zsh TEST.sh help
                 ;;
-            forward|backward|left|right|stop|sit|stand)
+            forward|backward|left|right|stop|balance|sit|stand)
                 echo -e "${BLUE}執行: $cmd${NC}"
                 cd $PROJECT_DIR
                 zsh TEST.sh $cmd
