@@ -357,6 +357,42 @@ step_check() {
     echo -e "${BLUE}========================================${NC}"
 }
 
+# ==========================================
+# MCP 相關步驟 (Phase 4+)
+# ==========================================
+
+# 啟動 rosbridge (MCP 通訊橋接)
+step_bridge() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}啟動 rosbridge (Port 9090)${NC}"
+    echo -e "${BLUE}========================================${NC}"
+
+    echo -e "${YELLOW}載入 ROS2 環境...${NC}"
+    source /opt/ros/humble/setup.zsh
+    export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    export CYCLONEDDS_URI=/home/roy422/local_only_v2.xml
+
+    echo -e "${GREEN}✅ 環境已載入${NC}"
+    echo -e "${YELLOW}啟動 rosbridge WebSocket server...${NC}"
+    echo -e "${YELLOW}Port: 9090${NC}\n"
+
+    ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+}
+
+# 啟動 MCP 模式 (Driver only, 不含 SLAM/Nav2)
+step_mcp() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}MCP 模式：啟動 Go2 Driver (精簡版)${NC}"
+    echo -e "${BLUE}========================================${NC}"
+
+    load_ros_env
+
+    echo -e "${YELLOW}啟動 Go2 Driver (不含 SLAM/Nav2)...${NC}"
+    echo -e "${YELLOW}適用於 Kilo Code / Claude Desktop MCP 控制${NC}\n"
+
+    ros2 launch go2_robot_sdk robot.launch.py slam:=false nav2:=false
+}
+
 # 主函數
 main() {
     case "$1" in
@@ -384,6 +420,12 @@ main() {
         check)
             step_check
             ;;
+        bridge)
+            step_bridge
+            ;;
+        mcp)
+            step_mcp
+            ;;
         *)
             echo -e "${BLUE}========================================${NC}"
             echo -e "${BLUE}Phase 1 自動化測試腳本${NC}"
@@ -397,16 +439,22 @@ main() {
             echo -e "  ${BLUE}t4${NC}        - Terminal 4：控制機器狗移動（互動模式）"
             echo -e "  ${BLUE}save_map${NC}  - 儲存地圖到 maps/phase1"
             echo -e "  ${BLUE}nav_test${NC}  - 測試 Nav2 自動導航"
-            echo -e "  ${BLUE}check${NC}     - 檢查所有項目狀態\n"
-            echo -e "${YELLOW}建議執行順序:${NC}"
+            echo -e "  ${BLUE}check${NC}     - 檢查所有項目狀態"
+            echo -e "  ${BLUE}bridge${NC}    - 🆕 啟動 rosbridge (Port 9090)"
+            echo -e "  ${BLUE}mcp${NC}       - 🆕 MCP 模式：Driver only (Kilo Code 用)\n"
+            echo -e "${YELLOW}建議執行順序（Phase 1 SLAM 測試）:${NC}"
             echo -e "  1. 單一終端執行: ${BLUE}zsh phase1_test.sh env${NC}"
             echo -e "  2. 開 Terminal 1: ${BLUE}zsh phase1_test.sh t1${NC}"
             echo -e "  3. 開 Terminal 2: ${BLUE}zsh phase1_test.sh t2${NC}"
             echo -e "  4. 開 Terminal 3: ${BLUE}zsh phase1_test.sh t3${NC}"
             echo -e "  5. 開 Terminal 4: ${BLUE}zsh phase1_test.sh t4${NC} (輸入 auto 自動建圖)"
             echo -e "  6. 任一終端:     ${BLUE}zsh phase1_test.sh save_map${NC}"
-            echo -e "  7. 任一終端:     ${BLUE}zsh phase1_test.sh nav_test${NC}"
-            echo -e "  8. 任一終端:     ${BLUE}zsh phase1_test.sh check${NC}\n"
+            echo -e "  7. 任一終端:     ${BLUE}zsh phase1_test.sh check${NC}\n"
+            echo -e "${YELLOW}MCP 模式（Kilo Code / Claude Desktop）:${NC}"
+            echo -e "  1. 單一終端執行: ${BLUE}zsh phase1_test.sh env${NC}"
+            echo -e "  2. 開 Terminal 1: ${BLUE}zsh phase1_test.sh bridge${NC}"
+            echo -e "  3. 開 Terminal 2: ${BLUE}zsh phase1_test.sh mcp${NC}"
+            echo -e "  4. 在 Kilo Code 中使用 ROS2專家 Mode\n"
             ;;
     esac
 }
