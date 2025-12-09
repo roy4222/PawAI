@@ -98,6 +98,24 @@ class SnapshotService(Node):
             encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
             _, jpeg_data = cv2.imencode('.jpg', resized, encode_params)
 
+            # === 新增：本地存檔功能 ===
+            import os
+            from datetime import datetime
+            
+            # 1. 存到固定路徑（方便快速檢視）
+            latest_path = '/tmp/snapshot_latest.jpg'
+            cv2.imwrite(latest_path, resized, encode_params)
+            
+            # 2. 存到帶時間戳的資料夾（保留歷史）
+            snapshot_dir = '/tmp/snapshots'
+            os.makedirs(snapshot_dir, exist_ok=True)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            history_path = f'{snapshot_dir}/snapshot_{timestamp}.jpg'
+            cv2.imwrite(history_path, resized, encode_params)
+            
+            self.get_logger().info(f'📸 Saved: {latest_path} & {history_path}')
+            # === 存檔功能結束 ===
+
             # Base64 encode
             b64_string = base64.b64encode(jpeg_data.tobytes()).decode('utf-8')
 
