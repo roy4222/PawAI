@@ -6,7 +6,7 @@ from typing import List
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, AndSubstitution, NotSubstitution
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import FrontendLaunchDescriptionSource, PythonLaunchDescriptionSource
@@ -86,6 +86,7 @@ class Go2NodeFactory:
             DeclareLaunchArgument('foxglove', default_value='true', description='Launch Foxglove Bridge'),
             DeclareLaunchArgument('joystick', default_value='true', description='Launch joystick'),
             DeclareLaunchArgument('teleop', default_value='true', description='Launch teleoperation'),
+            DeclareLaunchArgument('mcp_mode', default_value='false', description='MCP mode: enables snapshot_service, disables SLAM/Nav2'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -178,6 +179,8 @@ class Go2NodeFactory:
     
     def create_core_nodes(self) -> List[Node]:
         """Create core Go2 robot nodes"""
+        with_mcp_mode = LaunchConfiguration('mcp_mode', default='false')
+        
         return [
             # Main robot driver (clean architecture)
             Node(
@@ -229,6 +232,14 @@ class Go2NodeFactory:
                     'use_cache': True,
                     'audio_quality': 'standard'
                 }],
+            ),
+            # Snapshot service for MCP mode (captures camera images)
+            Node(
+                package='go2_robot_sdk',
+                executable='snapshot_service',
+                name='snapshot_service',
+                output='screen',
+                condition=IfCondition(with_mcp_mode),
             ),
         ]
     
@@ -290,6 +301,12 @@ class Go2NodeFactory:
         with_foxglove = LaunchConfiguration('foxglove', default='true')
         with_slam = LaunchConfiguration('slam', default='true')
         with_nav2 = LaunchConfiguration('nav2', default='true')
+        with_mcp_mode = LaunchConfiguration('mcp_mode', default='false')
+        
+        # SLAM/Nav2 enabled when: (slam/nav2=true) AND (mcp_mode=false)
+        # Uses AndSubstitution for robust boolean handling (works with True/true/1)
+        slam_enabled = AndSubstitution(with_slam, NotSubstitution(with_mcp_mode))
+        nav2_enabled = AndSubstitution(with_nav2, NotSubstitution(with_mcp_mode))
         
         foxglove_launch = os.path.join(
             get_package_share_directory('foxglove_bridge'),
@@ -302,25 +319,25 @@ class Go2NodeFactory:
                 FrontendLaunchDescriptionSource(foxglove_launch),
                 condition=IfCondition(with_foxglove),
             ),
-            # SLAM Toolbox
+            # SLAM Toolbox (enabled when slam=true AND mcp_mode=false)
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([
                     os.path.join(get_package_share_directory('slam_toolbox'),
                                 'launch', 'online_async_launch.py')
                 ]),
-                condition=IfCondition(with_slam),
+                condition=IfCondition(slam_enabled),
                 launch_arguments={
                     'slam_params_file': self.config.config_paths['slam'],
                     'use_sim_time': use_sim_time,
                 }.items(),
             ),
-            # Nav2
+            # Nav2 (enabled when nav2=true AND mcp_mode=false)
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource([
                     os.path.join(get_package_share_directory('nav2_bringup'),
                                 'launch', 'navigation_launch.py')
                 ]),
-                condition=IfCondition(with_nav2),
+                condition=IfCondition(nav2_enabled),
                 launch_arguments={
                     'params_file': self.config.config_paths['nav2'],
                     'use_sim_time': use_sim_time,
