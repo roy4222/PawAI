@@ -74,10 +74,10 @@
 
 | 動作 | MCP 指令 |
 |------|---------|
-| **前進** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"linear": {"x": 0.2}})` |
-| **後退** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"linear": {"x": -0.2}})` |
-| **左轉** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"angular": {"z": 0.3}})` |
-| **右轉** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"angular": {"z": -0.3}})` |
+| **前進** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"linear": {"x": 0.3}})` |
+| **後退** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"linear": {"x": -0.3}})` |
+| **左轉** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"angular": {"z": 0.5}})` |
+| **右轉** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"angular": {"z": -0.5}})` |
 | **停止** | `publish_once('/cmd_vel', 'geometry_msgs/Twist', {"linear": {"x": 0}, "angular": {"z": 0}})` |
 
 ---
@@ -90,8 +90,10 @@
 
 ```python
 call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', 
-             {"linear_x": 0.2, "angular_z": 0.0, "duration": 2.0})
+             {"linear_x": 0.3, "angular_z": 0.0, "duration": 2.0})
 ```
+
+> ⚠️ **重要：** Go2 需要 0.3 m/s 才會真正邁步行走！0.2 m/s 只會身體傾斜！
 
 ### 參數說明
 
@@ -105,10 +107,10 @@ call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration',
 
 | 動作 | 指令 |
 |------|------|
-| **前進 2 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"linear_x": 0.2, "duration": 2.0})` |
-| **後退 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"linear_x": -0.2, "duration": 1.0})` |
-| **左轉 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"angular_z": 0.3, "duration": 1.0})` |
-| **右轉 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"angular_z": -0.3, "duration": 1.0})` |
+| **前進 2 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"linear_x": 0.3, "duration": 2.0})` |
+| **後退 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"linear_x": -0.3, "duration": 1.0})` |
+| **左轉 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"angular_z": 0.5, "duration": 1.0})` |
+| **右轉 1 秒** | `call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', {"angular_z": -0.5, "duration": 1.0})` |
 
 > ⚠️ **預設使用此服務**：當使用者說「往前走 X 秒」時，優先使用 `/move_for_duration`，而非 `publish_once`。
 
