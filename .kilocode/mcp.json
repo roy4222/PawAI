@@ -1,1 +1,1 @@
-{"mcpServers":{"ros-mcp-server":{"command":"uvx","args":["ros-mcp","--transport","stdio"],"env":{"ROS_BRIDGE_URL":"ws://127.0.0.1:9090"},"disabled":false,"alwaysAllow":["get_topics","subscribe_once","get_services"]}}}
+{"mcpServers":{"ros-mcp-server":{"command":"uvx","args":["ros-mcp","--transport","stdio"],"env":{"ROS_BRIDGE_URL":"ws://127.0.0.1:9090"},"disabled":false,"alwaysAllow":["get_topics","subscribe_once","get_services","call_service","analyze_previously_received_image"]}}}
