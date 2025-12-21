@@ -47,20 +47,38 @@
 
 ---
 
-## 尋物流程（使用 find_object）
+## 尋物流程（迴圈修正版）
 
 ```
-使用者：「幫我找水瓶」
+使用者：「找到椅子，走過去打招呼」
 
-1. find_object(target='bottle', gpu_server_url='http://192.168.1.146:18001')
-2. 根據回傳：
-   - found=true → 「已找到水瓶，在正前方 0.8m」
-   - found=false → 「目前畫面中沒有看到水瓶」
-3. 移動到目標（**必須使用 0.3 m/s**）：
-   - call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration', 
-     {"linear_x": 0.3, "angular_z": 0.0, "duration": 2.0})
-   - ⚠️ **不要使用 find_object 回傳的 cmd_vel.linear_x (0.1)**，太慢！
+🔄 迴圈直到 distance_m < 0.5m 或最多 5 次：
+
+Step 1: find_object(target='chair')
+        ↓
+Step 2: 根據 direction 轉向
+        - "左側" → angular_z: 0.5, duration: 1.5 (左轉)
+        - "右側" → angular_z: -0.5, duration: 1.5 (右轉)
+        - "正前方" → 跳過轉向
+        ↓
+Step 3: find_object 再確認方向
+        ↓
+Step 4: 如果 "正前方" → 前進 (linear_x: 0.3, duration: 2.0)
+        ↓
+Step 5: 重複 Step 1-4 直到夠近
+
+最後: go2_perform_action(action='Hello')
 ```
+
+### 方向對應轉向
+
+| direction | angular_z | 說明 |
+|-----------|-----------|------|
+| "左側" | **+0.5** | 左轉 1.5 秒 |
+| "右側" | **-0.5** | 右轉 1.5 秒 |
+| "正前方" | 0 | 不轉，直接前進 |
+
+> ⚠️ **每次移動後都要 find_object 重新確認！** 這樣才能持續修正。
 
 ---
 
