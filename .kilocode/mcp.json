@@ -1,1 +1,31 @@
-{"mcpServers":{"ros-mcp-server":{"command":"uvx","args":["ros-mcp","--transport","stdio"],"env":{"ROS_BRIDGE_URL":"ws://127.0.0.1:9090"},"disabled":false,"alwaysAllow":["get_topics","subscribe_once","get_services","call_service","analyze_previously_received_image"]}}}
+{
+    "mcpServers": {
+        "ros-mcp-server": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/home/roy422/ros2_ws/src/elder_and_dog/ros-mcp-server",
+                "run",
+                "python3",
+                "server.py"
+            ],
+            "env": {
+                "ROSBRIDGE_IP": "127.0.0.1",
+                "ROSBRIDGE_PORT": "9090",
+                "GPU_SERVER_URL": "http://192.168.1.146:18001"
+            },
+            "disabled": false,
+            "alwaysAllow": [
+                "get_topics",
+                "subscribe_once",
+                "get_services",
+                "call_service",
+                "publish_once",
+                "find_object",
+                "go2_perform_action",
+                "check_gpu_server",
+                "list_go2_actions"
+            ]
+        }
+    }
+}

@@ -8,6 +8,12 @@ import time
 import uuid
 from typing import Any, Dict, List, Union
 
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+
 from fastmcp import Context, FastMCP
 from fastmcp.utilities.types import Image
 from PIL import Image as PILImage
@@ -3007,6 +3013,400 @@ def analyze_previously_received_image():
         return {"error": "No image found at ./camera/received_image.jpeg"}
     img = PILImage.open(path)
     return _encode_image_to_imagecontent(img)
+
+
+## ############################################################################################## ##
+##
+##                      GPU PERCEPTION API (YOLO + DA3)
+##
+## ############################################################################################## ##
+
+# Default GPU server URL - can be overridden via environment variable
+GPU_SERVER_URL = os.getenv("GPU_SERVER_URL", "http://140.136.155.5:8001")
+
+
+@mcp.tool(
+    description=(
+        "Find a specific object using GPU-accelerated vision model (YOLO-World + Depth Anything).\n"
+        "This tool captures a camera snapshot and sends it to the perception server.\n"
+        "Returns object location, distance (meters), direction, and movement commands.\n\n"
+        "Example:\n"
+        "find_object(target='bottle')  # Find a water bottle\n"
+        "find_object(target='cup', gpu_server_url='http://localhost:8001')  # Custom server URL\n\n"
+        "Common targets: bottle, cup, chair, person, backpack, laptop, phone, keys, glasses, remote"
+    )
+)
+async def find_object(
+    target: str,
+    camera_topic: str = "/camera/image_raw",
+    timeout: float = 30.0,
+    gpu_server_url: str = GPU_SERVER_URL,
+) -> dict:
+    """
+    Find a specific object using GPU perception server (YOLO-World + Depth Anything V2).
+
+    This tool:
+    1. Captures a snapshot from the robot's camera
+    2. Sends it to the GPU perception server for YOLO + depth analysis
+    3. Returns distance, direction, and navigation commands
+
+    Args:
+        target: Object name to find (e.g., 'bottle', 'cup', 'chair', 'person')
+        camera_topic: ROS camera topic to subscribe for image
+        timeout: API timeout in seconds
+        gpu_server_url: GPU perception server URL (default from env or 140.136.155.5:8001)
+
+    Returns:
+        dict with keys:
+            - found: bool - whether target was detected
+            - label: str - detected object label
+            - distance_m: float - distance in meters
+            - direction: str - direction ('左側', '正前方', '右側')
+            - cmd_vel: dict - suggested movement command
+            - message: str - human-readable description
+    """
+    # Check httpx availability
+    if not HTTPX_AVAILABLE:
+        return {
+            "success": False,
+            "error": "httpx library not installed",
+            "suggestion": "Run: uv pip install httpx"
+        }
+
+    # Validate input
+    if not target or not target.strip():
+        return {"success": False, "error": "Target object name cannot be empty"}
+
+    # Step 1: Capture camera image using /capture_snapshot service
+    # Using ws_manager.request() directly instead of call_service (which is a FunctionTool)
+    try:
+        import time
+        
+        # Call the capture_snapshot service via rosbridge
+        service_call_msg = {
+            "op": "call_service",
+            "service": "/capture_snapshot",
+            "type": "std_srvs/srv/Trigger",
+            "args": {}
+        }
+        
+        response = ws_manager.request(service_call_msg, timeout=10.0)
+        
+        if "error" in response:
+            return {
+                "success": False,
+                "error": f"Failed to capture camera image: {response['error']}",
+                "suggestion": "Ensure snapshot_service is running (zsh start_mcp.sh)"
+            }
+        
+        # Check if service call was successful
+        values = response.get("values", {})
+        if not values.get("success", False):
+            return {
+                "success": False,
+                "error": f"Snapshot service failed: {values.get('message', 'Unknown error')}",
+                "suggestion": "Ensure Go2 camera is publishing to /camera/image_raw"
+            }
+            
+    except Exception as e:
+        return {"success": False, "error": f"Camera snapshot failed: {str(e)}"}
+
+    # Step 2: Check if image file exists
+    # snapshot_service saves to /tmp/snapshot_latest.jpg
+    image_path = "/tmp/snapshot_latest.jpg"
+    if not os.path.exists(image_path):
+        return {
+            "success": False,
+            "error": "Camera image file not found after capture",
+            "suggestion": "Check if camera topic is publishing valid image data"
+        }
+
+    # Step 3: Send to GPU perception server
+    api_endpoint = f"{gpu_server_url}/find_object/summary"
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            with open(image_path, "rb") as img_file:
+                files = {"image": ("image.jpg", img_file, "image/jpeg")}
+                data = {"target": target}
+
+                response = await client.post(
+                    api_endpoint,
+                    files=files,
+                    data=data
+                )
+
+                response.raise_for_status()
+                result = response.json()
+
+                # Return structured result
+                return {
+                    "success": True,
+                    "found": result.get("found", False),
+                    "label": result.get("label", target),
+                    "distance_m": result.get("distance_m", 0.0),
+                    "direction": result.get("direction", "unknown"),
+                    "cmd_vel": result.get("cmd_vel", {"linear_x": 0.0, "angular_z": 0.0}),
+                    "message": result.get("message", ""),
+                    "server": gpu_server_url
+                }
+
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "error": f"GPU server timeout after {timeout}s",
+            "suggestion": "Check GPU server status or increase timeout",
+            "server": gpu_server_url
+        }
+    except httpx.ConnectError:
+        return {
+            "success": False,
+            "error": f"Cannot connect to GPU server at {gpu_server_url}",
+            "suggestion": "Ensure GPU server is running and accessible. If at home, set up SSH tunnel."
+        }
+    except httpx.HTTPStatusError as e:
+        return {
+            "success": False,
+            "error": f"GPU server HTTP error: {e.response.status_code}",
+            "details": e.response.text[:500] if e.response.text else "No details",
+            "server": gpu_server_url
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Unexpected error: {str(e)}",
+            "server": gpu_server_url
+        }
+
+
+# Go2 Robot Action Commands - API IDs for various actions
+# Source: go2_robot_sdk/domain/constants/robot_commands.py
+# Reference: https://wiki.theroboverse.com/en/unitree-go2-app-console-commands
+GO2_ACTIONS = {
+    # Basic movement
+    "StandUp": 1004,
+    "StandDown": 1005,
+    "RecoveryStand": 1006,
+    "Sit": 1009,
+    "RiseSit": 1010,
+    "StopMove": 1003,
+    "BalanceStand": 1002,
+    
+    # Interactive actions (Demo favorites!)
+    "Hello": 1016,           # Wave hello
+    "Stretch": 1017,         # Stretch like waking up
+    "Dance1": 1022,          # Dance routine 1
+    "Dance2": 1023,          # Dance routine 2
+    "WiggleHips": 1033,      # Wiggle hips
+    "FingerHeart": 1036,     # Make heart gesture with paw
+    "Wallow": 1021,          # Roll around
+    "Scrape": 1029,          # Scrape ground
+    
+    # Advanced tricks
+    "FrontFlip": 1030,       # Front flip (risky!)
+    "FrontJump": 1031,       # Jump forward
+    "FrontPounce": 1032,     # Pounce forward
+    "Handstand": 1301,       # Handstand
+    "MoonWalk": 1305,        # Moonwalk
+    "Bound": 1304,           # Bounding motion
+    
+    # Gait control
+    "EconomicGait": 1035,
+    "FreeWalk": 1045,
+    "CrossWalk": 1051,
+}
+
+# Actions safe for demo/LLM control (no dangerous stunts)
+# SAFETY: Dangerous actions like FrontFlip require demo_mode=False to be explicitly disabled
+SAFE_ACTIONS = {
+    "StandUp", "StandDown", "RecoveryStand", "Sit", "RiseSit", "StopMove", "BalanceStand",
+    "Hello", "Stretch", "Dance1", "Dance2", "WiggleHips", "FingerHeart", "Wallow", "Scrape",
+    "EconomicGait", "FreeWalk", "CrossWalk",
+}
+
+# Dangerous actions that require explicit opt-in
+DANGEROUS_ACTIONS = {
+    "FrontFlip", "FrontJump", "FrontPounce", "Handstand", "MoonWalk", "Bound",
+}
+
+
+@mcp.tool(
+    description=(
+        "Command Go2 robot to perform a predefined action or trick.\n"
+        "This directly triggers the robot's built-in action library.\n\n"
+        "Example:\n"
+        "go2_perform_action(action='Hello')      # Wave hello\n"
+        "go2_perform_action(action='Dance1')     # Dance routine\n"
+        "go2_perform_action(action='FingerHeart') # Make heart with paw\n\n"
+        "Safe actions: Hello, Stretch, Dance1, Dance2, WiggleHips, FingerHeart, Wallow\n"
+        "Basic: StandUp, StandDown, Sit, RecoveryStand, StopMove\n"
+        "Advanced (require demo_mode=False): FrontFlip, FrontJump, Handstand, MoonWalk, Bound"
+    )
+)
+def go2_perform_action(
+    action: str,
+    webrtc_topic: str = "/webrtc_req",
+    demo_mode: bool = True,
+) -> dict:
+    """
+    Command Go2 robot to perform a predefined action.
+
+    This tool sends an action command to the Go2 robot via WebRTC.
+    The robot must be connected and the go2_driver_node must be running.
+
+    Args:
+        action: Action name (e.g., 'Hello', 'Dance1', 'FingerHeart')
+        webrtc_topic: ROS topic for WebRTC requests (default: /webrtc_req)
+        demo_mode: If True (default), blocks dangerous actions like FrontFlip
+
+    Returns:
+        dict with success status and action details
+    """
+    # Validate input
+    if not action or not action.strip():
+        return {"success": False, "error": "Action name cannot be empty"}
+
+    # Normalize action name (case-insensitive lookup)
+    action_normalized = action.strip()
+    
+    # Find matching action (case-insensitive)
+    api_id = None
+    matched_action = None
+    for cmd_name, cmd_id in GO2_ACTIONS.items():
+        if cmd_name.lower() == action_normalized.lower():
+            api_id = cmd_id
+            matched_action = cmd_name
+            break
+
+    if api_id is None:
+        available_actions = ", ".join(sorted(GO2_ACTIONS.keys()))
+        return {
+            "success": False,
+            "error": f"Unknown action '{action}'",
+            "available_actions": available_actions,
+            "suggestion": "Try one of: Hello, Dance1, FingerHeart, StandUp, Sit",
+        }
+
+    # SAFETY CHECK: Block dangerous actions in demo mode
+    if demo_mode and matched_action in DANGEROUS_ACTIONS:
+        return {
+            "success": False,
+            "error": f"Action '{matched_action}' is blocked in demo mode (safety)",
+            "suggestion": "Use demo_mode=False to enable dangerous actions",
+            "warning": "Dangerous actions may cause robot falls or damage!",
+        }
+
+    # Build WebRTC request message
+    # Format: go2_interfaces/msg/WebRtcReq
+    webrtc_msg = {
+        "id": 0,  # Auto-assign
+        "topic": "rt/api/sport/request",  # Go2 sport mode topic
+        "api_id": api_id,
+        "parameter": "",  # Most actions don't need parameters
+        "priority": 0,
+    }
+
+    # Publish to WebRTC request topic using ws_manager directly
+    # (Cannot call publish_once as it's a FunctionTool object)
+    msg_type = "go2_interfaces/msg/WebRtcReq"
+    
+    try:
+        # 1. Advertise the topic
+        advertise_msg = {"op": "advertise", "topic": webrtc_topic, "type": msg_type}
+        ws_manager.send(advertise_msg)
+        
+        # Small delay for rosbridge to process
+        import time
+        time.sleep(0.1)
+        
+        # 2. Publish the message
+        publish_msg = {"op": "publish", "topic": webrtc_topic, "msg": webrtc_msg}
+        send_error = ws_manager.send(publish_msg)
+        
+        if send_error:
+            # Unadvertise before returning error
+            ws_manager.send({"op": "unadvertise", "topic": webrtc_topic})
+            return {
+                "success": False,
+                "action": matched_action,
+                "api_id": api_id,
+                "error": f"Failed to publish: {send_error}",
+                "suggestion": "Ensure rosbridge and go2_driver_node are running"
+            }
+        
+        # Small delay for message processing
+        time.sleep(0.1)
+        
+        # 3. Unadvertise the topic
+        unadvertise_msg = {"op": "unadvertise", "topic": webrtc_topic}
+        ws_manager.send(unadvertise_msg)
+
+        return {
+            "success": True,
+            "action": matched_action,
+            "api_id": api_id,
+            "message": f"Action '{matched_action}' triggered successfully",
+        }
+
+    except Exception as e:
+        # Try to unadvertise on error
+        try:
+            ws_manager.send({"op": "unadvertise", "topic": webrtc_topic})
+        except Exception:
+            pass
+        return {
+            "success": False,
+            "action": matched_action,
+            "api_id": api_id,
+            "error": f"Failed to send action: {str(e)}",
+        }
+
+
+@mcp.tool(
+    description=(
+        "Check if GPU perception server is reachable.\n"
+        "Example: check_gpu_server()\n"
+        "Example: check_gpu_server(gpu_server_url='http://localhost:8001')"
+    )
+)
+async def check_gpu_server(gpu_server_url: str = GPU_SERVER_URL) -> dict:
+    """Quick health check for GPU perception server."""
+    if not HTTPX_AVAILABLE:
+        return {"status": "error", "error": "httpx not installed"}
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{gpu_server_url}/")
+            return {
+                "status": "online",
+                "http_code": response.status_code,
+                "server": gpu_server_url
+            }
+    except httpx.ConnectError:
+        return {"status": "offline", "error": "Connection refused", "server": gpu_server_url}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "server": gpu_server_url}
+
+
+@mcp.tool(
+    description=(
+        "List all available Go2 robot actions.\n"
+        "Returns categorized list of actions the robot can perform."
+    )
+)
+def list_go2_actions() -> dict:
+    """Return a categorized list of all available Go2 actions."""
+    categories = {
+        "Interactive": ["Hello", "Stretch", "Dance1", "Dance2", "WiggleHips", "FingerHeart", "Wallow", "Scrape"],
+        "Basic": ["StandUp", "StandDown", "Sit", "RiseSit", "RecoveryStand", "StopMove", "BalanceStand"],
+        "Advanced": ["FrontFlip", "FrontJump", "FrontPounce", "Handstand", "MoonWalk", "Bound"],
+        "Gait": ["EconomicGait", "FreeWalk", "CrossWalk"],
+    }
+    return {
+        "total_actions": len(GO2_ACTIONS),
+        "categories": categories,
+        "all_actions": sorted(GO2_ACTIONS.keys()),
+    }
 
 
 def parse_arguments():
