@@ -15,9 +15,9 @@
 
 | Tool | 功能 | 範例 |
 |------|------|------|
-| **find_object** | 拍照 + GPU 感知 → 回傳距離、方向 | `find_object(target='bottle', gpu_server_url='http://192.168.1.146:18001')` |
+| **find_object** | 拍照 + GPU 感知 → 回傳距離、方向 | `find_object(target='chair')` |
 | **go2_perform_action** | 執行預設動作（Hello, Dance1 等） | `go2_perform_action(action='Hello')` |
-| **check_gpu_server** | 檢查 GPU Server 連線 | `check_gpu_server(gpu_server_url='...')` |
+| **check_gpu_server** | 檢查 GPU Server 連線 | `check_gpu_server()` |
 | **list_go2_actions** | 列出可用動作 | `list_go2_actions()` |
 
 ### find_object 回傳格式
@@ -127,10 +127,12 @@ call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration',
 
 ## GPU Server URL
 
-| 環境 | URL |
-|------|-----|
-| **開發環境（在家）** | `http://192.168.1.146:18001` |
-| **Demo 現場（學校）** | `http://140.136.155.5:8001` |
+| 環境 | URL | 說明 |
+|------|-----|------|
+| **開發環境（在家）** | `http://192.168.1.146:8001` | 透過 Windows SSH Tunnel |
+| **Demo 現場（學校）** | `http://140.136.155.5:8001` | 直連 GPU Server |
+
+> ⚠️ **Port 是 8001**，不是 8050 或 18001！
 
 ---
 
@@ -158,5 +160,5 @@ call_service('/move_for_duration', 'go2_interfaces/srv/MoveForDuration',
 
 ---
 
-**文件版本：** v3.0 (MCP Tools Integration)  
-**最後更新：** 2025/12/21
+**文件版本：** v3.1 (GPU Server URL Update)  
+**最後更新：** 2025/12/31

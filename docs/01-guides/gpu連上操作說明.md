@@ -12,7 +12,6 @@
 | **IP** | `140.136.155.5` |
 | **Port** | `8022` |
 | **帳號** | `roy422` |
-| **密碼** | `ioqSF9rrmB4` |
 
 > ⚠️ **此為敏感資訊，請勿外洩**
 
@@ -27,6 +26,33 @@ ssh roy422@140.136.155.5 -p 8022
 ```
 
 第一次連線會問是否信任主機，輸入 `yes`，然後輸入密碼（密碼不會顯示）。
+
+### SSH Tunnel（在家連線必用）
+
+> 💡 用途：讓本機可以存取 GPU Server 上的 FastAPI 服務（Port 8050）
+
+```bash
+# Windows PowerShell / Mac Terminal
+ssh -L 8050:localhost:8050 GPUServer
+```
+
+**說明：**
+- `-L 8050:localhost:8050`：本機 8050 Port → GPU Server 8050 Port
+- 保持此視窗開啟，Tunnel 才會持續運作
+- 連線後可在另一個終端測試：`curl http://localhost:8050/health`
+
+**SSH Config 設定（簡化指令）：**
+
+在 `~/.ssh/config` 加入：
+
+```
+Host GPUServer
+    HostName 140.136.155.5
+    User roy422
+    Port 8022
+```
+
+設定後只需輸入 `ssh GPUServer` 或 `ssh -L 8050:localhost:8050 GPUServer` 即可。
 
 ### 驗證 GPU 狀態
 
