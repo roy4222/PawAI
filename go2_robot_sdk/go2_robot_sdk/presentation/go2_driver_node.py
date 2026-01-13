@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import asyncio
+import json
 import logging
 import os
 from typing import Dict, Any
@@ -31,6 +32,7 @@ from sensor_msgs.msg import (
 from nav_msgs.msg import Odometry
 
 from ..domain.entities import RobotConfig, RobotData, CameraData
+from ..domain.constants import RTC_TOPIC
 from ..application.services import RobotDataService, RobotControlService
 from ..infrastructure.ros2 import ROS2Publisher
 from ..infrastructure.webrtc import WebRTCAdapter
@@ -108,6 +110,7 @@ class Go2DriverNode(Node):
                 ("publish_raw_image", False),
                 ("publish_compressed_image", True),
                 ("jpeg_quality", 80),
+                ("enable_lidar", True),
             ],
         )
 
@@ -143,6 +146,9 @@ class Go2DriverNode(Node):
             jpeg_quality=self.get_parameter("jpeg_quality")
             .get_parameter_value()
             .integer_value,
+            enable_lidar=self.get_parameter("enable_lidar")
+            .get_parameter_value()
+            .bool_value,
         )
 
         # Log configuration
@@ -158,6 +164,7 @@ class Go2DriverNode(Node):
             f"Publish compressed image: {config.publish_compressed_image}"
         )
         self.get_logger().info(f"JPEG quality: {config.jpeg_quality}")
+        self.get_logger().info(f"Enable lidar: {config.enable_lidar}")
 
         return config
 
@@ -375,6 +382,16 @@ class Go2DriverNode(Node):
     def _on_robot_validated(self, robot_id: str) -> None:
         """Callback after robot validation"""
         self.get_logger().info(f"Robot {robot_id} validated and ready")
+
+        if self.config.enable_lidar:
+            self.get_logger().info("Enabling LiDAR stream via WebRTC")
+            self.robot_control_service.handle_webrtc_request(
+                api_id=0,
+                parameter_str=json.dumps("on"),
+                topic=RTC_TOPIC["ULIDAR_SWITCH"],
+                msg_id="0",
+                robot_id=robot_id,
+            )
 
     def _on_robot_data_received(self, msg: Dict[str, Any], robot_id: str) -> None:
         """Callback for receiving data from robot"""

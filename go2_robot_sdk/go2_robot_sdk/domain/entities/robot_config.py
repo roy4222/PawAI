@@ -19,6 +19,7 @@ class RobotConfig:
     publish_raw_image: bool
     publish_compressed_image: bool
     jpeg_quality: int
+    enable_lidar: bool
     conn_mode: str  # 'single' or 'multi'
 
     @classmethod
@@ -34,6 +35,7 @@ class RobotConfig:
         publish_raw_image: bool,
         publish_compressed_image: bool,
         jpeg_quality: int,
+        enable_lidar: bool,
     ):
         """Создание конфигурации из параметров"""
         robot_ip_list = robot_ip.replace(" ", "").split(",")
@@ -54,5 +56,6 @@ class RobotConfig:
             publish_raw_image=publish_raw_image,
             publish_compressed_image=publish_compressed_image,
             jpeg_quality=jpeg_quality,
+            enable_lidar=enable_lidar,
             conn_mode=conn_mode,
         )
