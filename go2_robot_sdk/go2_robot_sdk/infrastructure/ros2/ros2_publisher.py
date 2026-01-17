@@ -224,7 +224,7 @@ class ROS2Publisher(IRobotDataPublisher):
             )
 
             point_cloud = PointCloud2()
-            point_cloud.header = Header(frame_id="odom")
+            point_cloud.header = Header(frame_id="base_link")
             point_cloud.header.stamp = self.node.get_clock().now().to_msg()
 
             fields = [

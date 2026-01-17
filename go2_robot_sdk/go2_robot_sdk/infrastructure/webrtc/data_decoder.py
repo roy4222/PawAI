@@ -24,6 +24,11 @@ except ImportError:
         OriginalLidarDecoder = None
         USING_LZ4_DECODER = False
 
+try:
+    from ..sensors.lidar_decoder import LidarDecoder as WasmLidarDecoder
+except ImportError:
+    WasmLidarDecoder = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -211,11 +216,15 @@ def get_data_decoder(enable_lidar: bool = True) -> WebRTCDataDecoder:
     return _global_decoder
 
 
-# Create a global decoder instance for backward compatibility
 try:
     _global_lidar_decoder = OriginalLidarDecoder() if OriginalLidarDecoder else None
-except:
+except Exception:
     _global_lidar_decoder = None
+
+try:
+    _global_wasm_decoder = WasmLidarDecoder() if WasmLidarDecoder else None
+except Exception:
+    _global_wasm_decoder = None
 
 
 # Backward compatibility function
@@ -248,10 +257,23 @@ def deal_array_buffer(
             obj = json.loads(json_str)
 
             if compressed_data:
-                decoded_data = _global_lidar_decoder.decode(
-                    compressed_data, obj["data"]
-                )
+                data = obj.get("data", {})
+                if USING_LZ4_DECODER and _global_wasm_decoder:
+                    try:
+                        decoded_data = _global_wasm_decoder.decode(
+                            compressed_data, data
+                        )
+                        logger.info("Decoded LiDAR using WASM decoder")
+                    except Exception:
+                        decoded_data = _global_lidar_decoder.decode(
+                            compressed_data, data
+                        )
+                        logger.info("Decoded LiDAR using LZ4 decoder fallback")
+                else:
+                    decoded_data = _global_lidar_decoder.decode(compressed_data, data)
+                    logger.info("Decoded LiDAR using default decoder")
                 obj["decoded_data"] = decoded_data
+
             else:
                 obj["compressed_data"] = compressed_data
             return obj

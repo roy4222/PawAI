@@ -39,8 +39,22 @@ def bits_to_points(buf: bytes, origin: list, resolution: float = 0.05) -> np.nda
 class LidarDecoderLz4:
     def decode(self, compressed_data: bytes, data: Dict[str, Any]) -> Dict[str, Any]:
         decompressed = decompress(compressed_data, data["src_size"])
-        points = bits_to_points(decompressed, data["origin"], data["resolution"])
-        return {"points": points}
+        origin = np.array(data.get("origin", [0.0, 0.0, 0.0]), dtype=np.float32)
+        resolution = float(data.get("resolution", 0.0))
+        points = bits_to_points(decompressed, origin.tolist(), resolution)
+
+        if points.size == 0 or resolution <= 0.0:
+            empty = np.empty((0,), dtype=np.float32)
+            return {"positions": empty, "uvs": empty, "point_count": 0}
+
+        voxel_points = (points - origin) / resolution
+        positions = voxel_points.astype(np.float32).reshape(-1)
+        uvs = np.ones((voxel_points.shape[0], 2), dtype=np.float32).reshape(-1)
+        return {
+            "positions": positions,
+            "uvs": uvs,
+            "point_count": voxel_points.shape[0],
+        }
 
 
 LidarDecoder = LidarDecoderLz4

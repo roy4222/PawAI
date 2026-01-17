@@ -56,6 +56,9 @@ def update_meshes_for_cloud2(
     filtered_points = positions_with_intensities[
         positions_with_intensities[:, -1] > intense_limiter
     ]
+    if filtered_points.size == 0:
+        filtered_points = positions_with_intensities
+
     unique_points = np.unique(filtered_points, axis=0)
 
     return unique_points

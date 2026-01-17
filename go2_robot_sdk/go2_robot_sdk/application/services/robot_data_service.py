@@ -5,7 +5,14 @@ import logging
 import math
 from typing import Dict, Any
 
-from ...domain.entities import RobotData, RobotState, IMUData, OdometryData, JointData, LidarData
+from ...domain.entities import (
+    RobotData,
+    RobotState,
+    IMUData,
+    OdometryData,
+    JointData,
+    LidarData,
+)
 from ...domain.interfaces import IRobotDataPublisher
 from ...domain.constants import RTC_TOPIC
 
@@ -21,7 +28,7 @@ class RobotDataService:
     def process_webrtc_message(self, msg: Dict[str, Any], robot_id: str) -> None:
         """Process WebRTC message"""
         try:
-            topic = msg.get('topic')
+            topic = msg.get("topic")
             robot_data = RobotData(robot_id=robot_id, timestamp=0.0)
 
             if topic == RTC_TOPIC["ULIDAR_ARRAY"]:
@@ -49,43 +56,79 @@ class RobotDataService:
         try:
             decoded_data = msg.get("decoded_data", {})
             data = msg.get("data", {})
-            
+
+            positions = decoded_data.get("positions")
+            uvs = decoded_data.get("uvs")
+            if (positions is None or uvs is None) and decoded_data.get(
+                "points"
+            ) is not None:
+                positions = decoded_data.get("points")
+                uvs = decoded_data.get("points")
+
+            resolution = data.get("resolution", 0.0)
+            origin = data.get("origin", [0.0, 0.0, 0.0])
+            stamp = data.get("stamp", 0.0)
+
+            if positions is None or uvs is None:
+                logger.error(
+                    "LiDAR decode missing positions/uvs (resolution=%s, origin=%s)",
+                    resolution,
+                    origin,
+                )
+            else:
+                logger.info(
+                    "LiDAR decoded points: positions=%s uvs=%s",
+                    len(positions),
+                    len(uvs),
+                )
+
             robot_data.lidar_data = LidarData(
-                positions=decoded_data.get("positions"),
-                uvs=decoded_data.get("uvs"),
-                resolution=data.get("resolution", 0.0),
-                origin=data.get("origin", [0.0, 0.0, 0.0]),
-                stamp=data.get("stamp", 0.0),
+                positions=positions,
+                uvs=uvs,
+                resolution=resolution,
+                origin=origin,
+                stamp=stamp,
                 width=data.get("width"),
                 src_size=data.get("src_size"),
-                compressed_data=msg.get("compressed_data")
+                compressed_data=msg.get("compressed_data"),
             )
         except Exception as e:
             logger.error(f"Error processing lidar data: {e}")
 
-    def _process_odometry_data(self, msg: Dict[str, Any], robot_data: RobotData) -> None:
+    def _process_odometry_data(
+        self, msg: Dict[str, Any], robot_data: RobotData
+    ) -> None:
         """Process odometry data"""
         try:
-            pose_data = msg['data']['pose']
-            position = pose_data['position']
-            orientation = pose_data['orientation']
+            pose_data = msg["data"]["pose"]
+            position = pose_data["position"]
+            orientation = pose_data["orientation"]
 
             # Data validation
-            pos_vals = [position['x'], position['y'], position['z']]
-            rot_vals = [orientation['x'], orientation['y'], orientation['z'], orientation['w']]
+            pos_vals = [position["x"], position["y"], position["z"]]
+            rot_vals = [
+                orientation["x"],
+                orientation["y"],
+                orientation["z"],
+                orientation["w"],
+            ]
 
-            if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in pos_vals + rot_vals):
+            if not all(
+                isinstance(v, (int, float)) and math.isfinite(v)
+                for v in pos_vals + rot_vals
+            ):
                 logger.warning("Invalid odometry data - skipping")
                 return
 
             robot_data.odometry_data = OdometryData(
-                position=position,
-                orientation=orientation
+                position=position, orientation=orientation
             )
         except Exception as e:
             logger.error(f"Error processing odometry data: {e}")
 
-    def _process_sport_mode_state(self, msg: Dict[str, Any], robot_data: RobotData) -> None:
+    def _process_sport_mode_state(
+        self, msg: Dict[str, Any], robot_data: RobotData
+    ) -> None:
         """Process sport mode state"""
         try:
             data = msg["data"]
@@ -112,22 +155,23 @@ class RobotDataService:
                 range_obstacle=data["range_obstacle"],
                 foot_force=data["foot_force"],
                 foot_position_body=data["foot_position_body"],
-                foot_speed_body=data["foot_speed_body"]
+                foot_speed_body=data["foot_speed_body"],
             )
 
             # Process IMU data
             imu_data = data["imu_state"]
-            if (self._validate_float_list(imu_data.get("quaternion", [])) and
-                self._validate_float_list(imu_data.get("accelerometer", [])) and
-                self._validate_float_list(imu_data.get("gyroscope", [])) and
-                self._validate_float_list(imu_data.get("rpy", []))):
-                
+            if (
+                self._validate_float_list(imu_data.get("quaternion", []))
+                and self._validate_float_list(imu_data.get("accelerometer", []))
+                and self._validate_float_list(imu_data.get("gyroscope", []))
+                and self._validate_float_list(imu_data.get("rpy", []))
+            ):
                 robot_data.imu_data = IMUData(
                     quaternion=imu_data["quaternion"],
                     accelerometer=imu_data["accelerometer"],
                     gyroscope=imu_data["gyroscope"],
                     rpy=imu_data["rpy"],
-                    temperature=imu_data["temperature"]
+                    temperature=imu_data["temperature"],
                 )
 
         except Exception as e:
@@ -136,10 +180,8 @@ class RobotDataService:
     def _process_low_state(self, msg: Dict[str, Any], robot_data: RobotData) -> None:
         """Process low state data"""
         try:
-            low_state_data = msg['data']
-            robot_data.joint_data = JointData(
-                motor_state=low_state_data['motor_state']
-            )
+            low_state_data = msg["data"]
+            robot_data.joint_data = JointData(motor_state=low_state_data["motor_state"])
         except Exception as e:
             logger.error(f"Error processing low state: {e}")
 
@@ -149,4 +191,4 @@ class RobotDataService:
 
     def _validate_float(self, value: Any) -> bool:
         """Validate a float value"""
-        return isinstance(value, (int, float)) and math.isfinite(value) 
+        return isinstance(value, (int, float)) and math.isfinite(value)
