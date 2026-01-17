@@ -192,8 +192,9 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": f"{namespace}/base_link",
-                        "min_height": -2.0,
-                        "max_height": 2.0,
+                        "min_height": -0.25,
+                        "max_height": 0.5,
+                        "range_min": 0.2,
                         "range_max": 30.0,
                     }
                 ],
@@ -212,8 +213,9 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": "base_link",
-                        "min_height": -2.0,
-                        "max_height": 2.0,
+                        "min_height": -0.25,
+                        "max_height": 0.5,
+                        "range_min": 0.2,
                         "range_max": 30.0,
                     }
                 ],
@@ -263,8 +265,8 @@ class Go2NodeFactory:
                     {
                         "max_range": 20.0,
                         "min_range": 0.1,
-                        "height_filter_min": -2.0,
-                        "height_filter_max": 3.0,
+                        "height_filter_min": -0.25,
+                        "height_filter_max": 2.0,
                         "downsample_rate": 5,
                         "publish_rate": 10.0,
                     }

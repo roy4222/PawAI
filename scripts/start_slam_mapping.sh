@@ -16,6 +16,6 @@ ros2 launch go2_robot_sdk robot.launch.py \
   slam:=true \
   nav2:=true \
   rviz2:=false \
-  foxglove:=false \
+  foxglove:=true \
   joystick:=false \
   teleop:=true
