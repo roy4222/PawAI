@@ -14,7 +14,7 @@ source /home/roy422/ros2_ws/install/setup.zsh
 
 ros2 launch go2_robot_sdk robot.launch.py \
   slam:=true \
-  nav2:=true \
+  nav2:=false \
   rviz2:=false \
   foxglove:=true \
   joystick:=false \
