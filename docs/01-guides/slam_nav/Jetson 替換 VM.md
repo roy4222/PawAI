@@ -62,7 +62,26 @@
 | `mode=1` | 進階避障模式 | 增強的障礙物偵測邏輯 |
 | `mode=2` | **跟隨模式** | Follow mode，**不是絕對座標！** |
 
-### 2.3 可用的 WebRTC Topics
+### 2.3 slam_toolbox 與 RTAB-Map（RGB-D / LiDAR SLAM）整合可行性
+
+**結論：不建議「融合」成同一條 SLAM pipeline。**
+
+- `slam_toolbox` 是 **2D SLAM**，輸入是 `/scan` 的 `sensor_msgs/LaserScan`。
+  - 官方文件明確指出訂閱 `/scan`（LaserScan）。
+- RTAB-Map 是 **RGB-D / Stereo / LiDAR 的圖優化 SLAM**，可用於 3D 或 RGB-D。
+  - `rtabmap_ros`（ROS2）提供 RGB-D 與 3D LiDAR 的感測器整合範例。
+
+**建議取捨（有 D435）：**
+1. **要用 D435（RGB-D）做 SLAM** → 用 `rtabmap_ros` 走 RGB-D SLAM，輸出 `/map` + `/odom` 給 Nav2。
+2. **要用 L1 LiDAR 做 2D SLAM** → 用 `slam_toolbox` 走 `/scan`。
+3. 不建議把 RTAB-Map 當成「定位/里程計」再讓 slam_toolbox 再做一層建圖，整體容易漂移/重複建圖。
+
+參考：
+- slam_toolbox 訂閱 `/scan`（LaserScan）：https://docs.ros.org/en/ros2_packages/humble/api/slam_toolbox/
+- RTAB-Map RGB-D/LiDAR SLAM 與 ROS2 支援：https://introlab.github.io/rtabmap/ 
+- rtabmap_ros（ROS2）RGB-D/3D LiDAR 範例：https://github.com/introlab/rtabmap_ros/tree/ros2
+
+### 2.4 可用的 WebRTC Topics
 
 ```python
 RTC_TOPIC = {
@@ -86,7 +105,7 @@ RTC_TOPIC = {
 }
 ```
 
-### 2.4 完整 API ID 參考表
+### 2.5 完整 API ID 參考表
 
 #### 移動控制 (1000-1099)
 
@@ -396,3 +415,31 @@ isaac_ros_image_pipeline   # 影像處理加速
 ---
 
 **研究結論：Go2 Pro 依賴外部 SLAM + Nav2 進行座標導航，Jetson 需要跑完整的導航堆疊。**
+### 5.5 P1. Isaac ROS cuVSLAM（NVIDIA 官方案）最低配置與可行性
+
+**官方可找到的最低配置資訊（以公開文件為準）：**
+- NVIDIA 官方 Quickstart 明確列出可在 **Jetson Orin Nano Developer Kit** 上跑 Isaac ROS Visual SLAM，並使用 **Intel RealSense D435i 或 D455**。
+- 該 Quickstart 使用 microSD（>=64GB）。
+
+**重點判斷：**
+- 官方 Quickstart **已證實 Orin Nano Dev Kit + D435i/D455 可跑**（但未明載最低 RAM 上限）。
+- 若要跑 `nvblox` 進一步做 3D costmap，官方說明 **Orin Nano 8GB/Dev Kit（live）可支援 1 顆 RealSense、30Hz**（功能較受限）。
+
+參考：
+- Jetson Orin Nano Quickstart（Visual SLAM）：https://nvidia-ai-iot.github.io/jetson_isaac_ros_visual_slam_tutorial/quickstart.html
+- Nvblox 支援配置（Orin Nano 8GB/Dev Kit, live）：https://nvidia-isaac-ros.github.io/concepts/scene_reconstruction/nvblox/index.html
+
+### 5.6 Jetson / 雲端（RTX PRO 6000）分工建議
+
+**原則：即時性在 Jetson，重模型在雲端。**
+
+| 模組 | 建議執行位置 | 理由 |
+|------|--------------|------|
+| SLAM + Nav2 + local costmap | Jetson | 低延遲、閉迴路控制
+| 即時避障（nvblox / costmap） | Jetson | 需即時反應
+| 輕量物件偵測（小型 YOLO） | Jetson | 低延遲、可降 FPS
+| 大模型 VLM/VLA 或 YOLO-World | 雲端 | 算力需求高、容許延遲
+| LLM 推理 / 對話 | 雲端 | 大模型成本與延遲可接受
+| TTS | Jetson（輕量）或雲端（高品質） | 依品質/延遲取捨
+
+**你目前的方向（Jetson 跑導航/避障 + 輕量感知，雲端跑重模型）是合理的。**
