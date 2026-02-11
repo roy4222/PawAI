@@ -1,4 +1,4 @@
-## ROS-MCP-Server -> ROS2 Skills 重構計畫（Go2 專用 Agent）
+## ROS-MCP-Server -> ROS2 Skills 重構計畫（Go2 專用 Agent）(TO-BE)
 
 > 目標：把目前偏通用的 `ros-mcp-server` 能力，拆成 Go2 專用、可測試、可安全落地的 Skills 架構，支援後續以 pi 打造專屬 agent。
 
@@ -16,7 +16,7 @@
 
 ---
 
-## 2) 現況盤點（Repo 內證據）
+## 2) 現況盤點（Repo 內證據 / AS-IS）
 
 ### 2.1 目前 MCP 工具面
 
@@ -61,7 +61,7 @@ Skill 化後也必須保留這些依賴的可觀測與健康檢查能力。
 
 ---
 
-## 3) 目標架構（Skills-First）
+## 3) 目標架構（Skills-First / TO-BE）
 
 ```
 Go2 Agent (pi)
@@ -157,7 +157,7 @@ skills/
 
 交付物：
 
-- `docs/refactor/skills-schema.md`（可新增）
+- `docs/refactor/skills-schema.md`（已建立：schema 草案）
 - 本文件（`Ros2_Skills.md`）
 
 ### Phase 1：核心技能 MVP（2~3 週）

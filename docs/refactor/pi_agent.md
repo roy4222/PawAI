@@ -1,4 +1,6 @@
-# Pi-Mono + Go2 Agent 整合方案
+# Pi-Mono + Go2 Agent 整合方案 (TO-BE)
+
+本文件是整合提案與設計草案（`TO-BE`）。本 repo 目前沒有 Node.js/TypeScript 專案骨架（例如 `package.json`），因此本文的 npm 指令是「建立新專案」的步驟，不是對此 repo 直接可執行的操作手冊。
 
 **日期**: 2026-02-10  
 **目標**: 使用 pi-mono 框架打造專屬 Go2 Agent，整合 ROS2 Skills 架構  
@@ -25,7 +27,7 @@
 - 統一 LLM API 抽象層
 - 內建 Tool Calling 機制
 - TUI/Web UI 雙介面支援
-- 9.9k stars, 977 forks (活躍社群)
+- 社群數據（stars/forks）請以查詢當天為準，本 repo 不保證同步更新。
 
 ---
 
@@ -515,7 +517,7 @@ ros2_version: Humble Hawksbill
 
 ---
 
-## 八、起步步驟
+## 八、起步步驟（建立新專案）
 
 ### Step 1: 環境準備
 
@@ -583,7 +585,7 @@ Agent: 執行中... 完成！實際移動 1.8 秒
 ## 十、參考文件
 
 - [pi-mono GitHub](https://github.com/badlogic/pi-mono)
-- [pi-agent-core API](./pi-mono/packages/agent)
+- [pi-agent-core API](./pi-mono/packages/agent)（此路徑不在本 repo；僅為上游結構示意）
 - [Ros2_Skills.md](./Ros2_Skills.md)
 - [refactor_plan.md](./refactor_plan.md)
 - [pi.dev](https://pi.dev)
