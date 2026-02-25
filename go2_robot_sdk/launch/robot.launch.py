@@ -156,6 +156,11 @@ class Go2NodeFactory:
                 default_value=os.getenv("MAP_YAML", "/home/jetson/go2_map.yaml"),
                 description="Map YAML path used by Nav2 localization",
             ),
+            DeclareLaunchArgument(
+                "autostart",
+                default_value="true",
+                description="Autostart Nav2 lifecycle nodes",
+            ),
         ]
 
     def create_robot_state_nodes(self) -> List[Node]:
@@ -236,7 +241,8 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": f"{namespace}/base_link",
-                        "queue_size": 2,
+                        "queue_size": 8,
+                        "transform_tolerance": 0.05,
                         "min_height": -0.25,
                         "max_height": 0.5,
                         "angle_increment": 0.0349,
@@ -260,7 +266,8 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": "base_link",
-                        "queue_size": 2,
+                        "queue_size": 8,
+                        "transform_tolerance": 0.05,
                         "min_height": -0.25,
                         "max_height": 0.5,
                         "angle_increment": 0.0349,
@@ -428,11 +435,17 @@ class Go2NodeFactory:
         with_slam = LaunchConfiguration("slam", default="true")
         with_nav2 = LaunchConfiguration("nav2", default="true")
         with_mcp_mode = LaunchConfiguration("mcp_mode", default="false")
+        with_map = LaunchConfiguration("map", default="/home/jetson/go2_map.yaml")
+        with_autostart = LaunchConfiguration("autostart", default="true")
 
         # SLAM/Nav2 enabled when: (slam/nav2=true) AND (mcp_mode=false)
         # Uses AndSubstitution for robust boolean handling (works with True/true/1)
         slam_enabled = AndSubstitution(with_slam, NotSubstitution(with_mcp_mode))
         nav2_enabled = AndSubstitution(with_nav2, NotSubstitution(with_mcp_mode))
+        nav2_localization_enabled = AndSubstitution(
+            AndSubstitution(with_nav2, NotSubstitution(with_slam)),
+            NotSubstitution(with_mcp_mode),
+        )
 
         foxglove_launch = os.path.join(
             get_package_share_directory("foxglove_bridge"),
@@ -476,10 +489,30 @@ class Go2NodeFactory:
                 ),
                 condition=IfCondition(nav2_enabled),
                 launch_arguments={
-                    "map": with_map,
-                    "params_file": self.config.config_paths["nav2"],
-                    "use_sim_time": use_sim_time,
-                }.items(),
+                        "map": with_map,
+                        "params_file": self.config.config_paths["nav2"],
+                        "use_sim_time": use_sim_time,
+                        "autostart": with_autostart,
+                    }.items(),
+            ),
+            # Nav2 localization (AMCL + map_server) when nav2=true and slam=false
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        os.path.join(
+                            get_package_share_directory("nav2_bringup"),
+                            "launch",
+                            "localization_launch.py",
+                        )
+                    ]
+                ),
+                condition=IfCondition(nav2_localization_enabled),
+                launch_arguments={
+                        "map": with_map,
+                        "params_file": self.config.config_paths["nav2"],
+                        "use_sim_time": use_sim_time,
+                        "autostart": with_autostart,
+                    }.items(),
             ),
         ]
 

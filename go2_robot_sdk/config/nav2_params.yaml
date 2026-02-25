@@ -11,7 +11,7 @@ amcl:
     beam_skip_error_threshold: 0.9
     beam_skip_threshold: 0.3
     do_beamskip: false
-    global_frame_id: "odom"
+    global_frame_id: "map"
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
     laser_max_range: 100.0
@@ -42,7 +42,7 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: False
-    global_frame: odom
+    global_frame: map
     robot_base_frame: base_link
     odom_topic: odom
     bt_loop_duration: 10
@@ -332,7 +332,7 @@ behavior_server:
       plugin: "nav2_behaviors/Wait"
     assisted_teleop:
       plugin: "nav2_behaviors/AssistedTeleop"
-    global_frame: odom
+    global_frame: map
     robot_base_frame: base_link
     transform_tolerance: 0.1
     use_sim_time: False   # 修改：實機環境使用 False

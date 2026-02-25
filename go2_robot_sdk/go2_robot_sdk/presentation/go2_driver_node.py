@@ -184,7 +184,7 @@ class Go2DriverNode(Node):
         best_effort_qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=5,
         )
 
         publishers = {

@@ -5,7 +5,7 @@ from typing import List
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, AndSubstitution, NotSubstitution
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.launch_description_sources import FrontendLaunchDescriptionSource, PythonLaunchDescriptionSource
@@ -93,6 +93,8 @@ class Go2NodeFactory:
             DeclareLaunchArgument('enable_tts', default_value='false', description='Enable TTS node'),
             DeclareLaunchArgument('minimal_state_topics', default_value='false', description='Subscribe only odometry + lidar RTC topics'),
             DeclareLaunchArgument('lidar_point_stride', default_value='1', description='Keep every Nth lidar point before PointCloud2 publish'),
+            DeclareLaunchArgument('map', default_value=os.getenv('MAP_YAML', '/home/jetson/go2_map.yaml'), description='Map YAML path used by Nav2 localization'),
+            DeclareLaunchArgument('autostart', default_value='true', description='Autostart Nav2 lifecycle nodes'),
         ]
     
     def create_robot_state_nodes(self) -> List[Node]:
@@ -162,7 +164,14 @@ class Go2NodeFactory:
                 ],
                 parameters=[{
                     'target_frame': f'{namespace}/base_link',
-                    'max_height': 0.1
+                    'queue_size': 8,
+                    'transform_tolerance': 0.05,
+                    'min_height': -0.25,
+                    'max_height': 0.5,
+                    'angle_increment': 0.0349,
+                    'scan_time': 0.2,
+                    'range_min': 0.2,
+                    'range_max': 12.0,
                 }],
                 output='screen',
             )
@@ -178,7 +187,14 @@ class Go2NodeFactory:
                 ],
                 parameters=[{
                     'target_frame': 'base_link',
-                    'max_height': 0.5
+                    'queue_size': 8,
+                    'transform_tolerance': 0.05,
+                    'min_height': -0.25,
+                    'max_height': 0.5,
+                    'angle_increment': 0.0349,
+                    'scan_time': 0.2,
+                    'range_min': 0.2,
+                    'range_max': 12.0,
                 }],
                 output='screen',
             )
@@ -314,6 +330,9 @@ class Go2NodeFactory:
         with_foxglove = LaunchConfiguration('foxglove', default='true')
         with_slam = LaunchConfiguration('slam', default='true')
         with_nav2 = LaunchConfiguration('nav2', default='true')
+        with_map = LaunchConfiguration('map', default='/home/jetson/go2_map.yaml')
+        with_autostart = LaunchConfiguration('autostart', default='true')
+        nav2_localization_enabled = AndSubstitution(with_nav2, NotSubstitution(with_slam))
         
         foxglove_launch = os.path.join(
             get_package_share_directory('foxglove_bridge'),
@@ -346,8 +365,24 @@ class Go2NodeFactory:
                 ]),
                 condition=IfCondition(with_nav2),
                 launch_arguments={
+                    'map': with_map,
                     'params_file': self.config.config_paths['nav2'],
                     'use_sim_time': use_sim_time,
+                    'autostart': with_autostart,
+                }.items(),
+            ),
+            # Nav2 localization (AMCL + map_server) when nav2=true and slam=false
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource([
+                    os.path.join(get_package_share_directory('nav2_bringup'),
+                                'launch', 'localization_launch.py')
+                ]),
+                condition=IfCondition(nav2_localization_enabled),
+                launch_arguments={
+                    'map': with_map,
+                    'params_file': self.config.config_paths['nav2'],
+                    'use_sim_time': use_sim_time,
+                    'autostart': with_autostart,
                 }.items(),
             ),
         ]

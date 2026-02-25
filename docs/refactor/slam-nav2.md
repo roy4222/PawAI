@@ -324,19 +324,41 @@ ls -lh /home/jetson/go2_map.*
 
 ### 啟動指令
 ```bash
-# 啟動 Nav2 + 載入地圖（不開 SLAM）
+# 推薦：用 Gate C 腳本（內建 prelaunch + source + map 參數）
+MAP_YAML=/home/jetson/go2_map.yaml zsh scripts/start_nav2_localization.sh
+
+# 預設 RVIZ2=false（適合 headless/SSH）；要開 GUI 再加 RVIZ2=true
+# RVIZ2=true MAP_YAML=/home/jetson/go2_map.yaml zsh scripts/start_nav2_localization.sh
+
+# 若 /home/jetson/go2_map.yaml 不存在，腳本會自動 fallback：
+# /home/jetson/elder_and_dog/src/go2_robot_sdk/maps/phase1.yaml
+
+# 手動等價指令（不開 SLAM、只開 Nav2 + AMCL）
 ros2 launch go2_robot_sdk robot.launch.py \
     slam:=false nav2:=true rviz2:=true \
-    map:=/home/jetson/go2_map.yaml
+    map:=/home/jetson/go2_map.yaml \
+    enable_video:=false minimal_state_topics:=true lidar_point_stride:=8
 
 # 確認節點
 ros2 node list | grep -E "amcl|bt_navigator|controller"
 ```
 
+### Gate C 一行快測（含 10 秒監測）
+```bash
+GO2_LIDAR_DECODER=wasm LIDAR_POINT_STRIDE=8 zsh scripts/start_nav2_localization.sh & LAUNCH_PID=$!; sleep 25; zsh scripts/set_initial_pose.sh 0.0 0.0 0.0; sleep 2; timeout 10s zsh scripts/ros2w.sh topic hz /point_cloud2 | tee /tmp/hz_pc2_gatec.log; timeout 10s zsh scripts/ros2w.sh topic hz /scan | tee /tmp/hz_scan_gatec.log; timeout 10s zsh scripts/ros2w.sh topic hz /amcl_pose | tee /tmp/hz_amcl_pose_gatec.log; timeout 10s tegrastats | tee /tmp/tegrastats_gatec.log; kill $LAUNCH_PID 2>/dev/null || true; pkill -f "ros2 launch go2_robot_sdk" || true; pkill -f "go2_driver_node" || true
+```
+- 重點判讀：`/amcl_pose` 有穩定輸出、`/point_cloud2`/`/scan` 維持 >5Hz 即可進入導航目標測試。
+- 若看到 `Can't update static costmap layer, no map received`，表示 localization stack 未啟動或 map 參數未正確注入。
+
 ### 初始化定位
 1. **RViz 點擊 "2D Pose Estimate"**：設定 Go2 的初始位置和方向
 2. **觀察雷射掃描**：確認雷射點與地圖牆壁對齊
 3. **等待 AMCL 收斂**：粒子雲集中在正確位置
+
+Headless 模式可直接下指令：
+```bash
+zsh scripts/set_initial_pose.sh 0.0 0.0 0.0
+```
 
 ### 導航測試（循序漸進）
 
