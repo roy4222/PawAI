@@ -92,7 +92,7 @@ if [ "$MODE" = "prelaunch" ]; then
     echo "[prelaunch] WARN: publishers still present before launch; stale processes may exist."
   fi
   echo "[prelaunch] Expected before launch: publisher count <= 0 (or topic absent)."
-  echo "[prelaunch] Next: zsh start_go2_wired_webrtc.sh minimal"
+  echo "[prelaunch] Next: zsh /home/jetson/elder_and_dog/start_go2_wired_webrtc.sh minimal"
   exit 0
 fi
 

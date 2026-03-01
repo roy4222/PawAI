@@ -20,6 +20,16 @@ FOXGLOVE="${FOXGLOVE:-false}"
 ENABLE_VIDEO="${ENABLE_VIDEO:-false}"
 PUBLISH_RAW_IMAGE="${PUBLISH_RAW_IMAGE:-false}"
 PUBLISH_COMPRESSED_IMAGE="${PUBLISH_COMPRESSED_IMAGE:-false}"
+AUTO_BUILD="${AUTO_BUILD:-true}"
+BUILD_PACKAGES="${BUILD_PACKAGES:-go2_robot_sdk}"
+
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build)
+      AUTO_BUILD="false"
+      ;;
+  esac
+done
 
 if [ "$ENABLE_VIDEO" = "false" ] && { [ "$PUBLISH_RAW_IMAGE" = "true" ] || [ "$PUBLISH_COMPRESSED_IMAGE" = "true" ]; }; then
   echo "WARN: publish_*_image=true requires enable_video=true, forcing enable_video=true"
@@ -71,17 +81,27 @@ if [ ! -f /opt/ros/humble/setup.zsh ]; then
   exit 1
 fi
 
+echo "Running prelaunch cleanup..."
+zsh "$WORKSPACE_ROOT/scripts/go2_ros_preflight.sh" prelaunch
+
+set +u
+source /opt/ros/humble/setup.zsh
+set -u
+
+if [ "$AUTO_BUILD" = "true" ]; then
+  echo "Building workspace packages before launch: $BUILD_PACKAGES"
+  colcon build --packages-select $BUILD_PACKAGES
+else
+  echo "Skipping colcon build (AUTO_BUILD=$AUTO_BUILD)"
+fi
+
 if [ ! -f "$WORKSPACE_ROOT/install/setup.zsh" ]; then
   echo "FAIL: missing $WORKSPACE_ROOT/install/setup.zsh"
   echo "Build workspace first: colcon build"
   exit 1
 fi
 
-echo "Running prelaunch cleanup..."
-zsh "$WORKSPACE_ROOT/scripts/go2_ros_preflight.sh" prelaunch
-
 set +u
-source /opt/ros/humble/setup.zsh
 source "$WORKSPACE_ROOT/install/setup.zsh"
 set -u
 

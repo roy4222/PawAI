@@ -13,13 +13,16 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+import time
 from typing import Optional
 
 import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion
 from nav2_msgs.action import NavigateToPose
+from action_msgs.msg import GoalStatus
 from rclpy.action import ActionClient
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 
 def yaw_from_quaternion(q: Quaternion) -> float:
@@ -47,6 +50,7 @@ class NavGoalAutoTester(Node):
         self,
         distance: float,
         frame_id: str,
+        amcl_topic: str,
         timeout: float,
         goal_x: Optional[float],
         goal_y: Optional[float],
@@ -55,17 +59,25 @@ class NavGoalAutoTester(Node):
         super().__init__("nav_goal_autotest")
         self._distance = distance
         self._frame = frame_id
+        self._amcl_topic = amcl_topic
         self._timeout = timeout
         self._goal_x = goal_x
         self._goal_y = goal_y
         self._goal_yaw = goal_yaw
         self._amcl_pose: Optional[PoseWithCovarianceStamped] = None
+        self._last_feedback_log_time = 0.0
+        self._last_feedback_x: Optional[float] = None
+        self._last_feedback_y: Optional[float] = None
+
+        amcl_qos = QoSProfile(depth=10)
+        amcl_qos.reliability = ReliabilityPolicy.RELIABLE
+        amcl_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
 
         self._amcl_sub = self.create_subscription(
             PoseWithCovarianceStamped,
-            "/amcl_pose",
+            self._amcl_topic,
             self._handle_amcl_pose,
-            10,
+            amcl_qos,
         )
         self._action_client = ActionClient(self, NavigateToPose, "navigate_to_pose")
 
@@ -149,19 +161,32 @@ class NavGoalAutoTester(Node):
             self.get_logger().warn("已送出取消導航目標請求")
             return False
 
-        outcome = result.result().result
-        status = outcome.error_code
-        if status == outcome.SUCCEEDED:
+        wrapped_result = result.result()
+        status = wrapped_result.status
+        outcome = wrapped_result.result
+        if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info("✅ NavigateToPose 成功（status=SUCCEEDED）")
             return True
         self.get_logger().error(f"❌ NavigateToPose 失敗，status={status}")
-        if outcome.error_msg:
+        if hasattr(outcome, "error_msg") and outcome.error_msg:
             self.get_logger().error("Nav2 回報：%s", outcome.error_msg)
         return False
 
     # ---------------------------------------------------------------- callbacks
     def _feedback_cb(self, feedback: NavigateToPose.Feedback) -> None:  # pragma: no cover - log only
         pose = feedback.feedback.current_pose.pose
+        now = time.monotonic()
+        if self._last_feedback_x is not None and self._last_feedback_y is not None:
+            moved = math.hypot(pose.position.x - self._last_feedback_x, pose.position.y - self._last_feedback_y)
+        else:
+            moved = float("inf")
+
+        if (now - self._last_feedback_log_time) < 1.0 and moved < 0.02:
+            return
+
+        self._last_feedback_log_time = now
+        self._last_feedback_x = pose.position.x
+        self._last_feedback_y = pose.position.y
         self.get_logger().info(
             f"回饋 - 機器狗位置 x={pose.position.x:.3f}, y={pose.position.y:.3f}"
         )
@@ -179,6 +204,11 @@ def parse_args() -> argparse.Namespace:
         "--frame-id",
         default="map",
         help="預期的 AMCL/目標參考座標系（預設 map）",
+    )
+    parser.add_argument(
+        "--amcl-topic",
+        default="/amcl_pose",
+        help="AMCL topic（預設 /amcl_pose；多機器人可改為 /robotX/amcl_pose）",
     )
     parser.add_argument(
         "--timeout",
@@ -216,6 +246,7 @@ def main() -> None:
     tester = NavGoalAutoTester(
         distance=args.distance,
         frame_id=args.frame_id,
+        amcl_topic=args.amcl_topic,
         timeout=args.timeout,
         goal_x=args.x,
         goal_y=args.y,
@@ -231,7 +262,8 @@ def main() -> None:
         success = False
     finally:
         tester.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
     sys.exit(0 if success else 1)
 
 

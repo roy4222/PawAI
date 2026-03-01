@@ -12,7 +12,7 @@ from ...domain.constants import RTC_TOPIC
 
 logger = logging.getLogger(__name__)
 
-MAX_LINEAR_X = 0.2
+MAX_LINEAR_X = 0.22
 MAX_LINEAR_Y = 0.2
 MAX_ANGULAR_Z = 0.35
 DEADBAND = 0.01

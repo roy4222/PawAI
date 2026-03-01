@@ -8,6 +8,35 @@
 
 ---
 
+
+### ⚠️⚠️⚠️ 修改 nav2_params.yaml 後必須 build（重大教訓 2026-02-28）
+
+**問題**: 修改 `go2_robot_sdk/config/nav2_params.yaml` 後直接重啟，但 Nav2 一直使用舊參數，導致調參無效、反覆 ABORTED，浪費三小時。
+
+**根因**: ROS2 啟動時讀取的是 `install/` 目錄下的檔案，不是 source 目錄。必須 `colcon build` 才會把修改從 source 複製到 install。
+
+**正確流程**:
+```bash
+# 1. 修改 go2_robot_sdk/config/nav2_params.yaml
+# 2. 務必 build（關鍵步驟）
+colcon build --packages-select go2_robot_sdk
+
+# 3. 確認 install 檔案已更新
+grep 'max_vel_x\|inflation_radius' install/go2_robot_sdk/share/go2_robot_sdk/config/nav2_params.yaml
+
+# 4. 重啟節點（這次才會讀到新參數）
+zsh scripts/start_nav2_localization.sh
+
+# 5. 驗證 live 參數（確保生效）
+zsh scripts/ros2w.sh param get /controller_server FollowPath.max_vel_x
+```
+
+**檢查清單**:
+- [ ] 修改 YAML 後有執行 `colcon build`
+- [ ] 啟動後檢查 live 參數 (`ros2 param get`) 確認已更新
+- [ ] 若 live 參數與檔案不一致 → 表示 build 未執行或失敗
+
+
 ## ⚠️ 關鍵修正（執行前必讀）
 
 ### Frame 設定不一致（已修正）
