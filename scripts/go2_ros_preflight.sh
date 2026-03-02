@@ -4,6 +4,7 @@ set -euo pipefail
 
 MODE="${1:-prelaunch}"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES:-}"
 export COLCON_TRACE="${COLCON_TRACE:-}"
 
@@ -65,24 +66,48 @@ fi
 
 get_publisher_count() {
   local topic="$1"
+  local max_attempts="${2:-1}"
+  local attempt=1
   local output
-
-  if ! output=$(ros2 topic info -v "$topic" 2>/dev/null); then
-    echo "-1"
-    return
-  fi
-
   local count
-  count=$(printf "%s\n" "$output" | awk -F': ' '/Publisher count/ {print $2; exit}')
-  if [ -z "$count" ]; then
-    echo "-1"
-  else
-    echo "$count"
-  fi
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    output=$(ros2 topic info -v "$topic" 2>/dev/null || true)
+    count=$(printf "%s\n" "$output" | awk -F': ' '/Publisher count/ {print $2; exit}')
+
+    if [ -n "$count" ]; then
+      echo "$count"
+      return
+    fi
+
+    sleep 1
+    attempt=$((attempt + 1))
+  done
+
+  echo "-1"
 }
 
-POINT_CLOUD_PUBS=$(get_publisher_count "/point_cloud2")
-SCAN_PUBS=$(get_publisher_count "/scan")
+topic_has_messages() {
+  local topic="$1"
+  timeout 4 zsh "$SCRIPT_DIR/ros2w.sh" topic echo "$topic" --qos-profile sensor_data --once > /dev/null 2>&1
+}
+
+INFO_RETRIES=2
+if [ "$MODE" = "postlaunch" ]; then
+  INFO_RETRIES=6
+fi
+
+POINT_CLOUD_PUBS=$(get_publisher_count "/point_cloud2" "$INFO_RETRIES")
+SCAN_PUBS=$(get_publisher_count "/scan" "$INFO_RETRIES")
+
+if [ "$MODE" = "postlaunch" ]; then
+  if [ "$POINT_CLOUD_PUBS" = "-1" ] && topic_has_messages "/point_cloud2"; then
+    POINT_CLOUD_PUBS="1"
+  fi
+  if [ "$SCAN_PUBS" = "-1" ] && topic_has_messages "/scan"; then
+    SCAN_PUBS="1"
+  fi
+fi
 
 echo "[$MODE] /point_cloud2 publisher count: $POINT_CLOUD_PUBS"
 echo "[$MODE] /scan publisher count: $SCAN_PUBS"

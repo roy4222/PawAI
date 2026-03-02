@@ -36,6 +36,12 @@ if [ "$ENABLE_VIDEO" = "false" ] && { [ "$PUBLISH_RAW_IMAGE" = "true" ] || [ "$P
   ENABLE_VIDEO="true"
 fi
 
+if [[ ! "$LIDAR_POINT_STRIDE" =~ ^[0-9]+$ ]] || [ "$LIDAR_POINT_STRIDE" -lt 1 ]; then
+  echo "FAIL: LIDAR_POINT_STRIDE must be a positive integer (got: $LIDAR_POINT_STRIDE)"
+  echo "Example: LIDAR_POINT_STRIDE=8 zsh scripts/start_nav2_localization.sh"
+  exit 1
+fi
+
 resolve_map_yaml() {
   local requested="$1"
 
