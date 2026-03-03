@@ -43,6 +43,19 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
     return q
 
 
+def goal_status_name(status: int) -> str:
+    """Translate action status code to readable name."""
+    return {
+        GoalStatus.STATUS_UNKNOWN: "UNKNOWN",
+        GoalStatus.STATUS_ACCEPTED: "ACCEPTED",
+        GoalStatus.STATUS_EXECUTING: "EXECUTING",
+        GoalStatus.STATUS_CANCELING: "CANCELING",
+        GoalStatus.STATUS_SUCCEEDED: "SUCCEEDED",
+        GoalStatus.STATUS_CANCELED: "CANCELED",
+        GoalStatus.STATUS_ABORTED: "ABORTED",
+    }.get(status, f"CODE_{status}")
+
+
 class NavGoalAutoTester(Node):
     """透過 action client 發送單點導航並回報結果。"""
 
@@ -167,7 +180,11 @@ class NavGoalAutoTester(Node):
         if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info("✅ NavigateToPose 成功（status=SUCCEEDED）")
             return True
-        self.get_logger().error(f"❌ NavigateToPose 失敗，status={status}")
+        self.get_logger().error(
+            f"❌ NavigateToPose 失敗，status={status} ({goal_status_name(status)})"
+        )
+        if hasattr(outcome, "error_code"):
+            self.get_logger().error("Nav2 error_code=%s", str(outcome.error_code))
         if hasattr(outcome, "error_msg") and outcome.error_msg:
             self.get_logger().error("Nav2 回報：%s", outcome.error_msg)
         return False

@@ -152,6 +152,41 @@ class Go2NodeFactory:
                 description="Keep every Nth lidar point before PointCloud2 publish",
             ),
             DeclareLaunchArgument(
+                "pcl2ls_queue_size",
+                default_value="2",
+                description="pointcloud_to_laserscan queue size",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_min_height",
+                default_value="-0.2",
+                description="pointcloud_to_laserscan min height filter",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_max_height",
+                default_value="0.35",
+                description="pointcloud_to_laserscan max height filter",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_angle_increment",
+                default_value="0.0523598776",
+                description="pointcloud_to_laserscan angular resolution in radians",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_scan_time",
+                default_value="0.2",
+                description="pointcloud_to_laserscan scan_time parameter",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_range_min",
+                default_value="0.25",
+                description="pointcloud_to_laserscan min range",
+            ),
+            DeclareLaunchArgument(
+                "pcl2ls_range_max",
+                default_value="8.0",
+                description="pointcloud_to_laserscan max range",
+            ),
+            DeclareLaunchArgument(
                 "map",
                 default_value=os.getenv("MAP_YAML", "/home/jetson/go2_map.yaml"),
                 description="Map YAML path used by Nav2 localization",
@@ -228,6 +263,16 @@ class Go2NodeFactory:
         self, namespace: str | None = None
     ) -> Node:
         """Create pointcloud to laserscan conversion node"""
+        pcl2ls_queue_size = LaunchConfiguration("pcl2ls_queue_size", default="2")
+        pcl2ls_min_height = LaunchConfiguration("pcl2ls_min_height", default="-0.2")
+        pcl2ls_max_height = LaunchConfiguration("pcl2ls_max_height", default="0.35")
+        pcl2ls_angle_increment = LaunchConfiguration(
+            "pcl2ls_angle_increment", default="0.0523598776"
+        )
+        pcl2ls_scan_time = LaunchConfiguration("pcl2ls_scan_time", default="0.2")
+        pcl2ls_range_min = LaunchConfiguration("pcl2ls_range_min", default="0.25")
+        pcl2ls_range_max = LaunchConfiguration("pcl2ls_range_max", default="8.0")
+
         if namespace:
             # Multi-robot setup
             return Node(
@@ -241,14 +286,14 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": f"{namespace}/base_link",
-                        "queue_size": 8,
+                        "queue_size": pcl2ls_queue_size,
                         "transform_tolerance": 0.05,
-                        "min_height": -1.0,
-                        "max_height": 0.5,
-                        "angle_increment": 0.0349,
-                        "scan_time": 0.1,
-                        "range_min": 0.2,
-                        "range_max": 12.0,
+                        "min_height": pcl2ls_min_height,
+                        "max_height": pcl2ls_max_height,
+                        "angle_increment": pcl2ls_angle_increment,
+                        "scan_time": pcl2ls_scan_time,
+                        "range_min": pcl2ls_range_min,
+                        "range_max": pcl2ls_range_max,
                     }
                 ],
                 output="screen",
@@ -266,14 +311,14 @@ class Go2NodeFactory:
                 parameters=[
                     {
                         "target_frame": "base_link",
-                        "queue_size": 8,
+                        "queue_size": pcl2ls_queue_size,
                         "transform_tolerance": 0.05,
-                        "min_height": -1.0,
-                        "max_height": 0.5,
-                        "angle_increment": 0.0349,
-                        "scan_time": 0.1,
-                        "range_min": 0.2,
-                        "range_max": 12.0,
+                        "min_height": pcl2ls_min_height,
+                        "max_height": pcl2ls_max_height,
+                        "angle_increment": pcl2ls_angle_increment,
+                        "scan_time": pcl2ls_scan_time,
+                        "range_min": pcl2ls_range_min,
+                        "range_max": pcl2ls_range_max,
                     }
                 ],
                 output="screen",

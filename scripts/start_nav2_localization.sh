@@ -8,6 +8,7 @@ fi
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 WORKSPACE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+MEMORY_GUARD_SCRIPT="$SCRIPT_DIR/nav_memory_guard.sh"
 
 export ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
 export CONN_TYPE="${CONN_TYPE:-webrtc}"
@@ -22,6 +23,13 @@ PUBLISH_RAW_IMAGE="${PUBLISH_RAW_IMAGE:-false}"
 PUBLISH_COMPRESSED_IMAGE="${PUBLISH_COMPRESSED_IMAGE:-false}"
 AUTO_BUILD="${AUTO_BUILD:-true}"
 BUILD_PACKAGES="${BUILD_PACKAGES:-go2_robot_sdk}"
+ENABLE_MEMORY_GUARD="${ENABLE_MEMORY_GUARD:-true}"
+
+if [ -f "$MEMORY_GUARD_SCRIPT" ]; then
+  set +u
+  source "$MEMORY_GUARD_SCRIPT"
+  set -u
+fi
 
 for arg in "$@"; do
   case "$arg" in
@@ -40,6 +48,10 @@ if [[ ! "$LIDAR_POINT_STRIDE" =~ ^[0-9]+$ ]] || [ "$LIDAR_POINT_STRIDE" -lt 1 ];
   echo "FAIL: LIDAR_POINT_STRIDE must be a positive integer (got: $LIDAR_POINT_STRIDE)"
   echo "Example: LIDAR_POINT_STRIDE=8 zsh scripts/start_nav2_localization.sh"
   exit 1
+fi
+
+if [ "$ENABLE_MEMORY_GUARD" = "true" ] && command -v nav_memory_guard_check > /dev/null 2>&1; then
+  nav_memory_guard_check
 fi
 
 resolve_map_yaml() {
