@@ -74,3 +74,42 @@ cd ros-mcp-server && ruff check . && ruff format --check .
 ## NOTES
 - Launch file changes do not require rebuild; just restart launch.
 - `ROBOT_IP` and `CONN_TYPE` are required for runtime.
+
+
+
+## AI INTERACTION GUIDELINES
+
+### Requirement-First Questioning Pattern (需求導向提問模式)
+
+When gathering research requirements from users, follow this **non-assumptive approach** :
+
+**DON'T:**
+- Prescribe specific models, libraries, or technologies
+- Assume implementation details
+- Ask questions that require local testing or code review
+
+**DO:**
+- Ask for the **desired outcome** in plain language
+- Ask what exists in **open-source communities**
+- Ask for **common practices** and **recommendations**
+- Focus on **what's possible** rather than **how to implement**
+
+**Good Examples:**
+```
+❌ "Use MediaPipe for face detection" (prescribes solution)
+✅ "What open-source options exist for real-time face detection on edge devices?"
+
+❌ "Check if D435 depth sync works on Jetson" (requires local testing)
+✅ "What are common issues when using D435 with Jetson in ROS2 projects?"
+
+❌ "Implement Whisper Tiny for ASR" (prescribes implementation)
+✅ "What ASR models do robot projects commonly use for Chinese speech recognition?"
+```
+
+**Template Structure for Research Questions:**
+1. **Desired effect** (想要的效果): What should the system achieve?
+2. **Community practices** (業界做法): How do others solve this?
+3. **Available options** (開源選擇): What open-source solutions exist?
+4. **Common pitfalls** (常見問題): What issues should be aware of?
+
+This pattern ensures research questions are **actionable by external AI/tools** rather than requiring local codebase inspection.
