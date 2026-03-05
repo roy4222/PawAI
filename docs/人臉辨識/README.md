@@ -12,6 +12,26 @@
 
 先不要一次把「偵測 + 追蹤 + 識別 + 視線」全開。建議照下面順序逐步打通。
 
+### 先跑客觀測試腳本（建議）
+
+已提供可直接執行的 D435 快速驗證腳本：`scripts/d435_quick_test.py`
+
+- 依賴：`pyrealsense2`、`numpy`
+- 預設測試：`640x480@30`、120 秒
+- 輸出指標：`Avg FPS`、`Depth hole ratio`、`Center flicker p2p`、`OVERALL PASS/FAIL`
+
+範例：
+
+```bash
+python scripts/d435_quick_test.py
+```
+
+或：
+
+```bash
+python scripts/d435_quick_test.py --seconds 120 --width 640 --height 480 --fps 30
+```
+
 ### Step 1 - 邊緣端先做「人臉偵測 + 追蹤」
 
 目標：Jetson 端穩定輸出 `face_bbox`、`track_id`、`confidence`。
