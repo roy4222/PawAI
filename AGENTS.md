@@ -4,7 +4,7 @@
 
 | Environment | Path | Purpose |
 |-------------|------|---------|
-| **Local WSL2** | `/home/roy422/jetson/elder_and_dog` | Code editing, opencode execution |
+| **Local WSL2** | `/home/roy422/newLife/elder_and_dog` | Code editing, opencode execution |
 | **Jetson Orin Nano** | `/home/jetson/elder_and_dog` | ROS2 runtime, GPU, hardware, colcon |
 
 **Sync Method:** `sshfs` - Jetson's `/home/jetson` mounted to WSL's `/home/roy422/jetson`
@@ -14,7 +14,7 @@
 
 ```bash
 # [Local WSL2] - Use for: git, editing, opencode
-cd /home/roy422/jetson/elder_and_dog
+cd /home/roy422/newLife/elder_and_dog
 
 # [Jetson SSH] - Use for: ROS2, colcon, hardware
 ssh jetson-nano "cd /home/jetson/elder_and_dog && <command>"
@@ -26,6 +26,31 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && colcon build --packages-select
 # [Jetson] Launch
 ssh jetson-nano "cd /home/jetson/elder_and_dog && source install/setup.bash && ros2 launch go2_robot_sdk go2_driver.launch.py"
 ```
+
+### Auto Sync Workflow (WSL Save -> Jetson)
+
+Use the local watcher + rsync workflow so file saves in WSL are mirrored to Jetson automatically.
+
+```bash
+# Start background auto-sync watcher
+~/sync start
+
+# Check watcher status
+~/sync status
+
+# Force one sync immediately
+~/sync once
+
+# Stop watcher
+~/sync stop
+```
+
+Operational notes:
+- Source of truth is WSL (`/home/roy422/newLife/elder_and_dog`). Avoid editing code directly on Jetson.
+- Sync is one-way (WSL -> Jetson) and uses `--delete`; removed local files will also be removed on Jetson.
+- Excluded folders in sync: `.git/`, `build/`, `install/`, `log/`, `.cache/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
+- Build artifacts should be generated on Jetson (`colcon build`) after sync.
+- If network drops or sync looks stale, run `~/sync once` manually.
 
 ---
 
