@@ -430,3 +430,7 @@ docs/
 > **更新日期**: 2026-03-04
 > **硬體配置**: Jetson Orin Nano 8GB + 5×RTX 8000 雲端
 > **方向**: Human-Robot Interaction + LLM-based Skill Planning (不做控制算法/SLAM)
+
+### 本週主路線圖
+
+- [Agentic Embodied AI 實作路線圖](./agentic_embodied_ai_roadmap.md)

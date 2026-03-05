@@ -8,6 +8,91 @@
 - 可以根據人的位置轉頭或移動
 - **雲端負責「懂人是誰」，邊緣負責「快速反應」**
 
+## 先從哪裡開始（建議起手順序）
+
+先不要一次把「偵測 + 追蹤 + 識別 + 視線」全開。建議照下面順序逐步打通。
+
+### Step 1 - 邊緣端先做「人臉偵測 + 追蹤」
+
+目標：Jetson 端穩定輸出 `face_bbox`、`track_id`、`confidence`。
+
+- 輸入：`/camera/color/image_raw`（或你目前實際相機 topic）
+- 輸出：`/face_tracks`
+- 驗收：
+  - 單人場景 5 分鐘內 `track_id` 不亂跳
+  - 平均延遲 <100ms
+
+### Step 2 - 接 D435 深度，補上「距離資訊」
+
+目標：每個人臉 track 多一個距離值（公尺），供 Go2 跟隨/轉向使用。
+
+- 公式：bbox 中心點對應 `aligned_depth_to_color`
+- 建議：取 ROI 的 median depth，避免單點噪聲
+- 驗收：
+  - 能穩定輸出 `distance_m`
+  - 距離變化與人物前後移動方向一致
+
+### Step 3 - 雲端做「身份識別」
+
+目標：Jetson 傳 ROI crop（或 embedding）到雲端，回傳 `person_id` / `person_name`。
+
+- Jetson：偵測 + crop + 上傳
+- 雲端：embedding + 向量比對
+- 驗收：
+  - 已註冊成員可回傳固定 identity
+  - 未知人員回傳 `unknown`
+
+### Step 4 - 把辨識結果接到 Go2 互動 skill
+
+目標：人臉結果真的驅動行為，而不只是畫框。
+
+- 最小 skill：
+  - `look_at_person(track_id)`
+  - `follow_person(track_id, distance)`
+  - `greet_person(person_name)`
+- 驗收：
+  - 指定人物進入畫面時，Go2 會轉向並播報
+
+### Step 5 - 再加進階能力（視線/頭部朝向/情緒）
+
+目標：提升互動品質，不影響主線穩定性。
+
+- 只有在 Step 1~4 穩定後才加入
+- 先灰度開啟（可開關），避免拖垮主 pipeline
+
+## 第一週實作清單（可直接開工）
+
+- Day 1：建立 `face_perception_node`，只做偵測結果發布
+- Day 2：加追蹤器（SORT/ByteTrack）並發布 `track_id`
+- Day 3：接 D435 深度，產生 `distance_m`
+- Day 4：雲端識別 API 打通（ROI 上傳與 identity 回傳）
+- Day 5：串接 Go2 `look_at` / `greet` 最小互動 demo
+
+## 建議 topic / payload（先簡化，後續再升級 msg）
+
+### `/face_tracks`（Jetson -> 本地/雲端）
+
+```json
+{
+  "stamp": 1719999999.123,
+  "track_id": 12,
+  "bbox": [x, y, w, h],
+  "confidence": 0.94,
+  "distance_m": 1.37
+}
+```
+
+### `/face_identity`（雲端 -> Jetson）
+
+```json
+{
+  "track_id": 12,
+  "person_id": "u_001",
+  "person_name": "Alex",
+  "confidence": 0.91
+}
+```
+
 ---
 
 ## 邊緣端 (Jetson 8GB) - 即時感知
