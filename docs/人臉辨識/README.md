@@ -128,6 +128,78 @@ ros2 run web_video_server web_video_server --ros-args -p port:=8081
 3. 建立 `face_identity_node`：輸入 face bbox/crop，輸出 `person_id/person_name/confidence`
 4. 先在 Jetson 單機打通 unknown/known 判定，再決定是否拆到雲端
 
+### Step 3 快速起手（CV baseline，可立即跑）
+
+已新增兩個腳本：
+
+- `scripts/face_identity_enroll_cv.py`：收集人臉樣本
+- `scripts/face_identity_infer_cv.py`：即時 known/unknown 推論
+
+1) 收集樣本（每人先收 30 張）：
+
+```bash
+source /opt/ros/humble/setup.zsh
+python3 /home/jetson/elder_and_dog/scripts/face_identity_enroll_cv.py \
+  --person-name alice \
+  --samples 30 \
+  --output-dir /home/jetson/face_db \
+  --headless
+```
+
+2) 啟動辨識：
+
+```bash
+source /opt/ros/humble/setup.zsh
+python3 /home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py --headless
+
+# 建議顯式指定資料庫路徑（避免被專案同步清理）
+python3 /home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py \
+  --db-dir /home/jetson/face_db \
+  --model-path /home/jetson/face_db/model_centroid.pkl \
+  --headless
+```
+
+3) 觀察輸出：
+
+- 終端每秒輸出：`alice sim=0.xx d=1.xxm` 或 `unknown`
+- debug 圖：`/tmp/face_identity_debug.jpg`
+- compare 圖：`/tmp/face_identity_compare.jpg`
+- ROS2 topic：`/face_identity/debug_image`、`/face_identity/compare_image`
+
+備註：這是 CV baseline（先求可跑可驗證），下一階段可替換為 InsightFace embedding + Faiss/Qdrant。
+另外，`/home/jetson/elder_and_dog` 可能被 WSL->Jetson 同步流程（含 `--delete`）覆蓋；
+註冊樣本建議放在 `/home/jetson/face_db` 這類專案外路徑。
+
+### 收樣本網站模式（多人 + 進度 + 預覽 + Demo）
+
+已提供：`scripts/face_enroll_web.py`
+
+功能：
+
+- 設定每人姓名、Samples、Interval
+- 即時掃描預覽（Enrollment）
+- 掃描進度條與引導文案
+- 多人名單（已註冊樣本數）
+- 一鍵啟動/停止 Recognition Demo，右側即時預覽辨識效果
+
+啟動：
+
+```bash
+source /opt/ros/humble/setup.zsh
+sudo apt install -y python3-flask
+python3 /home/jetson/elder_and_dog/scripts/face_enroll_web.py --port 8090
+```
+
+瀏覽器：
+
+- `http://<jetson-ip>:8090`
+
+建議流程：
+
+1. 先在頁面輸入 person/samples/interval，按 `Start Scan`
+2. 完成後切換下一位人員重複掃描
+3. 按 `Start Recognition Demo` 驗證已註冊人員辨識結果
+
 
 ### Step 1 - 邊緣端先做「人臉偵測 + 追蹤」
 
