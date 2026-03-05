@@ -200,6 +200,60 @@ python3 /home/jetson/elder_and_dog/scripts/face_enroll_web.py --port 8090
 2. 完成後切換下一位人員重複掃描
 3. 按 `Start Recognition Demo` 驗證已註冊人員辨識結果
 
+### Next.js + FastAPI 版本（重構路線）
+
+已新增新架構骨架：
+
+- 後端：`face_dashboard_fastapi/main.py`
+- 前端：`face_dashboard_nextjs/app/page.tsx`
+
+啟動順序：
+
+1. D435 + ROS topic（同既有流程）
+2. `web_video_server`（port 8081）
+3. FastAPI（port 8000）
+4. Next.js（port 3000）
+
+此路線用於提升可維護性與除錯效率，並保留現有 ROS2 腳本作為執行核心。
+
+### 今日進度整理（2026-03-05 晚間）
+
+已完成：
+
+- D435 + ROS2 + `web_video_server` 即時串流可用（8081 健康檢查 `HEALTHY`）。
+- Flask 版收樣本頁面可正常打到 API（`/api/enroll/start`、`/api/infer/start`），按鈕事件已確認生效。
+- 認臉 baseline 強化完成（`scripts/face_identity_infer_cv.py`）：
+  - 多樣本比對（非純 centroid）
+  - 雙閾值遲滯（upper/lower）
+  - 穩定化 hits 與 unknown grace
+  - 模型自動偵測 DB 變更後重訓
+  - 關閉流程保護，避免 `publisher's context is invalid` 干擾 demo
+- Next.js + FastAPI 重構骨架已落地：
+  - `face_dashboard_fastapi/main.py`
+  - `face_dashboard_nextjs/app/page.tsx`
+  - 基本 API 與前端操作面板已可跑。
+
+遇到問題與已修正：
+
+- 問題：`npm TAR_ENTRY_ERROR ENOENT`、`next: not found`。
+- 根因：Jetson 的 `node/npm` 未就緒，且在 `/home/jetson/elder_and_dog` 內安裝 `node_modules` 容易受同步 `--delete` 影響。
+- 修正：
+  - Jetson 端改用 `nvm` + Node 20。
+  - Next.js 改在專案外 runtime 路徑安裝與執行：`/home/jetson/face_dashboard_nextjs_runtime`。
+
+目前建議運行模式：
+
+1. ROS2 D435 launch（Terminal A）
+2. `web_video_server`（Terminal B）
+3. FastAPI backend（Terminal C，port 8000）
+4. Next.js frontend（Terminal D，port 3000，runtime 路徑）
+
+待辦（下一輪）：
+
+- 人員資料清理工具（批次刪除 0 樣本與測試垃圾名稱）。
+- Next.js 前端補健康燈與明確 toast（start/stop 成功/失敗回饋）。
+- 多人辨識參數建立「場景 preset」並固化預設值。
+
 
 ### Step 1 - 邊緣端先做「人臉偵測 + 追蹤」
 
