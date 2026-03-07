@@ -128,12 +128,81 @@ ros2 run web_video_server web_video_server --ros-args -p port:=8081
 3. 建立 `face_identity_node`：輸入 face bbox/crop，輸出 `person_id/person_name/confidence`
 4. 先在 Jetson 單機打通 unknown/known 判定，再決定是否拆到雲端
 
-### Step 3 快速起手（CV baseline，可立即跑）
+---
+
+## 技術選型與效能評估
+
+### 為什麼選 YuNet + SFace？
+
+| 方案 | 模型大小 | 檢測 FPS (Jetson Orin Nano) | 安裝複雜度 | 主要依賴 |
+|:---|:---|:---|:---|:---|
+| **OpenCV DNN + YuNet** | ~100 KB | **25-35 (CUDA)** | **極低 (<5 分鐘)** | 系統 OpenCV |
+| dlib HOG/CNN | ~10 MB | 10-15 (CPU) / 20-25 (GPU) | 高 (30-60 分鐘) | CMake, Boost, BLAS |
+| MediaPipe BlazeFace | ~2 MB | 25-35 | 中等 (10-30 分鐘) | TensorFlow Lite, Bazel |
+
+**選擇理由**：
+- YuNet 是專為邊緣裝置設計的超輕量模型，僅 100KB
+- OpenCV 4.5+ 內建支援，無需額外編譯
+- 啟用 CUDA 後可達 25-35 FPS，滿足即時需求
+- SFace 提供 128 維特徵向量，適合家庭場景的輕量辨識
+
+### 記憶體占用預估
+
+| 元件 | 記憶體占用 | 備註 |
+|:---|:---|:---|
+| OpenCV + YuNet 模型 | 50-100 MB | 模型權重 + 執行時緩衝 |
+| 特徵資料庫（記憶體快取） | 4-40 MB | 100-1000 人規模 |
+| ROS2 Humble 系統開銷 | 500-800 MB | 節點、topic、服務 |
+| RealSense SDK + 影像緩衝 | 200-400 MB | 雙影像流（RGB + Depth）|
+| **總計（保守估計）** | **1.5-2.5 GB** | **Jetson 8GB 充足餘裕** |
+
+---
+
+## 資料庫建置最佳實踐
+
+### 照片收集規範
+
+預設人臉資料庫的建置品質直接決定辨識系統的上限效能。**每位家庭成員應收集 10-20 張照片作為基準，最低不可少於 5 張**。
+
+| 變異維度 | 建議覆蓋範圍 | 照片數量 | 特殊考量 |
+|:---|:---|:---|:---|
+| **水平角度（yaw）** | 0°, ±15°, ±30°, ±45° | 6-8 張 | **>45° 辨識率驟降** |
+| **俯仰角度（pitch）** | 0°, ±15° | 3-4 張 | 機器狗低視角需仰角照片 |
+| **光線條件** | 日間自然光、傍晚人工光、夜間暖光 | 4-6 張 | 避免強陰影與過曝 |
+| **表情變化** | 中性、微笑、微張嘴 | 3-4 張 | 避免過度誇張表情 |
+| **配件變化** | 眼鏡、帽子（若有固定習慣）| 2-3 張 | 可選，依個人習慣 |
+
+### 相似度閾值設定建議
+
+辨識準確度的核心參數為**相似度閾值**（threshold）：
+
+| 場景 | 建議閾值 | 說明 |
+|:---|:---|:---|
+| **首次見面** | 0.55 | 較低召回率，建立互動 |
+| **日常追蹤** | 0.65 | 平衡精確度與穩定性 |
+| **高安全場景** | 0.70 | 降低誤接受率至 <0.1% |
+
+**動態閾值策略**：首次辨識使用較低閾值（0.55），後續追蹤同一人物時逐步提高至 0.65。
+
+---
+
+
+### Step 3 快速起手（YuNet + SFace，可立即跑）
 
 已新增兩個腳本：
 
 - `scripts/face_identity_enroll_cv.py`：收集人臉樣本
 - `scripts/face_identity_infer_cv.py`：即時 known/unknown 推論
+
+0) 先準備模型（一次性）：
+
+```bash
+mkdir -p /home/jetson/face_models
+wget -O /home/jetson/face_models/face_detection_yunet_2023mar.onnx \
+  https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx
+wget -O /home/jetson/face_models/face_recognition_sface_2021dec.onnx \
+  https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx
+```
 
 1) 收集樣本（每人先收 30 張）：
 
@@ -143,6 +212,8 @@ python3 /home/jetson/elder_and_dog/scripts/face_identity_enroll_cv.py \
   --person-name alice \
   --samples 30 \
   --output-dir /home/jetson/face_db \
+  --yunet-model /home/jetson/face_models/face_detection_yunet_2023mar.onnx \
+  --sface-model /home/jetson/face_models/face_recognition_sface_2021dec.onnx \
   --headless
 ```
 
@@ -155,7 +226,11 @@ python3 /home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py --headless
 # 建議顯式指定資料庫路徑（避免被專案同步清理）
 python3 /home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py \
   --db-dir /home/jetson/face_db \
-  --model-path /home/jetson/face_db/model_centroid.pkl \
+  --model-path /home/jetson/face_db/model_sface.pkl \
+  --yunet-model /home/jetson/face_models/face_detection_yunet_2023mar.onnx \
+  --sface-model /home/jetson/face_models/face_recognition_sface_2021dec.onnx \
+  --sim-threshold-upper 0.35 \
+  --sim-threshold-lower 0.25 \
   --headless
 ```
 
@@ -460,8 +535,33 @@ D435 aligned_depth → 取 ROI 深度統計 (median) → 傳 3D 坐標
 
 ---
 
-## 參考資源
+## 社群專案經驗借鏡
 
+### 類似專案案例
+
+| 專案名稱 | 平台 | 核心技術 | 參考價值 |
+|:---|:---|:---|:---|
+| OpenCV 官方教學 | 通用 | LBPH, Haar | 基礎概念、快速入門 |
+| Jetson Nano 門禁系統 | Jetson Nano | MTCNN + FaceNet + TensorRT | **效能優化、部署流程** |
+| ROSPug 四足機器人 | Jetson Nano | OpenCV DNN | **機器人整合、硬體選型** |
+| Astro 機器狗 | Jetson TX2 | PyTorch + TensorRT | 模型訓練、雲端協同 |
+
+### 部署常見問題
+
+**光線變化**：逆光場景（窗邊、門口）常導致人臉區域過暗或過曝。
+- 緩解策略：啟用 RealSense D435 自動曝光、HDR 模式
+- 建議將機器狗主要活動區域設定在室內均勻照明處
+
+**角度限制**：機器狗低視角（地面以上 30-50 公分）對成人為仰角拍攝。
+- 建議採用廣角鏡頭（>100° 對角線視野）
+- 極端側臉（>45°）辨識率驟降，需特別收集側臉照片
+
+**動態模糊**：機器狗移動時產生方向性模糊條紋。
+- 解決方案：提高相機幀率至 60 FPS、移動時降低辨識幀率
+
+---
+
+## 參考資源
 - [InsightFace](https://github.com/deepinsight/insightface)
 - [OpenFace](https://github.com/TadasBaltrusaitis/OpenFace)
 - [6DRepNet](https://github.com/thohemp/6DRepNet)

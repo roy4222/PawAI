@@ -40,6 +40,15 @@ class EnrollStartRequest(BaseModel):
     person_name: str = Field(min_length=1)
     samples: int = Field(default=30, gt=0, le=500)
     interval: float = Field(default=0.35, gt=0)
+    profile_id: Optional[str] = None
+
+
+class ProfileSelectRequest(BaseModel):
+    profile_id: str = Field(min_length=1)
+
+
+class InferStartRequest(BaseModel):
+    profile_id: Optional[str] = None
 
 
 class AppConfig(BaseModel):
@@ -66,6 +75,131 @@ CONFIG = AppConfig(
     infer_script="/home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py",
     stream_health_url="http://127.0.0.1:8081/stream?topic=/camera/camera/color/image_raw",
 )
+
+MODEL_PROFILES = {
+    "yunet_sface_fp32": {
+        "label": "YuNet + SFace FP32",
+        "description": "Default profile using fp32 ONNX models",
+        "enroll_args": [
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec.onnx",
+            "--det-score-threshold",
+            "0.90",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+        ],
+        "infer_args": [
+            "--model-path",
+            "/home/jetson/face_db/model_sface_fp32.pkl",
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec.onnx",
+            "--det-score-threshold",
+            "0.90",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+            "--sim-threshold-upper",
+            "0.35",
+            "--sim-threshold-lower",
+            "0.25",
+            "--stable-hits",
+            "3",
+            "--unknown-grace-s",
+            "1.2",
+            "--min-face-area-ratio",
+            "0.02",
+        ],
+    },
+    "yunet_sface_int8": {
+        "label": "YuNet + SFace INT8BQ",
+        "description": "Quantized ONNX variants for edge speed testing",
+        "enroll_args": [
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar_int8bq.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec_int8bq.onnx",
+            "--det-score-threshold",
+            "0.90",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+        ],
+        "infer_args": [
+            "--model-path",
+            "/home/jetson/face_db/model_sface_int8.pkl",
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar_int8bq.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec_int8bq.onnx",
+            "--det-score-threshold",
+            "0.90",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+            "--sim-threshold-upper",
+            "0.35",
+            "--sim-threshold-lower",
+            "0.25",
+            "--stable-hits",
+            "3",
+            "--unknown-grace-s",
+            "1.2",
+            "--min-face-area-ratio",
+            "0.02",
+        ],
+    },
+    "yunet_sface_strict": {
+        "label": "YuNet + SFace Strict",
+        "description": "Same models with stricter known/unknown thresholds",
+        "enroll_args": [
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec.onnx",
+            "--det-score-threshold",
+            "0.92",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+        ],
+        "infer_args": [
+            "--model-path",
+            "/home/jetson/face_db/model_sface_strict.pkl",
+            "--yunet-model",
+            "/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
+            "--sface-model",
+            "/home/jetson/face_models/face_recognition_sface_2021dec.onnx",
+            "--det-score-threshold",
+            "0.92",
+            "--det-nms-threshold",
+            "0.30",
+            "--det-top-k",
+            "5000",
+            "--sim-threshold-upper",
+            "0.42",
+            "--sim-threshold-lower",
+            "0.30",
+            "--stable-hits",
+            "3",
+            "--unknown-grace-s",
+            "1.2",
+            "--min-face-area-ratio",
+            "0.02",
+        ],
+    },
+}
+
+SELECTED_PROFILE_ID = "yunet_sface_fp32"
 
 
 def _spawn_reader(state: ProcState):
@@ -128,6 +262,46 @@ def _guidance(saved: int, total: int) -> str:
     return "Scan complete. You can add another person or run demo."
 
 
+def _require_profile(profile_id: str):
+    profile = MODEL_PROFILES.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail=f"unknown profile: {profile_id}")
+    return profile
+
+
+def _iter_profile_model_paths(args: list[str]):
+    i = 0
+    while i < len(args) - 1:
+        if args[i] in {"--yunet-model", "--sface-model"}:
+            yield Path(args[i + 1])
+            i += 2
+            continue
+        i += 1
+
+
+def _validate_profile_models(profile: dict):
+    missing = []
+    for p in _iter_profile_model_paths(profile["enroll_args"] + profile["infer_args"]):
+        if not p.exists():
+            missing.append(str(p))
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "model files missing for selected profile",
+                "missing": missing,
+            },
+        )
+
+
+def _profile_summary(profile_id: str, profile: dict):
+    return {
+        "id": profile_id,
+        "label": profile["label"],
+        "description": profile["description"],
+    }
+
+
 def _check_stream_health(url: str):
     req = Request(url, method="HEAD")
     started = time.time()
@@ -150,6 +324,7 @@ def _check_stream_health(url: str):
 
 @APP.get("/api/status")
 def get_status():
+    selected_profile = _require_profile(SELECTED_PROFILE_ID)
     with ENROLL.lock:
         enroll = {
             "running": ENROLL.running(),
@@ -170,6 +345,41 @@ def get_status():
         "enroll": enroll,
         "infer": infer,
         "people": _list_people(Path(CONFIG.db_dir)),
+        "selected_profile": _profile_summary(SELECTED_PROFILE_ID, selected_profile),
+        "profiles": [
+            _profile_summary(profile_id, profile)
+            for profile_id, profile in MODEL_PROFILES.items()
+        ],
+    }
+
+
+@APP.get("/api/model/profiles")
+def model_profiles():
+    selected_profile = _require_profile(SELECTED_PROFILE_ID)
+    return {
+        "selected_profile": _profile_summary(SELECTED_PROFILE_ID, selected_profile),
+        "profiles": [
+            _profile_summary(profile_id, profile)
+            for profile_id, profile in MODEL_PROFILES.items()
+        ],
+    }
+
+
+@APP.post("/api/model/select")
+def model_select(req: ProfileSelectRequest):
+    global SELECTED_PROFILE_ID
+    profile = _require_profile(req.profile_id)
+    _validate_profile_models(profile)
+    with ENROLL.lock, INFER.lock:
+        if ENROLL.running() or INFER.running():
+            raise HTTPException(
+                status_code=409,
+                detail="cannot switch profile while enroll/infer is running",
+            )
+    SELECTED_PROFILE_ID = req.profile_id
+    return {
+        "ok": True,
+        "selected_profile": _profile_summary(SELECTED_PROFILE_ID, profile),
     }
 
 
@@ -180,6 +390,9 @@ def stream_health():
 
 @APP.post("/api/enroll/start")
 def enroll_start(req: EnrollStartRequest):
+    profile_id = req.profile_id or SELECTED_PROFILE_ID
+    profile = _require_profile(profile_id)
+    _validate_profile_models(profile)
     with ENROLL.lock:
         if ENROLL.running():
             raise HTTPException(status_code=409, detail="enroll already running")
@@ -197,10 +410,19 @@ def enroll_start(req: EnrollStartRequest):
             str(req.interval),
             "--output-dir",
             CONFIG.db_dir,
-            "--headless",
         ]
+        cmd.extend(profile["enroll_args"])
+        cmd.extend(
+            [
+                "--headless",
+            ]
+        )
         pid = _start_process(ENROLL, cmd)
-    return {"ok": True, "pid": pid}
+    return {
+        "ok": True,
+        "pid": pid,
+        "selected_profile": _profile_summary(profile_id, profile),
+    }
 
 
 @APP.post("/api/enroll/stop")
@@ -213,7 +435,10 @@ def enroll_stop():
 
 
 @APP.post("/api/infer/start")
-def infer_start():
+def infer_start(req: Optional[InferStartRequest] = None):
+    profile_id = req.profile_id if req and req.profile_id else SELECTED_PROFILE_ID
+    profile = _require_profile(profile_id)
+    _validate_profile_models(profile)
     with INFER.lock:
         if INFER.running():
             raise HTTPException(status_code=409, detail="infer already running")
@@ -223,12 +448,19 @@ def infer_start():
             CONFIG.infer_script,
             "--db-dir",
             CONFIG.db_dir,
-            "--model-path",
-            str(Path(CONFIG.db_dir) / "model_centroid.pkl"),
-            "--headless",
         ]
+        cmd.extend(profile["infer_args"])
+        cmd.extend(
+            [
+                "--headless",
+            ]
+        )
         pid = _start_process(INFER, cmd)
-    return {"ok": True, "pid": pid}
+    return {
+        "ok": True,
+        "pid": pid,
+        "selected_profile": _profile_summary(profile_id, profile),
+    }
 
 
 @APP.post("/api/infer/stop")

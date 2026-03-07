@@ -19,10 +19,18 @@ type InferStatus = {
 
 type Person = { name: string; samples: number };
 
+type ModelProfile = {
+  id: string;
+  label: string;
+  description: string;
+};
+
 type StatusPayload = {
   enroll: EnrollStatus;
   infer: InferStatus;
   people: Person[];
+  selected_profile: ModelProfile;
+  profiles: ModelProfile[];
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://192.168.0.222:8000";
@@ -32,10 +40,12 @@ export default function Page() {
   const [samples, setSamples] = useState(30);
   const [intervalSec, setIntervalSec] = useState(0.35);
   const [statusText, setStatusText] = useState("idle");
+  const [selectedProfileId, setSelectedProfileId] = useState("yunet_sface_fp32");
   const [busyEnrollStart, setBusyEnrollStart] = useState(false);
   const [busyEnrollStop, setBusyEnrollStop] = useState(false);
   const [busyInferStart, setBusyInferStart] = useState(false);
   const [busyInferStop, setBusyInferStop] = useState(false);
+  const [busyProfileSelect, setBusyProfileSelect] = useState(false);
   const [data, setData] = useState<StatusPayload | null>(null);
 
   const host = useMemo(() => {
@@ -58,9 +68,10 @@ export default function Page() {
         if (!res.ok) throw new Error(`status ${res.status}`);
         const payload = (await res.json()) as StatusPayload;
         setData(payload);
+        setSelectedProfileId(payload.selected_profile.id);
         const enrollState = payload.enroll.running ? `enroll running pid=${payload.enroll.pid}` : "enroll idle";
         const inferState = payload.infer.running ? `infer running pid=${payload.infer.pid}` : "infer idle";
-        setStatusText(`${enrollState} | ${inferState}`);
+        setStatusText(`${payload.selected_profile.label} | ${enrollState} | ${inferState}`);
       } catch {
         setStatusText("connection issue: retrying...");
       }
@@ -78,7 +89,12 @@ export default function Page() {
       const res = await fetch(`${API_BASE}/api/enroll/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ person_name: personName, samples, interval: intervalSec }),
+        body: JSON.stringify({
+          person_name: personName,
+          samples,
+          interval: intervalSec,
+          profile_id: selectedProfileId,
+        }),
       });
       if (!res.ok) {
         const msg = await res.text();
@@ -107,7 +123,11 @@ export default function Page() {
     setBusyInferStart(true);
     setStatusText("starting demo...");
     try {
-      const res = await fetch(`${API_BASE}/api/infer/start`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/api/infer/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: selectedProfileId }),
+      });
       if (!res.ok) throw new Error(await res.text());
       setStatusText("demo started");
     } catch (e) {
@@ -128,6 +148,25 @@ export default function Page() {
     }
   };
 
+  const applyProfile = async () => {
+    setBusyProfileSelect(true);
+    setStatusText("switching model profile...");
+    try {
+      const res = await fetch(`${API_BASE}/api/model/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: selectedProfileId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setStatusText(`profile switched: ${selectedProfileId}`);
+    } catch (e) {
+      setStatusText("switch profile failed");
+      alert(String(e));
+    } finally {
+      setBusyProfileSelect(false);
+    }
+  };
+
   return (
     <main className="wrap">
       <h1>Face Dashboard (Next.js + FastAPI)</h1>
@@ -138,6 +177,20 @@ export default function Page() {
           <h3>Scan Setup</h3>
           <label>Person Name</label>
           <input value={personName} onChange={(e) => setPersonName(e.target.value)} />
+          <label>Model Profile</label>
+          <div className="row">
+            <select value={selectedProfileId} onChange={(e) => setSelectedProfileId(e.target.value)}>
+              {(data?.profiles ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <button className="primary" disabled={busyProfileSelect} onClick={applyProfile}>
+              {busyProfileSelect ? "Applying..." : "Apply Profile"}
+            </button>
+          </div>
+          <div>{data?.selected_profile.description ?? ""}</div>
           <div className="row">
             <div>
               <label>Samples</label>

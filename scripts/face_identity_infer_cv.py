@@ -14,22 +14,11 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 
 
-def resolve_cascade_path() -> Path:
-    candidates = []
-    if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
-        candidates.append(
-            Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
-        )
-    candidates.extend(
-        [
-            Path("/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml"),
-            Path("/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml"),
-        ]
-    )
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    raise FileNotFoundError("Cannot find haarcascade_frontalface_default.xml")
+def resolve_model_path(path: str, model_name: str) -> Path:
+    model_path = Path(path)
+    if not model_path.exists():
+        raise FileNotFoundError(f"Cannot find {model_name} model: {model_path}")
+    return model_path
 
 
 def list_face_images(db_dir: Path):
@@ -63,38 +52,6 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (na * nb))
 
 
-def preprocess_face(gray: np.ndarray) -> np.ndarray:
-    face = cv2.resize(gray, (160, 160), interpolation=cv2.INTER_AREA)
-    feat = cv2.resize(face, (32, 32), interpolation=cv2.INTER_AREA).astype(np.float32)
-    feat = feat.flatten()
-    feat -= feat.mean()
-    feat /= feat.std() + 1e-6
-    return feat
-
-
-def train_model(db_dir: Path):
-    samples = list_face_images(db_dir)
-    if len(samples) == 0:
-        raise RuntimeError(f"No face samples found under {db_dir}")
-
-    by_person = {}
-    for name, img_path in samples:
-        gray = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-        if gray is None:
-            continue
-        feat = preprocess_face(gray)
-        by_person.setdefault(name, []).append(feat)
-
-    model = {"embeddings": {}, "centroids": {}, "counts": {}}
-    for name, feats in by_person.items():
-        if len(feats) == 0:
-            continue
-        model["embeddings"][name] = feats
-        model["centroids"][name] = np.mean(np.stack(feats, axis=0), axis=0)
-        model["counts"][name] = len(feats)
-    return model
-
-
 class FaceIdentityNode(Node):
     def __init__(self, args):
         super().__init__("face_identity_infer_cv")
@@ -116,9 +73,24 @@ class FaceIdentityNode(Node):
         self.depth = None
         self.depth_scale = 0.001
 
-        self.face = cv2.CascadeClassifier(str(resolve_cascade_path()))
-        if self.face.empty():
-            raise RuntimeError("Failed to load Haar cascade")
+        if not hasattr(cv2, "FaceDetectorYN") or not hasattr(cv2, "FaceRecognizerSF"):
+            raise RuntimeError(
+                "OpenCV build does not support FaceDetectorYN/FaceRecognizerSF; "
+                "please install OpenCV >= 4.8 with face module"
+            )
+
+        yunet_model = resolve_model_path(args.yunet_model, "YuNet")
+        sface_model = resolve_model_path(args.sface_model, "SFace")
+
+        self.detector = cv2.FaceDetectorYN.create(
+            str(yunet_model),
+            "",
+            (320, 320),
+            args.det_score_threshold,
+            args.det_nms_threshold,
+            args.det_top_k,
+        )
+        self.recognizer = cv2.FaceRecognizerSF.create(str(sface_model), "")
 
         self.model_path = Path(args.model_path)
         current_counts = compute_db_counts(Path(args.db_dir))
@@ -131,7 +103,7 @@ class FaceIdentityNode(Node):
                     "Enrollment DB changed; retraining model "
                     f"(stored={stored_counts}, current={current_counts})"
                 )
-                self.model = train_model(Path(args.db_dir))
+                self.model = self.train_model(Path(args.db_dir))
                 self.model_path.parent.mkdir(parents=True, exist_ok=True)
                 with self.model_path.open("wb") as wf:
                     pickle.dump(self.model, wf)
@@ -141,14 +113,11 @@ class FaceIdentityNode(Node):
             else:
                 self.get_logger().info(f"Loaded model from {self.model_path}")
         else:
-            self.model = train_model(Path(args.db_dir))
+            self.model = self.train_model(Path(args.db_dir))
             self.model_path.parent.mkdir(parents=True, exist_ok=True)
             with self.model_path.open("wb") as f:
                 pickle.dump(self.model, f)
             self.get_logger().info(f"Trained and saved model to {self.model_path}")
-
-        if "embeddings" not in self.model:
-            self.model["embeddings"] = {}
 
         self.debug_image_pub = self.create_publisher(
             Image, "/face_identity/debug_image", 10
@@ -162,8 +131,69 @@ class FaceIdentityNode(Node):
         self.timer = self.create_timer(0.05, self.tick)
 
         self.get_logger().info(
-            f"Identity ready, people={sorted(self.model.get('centroids', {}).keys())}, headless={self.headless}"
+            f"Identity ready, people={sorted(self.model.get('centroids', {}).keys())}, "
+            f"headless={self.headless}"
         )
+
+    @staticmethod
+    def pick_largest_face(faces: np.ndarray):
+        if faces is None or len(faces) == 0:
+            return None
+        return max(faces, key=lambda row: float(row[2] * row[3]))
+
+    def extract_embedding_from_crop(self, image_bgr: np.ndarray, face_row: np.ndarray):
+        aligned = self.recognizer.alignCrop(image_bgr, face_row)
+        if aligned is None or aligned.size == 0:
+            return None
+        emb = self.recognizer.feature(aligned)
+        if emb is None:
+            return None
+        emb = np.asarray(emb, dtype=np.float32).reshape(-1)
+        return emb
+
+    def train_model(self, db_dir: Path):
+        samples = list_face_images(db_dir)
+        if len(samples) == 0:
+            raise RuntimeError(f"No face samples found under {db_dir}")
+
+        by_person = {}
+        for name, img_path in samples:
+            bgr = cv2.imread(str(img_path), cv2.IMREAD_COLOR)
+            if bgr is None:
+                continue
+
+            if bgr.shape[0] == 112 and bgr.shape[1] == 112:
+                emb = self.recognizer.feature(bgr)
+                if emb is None:
+                    continue
+                emb = np.asarray(emb, dtype=np.float32).reshape(-1)
+                by_person.setdefault(name, []).append(emb)
+                continue
+
+            h, w = bgr.shape[:2]
+            self.detector.setInputSize((w, h))
+            _, faces = self.detector.detect(bgr)
+            face = self.pick_largest_face(faces)
+            if face is None:
+                continue
+            emb = self.extract_embedding_from_crop(bgr, face)
+            if emb is None:
+                continue
+            by_person.setdefault(name, []).append(emb)
+
+        model = {"embeddings": {}, "centroids": {}, "counts": {}}
+        for name, feats in by_person.items():
+            if len(feats) == 0:
+                continue
+            model["embeddings"][name] = feats
+            model["centroids"][name] = np.mean(np.stack(feats, axis=0), axis=0)
+            model["counts"][name] = len(feats)
+
+        if len(model["counts"]) == 0:
+            raise RuntimeError(
+                "No valid face embeddings from DB; please re-enroll samples"
+            )
+        return model
 
     def cb_color(self, msg):
         with self.lock:
@@ -173,17 +203,16 @@ class FaceIdentityNode(Node):
         with self.lock:
             self.depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
-    def predict_name(self, gray_face: np.ndarray):
-        feat = preprocess_face(gray_face)
+    def predict_name(self, emb: np.ndarray):
         best_name = "unknown"
         best_sim = -1.0
 
         for name, centroid in self.model.get("centroids", {}).items():
             sample_embs = self.model.get("embeddings", {}).get(name, [])
             if len(sample_embs) > 0:
-                sim = max(cosine_similarity(feat, emb) for emb in sample_embs)
+                sim = max(cosine_similarity(emb, sample) for sample in sample_embs)
             else:
-                sim = cosine_similarity(feat, centroid)
+                sim = cosine_similarity(emb, centroid)
 
             if sim > best_sim:
                 best_sim = sim
@@ -251,45 +280,49 @@ class FaceIdentityNode(Node):
             return
 
         raw = color.copy()
-        gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
-        faces = self.face.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50)
-        )
-        faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+        h, w = color.shape[:2]
+        self.detector.setInputSize((w, h))
+        _, faces = self.detector.detect(color)
+        face = self.pick_largest_face(faces)
 
         lines = []
-        if len(faces) > 0:
-            x, y, w, h = faces[0]
+        if face is not None:
+            x, y, fw, fh = face[:4].astype(np.int32)
+            x = max(0, x)
+            y = max(0, y)
+            x2 = min(w, x + max(1, fw))
+            y2 = min(h, y + max(1, fh))
+
             frame_area = float(color.shape[0] * color.shape[1])
-            if (w * h) / frame_area >= self.args.min_face_area_ratio:
-                x2 = min(color.shape[1], x + w)
-                y2 = min(color.shape[0], y + h)
+            if ((x2 - x) * (y2 - y)) / frame_area >= self.args.min_face_area_ratio:
+                emb = self.extract_embedding_from_crop(color, face)
+                if emb is not None:
+                    raw_name, raw_sim = self.predict_name(emb)
+                    name, sim, mode = self.decide_stable_name(raw_name, raw_sim)
 
-                face_gray = gray[y:y2, x:x2]
-                raw_name, raw_sim = self.predict_name(face_gray)
-                name, sim, mode = self.decide_stable_name(raw_name, raw_sim)
+                    dist_txt = "N/A"
+                    if depth is not None:
+                        roi = depth[y:y2, x:x2]
+                        valid = roi[(roi > 0) & (roi < 10000)]
+                        if valid.size:
+                            dist_txt = (
+                                f"{float(np.median(valid)) * self.depth_scale:.2f}m"
+                            )
 
-                dist_txt = "N/A"
-                if depth is not None:
-                    roi = depth[y:y2, x:x2]
-                    valid = roi[(roi > 0) & (roi < 10000)]
-                    if valid.size:
-                        dist_txt = f"{float(np.median(valid)) * self.depth_scale:.2f}m"
+                    label = f"{name} sim={sim:.2f} d={dist_txt} {mode}"
+                    lines.append(label)
 
-                label = f"{name} sim={sim:.2f} d={dist_txt} {mode}"
-                lines.append(label)
-
-                color_box = (0, 255, 0) if name != "unknown" else (0, 0, 255)
-                cv2.rectangle(color, (x, y), (x2, y2), color_box, 2)
-                cv2.putText(
-                    color,
-                    label,
-                    (x, max(20, y - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
-                    color_box,
-                    2,
-                )
+                    color_box = (0, 255, 0) if name != "unknown" else (0, 0, 255)
+                    cv2.rectangle(color, (x, y), (x2, y2), color_box, 2)
+                    cv2.putText(
+                        color,
+                        label,
+                        (x, max(20, y - 8)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        color_box,
+                        2,
+                    )
 
         compare = cv2.hconcat([raw, color])
         self.safe_publish(color, compare)
@@ -312,12 +345,23 @@ class FaceIdentityNode(Node):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Real-time face identity inference (CV baseline)"
+        description="Real-time face identity inference (YuNet + SFace baseline)"
     )
     p.add_argument("--db-dir", default="/home/jetson/face_db")
-    p.add_argument("--model-path", default="/home/jetson/face_db/model_centroid.pkl")
-    p.add_argument("--sim-threshold-upper", type=float, default=0.42)
-    p.add_argument("--sim-threshold-lower", type=float, default=0.30)
+    p.add_argument("--model-path", default="/home/jetson/face_db/model_sface.pkl")
+    p.add_argument(
+        "--yunet-model",
+        default="/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
+    )
+    p.add_argument(
+        "--sface-model",
+        default="/home/jetson/face_models/face_recognition_sface_2021dec.onnx",
+    )
+    p.add_argument("--det-score-threshold", type=float, default=0.90)
+    p.add_argument("--det-nms-threshold", type=float, default=0.30)
+    p.add_argument("--det-top-k", type=int, default=5000)
+    p.add_argument("--sim-threshold-upper", type=float, default=0.35)
+    p.add_argument("--sim-threshold-lower", type=float, default=0.25)
     p.add_argument("--stable-hits", type=int, default=3)
     p.add_argument("--unknown-grace-s", type=float, default=1.2)
     p.add_argument("--min-face-area-ratio", type=float, default=0.02)
