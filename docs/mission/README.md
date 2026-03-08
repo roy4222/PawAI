@@ -1,9 +1,12 @@
 # PawAI Mission 入口頁
 
 **專案名稱**：老人與狗 (Elder and Dog) / PawAI  
-**文件版本**：v1.0  
+**文件版本**：v1.1  
 **定案日期**：2026-03-07  
+**最後更新**：2026-03-08  
 **交付期限**：2026/4/13 (硬底線)
+
+> **v1.1 更新**：修正 D435 麥克風錯誤資訊、新增會議紀錄補充文件連結
 
 ---
 
@@ -94,6 +97,7 @@
 | **機器人載體** | Unitree Go2 Pro | 12 關節四足、內建 LiDAR/IMU | 運動執行、環境感知 |
 | **邊緣運算** | NVIDIA Jetson Orin Nano SUPER | 8GB VRAM、ARM 架構 | 即時感知、本地決策、ROS2 runtime |
 | **視覺感測** | Intel RealSense D435 | RGB-D 深度攝影機 | 人臉偵測、深度估計、手勢辨識 |
+| **音訊輸入** | USB 麥克風（待採購） | 外接式 | 中文語音輸入（⚠️ D435 無內建麥克風） |
 | **遠端算力** | NVIDIA Quadro RTX 8000 | 48GB VRAM × 5 張 | ASR/TTS/LLM、模型訓練、雲端推理 |
 
 ### 4.2 算力分工策略
@@ -111,7 +115,8 @@
 │  ├── YuNet + SFace (人臉偵測/識別)                          │
 │  ├── ROS2 Humble (系統整合)                                 │
 │  ├── Interaction Executive v1 (中控決策)                    │
-│  └── Silero VAD (語音活動偵測)                              │
+│  ├── Silero VAD (語音活動偵測)                              │
+│  └── USB 麥克風驅動 (ALSA/PulseAudio)                       │
 └─────────────────────────────────────────────────────────────┘
                               ↑↓ USB/網路
 ┌─────────────────────────────────────────────────────────────┐
@@ -184,7 +189,7 @@
 ```
 使用者說話
     ↓
-[D435 麥克風陣列] ──→ Layer 1 音訊擷取
+[USB 麥克風] ──→ Layer 1 音訊擷取
     ↓
 [雲端 ASR] ──→ 文字轉錄
     ↓
@@ -198,6 +203,8 @@ Layer 3 Interaction Executive 接收事件
     ↓
 Go2 播放語音回應 + 執行對應動作 (wave/stand/look_left)
 ```
+
+> **注意**：D435 無內建麥克風，需外接 USB 麥克風。詳見 [會議紀錄補充文件](./meeting_notes_supplement.md)
 
 ### 5.4 介面契約摘要
 
@@ -409,6 +416,20 @@ Go2 播放語音回應 + 執行對應動作 (wave/stand/look_left)
 - [ ] **鄔**：先把 Website 做出「一鍵 Demo + brain state 監控」
 - [ ] **Architect**：準備 Bring-up 手冊與故障排查第一版
 
+### 8.6 未定事項與決策時程
+
+以下項目會議紀錄標示「未定」，需依時程決定：
+
+| 未定項目 | 建議決策時程 | 負責人 | 詳見補充文件 |
+|----------|-------------|--------|-------------|
+| 麥克風硬體方案 | **3/12 前** | 鄔 | 第 1 節 |
+| 手勢對應行為 | **3/16 前** | 楊/鄔 | 第 3 節 |
+| 尋物簡化程度 | **3/16 前** | 全員 | 第 4 節 |
+| AI 大腦最終深度 | **維持開放** | Architect | 第 5 節 |
+| 展示場地規格 | **3/30 前** | 全員 | 第 6 節 |
+
+**詳細選項分析**請見：[會議紀錄補充文件](./meeting_notes_supplement.md)
+
 ---
 
 ## 9. 風險與降級策略
@@ -422,6 +443,9 @@ Go2 播放語音回應 + 執行對應動作 (wave/stand/look_left)
 | 中文語音現場誤識別 | 錯誤回應 | 小詞表 + 關鍵字規則 + 文字輸入替代 | 鄔 | 3/14 |
 | Go2 技能執行不穩 | 動作失敗 | Safety guard (速度上限、超時 stop) | Architect | 3/12 |
 | Website 與 ROS 串接受限 | 無法展示 | web-bridge proxy 備案 + 同網段筆電 | 鄔 + Architect | 3/13 |
+
+**導航避障風險說明**：
+會議紀錄指出「導航避障風險高」。具體技術瓶頸：Go2 LiDAR 感測頻率過低（<2Hz，需 ≥10Hz），資料間隙可達 1.85 秒，無法支援安全連續避障。詳見[會議紀錄補充文件](./meeting_notes_supplement.md)第 2 節。
 
 ### 9.2 網路降級策略 (正式驗收項)
 
@@ -465,6 +489,7 @@ Go2 播放語音回應 + 執行對應動作 (wave/stand/look_left)
 docs/
 ├── mission/
 │   ├── README.md          # ← 你正在這裡 (入口頁)
+│   ├── meeting_notes_supplement.md  # 會議紀錄補充（未定事項細節）
 │   ├── vision.md          # 專案願景 (待撰寫)
 │   └── roadmap.md         # 開發路線圖 (待撰寫)
 │
@@ -494,6 +519,7 @@ docs/
 
 | 目的 | 連結 |
 |------|------|
+| **會議紀錄補充** | [meeting_notes_supplement.md](./meeting_notes_supplement.md) |
 | **人臉模組設計** | [人臉辨識/README.md](../人臉辨識/README.md) |
 | **語音模組設計** | [語音功能/README.md](../語音功能/README.md) |
 | **介面契約規格** | [interaction_v1_contract.md](../architecture/interaction_v1_contract.md) |
@@ -536,6 +562,6 @@ docs/
 
 ---
 
-*最後更新：2026-03-07*  
+*最後更新：2026-03-08*  
 *維護者：System Architect*  
-*狀態：v1.0 定案*
+*狀態：v1.1（修正麥克風資訊、補充會議未定事項）*
