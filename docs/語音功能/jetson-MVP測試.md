@@ -426,22 +426,34 @@ PY
 
 ### 7.3 啟動指令
 
-若已有 ASR node：
+目前 Phase 2 已提供獨立 ASR node（`asr_node`）：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run speech_processor stt_intent_node"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor asr_node --ros-args -p model_name:=tiny -p language:=zh"
 ```
 
-若後續拆成獨立 ASR node，可使用對應指令，例如：
+若要確認 VAD 到 ASR 的音訊片段串流：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run speech_processor asr_node"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /audio/speech_segment"
 ```
 
 觀察 ASR 輸出：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic echo /asr_result"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /asr_result"
+```
+
+必要依賴（至少擇一 ASR backend）：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && uv pip install faster-whisper"
+```
+
+若 `faster-whisper` 不可用，可改用：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && uv pip install openai-whisper"
 ```
 
 ### 7.4 測試步驟
