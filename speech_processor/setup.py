@@ -32,6 +32,7 @@ setup(
             "tts_node = speech_processor.tts_node:main",
             "vad_node = speech_processor.vad_node:main",
             "asr_node = speech_processor.asr_node:main",
+            "intent_node = speech_processor.intent_node:main",
             "stt_intent_node = speech_processor.stt_intent_node:main",
         ],
     },

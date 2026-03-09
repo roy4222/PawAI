@@ -556,26 +556,32 @@ ASR 參數：
 
 ### 8.3 啟動指令
 
-若 Intent 與 STT 合併在 `stt_intent_node`：
+目前 Phase 3 建議使用獨立 `intent_node`（訂閱 `/asr_result`）：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run speech_processor stt_intent_node"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor intent_node"
+```
+
+若要觀察 intent 狀態：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /state/interaction/intent"
 ```
 
 觀察建議 topic：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic echo /intent"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /intent"
 ```
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic echo /event/speech_intent_recognized"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /event/speech_intent_recognized"
 ```
 
-若契約版名稱已採用，也要確認：
+若契約版名稱已採用，也可確認：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic echo /event/speech_intent"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /event/speech_intent"
 ```
 
 ### 8.4 測試步驟
@@ -623,6 +629,37 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 - 將危險動作 intent 設為高門檻匹配
 - 若 topic 沒有輸出，確認 node 內實際發布名稱是 `/intent`、`/event/speech_intent_recognized` 或 `/event/speech_intent`
 - 若規則與 ASR 互相干擾，先固定輸入文字做單元測試
+
+### 8.8 2026-03-09 實測進度（Phase 3）
+
+本日已完成 ASR -> Intent 串流打通，重點如下。
+
+#### 已完成項目
+
+- `intent_node` 可正常啟動（訂閱 `/asr_result`）
+- `/intent` 與 `/event/speech_intent_recognized` 均有持續輸出
+- 已確認 intent label 可命中：`sit`、`stand`、`hello`、`stop`、`chat`
+- `session_id` 在 ASR 與 Intent 事件中可對應同一輪
+
+#### tmux 觀察補充
+
+- `speech-mvp` 目前採 6 pane 監看（VAD/ASR/Intent + 3 個 topic echo）
+- 畫面看起來像 4 pane 通常是 tiled 佈局下部分 pane 過窄，不代表程式退出
+- 實際判斷請以 `tmux list-panes -t speech-mvp -F '#{pane_index} dead=#{pane_dead}'` 為準（本次為 `0~5` 且 `dead=0`）
+
+#### 實測結果摘要
+
+- Phase 3 已達成「可用閉環」：`VAD -> ASR -> Intent`
+- 目前仍有 `unknown` 比例偏高情況（主要受 ASR 誤辨與規則覆蓋率影響）
+- 這屬於命中率調優問題，非串流故障
+
+#### 下一步建議（調優）
+
+1. 先用固定 5 句標準句反覆測試（hello/sit/stand/stop/chat）
+2. 依誤辨詞擴充 `intent_node` 關鍵字規則
+3. 視情況將 `min_confidence` 由 `0.55` 下修至 `0.45` 做 A/B 比較
+
+> 建議策略：先穩定通鏈路，再集中做命中率優化，避免每個 Phase 重複調參。
 
 ---
 
