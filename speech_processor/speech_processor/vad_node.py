@@ -6,6 +6,7 @@
 import json
 import importlib
 import queue
+import base64
 from datetime import datetime
 from secrets import token_hex
 from typing import Any, Optional
@@ -61,9 +62,13 @@ class VadNode(Node):
         self.event_topic = str(
             self.get_parameter("event_topic").get_parameter_value().string_value
         )
+        self.segment_topic = str(
+            self.get_parameter("segment_topic").get_parameter_value().string_value
+        )
 
         self.state_pub = self.create_publisher(String, self.state_topic, 10)
         self.event_pub = self.create_publisher(String, self.event_topic, 10)
+        self.segment_pub = self.create_publisher(String, self.segment_topic, 10)
 
         self.current_state = "INITIALIZING"
         self.active_session_id: Optional[str] = None
@@ -72,6 +77,7 @@ class VadNode(Node):
 
         self._audio_queue: "queue.Queue" = queue.Queue(maxsize=256)
         self._vad_buffer = np.array([], dtype=np.float32)
+        self._active_segment_chunks = []
         self._stream: Optional[Any] = None
         self._sd: Optional[Any] = None
         self._torch: Optional[Any] = None
@@ -104,6 +110,7 @@ class VadNode(Node):
         self.declare_parameter("state_publish_hz", 5.0)
         self.declare_parameter("state_topic", "/state/interaction/speech")
         self.declare_parameter("event_topic", "/event/speech_activity")
+        self.declare_parameter("segment_topic", "/audio/speech_segment")
 
     def _load_dependencies(self) -> None:
         try:
@@ -221,13 +228,14 @@ class VadNode(Node):
                     self._torch.from_numpy(vad_frame),
                     return_seconds=False,
                 )
-                if not event:
-                    continue
+                if event:
+                    if "start" in event:
+                        self._on_speech_start()
+                    if "end" in event:
+                        self._on_speech_end()
 
-                if "start" in event:
-                    self._on_speech_start()
-                if "end" in event:
-                    self._on_speech_end()
+                if self.current_state == "SPEAKING":
+                    self._active_segment_chunks.append(vad_frame.copy())
 
     def _new_session_id(self) -> str:
         now = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -237,15 +245,41 @@ class VadNode(Node):
         if self.current_state == "SPEAKING":
             return
         self.active_session_id = self._new_session_id()
+        self._active_segment_chunks = []
         self.current_state = "SPEAKING"
         self._publish_event("speech_start")
 
     def _on_speech_end(self) -> None:
         if self.current_state != "SPEAKING":
             return
+        self._publish_segment()
         self._publish_event("speech_end")
         self.current_state = "LISTENING"
         self.active_session_id = None
+        self._active_segment_chunks = []
+
+    def _publish_segment(self) -> None:
+        if not self._active_segment_chunks:
+            return
+
+        segment = np.concatenate(self._active_segment_chunks)
+        pcm = np.clip(segment, -1.0, 1.0)
+        pcm_i16 = (pcm * 32767.0).astype(np.int16)
+        encoded = base64.b64encode(pcm_i16.tobytes()).decode("ascii")
+
+        msg = String()
+        msg.data = json.dumps(
+            {
+                "session_id": self.active_session_id,
+                "sample_rate": self.sample_rate,
+                "format": "pcm_s16le",
+                "num_samples": int(pcm_i16.shape[0]),
+                "audio_base64": encoded,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            },
+            ensure_ascii=True,
+        )
+        self.segment_pub.publish(msg)
 
     def _publish_event(self, event_name: str) -> None:
         msg = String()
@@ -299,7 +333,8 @@ def main(args=None) -> None:
     finally:
         if node is not None:
             node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

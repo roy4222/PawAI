@@ -504,6 +504,42 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && uv pip install openai-whisper"
 - 觀察記憶體是否不足導致推理速度異常
 - 若節點未輸出，檢查 node log 與 `/asr_result` topic 是否一致
 
+### 7.8 2026-03-09 實測進度（Phase 2）
+
+本日已完成 VAD -> ASR 串流打通，重點如下。
+
+#### 已完成項目
+
+- `faster-whisper` 安裝成功（Jetson 以 `pip3 --user` 路線）
+- `asr_node` 可正常啟動，backend 顯示 `faster_whisper`
+- `/audio/speech_segment`、`/state/interaction/asr`、`/asr_result` 三條 topic 均存在
+- `/state/interaction/asr` 可穩定看到 `processing -> done`
+- `/asr_result` 已有實際中文轉寫內容（非全空）
+
+#### 實測觀察
+
+- 已確認不是串流故障，屬於可用狀態
+- 仍有少量空字串結果（常見於語音片段過短或切段偏碎）
+- 當前階段建議：先往 Phase 3（Intent）推進，精度/延遲調優可在整鏈打通後集中處理
+
+#### 當前 baseline（可重現）
+
+VAD 參數：
+
+- `input_device:=0`
+- `sample_rate:=16000`
+- `capture_sample_rate:=44100`
+- `frame_samples:=512`
+- `vad_threshold:=0.25`
+- `min_silence_ms:=150`
+
+ASR 參數：
+
+- `model_name:=tiny`
+- `language:=zh`
+
+> 備註：若後續空字串比例偏高，可優先試 `vad_threshold=0.28~0.32`、`min_silence_ms=220~300`。
+
 ---
 
 ## 8. Phase 3: Intent Rule 測試
