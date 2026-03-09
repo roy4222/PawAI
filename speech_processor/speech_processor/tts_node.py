@@ -12,15 +12,21 @@ caching, and multiple provider support.
 
 import base64
 import io
+import importlib
 import json
 import os
+import shutil
+import subprocess
 import time
 import hashlib
+import tempfile
+import wave
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
 import threading
 
+import numpy as np
 from pydub import AudioSegment
 from pydub.playback import play
 import rclpy
@@ -32,6 +38,7 @@ from go2_interfaces.msg import WebRtcReq
 
 class AudioFormat(Enum):
     """Supported audio formats"""
+
     MP3 = "mp3"
     WAV = "wav"
     OGG = "ogg"
@@ -39,7 +46,10 @@ class AudioFormat(Enum):
 
 class TTSProvider(Enum):
     """Supported TTS providers"""
+
     ELEVENLABS = "elevenlabs"
+    MELOTTS = "melotts"
+    PIPER = "piper"
     GOOGLE = "google"
     AMAZON = "amazon"
     OPENAI = "openai"
@@ -48,6 +58,7 @@ class TTSProvider(Enum):
 @dataclass
 class TTSConfig:
     """Configuration for TTS functionality"""
+
     api_key: str
     provider: TTSProvider = TTSProvider.ELEVENLABS
     voice_name: str = "XrExE9yKIg1WjnnlVkGX"
@@ -57,47 +68,61 @@ class TTSConfig:
     chunk_size: int = 16 * 1024
     audio_quality: str = "standard"  # standard, high
     language: str = "en"
-    
+
     # ElevenLabs specific settings
     stability: float = 0.5
     similarity_boost: float = 0.5
     model_id: str = "eleven_turbo_v2_5"
 
+    # MeloTTS specific settings
+    melo_language: str = "ZH"
+    melo_speaker: str = "ZH"
+    melo_speed: float = 1.0
+    melo_device: str = "auto"
+
+    piper_model_path: str = ""
+    piper_config_path: str = ""
+    piper_speaker_id: int = 0
+    piper_length_scale: float = 1.0
+    piper_noise_scale: float = 0.667
+    piper_noise_w: float = 0.8
+    piper_use_cuda: bool = False
+
 
 class AudioCache:
     """Thread-safe audio cache management"""
-    
+
     def __init__(self, cache_dir: str, enabled: bool = True):
         self.cache_dir = cache_dir
         self.enabled = enabled
         self._lock = threading.Lock()
-        
+
         if self.enabled:
             os.makedirs(self.cache_dir, exist_ok=True)
-    
+
     def get_cache_path(self, text: str, voice_name: str, provider: str) -> str:
         """Generate cache file path"""
         cache_key = f"{text}_{voice_name}_{provider}"
         text_hash = hashlib.md5(cache_key.encode()).hexdigest()
         return os.path.join(self.cache_dir, f"{text_hash}.mp3")
-    
+
     def get(self, text: str, voice_name: str, provider: str) -> Optional[bytes]:
         """Get cached audio data"""
         if not self.enabled:
             return None
-            
+
         with self._lock:
             cache_path = self.get_cache_path(text, voice_name, provider)
             if os.path.exists(cache_path):
                 with open(cache_path, "rb") as f:
                     return f.read()
         return None
-    
+
     def put(self, text: str, voice_name: str, provider: str, audio_data: bytes) -> bool:
         """Cache audio data"""
         if not self.enabled or not audio_data:
             return False
-            
+
         with self._lock:
             try:
                 cache_path = self.get_cache_path(text, voice_name, provider)
@@ -106,12 +131,12 @@ class AudioCache:
                 return True
             except Exception:
                 return False
-    
+
     def clear(self) -> bool:
         """Clear all cached files"""
         if not self.enabled:
             return True
-            
+
         with self._lock:
             try:
                 for filename in os.listdir(self.cache_dir):
@@ -121,24 +146,25 @@ class AudioCache:
                 return True
             except Exception:
                 return False
-    
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get cache statistics"""
         if not self.enabled:
             return {"enabled": False}
-            
+
         with self._lock:
             try:
                 files = os.listdir(self.cache_dir)
                 total_size = sum(
-                    os.path.getsize(os.path.join(self.cache_dir, f)) 
-                    for f in files if os.path.isfile(os.path.join(self.cache_dir, f))
+                    os.path.getsize(os.path.join(self.cache_dir, f))
+                    for f in files
+                    if os.path.isfile(os.path.join(self.cache_dir, f))
                 )
                 return {
                     "enabled": True,
                     "file_count": len(files),
                     "total_size_mb": round(total_size / (1024 * 1024), 2),
-                    "cache_dir": self.cache_dir
+                    "cache_dir": self.cache_dir,
                 }
             except Exception:
                 return {"enabled": True, "error": "Unable to read cache stats"}
@@ -146,42 +172,42 @@ class AudioCache:
 
 class TTSProvider_ElevenLabs:
     """ElevenLabs TTS provider implementation"""
-    
+
     def __init__(self, config: TTSConfig):
         self.config = config
         self.base_url = "https://api.elevenlabs.io/v1"
-    
+
     def synthesize(self, text: str) -> Optional[bytes]:
         """Generate speech using ElevenLabs API"""
         url = f"{self.base_url}/text-to-speech/{self.config.voice_name}"
-        
+
         headers = {
             "Accept": "audio/mpeg",
             "Content-Type": "application/json",
             "xi-api-key": self.config.api_key,
         }
-        
+
         data = {
             "text": text,
             "model_id": self.config.model_id,
             "voice_settings": {
                 "stability": self.config.stability,
-                "similarity_boost": self.config.similarity_boost
+                "similarity_boost": self.config.similarity_boost,
             },
         }
-        
+
         try:
             response = requests.post(url, json=data, headers=headers, timeout=30)
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException:
             return None
-    
+
     def get_voices(self) -> List[Dict[str, Any]]:
         """Get available voices"""
         url = f"{self.base_url}/voices"
         headers = {"xi-api-key": self.config.api_key}
-        
+
         try:
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
@@ -190,11 +216,150 @@ class TTSProvider_ElevenLabs:
             return []
 
 
+class TTSProvider_MeloTTS:
+    def __init__(self, config: TTSConfig):
+        self.config = config
+        try:
+            melo_api = importlib.import_module("melo.api")
+            tts_class = getattr(melo_api, "TTS")
+        except Exception as exc:
+            raise RuntimeError(
+                "MeloTTS is not installed. Install with: pip3 install --user melotts"
+            ) from exc
+
+        self._model = tts_class(
+            language=self.config.melo_language, device=self.config.melo_device
+        )
+
+    def _wav_from_array(self, audio_array: np.ndarray, sample_rate: int) -> bytes:
+        normalized = np.clip(audio_array, -1.0, 1.0)
+        pcm = (normalized * 32767.0).astype(np.int16)
+
+        wav_io = io.BytesIO()
+        with wave.open(wav_io, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(pcm.tobytes())
+        return wav_io.getvalue()
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        try:
+            speakers = self._model.hps.data.spk2id
+            speaker_id = speakers.get(self.config.melo_speaker)
+            if speaker_id is None:
+                speaker_id = next(iter(speakers.values()))
+
+            audio_np = self._model.tts_to_file(
+                text,
+                speaker_id,
+                output_path=None,
+                speed=self.config.melo_speed,
+                quiet=True,
+            )
+            if audio_np is None:
+                return None
+
+            sample_rate = int(self._model.hps.data.sampling_rate)
+            wav_data = self._wav_from_array(audio_np, sample_rate)
+
+            audio = AudioSegment.from_wav(io.BytesIO(wav_data))
+            mp3_io = io.BytesIO()
+            audio.export(mp3_io, format="mp3")
+            return mp3_io.getvalue()
+        except Exception:
+            return None
+
+
+class TTSProvider_Piper:
+    def __init__(self, config: TTSConfig):
+        self.config = config
+        self._piper_bin = shutil.which("piper")
+        if self._piper_bin is None:
+            user_piper = os.path.expanduser("~/.local/bin/piper")
+            if os.path.exists(user_piper):
+                self._piper_bin = user_piper
+        if self._piper_bin is None:
+            raise RuntimeError(
+                "Piper CLI not found. Install with: pip3 install --user piper-tts"
+            )
+
+        if not self.config.piper_model_path:
+            raise RuntimeError(
+                "Piper model path is empty. Set parameter: piper_model_path"
+            )
+
+        if not os.path.exists(self.config.piper_model_path):
+            raise RuntimeError(f"Piper model not found: {self.config.piper_model_path}")
+
+        if self.config.piper_config_path and not os.path.exists(
+            self.config.piper_config_path
+        ):
+            raise RuntimeError(
+                f"Piper config not found: {self.config.piper_config_path}"
+            )
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        wav_path: Optional[str] = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav:
+                wav_path = tmp_wav.name
+
+            cmd = [
+                self._piper_bin,
+                "-m",
+                self.config.piper_model_path,
+                "-f",
+                wav_path,
+                "--length_scale",
+                str(self.config.piper_length_scale),
+                "--noise_scale",
+                str(self.config.piper_noise_scale),
+                "--noise-w-scale",
+                str(self.config.piper_noise_w),
+                "-s",
+                str(self.config.piper_speaker_id),
+            ]
+
+            if self.config.piper_config_path:
+                cmd.extend(["-c", self.config.piper_config_path])
+
+            if self.config.piper_use_cuda:
+                cmd.append("--cuda")
+
+            subprocess.run(
+                cmd,
+                input=text.encode("utf-8"),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+                timeout=60,
+            )
+
+            with open(wav_path, "rb") as f:
+                wav_data = f.read()
+
+            audio = AudioSegment.from_wav(io.BytesIO(wav_data))
+            mp3_io = io.BytesIO()
+            audio.export(mp3_io, format="mp3")
+            return mp3_io.getvalue()
+        except Exception:
+            return None
+        finally:
+            try:
+                if wav_path is not None and os.path.exists(wav_path):
+                    os.unlink(wav_path)
+            except Exception:
+                pass
+
+
 class AudioProcessor:
     """Audio processing utilities"""
-    
+
     @staticmethod
-    def convert_to_wav(audio_data: bytes, input_format: AudioFormat = AudioFormat.MP3) -> Optional[bytes]:
+    def convert_to_wav(
+        audio_data: bytes, input_format: AudioFormat = AudioFormat.MP3
+    ) -> Optional[bytes]:
         """Convert audio data to WAV format"""
         try:
             if input_format == AudioFormat.MP3:
@@ -203,13 +368,13 @@ class AudioProcessor:
                 audio = AudioSegment.from_ogg(io.BytesIO(audio_data))
             else:
                 return audio_data  # Already WAV
-            
+
             wav_io = io.BytesIO()
             audio.export(wav_io, format="wav")
             return wav_io.getvalue()
         except Exception:
             return None
-    
+
     @staticmethod
     def get_duration(audio_data: bytes, format: AudioFormat = AudioFormat.WAV) -> float:
         """Get audio duration in seconds"""
@@ -220,49 +385,48 @@ class AudioProcessor:
                 audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
             else:
                 audio = AudioSegment.from_file(io.BytesIO(audio_data))
-            
+
             return len(audio) / 1000.0  # Convert ms to seconds
         except Exception:
             return 0.0
-    
+
     @staticmethod
     def split_into_chunks(data: bytes, chunk_size: int) -> List[bytes]:
         """Split data into chunks"""
-        return [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+        return [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]
 
 
 class EnhancedTTSNode(Node):
     """Enhanced TTS Node with improved architecture"""
-    
+
     def __init__(self):
         super().__init__("tts_node")
-        
+
         # Declare parameters
         self._declare_parameters()
-        
+
         # Load configuration
         self.config = self._load_configuration()
-        
+
         # Initialize components
         self.cache = AudioCache(self.config.cache_dir, self.config.use_cache)
         self.audio_processor = AudioProcessor()
-        
+
         # Initialize TTS provider
         self.tts_provider = self._create_tts_provider()
-        
+
         if not self.tts_provider:
             self.get_logger().error("Failed to initialize TTS provider!")
             return
-        
+
         # Setup subscriptions and publishers
         self._setup_communication()
-        
-        # RTC topic constants (imported from domain)
-        self.RTC_TOPIC = {"AUDIO_HUB_REQ": 1003}  # Fallback if import fails
-        
+
+        self.RTC_TOPIC = {"AUDIO_HUB_REQ": "rt/api/audiohub/request"}
+
         # Log initialization
         self._log_initialization()
-    
+
     def _declare_parameters(self) -> None:
         """Declare all node parameters"""
         self.declare_parameter("api_key", "")
@@ -277,7 +441,18 @@ class EnhancedTTSNode(Node):
         self.declare_parameter("stability", 0.5)
         self.declare_parameter("similarity_boost", 0.5)
         self.declare_parameter("model_id", "eleven_turbo_v2_5")
-    
+        self.declare_parameter("melo_language", "ZH")
+        self.declare_parameter("melo_speaker", "ZH")
+        self.declare_parameter("melo_speed", 1.0)
+        self.declare_parameter("melo_device", "auto")
+        self.declare_parameter("piper_model_path", "")
+        self.declare_parameter("piper_config_path", "")
+        self.declare_parameter("piper_speaker_id", 0)
+        self.declare_parameter("piper_length_scale", 1.0)
+        self.declare_parameter("piper_noise_scale", 0.667)
+        self.declare_parameter("piper_noise_w", 0.8)
+        self.declare_parameter("piper_use_cuda", False)
+
     def _load_configuration(self) -> TTSConfig:
         """Load configuration from parameters"""
         provider_str = self.get_parameter("provider").get_parameter_value().string_value
@@ -285,22 +460,69 @@ class EnhancedTTSNode(Node):
             provider = TTSProvider(provider_str)
         except ValueError:
             provider = TTSProvider.ELEVENLABS
-        
+
         return TTSConfig(
             api_key=self.get_parameter("api_key").get_parameter_value().string_value,
             provider=provider,
-            voice_name=self.get_parameter("voice_name").get_parameter_value().string_value,
-            local_playback=self.get_parameter("local_playback").get_parameter_value().bool_value,
+            voice_name=self.get_parameter("voice_name")
+            .get_parameter_value()
+            .string_value,
+            local_playback=self.get_parameter("local_playback")
+            .get_parameter_value()
+            .bool_value,
             use_cache=self.get_parameter("use_cache").get_parameter_value().bool_value,
-            cache_dir=self.get_parameter("cache_dir").get_parameter_value().string_value,
-            chunk_size=self.get_parameter("chunk_size").get_parameter_value().integer_value,
-            audio_quality=self.get_parameter("audio_quality").get_parameter_value().string_value,
+            cache_dir=self.get_parameter("cache_dir")
+            .get_parameter_value()
+            .string_value,
+            chunk_size=self.get_parameter("chunk_size")
+            .get_parameter_value()
+            .integer_value,
+            audio_quality=self.get_parameter("audio_quality")
+            .get_parameter_value()
+            .string_value,
             language=self.get_parameter("language").get_parameter_value().string_value,
-            stability=self.get_parameter("stability").get_parameter_value().double_value,
-            similarity_boost=self.get_parameter("similarity_boost").get_parameter_value().double_value,
+            stability=self.get_parameter("stability")
+            .get_parameter_value()
+            .double_value,
+            similarity_boost=self.get_parameter("similarity_boost")
+            .get_parameter_value()
+            .double_value,
             model_id=self.get_parameter("model_id").get_parameter_value().string_value,
+            melo_language=self.get_parameter("melo_language")
+            .get_parameter_value()
+            .string_value,
+            melo_speaker=self.get_parameter("melo_speaker")
+            .get_parameter_value()
+            .string_value,
+            melo_speed=self.get_parameter("melo_speed")
+            .get_parameter_value()
+            .double_value,
+            melo_device=self.get_parameter("melo_device")
+            .get_parameter_value()
+            .string_value,
+            piper_model_path=self.get_parameter("piper_model_path")
+            .get_parameter_value()
+            .string_value,
+            piper_config_path=self.get_parameter("piper_config_path")
+            .get_parameter_value()
+            .string_value,
+            piper_speaker_id=self.get_parameter("piper_speaker_id")
+            .get_parameter_value()
+            .integer_value,
+            piper_length_scale=self.get_parameter("piper_length_scale")
+            .get_parameter_value()
+            .double_value,
+            piper_noise_scale=self.get_parameter("piper_noise_scale")
+            .get_parameter_value()
+            .double_value,
+            piper_noise_w=self.get_parameter("piper_noise_w")
+            .get_parameter_value()
+            .double_value,
+            piper_use_cuda=self.get_parameter("piper_use_cuda")
+            .get_parameter_value()
+            .bool_value,
         )
-    
+
     def _create_tts_provider(self):
         """Create TTS provider based on configuration"""
         if self.config.provider == TTSProvider.ELEVENLABS:
@@ -308,23 +530,27 @@ class EnhancedTTSNode(Node):
                 self.get_logger().error("ElevenLabs API key not provided!")
                 return None
             return TTSProvider_ElevenLabs(self.config)
+        elif self.config.provider == TTSProvider.MELOTTS:
+            return TTSProvider_MeloTTS(self.config)
+        elif self.config.provider == TTSProvider.PIPER:
+            return TTSProvider_Piper(self.config)
         else:
             self.get_logger().error(f"Unsupported TTS provider: {self.config.provider}")
             return None
-    
+
     def _setup_communication(self) -> None:
         """Setup ROS2 communication"""
         self.subscription = self.create_subscription(
             String, "/tts", self.tts_callback, 10
         )
-        
+
         self.audio_pub = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
-        
+
         # Service for cache management
         # self.cache_service = self.create_service(
         #     Empty, "clear_tts_cache", self.clear_cache_callback
         # )
-    
+
     def tts_callback(self, msg: String) -> None:
         """Handle incoming TTS requests"""
         try:
@@ -332,42 +558,55 @@ class EnhancedTTSNode(Node):
             if not text:
                 self.get_logger().warn("Received empty TTS request")
                 return
-            
-            self.get_logger().info(f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})')
-            
+
+            self.get_logger().info(
+                f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})'
+            )
+
             # Check cache first
             cache_hit = False
-            audio_data = self.cache.get(text, self.config.voice_name, self.config.provider.value)
-            
+            audio_data = self.cache.get(
+                text, self.config.voice_name, self.config.provider.value
+            )
+
             if audio_data:
                 self.get_logger().info("💾 Cache hit - using cached audio")
                 cache_hit = True
             else:
+                if self.tts_provider is None:
+                    self.get_logger().error("❌ TTS provider is not initialized")
+                    return
+
                 # Generate new speech
                 self.get_logger().info("🔊 Generating new speech...")
                 audio_data = self.tts_provider.synthesize(text)
-                
+
                 if audio_data:
                     # Cache the result
-                    if self.cache.put(text, self.config.voice_name, self.config.provider.value, audio_data):
+                    if self.cache.put(
+                        text,
+                        self.config.voice_name,
+                        self.config.provider.value,
+                        audio_data,
+                    ):
                         self.get_logger().info("💾 Audio cached successfully")
                 else:
                     self.get_logger().error("❌ Failed to generate speech")
                     return
-            
+
             # Process and play audio
             if self.config.local_playback:
                 self._play_locally(audio_data)
             else:
                 self._play_on_robot(audio_data)
-            
+
             # Log success
             status = "cached" if cache_hit else "generated"
             self.get_logger().info(f"✅ TTS completed successfully ({status})")
-            
+
         except Exception as e:
             self.get_logger().error(f"❌ TTS processing error: {str(e)}")
-    
+
     def _play_locally(self, audio_data: bytes) -> None:
         """Play audio locally"""
         try:
@@ -376,7 +615,7 @@ class EnhancedTTSNode(Node):
             self.get_logger().info("🔊 Local playback completed")
         except Exception as e:
             self.get_logger().error(f"❌ Local playback error: {str(e)}")
-    
+
     def _play_on_robot(self, audio_data: bytes) -> None:
         """Send audio to robot for playback"""
         try:
@@ -385,21 +624,25 @@ class EnhancedTTSNode(Node):
             if not wav_data:
                 self.get_logger().error("❌ Failed to convert audio to WAV")
                 return
-            
+
             # Get audio duration for timing
             duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
-            
+
             # Encode and split into chunks
             b64_encoded = base64.b64encode(wav_data).decode("utf-8")
-            chunks = self.audio_processor.split_into_chunks(b64_encoded.encode(), self.config.chunk_size)
+            chunks = self.audio_processor.split_into_chunks(
+                b64_encoded.encode(), self.config.chunk_size
+            )
             total_chunks = len(chunks)
-            
-            self.get_logger().info(f"📤 Sending audio to robot: {total_chunks} chunks, {duration:.1f}s duration")
-            
+
+            self.get_logger().info(
+                f"📤 Sending audio to robot: {total_chunks} chunks, {duration:.1f}s duration"
+            )
+
             # Send start command
             self._send_audio_command(4001, "")
             time.sleep(0.1)
-            
+
             # Send audio chunks
             for chunk_idx, chunk in enumerate(chunks, 1):
                 audio_block = {
@@ -408,47 +651,53 @@ class EnhancedTTSNode(Node):
                     "block_content": chunk.decode(),
                 }
                 self._send_audio_command(4003, json.dumps(audio_block))
-                
+
                 if chunk_idx % 10 == 0:  # Log progress every 10 chunks
                     self.get_logger().info(f"📤 Sent {chunk_idx}/{total_chunks} chunks")
-                
+
                 time.sleep(0.15)  # Prevent flooding
-            
+
             # Wait for playback to complete
-            self.get_logger().info(f"⏳ Waiting for playback completion ({duration:.1f}s)...")
+            self.get_logger().info(
+                f"⏳ Waiting for playback completion ({duration:.1f}s)..."
+            )
             time.sleep(duration + 1.0)
-            
+
             # Send end command
             self._send_audio_command(4002, "")
-            
+
             self.get_logger().info("🎵 Robot playback completed")
-            
+
         except Exception as e:
             self.get_logger().error(f"❌ Robot playback error: {str(e)}")
-    
+
     def _send_audio_command(self, api_id: int, parameter: str) -> None:
         """Send audio command to robot"""
         req = WebRtcReq()
         req.api_id = api_id
         req.priority = 0
         req.parameter = parameter
-        req.topic = self.RTC_TOPIC["AUDIO_HUB_REQ"]
+        req.topic = str(self.RTC_TOPIC["AUDIO_HUB_REQ"])
         self.audio_pub.publish(req)
-    
+
     def _log_initialization(self) -> None:
         """Log initialization details"""
         cache_stats = self.cache.get_cache_stats()
-        
+
         self.get_logger().info("🎤 Enhanced TTS Node Initialized")
         self.get_logger().info(f"   Provider: {self.config.provider.value}")
         self.get_logger().info(f"   Voice: {self.config.voice_name}")
-        self.get_logger().info(f"   Playback: {'Local' if self.config.local_playback else 'Robot'}")
+        self.get_logger().info(
+            f"   Playback: {'Local' if self.config.local_playback else 'Robot'}"
+        )
         self.get_logger().info(f"   Language: {self.config.language}")
         self.get_logger().info(f"   Quality: {self.config.audio_quality}")
-        
+
         if cache_stats["enabled"]:
-            self.get_logger().info(f"   Cache: Enabled ({cache_stats.get('file_count', 0)} files, "
-                                 f"{cache_stats.get('total_size_mb', 0)}MB)")
+            self.get_logger().info(
+                f"   Cache: Enabled ({cache_stats.get('file_count', 0)} files, "
+                f"{cache_stats.get('total_size_mb', 0)}MB)"
+            )
         else:
             self.get_logger().info("   Cache: Disabled")
 
@@ -456,7 +705,7 @@ class EnhancedTTSNode(Node):
 def main(args=None):
     """Main entry point"""
     rclpy.init(args=args)
-    
+
     try:
         node = EnhancedTTSNode()
         rclpy.spin(node)
@@ -472,4 +721,4 @@ def main(args=None):
 
 
 if __name__ == "__main__":
-    main() 
+    main()

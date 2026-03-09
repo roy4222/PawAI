@@ -681,25 +681,31 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.z
 若用現有 launch 啟動 TTS：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && unset COLCON_CURRENT_PREFIX && source /opt/ros/humble/setup.bash && source install/setup.bash && export ROBOT_IP=<GO2_IP> && export CONN_TYPE=webrtc && ros2 launch go2_robot_sdk robot.launch.py enable_tts:=true nav2:=false slam:=false rviz2:=false foxglove:=false"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && unset COLCON_CURRENT_PREFIX && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export ROBOT_IP=<GO2_IP> && export CONN_TYPE=webrtc && ros2 launch go2_robot_sdk robot.launch.py enable_tts:=true nav2:=false slam:=false rviz2:=false foxglove:=false"
 ```
 
 若未走 launch，也可直接啟動：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run speech_processor tts_node"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor tts_node --ros-args -p api_key:=<ELEVENLABS_API_KEY>"
+```
+
+接上 Intent 到 TTS 的模板回覆橋接（無 LLM 版本）：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor intent_tts_bridge_node"
 ```
 
 發布測試文字：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic pub --once /tts std_msgs/msg/String '{data: "哈囉，語音模組測試成功"}'"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic pub --once /tts std_msgs/msg/String '{data: "哈囉，語音模組測試成功"}'"
 ```
 
 觀察 Go2 命令流：
 
 ```bash
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic echo /webrtc_req"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic echo /webrtc_req"
 ```
 
 ### 9.3.1 本地音訊生成驗證（優先執行）
@@ -708,12 +714,12 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 
 ```bash
 # 啟動 TTS node 並監聽 log
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 run speech_processor tts_node 2>&1 | tee /tmp/tts_test.log"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor tts_node --ros-args -p api_key:=<ELEVENLABS_API_KEY> 2>&1 | tee /tmp/tts_test.log"
 ```
 
 ```bash
 # 發布測試文字
-ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic pub --once /tts std_msgs/msg/String '{data: "哈囉，測試"}'"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic pub --once /tts std_msgs/msg/String '{data: "哈囉，測試"}'"
 ```
 
 **本地驗證檢查點：**
@@ -723,6 +729,23 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 - [ ] 音訊時長合理（5字約 1-2 秒）
 
 只有本地驗證通過後，再進入 Go2 播放鏈路測試。
+
+### 9.3.2 Phase 4 最小回應鏈（推薦）
+
+在不接 LLM 的前提下，先驗證模板回應可播報：
+
+1. `intent_node` 產生 `/event/speech_intent_recognized`
+2. `intent_tts_bridge_node` 將 intent 轉為回覆模板並發布 `/tts`
+3. `tts_node` 接收 `/tts` 並轉發 `/webrtc_req`
+
+建議模板（目前預設）：
+
+- `hello` -> 「哈囉，我在這裡。」
+- `sit` -> 「收到，請坐下。」
+- `stand` -> 「收到，請站起來。」
+- `stop` -> 「好的，停止動作。」
+- `chat` -> 「我正在進行語音互動測試。」
+- `unknown` -> 「我沒聽清楚，請再說一次。」
 
 ### 9.4 Go2 播放鏈路測試步驟
 
@@ -766,6 +789,157 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 - 若無聲音但有 `/webrtc_req`，優先查 WebRTC 與 Go2 播放端
 - 若音訊有生成但播放失敗，檢查音訊格式轉換流程
 - 若使用本地 provider 取代現有 provider，確認 provider 初始化是否成功
+
+### 9.8 2026-03-09 實測進度（Phase 4）
+
+本日已完成 `/tts -> /webrtc_req -> go2_driver_node` 播放鏈路驗證。
+
+#### 已確認成功
+
+- `go2_driver_node` 正常啟動且 WebRTC 狀態為 connected
+- `/webrtc_req` 的訂閱端包含 `go2_driver_node`（不是只有 `_ros2cli_*`）
+- `tts_node` log 顯示音訊分塊送出（`api_id 4001/4003/4002`）
+- `tts_node` 顯示 `Robot playback completed` 與 `TTS completed successfully`
+
+#### 關鍵踩坑與修復
+
+1. **API key 空值導致 tts_node 無法啟動**
+   - 錯誤型態：`-p api_key:=`（等號後為空）
+   - 修法：先 `source .env.local`，並用雙引號帶參數
+   - 正確指令：
+
+   ```bash
+   source /opt/ros/humble/setup.zsh
+   source /home/jetson/elder_and_dog/install/setup.zsh
+   ros2 run speech_processor tts_node --ros-args -p api_key:="$ELEVENLABS_API_KEY"
+   ```
+
+2. **NumPy 2.x 破壞 ROS cv_bridge/cv2（go2_driver_node 啟動失敗）**
+   - 症狀：`_ARRAY_API not found`、`numpy.core.multiarray failed to import`
+   - 修法：Jetson 環境固定 `numpy<2`，再驗證 `cv2` 與 `cv_bridge`
+
+   ```bash
+   python3 -m pip install --user --force-reinstall "numpy<2"
+   python3 -c "import cv2; print('cv2 ok')"
+   python3 -c "from cv_bridge import CvBridge; print('cv_bridge ok')"
+   ```
+
+3. **`/webrtc_req` 有資料但沒聲音時，先看真訂閱者**
+   - 確認指令：
+
+   ```bash
+   ros2 topic info /webrtc_req -v
+   ```
+
+   - 必須看到 `go2_driver_node` 在 Subscription 清單內。
+
+#### 一次成功的最小流程（建議）
+
+```bash
+cd /home/jetson/elder_and_dog
+set -a; source .env.local; set +a
+source /opt/ros/humble/setup.zsh
+source install/setup.zsh
+
+# 終端 A
+ros2 launch go2_robot_sdk robot.launch.py enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false
+
+# 終端 B
+ros2 run speech_processor tts_node --ros-args -p api_key:="$ELEVENLABS_API_KEY"
+
+# 終端 C
+ros2 topic pub --once /tts std_msgs/msg/String '{data: "哈囉，Go2，請播放測試音"}'
+```
+
+> 備註：本階段已先用 ElevenLabs 路線打通。MeloTTS 改造可在此基準上替換 provider。
+
+### 9.9 2026-03-09 夜間補充（Piper 遷移進度）
+
+本日已將 TTS provider 由「僅 ElevenLabs/MeloTTS」擴充為可切換 `piper`，並完成腳本與文件同步。
+
+#### 已完成
+
+- 程式：`speech_processor/speech_processor/tts_node.py` 新增 `piper` provider
+  - 支援參數：`piper_model_path`、`piper_config_path`、`piper_speaker_id`、`piper_length_scale`、`piper_noise_scale`、`piper_noise_w`、`piper_use_cuda`
+  - 修正 Piper CLI 參數相容性（`--noise-w-scale`）與 `~/.local/bin/piper` fallback
+- 腳本：`scripts/start_speech_phase4_tmux.sh`、`scripts/start_speech_e2e_tmux.sh` 新增 Piper 參數透傳
+- 環境範本：`.env.example` 已新增 Piper 預設欄位
+- 驗證：`lsp_diagnostics`、`py_compile`、`colcon build --packages-select speech_processor` 均通過
+
+#### Jetson 實測結果
+
+- `piper-tts` 安裝成功（`pip install --user piper-tts`）
+- 中文模型下載成功（`zh_CN-huayan-medium.onnx` + `.onnx.json`）
+- `python3 -m piper --help` 可執行
+- E2E tmux 觀察到：
+  - `/tts` 有資料
+  - `/webrtc_req` 有 4001/4003/4002 且分塊送出
+  - `tts_node` 顯示 `TTS completed successfully`
+
+#### 尚未解決（留待明日）
+
+- 目前仍有「封包送出成功但現場無聲音」情況
+- 優先排查順序：
+  1. 確認實際使用 `TTS_PROVIDER=piper`（避免被舊 `.env.local` 覆蓋回 elevenlabs）
+  2. 確認 Go2 端音量與播放狀態（`audiohub`）
+  3. 以最短路徑重測：單獨 `tts_node(provider=piper)` + 單次 `ros2 topic pub /tts`
+  4. 再回到 `start_speech_e2e_tmux.sh` 全鏈路
+
+#### 明日接續建議
+
+- 先完成「Piper 單點播放（無 ASR/Intent）」再回測 E2E
+- 若仍無聲，先以 ElevenLabs 保底 demo，再平行調 Piper 音量/裝置
+- 完成後補充 15.1 測試紀錄表（Phase 4 與 End-to-End）
+
+### 9.3.3 Piper 測試（本地低延遲模式）
+
+若要測本地 Piper（降低雲端往返延遲）：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && python3 -m pip install --user piper-tts"
+```
+
+下載中文 voice model（`.onnx` + `.onnx.json` 必須成對）：
+
+```bash
+ssh jetson-nano "mkdir -p /home/jetson/models/piper && cd /home/jetson/models/piper && wget -nc https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx && wget -nc https://huggingface.co/rhasspy/piper-voices/resolve/main/zh/zh_CN/huayan/medium/zh_CN-huayan-medium.onnx.json"
+```
+
+直接啟動 tts_node（Piper provider）：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor tts_node --ros-args -p provider:=piper -p piper_model_path:=/home/jetson/models/piper/zh_CN-huayan-medium.onnx -p piper_config_path:=/home/jetson/models/piper/zh_CN-huayan-medium.onnx.json -p piper_speaker_id:=0 -p piper_length_scale:=1.05 -p piper_noise_scale:=0.667 -p piper_noise_w:=0.8 -p piper_use_cuda:=false"
+```
+
+或用一鍵腳本切換 provider：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && set -a && source .env.local && set +a && TTS_PROVIDER=piper ./scripts/start_speech_phase4_tmux.sh"
+```
+
+Piper 調整建議（先求清晰）：
+
+- `piper_length_scale=1.00~1.12`（值越大語速越慢）
+- 優先短句模板（降低尾音含糊）
+- 若 CPU 延遲偏高，再測 `piper_use_cuda=true`
+
+直接啟動 tts_node（Melo provider）：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor tts_node --ros-args -p provider:=melotts -p melo_language:=ZH -p melo_speaker:=ZH -p melo_speed:=0.92 -p melo_device:=auto"
+```
+
+或用一鍵腳本切換 provider：
+
+```bash
+ssh jetson-nano "cd /home/jetson/elder_and_dog && set -a && source .env.local && set +a && TTS_PROVIDER=melotts ./scripts/start_speech_phase4_tmux.sh"
+```
+
+MeloTTS 調整建議（先求清晰）：
+
+- `melo_speed=0.90~0.95`（放慢語速）
+- 優先短句模板（減少含糊與尾音吃字）
+- 先固定 `ZH` speaker，再做音色比較
 
 ---
 

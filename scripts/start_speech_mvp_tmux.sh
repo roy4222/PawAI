@@ -6,6 +6,7 @@ SESSION_NAME="speech-mvp"
 WORKDIR="/home/jetson/elder_and_dog"
 
 INPUT_DEVICE="${INPUT_DEVICE:-0}"
+CHANNELS="${CHANNELS:-1}"
 SAMPLE_RATE="${SAMPLE_RATE:-16000}"
 CAPTURE_SAMPLE_RATE="${CAPTURE_SAMPLE_RATE:-44100}"
 FRAME_SAMPLES="${FRAME_SAMPLES:-512}"
@@ -31,7 +32,7 @@ tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
 
 zsh -lc "cd $WORKDIR && source /opt/ros/humble/setup.zsh && colcon build --packages-select speech_processor && source install/setup.zsh"
 
-tmux new-session -d -s "$SESSION_NAME" "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor vad_node --ros-args -p input_device:=$INPUT_DEVICE -p sample_rate:=$SAMPLE_RATE -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE -p frame_samples:=$FRAME_SAMPLES -p vad_threshold:=$VAD_THRESHOLD -p min_silence_ms:=$MIN_SILENCE_MS'"
+tmux new-session -d -s "$SESSION_NAME" "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor vad_node --ros-args -p input_device:=$INPUT_DEVICE -p channels:=$CHANNELS -p sample_rate:=$SAMPLE_RATE -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE -p frame_samples:=$FRAME_SAMPLES -p vad_threshold:=$VAD_THRESHOLD -p min_silence_ms:=$MIN_SILENCE_MS'"
 
 VAD_PANE="$(tmux list-panes -t "$SESSION_NAME":0 -F '#{pane_id}')"
 ASR_PANE="$(tmux split-window -h -P -F '#{pane_id}' -t "$VAD_PANE" "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor asr_node --ros-args -p model_name:=$ASR_MODEL_NAME -p language:=$ASR_LANGUAGE'")"
