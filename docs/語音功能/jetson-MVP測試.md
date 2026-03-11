@@ -3,7 +3,7 @@
 > 適用對象：PawAI 語音模組、整合測試、展示前驗收  
 > 適用平台：NVIDIA Jetson Orin Nano 8GB + ROS2 Humble + Unitree Go2  
 > 目標期限：2026/4/13 Demo 前完成 Jetson 端 MVP 驗證  
-> 測試主線：Sequential pipeline `VAD -> ASR -> Intent -> LLM -> TTS`
+> 測試主線（2026-03-11 決策凍結）：`no-VAD -> ASR -> Intent -> (Template/LLM) -> TTS`
 
 ---
 
@@ -11,15 +11,15 @@
 
 本文件用於 Jetson Orin Nano 8GB 上之語音互動 MVP 測試與展示前驗收，重點在於以最小可行鏈路驗證 PawAI 語音模組是否可在實機整合情境下穩定運作。
 
-測試範圍涵蓋 VAD、ASR、Intent、TTS、LLM 與端到端閉環，並以展示可接受延遲、可重複執行穩定性及資源壓力可控為主要驗收標準。
+測試範圍涵蓋 ASR、Intent、TTS、LLM 與端到端閉環；VAD 目前列為次要實驗路徑，不列入展示主線必要條件。驗收以可重複執行穩定性、可展示延遲與資源壓力可控為優先。
 
 **逐階段驗證目標：**
 
-1. VAD 能穩定偵測人聲開始與結束
+1. no-VAD 主線可穩定接收語音輸入並產生可用文字
 2. ASR 能將中文短句轉為文字
 3. Intent Rule 能將固定語句映射成可執行意圖
 4. TTS 能將回覆文字轉成語音並經 Go2 播放
-5. LLM 能在 Jetson 上完成簡短回覆生成並接上 TTS
+5. LLM 能在 Jetson 上完成簡短回覆生成並接上 TTS（非主路徑必要）
 6. 端到端流程延遲控制在展示可接受範圍內
 
 ### 1.1 Phase 0（今日凍結項）
@@ -31,6 +31,30 @@
 - Foxglove 觀測策略：只看低頻關鍵 topic，先不開高流量影像/點雲
 
 > 若實作與本節不一致，先回到本節修正契約，再進行下一個 Phase。
+
+### 1.2 路徑決策凍結（2026-03-11）
+
+本專案目前採用 **no-VAD-first** 策略，目標是先確保 4/13 前展示主線穩定可重現。
+
+- 主路徑（預設）
+  - `no-VAD -> ASR -> Intent -> (Template/LLM) -> TTS`
+  - 啟動腳本：`scripts/start_asr_tts_no_vad_tmux.sh`
+- 次路徑（僅受控驗證）
+  - `VAD -> ASR -> Intent -> TTS`
+  - 僅用於實驗與診斷，不作為展示成敗關鍵入口
+
+**非協商操作規則：**
+
+1. 同時間只允許一套 speech session（禁止混跑）
+2. 每輪測試前必須 clean-start（tmux + process 全清）
+3. 每輪測試後必須做 snapshot（無 snapshot 不算有效結果）
+
+**VAD 升格回主路徑門檻（未達成前不得升格）：**
+
+- 連續 50 輪無 `PaErrorCode -9998/-9985/-9997`
+- 無 session contamination（上一輪狀態不污染下一輪）
+- VAD 失敗可在同輪回退 no-VAD，且主流程可完成
+- `speech_start/speech_end` 在一般室內噪音下可穩定成對
 
 ---
 
@@ -44,7 +68,7 @@
 - 視覺感測：Intel RealSense D435
 - 人臉偵測：YuNet
 - ROS2：Humble
-- 語音流程：Sequential pipeline，非平行處理
+- 語音流程：主線採 no-VAD sequential pipeline（VAD 為次路徑）
 
 ### 2.2 MVP 模型配置
 
@@ -1458,14 +1482,14 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 
 ## 14. 最終驗收建議
 
-### 14.1 展示前最低通過門檻
+### 14.1 展示前最低通過門檻（主路徑：no-VAD）
 
-- [ ] Phase 1 通過：VAD 可穩定切段
+- [ ] 主路徑啟動通過：`start_asr_tts_no_vad_tmux.sh` 可重複啟動
 - [ ] Phase 2 通過：Whisper Tiny 可輸出可用中文文字
 - [ ] Phase 3 通過：固定指令 intent 正確率足夠
 - [ ] Phase 4 通過：Go2 可穩定播音
 - [ ] Phase 5 通過：Qwen3.5-0.8B 可生成短回覆
-- [ ] 端到端延遲符合 `< 2.0 s` 目標
+- [ ] 端到端延遲符合「中位數 ≤ 3.5 s，最差 ≤ 6 s」
 - [ ] `tegrastats` 顯示系統未長時間貼近極限
 - [ ] 與 D435、YuNet 同時執行時仍可接受
 
@@ -1473,9 +1497,9 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 
 若 Phase 5 不穩定，可先採：
 
-- `VAD -> ASR -> Intent Rule -> Template Reply -> TTS`
+- `no-VAD -> ASR -> Intent Rule -> Template Reply -> TTS`
 
-此模式雖非完整 LLM 對話，但更有利於 4/13 展示穩定性。
+此模式雖非完整 LLM 對話，但在目前 Jetson 音訊條件下更有利於 4/13 展示穩定性。
 
 ### 14.3 展示模式降級順序
 
@@ -1487,14 +1511,24 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 | 2 | 關閉視覺除錯 | 關閉非必要視覺節點（影像顯示等） | 釋放 ~0.3-0.5 GB |
 | 3 | 簡化 LLM | 關閉 LLM，改用 Template Reply | 釋放 ~1.0 GB |
 | 4 | 限制對話範圍 | 僅保留固定指令集，不開放自由問答 | 降低 intent 複雜度 |
-| 5 | 按鍵觸發 | 改成手動按鍵觸發錄音，而非全時 VAD | 降低 VAD 誤觸發風險 |
-| 6 | 最簡模式 | 僅保留 `VAD -> ASR -> 固定指令 -> TTS` | 最小資源佔用 |
+| 5 | 關閉 VAD | 切回 no-VAD 主線（手動/固定窗口錄音） | 避免 `-9998` 入口崩潰 |
+| 6 | 最簡模式 | 僅保留 `no-VAD -> ASR -> 固定指令 -> TTS` | 最小風險可展示鏈路 |
 
 **降級決策建議：**
 - 若在測試階段發現記憶體長時間 > 7GB，執行順序 1-2
 - 若 LLM 延遲不穩定或回覆品質差，執行順序 3
-- 若展示現場噪音過大導致 VAD 誤觸發頻繁，執行順序 5
+- 若展示現場噪音過大或 VAD 啟動異常，直接執行順序 5
 - 順序 6 為最終保底，確保至少能展示「語音控制機器人」基礎功能
+
+### 14.4 VAD 次路徑啟用條件（僅受控測試）
+
+只有在以下條件全部滿足時，才允許在測試場次啟用 VAD：
+
+- 已完成當天 no-VAD 主路徑通關（ASR/Intent/TTS 全綠）
+- 當前環境為單 session、乾淨啟動、可回收 snapshot
+- 失敗時可在 30 秒內切回 no-VAD，不做現場長時間 debug
+
+若任一條件不滿足，當場禁用 VAD，回主路徑。
 
 ---
 
@@ -1533,6 +1567,6 @@ ssh jetson-nano "free -h" >> /tmp/test_mem_$(date +%Y%m%d_%H%M%S).log
 
 ---
 
-*最後更新：2026-03-09（修訂版）*  
+*最後更新：2026-03-11（no-VAD 主線決策版）*  
 *適用專案：PawAI / elder_and_dog*  
 *維護用途：Jetson MVP 語音功能測試與展示前驗收*
