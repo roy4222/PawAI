@@ -253,7 +253,7 @@ USB 麥克風 → stt_intent_node (Whisper Tiny ASR + 規則 Intent)
 - `docs/mission/meeting_notes_supplement.md` — 會議未定事項
 
 ### 架構與契約
-- `docs/architecture/interaction_v1_contract.md` — 介面契約（3/9 凍結）
+- `docs/architecture/interaction_contract.md` — 介面契約（3/9 凍結）
 - `docs/architecture/brain_v1.md` — AI 大腦設計
 
 ### 語音功能

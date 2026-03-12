@@ -26,7 +26,7 @@
 | Face Owner (楊) | 第 5、6、7 節 | [人臉辨識/README.md](../人臉辨識/README.md) |
 | Speech Owner (鄔) | 第 5、6、7 節 | [語音功能/README.md](../語音功能/README.md) |
 | Frontend (鄔) | 第 6、7、8 節 | [face_dashboard_nextjs/README.md](../../face_dashboard_nextjs/README.md) |
-| System Architect | 全篇 + 附錄 | [interaction_v1_contract.md](../architecture/interaction_v1_contract.md) |
+| System Architect | 全篇 + 附錄 | [interaction_contract.md](../architecture/interaction_contract.md) |
 
 ### 閱讀順序建議
 
@@ -212,7 +212,7 @@ Go2 播放語音回應 + 執行對應動作 (wave/stand/look_left)
 | `/state/executive/brain` | State | 大腦決策狀態 (5 Hz) |
 | `/execute_skill` | Action | 技能執行請求 |
 
-**完整介面規格**請見：[interaction_v1_contract.md](../architecture/interaction_v1_contract.md)
+**完整介面規格**請見：[interaction_contract.md](../architecture/interaction_contract.md)
 
 ---
 
@@ -469,7 +469,7 @@ docs/
 │   └── roadmap.md         # 開發路線圖 (待撰寫)
 │
 ├── architecture/
-│   ├── interaction_v1_contract.md  # 介面契約 v1 (凍結)
+│   ├── interaction_contract.md  # 介面契約 v1 (凍結)
 │   └── brain_v1.md                 # 大腦架構設計
 │
 ├── 人臉辨識/
@@ -496,7 +496,7 @@ docs/
 |------|------|
 | **人臉模組設計** | [人臉辨識/README.md](../人臉辨識/README.md) |
 | **語音模組設計** | [語音功能/README.md](../語音功能/README.md) |
-| **介面契約規格** | [interaction_v1_contract.md](../architecture/interaction_v1_contract.md) |
+| **介面契約規格** | [interaction_contract.md](../architecture/interaction_contract.md) |
 | **環境建置指南** | [setup/README.md](../setup/README.md) |
 | **前端展示程式** | [face_dashboard_nextjs/README.md](../../face_dashboard_nextjs/README.md) |
 | **後端 API 程式** | [face_dashboard_fastapi/README.md](../../face_dashboard_fastapi/README.md) |

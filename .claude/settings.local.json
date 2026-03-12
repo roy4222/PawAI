@@ -19,7 +19,10 @@
       "Bash(python3 -c \"import ast; ast.parse\\(open\\('speech_processor/speech_processor/stt_intent_node.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\" && python3 -c \"import ast; ast.parse\\(open\\('speech_processor/speech_processor/intent_tts_bridge_node.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
       "Bash(bash -c 'source /opt/ros/humble/setup.bash && source install/setup.bash 2>/dev/null; colcon build --packages-select speech_processor 2>&1')",
       "Bash(ssh jetson-nano:*)",
-      "Bash(python3 -c \"import ast; ast.parse\\(open\\('speech_processor/speech_processor/stt_intent_node.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")"
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('speech_processor/speech_processor/stt_intent_node.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(cat /home/roy422/newLife/elder_and_dog/interaction_executive/config/* 2>/dev/null | head -50)",
+      "Bash(colcon list:*)",
+      "Bash(grep -r \"interaction_v1\\\\|face_perception\\\\|face_owner\" /home/roy422/newLife/elder_and_dog/docs/mission/ --include=\"*.md\" 2>/dev/null | head -20)"
     ],
     "deny": [],
     "ask": []
