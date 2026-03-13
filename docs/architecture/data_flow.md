@@ -1,4 +1,9 @@
-> **⚠️ OUTDATED** — 節點名稱未對齊實作（如 `FacePerceptionNode` 已不存在），資料流以 [interaction_contract.md](./interaction_contract.md) v2.0 為準。
+> **⚠️ OUTDATED** — 本文件與實作有結構性差異，以 [interaction_contract.md](./interaction_contract.md) v2.0 為準。已知偏差：
+> - `FacePerceptionNode` 已不存在；`face_perception` 套件已不在 repo 中
+> - `/audio/...` topic 不存在 — 語音走 USB 麥克風 ALSA 直接錄製，不經 ROS2 topic
+> - `/event/speech_intent` → 正確名稱為 `/event/speech_intent_recognized`
+> - Interaction Executive 仍在設計中，尚未落地
+> - 語音管線實際路徑：USB 麥克風 → stt_intent_node → intent_tts_bridge_node → tts_node → go2_driver_node
 
 # 資料流與互動流程
 

@@ -1,4 +1,10 @@
-> **⚠️ PARTIALLY OUTDATED** — package 內分層原則（Presentation → Application → Domain → Infrastructure）仍可參考，但未涵蓋 Brain Adapter、Studio Gateway、四級降級等系統層設計。系統層架構見 [Pawai-studio/system-architecture.md](../Pawai-studio/system-architecture.md)。
+> **⚠️ PARTIALLY OUTDATED** — 分層原則（Presentation → Application → Domain → Infrastructure）仍可參考，但落地狀況與文件描述有差距：
+> - `go2_robot_sdk` — **唯一完整落地**的四層分層模組
+> - `face_perception` — 文件中描述的目錄已不存在於 repo，人臉模組已重構（見 `docs/人臉辨識/`）
+> - `speech_processor` — 未採用 Clean Architecture 分層（扁平結構，無 domain/application/infrastructure 子目錄）
+> - `gesture_module` — 尚未建立
+>
+> 系統層架構見 [Pawai-studio/system-architecture.md](../Pawai-studio/system-architecture.md)。
 
 # Clean Architecture 分層原則
 
