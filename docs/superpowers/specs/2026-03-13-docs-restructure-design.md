@@ -52,6 +52,11 @@ docs/
 | `refactor/` | 歸檔 | → `archive/refactor/` |
 | `logs/` | 歸檔 | → `archive/logs/` |
 | `testing/` | 歸檔 | → `archive/testing/` |
+| `superpowers/` | **保留** | 設計規格存放區，不列入主導航 |
+
+**備註**：
+- 中文模組資料夾的子目錄（如 `導航避障/開源專案/`）中期遷移時一併搬入 `modules/`
+- 既有 `archive/2026-02-11-restructure/` 視為一個完整歸檔包不動；新歸檔另立子目錄（`archive/design/`、`archive/logs/` 等），兩者平行共存
 
 ---
 
@@ -59,7 +64,7 @@ docs/
 
 ### 治理規則總綱
 
-> **`mission` 定方向，`architecture` 定契約，`Pawai-studio` 定 Studio，`modules` 定模組，`setup` 定操作，`code` 定現況，`CLAUDE.md` 不定規格。**
+> **`mission` 定方向，`architecture` 定契約，`Pawai-studio` 定 Studio，`modules` 定模組，`setup` 定操作，程式碼庫定現況，`CLAUDE.md` 不定規格。**
 
 ### 3.1 `mission/`
 
@@ -124,6 +129,15 @@ docs/
 | **不能放** | Markdown 文件、程式碼 |
 | **組織方式** | `assets/diagrams/`（架構圖）、可擴充 `assets/screenshots/` 等 |
 
+### 3.8 `CLAUDE.md`（根目錄）
+
+| 項目 | 定義 |
+|------|------|
+| **角色** | AI 助手與開發者操作速查卡 |
+| **能放** | 建構/測試/除錯指令、開發工作流、已知陷阱的摘要（附引用連結）、常見開發情境的快速步驟 |
+| **不能放** | 完整規格表、完整 schema、架構設計、專案決策 |
+| **規則** | 操作步驟與 `setup/` 衝突時以 `setup/` 為準；技術規格與 `architecture/` 衝突時以 `architecture/` 為準；新增已知陷阱時，摘要寫在 CLAUDE.md，完整說明寫在對應的主幹文件 |
+
 ### 衝突仲裁規則（依問題類型）
 
 | 問題類型 | 仲裁來源 |
@@ -132,7 +146,7 @@ docs/
 | ROS2 介面、schema、command、QoS、跨模組技術契約 | `architecture/` |
 | Studio / Gateway / Brain / Frontend 設計 | `Pawai-studio/`（不得違反 `architecture/`） |
 | 模組內部設計與模組專屬操作 | `modules/`（對外介面不得違反 `architecture/`） |
-| 安裝、部署、環境與操作步驟 | `setup/` |
+| 安裝、部署、環境與操作步驟 | `setup/`（`CLAUDE.md` 與 `setup/` 衝突時以 `setup/` 為準） |
 | 歷史參考 | `archive/`（**不參與現行仲裁**） |
 
 ---
@@ -143,7 +157,8 @@ docs/
 
 **保留**：
 - 專案一句話定位（從 mission 摘錄，≤3 行）
-- 快速連結表（4-5 個連結指向主幹文件）
+- 明確導引：「完整專案說明請見 `docs/mission/README.md`」
+- 快速連結表（4-5 個連結指向主幹文件，必須包含 `docs/mission/README.md`）
 - 最小可用 quick start（3-5 行指令）
 - 詳細環境指向 `docs/setup/README.md`
 
@@ -167,8 +182,8 @@ docs/
 
 **保留**：
 - 一句話角色說明
-- 文件清單表（`interaction_contract.md`、`clean_architecture.md`、`data_flow.md`）
-- `face_perception.md` 在表中標為：「歷史人臉模組設計，已被 `interaction_contract.md` 與 `docs/人臉辨識/README.md` 取代」
+- 文件清單表（`interaction_contract.md`、`clean_architecture.md`、`data_flow.md`、`face_perception.md`）
+- `face_perception.md` 的歷史標記方式見 Section 5
 - 閱讀建議（按角色，3 行以內）
 - 邊界聲明
 
@@ -204,10 +219,11 @@ docs/
 
 | 對象 | 動作 |
 |------|------|
-| `architecture/face_perception.md` | 在 `architecture/README.md` 文件表中標歷史 |
+| `architecture/face_perception.md` | 在 `architecture/README.md` 文件表中標為：「歷史人臉模組設計，已被 `interaction_contract.md` 與 `docs/人臉辨識/README.md` 取代」 |
 | `architecture/clean_architecture.md` | 核對與現行程式碼一致性，必要時補 NOTE |
 | `architecture/data_flow.md` | 核對與現行程式碼一致性，必要時補 NOTE |
 | 中文模組資料夾（5 個） | 不動，中期收編 `modules/` |
+| `mission/README.md` §10 文件地圖 | 標記失效連結：`brain_v1.md`（檔案不存在，幽靈引用）、`logs/`（即將歸檔）。不改主體內容，只在文件地圖區塊加 NOTE |
 
 ---
 
