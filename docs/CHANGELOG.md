@@ -63,6 +63,7 @@ f93f6a7 docs: 重寫 docs/README.md 為二級導航
 261eaea docs: 標記 mission/README.md 文件地圖的失效連結
 92de9f3 docs: 補充 architecture/ 現有文件 banner 偏差清單
 9c0c140 docs: 幽靈文件審查與歸檔
+d85f04a docs: 新增 CHANGELOG 條目記錄 2026-03-13 結構級重構
 ```
 
 ---
