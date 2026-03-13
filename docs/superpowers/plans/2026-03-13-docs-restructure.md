@@ -31,7 +31,7 @@ Expected: ~540 行（確認是當前的 mission 複製版）
 ```markdown
 # PawAI — 老人與狗
 
-> 以 Unitree Go2 Pro 為載體的 embodied AI 互動陪伴平台。
+> 以 Unitree Go2 Pro 為載體的 embodied AI 互動平台。
 > 核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」。
 
 **硬底線**：2026/4/13 展示
@@ -430,23 +430,23 @@ brain_v1.md 為幽靈引用，logs/ 為歷史資料。
 - Read only: `docs/architecture/clean_architecture.md`
 - Read only: `docs/architecture/data_flow.md`
 
-**目標**：核對與現行程式碼一致性，必要時補 NOTE。
+**目標**：確認 banner 是否充分揭露目前偏差；若不足，補充具體偏差清單。
 
 - [ ] **Step 1: 核對 clean_architecture.md**
 
 確認事項：
 - 第 1 行已有 `⚠️ PARTIALLY OUTDATED` banner ✓
-- 分層原則（Presentation → Application → Domain → Infrastructure）是否與 `go2_robot_sdk/` 和 `face_perception/` 的實際目錄結構一致
-- 若一致：不動
-- 若有偏差：在既有 banner 中補充說明
+- **已知偏差**：內文適用範圍寫 `face_perception`、`speech_processor`、`gesture_module`，但 `gesture_module` 尚未建立、`face_perception` 的實際分層可能與文件描述不完全一致
+- 檢查 `go2_robot_sdk/` 和 `face_perception/` 的實際目錄結構是否符合文件描述的四層
+- 在既有 banner 中補充具體偏差清單（哪些模組未落地、哪些分層描述不準確）
 
 - [ ] **Step 2: 核對 data_flow.md**
 
 確認事項：
 - 第 1 行已有 `⚠️ OUTDATED` banner ✓
-- Banner 已說明「節點名稱未對齊實作，資料流以 interaction_contract.md v2.0 為準」
-- 若 banner 描述準確：不動
-- 若需要補充：加入具體哪些節點已更名
+- Banner 目前說「節點名稱未對齊實作」，但實際偏差不只節點名稱——整個資料流路徑可能已與 interaction_contract.md v2.0 有結構性差異
+- 比對 `data_flow.md` 的流程圖與 `interaction_contract.md` v2.0 的 Topic 列表，列出具體偏差
+- 在 banner 中補充：哪些節點已更名/不存在、哪些 Topic 路徑已變更、整體流程與 v2.0 的差異程度
 
 - [ ] **Step 3: Commit（僅在有改動時）**
 
