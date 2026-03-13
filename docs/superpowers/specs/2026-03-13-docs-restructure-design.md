@@ -223,7 +223,7 @@ docs/
 | `architecture/clean_architecture.md` | 核對與現行程式碼一致性，必要時補 NOTE |
 | `architecture/data_flow.md` | 核對與現行程式碼一致性，必要時補 NOTE |
 | 中文模組資料夾（5 個） | 不動，中期收編 `modules/` |
-| `mission/README.md` §10 文件地圖 | 標記失效連結：`brain_v1.md`（檔案不存在，幽靈引用）、`logs/`（即將歸檔）。不改主體內容，只在文件地圖區塊加 NOTE |
+| `mission/README.md` §10 文件地圖 | 標記失效連結：`brain_v1.md`（檔案不存在，幽靈引用）、`logs/`（為歷史資料，不作主導航依據；後續將移至 `archive/`）。不改主體內容，只在文件地圖區塊加 NOTE |
 
 ---
 
