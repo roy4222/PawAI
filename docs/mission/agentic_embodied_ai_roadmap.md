@@ -1,3 +1,5 @@
+> **⚠️ ARCHIVED** — 早期大規模技術路線圖，非 4/13 展示主線。當前主線架構見 [mission/README.md](./README.md) v2.0。
+
 # PawAI Agentic Embodied AI 實作路線圖
 
 **文件版本**: v1.0  

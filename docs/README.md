@@ -1,96 +1,79 @@
 # PawAI 文件中心
 
-**專案：** 老人與狗 (Elder and Dog) - Go2 機器狗智慧陪伴系統  
-**版本：** v4.0 (文件重構版)  
-**最後更新：** 2026-02-11
+**專案**：老人與狗 (Elder and Dog) / PawAI
+**最後更新**：2026-03-13
 
 ---
 
-## 🗺️ 文件導航
+## 主幹文件（你該從這裡開始）
 
-| 目錄 | 用途 | 主要內容 |
-|------|------|----------|
-| **[mission/](./mission/)** | 專案使命 | 願景、路線圖、目標 |
-| **[setup/](./setup/)** | 環境建置 | 硬體、軟體、網路配置指南 |
-| **[design/](./design/)** | 系統設計 | 架構、API、模組設計 |
-| **[testing/](./testing/)** | 測試驗收 | 測試計畫、報告、驗收文件 |
-| **[logs/](./logs/)** | 開發日誌 | 依日期組織的開發紀錄 |
-| **[assets/](./assets/)** | 靜態資源 | 圖片、圖表、截圖 |
-| **[archive/](./archive/)** | 歸檔文件 | 歷史版本與過時文件 |
+| 文件 | 說明 |
+|------|------|
+| [mission/README.md](./mission/README.md) | **專案總覽 v2.0** — 單一真相來源：功能閉環、本地/雲端拆分、團隊分工 |
+| [mission/handoff_316.md](./mission/handoff_316.md) | **3/16 分工交付清單** — 誰做什麼、驗收標準、攻守交換 |
+| [architecture/interaction_contract.md](./architecture/interaction_contract.md) | **ROS2 介面契約 v2.0** — Topic schema、節點參數、QoS |
+| [Pawai-studio/README.md](./Pawai-studio/README.md) | **PawAI Studio 設計入口** — 含 system-architecture / event-schema / ui-orchestration / brain-adapter |
 
 ---
 
-## 🚀 快速開始
+## 閱讀順序
 
-### 新手上路
-1. 閱讀專案願景：[mission/](./mission/)（待建立新內容）
-2. 環境設置：[setup/hardware/](./setup/hardware/)
-3. 系統架構：[design/modules/mcp_system_prompt.md](./design/modules/mcp_system_prompt.md)
+**新成員（黃、陳）**：
+1. `mission/README.md` — 專案全貌
+2. `mission/handoff_316.md` — 你的交付物
+3. `architecture/interaction_contract.md` — 系統接口
+4. `Pawai-studio/README.md` — Studio 概覽
 
-### 日常開發
-1. 查看最新進度：[logs/2026/01/](./logs/2026/01/)
-2. 查閱設計文件：[design/](./design/)
-3. 執行測試：[testing/](./testing/)
+**前端開發（鄔）**：
+1. `Pawai-studio/README.md` — 面板清單與技術棧
+2. `Pawai-studio/event-schema.md` — 事件/狀態/指令 TypeScript 型別
+3. `Pawai-studio/ui-orchestration.md` — 面板切換規則
 
----
-
-## 📁 目錄結構詳解
-
-```
-docs/
-├── mission/              # 專案使命與願景
-│   ├── README.md
-│   ├── vision.md         # 專案願景（新版，待撰寫）
-│   └── roadmap.md        # 開發路線圖（待撰寫）
-│
-├── setup/                # 環境建置指南
-│   ├── README.md
-│   ├── hardware/         # 硬體設置
-│   ├── software/         # 軟體安裝
-│   ├── network/          # 網路配置
-│   └── slam_nav/         # SLAM/導航指南
-│
-├── design/               # 系統設計文件
-│   ├── README.md
-│   ├── modules/          # 模組設計
-│   └── research/         # 研究與分析
-│
-├── testing/              # 測試與驗收
-│   ├── README.md
-│   ├── 專題文件大綱.md
-│   └── reports/          # 測試報告
-│
-├── logs/                 # 開發日誌（依日期組織）
-│   ├── README.md
-│   ├── 2025/11/          # 2025年11月
-│   ├── 2025/12/          # 2025年12月
-│   └── 2026/01/          # 2026年1月
-│
-├── assets/               # 靜態資源
-│   ├── diagrams/         # 架構圖、流程圖
-│   ├── screenshots/      # 截圖
-│   └── photos/           # 照片
-│
-├── archive/              # 歸檔文件
-│   └── 2026-02-11-restructure/
-│
-└── CHANGELOG.md          # 文件變更紀錄
-```
+**整合者（Roy）**：
+1. `mission/README.md` — 功能閉環與降級策略
+2. `architecture/interaction_contract.md` — ROS2 介面規格
+3. `Pawai-studio/brain-adapter.md` — LLM 統一介面
 
 ---
 
-## 📜 歷史文件
+## 功能模組文件
 
-如需查閱 2026-02-11 之前的文件，請參見：
-- [archive/2026-02-11-restructure/](./archive/2026-02-11-restructure/)
+| 模組 | 文件 | 優先級 |
+|------|------|:------:|
+| 語音功能 | [語音功能/README.md](./語音功能/README.md)、[jetson-MVP測試.md](./語音功能/jetson-MVP測試.md) | P0 |
+| 人臉辨識 | [人臉辨識/README.md](./人臉辨識/README.md) | P0 |
+| 手勢辨識 | [手勢辨識/README.md](./手勢辨識/README.md) | P1 |
+| 辨識物體 | [辨識物體/README.md](./辨識物體/README.md) | P2 |
+| 導航避障 | [導航避障/README.MD](./導航避障/README.MD) | P2 |
 
 ---
 
-## 🔄 變更紀錄
+## 環境與部署
 
-參見 [CHANGELOG.md](./CHANGELOG.md) 查看文件結構變更歷史。
+| 文件 | 說明 |
+|------|------|
+| [setup/README.md](./setup/README.md) | 環境建置總覽 |
+| [setup/hardware/](./setup/hardware/) | Jetson 設定、GPU 連接 |
+| [setup/software/](./setup/software/) | 基礎操作說明 |
 
 ---
 
-**維護者：** FJU PawAI 專題組  
-**文件狀態：** ✅ 重構完成（Phase 8/8）
+## 歷史與研究（僅供參考，不作為主線依據）
+
+以下文件保留歷史脈絡，但**已不反映系統現況**。主線規格以上方主幹文件為準。
+
+| 目錄/文件 | 狀態 | 說明 |
+|----------|------|------|
+| [mission/vision.md](./mission/vision.md) | OUTDATED | 早期願景，含過時定位與錯誤年份 |
+| [mission/roadmap.md](./mission/roadmap.md) | SUPERSEDED | 舊版時程，已被 mission/README.md v2.0 取代 |
+| [mission/agentic_embodied_ai_roadmap.md](./mission/agentic_embodied_ai_roadmap.md) | ARCHIVED | 早期大規模技術路線，非 4/13 展示主線 |
+| [design/](./design/) | OUTDATED | 舊設計文件，已被 Pawai-studio/ + architecture/ 取代 |
+| [refactor/](./refactor/) | ARCHIVED | 早期重構計畫 |
+| [logs/](./logs/) | ARCHIVED | 開發日誌（2025/11 ~ 2026/02），不作為主線依據 |
+| [archive/](./archive/) | ARCHIVED | 2026-02-11 前舊結構備份 |
+| [testing/](./testing/) | ARCHIVED | 早期測試報告（SLAM Phase 1.5 等），新驗收紀錄仍可放入此目錄 |
+
+---
+
+*維護者：System Architect*
+*狀態：v5.0（主幹導航版）*

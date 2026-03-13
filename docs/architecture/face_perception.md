@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** — 人臉模組規格已移至 [interaction_contract.md](./interaction_contract.md) v2.0 §3.1（state schema）+ §4.1（event schema）+ §7.1（節點參數）。現行實作為 `scripts/face_identity_infer_cv.py`。
+
 # Face Perception 模組架構
 
 **模組名稱**：face_perception  

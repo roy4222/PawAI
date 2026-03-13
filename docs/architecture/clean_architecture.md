@@ -1,3 +1,5 @@
+> **⚠️ PARTIALLY OUTDATED** — package 內分層原則（Presentation → Application → Domain → Infrastructure）仍可參考，但未涵蓋 Brain Adapter、Studio Gateway、四級降級等系統層設計。系統層架構見 [Pawai-studio/system-architecture.md](../Pawai-studio/system-architecture.md)。
+
 # Clean Architecture 分層原則
 
 **文件定位**：PawAI 專案採用的軟體架構原則與實作規範  

@@ -1,3 +1,5 @@
+> **⚠️ OUTDATED** — 節點名稱未對齊實作（如 `FacePerceptionNode` 已不存在），資料流以 [interaction_contract.md](./interaction_contract.md) v2.0 為準。
+
 # 資料流與互動流程
 
 **文件定位**：PawAI 系統資料流向與互動流程說明  

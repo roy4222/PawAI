@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** — 本文件已被 [mission/README.md](./README.md) v2.0 + [handoff_316.md](./handoff_316.md) 取代。時程、角色分配、里程碑均以新文件為準。
+
 # 開發路線圖與時程 (Development Roadmap)
 
 **文件版本**: 1.0  
