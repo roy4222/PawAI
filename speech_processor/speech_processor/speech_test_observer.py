@@ -339,3 +339,216 @@ class ReportGenerator:
         with open(path, "w") as f:
             json.dump(summary, f, indent=2, ensure_ascii=False)
         return path
+
+
+# ---------------------------------------------------------------------------
+# ROS2 node wrapper
+# ---------------------------------------------------------------------------
+
+try:
+    import rclpy
+    from rclpy.node import Node
+    from std_msgs.msg import String as RosString
+    _HAS_ROS2 = True
+except ImportError:
+    _HAS_ROS2 = False
+
+try:
+    from go2_interfaces.msg import WebRtcReq
+    _HAS_GO2 = True
+except ImportError:
+    _HAS_GO2 = False
+
+
+if _HAS_ROS2:
+
+    class SpeechTestObserverNode(Node):
+        def __init__(self):
+            super().__init__("speech_test_observer")
+
+            self.declare_parameter("output_dir", "test_results")
+            self.declare_parameter("tts_correlation_window_s", 3.0)
+            self.declare_parameter("round_meta_timeout_s", 30.0)
+            self.declare_parameter("round_complete_timeout_s", 10.0)
+
+            output_dir = str(self.get_parameter("output_dir").value)
+            tts_window = float(self.get_parameter("tts_correlation_window_s").value)
+            self._meta_timeout = float(self.get_parameter("round_meta_timeout_s").value)
+            self._round_complete_timeout = float(
+                self.get_parameter("round_complete_timeout_s").value
+            )
+
+            self._aggregator = SessionAggregator(tts_correlation_window_s=tts_window)
+            self._report_gen = ReportGenerator(
+                output_dir=output_dir, test_name="", yaml_file=""
+            )
+            self._prev_state = "LISTENING"
+            self._meta_set_time: float = 0.0
+
+            self.create_subscription(
+                RosString, "/state/interaction/speech", self._on_speech_state, 10
+            )
+            self.create_subscription(
+                RosString, "/asr_result", self._on_asr_result, 10
+            )
+            self.create_subscription(
+                RosString, "/event/speech_intent_recognized", self._on_intent_event, 10
+            )
+            self.create_subscription(RosString, "/tts", self._on_tts, 10)
+            if _HAS_GO2:
+                self.create_subscription(
+                    WebRtcReq, "/webrtc_req", self._on_webrtc_req, 10
+                )
+
+            self.create_subscription(
+                RosString, "/speech_test_observer/round_meta_req",
+                self._on_round_meta_req, 10
+            )
+            self._meta_ack_pub = self.create_publisher(
+                RosString, "/speech_test_observer/round_meta_ack", 10
+            )
+            self.create_subscription(
+                RosString, "/speech_test_observer/generate_report_req",
+                self._on_generate_report_req, 10
+            )
+            self._report_ack_pub = self.create_publisher(
+                RosString, "/speech_test_observer/generate_report_ack", 10
+            )
+
+            self.create_timer(1.0, self._check_meta_timeout)
+            self.create_timer(1.0, self._check_round_timeout)
+
+            self.get_logger().info("speech_test_observer ready")
+
+        def _on_speech_state(self, msg) -> None:
+            try:
+                data = json.loads(msg.data)
+            except json.JSONDecodeError:
+                return
+            new_state = data.get("state", "")
+            if new_state and new_state != self._prev_state:
+                ts = time.time()
+                self._aggregator.on_state_change(self._prev_state, new_state, ts)
+                if self._prev_state == "LISTENING" and new_state == "RECORDING":
+                    self.get_logger().info(
+                        f"[Round {len(self._aggregator.rounds)}] speech_start detected"
+                    )
+                self._prev_state = new_state
+
+        def _on_asr_result(self, msg) -> None:
+            try:
+                data = json.loads(msg.data)
+            except json.JSONDecodeError:
+                return
+            self._aggregator.on_asr_result(
+                session_id=data.get("session_id", ""),
+                text=data.get("text", ""),
+                provider=data.get("provider", ""),
+                latency_ms=float(data.get("latency_ms", 0)),
+                ts=time.time(),
+            )
+
+        def _on_intent_event(self, msg) -> None:
+            try:
+                data = json.loads(msg.data)
+            except json.JSONDecodeError:
+                return
+            self._aggregator.on_intent_event(
+                session_id=data.get("session_id", ""),
+                intent=data.get("intent", "unknown"),
+                confidence=float(data.get("confidence", 0)),
+                latency_ms=float(data.get("latency_ms", 0)),
+                ts=time.time(),
+            )
+            r = self._aggregator._current_round()
+            if r:
+                self.get_logger().info(
+                    f"[Round {r.round_id}] intent={r.intent} "
+                    f"asr_text={r.asr_text!r}"
+                )
+
+        def _on_tts(self, msg) -> None:
+            self._aggregator.on_tts(text=msg.data, ts=time.time())
+
+        def _on_webrtc_req(self, msg) -> None:
+            self._aggregator.on_webrtc_req(api_id=int(msg.api_id), ts=time.time())
+
+        def _on_round_meta_req(self, msg) -> None:
+            try:
+                data = json.loads(msg.data)
+            except json.JSONDecodeError:
+                self._publish_ack(self._meta_ack_pub, {"ok": False})
+                return
+            self._aggregator.set_pending_meta(
+                round_id=int(data.get("round_id", 0)),
+                mode=str(data.get("mode", "")),
+                expected_intent=str(data.get("expected_intent", "")),
+                utterance_text=str(data.get("utterance_text", "")),
+            )
+            self._meta_set_time = time.time()
+            self._publish_ack(
+                self._meta_ack_pub,
+                {"ok": True, "round_id": data.get("round_id", 0)},
+            )
+            self.get_logger().info(f"Round meta set: {data}")
+
+        def _on_generate_report_req(self, msg) -> None:
+            for i in range(len(self._aggregator.rounds)):
+                self._aggregator.finalize_round(i)
+            rounds = self._aggregator.rounds
+            suffix = self._report_gen._timestamp_suffix()
+            csv_path = self._report_gen.write_csv(rounds, suffix=suffix)
+            summary = self._report_gen.compute_summary(rounds)
+            summary_path = self._report_gen.write_summary(summary, suffix=suffix)
+            self._publish_ack(
+                self._report_ack_pub,
+                {"ok": True, "csv_path": csv_path, "summary_path": summary_path},
+            )
+            self.get_logger().info(
+                f"Report generated: grade={summary['grade']} "
+                f"csv={csv_path} summary={summary_path}"
+            )
+
+        def _publish_ack(self, pub, payload: dict) -> None:
+            msg = RosString()
+            msg.data = json.dumps(payload, ensure_ascii=True)
+            pub.publish(msg)
+
+        def _check_round_timeout(self) -> None:
+            now = time.time()
+            for i, r in enumerate(self._aggregator.rounds):
+                if r.status == "pending" and r.speech_start_ts > 0:
+                    if (now - r.speech_start_ts) > self._round_complete_timeout:
+                        self._aggregator.finalize_round(i)
+                        self.get_logger().warning(
+                            f"[Round {r.round_id}] timed out after "
+                            f"{self._round_complete_timeout}s, status={r.status}"
+                        )
+
+        def _check_meta_timeout(self) -> None:
+            if (
+                self._aggregator._pending_meta
+                and self._meta_set_time > 0
+                and (time.time() - self._meta_set_time) > self._meta_timeout
+            ):
+                self.get_logger().warning("Pending round meta expired, clearing")
+                self._aggregator._pending_meta = None
+                self._meta_set_time = 0.0
+
+
+def main(args=None):
+    if not _HAS_ROS2:
+        raise RuntimeError("rclpy is not available — cannot run SpeechTestObserverNode")
+    rclpy.init(args=args)
+    node = SpeechTestObserverNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
