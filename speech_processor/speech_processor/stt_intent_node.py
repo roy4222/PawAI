@@ -474,7 +474,7 @@ class SttIntentNode(Node):
         self.declare_parameter("sample_rate", 16000)
         self.declare_parameter("capture_sample_rate", 16000)
         self.declare_parameter("frame_samples", 512)
-        self.declare_parameter("channels", 1)
+        self.declare_parameter("channels", 2)  # HyperX SoloCast is stereo-only; downmix in callback
         self.declare_parameter("input_device", -1)
         self.declare_parameter("alsa_device", "")
         self.declare_parameter("max_record_seconds", 6.0)
@@ -660,7 +660,12 @@ class SttIntentNode(Node):
         if status:
             self._last_error = str(status)
 
-        mono = np.asarray(indata, dtype=np.float32).reshape(-1)
+        audio = np.asarray(indata, dtype=np.float32)
+        # Stereo→mono downmix: take left channel (more reliable than PortAudio auto-downmix)
+        if audio.ndim == 2 and audio.shape[1] > 1:
+            mono = audio[:, 0].copy()
+        else:
+            mono = audio.reshape(-1)
         try:
             self._audio_queue.put_nowait(mono)
         except queue.Full:
