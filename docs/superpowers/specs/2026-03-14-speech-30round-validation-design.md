@@ -43,11 +43,17 @@ Phase 1-4 各自已通過，但缺乏端到端的可重複驗證：
 
 | Topic | 訊息型別 | 抓什麼 |
 |-------|---------|--------|
-| `/event/speech_activity` | `String` (JSON) | `speech_start` / `speech_end` + `session_id` |
 | `/asr_result` | `String` (JSON) | `text`, `provider`, `latency_ms`, `session_id` |
 | `/event/speech_intent_recognized` | `String` (JSON) | `intent`, `confidence`, `text`, `session_id`, `latency_ms` |
+| `/state/interaction/speech` | `String` (JSON) | `state` 欄位變化（`LISTENING`→`ASR`→`IDLE`），推算 speech_start/end |
 | `/tts` | `String` | TTS 輸入文字（純文字，無 session_id） |
 | `/webrtc_req` | `go2_interfaces/WebRtcReq` | `api_id` 判斷播放狀態 |
+
+> **設計注意**：no-VAD 主線下 `stt_intent_node` 的 energy VAD 是內部邏輯，不發布 `/event/speech_activity`。
+> Observer 以 `/asr_result`（帶 `session_id` 的第一個事件）作為 session 起始信號，
+> 並用 `/state/interaction/speech` 的 `state` 變化推算 `speech_start_ts`（state 從 `IDLE` 變為 `LISTENING`）
+> 和 `speech_end_ts`（state 從 `LISTENING` 變為 `ASR`）。
+> `e2e_latency_ms` 定義為 `asr_ts`（收到 `/asr_result` 的 wall clock）到 `webrtc_play_start_ts`。
 
 #### WebRTC api_id 映射（已核實）
 
@@ -71,9 +77,9 @@ RoundRecord:
   mode: "fixed" | "free"         # 來自 set_round_meta
   expected_intent: str | ""      # 來自 set_round_meta
   utterance_text: str | ""       # 來自 set_round_meta
-  speech_start_ts: float         # /event/speech_activity
-  speech_end_ts: float           # /event/speech_activity
-  asr_ts: float                  # /asr_result 收到時的 wall clock
+  speech_start_ts: float         # /state/interaction/speech IDLE→LISTENING
+  speech_end_ts: float           # /state/interaction/speech LISTENING→ASR
+  asr_ts: float                  # /asr_result 收到時的 wall clock（session 起始信號）
   asr_text: str                  # /asr_result.text
   asr_latency_ms: float          # /asr_result.latency_ms（node 自報）
   intent_ts: float               # /event/speech_intent_recognized 收到時的 wall clock
@@ -86,7 +92,7 @@ RoundRecord:
   webrtc_play_end_ts: float      # api_id 4002
   last_audio_chunk_ts: float     # api_id 4003 最後一塊
   audio_chunks_count: int        # api_id 4003 計數
-  e2e_latency_ms: float          # speech_start → webrtc_play_start
+  e2e_latency_ms: float          # asr_ts → webrtc_play_start（見下方定義）
   match: "hit" | "miss" | "n/a" # expected vs predicted
   status: "complete" | "partial" | "timeout" | "orphan"
   correlated_by_time: bool       # TTS/webrtc 是否靠時序推定
@@ -112,11 +118,17 @@ Service: /speech_test_observer/set_round_meta
   Response: { ok: bool }
 ```
 
+**實作方式**：使用 `rcl_interfaces/srv/SetParameters` 或 topic-based request/response 模式
+（用 `/speech_test_observer/round_meta_req` publish JSON + `/speech_test_observer/round_meta_ack` subscribe），
+避免自訂 `.srv` 檔案以減少 interface package 修改。若後續需要正式化再升級為自訂 `.srv`。
+
 **一次性消費規則**：
 - Service 寫入 `pending_round_meta`
 - 下一個新 `session_id` 到來時綁定，**立即清空**
 - 連續呼叫 → 後一次覆蓋前一次
 - 超過 `round_meta_timeout_s`（預設 `30.0`）未收到新 session → 清空 + WARN log
+
+**round_id 優先順序**：`set_round_meta` 注入的 `round_id` 優先。Observer 內部自動遞增的計數僅作為 fallback（metadata 未注入時使用）。
 
 #### 報告生成（ROS2 Service）
 
@@ -125,6 +137,8 @@ Service: /speech_test_observer/generate_report
   Request:  {}
   Response: { csv_path: str, summary_path: str, ok: bool }
 ```
+
+**實作方式**：同上，使用 topic-based request/response 或直接由 shell 腳本發送 `ros2 topic pub` 觸發。
 
 #### 參數一覽
 
@@ -178,20 +192,20 @@ fixed_rounds:
     utterance: "你現在怎麼樣"
     expected_intent: "status"
   - round_id: 11
-    utterance: "坐下"
-    expected_intent: "sit"
+    utterance: "哈囉"
+    expected_intent: "greet"
   - round_id: 12
-    utterance: "坐好"
-    expected_intent: "sit"
+    utterance: "你來一下"
+    expected_intent: "come_here"
   - round_id: 13
-    utterance: "站起來"
-    expected_intent: "stand"
+    utterance: "停住"
+    expected_intent: "stop"
   - round_id: 14
-    utterance: "起來"
-    expected_intent: "stand"
+    utterance: "照相"
+    expected_intent: "take_photo"
   - round_id: 15
-    utterance: "今天天氣怎麼樣"
-    expected_intent: "chat"
+    utterance: "你還好嗎"
+    expected_intent: "status"
 
 free_rounds:
   - round_id: 16
@@ -228,7 +242,8 @@ free_rounds:
 
 **設計決策**：
 - `fixed_rounds` / `free_rounds` 明確分開，不靠空欄位判斷
-- 每個核心 intent 各 2 輪 + `chat` 1 輪 = 15 輪
+- 每個 `SUPPORTED_INTENTS` 各 3 輪 = 15 輪（`greet`, `come_here`, `stop`, `take_photo`, `status`）
+- 注意：`sit`/`stand`/`chat` 不在 `stt_intent_node.py` 的 `SUPPORTED_INTENTS` 中，不可用於 fixed rounds
 - `free_rounds` 有 `notes` 提示測試方向，不強制特定句子
 - `round_id` 全域唯一遞增
 
@@ -263,8 +278,10 @@ free_rounds:
 **整合方式**：現有 `start_asr_tts_no_vad_tmux.sh` 開頭的手動 kill 邏輯替換為：
 
 ```bash
-source "$(dirname "$0")/clean_speech_env.sh"
+bash "$(dirname "$0")/clean_speech_env.sh" || { echo "[ERROR] clean_speech_env failed"; exit 1; }
 ```
+
+> 用子 shell 執行（`bash`）而非 `source`，避免 `clean_speech_env.sh` 的 `exit 1` 直接結束呼叫者的 shell。
 
 ---
 
@@ -305,6 +322,9 @@ run_speech_test.sh [--yaml path] [--skip-build] [--skip-driver]
 | `stt_intent_node` | `/event/speech_intent_recognized` 有 publisher | **45s** |
 
 超時未就緒 → 報錯退出，不開始測試。
+
+> **注意**：這是最低限度 health check（topic 已註冊）。`stt_intent_node` 在 Whisper 模型載入完成前就會註冊 publisher，
+> 但此時尚無法處理音訊。建議 orchestration 腳本在第一輪前加一個 warmup 提示（「請說任意一句話做暖機，此輪不計分」）。
 
 **操作者互動**：
 
@@ -395,13 +415,30 @@ e2e_latency_ms, match, status, correlated_by_time, notes
 }
 ```
 
+#### Summary 欄位定義
+
+| 欄位 | 定義 |
+|------|------|
+| `hit` | `predicted_intent == expected_intent` |
+| `miss` | `predicted_intent != expected_intent`，且 ASR 有輸出文字 |
+| `empty` | ASR 沒有回傳文字（空字串），intent 無法判定 |
+| `unknown` | `predicted_intent == "unknown"`（intent 規則未命中） |
+| `accuracy` | `hit / total`（包含 empty 和 miss，不排除任何輪次） |
+| `tts_ok_rate` | 有收到 `/tts` 的輪次佔 `completed` 的比例 |
+| `play_ok_rate` | 有收到 `api_id=4001` 的輪次佔 `completed` 的比例 |
+| `no_expected` | free_rounds 中操作者未填 `expected_intent` 的輪次，不參與命中率計算 |
+
 #### Grade 判定邏輯
 
 | Grade | 條件 |
 |-------|------|
 | `PASS` | 所有 pass_criteria 都通過 |
-| `MARGINAL` | 恰好一項未通過，且實際值在門檻的 90% 以內 |
-| `FAIL` | 兩項以上未通過，或單項嚴重未達 |
+| `MARGINAL` | 恰好一項未通過，且偏離門檻 ≤ 10%（見下方公式） |
+| `FAIL` | 兩項以上未通過，或單項偏離門檻 > 10% |
+
+**MARGINAL 偏離計算公式**：
+- 越高越好的指標（accuracy, play_ok_rate）：`deviation = (threshold - actual) / threshold`，例如 accuracy 門檻 0.80、實際 0.75 → deviation = 6.25% → MARGINAL
+- 越低越好的指標（e2e_median, e2e_max）：`deviation = (actual - threshold) / threshold`，例如 e2e_median 門檻 3500ms、實際 3800ms → deviation = 8.6% → MARGINAL
 
 門檻值來源：`docs/語音功能/jetson-MVP測試.md` §14.1，不放寬。
 
