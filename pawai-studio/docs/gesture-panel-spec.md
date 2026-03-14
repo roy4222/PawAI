@@ -1,202 +1,170 @@
-# GesturePanel Spec — 手勢辨識面板
+# Gesture Panel Spec
 
-**負責人**：黃
-**版本**：v1.0
-**建立日期**：2026-03-14
-**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
-
-> **本版不依賴特定模型。** MediaPipe Hands / 其他模型皆可，輸出需符合同一 props 介面。
-> 模型研究未完成不影響 Panel UI 開發，先用 Mock 資料。
+> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
+> 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
+> Design Tokens：[design-tokens.md](design-tokens.md)
 
 ---
 
-## 目標
+## 1. 目標
 
-顯示手勢辨識結果：偵測到的手勢類型、信心度、左右手、事件歷史。
+即時顯示手勢辨識結果：手勢類型、信心度、左右手、事件歷史。（P1 功能）
 
 ---
 
-## Props 介面
+## 2. 檔案範圍
+
+### 可以改
+- `frontend/components/gesture/gesture-panel.tsx`
+- `frontend/components/gesture/` 下新增的子元件
+
+### 不可以改（改了 PR 會被退）
+- `frontend/contracts/types.ts`
+- `frontend/stores/*`
+- `frontend/hooks/*`
+- `frontend/components/layout/*`
+- `frontend/components/chat/*`
+- 其他人的 `frontend/components/face/`、`speech/`、`pose/`
+
+### 不得直接修改現有 shared 元件；若需新增或擴充，先提 Issue
+- `frontend/components/shared/*`
+
+---
+
+## 3. Store Selectors 與使用型別
 
 ```typescript
-interface GesturePanelProps {
-  data: GestureState;                   // 即時狀態
-  events: GestureEvent[];               // 歷史事件列表
+import { useStateStore } from '@/stores/state-store'
+import { useEventStore } from '@/stores/event-store'
+import type { GestureState, GestureEvent } from '@/contracts/types'
+
+// 在元件內：
+const gestureState = useStateStore((s) => s.gestureState)
+const events = useEventStore((s) => s.events.filter((e) => e.source === 'gesture'))
+```
+
+---
+
+## 4. Mock Data
+
+```typescript
+const MOCK_GESTURE_STATE: GestureState = {
+  stamp: 1773561605.456,
+  active: true,
+  current_gesture: 'wave',
+  confidence: 0.87,
+  hand: 'right',
+  status: 'active',
 }
 
-// 來自 contracts/types.ts
-interface GestureState {
-  stamp: number;
-  active: boolean;                      // 是否有手勢被偵測
-  current_gesture: string | null;       // 當前手勢，null 表示無
-  confidence: number;                   // [0.0, 1.0]
-  hand: "left" | "right" | null;
-  status: "active" | "inactive" | "loading";
-}
-
-interface GestureEvent {
-  id: string;
-  timestamp: string;
-  source: "gesture";
-  event_type: "gesture_detected";
+const MOCK_GESTURE_EVENT: GestureEvent = {
+  id: 'evt-gesture-001',
+  timestamp: '2026-03-14T10:00:05.456+08:00',
+  source: 'gesture',
+  event_type: 'gesture_detected',
   data: {
-    gesture: string;        // "wave" | "stop" | "point" | "ok"
-    confidence: number;
-    hand: "left" | "right";
-  };
+    gesture: 'wave',
+    confidence: 0.87,
+    hand: 'right',
+  },
+}
+
+const MOCK_EMPTY_STATE: GestureState = {
+  stamp: 0,
+  active: false,
+  current_gesture: null,
+  confidence: 0,
+  hand: null,
+  status: 'inactive',
 }
 ```
 
 ---
 
-## 資料來源
+## 5. UI 結構
 
-| 資料 | 來源 Topic | 更新頻率 |
-|------|-----------|---------|
-| GestureState | `/state/perception/gesture` | 狀態變化時 |
-| GestureEvent | `/event/gesture_detected` | 條件觸發 |
+### 必要區塊
+
+```
+PanelCard (icon=Hand, title="手勢辨識")
+├── [若 active] 手勢卡片
+│   ├── 手勢圖示（wave=👋 / stop=✋ / point=👉 / ok=👌，或用 lucide icon）
+│   ├── 手勢名稱（粗體）
+│   ├── 信心度（MetricChip, value=confidence, unit="%", 乘100顯示）
+│   └── 左右手 badge（left=左手 / right=右手）
+├── [若 !active] 空狀態
+│   └── 圖示 + "尚未偵測到手勢"
+└── [可選/M2] 事件歷史（最近 10 筆 GestureEvent）
+    └── EventItem 列表
+```
+
+### 狀態矩陣
+
+| 狀態 | 條件 | 顯示內容 | StatusBadge |
+|------|------|---------|-------------|
+| 正常運作 | `active === true` | 手勢卡片 | `active` |
+| 載入中 | `gestureState === null` 或 `status === "loading"` | "正在連線..." | `loading` |
+| 無資料 | `active === false` | "尚未偵測到手勢" | `inactive` |
+| 錯誤 | store 連線失敗 | "手勢模組離線" | `error` |
+
+### 響應式
+- sidebar 寬度：固定 360px（以 design-tokens.md 為準）
+- main area：自適應
+- 不需要做 mobile layout
 
 ---
 
-## 必做元件
+## 6. 互動規則
 
-### 1. 手勢顯示卡（主體）
-
-偵測到手勢時顯示：
-
-```
-┌─────────────────────────────────────────┐
-│ ✋ 手勢辨識                    ● Live   │
-├─────────────────────────────────────────┤
-│                                         │
-│        ┌──────────────┐                │
-│        │     👋        │                │  ← 大圖示（Lucide icon）
-│        │    wave       │                │  ← gesture 名稱
-│        └──────────────┘                │
-│                                         │
-│  信心度  87%          右手              │  ← MetricChip + hand
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-### 2. 手勢圖示對照
-
-| gesture | Lucide Icon | 顯示名稱 |
-|---------|------------|---------|
-| `wave` | `Hand` | 揮手 |
-| `stop` | `HandMetal` | 停止 |
-| `point` | `Pointer` | 指向 |
-| `ok` | `ThumbsUp` | OK |
-
-### 3. 空狀態
-
-無手勢偵測時：
-- 圖示：`Hand`（灰色）
-- 文字：「尚未偵測到手勢」
-- 次要文字：「請對著攝影機做出手勢」
-
-### 4. 事件歷史
-
-最近 10 筆手勢事件：
-```
-14:35:02  wave   右手  87%
-14:34:45  stop   左手  92%
-14:34:30  point  右手  78%
-```
+- **新手勢偵測**：bounce 動畫 200ms
+- **信心度變化**：transition 300ms
+- **手勢切換**：crossfade 200ms
+- **手勢卡片 hover**：背景色加深 `var(--surface-hover)`，transition 150ms
 
 ---
 
-## 互動規則
+## 7. 參考來源
 
-| 互動 | 行為 |
-|------|------|
-| 新手勢偵測 | 圖示從小放大 + 輕微彈跳（200ms） |
-| 信心度變化 | 數字 transition（300ms） |
-| gesture 切換 | 圖示 crossfade（200ms） |
-| 事件項目 hover | `surface-hover` 背景 |
-| 無手勢超過 5s | 漸變回空狀態 |
-
----
-
-## Design Tokens 參考
-
-見 `design-tokens.md`。必須使用：
-- `PanelCard` 作為外層容器
-- `StatusBadge` 顯示 status
-- `MetricChip` 顯示 confidence
-- `LiveIndicator` 顯示即時狀態
-- `EventItem` 顯示歷史事件
+| 需求 | 看哪裡 |
+|------|--------|
+| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 + §1.4 |
+| 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
+| PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
+| StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
+| MetricChip 用法 | `frontend/components/shared/metric-chip.tsx` |
+| 完整 Panel 範例 | `frontend/components/chat/chat-panel.tsx` |
 
 ---
 
-## Mock 資料範例
+## 8. Milestones
 
-### GestureState（有手勢）
+### M1（3/16）：能看、能 review
+- [ ] `PanelCard` 包裹，icon=`Hand`，title="手勢辨識"
+- [ ] 用 `MOCK_GESTURE_STATE` 顯示 1 個手勢卡片
+- [ ] 4 種狀態（active / loading / inactive / error）都有對應畫面
+- [ ] `npm run lint` + `npm run build` 通過
 
-```json
-{
-  "stamp": 1710400502.123,
-  "active": true,
-  "current_gesture": "wave",
-  "confidence": 0.87,
-  "hand": "right",
-  "status": "active"
-}
-```
+### M2（3/23）：可 demo 的前端版本
+- [ ] Panel 能正確反映由 store 注入的 mock 資料更新
+- [ ] 手勢圖示 + 名稱 + 信心度 + 左右手 視覺完成
+- [ ] bounce / crossfade / transition 動畫符合 design-tokens.md
+- [ ] 空狀態 + loading 狀態 UI
+- [ ] 事件歷史列表（最近 10 筆）
+- [ ] `npm run lint` + `npm run build` 通過
 
-### GestureState（無手勢）
-
-```json
-{
-  "stamp": 1710400510.000,
-  "active": false,
-  "current_gesture": null,
-  "confidence": 0.0,
-  "hand": null,
-  "status": "active"
-}
-```
-
-### GestureEvent
-
-```json
-{
-  "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
-  "timestamp": "2026-03-14T14:35:02.789+08:00",
-  "source": "gesture",
-  "event_type": "gesture_detected",
-  "data": {
-    "gesture": "wave",
-    "confidence": 0.87,
-    "hand": "right"
-  }
-}
-```
+### M3（4/6）：整合穩定版
+- [ ] Panel 能正確反映由 store 注入的真實 Gateway 資料
+- [ ] 處理邊界 case（快速手勢切換、null gesture、未知手勢字串）
+- [ ] 與其他 Panel 共存不衝突（Chat + 2 panels）
+- [ ] 5 分鐘無當機 soak test
+- [ ] `npm run lint` + `npm run build` 通過
 
 ---
 
-## 驗收標準
+## 9. Out of Scope（不要做）
 
-- [ ] 使用 `PanelCard` 包裹，標題顯示「手勢辨識」+ LiveIndicator
-- [ ] 偵測到手勢時顯示大圖示 + 名稱 + 信心度 + 左右手
-- [ ] 四種手勢都有對應圖示（wave/stop/point/ok）
-- [ ] 無手勢時顯示空狀態
-- [ ] 事件歷史列表（至少顯示最近 5 筆）
-- [ ] 遵守 design-tokens.md 的色板與圓角
-- [ ] props 變化時有 transition 動畫（150-300ms）
-- [ ] 響應式：sidebar 寬度 360px 自適應
-- [ ] 接 Mock Server 資料可正常更新
-
----
-
-## 不要做的事
-
-- 不要處理 WebSocket 連線（已由 hooks 處理，你只接 props）
-- 不要自己定義顏色（用 design tokens）
-- 不要做模型推理或攝影機輸入
-- 不要做 layout 切換邏輯
-- 不要做手勢訓練或校正介面（超出範圍）
-
----
-
-*最後更新：2026-03-14*
+- 不要自己加新的 shared component（先提 Issue）
+- 不要改 layout 邏輯
+- 不要加 Panel 之間的直接通訊
+- 不要引入新的 npm 依賴（除非先提 Issue）
+- 不要實作手勢辨識模型或影像處理
