@@ -177,3 +177,165 @@ class SessionAggregator:
                 r.match = "miss"
         r.status = compute_round_status(r)
         return r
+
+
+CSV_FIELDS = [
+    "round_id", "mode", "utterance_text", "expected_intent", "session_id",
+    "speech_start_ts", "speech_end_ts",
+    "asr_ts", "asr_text", "asr_latency_ms",
+    "intent_ts", "intent", "intent_confidence", "intent_latency_ms",
+    "tts_ts", "tts_text",
+    "webrtc_play_start_ts", "webrtc_play_end_ts", "last_audio_chunk_ts",
+    "audio_chunks_count", "e2e_latency_ms", "match", "status",
+    "correlated_by_time", "notes",
+]
+
+PASS_CRITERIA = {
+    "fixed_accuracy_ge_80pct": {"threshold": 0.80, "higher_is_better": True},
+    "e2e_median_le_3500ms": {"threshold": 3500, "higher_is_better": False},
+    "e2e_max_le_6000ms": {"threshold": 6000, "higher_is_better": False},
+    "play_ok_rate_ge_80pct": {"threshold": 0.80, "higher_is_better": True},
+}
+
+
+class ReportGenerator:
+    def __init__(self, output_dir: str, test_name: str, yaml_file: str):
+        self.output_dir = output_dir
+        self.test_name = test_name
+        self.yaml_file = yaml_file
+        os.makedirs(output_dir, exist_ok=True)
+
+    def _timestamp_suffix(self) -> str:
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    def write_csv(self, rounds: List[RoundRecord], suffix: str = "") -> str:
+        suffix = suffix or self._timestamp_suffix()
+        path = os.path.join(self.output_dir, f"speech_test_{suffix}.csv")
+        with open(path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            writer.writeheader()
+            for r in rounds:
+                row = {k: getattr(r, k, "") for k in CSV_FIELDS}
+                writer.writerow(row)
+        return path
+
+    def compute_summary(self, rounds: List[RoundRecord]) -> dict:
+        completed = [r for r in rounds if r.status != "timeout"]
+        fixed = [r for r in rounds if r.mode == "fixed"]
+        free = [r for r in rounds if r.mode == "free"]
+
+        status_counts = {"complete": 0, "partial": 0, "timeout": 0, "orphan": 0, "pending": 0}
+        for r in rounds:
+            status_counts[r.status] = status_counts.get(r.status, 0) + 1
+
+        fixed_hit = sum(1 for r in fixed if r.match == "hit")
+        fixed_miss = sum(1 for r in fixed if r.match == "miss")
+        fixed_empty = sum(1 for r in fixed if not r.asr_text and r.expected_intent)
+        fixed_total = len(fixed)
+        fixed_accuracy = fixed_hit / fixed_total if fixed_total > 0 else 0.0
+
+        free_with_expected = [r for r in free if r.expected_intent]
+        free_hit = sum(1 for r in free_with_expected if r.match == "hit")
+        free_miss = sum(1 for r in free_with_expected if r.match == "miss")
+        free_unknown = sum(1 for r in free if r.intent == "unknown")
+
+        e2e_values = [r.e2e_latency_ms for r in completed if r.e2e_latency_ms > 0]
+        asr_values = [r.asr_latency_ms for r in completed if r.asr_latency_ms > 0]
+
+        def safe_median(vals):
+            return round(statistics.median(vals), 1) if vals else 0
+
+        def safe_quantile(vals, q):
+            if not vals:
+                return 0
+            sorted_v = sorted(vals)
+            idx = int(math.ceil(q * len(sorted_v))) - 1
+            return round(sorted_v[max(0, idx)], 1)
+
+        num_completed = len(completed) or 1
+        tts_ok_rate = round(sum(1 for r in completed if r.tts_ts > 0) / num_completed, 3)
+        play_ok_rate = round(
+            sum(1 for r in completed if r.webrtc_play_start_ts > 0) / num_completed, 3
+        )
+
+        actuals = {
+            "fixed_accuracy_ge_80pct": fixed_accuracy,
+            "e2e_median_le_3500ms": safe_median(e2e_values),
+            "e2e_max_le_6000ms": max(e2e_values) if e2e_values else 0,
+            "play_ok_rate_ge_80pct": play_ok_rate,
+        }
+        criteria_results = {}
+        for key, spec in PASS_CRITERIA.items():
+            actual = actuals[key]
+            threshold = spec["threshold"]
+            if spec["higher_is_better"]:
+                passed = actual >= threshold
+            else:
+                passed = actual <= threshold
+            criteria_results[key] = {
+                "threshold": threshold,
+                "actual": round(actual, 3),
+                "pass": passed,
+            }
+
+        grade = self._compute_grade(criteria_results, PASS_CRITERIA)
+
+        return {
+            "test_name": self.test_name,
+            "yaml_file": self.yaml_file,
+            "date": datetime.now().isoformat(timespec="seconds"),
+            "total_rounds": len(rounds),
+            "completed": len(completed),
+            "status_breakdown": status_counts,
+            "fixed_rounds": {
+                "total": fixed_total,
+                "hit": fixed_hit,
+                "miss": fixed_miss,
+                "empty": fixed_empty,
+                "accuracy": round(fixed_accuracy, 3),
+            },
+            "free_rounds": {
+                "total": len(free),
+                "with_expected": len(free_with_expected),
+                "hit": free_hit,
+                "miss": free_miss,
+                "unknown": free_unknown,
+                "no_expected": len(free) - len(free_with_expected),
+            },
+            "latency": {
+                "e2e_median_ms": safe_median(e2e_values),
+                "e2e_p90_ms": safe_quantile(e2e_values, 0.9),
+                "e2e_max_ms": round(max(e2e_values), 1) if e2e_values else 0,
+                "asr_median_ms": safe_median(asr_values),
+                "asr_max_ms": round(max(asr_values), 1) if asr_values else 0,
+                "tts_ok_rate": tts_ok_rate,
+                "play_ok_rate": play_ok_rate,
+            },
+            "pass_criteria": criteria_results,
+            "grade": grade,
+        }
+
+    def _compute_grade(self, results: dict, specs: dict) -> str:
+        failures = []
+        for key, result in results.items():
+            if not result["pass"]:
+                spec = specs[key]
+                threshold = spec["threshold"]
+                actual = result["actual"]
+                if spec["higher_is_better"]:
+                    deviation = (threshold - actual) / threshold if threshold else 0
+                else:
+                    deviation = (actual - threshold) / threshold if threshold else 0
+                failures.append(deviation)
+        if not failures:
+            return "PASS"
+        if len(failures) == 1 and failures[0] <= 0.10:
+            return "MARGINAL"
+        return "FAIL"
+
+    def write_summary(self, summary: dict, suffix: str = "") -> str:
+        suffix = suffix or self._timestamp_suffix()
+        path = os.path.join(self.output_dir, f"speech_test_{suffix}_summary.json")
+        with open(path, "w") as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
+        return path

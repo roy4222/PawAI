@@ -196,3 +196,65 @@ def test_match_empty():
                         confidence=0.0, latency_ms=5.0, ts=102.6)
     r = agg.finalize_round(0)
     assert r.match == "empty"
+
+
+import tempfile
+import os
+from speech_processor.speech_test_observer import ReportGenerator
+
+
+def _make_complete_round(round_id, mode, expected, intent, e2e_ms):
+    return RoundRecord(
+        session_id=f"sp-{round_id:03d}",
+        round_id=round_id,
+        mode=mode,
+        expected_intent=expected,
+        intent=intent,
+        speech_start_ts=100.0,
+        speech_end_ts=102.0,
+        asr_ts=102.5,
+        asr_text="test",
+        intent_ts=102.6,
+        intent_confidence=0.9,
+        tts_ts=103.0,
+        webrtc_play_start_ts=100.0 + e2e_ms / 1000,
+        webrtc_play_end_ts=105.0,
+        e2e_latency_ms=e2e_ms,
+        match="hit" if intent == expected else ("miss" if expected else "n/a"),
+        status="complete",
+        correlated_by_time=True,
+    )
+
+
+def test_csv_output():
+    rounds = [
+        _make_complete_round(1, "fixed", "greet", "greet", 2000),
+        _make_complete_round(2, "fixed", "stop", "unknown", 2500),
+    ]
+    with tempfile.TemporaryDirectory() as d:
+        gen = ReportGenerator(output_dir=d, test_name="test", yaml_file="test.yaml")
+        csv_path = gen.write_csv(rounds)
+        assert os.path.exists(csv_path)
+        with open(csv_path) as f:
+            lines = f.readlines()
+        assert len(lines) == 3  # header + 2 rows
+
+
+def test_summary_json_grade_pass():
+    rounds = [_make_complete_round(i, "fixed", "greet", "greet", 2000) for i in range(1, 16)]
+    with tempfile.TemporaryDirectory() as d:
+        gen = ReportGenerator(output_dir=d, test_name="test", yaml_file="test.yaml")
+        summary = gen.compute_summary(rounds)
+        assert summary["grade"] == "PASS"
+        assert summary["fixed_rounds"]["accuracy"] == 1.0
+
+
+def test_summary_json_grade_fail():
+    rounds = []
+    for i in range(1, 16):
+        intent = "greet" if i <= 5 else "unknown"  # 5/15 = 33%
+        rounds.append(_make_complete_round(i, "fixed", "greet", intent, 2000))
+    with tempfile.TemporaryDirectory() as d:
+        gen = ReportGenerator(output_dir=d, test_name="test", yaml_file="test.yaml")
+        summary = gen.compute_summary(rounds)
+        assert summary["grade"] == "FAIL"
