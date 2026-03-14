@@ -170,7 +170,7 @@ interface SpeechState {
        | "speaking" | "keep_alive" | "unloading";
   last_asr_text: string;
   last_intent: string;
-  last_tts_text: string;
+  last_tts_text: string;   // Gateway-derived field — 由 Gateway 從 TTS 狀態聚合填入，非直接對應單一 ROS2 topic 欄位
   models_loaded: string[];  // ["kws"] | ["kws","asr","tts"] | ...
 }
 ```
