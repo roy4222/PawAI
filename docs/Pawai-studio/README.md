@@ -1,3 +1,8 @@
+> **開發者請直接看 [pawai-studio/README.md](../../pawai-studio/README.md)**
+> 本目錄是正式設計規格庫，非日常開發入口。
+
+---
+
 # PawAI Studio 設計文件
 
 **文件版本**：v2.0
