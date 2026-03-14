@@ -143,9 +143,9 @@ frontend/components/chat/chat-panel.tsx 是唯一完整範例
 ```markdown
 # [Feature] Panel Spec
 
-> 真相來源：../docs/Pawai-studio/event-schema.md
-> 參考實作：frontend/components/chat/chat-panel.tsx
-> Design Tokens：docs/design-tokens.md
+> 真相來源：../../docs/Pawai-studio/event-schema.md
+> 參考實作：../frontend/components/chat/chat-panel.tsx
+> Design Tokens：design-tokens.md
 
 ## 1. 目標
 一句話：這個 Panel 解決什麼問題。
@@ -206,8 +206,8 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 ## 7. 參考來源
 | 需求 | 看哪裡 |
 |------|--------|
-| Event/State 欄位定義 | ../docs/Pawai-studio/event-schema.md |
-| 色彩/字體/間距 | docs/design-tokens.md |
+| Event/State 欄位定義 | ../../docs/Pawai-studio/event-schema.md |
+| 色彩/字體/間距 | design-tokens.md |
 | PanelCard 用法 | frontend/components/shared/panel-card.tsx |
 | StatusBadge 用法 | frontend/components/shared/status-badge.tsx |
 | 完整 Panel 範例 | frontend/components/chat/chat-panel.tsx |
@@ -228,7 +228,7 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 - [ ] npm run lint + npm run build 通過
 
 ### M3（4/6）：整合穩定版
-- [ ] 對接真實 Gateway WebSocket（替換 mock）
+- [ ] Panel 能正確反映由 store 注入的真實 Gateway 資料
 - [ ] 處理真實資料邊界 case（缺欄位、格式異常、斷線重連）
 - [ ] 與其他 Panel 共存不衝突（在設計上限內，例如 Chat + 2 panels）
 - [ ] 5 分鐘無當機 soak test
@@ -292,7 +292,7 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 #### M3（4/6）：整合穩定版
 
 每人交付：
-- [ ] 對接真實 Gateway WebSocket（替換 mock）
+- [ ] Panel 能正確反映由 store 注入的真實 Gateway 資料
 - [ ] 處理真實資料邊界 case（缺欄位、格式異常、斷線重連）
 - [ ] 與其他 Panel 共存不衝突（在設計上限內，例如 Chat + 2 panels）
 - [ ] 5 分鐘無當機 soak test
@@ -371,7 +371,7 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 
 本設計文件確認後，需要執行以下實作：
 
-1. **重寫 `pawai-studio/README.md`** — Developer Launcher 格式
+1. **新增 `pawai-studio/README.md`** — Developer Launcher 格式
 2. **新增 `pawai-studio/docs/onboarding.md`** — 5 分鐘上手指南
 3. **重寫 4 份 Panel Spec** — 統一 AI-ready 格式（Section 2 模板）
 4. **修改 `docs/Pawai-studio/README.md`** — 加頂部導向提示
