@@ -13,9 +13,11 @@ interface EventItemProps {
 
 const sourceColorMap: Record<string, string> = {
   face: "bg-blue-500/10 text-blue-400 border-transparent",
-  speech: "bg-purple-500/10 text-purple-400 border-transparent",
-  gesture: "bg-[#22C55E]/10 text-[#22C55E] border-transparent",
+  speech: "bg-primary/10 text-primary border-transparent",
+  gesture: "bg-success/10 text-success border-transparent",
   pose: "bg-orange-500/10 text-orange-400 border-transparent",
+  brain: "bg-warning/10 text-warning border-transparent",
+  system: "bg-info/10 text-info border-transparent",
 }
 
 function getSourceColor(source: string): string {
@@ -23,7 +25,7 @@ function getSourceColor(source: string): string {
   for (const [k, v] of Object.entries(sourceColorMap)) {
     if (key.includes(k)) return v
   }
-  return "bg-[#2A2A35] text-[#8B8B9E] border-transparent"
+  return "bg-muted text-muted-foreground border-transparent"
 }
 
 export function EventItem({
@@ -36,12 +38,12 @@ export function EventItem({
   return (
     <div
       className={cn(
-        "flex flex-row items-center gap-2 p-1.5 rounded-lg transition-colors duration-150",
-        onClick && "cursor-pointer hover:bg-[#1C1C24]"
+        "flex flex-row items-center gap-2 p-2 rounded-lg transition-colors duration-150",
+        onClick && "cursor-pointer hover:bg-surface-hover"
       )}
       onClick={onClick}
     >
-      <span className="font-mono text-xs text-[#55556A] shrink-0">
+      <span className="font-mono text-[11px] text-muted-foreground/60 shrink-0">
         {timestamp}
       </span>
       <Badge
@@ -52,8 +54,8 @@ export function EventItem({
       >
         {source}
       </Badge>
-      <span className="text-xs text-[#8B8B9E] shrink-0">{eventType}</span>
-      <span className="text-xs text-[#F0F0F5] flex-1 truncate">{summary}</span>
+      <span className="text-xs text-muted-foreground shrink-0">{eventType}</span>
+      <span className="text-xs text-foreground/80 flex-1 truncate">{summary}</span>
     </div>
   )
 }

@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "./status-badge"
 import { LiveIndicator } from "./live-indicator"
-import { cn } from "@/lib/utils"
 
 type Status = "active" | "loading" | "error" | "inactive"
 
@@ -30,16 +29,16 @@ export function PanelCard({
   const showLive = status === "active" || status === "loading"
 
   return (
-    <Card className="bg-[#141419] border-[#2A2A35] rounded-[12px]">
+    <Card className="bg-card border-border/50 rounded-xl">
       <CardHeader className="p-3 flex flex-row items-center gap-2 space-y-0">
-        <span className="h-4 w-4 text-[#8B8B9E] shrink-0 flex items-center justify-center">
+        <span className="h-4 w-4 text-muted-foreground shrink-0 flex items-center justify-center">
           {icon}
         </span>
-        <span className="text-sm font-medium text-[#F0F0F5] flex-1 truncate">
+        <span className="text-sm font-medium text-foreground flex-1 truncate">
           {title}
         </span>
         {count !== undefined && (
-          <Badge className="rounded-full bg-[#2A2A35] text-[#8B8B9E] border-transparent text-[10px] px-1.5 py-0 h-5 font-normal">
+          <Badge className="rounded-full bg-muted text-muted-foreground border-transparent text-[10px] px-1.5 py-0 h-5 font-normal">
             {count}
           </Badge>
         )}
@@ -49,7 +48,7 @@ export function PanelCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5 p-0 opacity-50 hover:opacity-100 hover:bg-transparent text-[#8B8B9E]"
+            className="h-5 w-5 p-0 opacity-50 hover:opacity-100 hover:bg-transparent text-muted-foreground cursor-pointer"
             onClick={onDismiss}
           >
             <X className="h-3.5 w-3.5" />

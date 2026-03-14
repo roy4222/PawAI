@@ -92,4 +92,25 @@
   html {
     @apply font-sans;
   }
+
+  /* Custom scrollbar — thin, unobtrusive */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+
+  /* Selection color */
+  ::selection {
+    background: rgba(124, 107, 255, 0.25);
+  }
 }

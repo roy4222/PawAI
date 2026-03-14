@@ -15,18 +15,18 @@ export function MetricChip({ label, value, unit, trend }: MetricChipProps) {
   return (
     <Badge
       variant="outline"
-      className="border-[#2A2A35] bg-transparent gap-1 font-mono text-xs px-2 py-0.5"
+      className="border-border/50 bg-transparent gap-1 font-mono text-xs px-2 py-0.5"
     >
-      <span className="text-[#8B8B9E]">{label}:</span>
-      <span className="text-[#F0F0F5]">
+      <span className="text-muted-foreground">{label}:</span>
+      <span className="text-foreground">
         {value}
-        {unit && <span className="text-[#55556A] ml-0.5">{unit}</span>}
+        {unit && <span className="text-muted-foreground/60 ml-0.5">{unit}</span>}
       </span>
       {trend === "up" && (
-        <ArrowUp className={cn("h-3 w-3 text-[#22C55E]")} />
+        <ArrowUp className={cn("h-3 w-3 text-success")} />
       )}
       {trend === "down" && (
-        <ArrowDown className={cn("h-3 w-3 text-[#EF4444]")} />
+        <ArrowDown className={cn("h-3 w-3 text-destructive")} />
       )}
     </Badge>
   )

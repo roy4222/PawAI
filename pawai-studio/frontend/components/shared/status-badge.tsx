@@ -11,20 +11,20 @@ interface StatusBadgeProps {
 
 const statusConfig: Record<Status, { className: string; label: string; pulse?: boolean }> = {
   active: {
-    className: "bg-[#22C55E]/10 text-[#22C55E] border-transparent",
+    className: "bg-success/10 text-success border-transparent",
     label: "運作中",
   },
   loading: {
-    className: "bg-[#F59E0B]/10 text-[#F59E0B] border-transparent",
+    className: "bg-warning/10 text-warning border-transparent",
     label: "載入中",
     pulse: true,
   },
   error: {
-    className: "bg-[#EF4444]/10 text-[#EF4444] border-transparent",
+    className: "bg-destructive/10 text-destructive border-transparent",
     label: "錯誤",
   },
   inactive: {
-    className: "bg-[#2A2A35] text-[#55556A] border-transparent",
+    className: "bg-muted text-muted-foreground border-transparent",
     label: "離線",
   },
 }
