@@ -1786,12 +1786,58 @@ ros2 topic pub --once /tts std_msgs/msg/String '{data: "系統就緒"}'
 - TTS / webrtc_req 用時序關聯（`tts_correlation_window_s` 預設 3.0s），因這些 topic 不帶 `session_id`
 - 控制面用 topic-based req/ack（不用 ROS2 service，避免自訂 .srv）
 
+#### Jetson 實測結果（同日晚間）
+
+**text_input downstream validation: PASS**
+
+使用 `/speech/text_input` 繞過麥克風，驗證 Intent → TTS → Go2 播放 → Observer 記錄全鏈：
+
+| 指標 | 結果 | 門檻 | 狀態 |
+|------|------|------|------|
+| Fixed accuracy | 100%（5/5 hit） | ≥80% | PASS |
+| E2E median | 378ms | ≤3500ms | PASS |
+| E2E max | 386ms | ≤6000ms | PASS |
+| Play OK rate | 100% | ≥80% | PASS |
+| TTS OK rate | 100% | — | PASS |
+
+- 5 輪全部 `complete`，零 partial/timeout/orphan
+- greet/come_here/stop/take_photo/status 全命中
+- Round meta 綁定正確，CSV + Summary JSON 正常生成
+
+**live mic capture on Jetson: BLOCKED**
+
+| 問題 | 根因 | 狀態 |
+|------|------|------|
+| `input_device:=0` crash | PortAudio `PaErrorCode -9985`，ALSA backend 無法開 device 0 | 未解 |
+| `alsa_device:=plughw:0,0` 靜默失敗 | `stt_intent_node` 只設 `ALSA_DEFAULT` 環境變數，不影響 PortAudio 的 device 選擇，stream 實際開在 default device 30（NVIDIA APE） | 未解 |
+| default device 收音弱 | RMS ~0.016 剛好在 VAD threshold 0.015 邊界，觸發不穩定 | 未解 |
+
+> **結論**：驗收工具本身已驗通。麥克風輸入層是獨立的底層 bug，需另開 debugging session 處理。
+
+#### 今日修正的 bug
+
+- **warmup 污染統計**：改為 observer 在 warmup 結束後才啟動
+- **`--skip-driver` 未生效**：加 `SKIP_DRIVER` 條件包裹 go2 launch
+- **correlation window 太短**：`tts_correlation_window_s` 從 3.0s 改為 5.0s
+- **text_input 路徑 observer 不記錄**：observer 在 `on_intent_event` 無 active round 時自動建立新 round
+- **match 全判 empty**：`on_intent_event` 補填 `asr_text` from intent event 的 `text` 欄位
+- **report 最後一輪截斷**：`generate_report` 前加 8s drain wait
+
 #### 下一步
 
-- 在 Jetson 上跑第一輪小批次測試（3-5 輪 fixed rounds），驗 observer 工具鏈無誤
-- 確認無誤後跑完整 30 輪，回填 §15.1 測試結果表格
+- **獨立處理 Jetson PortAudio/ALSA 麥克風問題**（不與驗收工具混合）
+- 麥克風問題解決後，跑完整 30 輪 live mic 測試
 - 根據 30 輪數據決定是否需要調整 energy VAD 參數或 intent 規則
 
-*最後更新：2026-03-14（30 輪驗收框架建立）*
+#### 待辦：Jetson live mic capture stabilization
+
+> 獨立 debugging task，不阻擋驗收工具或 downstream 開發。
+
+需調查：
+1. 為什麼 PortAudio 在 ROS2 process 中無法開 device 0（獨立 python3 可以）
+2. `stt_intent_node` 的 `alsa_device` 參數實際上沒有讓 sounddevice 用指定裝置
+3. 是否應改用 pyaudio 或 subprocess `arecord` 替代 sounddevice/PortAudio
+
+*最後更新：2026-03-14（Jetson 實測 + 麥克風問題定位）*
 *適用專案：PawAI / elder_and_dog*
 *維護用途：Jetson MVP 語音功能測試與展示前驗收*
