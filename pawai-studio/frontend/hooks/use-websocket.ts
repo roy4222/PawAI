@@ -26,6 +26,8 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions): UseWebSocketRe
     onMessageRef.current = onMessage;
   }, [onMessage]);
 
+  const connectRef = useRef<() => void>(() => {});
+
   const connect = useCallback(() => {
     if (unmountedRef.current) return;
 
@@ -56,7 +58,7 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions): UseWebSocketRe
     ws.onclose = () => {
       if (unmountedRef.current) return;
       setIsConnected(false);
-      reconnectTimer.current = setTimeout(connect, RECONNECT_DELAY_MS);
+      reconnectTimer.current = setTimeout(() => connectRef.current(), RECONNECT_DELAY_MS);
     };
 
     ws.onerror = () => {
@@ -64,6 +66,10 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions): UseWebSocketRe
       ws.close();
     };
   }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     unmountedRef.current = false;

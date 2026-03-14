@@ -43,7 +43,7 @@ interface LayoutStore {
   setPreset: (preset: LayoutPreset) => void;
 }
 
-function evictIfNeeded(panels: Set<PanelId>, incoming: PanelId): Set<PanelId> {
+function evictIfNeeded(panels: Set<PanelId>): Set<PanelId> {
   if (panels.size < MAX_PANELS) return panels;
 
   // Find the lowest-priority panel (highest priority number) to evict,
@@ -75,7 +75,7 @@ export const useLayoutStore = create<LayoutStore>((set) => ({
   showPanel: (id) => {
     set((state) => {
       if (state.activePanels.has(id)) return state;
-      const panels = evictIfNeeded(new Set(state.activePanels), id);
+      const panels = evictIfNeeded(new Set(state.activePanels));
       panels.add(id);
       return { activePanels: panels };
     });
