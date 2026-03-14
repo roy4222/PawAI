@@ -216,7 +216,7 @@ phase 為 `idle_wakeword` 且無歷史事件時：
 - [ ] idle_wakeword 且無事件時顯示空狀態
 - [ ] 遵守 design-tokens.md 的色板與圓角
 - [ ] props 變化時有 transition 動畫（150-300ms）
-- [ ] 響應式：sidebar 寬度 280-400px 自適應
+- [ ] 響應式：sidebar 寬度 360px 自適應
 - [ ] 接 Mock Server 資料可正常更新
 
 ---

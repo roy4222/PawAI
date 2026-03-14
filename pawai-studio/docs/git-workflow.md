@@ -99,7 +99,7 @@ feat(<scope>): <你做了什麼>
 ## 測試方式
 - [ ] `npm run dev` 可正常顯示
 - [ ] 接 Mock Server 資料可正常更新
-- [ ] 響應式：sidebar 寬度 280-400px 自適應
+- [ ] 響應式：sidebar 寬度 360px 自適應
 ```
 
 ---
@@ -126,7 +126,33 @@ npm run dev
 
 ---
 
-## 6. 常見問題
+## 6. CI 自動檢查
+
+每個 PR 開到 `main` 時，GitHub Actions 會自動跑：
+
+| Job | 檢查項目 | 失敗原因 |
+|-----|---------|---------|
+| **Frontend** | `npm ci` → `npm run lint` → `npm run build` | TS 型別錯誤、import 壞掉、lint 不過 |
+| **Backend** | `uv pip install` → `python import app` | schema 改壞、依賴缺少 |
+
+- CI 沒過 = **不能 merge**
+- 設定檔：`.github/workflows/studio-ci.yml`
+- 只在 `pawai-studio/**` 有變更時才會觸發
+
+### 如果 CI 失敗怎麼辦？
+
+```bash
+# 先在本機跑一次看錯誤
+cd pawai-studio/frontend
+npm run lint
+npm run build
+
+# 修完後 commit + push，CI 會自動重跑
+```
+
+---
+
+## 7. 常見問題
 
 ### Q: 我需要新的 npm 套件怎麼辦？
 

@@ -107,9 +107,11 @@
 | 效果 | 持續時間 | Tailwind | 用途 |
 |------|---------|---------|------|
 | hover 色變 | 150ms | `transition-colors duration-150` | 按鈕、卡片 hover |
-| Panel 展開 | 200ms | `transition-all duration-200` | 面板出現/消失 |
+| Panel 展開 | 300ms | `animate-in slide-in-from-right-4 duration-300` | sidebar 面板出現 |
+| Panel 展開（底部）| 300ms | `animate-in slide-in-from-bottom-4 duration-300` | bottom 面板出現 |
 | 資料更新 | 300ms | `transition-all duration-300` | 數值變化 |
 | pulse 脈衝 | 2s loop | `animate-pulse` | LiveIndicator、狀態點 |
+| bounce 思考 | loop | `animate-bounce` | ChatPanel 思考指示器 |
 
 ### 尊重 reduced-motion
 
@@ -135,10 +137,10 @@ className="motion-safe:transition-all motion-safe:duration-200"
 
 // 規範
 // - 固定 header：icon + title + StatusBadge + 收合按鈕
-// - 背景：bg-surface
-// - 邊框：border-border
-// - 圓角：rounded-[12px]
-// - padding：p-4
+// - 背景：bg-card
+// - 邊框：border-border/50
+// - 圓角：rounded-xl
+// - padding：p-3（header）、p-3 pt-0（content）
 ```
 
 ### StatusBadge
@@ -185,7 +187,7 @@ className="motion-safe:transition-all motion-safe:duration-200"
 
 | 位置 | 最小寬度 | 最大寬度 | 高度 |
 |------|---------|---------|------|
-| sidebar | 280px | 400px | 自適應 |
+| sidebar | 360px | 360px | 自適應 |
 | bottom | 100% | 100% | 200-300px |
 | main (Chat) | 剩餘空間 | 剩餘空間 | 100vh - topbar |
 
@@ -196,6 +198,18 @@ className="motion-safe:transition-all motion-safe:duration-200"
 | >= 1200px | sidebar 展開，完整 layout |
 | 768-1199px | sidebar 改為可收合的 tabs |
 | < 768px | 僅 Chat，底部 tab 切換 Panel |
+
+---
+
+## 7. 全域樣式
+
+### Scrollbar
+
+自訂 scrollbar：6px 寬、圓角、背景透明、thumb 用 `border` 色。
+
+### 文字選取
+
+選取文字背景為 `rgba(124, 107, 255, 0.25)`（primary 的 25% 透明度）。
 
 ---
 

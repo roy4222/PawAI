@@ -217,7 +217,7 @@ interface PoseEvent {
 - [ ] 事件歷史列表（至少最近 5 筆），fallen 事件紅色標示
 - [ ] 遵守 design-tokens.md 的色板與圓角
 - [ ] props 變化時有 transition 動畫（150-300ms）
-- [ ] 響應式：sidebar 寬度 280-400px 自適應
+- [ ] 響應式：sidebar 寬度 360px 自適應
 - [ ] 接 Mock Server 資料可正常更新
 
 ---
