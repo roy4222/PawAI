@@ -1,234 +1,194 @@
-# SpeechPanel Spec — 語音互動面板
+# Speech Panel Spec
 
-**負責人**：陳
-**版本**：v1.0
-**建立日期**：2026-03-14
-**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
-
----
-
-## 目標
-
-顯示語音互動的即時狀態：ASR 轉寫文字、辨識的意圖、語音狀態機階段、對話歷史。
+> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 SpeechState / §1.3 SpeechIntentEvent
+> 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
+> Design Tokens：[design-tokens.md](design-tokens.md)
 
 ---
 
-## Props 介面
+## 1. 目標
+
+即時顯示語音互動狀態：狀態機 phase、ASR 轉寫文字、Intent 辨識結果、已載入模型。
+
+---
+
+## 2. 檔案範圍
+
+### 可以改
+- `frontend/components/speech/speech-panel.tsx`
+- `frontend/components/speech/` 下新增的子元件
+
+### 不可以改（改了 PR 會被退）
+- `frontend/contracts/types.ts`
+- `frontend/stores/*`
+- `frontend/hooks/*`
+- `frontend/components/layout/*`
+- `frontend/components/chat/*`
+- 其他人的 `frontend/components/face/`、`gesture/`、`pose/`
+
+### 不得直接修改現有 shared 元件；若需新增或擴充，先提 Issue
+- `frontend/components/shared/*`
+
+---
+
+## 3. Store Selectors 與使用型別
 
 ```typescript
-interface SpeechPanelProps {
-  data: SpeechState;                      // 即時狀態
-  events: SpeechIntentEvent[];            // 歷史事件列表
+import { useStateStore } from '@/stores/state-store'
+import { useEventStore } from '@/stores/event-store'
+import type { SpeechState, SpeechPhase, SpeechIntentEvent } from '@/contracts/types'
+
+// 在元件內：
+const speechState = useStateStore((s) => s.speechState)
+const events = useEventStore((s) => s.events.filter((e) => e.source === 'speech'))
+```
+
+---
+
+## 4. Mock Data
+
+```typescript
+const MOCK_SPEECH_STATE: SpeechState = {
+  stamp: 1773561602.123,
+  phase: 'listening',
+  last_asr_text: '你好，請問你是誰？',
+  last_intent: 'greet',
+  last_tts_text: '哈囉！我是 PawAI，很高興認識你！',
+  models_loaded: ['kws', 'asr', 'tts'],
 }
 
-// 來自 contracts/types.ts
-interface SpeechState {
-  stamp: number;
-  phase: "idle_wakeword" | "wake_ack" | "loading_local_stack" | "listening"
-       | "transcribing" | "local_asr_done" | "cloud_brain_pending"
-       | "speaking" | "keep_alive" | "unloading";
-  last_asr_text: string;
-  last_intent: string;
-  last_tts_text: string;
-  models_loaded: string[];   // ["kws"] | ["kws","asr","tts"] | ...
-}
-
-interface SpeechIntentEvent {
-  id: string;
-  timestamp: string;
-  source: "speech";
-  event_type: "intent_recognized" | "asr_result" | "wake_word";
+const MOCK_SPEECH_EVENT: SpeechIntentEvent = {
+  id: 'evt-speech-001',
+  timestamp: '2026-03-14T10:00:05.789+08:00',
+  source: 'speech',
+  event_type: 'intent_recognized',
   data: {
-    intent?: string;        // greet | come_here | stop | take_photo | status
-    text: string;           // ASR 原始文字
-    confidence: number;     // [0.0, 1.0]
-    provider: string;       // "whisper_local" | "qwen_asr" | 其他（依部署決定）
-  };
+    intent: 'greet',
+    text: '你好',
+    confidence: 0.95,
+    provider: 'whisper_local',
+  },
+}
+
+const MOCK_IDLE_STATE: SpeechState = {
+  stamp: 0,
+  phase: 'idle_wakeword',
+  last_asr_text: '',
+  last_intent: '',
+  last_tts_text: '',
+  models_loaded: ['kws'],
 }
 ```
 
 ---
 
-## 資料來源
+## 5. UI 結構
 
-| 資料 | 來源 Topic | 更新頻率 |
-|------|-----------|---------|
-| SpeechState | `/state/interaction/speech` | 狀態變化時 |
-| SpeechIntentEvent | `/event/speech_intent_recognized` | 條件觸發 |
+### 必要區塊
+
+```
+PanelCard (icon=Mic, title="語音互動")
+├── Phase 狀態指示
+│   ├── 當前 phase 名稱 + 對應顏色圓點
+│   └── [listening 狀態] 3-dot pulse 動畫
+├── 最近轉寫區
+│   ├── ASR 文字（last_asr_text）
+│   ├── Intent badge（last_intent + confidence%）
+│   └── Provider 標籤（小字灰色）
+├── 已載入模型
+│   └── Chip 列表（已載=綠 success / 未載=灰 muted）
+│       可能的模型：kws, asr, tts
+├── [若 idle_wakeword 且無事件] 空狀態
+│   └── 圖示 + "等待喚醒詞..."
+└── [可選/M2] 事件歷史（最近 10 筆 SpeechIntentEvent）
+    └── EventItem 列表
+```
+
+### Phase 顏色對照表
+
+| Phase | 顯示文字 | 顏色 |
+|-------|---------|------|
+| `idle_wakeword` | 等待喚醒 | `--muted-foreground` |
+| `wake_ack` | 喚醒確認 | `--warning` |
+| `loading_local_stack` | 載入模型中 | `--warning` |
+| `listening` | 聆聽中 | `--success` |
+| `transcribing` | 轉寫中 | `--primary` |
+| `local_asr_done` | ASR 完成 | `--primary` |
+| `cloud_brain_pending` | 等待大腦 | `--warning` |
+| `speaking` | 播放中 | `--success` |
+| `keep_alive` | 保持連線 | `--muted-foreground` |
+| `unloading` | 卸載中 | `--muted-foreground` |
+
+### 狀態矩陣
+
+| 狀態 | 條件 | 顯示內容 | StatusBadge |
+|------|------|---------|-------------|
+| 正常運作 | `phase !== "idle_wakeword"` | Phase + 轉寫 + Intent | `active` |
+| 載入中 | `speechState === null` | "正在連線..." | `loading` |
+| 無資料 | `phase === "idle_wakeword"` 且無事件 | "等待喚醒詞..." | `inactive` |
+| 錯誤 | store 連線失敗 | "語音模組離線" | `error` |
+
+### 響應式
+- sidebar 寬度：固定 360px（以 design-tokens.md 為準）
+- main area：自適應
+- 不需要做 mobile layout
 
 ---
 
-## 必做元件
+## 6. 互動規則
 
-### 1. 狀態機顯示（主體）
-
-顯示當前語音處理階段：
-
-```
-┌─────────────────────────────────────────┐
-│ 🎤 語音互動                    ● Live   │
-├─────────────────────────────────────────┤
-│                                         │
-│  狀態：listening                        │  ← phase，用 StatusBadge
-│  ●●● 正在聆聽...                        │  ← 3-dot pulse 動畫
-│                                         │
-│  ┌─ 最近轉寫 ─────────────────────────┐ │
-│  │ "你好，可以幫我拍個照嗎"           │ │  ← last_asr_text
-│  │ Intent: take_photo (85%)           │ │  ← last_intent + confidence
-│  │ Provider: whisper_local            │ │
-│  └────────────────────────────────────┘ │
-│                                         │
-│  已載入模型: kws, asr, tts             │  ← models_loaded chips
-└─────────────────────────────────────────┘
-```
-
-### 2. Phase 狀態對照
-
-| phase | 顯示文字 | 顏色 | 動畫 |
-|-------|---------|------|------|
-| `idle_wakeword` | 等待喚醒 | 灰色 | 無 |
-| `wake_ack` | 喚醒成功！ | 綠色 | 閃一下 |
-| `loading_local_stack` | 載入模型中... | 黃色 | pulse |
-| `listening` | 正在聆聽 | 綠色 | 3-dot pulse |
-| `transcribing` | 轉寫中... | 黃色 | pulse |
-| `local_asr_done` | 轉寫完成 | 綠色 | 無 |
-| `cloud_brain_pending` | AI 思考中... | 紫色(accent) | pulse |
-| `speaking` | 正在說話 | 綠色 | 音波動畫 |
-| `keep_alive` | 待命中 | 藍色 | 緩慢呼吸 |
-| `unloading` | 卸載模型... | 灰色 | 淡出 |
-
-### 3. 空狀態
-
-phase 為 `idle_wakeword` 且無歷史事件時：
-- 圖示：`Mic` 或 `MicOff`
-- 文字：「語音系統待命中」
-- 次要文字：「說出喚醒詞開始互動」
-
-### 4. 模型載入狀態
-
-用小 chips 顯示 `models_loaded` 陣列：
-```
-已載入: [KWS] [ASR] [TTS]      ← 綠色 chips
-未載入: [LLM]                    ← 灰色 chips
-```
-
-### 5. 事件歷史（可選，加分項）
-
-最近 10 筆語音事件：
-```
-14:33:02  intent_recognized  greet (95%)  "你好"
-14:32:58  asr_result         "你好"       whisper_local
-14:32:55  wake_word          —            —
-```
+- **Phase 切換**：顏色 transition 150ms
+- **ASR 文字更新**：typing effect（逐字顯示，可用 CSS animation）
+- **Intent badge 出現**：scale 200ms bounce
+- **Model chip 載入/卸載**：fade 200ms
+- **listening 狀態**：3-dot pulse 動畫（2s loop，`motion-safe` 尊重）
 
 ---
 
-## 互動規則
+## 7. 參考來源
 
-| 互動 | 行為 |
-|------|------|
-| phase 切換 | StatusBadge 顏色漸變（150ms） |
-| 新 ASR 文字 | 從空白逐字出現（typing effect，可選） |
-| intent 出現 | intent badge 從小放大（200ms） |
-| models_loaded 變化 | chip 淡入/淡出（200ms） |
-| 轉寫文字 hover | 顯示完整 provider 和 confidence 資訊 |
-
----
-
-## Design Tokens 參考
-
-見 `design-tokens.md`。必須使用：
-- `PanelCard` 作為外層容器
-- `StatusBadge` 顯示 phase 狀態
-- `MetricChip` 顯示 confidence
-- `LiveIndicator` 顯示即時狀態
+| 需求 | 看哪裡 |
+|------|--------|
+| SpeechState / SpeechPhase / SpeechIntentEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 + §1.3 |
+| 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
+| PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
+| StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
+| 完整 Panel 範例 | `frontend/components/chat/chat-panel.tsx` |
 
 ---
 
-## Mock 資料範例
+## 8. Milestones
 
-### SpeechState（聆聽中）
+### M1（3/16）：能看、能 review
+- [ ] `PanelCard` 包裹，icon=`Mic`，title="語音互動"
+- [ ] 用 `MOCK_SPEECH_STATE` 顯示 phase + ASR 文字 + intent
+- [ ] Phase 圓點顏色正確（至少 listening / idle_wakeword）
+- [ ] 4 種狀態（active / loading / inactive / error）都有對應畫面
+- [ ] `npm run lint` + `npm run build` 通過
 
-```json
-{
-  "stamp": 1710400385.789,
-  "phase": "listening",
-  "last_asr_text": "",
-  "last_intent": "",
-  "last_tts_text": "",
-  "models_loaded": ["kws", "asr", "tts"]
-}
-```
+### M2（3/23）：可 demo 的前端版本
+- [ ] Panel 能正確反映由 store 注入的 mock 資料更新
+- [ ] 10 種 phase 全部有對應顏色和文字
+- [ ] listening 的 3-dot pulse 動畫
+- [ ] Intent badge + confidence% 顯示
+- [ ] 已載入模型 chip 列表
+- [ ] 空狀態 + loading 狀態 UI
+- [ ] 事件歷史列表（最近 10 筆）
+- [ ] `npm run lint` + `npm run build` 通過
 
-### SpeechState（轉寫完成）
-
-```json
-{
-  "stamp": 1710400390.123,
-  "phase": "local_asr_done",
-  "last_asr_text": "你好，可以幫我拍個照嗎",
-  "last_intent": "take_photo",
-  "last_tts_text": "",
-  "models_loaded": ["kws", "asr", "tts"]
-}
-```
-
-### SpeechState（待機）
-
-```json
-{
-  "stamp": 1710400400.000,
-  "phase": "idle_wakeword",
-  "last_asr_text": "",
-  "last_intent": "",
-  "last_tts_text": "",
-  "models_loaded": ["kws"]
-}
-```
-
-### SpeechIntentEvent
-
-```json
-{
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "timestamp": "2026-03-14T14:33:02.456+08:00",
-  "source": "speech",
-  "event_type": "intent_recognized",
-  "data": {
-    "intent": "greet",
-    "text": "你好",
-    "confidence": 0.95,
-    "provider": "whisper_local"
-  }
-}
-```
+### M3（4/6）：整合穩定版
+- [ ] Panel 能正確反映由 store 注入的真實 Gateway 資料
+- [ ] 處理邊界 case（phase 快速切換、空 ASR 文字、未知 phase）
+- [ ] 與其他 Panel 共存不衝突（Chat + 2 panels）
+- [ ] 5 分鐘無當機 soak test
+- [ ] `npm run lint` + `npm run build` 通過
 
 ---
 
-## 驗收標準
+## 9. Out of Scope（不要做）
 
-- [ ] 使用 `PanelCard` 包裹，標題顯示「語音互動」+ LiveIndicator
-- [ ] 顯示當前 phase，文字 + 顏色對照表正確
-- [ ] listening 狀態有 3-dot pulse 動畫
-- [ ] 顯示 last_asr_text（轉寫文字）
-- [ ] 顯示 last_intent + confidence（百分比格式）
-- [ ] 顯示 models_loaded chips
-- [ ] idle_wakeword 且無事件時顯示空狀態
-- [ ] 遵守 design-tokens.md 的色板與圓角
-- [ ] props 變化時有 transition 動畫（150-300ms）
-- [ ] 響應式：sidebar 寬度 360px 自適應
-- [ ] 接 Mock Server 資料可正常更新
-
----
-
-## 不要做的事
-
-- 不要處理 WebSocket 連線（已由 hooks 處理，你只接 props）
-- 不要自己定義顏色（用 design tokens）
-- 不要做麥克風輸入或音訊處理（那是 Jetson 端的工作）
-- 不要做 layout 切換邏輯
-- 不要做 ChatPanel 裡的語音氣泡（那是 ChatPanel 的範圍）
-
----
-
-*最後更新：2026-03-14*
+- 不要自己加新的 shared component（先提 Issue）
+- 不要改 layout 邏輯
+- 不要加 Panel 之間的直接通訊
+- 不要引入新的 npm 依賴（除非先提 Issue）
+- 不要實作語音輸入功能（那是 ChatPanel / stt_intent_node 的事）
