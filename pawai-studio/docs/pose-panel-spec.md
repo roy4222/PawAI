@@ -1,236 +1,202 @@
-# PosePanel Spec — 姿勢辨識面板
+# Pose Panel Spec
 
-**負責人**：楊
-**版本**：v1.0
-**建立日期**：2026-03-14
-**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
-
-> **本版不依賴特定模型。** MediaPipe Pose / MoveNet / 其他模型皆可，輸出需符合同一 props 介面。
-> 模型研究未完成不影響 Panel UI 開發，先用 Mock 資料。
+> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.6 PoseState / §1.5 PoseEvent
+> 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
+> Design Tokens：[design-tokens.md](design-tokens.md)
 
 ---
 
-## 目標
+## 1. 目標
 
-顯示姿勢辨識結果：偵測到的姿勢類型、信心度、追蹤對象、事件歷史。特別注意跌倒偵測的警示顯示。
+即時顯示姿勢辨識結果：姿勢類型、信心度、追蹤對象、**跌倒警示**。（P1 功能）
 
 ---
 
-## Props 介面
+## 2. 檔案範圍
+
+### 可以改
+- `frontend/components/pose/pose-panel.tsx`
+- `frontend/components/pose/` 下新增的子元件
+
+### 不可以改（改了 PR 會被退）
+- `frontend/contracts/types.ts`
+- `frontend/stores/*`
+- `frontend/hooks/*`
+- `frontend/components/layout/*`
+- `frontend/components/chat/*`
+- 其他人的 `frontend/components/face/`、`speech/`、`gesture/`
+
+### 不得直接修改現有 shared 元件；若需新增或擴充，先提 Issue
+- `frontend/components/shared/*`
+
+---
+
+## 3. Store Selectors 與使用型別
 
 ```typescript
-interface PosePanelProps {
-  data: PoseState;                      // 即時狀態
-  events: PoseEvent[];                  // 歷史事件列表
+import { useStateStore } from '@/stores/state-store'
+import { useEventStore } from '@/stores/event-store'
+import type { PoseState, PoseEvent } from '@/contracts/types'
+
+// 在元件內：
+const poseState = useStateStore((s) => s.poseState)
+const events = useEventStore((s) => s.events.filter((e) => e.source === 'pose'))
+```
+
+---
+
+## 4. Mock Data
+
+```typescript
+const MOCK_POSE_STATE: PoseState = {
+  stamp: 1773561607.890,
+  active: true,
+  current_pose: 'standing',
+  confidence: 0.92,
+  track_id: 1,
+  status: 'active',
 }
 
-// 來自 contracts/types.ts
-interface PoseState {
-  stamp: number;
-  active: boolean;
-  current_pose: string | null;          // 當前姿勢，null 表示無
-  confidence: number;                   // [0.0, 1.0]
-  track_id: number | null;             // 對應的人臉 track_id
-  status: "active" | "inactive" | "loading";
-}
-
-interface PoseEvent {
-  id: string;
-  timestamp: string;
-  source: "pose";
-  event_type: "pose_detected";
+const MOCK_POSE_EVENT: PoseEvent = {
+  id: 'evt-pose-001',
+  timestamp: '2026-03-14T10:00:07.890+08:00',
+  source: 'pose',
+  event_type: 'pose_detected',
   data: {
-    pose: string;           // "standing" | "sitting" | "crouching" | "fallen"
-    confidence: number;
-    track_id: number;
-  };
+    pose: 'standing',
+    confidence: 0.92,
+    track_id: 1,
+  },
+}
+
+const MOCK_FALLEN_STATE: PoseState = {
+  stamp: 1773561610.000,
+  active: true,
+  current_pose: 'fallen',
+  confidence: 0.88,
+  track_id: 1,
+  status: 'active',
+}
+
+const MOCK_EMPTY_STATE: PoseState = {
+  stamp: 0,
+  active: false,
+  current_pose: null,
+  confidence: 0,
+  track_id: null,
+  status: 'inactive',
 }
 ```
 
 ---
 
-## 資料來源
+## 5. UI 結構
 
-| 資料 | 來源 Topic | 更新頻率 |
-|------|-----------|---------|
-| PoseState | `/state/perception/pose` | 狀態變化時 |
-| PoseEvent | `/event/pose_detected` | 條件觸發 |
+### 必要區塊
+
+```
+PanelCard (icon=Activity, title="姿勢辨識")
+├── [若 active] 姿勢卡片
+│   ├── 姿勢圖示（standing=🧍 / sitting=🪑 / crouching=⬇️ / fallen=⚠️，或用 lucide icon）
+│   ├── 姿勢名稱（粗體）
+│   ├── 信心度（MetricChip, value=confidence, unit="%", 乘100顯示）
+│   ├── 關聯 track_id（小字灰色，若有值）
+│   └── [fallen] 跌倒警示區塊（見下方）
+├── [若 !active] 空狀態
+│   └── 圖示 + "尚未偵測到姿勢"
+└── [可選/M2] 事件歷史（最近 10 筆 PoseEvent）
+    └── EventItem 列表，fallen 事件用 destructive 色標示
+```
+
+### 跌倒警示（`current_pose === "fallen"`）
+
+這是本 Panel 最重要的特殊狀態：
+
+- PanelCard 邊框改為 `var(--destructive)` 紅色
+- 姿勢卡片背景改為 `var(--destructive)/10`
+- 圖示改為 `AlertTriangle`（lucide）
+- 文字顯示「**偵測到跌倒！**」粗體紅色
+- 動畫：border pulse 2s loop（`motion-safe` 尊重）
+
+### 姿勢顏色對照表
+
+| Pose | 顯示文字 | 顏色 |
+|------|---------|------|
+| `standing` | 站立 | `--success` |
+| `sitting` | 坐下 | `--success` |
+| `crouching` | 蹲下 | `--warning` |
+| `fallen` | 跌倒 | `--destructive` |
+
+### 狀態矩陣
+
+| 狀態 | 條件 | 顯示內容 | StatusBadge |
+|------|------|---------|-------------|
+| 正常運作 | `active === true` 且 `pose !== "fallen"` | 姿勢卡片 | `active` |
+| 跌倒警示 | `active === true` 且 `pose === "fallen"` | 警示 UI | `error` |
+| 載入中 | `poseState === null` 或 `status === "loading"` | "正在連線..." | `loading` |
+| 無資料 | `active === false` | "尚未偵測到姿勢" | `inactive` |
+| 錯誤 | store 連線失敗 | "姿勢模組離線" | `error` |
+
+### 響應式
+- sidebar 寬度：固定 360px（以 design-tokens.md 為準）
+- main area：自適應
+- 不需要做 mobile layout
 
 ---
 
-## 必做元件
+## 6. 互動規則
 
-### 1. 姿勢顯示卡（主體）
-
-```
-┌─────────────────────────────────────────┐
-│ 🧍 姿勢辨識                    ● Live  │
-├─────────────────────────────────────────┤
-│                                         │
-│        ┌──────────────┐                │
-│        │     🧍        │                │  ← 大圖示
-│        │   standing    │                │  ← pose 名稱
-│        └──────────────┘                │
-│                                         │
-│  信心度  94%       Track #3            │  ← MetricChip + track_id
-│                                         │
-└─────────────────────────────────────────┘
-```
-
-### 2. 姿勢圖示與警示等級
-
-| pose | Lucide Icon | 顯示名稱 | 警示等級 |
-|------|------------|---------|---------|
-| `standing` | `PersonStanding` | 站立 | 正常（success） |
-| `sitting` | `Armchair` | 坐下 | 正常（success） |
-| `crouching` | `ChevronDown` | 蹲下 | 注意（warning） |
-| `fallen` | `AlertTriangle` | 跌倒 | 危險（destructive） |
-
-### 3. 跌倒警示（重要）
-
-偵測到 `fallen` 時，Panel 需要明顯警示：
-
-```
-┌─────────────────────────────────────────┐
-│ ⚠️ 姿勢辨識                   ● Live   │
-├─────────────────────────────────────────┤
-│ ┌─────────────────────────────────────┐ │
-│ │  ⚠ 偵測到跌倒！                    │ │  ← destructive 背景
-│ │  信心度: 89%    Track #3           │ │
-│ │  14:36:02                           │ │
-│ └─────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-```
-
-- 邊框變 `destructive` 色
-- Panel header 的 icon 變 `AlertTriangle`
-- 此為 `critical` 事件，即使使用者收合過 Panel，也會強制重新展開
-
-### 4. 空狀態
-
-無姿勢偵測時：
-- 圖示：`PersonStanding`（灰色）
-- 文字：「尚未偵測到姿勢」
-- 次要文字：「請確認攝影機可見完整身體」
-
-### 5. 事件歷史
-
-最近 10 筆姿勢事件：
-```
-14:36:02  fallen     Track #3  89%    ⚠
-14:35:45  crouching  Track #3  82%
-14:35:30  standing   Track #3  94%
-```
-`fallen` 事件用 destructive 色標示。
+- **姿勢切換**：圖示 + 名稱 crossfade 200ms
+- **信心度變化**：transition 300ms
+- **跌倒偵測**：邊框 pulse 2s loop，`motion-safe` 尊重
+- **姿勢卡片 hover**：背景色加深 `var(--surface-hover)`，transition 150ms
 
 ---
 
-## 互動規則
+## 7. 參考來源
 
-| 互動 | 行為 |
-|------|------|
-| 新姿勢偵測 | 圖示切換 + crossfade（200ms） |
-| fallen 偵測 | 邊框閃紅（pulse 2 次）+ 強制展開 Panel |
-| 信心度變化 | 數字 transition（300ms） |
-| 事件項目 hover | `surface-hover` 背景 |
-| fallen → 其他姿勢 | 紅色邊框漸變回正常（500ms） |
-
----
-
-## Design Tokens 參考
-
-見 `design-tokens.md`。必須使用：
-- `PanelCard` 作為外層容器
-- `StatusBadge` 顯示 status
-- `MetricChip` 顯示 confidence
-- `LiveIndicator` 顯示即時狀態
-- `EventItem` 顯示歷史事件
+| 需求 | 看哪裡 |
+|------|--------|
+| PoseState / PoseEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.6 + §1.5 |
+| 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
+| PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
+| StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
+| MetricChip 用法 | `frontend/components/shared/metric-chip.tsx` |
+| 完整 Panel 範例 | `frontend/components/chat/chat-panel.tsx` |
 
 ---
 
-## Mock 資料範例
+## 8. Milestones
 
-### PoseState（站立）
+### M1（3/16）：能看、能 review
+- [ ] `PanelCard` 包裹，icon=`Activity`，title="姿勢辨識"
+- [ ] 用 `MOCK_POSE_STATE` 顯示 1 個姿勢卡片
+- [ ] 用 `MOCK_FALLEN_STATE` 顯示跌倒警示 UI
+- [ ] 4 種狀態（active / loading / inactive / error）都有對應畫面
+- [ ] `npm run lint` + `npm run build` 通過
 
-```json
-{
-  "stamp": 1710400602.123,
-  "active": true,
-  "current_pose": "standing",
-  "confidence": 0.94,
-  "track_id": 3,
-  "status": "active"
-}
-```
+### M2（3/23）：可 demo 的前端版本
+- [ ] Panel 能正確反映由 store 注入的 mock 資料更新
+- [ ] 4 種姿勢各有正確圖示 + 顏色
+- [ ] 跌倒警示完整（紅框 + pulse + AlertTriangle + 粗體文字）
+- [ ] 信心度 MetricChip 視覺完成
+- [ ] 空狀態 + loading 狀態 UI
+- [ ] 事件歷史列表（最近 10 筆，fallen 紅色標示）
+- [ ] `npm run lint` + `npm run build` 通過
 
-### PoseState（跌倒）
-
-```json
-{
-  "stamp": 1710400662.456,
-  "active": true,
-  "current_pose": "fallen",
-  "confidence": 0.89,
-  "track_id": 3,
-  "status": "active"
-}
-```
-
-### PoseState（無偵測）
-
-```json
-{
-  "stamp": 1710400700.000,
-  "active": false,
-  "current_pose": null,
-  "confidence": 0.0,
-  "track_id": null,
-  "status": "active"
-}
-```
-
-### PoseEvent
-
-```json
-{
-  "id": "c3d4e5f6-a7b8-9012-cdef-345678901234",
-  "timestamp": "2026-03-14T14:36:02.456+08:00",
-  "source": "pose",
-  "event_type": "pose_detected",
-  "data": {
-    "pose": "fallen",
-    "confidence": 0.89,
-    "track_id": 3
-  }
-}
-```
+### M3（4/6）：整合穩定版
+- [ ] Panel 能正確反映由 store 注入的真實 Gateway 資料
+- [ ] 處理邊界 case（pose 快速切換、null pose、未知姿勢字串）
+- [ ] 與其他 Panel 共存不衝突（Chat + 2 panels）
+- [ ] 5 分鐘無當機 soak test
+- [ ] `npm run lint` + `npm run build` 通過
 
 ---
 
-## 驗收標準
+## 9. Out of Scope（不要做）
 
-- [ ] 使用 `PanelCard` 包裹，標題顯示「姿勢辨識」+ LiveIndicator
-- [ ] 偵測到姿勢時顯示大圖示 + 名稱 + 信心度 + track_id
-- [ ] 四種姿勢都有對應圖示和警示等級
-- [ ] **fallen（跌倒）有明顯紅色警示 + 邊框閃紅**
-- [ ] 無姿勢偵測時顯示空狀態
-- [ ] 事件歷史列表（至少最近 5 筆），fallen 事件紅色標示
-- [ ] 遵守 design-tokens.md 的色板與圓角
-- [ ] props 變化時有 transition 動畫（150-300ms）
-- [ ] 響應式：sidebar 寬度 360px 自適應
-- [ ] 接 Mock Server 資料可正常更新
-
----
-
-## 不要做的事
-
-- 不要處理 WebSocket 連線（已由 hooks 處理，你只接 props）
-- 不要自己定義顏色（用 design tokens）
-- 不要做模型推理或攝影機輸入
-- 不要做 layout 切換邏輯
-- 不要做骨架渲染（Skeleton rendering，那是進階功能，本版不做）
-- 不要做跌倒後的自動撥打電話等後續邏輯
-
----
-
-*最後更新：2026-03-14*
+- 不要自己加新的 shared component（先提 Issue）
+- 不要改 layout 邏輯
+- 不要加 Panel 之間的直接通訊
+- 不要引入新的 npm 依賴（除非先提 Issue）
+- 不要實作骨架渲染或影像疊加（可選 P2，不在 M1-M3 範圍）
