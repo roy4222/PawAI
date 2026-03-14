@@ -3,12 +3,10 @@
 import { Mic } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
 import type { SpeechState } from '@/contracts/types'
 
 export function SpeechPanel() {
   const speechState = useStateStore((s) => s.speechState) as SpeechState | null
-  const events = useEventStore((s) => s.events.filter((e) => e.source === 'speech'))
 
   const status = !speechState
     ? 'loading' as const

@@ -3,12 +3,10 @@
 import { Hand } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
 import type { GestureState } from '@/contracts/types'
 
 export function GesturePanel() {
   const gestureState = useStateStore((s) => s.gestureState) as GestureState | null
-  const events = useEventStore((s) => s.events.filter((e) => e.source === 'gesture'))
 
   const status = !gestureState
     ? 'loading' as const

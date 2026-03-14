@@ -3,12 +3,10 @@
 import { User } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
 import type { FaceState } from '@/contracts/types'
 
 export function FacePanel() {
   const faceState = useStateStore((s) => s.faceState) as FaceState | null
-  const events = useEventStore((s) => s.events.filter((e) => e.source === 'face'))
 
   const status = !faceState
     ? 'loading' as const

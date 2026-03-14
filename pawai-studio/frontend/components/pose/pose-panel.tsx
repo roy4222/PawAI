@@ -3,12 +3,10 @@
 import { Activity } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
 import type { PoseState } from '@/contracts/types'
 
 export function PosePanel() {
   const poseState = useStateStore((s) => s.poseState) as PoseState | null
-  const events = useEventStore((s) => s.events.filter((e) => e.source === 'pose'))
 
   const status = !poseState
     ? 'loading' as const
