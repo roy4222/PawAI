@@ -50,10 +50,19 @@ Phase 1-4 各自已通過，但缺乏端到端的可重複驗證：
 | `/webrtc_req` | `go2_interfaces/WebRtcReq` | `api_id` 判斷播放狀態 |
 
 > **設計注意**：no-VAD 主線下 `stt_intent_node` 的 energy VAD 是內部邏輯，不發布 `/event/speech_activity`。
-> Observer 以 `/asr_result`（帶 `session_id` 的第一個事件）作為 session 起始信號，
-> 並用 `/state/interaction/speech` 的 `state` 變化推算 `speech_start_ts`（state 從 `IDLE` 變為 `LISTENING`）
-> 和 `speech_end_ts`（state 從 `LISTENING` 變為 `ASR`）。
-> `e2e_latency_ms` 定義為 `asr_ts`（收到 `/asr_result` 的 wall clock）到 `webrtc_play_start_ts`。
+> Observer 以 `/state/interaction/speech` 的 `state` 欄位變化偵測 round 邊界：
+>
+> - `speech_start_ts`：state 從 `LISTENING` 變為 `RECORDING`（energy VAD 偵測到語音）
+> - `speech_end_ts`：state 從 `RECORDING` 變為 `TRANSCRIBING`（錄音結束，開始推理）
+>
+> 實際 state machine（`stt_intent_node.py`）：`LISTENING → RECORDING → TRANSCRIBING → LISTENING`。
+> 沒有 `IDLE` 或 `ASR` 狀態。
+>
+> Session 起始信號：Observer 在偵測到 `LISTENING → RECORDING` 時建立新 RoundRecord，
+> 並以後續 `/asr_result` 的 `session_id` 完成綁定。
+>
+> `e2e_latency_ms` 定義為 `speech_start_ts`（`LISTENING → RECORDING`）到 `webrtc_play_start_ts`（api_id 4001），
+> 代表使用者開口到 Go2 開始播放的完整端到端延遲。
 
 #### WebRTC api_id 映射（已核實）
 
@@ -77,9 +86,9 @@ RoundRecord:
   mode: "fixed" | "free"         # 來自 set_round_meta
   expected_intent: str | ""      # 來自 set_round_meta
   utterance_text: str | ""       # 來自 set_round_meta
-  speech_start_ts: float         # /state/interaction/speech IDLE→LISTENING
-  speech_end_ts: float           # /state/interaction/speech LISTENING→ASR
-  asr_ts: float                  # /asr_result 收到時的 wall clock（session 起始信號）
+  speech_start_ts: float         # /state/interaction/speech LISTENING→RECORDING
+  speech_end_ts: float           # /state/interaction/speech RECORDING→TRANSCRIBING
+  asr_ts: float                  # /asr_result 收到時的 wall clock
   asr_text: str                  # /asr_result.text
   asr_latency_ms: float          # /asr_result.latency_ms（node 自報）
   intent_ts: float               # /event/speech_intent_recognized 收到時的 wall clock
@@ -92,7 +101,7 @@ RoundRecord:
   webrtc_play_end_ts: float      # api_id 4002
   last_audio_chunk_ts: float     # api_id 4003 最後一塊
   audio_chunks_count: int        # api_id 4003 計數
-  e2e_latency_ms: float          # asr_ts → webrtc_play_start（見下方定義）
+  e2e_latency_ms: float          # speech_start_ts → webrtc_play_start_ts（真正端到端）
   match: "hit" | "miss" | "n/a" # expected vs predicted
   status: "complete" | "partial" | "timeout" | "orphan"
   correlated_by_time: bool       # TTS/webrtc 是否靠時序推定
@@ -110,17 +119,22 @@ RoundRecord:
 
 > 長期改善方向：讓 reply/TTS 鏈也帶 `session_id`，消除時序推定。
 
-#### Round metadata 注入（ROS2 Service）
+#### Round metadata 注入（Topic-based Request/Ack）
 
 ```
-Service: /speech_test_observer/set_round_meta
-  Request:  { round_id: int, mode: str, expected_intent: str, utterance_text: str }
-  Response: { ok: bool }
+Request topic:  /speech_test_observer/round_meta_req  (std_msgs/String, JSON)
+  Payload: { round_id: int, mode: str, expected_intent: str, utterance_text: str }
+Ack topic:      /speech_test_observer/round_meta_ack  (std_msgs/String, JSON)
+  Payload: { ok: bool, round_id: int }
 ```
 
-**實作方式**：使用 `rcl_interfaces/srv/SetParameters` 或 topic-based request/response 模式
-（用 `/speech_test_observer/round_meta_req` publish JSON + `/speech_test_observer/round_meta_ack` subscribe），
-避免自訂 `.srv` 檔案以減少 interface package 修改。若後續需要正式化再升級為自訂 `.srv`。
+**實作方式**：topic-based request/ack，不做 ROS2 service。
+
+- 請求：shell 腳本 `ros2 topic pub --once /speech_test_observer/round_meta_req std_msgs/String '{data: "JSON"}'`
+- 確認：Observer 收到後 publish `/speech_test_observer/round_meta_ack` 回傳 `{ok: true, round_id: N}`
+- Shell 腳本用 `ros2 topic echo --once` 等 ack（timeout 5s）
+
+選 topic 而非 service 的理由：避免自訂 `.srv` 檔案、避免修改 interface package、shell 腳本用 `ros2 topic pub/echo` 即可控制。
 
 **一次性消費規則**：
 - Service 寫入 `pending_round_meta`
@@ -130,15 +144,19 @@ Service: /speech_test_observer/set_round_meta
 
 **round_id 優先順序**：`set_round_meta` 注入的 `round_id` 優先。Observer 內部自動遞增的計數僅作為 fallback（metadata 未注入時使用）。
 
-#### 報告生成（ROS2 Service）
+#### 報告生成（Topic-based Request/Ack）
 
 ```
-Service: /speech_test_observer/generate_report
-  Request:  {}
-  Response: { csv_path: str, summary_path: str, ok: bool }
+Request topic:  /speech_test_observer/generate_report_req  (std_msgs/String, JSON)
+  Payload: {}
+Ack topic:      /speech_test_observer/generate_report_ack  (std_msgs/String, JSON)
+  Payload: { ok: bool, csv_path: str, summary_path: str }
 ```
 
-**實作方式**：同上，使用 topic-based request/response 或直接由 shell 腳本發送 `ros2 topic pub` 觸發。
+**實作方式**：同上，topic-based。
+
+- 請求：`ros2 topic pub --once /speech_test_observer/generate_report_req std_msgs/String '{data: "{}"}'`
+- 回傳：Observer publish `/speech_test_observer/generate_report_ack` 回傳 `{ok: true, csv_path: "...", summary_path: "..."}`
 
 #### 參數一覽
 
@@ -318,7 +336,7 @@ run_speech_test.sh [--yaml path] [--skip-build] [--skip-driver]
 | `go2_driver_node` | `/webrtc_req` 有 subscriber | 15s |
 | `intent_tts_bridge_node` | `/tts` 有 publisher | 15s |
 | `tts_node` | `/webrtc_req` 有 publisher | 15s |
-| `speech_test_observer` | service 可呼叫 | 15s |
+| `speech_test_observer` | `/speech_test_observer/round_meta_ack` 有 publisher | 15s |
 | `stt_intent_node` | `/event/speech_intent_recognized` 有 publisher | **45s** |
 
 超時未就緒 → 報錯退出，不開始測試。
