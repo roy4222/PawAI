@@ -1,7 +1,7 @@
 # PawAI Studio Scaffold & 分工設計
 
 **建立日期**：2026-03-14
-**對齊來源**：mission/README.md v2.0、handoff_316.md、event-schema.md v1.0、ui-orchestration.md v1.0
+**對齊來源**：mission/README.md v2.0、handoff_316.md、event-schema.md（2026-03-14 更新）、ui-orchestration.md（2026-03-14 更新）
 
 ---
 
@@ -156,7 +156,7 @@ pawai-studio/
 ### 5.1 Layout Preset 規則表
 
 > 對齊 event-schema.md `LayoutPreset` type + ui-orchestration.md。
-> 本設計文件新增了 `chat_camera_speech`、`chat_gesture`、`chat_pose`，需回頭更新 event-schema.md。
+> event-schema.md 和 ui-orchestration.md 已同步更新（2026-03-14）。
 
 | Preset | 觸發條件 | 顯示 |
 |--------|---------|------|

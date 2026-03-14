@@ -3,6 +3,7 @@
 **負責人**：黃
 **版本**：v1.0
 **建立日期**：2026-03-14
+**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
 
 > **本版不依賴特定模型。** MediaPipe Hands / 其他模型皆可，輸出需符合同一 props 介面。
 > 模型研究未完成不影響 Panel UI 開發，先用 Mock 資料。

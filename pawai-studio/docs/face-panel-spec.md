@@ -3,6 +3,7 @@
 **負責人**：鄔
 **版本**：v1.0
 **建立日期**：2026-03-14
+**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
 
 ---
 
@@ -72,7 +73,7 @@ interface FaceIdentityEvent {
 │ 👤 小明                   stable │  ← stable_name + StatusBadge(mode)
 │                                 │
 │  信心度  92%        距離  1.2m  │  ← MetricChip x2
-│  Track #3           hold 0.8s  │  ← track_id + 穩定化時間
+│  Track #3                      │  ← track_id
 └─────────────────────────────────┘
 ```
 

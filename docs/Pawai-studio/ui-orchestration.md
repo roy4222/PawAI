@@ -1,7 +1,7 @@
 # PawAI Studio UI Orchestration
 
-**文件版本**：v1.0
-**最後更新**：2026-03-13
+**文件版本**：v1.1
+**最後更新**：2026-03-14
 **對齊來源**：[mission/README.md](../mission/README.md) v2.0
 
 ---
@@ -75,7 +75,35 @@
 └──────────────────────────────────────┘
 ```
 
-#### `chat_full`（Debug / 完整監控）
+#### `chat_camera_speech`（人臉 + 語音同時活躍）
+```
+┌───────────────────┬──────────────────┐
+│                   │   CameraPanel    │
+│    ChatPanel      │   FacePanel      │
+│                   ├──────────────────┤
+│                   │   SpeechPanel    │
+└───────────────────┴──────────────────┘
+```
+
+#### `chat_gesture`（手勢偵測時）
+```
+┌───────────────────┬──────────────────┐
+│                   │                  │
+│    ChatPanel      │   GesturePanel   │
+│                   │                  │
+└───────────────────┴──────────────────┘
+```
+
+#### `chat_pose`（姿勢偵測時）
+```
+┌───────────────────┬──────────────────┐
+│                   │                  │
+│    ChatPanel      │   PosePanel      │
+│                   │                  │
+└───────────────────┴──────────────────┘
+```
+
+#### `chat_full`（`active_panels >= 3` 或 3 種以上不同 source 在 10s 內出現）
 ```
 ┌───────────────────┬──────────────────┐
 │                   │   CameraPanel    │
@@ -111,8 +139,13 @@
 | `face` | `track_lost` | `chat_camera` | `chat_only` | 所有人臉消失 ≥5s |
 | `speech` | `wake_word` | 任何 | 保持 + `SpeechPanel` | 喚醒詞觸發 |
 | `speech` | `intent_recognized` | 任何 | 保持 + `SpeechPanel` | 語音意圖識別 |
+| `face` + `speech` | 同時活躍 | 任何 | `chat_camera_speech` | face + speech 事件在同一時段 |
+| `gesture` | `gesture_detected` | 任何 | 保持 + `GesturePanel` | 手勢偵測 |
+| `pose` | `pose_detected` | 任何 | 保持 + `PosePanel` | 姿勢偵測 |
+| `pose` | `pose_detected` (fallen) | 任何 | **強制展開** `PosePanel` | Critical：跌倒偵測 |
 | `brain` | `skill_dispatched` | 任何 | 保持 + `BrainPanel` | 大腦派遣技能 |
-| `system` | `degradation_change` | 任何 | 保持 + `HealthPanel` | 降級等級變更 |
+| `system` | `degradation_change` | 任何 | **強制展開** `HealthPanel` | Critical：降級等級變更 |
+| `system` | `error` | 任何 | **強制展開** `HealthPanel` | Critical：系統錯誤 |
 | — | — | 任何 | `chat_full` | 使用者點擊 "Show All" |
 | — | — | 任何 | `demo` | Demo 頁面進入 |
 

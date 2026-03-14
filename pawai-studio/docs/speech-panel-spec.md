@@ -3,6 +3,7 @@
 **負責人**：陳
 **版本**：v1.0
 **建立日期**：2026-03-14
+**真相來源**：`docs/Pawai-studio/event-schema.md`（若與本文件衝突，以 event-schema.md 為準）
 
 ---
 
@@ -41,7 +42,7 @@ interface SpeechIntentEvent {
     intent?: string;        // greet | come_here | stop | take_photo | status
     text: string;           // ASR 原始文字
     confidence: number;     // [0.0, 1.0]
-    provider: string;       // "whisper_local" | "whisper_cloud"
+    provider: string;       // "whisper_local" | "qwen_asr" | 其他（依部署決定）
   };
 }
 ```
