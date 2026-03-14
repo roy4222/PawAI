@@ -55,10 +55,7 @@ fi
 
 cd "$WORKDIR"
 
-tmux kill-session -t "$SESSION_NAME" 2>/dev/null || true
-pkill -f "/speech_processor/stt_intent_node" || true
-pkill -f "/speech_processor/intent_tts_bridge_node" || true
-pkill -f "/speech_processor/tts_node" || true
+bash "$(dirname "$0")/clean_speech_env.sh" || { echo "[ERROR] clean_speech_env failed"; exit 1; }
 
 tmux new-session -d -x "$TMUX_COLS" -y "$TMUX_ROWS" -s "$SESSION_NAME" "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export ROBOT_IP=$ROBOT_IP && export CONN_TYPE=$CONN_TYPE && ros2 launch go2_robot_sdk robot.launch.py enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false'"
 

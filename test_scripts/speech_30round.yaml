@@ -1,0 +1,82 @@
+test_name: "語音主路徑 30 輪驗收"
+version: 1
+description: "no-VAD 主線端到端：講話 → ASR → Intent → TTS → Go2 播放"
+
+fixed_rounds:
+  - round_id: 1
+    utterance: "你好"
+    expected_intent: "greet"
+  - round_id: 2
+    utterance: "嘿你好嗎"
+    expected_intent: "greet"
+  - round_id: 3
+    utterance: "過來"
+    expected_intent: "come_here"
+  - round_id: 4
+    utterance: "到我這邊來"
+    expected_intent: "come_here"
+  - round_id: 5
+    utterance: "停"
+    expected_intent: "stop"
+  - round_id: 6
+    utterance: "不要動"
+    expected_intent: "stop"
+  - round_id: 7
+    utterance: "拍照"
+    expected_intent: "take_photo"
+  - round_id: 8
+    utterance: "幫我拍一張"
+    expected_intent: "take_photo"
+  - round_id: 9
+    utterance: "狀態"
+    expected_intent: "status"
+  - round_id: 10
+    utterance: "你現在怎麼樣"
+    expected_intent: "status"
+  - round_id: 11
+    utterance: "哈囉"
+    expected_intent: "greet"
+  - round_id: 12
+    utterance: "你來一下"
+    expected_intent: "come_here"
+  - round_id: 13
+    utterance: "停住"
+    expected_intent: "stop"
+  - round_id: 14
+    utterance: "照相"
+    expected_intent: "take_photo"
+  - round_id: 15
+    utterance: "你還好嗎"
+    expected_intent: "status"
+
+free_rounds:
+  - round_id: 16
+    notes: "同義句變體"
+  - round_id: 17
+    notes: "同義句變體"
+  - round_id: 18
+    notes: "同義句變體"
+  - round_id: 19
+    notes: "口語化 / 帶停頓"
+  - round_id: 20
+    notes: "口語化 / 帶停頓"
+  - round_id: 21
+    notes: "口語化 / 帶停頓"
+  - round_id: 22
+    notes: "應判為 unknown 的句子"
+  - round_id: 23
+    notes: "應判為 unknown 的句子"
+  - round_id: 24
+    notes: "較長聊天句"
+  - round_id: 25
+    notes: "較長聊天句"
+  - round_id: 26
+    notes: "自由測試"
+  - round_id: 27
+    notes: "自由測試"
+  - round_id: 28
+    notes: "自由測試"
+  - round_id: 29
+    notes: "自由測試"
+  - round_id: 30
+    notes: "自由測試"
