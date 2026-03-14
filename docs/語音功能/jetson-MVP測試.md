@@ -1829,14 +1829,23 @@ ros2 topic pub --once /tts std_msgs/msg/String '{data: "系統就緒"}'
 - 麥克風問題解決後，跑完整 30 輪 live mic 測試
 - 根據 30 輪數據決定是否需要調整 energy VAD 參數或 intent 規則
 
-#### 待辦：Jetson live mic capture stabilization
+#### 已解決：Jetson live mic capture（同日深夜）
 
-> 獨立 debugging task，不阻擋驗收工具或 downstream 開發。
+**根因**：HyperX SoloCast（4P5P8AA）硬體只支援 **stereo（2ch）** 錄音（`CHANNELS: 2`）。`stt_intent_node` 預設用 `channels=1`，PortAudio 在 Jetson ALSA backend 上的 auto stereo→mono downmix **不可靠**，導致：
+- `PaErrorCode -9985`（Device unavailable）— ALSA 無法以 1ch 開 2ch-only 裝置
+- `PaErrorCode -9998`（Invalid number of channels）— PulseAudio 重啟後 device list 不一致
 
-需調查：
-1. 為什麼 PortAudio 在 ROS2 process 中無法開 device 0（獨立 python3 可以）
-2. `stt_intent_node` 的 `alsa_device` 參數實際上沒有讓 sounddevice 用指定裝置
-3. 是否應改用 pyaudio 或 subprocess `arecord` 替代 sounddevice/PortAudio
+**修法**（commit `aef000f`）：
+1. `stt_intent_node` 預設 `channels=2`（match 硬體 native）
+2. `_audio_callback()` 手動取左聲道做 stereo→mono downmix
+3. 不再依賴 PortAudio 的 auto-downmix
+
+**修復後實測**：RMS 從 ~0.008（PulseAudio 中介）提升到 ~0.02-0.09（直接 ALSA），5 句 live mic 全命中。
+
+**教訓**：
+- USB 麥克風的 channel count 要先查 `arecord --dump-hw-params`，不要假設是 mono
+- Jetson PortAudio 的 ALSA backend 不做 channel downmix，必須在應用層處理
+- `alsa_device` 參數設 `ALSA_DEFAULT` 環境變數無效，sounddevice 不吃這個
 
 *最後更新：2026-03-14（Jetson 實測 + 麥克風問題定位）*
 *適用專案：PawAI / elder_and_dog*
