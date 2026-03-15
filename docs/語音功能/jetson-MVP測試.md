@@ -1538,12 +1538,12 @@ ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.b
 
 | 日期 | 測試階段 | 測試者 | 結果 | 延遲 | 啟動前記憶體 | 峰值記憶體 | 問題 | 備註 |
 |------|----------|--------|------|------|--------------|------------|------|------|
-| 2026-__-__ | Phase 1 |  | Pass / Fail |  |  |  |  |  |
-| 2026-__-__ | Phase 2 |  | Pass / Fail |  |  |  |  |  |
-| 2026-__-__ | Phase 3 |  | Pass / Fail |  |  |  |  |  |
-| 2026-__-__ | Phase 4 |  | Pass / Fail |  |  |  |  |  |
-| 2026-__-__ | Phase 5 |  | Pass / Fail |  |  |  |  |  |
-| 2026-__-__ | End-to-End |  | Pass / Fail |  |  |  |  |  |
+| 2026-03-14 | Phase 1 (mic) | Roy | **Pass** | — | — | — | stereo-only fix | `channels=2` + 手動 downmix |
+| 2026-03-14 | Phase 2 (ASR) | Roy | **Pass** | ~648ms | — | — | — | Whisper Small + CUDA float16 |
+| 2026-03-14 | Phase 3 (Intent) | Roy | **Pass** | — | — | — | — | 5/5 hit（text_input 驗證） |
+| 2026-03-14 | Phase 4 (TTS) | Roy | **Pass** | — | — | — | — | Piper 16kHz + Go2 播放 |
+| 2026-03-15 | Phase 5 (LLM) | — | **未測** | — | — | — | — | 待 RTX 8000 vLLM |
+| 2026-03-15 | E2E 10 輪 | Roy | **Pass** | 測量 bug | 6.7GB avail | — | e2e=0ms bug | 9/10 accuracy, 100% play OK |
 
 ### 15.2 記憶體監控紀錄格式
 
@@ -1847,6 +1847,72 @@ ros2 topic pub --once /tts std_msgs/msg/String '{data: "系統就緒"}'
 - Jetson PortAudio 的 ALSA backend 不做 channel downmix，必須在應用層處理
 - `alsa_device` 參數設 `ALSA_DEFAULT` 環境變數無效，sounddevice 不吃這個
 
-*最後更新：2026-03-14（Jetson 實測 + 麥克風問題定位）*
+### 15.6 2026-03-15 進度更新（30 輪正式驗收 + observer 重構）
+
+#### 驗收結果（最終 10 輪快速驗證）
+
+| 指標 | 門檻 | 結果 | 判定 |
+|------|------|------|------|
+| 完整性 | 10/10 | 10/10 | **PASS** |
+| Fixed accuracy | ≥80% | 90% (9/10) | **PASS** |
+| Play OK rate | ≥80% | 100% | **PASS** |
+| E2E median | ≤3500ms | 測量 bug（0ms） | 待修 |
+| E2E max | ≤6000ms | 測量 bug | 待修 |
+
+**結論**：accuracy + play OK 達標，語音主線功能驗收通過。E2E 延遲測量有 bug（hallucination 先寫 asr_text 導致真正語音的時間戳被跳過），列為技術債。
+
+#### 今日完成
+
+**語音主線改善：**
+- Intent rule 補強：`"哈喽"`(簡體)、`"來"`/`"来"`(單字)、`"king"`→stop
+- Whisper hallucination blacklist：`"字幕by索兰娅"` 等 6 種已知幻覺模式，偵測後發 `intent=hallucination`
+- Echo gate：`/state/tts_playing`（latched topic），TTS 播放時 mute 麥克風 + 200ms cooldown
+- `intent_tts_bridge_node` 跳過 `hallucination` intent，不回覆「請再說一次」（防止自激回音迴圈）
+
+**驗收框架重構（observer + orchestrator）：**
+- Observer `SessionAggregator` 重寫為 6 條規則狀態機：
+  1. `round_meta` 到 → 立刻建 `RoundRecord(pending)`
+  2. 後續 event 只在 pending round 上補欄位
+  3. 真 intent → finalize
+  4. timeout → finalize as timeout/hallucination
+  5. hallucination/timeout → `match="miss"`
+  6. 永不刪除 round
+- `round_done_ack` 機制：observer 在 finalize 或 timeout 時發 ack，腳本等 ack 才進下一輪
+- 每個 `RoundRecord` 帶 `created_ts`，timeout 判定精確到 round 級別
+- `set_pending_meta` 自動關閉殘留 pending round，防止多 round 交叉污染
+- `clean_speech_env.sh` 加入 PulseAudio kill + mask
+
+**測試腳本改善：**
+- `--nodes-running` flag：跳過 node 啟停，只做 observer + orchestration
+- 兩段式操作：Enter 準備 → 送 meta → 🎤 現在說 → 說完 Enter
+- `round_done_ack` listener 在 meta 前啟動（背景 echo 寫 tmpfile）
+- `round_id` 驗證：grep 匹配，不誤接前一輪 ack
+- `wait_tts_done` 用 latched `/state/tts_playing`，空輸出不假設 idle
+- 10 輪快速驗證 YAML（`test_scripts/speech_10round.yaml`）
+
+#### 踩坑總結
+
+本日共遇 36 個問題，分佈：
+- 環境/同步：5（Jetson 同步、PulseAudio 佔裝置）
+- 測試腳本：13（pipefail、timeout、黏句、QoS）
+- Observer 設計：12（幽靈輪、hallucination 搶 meta、timeout 路徑斷裂）
+- ASR/Intent：6（Whisper 幻覺、簡繁容錯、echo）
+
+**關鍵教訓**：語音主線約在第 6 個問題就基本通了，後面 30 個問題全在驗收工具。驗收工具的狀態機設計（round 建立/finalize/timeout）是最容易反覆打架的區域。
+
+#### 已知技術債
+
+- E2E 延遲測量 bug：hallucination 先佔 `asr_text`/`intent_ts`，真正語音的時間戳被跳過
+- Observer `on_asr_result`/`on_state_change` 用 `_latest_pending()` 在多 pending round 時可能掛錯
+- `wait_tts_done` 在 Humble 下依賴 QoS 自動協商，不保證在所有 DDS 實作上可靠
+- Go2 driver 偶發 `RecursionError`（asyncio task cancel 遞迴）
+
+#### 下一步
+
+1. RTX 8000 架 vLLM + Qwen3.5-27B
+2. 寫 `llm_bridge_node` 取代 `intent_tts_bridge_node` 的模板回覆
+3. E2E 延遲測量 bug 修復（低優先）
+
+*最後更新：2026-03-15（30 輪驗收 + observer 重構 + 10 輪最終驗證）*
 *適用專案：PawAI / elder_and_dog*
 *維護用途：Jetson MVP 語音功能測試與展示前驗收*

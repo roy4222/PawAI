@@ -20,7 +20,7 @@ from typing import Any, Deque, Dict, List, Optional, Tuple
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 try:
     import requests
@@ -62,6 +62,8 @@ class IntentClassifier:
                 ("您好", 1.0),
                 ("哈嘍", 0.9),
                 ("哈摟", 0.9),
+                ("哈啰", 0.9),
+                ("哈喽", 0.9),
                 ("嗨嗨", 0.8),
                 ("打擾", 0.7),
             ],
@@ -74,6 +76,7 @@ class IntentClassifier:
                 ("come here", 1.0),
                 ("come", 0.6),
                 ("這邊", 0.7),
+                ("你來一下", 1.0),
                 # 簡體 / Whisper 誤辨
                 ("过来", 1.0),
                 ("来这里", 1.0),
@@ -83,6 +86,11 @@ class IntentClassifier:
                 ("靠近我", 0.8),
                 ("國來", 0.7),
                 ("郭來", 0.7),
+                ("你来一下", 1.0),
+                ("来一下", 0.9),
+                ("來一下", 0.9),
+                ("來", 0.9),
+                ("来", 0.9),
             ],
             "stop": [
                 ("停止", 1.0),
@@ -101,6 +109,8 @@ class IntentClassifier:
                 ("別動", 0.9),
                 ("别动", 0.9),
                 ("停", 0.5),
+                # Whisper 短音誤辨為英文
+                ("king", 0.9),
             ],
             "take_photo": [
                 ("拍照", 1.0),
@@ -409,6 +419,16 @@ class RecorderState:
 
 
 class SttIntentNode(Node):
+    # Known Whisper Small hallucination patterns (substrings, checked after normalization)
+    HALLUCINATION_BLACKLIST = (
+        "字幕by",
+        "字幕制作",
+        "字幕製作",
+        "zither",
+        "索兰娅",
+        "索蘭婭",
+    )
+
     def __init__(self) -> None:
         super().__init__("stt_intent_node")
 
@@ -431,6 +451,15 @@ class SttIntentNode(Node):
         )
         self.text_sub = self.create_subscription(
             String, self.text_input_topic, self._on_text_input, 10
+        )
+
+        # Echo gate: mute mic while TTS is playing on Go2 speaker
+        self._tts_playing = False
+        self._tts_gate_open_time = 0.0  # monotonic time when gate lifts (after cooldown)
+        from rclpy.qos import QoSProfile, DurabilityPolicy
+        tts_playing_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.tts_playing_sub = self.create_subscription(
+            Bool, "/state/tts_playing", self._on_tts_playing, tts_playing_qos
         )
 
         self._sounddevice = None
@@ -467,6 +496,7 @@ class SttIntentNode(Node):
             "stt_intent_node started "
             f"(providers={','.join(self.provider_order)}, sample_rate={self.sample_rate}, "
             f"energy_vad={self.energy_vad_enabled}, "
+            f"echo_gate_cooldown={self.tts_echo_cooldown_ms}ms, "
             f"text_fallback_topic={self.text_input_topic})"
         )
 
@@ -502,6 +532,8 @@ class SttIntentNode(Node):
         self.declare_parameter("whisper_local.device", "cpu")
         self.declare_parameter("whisper_local.compute_type", "int8")
         self.declare_parameter("whisper_local.cpu_threads", 4)
+
+        self.declare_parameter("tts_echo_cooldown_ms", 200)
 
         self.declare_parameter("energy_vad.enabled", True)
         self.declare_parameter("energy_vad.start_threshold", 0.015)
@@ -552,6 +584,10 @@ class SttIntentNode(Node):
             self.get_parameter("whisper_local.cpu_threads").value
         )
 
+        self.tts_echo_cooldown_ms = int(
+            self.get_parameter("tts_echo_cooldown_ms").value
+        )
+
         self.energy_vad_enabled = bool(self.get_parameter("energy_vad.enabled").value)
         self.energy_vad_start_threshold = float(
             self.get_parameter("energy_vad.start_threshold").value
@@ -598,6 +634,34 @@ class SttIntentNode(Node):
         if not valid_order:
             valid_order = ["qwen_cloud", "whisper_local"]
         return valid_order
+
+    def _on_tts_playing(self, msg: Bool) -> None:
+        """Handle TTS playback state changes for echo gate."""
+        if msg.data:
+            self._tts_playing = True
+            self._tts_gate_open_time = 0.0
+            self.get_logger().debug("Echo gate: CLOSED (TTS playing)")
+        else:
+            # TTS stopped — start cooldown before reopening the gate
+            self._tts_playing = False
+            self._tts_gate_open_time = (
+                time.monotonic() + self.tts_echo_cooldown_ms / 1000.0
+            )
+            self.get_logger().debug(
+                f"Echo gate: cooldown {self.tts_echo_cooldown_ms}ms"
+            )
+
+    def _is_echo_gated(self) -> bool:
+        """Return True if audio should be discarded (TTS playing or cooldown)."""
+        if self._tts_playing:
+            return True
+        if self._tts_gate_open_time > 0.0:
+            if time.monotonic() < self._tts_gate_open_time:
+                return True
+            # Cooldown elapsed — gate fully open
+            self._tts_gate_open_time = 0.0
+            self.get_logger().debug("Echo gate: OPEN (cooldown elapsed)")
+        return False
 
     def _load_sounddevice(self) -> None:
         try:
@@ -659,6 +723,10 @@ class SttIntentNode(Node):
         del frames, time_info
         if status:
             self._last_error = str(status)
+
+        # Echo gate: discard audio while TTS is playing (or during cooldown)
+        if self._is_echo_gated():
+            return
 
         audio = np.asarray(indata, dtype=np.float32)
         # Stereo→mono downmix: take left channel (more reliable than PortAudio auto-downmix)
@@ -868,6 +936,32 @@ class SttIntentNode(Node):
                 reason,
             )
 
+            # Whisper hallucination filter — publish as hallucination intent so
+            # the observer records a miss instead of the round vanishing.
+            normalized_for_check = IntentClassifier._normalize(transcript)
+            is_hallucination = any(
+                pattern in normalized_for_check
+                for pattern in self.HALLUCINATION_BLACKLIST
+            )
+            if is_hallucination:
+                self.get_logger().warn(
+                    f"Whisper hallucination detected: {transcript!r}"
+                )
+                intent_match = IntentMatch(
+                    intent="hallucination", confidence=0.0, matched_keywords=[]
+                )
+                self._publish_intent(
+                    session_id=session_id,
+                    transcript=transcript,
+                    source="audio",
+                    provider=transcript_result.provider,
+                    latency_ms=transcript_result.latency_ms,
+                    degraded=True,
+                    match=intent_match,
+                )
+                self._state = "LISTENING"
+                return
+
             intent_match = self.classifier.classify(transcript)
             self._publish_intent(
                 session_id=session_id,
@@ -962,7 +1056,7 @@ class SttIntentNode(Node):
         degraded: bool,
         match: IntentMatch,
     ) -> None:
-        intent_label = match.intent if match.intent in SUPPORTED_INTENTS else "unknown"
+        intent_label = match.intent if match.intent in SUPPORTED_INTENTS or match.intent == "hallucination" else "unknown"
         self._last_intent = intent_label
 
         intent_msg = String()

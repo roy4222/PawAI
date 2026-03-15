@@ -32,7 +32,7 @@ from pydub.playback import play
 import rclpy
 from rclpy.node import Node
 import requests
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from go2_interfaces.msg import WebRtcReq
 
 
@@ -604,6 +604,12 @@ class EnhancedTTSNode(Node):
         )
 
         self.audio_pub = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+        # Latched (transient_local) so subscribers/echo always get the last value
+        from rclpy.qos import QoSProfile, DurabilityPolicy
+        tts_playing_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.tts_playing_pub = self.create_publisher(Bool, "/state/tts_playing", tts_playing_qos)
+        # Publish initial idle state so latched topic has a valid value
+        self._publish_tts_playing(False)
 
         # Service for cache management
         # self.cache_service = self.create_service(
@@ -669,11 +675,20 @@ class EnhancedTTSNode(Node):
     def _play_locally(self, audio_data: bytes) -> None:
         """Play audio locally"""
         try:
+            self._publish_tts_playing(True)
             audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
             play(audio)
             self.get_logger().info("🔊 Local playback completed")
         except Exception as e:
             self.get_logger().error(f"❌ Local playback error: {str(e)}")
+        finally:
+            self._publish_tts_playing(False)
+
+    def _publish_tts_playing(self, playing: bool) -> None:
+        """Publish TTS playback state for echo gate."""
+        msg = Bool()
+        msg.data = playing
+        self.tts_playing_pub.publish(msg)
 
     def _play_on_robot(self, audio_data: bytes) -> None:
         """Send audio to robot for playback"""
@@ -702,6 +717,9 @@ class EnhancedTTSNode(Node):
             self._send_audio_command(4004, str(volume))
             time.sleep(0.05)
 
+            # Signal echo gate: TTS playback starting
+            self._publish_tts_playing(True)
+
             # Send start command
             self._send_audio_command(4001, "")
             time.sleep(0.1)
@@ -729,9 +747,14 @@ class EnhancedTTSNode(Node):
             # Send end command
             self._send_audio_command(4002, "")
 
+            # Signal echo gate: TTS playback finished
+            self._publish_tts_playing(False)
+
             self.get_logger().info("🎵 Robot playback completed")
 
         except Exception as e:
+            # Ensure gate is released even on error
+            self._publish_tts_playing(False)
             self.get_logger().error(f"❌ Robot playback error: {str(e)}")
 
     def _send_audio_command(self, api_id: int, parameter: str) -> None:

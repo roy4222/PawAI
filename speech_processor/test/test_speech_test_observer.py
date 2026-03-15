@@ -52,33 +52,64 @@ def test_status_orphan():
 from speech_processor.speech_test_observer import SessionAggregator
 
 
-def test_state_transition_creates_round():
-    agg = SessionAggregator()
+def test_state_transition_records_speech_start():
+    """on_state_change(LISTENING→RECORDING) fills speech_start_ts on the latest
+    pending round created by set_pending_meta."""
+    agg = SessionAggregator(require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     assert len(agg.rounds) == 1
     assert agg.rounds[0].speech_start_ts == 100.0
 
 
+def test_state_transition_no_ignored_events():
+    """on_state_change without a pending round does nothing and does not
+    increment ignored_events."""
+    agg = SessionAggregator(require_meta=True)
+    agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
+    assert len(agg.rounds) == 0
+    assert agg.ignored_events == 0
+
+
+def test_intent_event_ignored_without_meta():
+    agg = SessionAggregator(require_meta=True)
+    agg.on_intent_event(session_id="sp-001", intent="greet",
+                        confidence=0.95, latency_ms=5.0, ts=102.6)
+    assert len(agg.rounds) == 0
+    assert agg.ignored_events == 1
+
+
 def test_state_recording_to_transcribing():
-    agg = SessionAggregator()
+    """speech_end_ts is set on RECORDING→TRANSCRIBING on the latest pending round.
+    After on_intent_event finalizes, the round is no longer pending so a second
+    pending round is needed to receive the TRANSCRIBING timestamp."""
+    agg = SessionAggregator(require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     agg.on_state_change("RECORDING", "TRANSCRIBING", ts=102.0)
     assert agg.rounds[0].speech_end_ts == 102.0
 
 
 def test_asr_result_binds_session_id():
-    agg = SessionAggregator()
+    """set_pending_meta creates the round; on_state_change fills speech_start_ts;
+    on_intent_event fills session_id and finalizes."""
+    agg = SessionAggregator(require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
-    agg.on_asr_result(session_id="sp-001", text="你好", provider="whisper_local",
-                      latency_ms=600.0, ts=102.5)
+    agg.on_intent_event(session_id="sp-001", intent="greet",
+                        confidence=0.9, latency_ms=5.0, ts=102.5)
     r = agg.rounds[0]
     assert r.session_id == "sp-001"
-    assert r.asr_text == "你好"
-    assert r.asr_ts == 102.5
+    assert r.speech_start_ts == 100.0
 
 
 def test_intent_event_fills_record():
-    agg = SessionAggregator()
+    agg = SessionAggregator(require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
                       latency_ms=600.0, ts=102.5)
@@ -90,7 +121,9 @@ def test_intent_event_fills_record():
 
 
 def test_tts_correlation_by_time():
-    agg = SessionAggregator(tts_correlation_window_s=3.0)
+    agg = SessionAggregator(tts_correlation_window_s=3.0, require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
                       latency_ms=600.0, ts=102.5)
@@ -104,7 +137,9 @@ def test_tts_correlation_by_time():
 
 
 def test_tts_outside_window_not_correlated():
-    agg = SessionAggregator(tts_correlation_window_s=1.0)
+    agg = SessionAggregator(tts_correlation_window_s=1.0, require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
                       latency_ms=600.0, ts=102.5)
@@ -116,7 +151,9 @@ def test_tts_outside_window_not_correlated():
 
 
 def test_webrtc_events():
-    agg = SessionAggregator(tts_correlation_window_s=3.0)
+    agg = SessionAggregator(tts_correlation_window_s=3.0, require_meta=False)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
     agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
                       latency_ms=600.0, ts=102.5)
@@ -134,10 +171,12 @@ def test_webrtc_events():
 
 
 def test_e2e_latency_computed():
+    """With pending_meta, speech_start_ts comes from _last_speech_start_ts (100.0).
+    e2e = (webrtc_play_start 103.5 - speech_start 100.0) * 1000 = 3500ms."""
     agg = SessionAggregator(tts_correlation_window_s=3.0)
+    agg.set_pending_meta(round_id=1, mode="fixed",
+                         expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
-    agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
-                      latency_ms=600.0, ts=102.5)
     agg.on_intent_event(session_id="sp-001", intent="greet",
                         confidence=0.95, latency_ms=5.0, ts=102.6)
     agg.on_webrtc_req(api_id=4001, ts=103.5)
@@ -148,40 +187,51 @@ def test_e2e_latency_computed():
 
 
 def test_pending_meta_binds_to_next_round():
+    """set_pending_meta immediately creates a pending RoundRecord.
+    on_state_change fills speech_start_ts. on_intent_event finalizes."""
     agg = SessionAggregator()
     agg.set_pending_meta(round_id=1, mode="fixed",
                          expected_intent="greet", utterance_text="你好")
+    # Round is created immediately by set_pending_meta
+    assert len(agg.rounds) == 1
+    assert agg.rounds[0].status == "pending"
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
+    assert agg.rounds[0].speech_start_ts == 100.0
+    # Intent event finalizes the round
+    agg.on_intent_event(session_id="sp-001", intent="greet",
+                        confidence=0.95, latency_ms=5.0, ts=102.6)
     r = agg.rounds[0]
     assert r.round_id == 1
     assert r.mode == "fixed"
     assert r.expected_intent == "greet"
-    assert agg._pending_meta is None
+    assert r.speech_start_ts == 100.0
+    assert r.status != "pending"  # finalized
 
 
 def test_match_logic():
+    """Round is created by on_intent_event with pending_meta.
+    asr_text is filled via the text param of on_intent_event."""
     agg = SessionAggregator()
     agg.set_pending_meta(round_id=1, mode="fixed",
                          expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
-    agg.on_asr_result(session_id="sp-001", text="你好", provider="w",
-                      latency_ms=600.0, ts=102.5)
     agg.on_intent_event(session_id="sp-001", intent="greet",
-                        confidence=0.95, latency_ms=5.0, ts=102.6)
-    r = agg.finalize_round(0)
+                        confidence=0.95, latency_ms=5.0, ts=102.6,
+                        text="你好")
+    r = agg.rounds[0]
     assert r.match == "hit"
 
 
 def test_match_miss():
+    """Round created by on_intent_event; asr_text via text param."""
     agg = SessionAggregator()
     agg.set_pending_meta(round_id=1, mode="fixed",
                          expected_intent="greet", utterance_text="你好")
     agg.on_state_change("LISTENING", "RECORDING", ts=100.0)
-    agg.on_asr_result(session_id="sp-001", text="過來", provider="w",
-                      latency_ms=600.0, ts=102.5)
     agg.on_intent_event(session_id="sp-001", intent="come_here",
-                        confidence=0.8, latency_ms=5.0, ts=102.6)
-    r = agg.finalize_round(0)
+                        confidence=0.8, latency_ms=5.0, ts=102.6,
+                        text="過來")
+    r = agg.rounds[0]
     assert r.match == "miss"
 
 

@@ -1,82 +1,149 @@
 test_name: "語音主路徑 30 輪驗收"
-version: 1
-description: "no-VAD 主線端到端：講話 → ASR → Intent → TTS → Go2 播放"
+version: 2
+description: "no-VAD 主線端到端：講話 → ASR → Intent → TTS → Go2 播放（全固定輪次）"
 
-fixed_rounds:
+rounds:
+  # ── greet (6 rounds) ──────────────────────────────────
+  # canonical
   - round_id: 1
+    mode: fixed
     utterance: "你好"
     expected_intent: "greet"
   - round_id: 2
-    utterance: "嘿你好嗎"
-    expected_intent: "greet"
-  - round_id: 3
-    utterance: "過來"
-    expected_intent: "come_here"
-  - round_id: 4
-    utterance: "到我這邊來"
-    expected_intent: "come_here"
-  - round_id: 5
-    utterance: "停"
-    expected_intent: "stop"
-  - round_id: 6
-    utterance: "不要動"
-    expected_intent: "stop"
-  - round_id: 7
-    utterance: "拍照"
-    expected_intent: "take_photo"
-  - round_id: 8
-    utterance: "幫我拍一張"
-    expected_intent: "take_photo"
-  - round_id: 9
-    utterance: "狀態"
-    expected_intent: "status"
-  - round_id: 10
-    utterance: "你現在怎麼樣"
-    expected_intent: "status"
-  - round_id: 11
+    mode: fixed
     utterance: "哈囉"
     expected_intent: "greet"
-  - round_id: 12
-    utterance: "你來一下"
+  # conversational
+  - round_id: 3
+    mode: fixed
+    utterance: "嘿你好嗎"
+    expected_intent: "greet"
+  - round_id: 4
+    mode: fixed
+    utterance: "早安啊小狗"
+    expected_intent: "greet"
+  # tricky / edge-case
+  - round_id: 5
+    mode: fixed
+    utterance: "嗨嗨嗨你好啊今天天氣真好"
+    expected_intent: "greet"
+  - round_id: 6
+    mode: fixed
+    utterance: "您好我想打個招呼"
+    expected_intent: "greet"
+
+  # ── come_here (6 rounds) ──────────────────────────────
+  # canonical
+  - round_id: 7
+    mode: fixed
+    utterance: "過來"
     expected_intent: "come_here"
+  - round_id: 8
+    mode: fixed
+    utterance: "來這裡"
+    expected_intent: "come_here"
+  # conversational
+  - round_id: 9
+    mode: fixed
+    utterance: "你可以過來這邊嗎"
+    expected_intent: "come_here"
+  - round_id: 10
+    mode: fixed
+    utterance: "到我這邊來"
+    expected_intent: "come_here"
+  # tricky / edge-case
+  - round_id: 11
+    mode: fixed
+    utterance: "來"
+    expected_intent: "come_here"
+  - round_id: 12
+    mode: fixed
+    utterance: "小狗你靠近我一點好不好"
+    expected_intent: "come_here"
+
+  # ── stop (6 rounds) ───────────────────────────────────
+  # canonical
   - round_id: 13
-    utterance: "停住"
+    mode: fixed
+    utterance: "停"
     expected_intent: "stop"
   - round_id: 14
+    mode: fixed
+    utterance: "停止"
+    expected_intent: "stop"
+  # conversational
+  - round_id: 15
+    mode: fixed
+    utterance: "不要動"
+    expected_intent: "stop"
+  - round_id: 16
+    mode: fixed
+    utterance: "請你停下來"
+    expected_intent: "stop"
+  # tricky / edge-case
+  - round_id: 17
+    mode: fixed
+    utterance: "別動別動別動"
+    expected_intent: "stop"
+  - round_id: 18
+    mode: fixed
+    utterance: "欸等一下先停住不要過來了"
+    expected_intent: "stop"
+
+  # ── take_photo (6 rounds) ─────────────────────────────
+  # canonical
+  - round_id: 19
+    mode: fixed
+    utterance: "拍照"
+    expected_intent: "take_photo"
+  - round_id: 20
+    mode: fixed
     utterance: "照相"
     expected_intent: "take_photo"
-  - round_id: 15
+  # conversational
+  - round_id: 21
+    mode: fixed
+    utterance: "幫我拍一張"
+    expected_intent: "take_photo"
+  - round_id: 22
+    mode: fixed
+    utterance: "拍個照片好不好"
+    expected_intent: "take_photo"
+  # tricky / edge-case
+  - round_id: 23
+    mode: fixed
+    utterance: "我想要拍攝一張紀念照可以嗎"
+    expected_intent: "take_photo"
+  - round_id: 24
+    mode: fixed
+    utterance: "拍張照留念一下"
+    expected_intent: "take_photo"
+
+  # ── status (6 rounds) ─────────────────────────────────
+  # canonical
+  - round_id: 25
+    mode: fixed
+    utterance: "狀態"
+    expected_intent: "status"
+  - round_id: 26
+    mode: fixed
+    utterance: "電量"
+    expected_intent: "status"
+  # conversational
+  - round_id: 27
+    mode: fixed
+    utterance: "你現在怎麼樣"
+    expected_intent: "status"
+  - round_id: 28
+    mode: fixed
     utterance: "你還好嗎"
     expected_intent: "status"
-
-free_rounds:
-  - round_id: 16
-    notes: "同義句變體"
-  - round_id: 17
-    notes: "同義句變體"
-  - round_id: 18
-    notes: "同義句變體"
-  - round_id: 19
-    notes: "口語化 / 帶停頓"
-  - round_id: 20
-    notes: "口語化 / 帶停頓"
-  - round_id: 21
-    notes: "口語化 / 帶停頓"
-  - round_id: 22
-    notes: "應判為 unknown 的句子"
-  - round_id: 23
-    notes: "應判為 unknown 的句子"
-  - round_id: 24
-    notes: "較長聊天句"
-  - round_id: 25
-    notes: "較長聊天句"
-  - round_id: 26
-    notes: "自由測試"
-  - round_id: 27
-    notes: "自由測試"
-  - round_id: 28
-    notes: "自由測試"
+  # tricky / edge-case
   - round_id: 29
-    notes: "自由測試"
+    mode: fixed
+    utterance: "報告一下你目前情況"
+    expected_intent: "status"
   - round_id: 30
-    notes: "自由測試"
+    mode: fixed
+    utterance: "小狗你現在狀態怎樣電量還夠不夠"
+    expected_intent: "status"

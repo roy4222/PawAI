@@ -63,7 +63,16 @@ for proc in "${SPEECH_PROCS[@]}"; do
   fi
 done
 
-# Step 5: Output status
+# Step 5: Stop PulseAudio to release ALSA device for PortAudio
+# PulseAudio holds /dev/snd/pcmC0D0c which blocks PortAudio ALSA backend (-9985)
+if command -v pulseaudio >/dev/null 2>&1; then
+  systemctl --user stop pulseaudio.socket pulseaudio.service 2>/dev/null || true
+  pulseaudio --kill 2>/dev/null || true
+  # Prevent auto-respawn during this session
+  systemctl --user mask pulseaudio.socket pulseaudio.service 2>/dev/null || true
+fi
+
+# Step 6: Output status
 echo "[clean_speech_env] Killed $KILLED_SESSIONS sessions, $KILLED_PROCS process groups"
 
 if [ "$RESIDUAL" = "1" ]; then

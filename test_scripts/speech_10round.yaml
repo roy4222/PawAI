@@ -1,0 +1,12 @@
+# 10-round quick validation (2 per intent)
+rounds:
+  - { round_id: 1,  mode: fixed, utterance: "你好",           expected_intent: greet }
+  - { round_id: 2,  mode: fixed, utterance: "哈囉",           expected_intent: greet }
+  - { round_id: 3,  mode: fixed, utterance: "過來",           expected_intent: come_here }
+  - { round_id: 4,  mode: fixed, utterance: "到我這邊來",     expected_intent: come_here }
+  - { round_id: 5,  mode: fixed, utterance: "停止",           expected_intent: stop }
+  - { round_id: 6,  mode: fixed, utterance: "不要動",         expected_intent: stop }
+  - { round_id: 7,  mode: fixed, utterance: "拍照",           expected_intent: take_photo }
+  - { round_id: 8,  mode: fixed, utterance: "幫我拍一張",     expected_intent: take_photo }
+  - { round_id: 9,  mode: fixed, utterance: "狀態",           expected_intent: status }
+  - { round_id: 10, mode: fixed, utterance: "你現在怎麼樣",   expected_intent: status }

@@ -85,6 +85,9 @@ class IntentTtsBridgeNode(Node):
         if session_id and session_id in self._seen_sessions:
             return
 
+        if intent == "hallucination":
+            return
+
         if intent == "unknown" and not self.enable_unknown_reply:
             return
 

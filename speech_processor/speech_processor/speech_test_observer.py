@@ -40,6 +40,7 @@ class RoundRecord:
     status: str = "pending"
     correlated_by_time: bool = False
     notes: str = ""
+    created_ts: float = 0.0
 
 
 def compute_round_status(r: RoundRecord) -> str:
@@ -61,12 +62,16 @@ def compute_round_status(r: RoundRecord) -> str:
 class SessionAggregator:
     """Aggregates topic events into RoundRecords."""
 
-    def __init__(self, tts_correlation_window_s: float = 5.0):
+    def __init__(self, tts_correlation_window_s: float = 5.0,
+                 require_meta: bool = True):
         self.rounds: List[RoundRecord] = []
         self._pending_meta: Optional[Dict] = None
         self._prev_state: str = "LISTENING"
         self._auto_round_id: int = 0
+        self._last_speech_start_ts: float = 0.0
         self.tts_correlation_window_s = tts_correlation_window_s
+        self.require_meta = require_meta
+        self.ignored_events: int = 0
 
     def _current_round(self) -> Optional[RoundRecord]:
         return self.rounds[-1] if self.rounds else None
@@ -91,36 +96,47 @@ class SessionAggregator:
 
     def set_pending_meta(self, round_id: int, mode: str,
                          expected_intent: str, utterance_text: str) -> None:
-        self._pending_meta = {
-            "round_id": round_id,
-            "mode": mode,
-            "expected_intent": expected_intent,
-            "utterance_text": utterance_text,
-        }
+        """Rule 1: round_meta → immediately create a pending RoundRecord."""
+        # Force-close any leftover pending round to avoid cross-contamination
+        prev = self._latest_pending()
+        if prev:
+            idx = self.rounds.index(prev)
+            prev.intent = prev.intent or "timeout"
+            prev.status = "timeout"
+            prev.match = "miss"
+        r = RoundRecord()
+        r.round_id = round_id
+        r.mode = mode
+        r.expected_intent = expected_intent
+        r.utterance_text = utterance_text
+        r.created_ts = time.time()
+        self.rounds.append(r)
+
+    def _latest_pending(self) -> Optional[RoundRecord]:
+        """Find the most recent pending round."""
+        for r in reversed(self.rounds):
+            if r.status == "pending":
+                return r
+        return None
 
     def on_state_change(self, old_state: str, new_state: str, ts: float) -> None:
+        """Rule 2: state changes just fill in timestamps on the latest pending round."""
+        r = self._latest_pending()
+        if not r:
+            return
         if old_state == "LISTENING" and new_state == "RECORDING":
-            self._auto_round_id += 1
-            r = RoundRecord(speech_start_ts=ts)
-            if self._pending_meta:
-                r.round_id = self._pending_meta["round_id"]
-                r.mode = self._pending_meta["mode"]
-                r.expected_intent = self._pending_meta["expected_intent"]
-                r.utterance_text = self._pending_meta["utterance_text"]
-                self._pending_meta = None
-            else:
-                r.round_id = self._auto_round_id
-            self.rounds.append(r)
+            if r.speech_start_ts == 0.0:
+                r.speech_start_ts = ts
         elif old_state == "RECORDING" and new_state == "TRANSCRIBING":
-            r = self._current_round()
-            if r and r.speech_end_ts == 0.0:
+            if r.speech_end_ts == 0.0:
                 r.speech_end_ts = ts
         self._prev_state = new_state
 
     def on_asr_result(self, session_id: str, text: str, provider: str,
                       latency_ms: float, ts: float) -> None:
-        r = self._current_round()
-        if r and not r.session_id:
+        """Rule 2: ASR result fills in fields on the latest pending round."""
+        r = self._latest_pending()
+        if r and not r.asr_text:
             r.session_id = session_id
             r.asr_text = text
             r.asr_ts = ts
@@ -128,31 +144,49 @@ class SessionAggregator:
 
     def on_intent_event(self, session_id: str, intent: str,
                         confidence: float, latency_ms: float, ts: float,
-                        text: str = "") -> None:
-        r = self._find_round_by_session(session_id)
+                        text: str = "") -> bool:
+        """Rule 3: real intent → finalize immediately.
+        Rule 5: hallucination → record but stay pending (let real intent or timeout close it).
+        Returns True if a round was finalized."""
+        r = self._latest_pending()
         if not r:
-            r = self._current_round()
-        # text_input path: no state transition happened, create a new round
-        if not r or (r.intent_ts > 0 and r.session_id != session_id):
-            self._auto_round_id += 1
-            r = RoundRecord(speech_start_ts=ts, asr_ts=ts)
-            r.session_id = session_id
-            if self._pending_meta:
-                r.round_id = self._pending_meta["round_id"]
-                r.mode = self._pending_meta["mode"]
-                r.expected_intent = self._pending_meta["expected_intent"]
-                r.utterance_text = self._pending_meta["utterance_text"]
-                self._pending_meta = None
-            else:
-                r.round_id = self._auto_round_id
-            self.rounds.append(r)
-        if r:
-            r.intent = intent
-            r.intent_ts = ts
-            r.intent_confidence = confidence
-            r.intent_latency_ms = latency_ms
-            if text and not r.asr_text:
+            self.ignored_events += 1
+            return False
+
+        # Hallucination: record details but keep round pending for real intent
+        if intent == "hallucination":
+            r.notes = f"hallucination:{text}" if text else "hallucination"
+            if not r.session_id:
+                r.session_id = session_id
+            if not r.asr_text and text:
                 r.asr_text = text
+            if r.intent_ts == 0.0:
+                r.intent_ts = ts
+            return False
+
+        # Real intent: fill fields and finalize
+        r.intent = intent
+        r.intent_ts = ts
+        r.intent_confidence = confidence
+        r.intent_latency_ms = latency_ms
+        r.session_id = session_id
+        if text and not r.asr_text:
+            r.asr_text = text
+
+        idx = self.rounds.index(r)
+        self.finalize_round(idx)
+        return True
+
+    def finalize_as_timeout(self, round_id: int) -> Optional[RoundRecord]:
+        """Rule 4: meta timeout → finalize as timeout/hallucination. Never delete."""
+        for r in self.rounds:
+            if r.round_id == round_id and r.status == "pending":
+                # If hallucination was recorded, keep that info
+                r.intent = "hallucination" if "hallucination" in r.notes else "timeout"
+                r.status = "timeout"
+                r.match = "miss"
+                return r
+        return None
 
     def on_tts(self, text: str, ts: float) -> None:
         r = self._find_round_for_correlation(ts)
@@ -186,7 +220,9 @@ class SessionAggregator:
                 (r.webrtc_play_start_ts - r.speech_start_ts) * 1000, 1
             )
         if r.expected_intent:
-            if not r.asr_text:
+            if r.intent in ("hallucination", "timeout"):
+                r.match = "miss"
+            elif not r.asr_text:
                 r.match = "empty"
             elif r.intent == r.expected_intent:
                 r.match = "hit"
@@ -431,6 +467,9 @@ if _HAS_ROS2:
             self._report_ack_pub = self.create_publisher(
                 RosString, "/speech_test_observer/generate_report_ack", 10
             )
+            self._round_done_pub = self.create_publisher(
+                RosString, "/speech_test_observer/round_done_ack", 10
+            )
 
             self.create_timer(1.0, self._check_meta_timeout)
             self.create_timer(1.0, self._check_round_timeout)
@@ -447,9 +486,14 @@ if _HAS_ROS2:
                 ts = time.time()
                 self._aggregator.on_state_change(self._prev_state, new_state, ts)
                 if self._prev_state == "LISTENING" and new_state == "RECORDING":
-                    self.get_logger().info(
-                        f"[Round {len(self._aggregator.rounds)}] speech_start detected"
-                    )
+                    if self._aggregator.rounds:
+                        self.get_logger().info(
+                            f"[Round {len(self._aggregator.rounds)}] speech_start detected"
+                        )
+                    else:
+                        self.get_logger().debug(
+                            "speech_start ignored (no pending round_meta)"
+                        )
                 self._prev_state = new_state
 
         def _on_asr_result(self, msg) -> None:
@@ -470,7 +514,7 @@ if _HAS_ROS2:
                 data = json.loads(msg.data)
             except json.JSONDecodeError:
                 return
-            self._aggregator.on_intent_event(
+            finalized = self._aggregator.on_intent_event(
                 session_id=data.get("session_id", ""),
                 intent=data.get("intent", "unknown"),
                 confidence=float(data.get("confidence", 0)),
@@ -478,12 +522,18 @@ if _HAS_ROS2:
                 ts=time.time(),
                 text=data.get("text", ""),
             )
-            r = self._aggregator._current_round()
-            if r:
-                self.get_logger().info(
-                    f"[Round {r.round_id}] intent={r.intent} "
-                    f"asr_text={r.asr_text!r}"
-                )
+            if finalized:
+                r = self._aggregator._current_round()
+                if r:
+                    self.get_logger().info(
+                        f"[Round {r.round_id}] DONE intent={r.intent} "
+                        f"match={r.match} asr_text={r.asr_text!r}"
+                    )
+                    self._publish_ack(
+                        self._round_done_pub,
+                        {"round_id": r.round_id, "intent": r.intent,
+                         "asr_text": r.asr_text, "match": r.match},
+                    )
 
         def _on_tts(self, msg) -> None:
             self._aggregator.on_tts(text=msg.data, ts=time.time())
@@ -508,7 +558,7 @@ if _HAS_ROS2:
                 self._meta_ack_pub,
                 {"ok": True, "round_id": data.get("round_id", 0)},
             )
-            self.get_logger().info(f"Round meta set: {data}")
+            self.get_logger().info(f"Round {data.get('round_id')} created (pending)")
 
         def _on_generate_report_req(self, msg) -> None:
             for i in range(len(self._aggregator.rounds)):
@@ -517,6 +567,7 @@ if _HAS_ROS2:
             suffix = self._report_gen._timestamp_suffix()
             csv_path = self._report_gen.write_csv(rounds, suffix=suffix)
             summary = self._report_gen.compute_summary(rounds)
+            summary["ignored_events"] = self._aggregator.ignored_events
             summary_path = self._report_gen.write_summary(summary, suffix=suffix)
             self._publish_ack(
                 self._report_ack_pub,
@@ -533,25 +584,26 @@ if _HAS_ROS2:
             pub.publish(msg)
 
         def _check_round_timeout(self) -> None:
-            now = time.time()
-            for i, r in enumerate(self._aggregator.rounds):
-                if r.status == "pending" and r.speech_start_ts > 0:
-                    if (now - r.speech_start_ts) > self._round_complete_timeout:
-                        self._aggregator.finalize_round(i)
-                        self.get_logger().warning(
-                            f"[Round {r.round_id}] timed out after "
-                            f"{self._round_complete_timeout}s, status={r.status}"
-                        )
+            """Removed — _check_meta_timeout handles all pending rounds via created_ts."""
+            pass
 
         def _check_meta_timeout(self) -> None:
-            if (
-                self._aggregator._pending_meta
-                and self._meta_set_time > 0
-                and (time.time() - self._meta_set_time) > self._meta_timeout
-            ):
-                self.get_logger().warning("Pending round meta expired, clearing")
-                self._aggregator._pending_meta = None
-                self._meta_set_time = 0.0
+            """Rule 4: any pending round older than meta_timeout → finalize as timeout."""
+            now = time.time()
+            for r in self._aggregator.rounds:
+                if r.status != "pending":
+                    continue
+                if r.created_ts > 0 and (now - r.created_ts) > self._meta_timeout:
+                    result = self._aggregator.finalize_as_timeout(r.round_id)
+                    self.get_logger().warning(
+                        f"[Round {r.round_id}] timeout → intent={r.intent} "
+                        f"({self._meta_timeout}s since creation)"
+                    )
+                    self._publish_ack(
+                        self._round_done_pub,
+                        {"round_id": r.round_id, "intent": r.intent,
+                         "asr_text": r.asr_text, "match": r.match},
+                    )
 
 
 def main(args=None):

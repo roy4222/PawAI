@@ -1,0 +1,46 @@
+{
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash /home/roy422/newLife/elder_and_dog/scripts/hooks/pre_tool_safety.sh"
+                    }
+                ]
+            },
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash /home/roy422/newLife/elder_and_dog/scripts/hooks/pre_tool_secret_guard.sh"
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "Edit|Write",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash /home/roy422/newLife/elder_and_dog/scripts/hooks/post_tool_py_syntax.sh"
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash /home/roy422/newLife/elder_and_dog/scripts/hooks/stop_remind_build.sh"
+                    }
+                ]
+            }
+        ]
+    }
+}
