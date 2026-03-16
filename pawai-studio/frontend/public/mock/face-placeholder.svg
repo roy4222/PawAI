@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="202" viewBox="0 0 360 202">
+  <rect width="360" height="202" fill="#0A0A0F"/>
+  <!-- Face bbox 1 -->
+  <rect x="60" y="30" width="80" height="100" rx="4" fill="none" stroke="#3B82F6" stroke-width="2" stroke-dasharray="4 2"/>
+  <circle cx="100" cy="65" r="18" fill="none" stroke="#3B82F680" stroke-width="1.5"/>
+  <circle cx="90" cy="60" r="2.5" fill="#3B82F680"/>
+  <circle cx="110" cy="60" r="2.5" fill="#3B82F680"/>
+  <path d="M90,75 Q100,85 110,75" fill="none" stroke="#3B82F680" stroke-width="1.5"/>
+  <text x="100" y="22" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="11" font-weight="600">Roy</text>
+  <text x="100" y="145" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="9">sim 42% · 1.2m · stable</text>
+  <!-- Face bbox 2 -->
+  <rect x="220" y="35" width="70" height="90" rx="4" fill="none" stroke="#F59E0B" stroke-width="2" stroke-dasharray="4 2"/>
+  <circle cx="255" cy="67" r="16" fill="none" stroke="#F59E0B80" stroke-width="1.5"/>
+  <circle cx="247" cy="62" r="2" fill="#F59E0B80"/>
+  <circle cx="263" cy="62" r="2" fill="#F59E0B80"/>
+  <path d="M247,75 Q255,82 263,75" fill="none" stroke="#F59E0B80" stroke-width="1.5"/>
+  <text x="255" y="27" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="11">unknown</text>
+  <text x="255" y="140" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="9">sim 18% · 2.1m · hold</text>
+  <!-- Label -->
+  <text x="180" y="180" text-anchor="middle" fill="#55556A" font-family="Inter,sans-serif" font-size="10">人臉辨識 — placeholder for layout</text>
+  <!-- Count badge -->
+  <rect x="310" y="8" width="40" height="18" rx="9" fill="#3B82F620"/>
+  <text x="330" y="21" text-anchor="middle" fill="#3B82F6" font-family="Inter,sans-serif" font-size="10">2 人</text>
+</svg>

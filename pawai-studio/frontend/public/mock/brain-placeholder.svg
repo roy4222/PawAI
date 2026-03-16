@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="202" viewBox="0 0 360 202">
+  <rect width="360" height="202" fill="#0A0A0F"/>
+  <!-- Decision card -->
+  <rect x="30" y="20" width="300" height="130" rx="8" fill="#141419" stroke="#2A2A35" stroke-width="1"/>
+  <!-- Header -->
+  <rect x="30" y="20" width="300" height="30" rx="8" fill="#F59E0B10"/>
+  <text x="50" y="40" fill="#F59E0B" font-family="Inter,sans-serif" font-size="11" font-weight="600">Brain Decision</text>
+  <rect x="270" y="27" width="48" height="16" rx="8" fill="#22C55E20"/>
+  <text x="294" y="39" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="9">Level 0</text>
+  <!-- Fields -->
+  <text x="50" y="72" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="10">intent</text>
+  <text x="150" y="72" fill="#F0F0F5" font-family="Inter,sans-serif" font-size="11" font-weight="500">greet</text>
+  <line x1="50" y1="80" x2="310" y2="80" stroke="#2A2A35" stroke-width="0.5"/>
+  <text x="50" y="97" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="10">selected_skill</text>
+  <text x="150" y="97" fill="#7C6BFF" font-family="Inter,sans-serif" font-size="11" font-weight="500">hello</text>
+  <line x1="50" y1="105" x2="310" y2="105" stroke="#2A2A35" stroke-width="0.5"/>
+  <text x="50" y="122" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="10">reasoning</text>
+  <text x="150" y="122" fill="#F0F0F580" font-family="Inter,sans-serif" font-size="10">偵測到熟人，打招呼</text>
+  <line x1="50" y1="130" x2="310" y2="130" stroke="#2A2A35" stroke-width="0.5"/>
+  <text x="50" y="143" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="10">confidence</text>
+  <!-- Confidence bar -->
+  <rect x="150" y="135" width="100" height="6" rx="3" fill="#2A2A35"/>
+  <rect x="150" y="135" width="92" height="6" rx="3" fill="#22C55E"/>
+  <text x="260" y="143" fill="#22C55E" font-family="Inter,sans-serif" font-size="10">92%</text>
+  <!-- Status -->
+  <rect x="30" y="165" width="80" height="22" rx="11" fill="#F59E0B15"/>
+  <text x="70" y="180" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="10">executing</text>
+  <!-- Cloud badge -->
+  <rect x="120" y="165" width="90" height="22" rx="11" fill="#22C55E15"/>
+  <text x="165" y="180" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="10">cloud connected</text>
+  <!-- Label -->
+  <text x="350" y="195" text-anchor="end" fill="#55556A" font-family="Inter,sans-serif" font-size="10">AI 大腦 — placeholder</text>
+</svg>

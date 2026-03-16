@@ -43,6 +43,10 @@ curl -X POST http://localhost:8001/mock/scenario/demo_a
 
 ### 各模組獨立觸發
 
+> **注意**：以下 trigger payload 是 **UI 測試捷徑**，把 event_type 和 state data 混在一起推，
+> 方便前端一次收到完整 state 更新。**這不是真實的 event schema**。
+> 真實 event 和 state 是分開的，以 [event-schema.md](../../docs/Pawai-studio/event-schema.md) 為準。
+
 **Face**
 ```bash
 curl -X POST http://localhost:8001/mock/trigger \

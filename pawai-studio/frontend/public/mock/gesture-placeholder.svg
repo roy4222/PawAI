@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="202" viewBox="0 0 360 202">
+  <rect width="360" height="202" fill="#0A0A0F"/>
+  <!-- Hand outline -->
+  <g transform="translate(130, 20)" fill="none" stroke="#22C55E" stroke-width="2" opacity="0.7">
+    <!-- Palm -->
+    <ellipse cx="50" cy="90" rx="35" ry="40"/>
+    <!-- Fingers -->
+    <line x1="25" y1="55" x2="20" y2="15"/>
+    <line x1="40" y1="50" x2="38" y2="5"/>
+    <line x1="55" y1="48" x2="55" y2="2"/>
+    <line x1="68" y1="52" x2="72" y2="10"/>
+    <line x1="80" y1="65" x2="88" y2="35"/>
+    <!-- Fingertips -->
+    <circle cx="20" cy="15" r="4" fill="#22C55E30"/>
+    <circle cx="38" cy="5" r="4" fill="#22C55E30"/>
+    <circle cx="55" cy="2" r="4" fill="#22C55E30"/>
+    <circle cx="72" cy="10" r="4" fill="#22C55E30"/>
+    <circle cx="88" cy="35" r="4" fill="#22C55E30"/>
+  </g>
+  <!-- Gesture label -->
+  <text x="180" y="155" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="16" font-weight="600">wave</text>
+  <!-- Confidence -->
+  <rect x="140" y="165" width="80" height="18" rx="9" fill="#22C55E15"/>
+  <text x="180" y="178" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="10">confidence 85%</text>
+  <!-- Hand side -->
+  <text x="180" y="195" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="10">右手 · active</text>
+  <!-- Label -->
+  <text x="10" y="195" fill="#55556A" font-family="Inter,sans-serif" font-size="10">手勢辨識 — placeholder</text>
+</svg>

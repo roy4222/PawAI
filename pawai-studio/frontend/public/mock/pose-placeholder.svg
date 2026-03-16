@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="202" viewBox="0 0 360 202">
+  <rect width="360" height="202" fill="#0A0A0F"/>
+  <!-- Skeleton figure -->
+  <g transform="translate(180, 15)" fill="none" stroke="#F97316" stroke-width="2.5" stroke-linecap="round">
+    <!-- Head -->
+    <circle cx="0" cy="12" r="12" fill="#F9731620"/>
+    <!-- Neck to torso -->
+    <line x1="0" y1="24" x2="0" y2="70"/>
+    <!-- Shoulders -->
+    <line x1="-40" y1="38" x2="40" y2="38"/>
+    <!-- Left arm -->
+    <line x1="-40" y1="38" x2="-55" y2="70"/>
+    <line x1="-55" y1="70" x2="-50" y2="95"/>
+    <!-- Right arm -->
+    <line x1="40" y1="38" x2="55" y2="70"/>
+    <line x1="55" y1="70" x2="50" y2="95"/>
+    <!-- Hips -->
+    <line x1="-25" y1="70" x2="25" y2="70"/>
+    <!-- Left leg -->
+    <line x1="-25" y1="70" x2="-30" y2="110"/>
+    <line x1="-30" y1="110" x2="-28" y2="145"/>
+    <!-- Right leg -->
+    <line x1="25" y1="70" x2="30" y2="110"/>
+    <line x1="30" y1="110" x2="28" y2="145"/>
+    <!-- Joints -->
+    <g fill="#F97316" stroke="none">
+      <circle cx="-40" cy="38" r="4"/>
+      <circle cx="40" cy="38" r="4"/>
+      <circle cx="-55" cy="70" r="3"/>
+      <circle cx="55" cy="70" r="3"/>
+      <circle cx="-25" cy="70" r="4"/>
+      <circle cx="25" cy="70" r="4"/>
+      <circle cx="-30" cy="110" r="3"/>
+      <circle cx="30" cy="110" r="3"/>
+      <circle cx="-28" cy="145" r="3"/>
+      <circle cx="28" cy="145" r="3"/>
+    </g>
+  </g>
+  <!-- Pose label -->
+  <text x="180" y="175" text-anchor="middle" fill="#F97316" font-family="Inter,sans-serif" font-size="16" font-weight="600">standing</text>
+  <!-- Confidence -->
+  <rect x="140" y="182" width="80" height="18" rx="9" fill="#F9731615"/>
+  <text x="180" y="195" text-anchor="middle" fill="#F97316" font-family="Inter,sans-serif" font-size="10">confidence 92%</text>
+  <!-- Label -->
+  <text x="10" y="195" fill="#55556A" font-family="Inter,sans-serif" font-size="10">姿勢辨識 — placeholder</text>
+</svg>

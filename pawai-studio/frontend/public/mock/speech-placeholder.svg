@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="202" viewBox="0 0 360 202">
+  <rect width="360" height="202" fill="#0A0A0F"/>
+  <!-- Waveform -->
+  <polyline points="30,60 50,45 70,65 90,35 110,55 130,40 150,60 170,50 190,65 210,42 230,58 250,38 270,55 290,48 310,60 330,50"
+    fill="none" stroke="#7C6BFF" stroke-width="2" opacity="0.6"/>
+  <line x1="30" y1="60" x2="330" y2="60" stroke="#2A2A35" stroke-width="1"/>
+  <!-- Phase badge -->
+  <rect x="260" y="8" width="90" height="22" rx="11" fill="#7C6BFF20"/>
+  <text x="305" y="23" text-anchor="middle" fill="#7C6BFF" font-family="Inter,sans-serif" font-size="10">listening</text>
+  <!-- User bubble -->
+  <rect x="180" y="85" width="150" height="32" rx="12" fill="#7C6BFF15"/>
+  <text x="255" y="106" text-anchor="middle" fill="#F0F0F5" font-family="Inter,sans-serif" font-size="12">「你好」</text>
+  <!-- AI bubble -->
+  <rect x="30" y="125" width="200" height="32" rx="12" fill="#14141980"/>
+  <text x="130" y="146" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="12">哈囉，我在這裡。</text>
+  <!-- Intent badge -->
+  <rect x="30" y="170" width="60" height="18" rx="9" fill="#22C55E20"/>
+  <text x="60" y="183" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="9">greet</text>
+  <!-- Models -->
+  <rect x="100" y="170" width="35" height="18" rx="9" fill="#2A2A35"/>
+  <text x="117" y="183" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="9">kws</text>
+  <rect x="140" y="170" width="35" height="18" rx="9" fill="#2A2A35"/>
+  <text x="157" y="183" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="9">asr</text>
+  <rect x="180" y="170" width="35" height="18" rx="9" fill="#2A2A35"/>
+  <text x="197" y="183" text-anchor="middle" fill="#8B8B9E" font-family="Inter,sans-serif" font-size="9">tts</text>
+  <!-- Label -->
+  <text x="330" y="193" text-anchor="end" fill="#55556A" font-family="Inter,sans-serif" font-size="10">語音互動 — placeholder</text>
+</svg>
