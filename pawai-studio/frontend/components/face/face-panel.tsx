@@ -16,6 +16,9 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   track_lost: '追蹤消失',
 }
 
+const PLACEHOLDER_SRC = "/mock/face-placeholder.svg"
+const SHOW_PLACEHOLDER = true  // M2 時改 false，換成真實元件
+
 export function FacePanel() {
   const faceState = useStateStore((s) => s.faceState) as FaceState | null
   const allEvents = useEventStore((s) => s.events)
@@ -40,6 +43,13 @@ export function FacePanel() {
       count={faceState?.face_count}
     >
       <div className="flex flex-col gap-3">
+        {/* Placeholder visual — M2 時改 SHOW_PLACEHOLDER = false，換成真實元件 */}
+        {SHOW_PLACEHOLDER && (
+          <div className="rounded-lg overflow-hidden border border-border/20">
+            <img src={PLACEHOLDER_SRC} alt="face placeholder" className="w-full h-auto" />
+          </div>
+        )}
+
         {/* Track list */}
         {tracks.length > 0 ? (
           <div className="flex flex-col gap-2">
