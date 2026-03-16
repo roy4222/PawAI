@@ -10,8 +10,10 @@ which stopped working on Go2 firmware v1.1.7+.
 
 import asyncio
 import fractions
+import hashlib
 import io
 import logging
+import time as _time
 import wave
 
 import av
@@ -31,13 +33,6 @@ class TtsAudioTrack(MediaStreamTrack):
     sends silence when queue is empty.
 
     Compatible with aiortc 1.3.0+ (uses MediaStreamTrack base).
-
-    Usage:
-        track = TtsAudioTrack()
-        pc.addTrack(track)  # before SDP offer
-
-        # From any thread (e.g. ROS2 callback):
-        track.enqueue_audio_threadsafe(wav_bytes, loop)
     """
 
     kind = "audio"
@@ -57,6 +52,13 @@ class TtsAudioTrack(MediaStreamTrack):
         # PTS counter
         self._pts: int = 0
 
+        # Observability
+        self._play_id: int = 0
+        self._current_play_id: int = 0
+        self._frames_sent: int = 0
+        self._play_start_ts: float = 0.0
+        self._last_hash: str = ""
+
         logger.info(
             "TtsAudioTrack initialized: %dHz, %d samples/frame",
             sample_rate, self._samples_per_frame,
@@ -68,6 +70,18 @@ class TtsAudioTrack(MediaStreamTrack):
         Can be called from any thread via enqueue_audio_threadsafe().
         """
         try:
+            # Hash dedup: skip if same WAV within 1 second
+            wav_hash = hashlib.md5(wav_bytes).hexdigest()[:12]
+            now = _time.time()
+            if wav_hash == self._last_hash and (now - self._play_start_ts) < 1.0:
+                logger.info("[TTS TRACK] Dedup skip hash=%s", wav_hash)
+                return
+            self._last_hash = wav_hash
+
+            # Assign play ID
+            self._play_id += 1
+            play_id = self._play_id
+
             container = av.open(io.BytesIO(wav_bytes), format="wav")
             resampler = av.AudioResampler(
                 format="s16",
@@ -92,11 +106,36 @@ class TtsAudioTrack(MediaStreamTrack):
 
             if all_samples:
                 pcm = np.concatenate(all_samples)
+
+                # Clear any previous audio (only play latest)
+                while not self._queue.empty():
+                    try:
+                        self._queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+                self._current_buffer = None
+                self._buffer_offset = 0
+
+                # Save debug WAV
+                try:
+                    dbg_path = f"/tmp/tts_debug_{play_id}.wav"
+                    with wave.open(dbg_path, "wb") as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(self._sample_rate)
+                        wf.writeframes(pcm.tobytes())
+                    logger.info("[TTS TRACK] Debug WAV saved: %s", dbg_path)
+                except Exception:
+                    pass
+
                 await self._queue.put(pcm)
+                self._current_play_id = play_id
+                self._frames_sent = 0
+                self._play_start_ts = _time.time()
                 duration_s = len(pcm) / self._sample_rate
                 logger.info(
-                    "[TTS TRACK] Enqueued %.1fs audio (%d samples)",
-                    duration_s, len(pcm),
+                    "[TTS TRACK] play_id=%d hash=%s enqueue %.1fs (%d samples)",
+                    play_id, wav_hash, duration_s, len(pcm),
                 )
             else:
                 logger.warning("[TTS TRACK] No audio samples decoded from WAV")
@@ -155,5 +194,22 @@ class TtsAudioTrack(MediaStreamTrack):
         frame.time_base = fractions.Fraction(1, self._sample_rate)
 
         self._pts += samples
+
+        # Track frame count for active playback
+        if filled > 0:
+            self._frames_sent += 1
+            # Log completion when buffer drains
+            if (
+                self._current_buffer is not None
+                and self._buffer_offset >= len(self._current_buffer)
+                and self._queue.empty()
+            ):
+                elapsed = _time.time() - self._play_start_ts
+                logger.info(
+                    "[TTS TRACK] play_id=%d DONE frames=%d elapsed=%.1fs",
+                    self._current_play_id,
+                    self._frames_sent,
+                    elapsed,
+                )
 
         return frame

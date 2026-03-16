@@ -396,8 +396,10 @@ class Go2DriverNode(Node):
 
     def _on_tts_audio_raw(self, msg: UInt8MultiArray) -> None:
         """Experimental: receive raw WAV bytes and play via WebRTC audio track."""
+        import hashlib
         wav_bytes = bytes(msg.data)
-        self.get_logger().info(f"[TTS AUDIO RAW] Received {len(wav_bytes)} bytes")
+        wav_hash = hashlib.md5(wav_bytes).hexdigest()[:12]
+        self.get_logger().info(f"[TTS AUDIO RAW] {len(wav_bytes)} bytes hash={wav_hash}")
         self.webrtc_adapter.play_tts_audio("0", wav_bytes)
 
     def _on_joy(self, msg: Joy) -> None:

@@ -32,7 +32,7 @@ from pydub.playback import play
 import rclpy
 from rclpy.node import Node
 import requests
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, String, UInt8MultiArray
 from go2_interfaces.msg import WebRtcReq
 
 
@@ -101,6 +101,7 @@ class TTSConfig:
     robot_chunk_interval_sec: float = 0.02
     robot_playback_tail_sec: float = 0.2
     robot_volume: int = 80
+    playback_method: str = "audio_track"  # "audio_track" or "datachannel"
     audio_quality: str = "standard"  # standard, high
     language: str = "en"
 
@@ -482,6 +483,7 @@ class EnhancedTTSNode(Node):
         self.declare_parameter("robot_chunk_interval_sec", 0.02)
         self.declare_parameter("robot_playback_tail_sec", 0.2)
         self.declare_parameter("robot_volume", 80)
+        self.declare_parameter("playback_method", "audio_track")
         self.declare_parameter("audio_quality", "standard")
         self.declare_parameter("language", "en")
         self.declare_parameter("stability", 0.5)
@@ -536,6 +538,9 @@ class EnhancedTTSNode(Node):
             robot_volume=self.get_parameter("robot_volume")
             .get_parameter_value()
             .integer_value,
+            playback_method=self.get_parameter("playback_method")
+            .get_parameter_value()
+            .string_value,
             audio_quality=self.get_parameter("audio_quality")
             .get_parameter_value()
             .string_value,
@@ -604,6 +609,7 @@ class EnhancedTTSNode(Node):
         )
 
         self.audio_pub = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+        self.audio_raw_pub = self.create_publisher(UInt8MultiArray, "/tts_audio_raw", 10)
         # Latched (transient_local) so subscribers/echo always get the last value
         from rclpy.qos import QoSProfile, DurabilityPolicy
         tts_playing_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -693,69 +699,100 @@ class EnhancedTTSNode(Node):
     def _play_on_robot(self, audio_data: bytes) -> None:
         """Send audio to robot for playback"""
         try:
-            # Convert to WAV
-            wav_data = self.audio_processor.convert_to_wav(audio_data, AudioFormat.MP3)
-            if not wav_data:
-                self.get_logger().error("❌ Failed to convert audio to WAV")
-                return
-
-            # Get audio duration for timing
-            duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
-
-            # Encode and split into chunks
-            b64_encoded = base64.b64encode(wav_data).decode("utf-8")
-            chunks = self.audio_processor.split_into_chunks(
-                b64_encoded.encode(), self.config.chunk_size
-            )
-            total_chunks = len(chunks)
-
-            self.get_logger().info(
-                f"📤 Sending audio to robot: {total_chunks} chunks, {duration:.1f}s duration"
-            )
-
-            volume = int(max(0, min(100, self.config.robot_volume)))
-            self._send_audio_command(4004, str(volume))
-            time.sleep(0.05)
-
-            # Signal echo gate: TTS playback starting
-            self._publish_tts_playing(True)
-
-            # Send start command
-            self._send_audio_command(4001, "")
-            time.sleep(0.1)
-
-            # Send audio chunks
-            for chunk_idx, chunk in enumerate(chunks, 1):
-                audio_block = {
-                    "current_block_index": chunk_idx,
-                    "total_block_number": total_chunks,
-                    "block_content": chunk.decode(),
-                }
-                self._send_audio_command(4003, json.dumps(audio_block))
-
-                if chunk_idx % 10 == 0:  # Log progress every 10 chunks
-                    self.get_logger().info(f"📤 Sent {chunk_idx}/{total_chunks} chunks")
-
-                time.sleep(max(0.0, self.config.robot_chunk_interval_sec))
-
-            # Wait for playback to complete
-            self.get_logger().info(
-                f"⏳ Waiting for playback completion ({duration:.1f}s)..."
-            )
-            time.sleep(max(0.0, duration + self.config.robot_playback_tail_sec))
-
-            # Send end command
-            self._send_audio_command(4002, "")
-
-            # Signal echo gate: TTS playback finished
-            self._publish_tts_playing(False)
-
-            self.get_logger().info("🎵 Robot playback completed")
+            if self.config.playback_method == "audio_track":
+                # Audio track: convert to WAV without forcing 16kHz
+                # (TtsAudioTrack handles resample to 48kHz internally)
+                wav_data = self._convert_to_wav_native(audio_data)
+                if not wav_data:
+                    self.get_logger().error("Failed to convert audio to WAV")
+                    return
+                duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
+                self._play_on_robot_audio_track(wav_data, duration)
+            else:
+                # DataChannel: needs 16kHz/16bit/mono for Go2 audiohub
+                wav_data = self.audio_processor.convert_to_wav(audio_data, AudioFormat.MP3)
+                if not wav_data:
+                    self.get_logger().error("Failed to convert audio to WAV")
+                    return
+                duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
+                self._play_on_robot_datachannel(wav_data, duration)
 
         except Exception as e:
-            # Ensure gate is released even on error
             self._publish_tts_playing(False)
-            self.get_logger().error(f"❌ Robot playback error: {str(e)}")
+            self.get_logger().error(f"Robot playback error: {str(e)}")
+
+    def _convert_to_wav_native(self, audio_data: bytes) -> bytes:
+        """Convert MP3/audio to WAV keeping original sample rate (no 16kHz downsampling)."""
+        try:
+            from pydub import AudioSegment
+            audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
+            # Only convert to mono, keep original sample rate
+            audio = audio.set_channels(1).set_sample_width(2)
+            buf = io.BytesIO()
+            audio.export(buf, format="wav")
+            return buf.getvalue()
+        except Exception as e:
+            self.get_logger().error(f"WAV conversion error: {e}")
+            return b""
+
+    def _play_on_robot_audio_track(self, wav_data: bytes, duration: float) -> None:
+        """Send WAV via WebRTC audio track (new method)."""
+        self.get_logger().info(
+            f"Sending audio via audio_track: {duration:.1f}s, {len(wav_data)} bytes"
+        )
+
+        self._publish_tts_playing(True)
+
+        msg = UInt8MultiArray()
+        msg.data = list(wav_data)
+        self.audio_raw_pub.publish(msg)
+
+        # Wait for playback to complete
+        self.get_logger().info(f"Waiting for playback ({duration:.1f}s)...")
+        time.sleep(max(0.0, duration + self.config.robot_playback_tail_sec))
+
+        self._publish_tts_playing(False)
+        self.get_logger().info("Robot playback completed")
+
+    def _play_on_robot_datachannel(self, wav_data: bytes, duration: float) -> None:
+        """Send WAV via DataChannel Megaphone (legacy fallback)."""
+        b64_encoded = base64.b64encode(wav_data).decode("utf-8")
+        chunks = self.audio_processor.split_into_chunks(
+            b64_encoded.encode(), self.config.chunk_size
+        )
+        total_chunks = len(chunks)
+
+        self.get_logger().info(
+            f"Sending audio via datachannel: {total_chunks} chunks, {duration:.1f}s"
+        )
+
+        volume = int(max(0, min(100, self.config.robot_volume)))
+        self._send_audio_command(4004, str(volume))
+        time.sleep(0.05)
+
+        self._publish_tts_playing(True)
+
+        self._send_audio_command(4001, "")
+        time.sleep(0.1)
+
+        for chunk_idx, chunk in enumerate(chunks, 1):
+            audio_block = {
+                "current_block_index": chunk_idx,
+                "total_block_number": total_chunks,
+                "block_content": chunk.decode(),
+            }
+            self._send_audio_command(4003, json.dumps(audio_block))
+            if chunk_idx % 10 == 0:
+                self.get_logger().info(f"Sent {chunk_idx}/{total_chunks} chunks")
+            time.sleep(max(0.0, self.config.robot_chunk_interval_sec))
+
+        self.get_logger().info(f"Waiting for playback ({duration:.1f}s)...")
+        time.sleep(max(0.0, duration + self.config.robot_playback_tail_sec))
+
+        self._send_audio_command(4002, "")
+
+        self._publish_tts_playing(False)
+        self.get_logger().info("Robot playback completed")
 
     def _send_audio_command(self, api_id: int, parameter: str) -> None:
         """Send audio command to robot"""
