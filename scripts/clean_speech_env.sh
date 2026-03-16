@@ -12,7 +12,7 @@ for arg in "$@"; do
 done
 
 SPEECH_SESSIONS=("asr-tts-no-vad" "speech-e2e" "speech-test")
-SPEECH_PROCS=("stt_intent_node" "intent_tts_bridge_node" "tts_node" "speech_test_observer")
+SPEECH_PROCS=("stt_intent_node" "intent_tts_bridge_node" "llm_bridge_node" "tts_node" "speech_test_observer")
 
 if [ "$WITH_GO2_DRIVER" = "1" ]; then
   SPEECH_PROCS+=("go2_driver_node")

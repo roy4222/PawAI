@@ -34,6 +34,7 @@ setup(
             "asr_node = speech_processor.asr_node:main",
             "intent_node = speech_processor.intent_node:main",
             "intent_tts_bridge_node = speech_processor.intent_tts_bridge_node:main",
+            "llm_bridge_node = speech_processor.llm_bridge_node:main",
             "stt_intent_node = speech_processor.stt_intent_node:main",
             "speech_test_observer = speech_processor.speech_test_observer:main",
         ],

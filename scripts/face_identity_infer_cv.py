@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import pickle
 import threading
@@ -12,6 +13,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 
 
 def resolve_model_path(path: str, model_name: str) -> Path:
@@ -126,6 +128,12 @@ class FaceIdentityNode(Node):
         self.compare_image_pub = self.create_publisher(
             Image, "/face_identity/compare_image", 10
         )
+        self.face_state_pub = self.create_publisher(
+            String, "/state/perception/face", 10
+        )
+        self.face_event_pub = self.create_publisher(
+            String, "/event/face_identity", 10
+        )
 
         self.create_subscription(Image, args.color_topic, self.cb_color, 10)
         self.create_subscription(Image, args.depth_topic, self.cb_depth, 10)
@@ -210,6 +218,8 @@ class FaceIdentityNode(Node):
                 track_id = self.next_track_id
                 self.next_track_id += 1
                 self.tracks[track_id] = {"bbox": bbox, "misses": 0}
+                self._publish_face_event(
+                    "track_started", track_id, "unknown", 0.0, None)
 
             used_tracks.add(track_id)
             assigned.append((track_id, det))
@@ -223,6 +233,13 @@ class FaceIdentityNode(Node):
                 drop_ids.append(track_id)
 
         for track_id in drop_ids:
+            lost_state = self.track_states.get(track_id, {})
+            self._publish_face_event(
+                "track_lost", track_id,
+                lost_state.get("last_stable_name", "unknown"),
+                max(0.0, lost_state.get("last_stable_sim", 0.0)),
+                None,
+            )
             self.tracks.pop(track_id, None)
             self.track_states.pop(track_id, None)
 
@@ -366,6 +383,20 @@ class FaceIdentityNode(Node):
                 self.get_logger().warn(f"publish skipped: {exc}")
                 self.last_pub_err_ts = now
 
+    def _publish_face_event(self, event_type, track_id, stable_name, sim, distance_m):
+        if self.shutting_down or not rclpy.ok():
+            return
+        msg = String()
+        msg.data = json.dumps({
+            "stamp": time.time(),
+            "event_type": event_type,
+            "track_id": track_id,
+            "stable_name": stable_name,
+            "sim": round(sim, 4),
+            "distance_m": distance_m,
+        })
+        self.face_event_pub.publish(msg)
+
     def close(self):
         self.shutting_down = True
         if hasattr(self, "timer") and self.timer is not None:
@@ -408,6 +439,7 @@ class FaceIdentityNode(Node):
         face_count = len(tracked_faces)
 
         lines = []
+        tick_track_info = {}
         for track_id, det in tracked_faces:
             face_row = det["face_row"]
             x1, y1, x2, y2 = det["bbox"]
@@ -415,17 +447,43 @@ class FaceIdentityNode(Node):
             name = "unknown"
             sim = 0.0
             mode = "stable"
+            ts = self.get_track_state(track_id)
+            old_stable_name = ts["last_stable_name"]
+
             emb = self.extract_embedding_from_crop(color, face_row)
             if emb is not None:
                 raw_name, raw_sim = self.predict_name(emb)
                 name, sim, mode = self.decide_stable_name(track_id, raw_name, raw_sim)
 
+            distance_m = None
             dist_txt = "N/A"
             if depth is not None:
                 roi = depth[y1:y2, x1:x2]
                 valid = roi[(roi > 0) & (roi < 10000)]
                 if valid.size:
-                    dist_txt = f"{float(np.median(valid)) * self.depth_scale:.2f}m"
+                    distance_m = round(
+                        float(np.median(valid)) * self.depth_scale, 3)
+                    dist_txt = f"{distance_m:.2f}m"
+
+            new_stable_name = ts["last_stable_name"]
+            if old_stable_name != new_stable_name:
+                if old_stable_name == "unknown":
+                    self._publish_face_event(
+                        "identity_stable", track_id,
+                        new_stable_name, sim, distance_m)
+                else:
+                    self._publish_face_event(
+                        "identity_changed", track_id,
+                        new_stable_name, sim, distance_m)
+
+            tick_track_info[track_id] = {
+                "track_id": track_id,
+                "stable_name": ts["last_stable_name"],
+                "sim": round(max(0.0, ts["last_stable_sim"]), 4),
+                "distance_m": distance_m,
+                "bbox": [x1, y1, x2, y2],
+                "mode": "stable" if ts["last_stable_name"] != "unknown" else "hold",
+            }
 
             label = f"id={track_id} {name} sim={sim:.2f} d={dist_txt} {mode}"
             lines.append(label)
@@ -446,6 +504,28 @@ class FaceIdentityNode(Node):
         if self.publish_compare_image:
             compare = cv2.hconcat([raw, color])
         self.safe_publish(color, compare)
+
+        state_tracks = []
+        for tid, track in self.tracks.items():
+            if tid in tick_track_info:
+                state_tracks.append(tick_track_info[tid])
+            else:
+                ts = self.track_states.get(tid, {})
+                state_tracks.append({
+                    "track_id": tid,
+                    "stable_name": ts.get("last_stable_name", "unknown"),
+                    "sim": round(max(0.0, ts.get("last_stable_sim", 0.0)), 4),
+                    "distance_m": None,
+                    "bbox": list(track["bbox"]),
+                    "mode": "stable" if ts.get("last_stable_name", "unknown") != "unknown" else "hold",
+                })
+        face_state_msg = String()
+        face_state_msg.data = json.dumps({
+            "stamp": time.time(),
+            "face_count": len(self.tracks),
+            "tracks": state_tracks,
+        })
+        self.face_state_pub.publish(face_state_msg)
 
         if self.headless:
             now = time.time()

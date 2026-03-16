@@ -7,22 +7,42 @@
 
 ## Quick Start
 
-### 前端
+### 一鍵啟動（推薦）
 
 ```bash
-cd pawai-studio/frontend
-npm install
-npm run dev
-# → http://localhost:3000
+# 從 repo 根目錄
+bash pawai-studio/start.sh
 ```
 
-### Mock Server（前端開發用）
+啟動後打開 **http://localhost:3000/studio** 就能看到 Studio。
+Ctrl+C 停止，或 `bash pawai-studio/stop.sh`。
+
+### 手動啟動
+
+**需求**：Python 3.10+、Node >= 18、npm
 
 ```bash
+# Terminal 1: Mock Server
 cd pawai-studio/backend
-uv pip install -r requirements.txt
-python mock_server.py
+pip3 install --user fastapi uvicorn pydantic websockets  # 第一次才需要
+python3 -m uvicorn mock_server:app --port 8001
 # → http://localhost:8001
+
+# Terminal 2: Frontend
+cd pawai-studio/frontend
+npm install  # 第一次才需要
+npm run dev
+# → http://localhost:3000/studio
+```
+
+### 驗證
+
+```bash
+# Mock Server 活著嗎？
+curl http://localhost:8001/api/health
+
+# 觸發 Demo A 場景（6 個事件依序推送到 WebSocket）
+curl -X POST http://localhost:8001/mock/scenario/demo_a
 ```
 
 ---

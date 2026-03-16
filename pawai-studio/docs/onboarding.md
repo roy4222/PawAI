@@ -4,27 +4,49 @@
 
 ---
 
-## Step 1：啟動前端
+## Step 1：一鍵啟動
 
 ```bash
-cd pawai-studio/frontend
-npm install
-npm run dev
+# 從 repo 根目錄（elder_and_dog/）
+bash pawai-studio/start.sh
 ```
 
-打開 http://localhost:3000 → 應該看到 Studio 頁面，左側 Chat，右側空白面板區
+啟動成功後會看到：
+```
+  Studio:      http://localhost:3000/studio
+  Mock Server:  http://localhost:8001
+  WebSocket:    ws://localhost:8001/ws/events
+```
+
+打開 **http://localhost:3000/studio** → 應該看到 Studio 頁面，左側 Chat，右側面板區。
+
+> **注意**：是 `/studio` 不是 `/`。首頁 `/` 是 landing page。
 
 ---
 
-## Step 2：啟動 Mock Server
+## Step 2：驗證 Mock Server
 
 ```bash
-cd pawai-studio/backend
-uv pip install -r requirements.txt
-python mock_server.py
+# 確認活著
+curl http://localhost:8001/api/health
+
+# 觸發 Demo A（6 個事件依序推送到 WebSocket，Studio 會即時顯示）
+curl -X POST http://localhost:8001/mock/scenario/demo_a
 ```
 
-Mock Server 跑在 http://localhost:8001，提供與真實 Gateway 完全相同的 WebSocket / REST 介面
+Mock Server 提供與真實 Gateway 完全相同的 WebSocket / REST 介面。
+
+> **手動啟動**（如果一鍵腳本不適用）：
+> ```bash
+> # Terminal 1
+> cd pawai-studio/backend
+> pip3 install --user fastapi uvicorn pydantic websockets
+> python3 -m uvicorn mock_server:app --port 8001
+>
+> # Terminal 2
+> cd pawai-studio/frontend
+> npm install && npm run dev
+> ```
 
 ---
 
