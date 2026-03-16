@@ -111,64 +111,9 @@ if [[ -n "$NEED_BUILD" ]]; then
 fi
 
 # ========================================
-# Phase 3: DUAL MODEL REVIEW (advisory, never blocks)
+# Phase 3: DUAL MODEL REVIEW — DISABLED
 # ========================================
-CODE_CHANGED=$(echo "$CHANGED" | grep -E '\.(py|ts|tsx|js|jsx|yaml|yml|launch\.py)$' || true)
-
-if [[ -z "$CODE_CHANGED" ]]; then
-  exit 0
-fi
-
-# --- 3a) Codex review (independent reviewer, different model) ---
-if command -v codex &>/dev/null; then
-  echo ""
-  echo "=== CODE REVIEW (Codex) ==="
-  timeout 30s codex review --uncommitted 2>/dev/null || echo "（Codex review 跳過：超時或 CLI 呼叫失敗）"
-  echo "==========================="
-  echo ""
-fi
-
-# --- 3b) Haiku review (second opinion, different model) ---
-# Build diff for Haiku (tracked + untracked)
-TRACKED_CODE=$(echo "$CODE_CHANGED" | while IFS= read -r f; do
-  git ls-files --error-unmatch "$f" &>/dev/null && echo "$f"
-done 2>/dev/null || true)
-UNTRACKED_CODE=$(echo "$CODE_CHANGED" | while IFS= read -r f; do
-  git ls-files --error-unmatch "$f" &>/dev/null || echo "$f"
-done 2>/dev/null || true)
-
-DIFF=""
-if [[ -n "$TRACKED_CODE" ]]; then
-  DIFF=$(git diff HEAD -- $TRACKED_CODE 2>/dev/null | head -150)
-fi
-if [[ -n "$UNTRACKED_CODE" ]]; then
-  for f in $UNTRACKED_CODE; do
-    DIFF="${DIFF}
---- NEW FILE: $f ---
-$(head -50 "$f" 2>/dev/null || true)"
-  done
-fi
-DIFF=$(echo "$DIFF" | head -200)
-
-if [[ -n "$DIFF" ]] && [[ $(echo "$DIFF" | wc -l) -ge 3 ]]; then
-  if command -v claude &>/dev/null; then
-    echo ""
-    echo "=== CODE REVIEW (Haiku) ==="
-
-    REVIEW=$(echo "$DIFF" | timeout 20s claude --model haiku -p "你是嚴格的 code reviewer（Linus Torvalds 風格）。
-審查以下 git diff，只回報：
-1. 明顯的 bug 或邏輯錯誤
-2. 安全風險（硬編碼密碼、注入漏洞等）
-3. 會導致 runtime crash 的問題
-
-不要回報：風格問題、命名建議、缺少註解、可能的改善。
-如果沒有嚴重問題，只回覆「LGTM」。
-回覆限制在 5 行以內，用繁體中文。" 2>/dev/null || echo "（Haiku review 跳過：CLI 呼叫失敗）")
-
-    echo "$REVIEW"
-    echo "==========================="
-    echo ""
-  fi
-fi
+# Codex + Haiku auto-review 已關閉，改用 /review skill 手動觸發。
+# 原因：每次 Stop 都呼叫外部 LLM，最多等 50 秒，拖慢開發節奏。
 
 exit 0
