@@ -68,8 +68,8 @@ function evictIfNeeded(panels: Set<PanelId>): Set<PanelId> {
 }
 
 export const useLayoutStore = create<LayoutStore>((set) => ({
-  currentPreset: "chat_only",
-  activePanels: new Set<PanelId>(["chat"]),
+  currentPreset: "chat_full",
+  activePanels: new Set<PanelId>(PRESET_PANELS["chat_full"]),
   dismissedPanels: new Set<PanelId>(),
 
   showPanel: (id) => {

@@ -18,7 +18,9 @@ bash pawai-studio/start.sh
   WebSocket:    ws://localhost:8001/ws/events
 ```
 
-打開 **http://localhost:3000/studio** → 應該看到 Studio 頁面，左側 Chat，右側面板區。
+打開 **http://localhost:3000/studio** → 應該看到 Studio 頁面，左側 Chat，右側四個面板（人臉/語音/手勢/姿勢）。
+
+首次開啟會顯示預設面板骨架。要看到事件驅動的動態變化，請觸發 Demo A（見 Step 2）。
 
 > **注意**：是 `/studio` 不是 `/`。首頁 `/` 是 landing page。
 

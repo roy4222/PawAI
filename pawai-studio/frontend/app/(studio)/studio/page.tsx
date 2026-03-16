@@ -9,32 +9,37 @@ import { FacePanel } from "@/components/face/face-panel";
 import { SpeechPanel } from "@/components/speech/speech-panel";
 import { GesturePanel } from "@/components/gesture/gesture-panel";
 import { PosePanel } from "@/components/pose/pose-panel";
+import type { PanelId } from "@/contracts/types";
+
+// Sidebar panel registry — add new panels here
+const SIDEBAR_PANELS: { id: PanelId; component: React.FC }[] = [
+  { id: "face", component: FacePanel },
+  { id: "speech", component: SpeechPanel },
+  { id: "gesture", component: GesturePanel },
+  { id: "pose", component: PosePanel },
+];
 
 export default function StudioPage() {
   const { isConnected } = useEventStream();
   const events = useEventStore((s) => s.events);
   const activePanels = useLayoutStore((s) => s.activePanels);
 
-  // Build sidebar panels based on active layout
-  const sidebarPanels: React.ReactNode[] = [];
-  if (activePanels.has("face")) {
-    sidebarPanels.push(<FacePanel key="face" />);
-  }
-  if (activePanels.has("speech")) {
-    sidebarPanels.push(<SpeechPanel key="speech" />);
-  }
-  if (activePanels.has("gesture")) {
-    sidebarPanels.push(<GesturePanel key="gesture" />);
-  }
-  if (activePanels.has("pose")) {
-    sidebarPanels.push(<PosePanel key="pose" />);
-  }
+  // Build sidebar: show all registered panels that are in activePanels
+  const sidebarPanels = SIDEBAR_PANELS
+    .filter((p) => activePanels.has(p.id))
+    .map((p) => <p.component key={p.id} />);
+
+  // If preset has no matching sidebar panels, show all as fallback
+  // so first-time users always see something
+  const panels = sidebarPanels.length > 0
+    ? sidebarPanels
+    : SIDEBAR_PANELS.map((p) => <p.component key={p.id} />);
 
   return (
     <StudioLayout
       isConnected={isConnected}
       mainPanel={<ChatPanel events={events} />}
-      sidebarPanels={sidebarPanels.length > 0 ? sidebarPanels : undefined}
+      sidebarPanels={panels}
     />
   );
 }
