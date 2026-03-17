@@ -308,52 +308,50 @@ class WhisperLocalProvider(ASRProvider):
         self._model = None
         self._lock = threading.Lock()
 
-    def _ensure_model(self) -> None:
+    def _ensure_model_unlocked(self) -> None:
+        """Load model if not yet loaded. Caller must hold self._lock."""
         if self._model is not None:
             return
 
-        with self._lock:
-            if self._model is not None:
-                return
+        try:
+            from faster_whisper import WhisperModel
 
-            try:
-                from faster_whisper import WhisperModel
+            self._backend = "faster_whisper"
+            self._model = WhisperModel(
+                self.model_name,
+                device=self.device,
+                compute_type=self.compute_type,
+                cpu_threads=self.cpu_threads,
+            )
+            return
+        except Exception:
+            pass
 
-                self._backend = "faster_whisper"
-                self._model = WhisperModel(
-                    self.model_name,
-                    device=self.device,
-                    compute_type=self.compute_type,
-                    cpu_threads=self.cpu_threads,
-                )
-                return
-            except Exception:
-                pass
+        try:
+            import whisper
 
-            try:
-                import whisper
-
-                self._backend = "openai_whisper"
-                self._model = whisper.load_model(self.model_name)
-                return
-            except Exception as exc:
-                raise RuntimeError(
-                    "Whisper local backend not available. Install faster-whisper or openai-whisper."
-                ) from exc
+            self._backend = "openai_whisper"
+            self._model = whisper.load_model(self.model_name)
+            return
+        except Exception as exc:
+            raise RuntimeError(
+                "Whisper local backend not available. Install faster-whisper or openai-whisper."
+            ) from exc
 
     def transcribe(
         self, audio_bytes: bytes, sample_rate: int, language: str
     ) -> ASRResult:
-        self._ensure_model()
-        started = time.monotonic()
+        with self._lock:
+            self._ensure_model_unlocked()
+            started = time.monotonic()
 
-        if self._backend == "faster_whisper":
-            return self._transcribe_faster_whisper(
+            if self._backend == "faster_whisper":
+                return self._transcribe_faster_whisper(
+                    audio_bytes, sample_rate, language, started
+                )
+            return self._transcribe_openai_whisper(
                 audio_bytes, sample_rate, language, started
             )
-        return self._transcribe_openai_whisper(
-            audio_bytes, sample_rate, language, started
-        )
 
     def _transcribe_faster_whisper(
         self,
@@ -499,6 +497,35 @@ class SttIntentNode(Node):
             f"echo_gate_cooldown={self.tts_echo_cooldown_ms}ms, "
             f"text_fallback_topic={self.text_input_topic})"
         )
+
+        # ASR warmup: preload Whisper model + trigger CUDA JIT in background
+        self._warmup_done = False
+        threading.Thread(target=self._do_warmup, daemon=True).start()
+
+    def _do_warmup(self) -> None:
+        """ASR warmup in background thread: preload Whisper model + trigger CUDA JIT.
+
+        Runs in daemon thread to avoid blocking ROS2 executor callbacks.
+        Uses self._lock in transcribe() to serialize with first real ASR call.
+        """
+        whisper = self.providers.get("whisper_local")
+        if whisper is None:
+            self._warmup_done = True
+            return
+
+        self.get_logger().info("ASR warmup started")
+        try:
+            t0 = time.monotonic()
+            silent_pcm = np.zeros(self.sample_rate, dtype=np.float32)
+            wav_bytes = self._encode_wav(silent_pcm)
+            whisper.transcribe(wav_bytes, self.sample_rate, self.language)
+            elapsed = time.monotonic() - t0
+            self.get_logger().info(
+                f"ASR warmup completed in {elapsed:.1f}s (warmup_done=true)"
+            )
+        except Exception as e:
+            self.get_logger().warn(f"ASR warmup failed (non-fatal): {e}")
+        self._warmup_done = True
 
     def _declare_parameters(self) -> None:
         self.declare_parameter("sample_rate", 16000)
