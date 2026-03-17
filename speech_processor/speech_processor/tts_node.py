@@ -101,7 +101,7 @@ class TTSConfig:
     robot_chunk_interval_sec: float = 0.02
     robot_playback_tail_sec: float = 0.2
     robot_volume: int = 80
-    playback_method: str = "audio_track"  # "audio_track" or "datachannel"
+    playback_method: str = "datachannel"  # "datachannel" (Megaphone) or "audio_track"
     audio_quality: str = "standard"  # standard, high
     language: str = "en"
 
@@ -480,7 +480,7 @@ class EnhancedTTSNode(Node):
         self.declare_parameter("robot_chunk_interval_sec", 0.02)
         self.declare_parameter("robot_playback_tail_sec", 0.2)
         self.declare_parameter("robot_volume", 80)
-        self.declare_parameter("playback_method", "audio_track")
+        self.declare_parameter("playback_method", "datachannel")
         self.declare_parameter("audio_quality", "standard")
         self.declare_parameter("language", "en")
         self.declare_parameter("stability", 0.5)
@@ -754,44 +754,57 @@ class EnhancedTTSNode(Node):
         self.get_logger().info("Robot playback completed")
 
     def _play_on_robot_datachannel(self, wav_data: bytes, duration: float) -> None:
-        """Send WAV via DataChannel Megaphone (legacy fallback)."""
+        """Send WAV via DataChannel Megaphone.
+
+        Protocol (verified 2026-03-17, aligned with go2_webrtc_connect):
+          ENTER_MEGAPHONE(4001) → UPLOAD_MEGAPHONE(4003) × N → EXIT_MEGAPHONE(4002)
+          chunk_size = 4096 (base64 chars), payload must include current_block_size.
+        """
+        MEGAPHONE_CHUNK_SIZE = 4096
+
+        # Save debug WAV for offline analysis
+        dbg_path = f"/tmp/megaphone_debug_{int(time.time())}.wav"
+        try:
+            with open(dbg_path, "wb") as f:
+                f.write(wav_data)
+            self.get_logger().info(f"Debug WAV saved: {dbg_path} ({len(wav_data)} bytes)")
+        except Exception:
+            pass
+
         b64_encoded = base64.b64encode(wav_data).decode("utf-8")
-        chunks = self.audio_processor.split_into_chunks(
-            b64_encoded.encode(), self.config.chunk_size
-        )
+        chunks = [b64_encoded[i:i + MEGAPHONE_CHUNK_SIZE]
+                  for i in range(0, len(b64_encoded), MEGAPHONE_CHUNK_SIZE)]
         total_chunks = len(chunks)
 
         self.get_logger().info(
-            f"Sending audio via datachannel: {total_chunks} chunks, {duration:.1f}s"
+            f"Megaphone: {total_chunks} chunks, {duration:.1f}s"
         )
-
-        volume = int(max(0, min(100, self.config.robot_volume)))
-        self._send_audio_command(4004, str(volume))
-        time.sleep(0.05)
 
         self._publish_tts_playing(True)
 
-        self._send_audio_command(4001, "")
+        # Enter megaphone mode
+        self._send_audio_command(4001, json.dumps({}))
         time.sleep(0.1)
 
+        # Upload chunks
         for chunk_idx, chunk in enumerate(chunks, 1):
             audio_block = {
+                "current_block_size": len(chunk),
+                "block_content": chunk,
                 "current_block_index": chunk_idx,
                 "total_block_number": total_chunks,
-                "block_content": chunk.decode(),
             }
             self._send_audio_command(4003, json.dumps(audio_block))
-            if chunk_idx % 10 == 0:
-                self.get_logger().info(f"Sent {chunk_idx}/{total_chunks} chunks")
-            time.sleep(max(0.0, self.config.robot_chunk_interval_sec))
+            time.sleep(0.1)  # 100ms interval (aligned with community)
 
         self.get_logger().info(f"Waiting for playback ({duration:.1f}s)...")
         time.sleep(max(0.0, duration + self.config.robot_playback_tail_sec))
 
-        self._send_audio_command(4002, "")
+        # Exit megaphone mode
+        self._send_audio_command(4002, json.dumps({}))
 
         self._publish_tts_playing(False)
-        self.get_logger().info("Robot playback completed")
+        self.get_logger().info("Megaphone playback completed")
 
     def _send_audio_command(self, api_id: int, parameter: str) -> None:
         """Send audio command to robot"""

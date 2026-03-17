@@ -154,11 +154,16 @@ class TtsAudioTrack(MediaStreamTrack):
 
     async def recv(self) -> AudioFrame:
         """
-        Called by aiortc every 20ms to get the next audio frame.
-        Returns PCM data if available, silence otherwise.
+        Called by aiortc to get the next audio frame.
+        Paces at AUDIO_PTIME (20ms) to match real-time RTP delivery.
+        Without pacing, aiortc's _run_rtp loop drains all frames instantly,
+        causing a burst that Go2's jitter buffer drops.
         """
         if self.readyState != "live":
             raise MediaStreamError
+
+        # Pace: one frame every 20ms (real-time delivery)
+        await asyncio.sleep(AUDIO_PTIME)
 
         samples = self._samples_per_frame
         output = np.zeros(samples, dtype=np.int16)

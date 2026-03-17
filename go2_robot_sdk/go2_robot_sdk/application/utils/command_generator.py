@@ -46,8 +46,11 @@ def create_command_structure(
     # Convert parameter to JSON string if it's a dict
     param_str = json.dumps(parameter) if isinstance(parameter, dict) else str(parameter)
 
+    # AudioHub commands require "req" type; other commands use "msg"
+    msg_type = "req" if "audiohub" in topic else "msg"
+
     return {
-        "type": "msg",
+        "type": msg_type,
         "topic": topic,
         "data": {
             "header": {
