@@ -533,7 +533,7 @@ class SttIntentNode(Node):
         self.declare_parameter("whisper_local.compute_type", "int8")
         self.declare_parameter("whisper_local.cpu_threads", 4)
 
-        self.declare_parameter("tts_echo_cooldown_ms", 200)
+        self.declare_parameter("tts_echo_cooldown_ms", 1000)
 
         self.declare_parameter("energy_vad.enabled", True)
         self.declare_parameter("energy_vad.start_threshold", 0.015)
