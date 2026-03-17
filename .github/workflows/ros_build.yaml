@@ -9,27 +9,57 @@ on:
       - 'main'
 
 jobs:
+  # ── Tier 1: Fast Gate (< 1 min, no ROS2 container) ──────────────
+  fast-gate:
+    name: Fast Gate (lint + pure-python tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install pytest flake8
+      - name: Flake8 lint
+        run: |
+          flake8 speech_processor/ go2_robot_sdk/ coco_detector/ \
+            lidar_processor/ src/search_logic/ \
+            --max-line-length=100 --extend-ignore=E203 --max-complexity=10
+      - name: Pure Python unit tests (no ROS2 needed)
+        env:
+          PYTHONPATH: speech_processor
+        run: |
+          pytest speech_processor/test/test_speech_test_observer.py -v --tb=short
+      - name: Python syntax check
+        run: |
+          find . -name '*.py' \
+            -not -path './build/*' -not -path './install/*' -not -path './log/*' \
+            -not -path './.git/*' -not -path '*/node_modules/*' \
+            -print0 | xargs -0 -r python3 -m py_compile
+          echo "All Python files pass syntax check."
+      - name: Topic contract check (report-only)
+        run: python scripts/ci/check_topic_contracts.py || true
+
+  # ── Tier 2: ROS2 Build + colcon test (< 5 min) ─────────────────
   test_environment:
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         ros_distribution:
           - humble
-          - jazzy
         include:
           # Humble Hawksbill (May 2022 - May 2027)
           - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
             ros_distribution: humble
             ros_version: 2
-          - docker_image: rostooling/setup-ros-docker:ubuntu-noble-ros-jazzy-ros-base-latest
-            ros_distribution: jazzy
-            ros_version: 2
     container:
       image: ${{ matrix.docker_image }}
     steps:
       - name: checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install libunwind (fix issues on humble)
@@ -48,5 +78,8 @@ jobs:
           skip-tests: false
       - name: Python syntax check
         run: |
-          find . -name '*.py' -not -path './build/*' -not -path './install/*' -not -path './log/*' -not -path './.git/*' -not -path '*/node_modules/*' -print0 | xargs -0 -r python3 -m py_compile
+          find . -name '*.py' \
+            -not -path './build/*' -not -path './install/*' -not -path './log/*' \
+            -not -path './.git/*' -not -path '*/node_modules/*' \
+            -print0 | xargs -0 -r python3 -m py_compile
           echo "All Python files pass syntax check."

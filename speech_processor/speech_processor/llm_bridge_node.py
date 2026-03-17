@@ -47,6 +47,37 @@ BANNED_API_IDS = {1030, 1031, 1301}
 # P0 today: only these skills are validated
 P0_SKILLS = {"hello", "stop_move"}
 
+# Required fields in every LLM JSON response
+LLM_REQUIRED_FIELDS = {"intent", "reply_text", "selected_skill", "reasoning", "confidence"}
+
+
+def strip_markdown_fences(raw: str) -> str:
+    """Strip markdown code fences that LLMs sometimes wrap around JSON."""
+    content = raw.strip()
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1]  # remove ```json line
+    if content.endswith("```"):
+        content = content.rsplit("```", 1)[0]
+    return content.strip()
+
+
+def parse_llm_response(raw: str):
+    """Parse and validate an LLM response string.
+
+    Returns the parsed dict on success, or None on failure.
+    """
+    try:
+        content = strip_markdown_fences(raw)
+        result = json.loads(content)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(result, dict):
+        return None
+    if not LLM_REQUIRED_FIELDS.issubset(result.keys()):
+        return None
+    return result
+
+
 # ── RuleBrain fallback templates (from intent_tts_bridge_node) ──────────
 
 REPLY_TEMPLATES = {
@@ -358,25 +389,15 @@ class LlmBridgeNode(Node):
 
         try:
             data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            # Strip markdown code fences (common with small local models)
-            content = content.strip()
-            if content.startswith("```"):
-                content = content.split("\n", 1)[-1]  # remove ```json line
-            if content.endswith("```"):
-                content = content.rsplit("```", 1)[0]
-            content = content.strip()
-            result = json.loads(content)
-        except (KeyError, IndexError, json.JSONDecodeError) as exc:
-            self.last_error = f"LLM response parse error: {exc}"
+            raw_content = data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError) as exc:
+            self.last_error = f"LLM response structure error: {exc}"
             self.get_logger().error(self.last_error)
             return None
 
-        # Validate required fields
-        required = {"intent", "reply_text", "selected_skill", "reasoning", "confidence"}
-        if not required.issubset(result.keys()):
-            missing = required - result.keys()
-            self.last_error = f"LLM response missing fields: {missing}"
+        result = parse_llm_response(raw_content)
+        if result is None:
+            self.last_error = f"LLM response parse/validation failed: {raw_content[:200]}"
             self.get_logger().error(self.last_error)
             return None
 
