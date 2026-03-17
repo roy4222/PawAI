@@ -10,16 +10,36 @@
 
 ---
 
-## 目前進度（2026-03-16 更新）
+## 目前進度（2026-03-17 更新）
 
-### 已完成的鏈路
+### E2E 已驗證通過
 
 ```
-使用者說話 → stt_intent_node (ASR + Intent) → llm_bridge_node (Cloud LLM) → tts_node (TTS) → Go2 播放
-人臉辨識 → identity_stable event → llm_bridge_node → tts_node → Go2 說出名字
+使用者說「你好」
+  → stt_intent_node (Whisper Small CUDA, Energy VAD)
+  → llm_bridge_node (Qwen3.5-9B, thinking mode off)
+  → tts_node (Piper, +16dB gain)
+  → Megaphone DataChannel (4001/4003/4002)
+  → Go2 說話 + 揮手動作
+  → echo gate 阻止 ASR 自激
 ```
 
-Phase 1 假事件驗證已通過（語音 greet / 人臉 Roy / 語音 stop）。
+**正式播放主線**：Megaphone DataChannel（不是 audio track）
+**echo gate**：tts_playing(True) 在收到 /tts 時立刻開，cooldown 1s
+**LLM**：Qwen3.5-9B，disable thinking，timeout 15s，max_tokens 300
+
+### 快速驗證
+
+```bash
+# 一鍵啟動
+bash scripts/start_llm_e2e_tmux.sh
+
+# 5 輪 smoke test
+bash scripts/smoke_test_e2e.sh 5
+
+# 單句測試
+ros2 topic pub --once /tts std_msgs/msg/String '{data: "你好，我是PawAI機器狗"}'
+```
 
 ### 核心檔案
 

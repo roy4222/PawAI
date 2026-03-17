@@ -88,6 +88,14 @@ bash pawai-studio/start.sh
 ros2 topic pub --once /tts std_msgs/msg/String '{data: "測試播放"}'
 ```
 
+### 5 輪 E2E Smoke Test
+
+```bash
+# 前提：llm-e2e tmux session 已在跑
+bash scripts/smoke_test_e2e.sh      # 預設 5 輪
+bash scripts/smoke_test_e2e.sh 3    # 指定輪數
+```
+
 ### 30 輪驗收測試
 
 ```bash
