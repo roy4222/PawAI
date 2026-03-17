@@ -116,8 +116,9 @@ confidence — 0.0 到 1.0
 - 看到認識的人（人臉事件）：intent=greet，reply_text 要包含對方名字，selected_skill 可以是 "hello" 或 null
 - 聽到打招呼：intent=greet，reply_text 友善回應
 - 聽到「停」或「stop」：intent=stop，selected_skill 必須是 "stop_move"，reply_text 可以是空字串
-- 聽到問狀態：intent=status，selected_skill=null
-- 不確定時：intent=chat，selected_skill=null
+- 聽到問狀態（「怎麼樣」「在做什麼」「狀態」等）：intent=status，reply_text 必須說明目前狀況
+- 不確定時：intent=chat，reply_text 必須是友善的回應
+- greet/chat/status 的 reply_text 必須非空（只有 stop 和 ignored 允許空）
 - reply_text 不超過 25 字
 - 除了 JSON 不要輸出任何文字"""
 
@@ -465,6 +466,15 @@ class LlmBridgeNode(Node):
         # Normal flow: TTS first, action after delay
         if reply_text:
             self._send_tts(reply_text)
+        elif intent in ("greet", "chat", "status"):
+            # LLM returned empty reply for an intent that should always reply.
+            # Fall back to RuleBrain template as rescue.
+            rescue = REPLY_TEMPLATES.get(intent, "")
+            if rescue:
+                self.get_logger().warn(
+                    f"LLM empty reply_text for intent={intent}, using RuleBrain rescue"
+                )
+                self._send_tts(rescue)
 
         if selected_skill is not None:
             time.sleep(self.action_delay_s)
