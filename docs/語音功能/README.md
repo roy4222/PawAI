@@ -27,7 +27,7 @@ Phase 1 假事件驗證已通過（語音 greet / 人臉 Roy / 語音 stop）。
 |------|------|
 | `speech_processor/speech_processor/stt_intent_node.py` | ASR + Intent 分類（Energy VAD + faster-whisper + IntentClassifier） |
 | `speech_processor/speech_processor/llm_bridge_node.py` | **新** — 取代 intent_tts_bridge_node，呼叫 Cloud LLM（Qwen3.5-9B） |
-| `speech_processor/speech_processor/tts_node.py` | TTS 合成 + Go2 WebRTC audio track 播放 |
+| `speech_processor/speech_processor/tts_node.py` | TTS 合成 + Go2 Megaphone DataChannel 播放 |
 | `go2_robot_sdk/.../webrtc/tts_audio_track.py` | **新** — 自訂 AudioStreamTrack，WAV→48kHz resample→RTP/Opus |
 | `speech_processor/speech_processor/intent_tts_bridge_node.py` | 舊版模板回覆（已被 llm_bridge_node 取代，保留作 fallback） |
 
@@ -61,51 +61,63 @@ ros2 run speech_processor llm_bridge_node --ros-args \
 
 ---
 
-## Go2 音訊播放（2026-03-16 重大變更）
+## Go2 音訊播放（2026-03-17 更新）
 
-### DataChannel Megaphone 已失效
+### 主線方案：Megaphone DataChannel（已驗證可用）
 
-Go2 韌體 v1.1.7 不再處理 DataChannel 的 Megaphone API（api_id 4001/4003/4002）。運動指令（1004/1005 等）正常，但音訊指令被完全忽略（`play_state` 永遠 `not_in_use`）。Go2 App 播放正常但走不同通道。
+Go2 透過 DataChannel 的 Megaphone API（4001/4003/4002）播放 TTS 音訊。
 
-**根因**：Megaphone API 是社群逆向工程出來的非官方接口，Unitree 韌體更新後不再支援。
+> **2026-03-17 修正**：之前判定「Megaphone 在 v1.1.7 失效」是錯誤結論。
+> 失敗原因是 payload 格式不對（chunk size 錯、缺少欄位、DataChannel msg type 錯）。
+> 對齊社群 [go2_webrtc_connect](https://github.com/legion1581/unitree_webrtc_connect) 的格式後，確認可正常播放。
 
-### 現行方案：WebRTC Audio Track
-
-改用 WebRTC 原生音訊軌道（sendonly），透過 RTP/Opus 串流 TTS 音訊到 Go2 喇叭。
-
+**播放流程**：
 ```
-tts_node 生成 WAV（保留原始 sample rate，不降到 16kHz）
-  → publish /tts_audio_raw (UInt8MultiArray)
-  → go2_driver_node → webrtc_adapter.play_tts_audio()
-  → TtsAudioTrack.enqueue_audio() — resample 到 48kHz mono
-  → aiortc Opus encoder → RTP → Go2 speaker
+tts_node 生成 WAV（16kHz mono 16bit）
+  → base64 encode → 4096-byte chunks
+  → ENTER_MEGAPHONE(4001) → UPLOAD_MEGAPHONE(4003) × N → EXIT_MEGAPHONE(4002)
+  → /webrtc_req topic → go2_driver_node → DataChannel → Go2 speaker
+```
+
+**Megaphone 協議格式**（4003 payload 必須包含）：
+```json
+{
+  "current_block_size": 4096,
+  "block_content": "<base64 chunk>",
+  "current_block_index": 1,
+  "total_block_number": 25
+}
 ```
 
 **關鍵實作細節**：
-- `TtsAudioTrack`（`go2_robot_sdk/.../webrtc/tts_audio_track.py`）繼承 `MediaStreamTrack`（aiortc 1.3.0 相容）
-- 用 `pc.addTrack(track)` 而非 `addTransceiver("audio", "sendrecv")`（後者在 aiortc 1.3.0 會破壞 SCTP 握手）
-- `/tts_audio_raw` 是實驗性內部 topic，不是 interaction_contract v2.0 的契約 topic
-- Resample 用 `av.AudioResampler`（22050Hz → 48kHz 一步到位，避免雙重 resample 損失音質）
-- Hash dedup 防止同一段音訊被重複播放
+- chunk_size = **4096** base64 字元（不是 16384）
+- DataChannel 訊息 type 必須是 `"req"`（不是 `"msg"`，audiohub 限定）
+- chunks 之間間隔 **100ms**（對齊社群）
+- WAV 格式：16kHz mono 16bit（由 `AudioProcessor.convert_to_wav()` 轉換）
+- Debug WAV 自動存檔至 `/tmp/megaphone_debug_*.wav` 供離線分析
 
 **啟動方式**：
 
 ```bash
-# tts_node 預設使用 audio_track 模式
+# tts_node 預設使用 datachannel (Megaphone) 模式
 ros2 run speech_processor tts_node --ros-args \
   -p provider:=piper \
   -p piper_model_path:=/home/jetson/models/piper/zh_CN-huayan-medium.onnx \
-  -p playback_method:=audio_track
+  -p playback_method:=datachannel
 
-# 如需切回舊的 DataChannel 模式（僅用於測試/舊韌體）
--p playback_method:=datachannel
+# 如需切到 WebRTC audio track 模式（實驗性，尚未在 Go2 上成功播放）
+-p playback_method:=audio_track
 ```
+
+### 備選方案：WebRTC Audio Track（研究分支）
+
+WebRTC audio track (sendonly) 的 SDP negotiation、RTP 封包發送均正常，但 Go2 不播放收到的音訊。可能需要對齊社群的 `MediaPlayer` + `addTrack` 模式。暫不作為 demo 主線。
 
 ### 已知問題
 
-- 音質仍有改善空間（Piper 中文模型品質一般，Opus 編碼有損）
-- 多 driver instance 殘留會導致 `/tts_audio_raw` subscriber 為 0（必須確保單一 instance）
-- Go2 OTA 自動更新可能再次改變行為 — 建議斷開外網鎖住韌體版本
+- 音質待優化：16kHz 採樣率丟失高頻（社群用 44100Hz），音量偏小
+- Echo loop：Go2 播放時 ASR 可能聽到自己的聲音，需調 echo gate
+- Go2 OTA 自動更新可能改變行為 — 建議 Ethernet 直連鎖住韌體版本
 
 ---
 
