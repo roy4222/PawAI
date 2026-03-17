@@ -40,15 +40,15 @@ class TestSkillToCmdMapping(unittest.TestCase):
         for skill, cmd in SKILL_TO_CMD.items():
             with self.subTest(skill=skill):
                 self.assertIn("api_id", cmd, f"{skill} missing 'api_id'")
-                self.assertIsInstance(cmd["api_id"], int,
-                                     f"{skill} api_id must be int")
+                self.assertIsInstance(
+                    cmd["api_id"], int, f"{skill} api_id must be int")
 
     def test_each_skill_has_parameter_str(self):
         for skill, cmd in SKILL_TO_CMD.items():
             with self.subTest(skill=skill):
                 self.assertIn("parameter", cmd, f"{skill} missing 'parameter'")
-                self.assertIsInstance(cmd["parameter"], str,
-                                     f"{skill} parameter must be str")
+                self.assertIsInstance(
+                    cmd["parameter"], str, f"{skill} parameter must be str")
 
 
 # ---------------------------------------------------------------------------

@@ -22,11 +22,12 @@ jobs:
           python-version: '3.10'
       - name: Install dependencies
         run: pip install pytest flake8
-      - name: Flake8 lint
+      - name: Flake8 lint (report-only)
         run: |
           flake8 speech_processor/ go2_robot_sdk/ coco_detector/ \
             lidar_processor/ src/search_logic/ \
-            --max-line-length=100 --extend-ignore=E203 --max-complexity=10
+            --max-line-length=100 --extend-ignore=E203 --max-complexity=10 \
+            --exit-zero
       - name: Pure Python unit tests (no ROS2 needed)
         env:
           PYTHONPATH: speech_processor

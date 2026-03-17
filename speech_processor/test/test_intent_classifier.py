@@ -64,7 +64,7 @@ class TestWhitespaceTolerance:
             ("不 要 動", "stop"),
         ],
     )
-    def test_spaces_between_chars(self, classifier: IntentClassifier, text: str, expected_intent: str):
+    def test_spaces_between_chars(self, classifier, text, expected_intent):
         result = classifier.classify(text)
         assert result.intent == expected_intent, (
             f"'{text}' should map to '{expected_intent}', got '{result.intent}'"
@@ -108,7 +108,7 @@ class TestSimplifiedChinese:
             ("电量", "status"),
         ],
     )
-    def test_simplified_keywords(self, classifier: IntentClassifier, text: str, expected_intent: str):
+    def test_simplified_keywords(self, classifier, text, expected_intent):
         result = classifier.classify(text)
         assert result.intent == expected_intent
 
@@ -138,10 +138,11 @@ class TestWhisperMisrecognition:
             ("回复", "status"),
         ],
     )
-    def test_misrecognition_variants(self, classifier: IntentClassifier, text: str, expected_intent: str):
+    def test_misrecognition_variants(self, classifier, text, expected_intent):
         result = classifier.classify(text)
         assert result.intent == expected_intent, (
-            f"Whisper misrecognition '{text}' should map to '{expected_intent}', got '{result.intent}'"
+            f"Whisper '{text}' should be '{expected_intent}', "
+            f"got '{result.intent}'"
         )
 
 
