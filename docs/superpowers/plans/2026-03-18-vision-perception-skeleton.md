@@ -949,7 +949,8 @@ class TestBuildPoseEvent:
         evt = build_pose_event("fallen", 0.95)
         assert evt["event_type"] == "pose_detected"
 
-    def test_track_id_defaults_to_zero(self):
+    def test_phase1_internal_track_id_is_zero(self):
+        """Phase 1 internal convention — NOT a contract guarantee."""
         from vision_perception.event_builder import build_pose_event
         evt = build_pose_event("standing", 0.9)
         assert evt["track_id"] == 0
