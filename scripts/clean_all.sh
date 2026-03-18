@@ -65,7 +65,7 @@ sleep 1
 #   joy_node, teleop_twist_joy_node, twist_mux,
 #   stt_intent_node, tts_node, llm_bridge_node, intent_tts_bridge_node
 VERIFY_PATTERN='(robot_state_publisher|pointcloud_to_laserscan|go2_driver_node|joy_node|teleop|twist_mux|stt_intent_node|tts_node|llm_bridge_node|intent_tts_bridge_node)'
-RESIDUAL=$(ps aux | grep -E "$VERIFY_PATTERN" | grep -v grep | wc -l)
+RESIDUAL=$(ps aux | grep -E "$VERIFY_PATTERN" | grep -v grep | wc -l || true)
 if [ "$RESIDUAL" -gt 0 ]; then
   echo "[WARN] $RESIDUAL residual process(es) remain:"
   ps aux | grep -E "$VERIFY_PATTERN" | grep -v grep

@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **專題名稱：老人與狗 / PawAI**
 **硬底線：2026/4/13 展示**
-**當前日期：2026-03-17（語音主線 freeze，轉入人臉辨識 + D435 整合）**
+**當前日期：2026-03-18（語音 E2E demo 已錄，人臉辨識 scaffold 完成）**
 
 以 Unitree Go2 Pro 為載體的 **embodied AI 互動陪伴平台**。核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
 
@@ -235,6 +235,10 @@ Megaphone API (4001/4003/4002) **可正常播放**，之前判定「失效」是
 ### 多 driver instance 殘留
 
 `ros2 launch` 啟動後，`killall python3` 只殺 launch parent，C++ 子 process（robot_state_publisher、pointcloud、joy 等）會殘留。下次 launch 會再生一組，導致多 instance 搶 WebRTC 連線和 topic。**必須用 `pkill -9 go2_driver; pkill -9 robot_state; pkill -9 pointcloud; pkill -9 joy_node; pkill -9 teleop; pkill -9 twist_mux` 逐一清除。**
+
+### clean_all.sh 的 pipefail + grep 空結果
+
+`clean_all.sh` 使用 `set -euo pipefail`。驗證段 `RESIDUAL=$(ps aux | grep -E ... | grep -v grep | wc -l)` 在無殘留 process 時，`grep` 回傳 1（no match），`pipefail` 傳播非零，`set -e` 中斷腳本。修復：尾端加 `|| true`。
 
 ### Go2 OTA 自動更新
 
