@@ -61,6 +61,8 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("gesture_vote_frames", 5)
         self.declare_parameter("pose_vote_frames", 20)
         self.declare_parameter("mock_scenario", "standing_idle")
+        self.declare_parameter("rtmpose_mode", "balanced")  # "lightweight" or "balanced"
+        self.declare_parameter("rtmpose_device", "cuda")    # "cuda" or "cpu"
 
         backend = self.get_parameter("inference_backend").value
         self.use_camera = self.get_parameter("use_camera").value
@@ -87,8 +89,17 @@ class VisionPerceptionNode(Node):
         # --- Inference adapter ---
         if backend == "mock":
             self.adapter = MockInference(scenario=mock_scenario)
+        elif backend == "rtmpose":
+            from .rtmpose_inference import RTMPoseInference
+            rtmpose_mode = self.get_parameter("rtmpose_mode").value
+            rtmpose_device = self.get_parameter("rtmpose_device").value
+            self.adapter = RTMPoseInference(
+                mode=rtmpose_mode,
+                backend="onnxruntime",
+                device=rtmpose_device,
+            )
         else:
-            raise ValueError(f"Unknown inference_backend: {backend}. Phase 2 will add 'rtmpose'.")
+            raise ValueError(f"Unknown inference_backend: {backend}. Use 'mock' or 'rtmpose'.")
 
         # --- Camera subscription (only if use_camera=true) ---
         if self.use_camera:
