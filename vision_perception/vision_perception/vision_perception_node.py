@@ -13,6 +13,7 @@ import threading
 import time
 from collections import deque
 
+import cv2
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -184,6 +185,34 @@ class VisionPerceptionNode(Node):
             msg = String()
             msg.data = json.dumps(build_gesture_event(gesture_vote, gesture_conf, self.last_hand))
             self.gesture_pub.publish(msg)
+
+        # --- Debug image (keypoint overlay, rate-limited) ---
+        if self.use_camera and self.debug_pub is not None and image is not None:
+            now = time.time()
+            if now - self.last_publish_ts >= self.publish_period:
+                self.last_publish_ts = now
+                try:
+                    debug = image.copy()
+                    # Draw body keypoints
+                    for i in range(len(result.body_kps)):
+                        if result.body_scores[i] > 0.3:
+                            x, y = int(result.body_kps[i][0]), int(result.body_kps[i][1])
+                            cv2.circle(debug, (x, y), 3, (0, 255, 0), -1)
+                    # Draw hand keypoints
+                    for hand_kps, hand_scores, color in [
+                        (result.left_hand_kps, result.left_hand_scores, (255, 0, 0)),
+                        (result.right_hand_kps, result.right_hand_scores, (0, 0, 255)),
+                    ]:
+                        for i in range(len(hand_kps)):
+                            if hand_scores[i] > 0.3:
+                                x, y = int(hand_kps[i][0]), int(hand_kps[i][1])
+                                cv2.circle(debug, (x, y), 2, color, -1)
+                    # Labels
+                    label = f"pose:{pose_vote or '?'}  gesture:{gesture_vote or '?'} ({self.last_hand})"
+                    cv2.putText(debug, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                    self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, encoding="bgr8"))
+                except Exception as exc:
+                    self.get_logger().warning(f"debug_image publish failed: {exc}", throttle_duration_sec=1.0)
 
     def close(self):
         self.shutting_down = True
