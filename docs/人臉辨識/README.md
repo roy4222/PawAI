@@ -3,7 +3,7 @@
 本文件只保留目前有效流程與最新排障結果。
 
 - 主線目標：先把 `YuNet + SFace` 在 Jetson 上穩定跑通、可監看、可量測。
-- 目前狀態：可用（多人偵測 + identity + Foxglove 監看）。
+- 目前狀態：**USABLE** — Jetson smoke passed（2026-03-18）。D435 + state/event/debug_image 全通。
 - 已暫停：Go2 互動控制 MVP（本輪未成功，相關內容先移除，後續另開章節）。
 
 ---
@@ -13,7 +13,7 @@
 資料流：
 
 1. RealSense RGB + Depth topic：`/camera/camera/color/image_raw` + `aligned_depth_to_color`
-2. 偵測/辨識/追蹤：`scripts/face_identity_infer_cv.py`
+2. 偵測/辨識/追蹤：`face_perception/face_perception/face_identity_node.py`（ROS2 package）或 `scripts/face_identity_infer_cv.py`（fallback）
 3. 輸出 topic：
    - `/face_identity/debug_image` — debug 影像（帶框）
    - `/face_identity/compare_image`（可關閉）
@@ -255,6 +255,14 @@ ps -eo pid,pcpu,pmem,cmd --sort=-pcpu | head -n 15
 - `/face_identity/debug_image` 穩定 > 6 Hz
 - 無重複核心流程（camera/infer/bridge 各 1）
 - Foxglove 延遲維持秒級內
+
+---
+
+## 已修復問題（2026-03-18）
+
+- **np.int32 JSON 序列化 crash**：`to_bbox()` 回傳 `np.int32`，`json.dumps` 無法序列化。修復：bbox 座標轉 Python `int()`。（commit `ca1547d`）
+- **Jetson smoke 通過**：D435 + face_identity_node + foxglove_bridge 同時跑穩定，`/face_identity/debug_image` ~6.6 Hz，`/state/perception/face` ~20 Hz。
+- **face_db 已更新**：alice 30 張、grama 30 張（自動 retrain）
 
 ---
 
