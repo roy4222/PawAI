@@ -11,6 +11,7 @@
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>cv_bridge</depend>
+  <depend>go2_interfaces</depend>
 
   <test_depend>python3-pytest</test_depend>
 

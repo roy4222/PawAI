@@ -8,9 +8,10 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-# go2_interfaces 可能沒在 vision_perception 的依賴裡，
-# 所以用 std_msgs/String 發 JSON 到 /webrtc_req（跟 llm_bridge 一樣的方式）
-# 不要 import go2_interfaces
+try:
+    from go2_interfaces.msg import WebRtcReq
+except ImportError:
+    WebRtcReq = None
 
 # 注意：/event/gesture_detected 的 gesture enum 用的是 v2.0 contract 值
 # fist 實作層發出的是 "ok"（GESTURE_COMPAT_MAP 已轉換）
@@ -41,8 +42,12 @@ class EventActionBridge(Node):
         self.create_subscription(String, "/event/gesture_detected", self._on_gesture, 10)
         self.create_subscription(String, "/event/pose_detected", self._on_pose, 10)
 
-        # Publish to Go2 (same interface as llm_bridge uses)
-        self.webrtc_pub = self.create_publisher(String, "/webrtc_req", 10)
+        # Publish to Go2 (same WebRtcReq msg type as llm_bridge uses)
+        if WebRtcReq is not None:
+            self.webrtc_pub = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+        else:
+            self.webrtc_pub = None
+            self.get_logger().warning("go2_interfaces not available — Go2 actions disabled")
         self.tts_pub = self.create_publisher(String, "/tts", 10)
 
         self.get_logger().info("EventActionBridge ready")
@@ -57,13 +62,16 @@ class EventActionBridge(Node):
         return True
 
     def _send_action(self, api_id: int, topic: str = "rt/api/sport/request"):
-        """Send Go2 sport action via /webrtc_req."""
-        msg = String()
-        msg.data = json.dumps({
-            "type": "req",
-            "topic": topic,
-            "data": {"api_id": api_id},
-        })
+        """Send Go2 sport action via /webrtc_req (WebRtcReq msg)."""
+        if self.webrtc_pub is None or WebRtcReq is None:
+            self.get_logger().warning(f"Cannot send action api_id={api_id}: no go2_interfaces")
+            return
+        msg = WebRtcReq()
+        msg.id = 0
+        msg.topic = topic
+        msg.api_id = api_id
+        msg.parameter = ""
+        msg.priority = 0
         self.webrtc_pub.publish(msg)
         self.get_logger().info(f"Action: api_id={api_id}")
 
