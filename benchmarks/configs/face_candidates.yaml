@@ -1,0 +1,31 @@
+task: face_detection
+description: "人臉偵測模型選型 — Batch 1"
+
+models:
+  - name: yunet_legacy
+    adapter: face_yunet
+    params:
+      model_path: /home/jetson/face_models/face_detection_yunet_legacy.onnx
+      score_threshold: 0.35
+      input_size: [320, 320]
+
+    entry_criteria:
+      installability: verified
+      runtime_viability: verified
+      gpu_path: cpu_only
+      rationale: "現有主線，已在 Jetson 上穩定運行 ~6.6 Hz"
+      reject_if: null
+
+    benchmark:
+      n_warmup: 50
+      n_measure: 200
+      input_source: benchmarks/test_inputs/images/
+
+    feasibility_gate:
+      min_fps: 3.0
+      max_ram_mb: 500
+      must_not_crash: true
+
+    quality_gate:
+      metrics:
+        min_mAP_0.5: 0.60
