@@ -1198,9 +1198,12 @@ class BenchmarkRunner:
         level: int = 1,
         mode: str = "headless",
         concurrent_models: Optional[list] = None,
-        test_input_ref: str = "default",
+        test_input_ref: Optional[str] = None,
     ) -> dict:
-        """Run benchmark for a single model. Returns the result dict."""
+        """Run benchmark for a single model.
+        test_input_ref overrides config's input_source. If None, auto-resolve
+        from input_source directory (picks first matching file).
+        """
         model_name = config["name"]
         bench_cfg = config.get("benchmark", {})
         n_warmup = bench_cfg.get("n_warmup", 50)
@@ -1224,12 +1227,13 @@ class BenchmarkRunner:
             self._evaluate_and_save(result, config, task)
             return result
 
-        # Step 2: Prepare input
-        input_source = bench_cfg.get("input_source", ".")
+        # Step 2: Resolve and prepare input
+        input_ref = self._resolve_input(bench_cfg, test_input_ref)
         try:
-            input_data = adapter.prepare_input(test_input_ref)
-        except Exception:
-            input_data = test_input_ref
+            input_data = adapter.prepare_input(input_ref)
+        except Exception as e:
+            logger.warning(f"prepare_input failed for '{input_ref}': {e}")
+            input_data = input_ref  # let adapter handle raw ref
 
         # Step 3: Warmup
         logger.info(f"Warmup: {n_warmup} runs")
@@ -1312,6 +1316,22 @@ class BenchmarkRunner:
         )
 
     @staticmethod
+    def _resolve_input(bench_cfg: dict, override: Optional[str] = None) -> str:
+        """Resolve test input: explicit override > first file from input_source dir."""
+        if override is not None:
+            return override
+        input_source = bench_cfg.get("input_source", ".")
+        if os.path.isfile(input_source):
+            return input_source
+        if os.path.isdir(input_source):
+            exts = (".jpg", ".jpeg", ".png", ".bmp", ".wav", ".mp3")
+            for fname in sorted(os.listdir(input_source)):
+                if fname.lower().endswith(exts):
+                    return os.path.join(input_source, fname)
+        logger.warning(f"No input files found in {input_source}, using raw ref")
+        return input_source
+
+    @staticmethod
     def _get_ram_mb() -> float:
         """Get current system RAM usage in MB via /proc/meminfo (no extra deps)."""
         try:
@@ -1362,11 +1382,20 @@ Uses a synthetic test image since real D435 images may not be available.
 import numpy as np
 import pytest
 
+import os
+
 try:
     import cv2
     HAS_OPENCV_FACE = hasattr(cv2, "FaceDetectorYN")
 except ImportError:
     HAS_OPENCV_FACE = False
+
+# Default model path — only exists on Jetson
+YUNET_MODEL = os.environ.get(
+    "YUNET_MODEL_PATH",
+    "/home/jetson/face_models/face_detection_yunet_legacy.onnx",
+)
+HAS_MODEL_FILE = os.path.isfile(YUNET_MODEL)
 
 from benchmarks.adapters.face_yunet import FaceYuNetAdapter
 
@@ -1390,12 +1419,15 @@ def test_prepare_input_returns_ndarray(tmp_path):
     assert result.shape == (480, 640, 3)
 
 
-@pytest.mark.skipif(not HAS_OPENCV_FACE,
-                    reason="OpenCV face module not available")
+@pytest.mark.skipif(not HAS_OPENCV_FACE or not HAS_MODEL_FILE,
+                    reason="OpenCV face module or YuNet model file not available")
 def test_load_and_infer_synthetic():
-    """Test with a synthetic image — may detect 0 faces, that's OK."""
+    """Test with a synthetic image — may detect 0 faces, that's OK.
+    Requires model file on disk. Set YUNET_MODEL_PATH env var to override.
+    """
     adapter = FaceYuNetAdapter()
     adapter.load({
+        "model_path": YUNET_MODEL,
         "score_threshold": 0.5,
         "input_size": [320, 320],
     })
@@ -1513,6 +1545,65 @@ Expected: 4 tests PASS (or 3 PASS + 1 SKIP if OpenCV face module unavailable on 
 ```bash
 git add benchmarks/adapters/face_yunet.py benchmarks/test/test_face_yunet.py
 git commit -m "feat(bench): add YuNet face detection adapter"
+```
+
+---
+
+### Task 7.5: Face Research Brief (Stage 1 — 制度流程前置)
+
+**Files:**
+- Create: `docs/research/face.md`
+
+制度流程要求 `Research Brief → Candidate Shortlist → Benchmark`。face 的候選 config 必須從 brief 收斂出來，不能直接憑直覺填。
+
+- [ ] **Step 1: Create minimal face research brief**
+
+```markdown
+# 人臉辨識模型選型調查
+
+> 最後更新：2026-03-19
+
+## 目標效果
+- 偵測 + 識別 D435 視野內的人臉，距離 0.5-3m
+- 4/13 Demo 目標：已知人臉識別成功率 ≥ 80%，偵測延遲 < 200ms
+
+## 候選模型
+
+| # | 模型 | 框架 | 輸出 | Installability | Runtime viability | GPU 路徑 | 社群性能參考 | 納入原因 | 預期淘汰條件 |
+|---|------|------|------|:-:|:-:|:-:|---|---|---|
+| 1 | YuNet (legacy) | OpenCV DNN | bbox + 5-point | verified | verified | cpu_only | ~6.6 Hz (Jetson 3/18 實測) | 現有主線，穩定 | — |
+| 2 | SCRFD-500M | ONNX Runtime | bbox + 5-point | likely | unknown | cuda | 推估 15+ Hz | InsightFace 推薦，更快更準 | 安裝失敗 or FPS 無明顯提升 |
+| 3 | SFace (recognition) | OpenCV DNN | 128-d embedding | verified | verified | cpu_only | 已驗證 | 現有主線 | — |
+
+### 排除清單
+
+| 模型 | 排除原因 | 證據等級 |
+|------|---------|:-------:|
+| MediaPipe Face Detection | Jetson ARM64 無 wheel，GPU delegate 不可用 | community_only |
+| RetinaFace-R50 | 模型太大 (~100MB)，Jetson 記憶體預算不足 | community_only |
+
+## 社群調查摘要
+- **YuNet**：OpenCV Zoo 內建，`cv2.FaceDetectorYN`，無額外依賴。Jetson 上走 CPU（OpenCV DNN 的 CUDA backend 不支援 FaceDetectorYN）。~6.6 Hz 已在 3/18 實測。
+- **SCRFD-500M**：InsightFace 系列輕量偵測器。ONNX 格式，可走 CUDAExecutionProvider。社群在 Jetson 上有部署案例但需驗證。
+- **SFace**：OpenCV Zoo 內建識別模型，128 維 embedding，餘弦相似度匹配。已驗證可用。
+
+## Jetson 資源約束
+- 人臉偵測+識別合計 RAM 增量目標：< 500MB
+- GPU 預算：盡量 0%（CPU-only 最佳），允許最多 10%
+- 與 RTMPose 共存時 GPU 已 91-99%，人臉模組不應再吃 GPU
+
+## 決策（Stage 4 回填）
+| 模型 | Decision Code | Placement | 依據 |
+|------|:---:|---|---|
+| | | | |
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+mkdir -p docs/research
+git add docs/research/face.md
+git commit -m "docs(research): face detection research brief — Stage 1"
 ```
 
 ---
@@ -1753,11 +1844,12 @@ git status
 | 5 | GateEvaluator | 1 | 7 |
 | 6 | BenchmarkRunner | 2 | 4 |
 | 7 | YuNet Adapter | 1 | 4 |
+| 7.5 | Face Research Brief (Stage 1) | 1 | 0 |
 | 8 | Config + CLI | 3 | 0 |
 | 9 | Validation | 0 | 0 |
-| **Total** | | **22** | **29** |
+| **Total** | | **23** | **29** |
 
 After this plan is complete, the framework is validated on dev machine. Next steps:
-1. rsync to Jetson, add real D435 test images, run first real benchmark
-2. Write `docs/research/face.md` (Research Brief)
-3. Proceed to Batch 2 (pose + gesture adapters)
+1. rsync to Jetson, add real D435 test images to `benchmarks/test_inputs/images/`
+2. Run first real benchmark on Jetson: `python benchmarks/scripts/bench_single.py --config benchmarks/configs/face_candidates.yaml --model yunet_legacy`
+3. Proceed to Batch 2 (pose + gesture research briefs + adapters)
