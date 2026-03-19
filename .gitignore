@@ -17,3 +17,5 @@ test_results/*.json
 .coverage
 coverage.xml
 PROJECT_MAP.md
+# Benchmark raw results (working area)
+benchmarks/results/raw/*.jsonl

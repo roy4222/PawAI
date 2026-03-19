@@ -1,0 +1,7 @@
+# Benchmark working files
+results/raw/*.jsonl
+__pycache__/
+*.pyc
+*.prof
+*.nsys-rep
+.pytest_cache/
