@@ -124,12 +124,12 @@ keypoints, scores = wholebody(img)
 
 > **注意**：「推估」數據基於 RTX 1660 Ti benchmark → Orin Nano 算力比換算，或社群在類似硬體上的回報。所有數據需以本專案 Jetson Orin Nano + JetPack 6.x 實測確認。
 
-### 推薦落地順序（更新版）
+### 推薦落地順序（2026-03-18 更新）
 
-1. **Phase 1**（3/16-3/23）：楊在 x86 筆電用 MediaPipe 做概念驗證 demo（驗證 UX 流程與事件格式）
-2. **Phase 2**（3/23-4/1）：Roy 在 Jetson 先用 **rtmlib + onnxruntime-gpu** 跑 RTMPose，驗證 FPS 和精度
-3. **Phase 2b**（3/25 決策點）：若 rtmlib wholebody FPS < 15 或手部精度不足 → 切備案（見 §備取方案與切換條件）
-4. **Phase 3**（4/1-4/6）：整合進 ROS2 `gesture_perception_node`
+1. **Phase 1**（3/16-3/18）：✅ 完成 — `vision_perception_node` mock mode + 23 unit tests pass + Jetson smoke test 通過
+2. **Phase 2**（3/18）：✅ 完成 — RTMPose wholebody balanced on Jetson（rtmlib 0.0.15 + onnxruntime-gpu 1.23.0），~7.5 FPS（隨機噪聲）/ ~3.8 Hz debug_image（D435 + face 同跑），GPU 91-99%
+3. **Phase 2b**（3/25 決策點）：FPS ~3.8-7.5，低於原定 15 FPS 紅線。待評估：切 `lightweight` mode 提速、或接受低 FPS 做 demo
+4. **Phase 3**（4/1-4/6）：手勢分類閾值校正（需 1.5-3m 距離實測手部 keypoint 檢出率）
 5. **Phase 4**（4/6-4/13）：端到端測試 + Demo B 微調
 
 > **⚠️ 移植風險提醒**：MediaPipe Hands（21 keypoints）與 DWPose hand（21×2 keypoints, COCO-WholeBody）的 keypoint 定義、索引順序、座標系統不同。Phase 1 的 x86 demo **只驗證 UX 互動流程與 ROS2 事件格式**，不驗證最終分類閾值。Phase 2 部署 DWPose 時，角度閾值、距離比、手勢規則都需要對照 COCO-WholeBody keypoint 定義重新校正。
@@ -410,12 +410,22 @@ YOLO / RTMDet 偵測所有人
 ### ROS2 控制串接
 
 ```
-gesture_perception_node → /event/gesture_detected (std_msgs/String JSON)
+vision_perception_node → /event/gesture_detected (std_msgs/String JSON)
   ↓
-Interaction Executive
+event_action_bridge（3/18 新建）
   ↓
-呼叫 Sport Service (StopMove/跟隨模式等)
+/webrtc_req (Go2 動作) + /tts (語音回覆)
 ```
+
+### event_action_bridge 手勢→動作映射（2026-03-18）
+
+| 手勢 | Go2 動作 | TTS | Cooldown |
+|------|---------|-----|:--------:|
+| `wave` | api_id 1016（運動命令） | "你好！" | 3s |
+| `stop` | api_id 1003（緊急停止） | — | **無**（安全優先） |
+| `ok`/`fist` | api_id 1020（回應動作） | — | 3s |
+
+> `event_action_bridge` 不觸及語音事件或人臉事件（由 `llm_bridge_node` 單獨處理），維持單一控制權。
 
 **Event Schema**（對齊 `interaction_contract.md` v2.0）：
 ```json

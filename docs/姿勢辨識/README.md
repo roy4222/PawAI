@@ -226,6 +226,14 @@ vision_perception_node (方案 A) / pose_perception_node (方案 B)
 }
 ```
 
+### event_action_bridge 姿勢→動作映射（2026-03-18）
+
+| 姿勢 | Go2 動作 | TTS | Cooldown |
+|------|---------|-----|:--------:|
+| `fallen` | — | "偵測到跌倒！請注意安全" | 10s |
+
+> 其他姿勢（standing/sitting/crouching）目前不觸發 Go2 動作，僅透過 `/event/pose_detected` 更新前端狀態。
+
 ### PawAI Studio 特殊行為
 
 - `pose_detected (fallen)` → **強制展開 PosePanel**（見 `ui-orchestration.md`）
@@ -294,14 +302,15 @@ DWPose 一個模型同時處理手勢+姿勢，記憶體只算一次：
 
 ---
 
-## 落地順序
+## 落地順序（2026-03-18 更新）
 
-| Phase | 時間 | 內容 | 負責 |
+| Phase | 時間 | 內容 | 狀態 |
 |:-----:|------|------|:----:|
-| 1 | 3/16-3/23 | 楊在 x86 筆電用 MediaPipe Pose demo 驗證 UX 流程與事件格式 | 楊 |
-| 2 | 3/23-4/1 | Roy 在 Jetson 部署 DWPose + TensorRT，重新校正分類閾值 | Roy |
-| 3 | 4/1-4/6 | 整合 pose_classifier + gesture_classifier 進 ROS2 node | Roy |
-| 4 | 4/6-4/13 | 端到端測試 + Demo B 微調 | Roy + 楊 |
+| 1 | 3/16-3/18 | `vision_perception_node` mock mode + 23 unit tests + Jetson smoke test | ✅ 完成 |
+| 2 | 3/18 | RTMPose wholebody balanced on Jetson（rtmlib + onnxruntime-gpu），~3.8-7.5 FPS | ✅ 完成 |
+| 2b | 3/25 決策點 | FPS 低於 15 紅線，評估 lightweight mode 或接受現狀 | 待定 |
+| 3 | 4/1-4/6 | 姿勢分類閾值校正 + 跌倒偵測穩定性測試 | 待做 |
+| 4 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
 
 ---
 
