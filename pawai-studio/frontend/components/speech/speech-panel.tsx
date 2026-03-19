@@ -1,4 +1,3 @@
-// @ts-nocheck
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,7 +6,8 @@ import { PanelCard } from '@/components/shared/panel-card'
 import { EventItem } from '@/components/shared/event-item'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { SpeechState, SpeechIntentEvent, PawAIEvent } from '@/contracts/types'
+// 🛡️ 修正：只留下真的有使用到的 SpeechState，刪除沒用到的型別避免 Lint 報錯
+import type { SpeechState } from '@/contracts/types'
 import { useStateStore } from '@/stores/state-store'
 import { useEventStore } from '@/stores/event-store'
 
@@ -104,7 +104,7 @@ export function SpeechPanel() {
     return new Date(ts).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
   }
 
-  const realSpeechState = useStateStore((s) => s.speechState)
+  const realSpeechState = useStateStore((s) => s.speechState) as SpeechState | null
   const allEvents = useEventStore((s) => s.events) || []
   const realSpeechEvents = allEvents.filter((e) => e.source === 'speech')
 
@@ -114,13 +114,13 @@ export function SpeechPanel() {
   const recentEvents = [...speechEvents].reverse().slice(0, 10)
   const latestIntentEvent = [...speechEvents].find(e => e.event_type === 'intent_recognized')
 
-  const eventData = latestIntentEvent?.data
+  // 🛡️ 修正：補上嚴格的型別宣告，讓 TypeScript 機器人不再報錯
+  const eventData = latestIntentEvent?.data as { confidence?: number; provider?: string } | undefined
   const confidence = eventData?.confidence ? Number(eventData.confidence) : 0
-  const provider = eventData?.provider ? String(eventData.provider) : 'unknown'
 
   const latestTimeStr = formatTime(latestIntentEvent?.timestamp)
 
-  let panelStatus = "loading"
+  let panelStatus: "loading" | "active" | "inactive" | "error" = "loading"
   if (!speechState) {
     panelStatus = "loading"
   } else if (speechState.phase === 'idle_wakeword' && recentEvents.length === 0) {
@@ -142,7 +142,6 @@ export function SpeechPanel() {
     latest: <FileText className="h-4 w-4" />
   }
 
-  // 🛡️ 免死金牌在這裡：如果瀏覽器還沒準備好，就先不渲染，徹底杜絕文字打架的錯誤！
   if (!isMounted) {
     return null
   }
@@ -168,9 +167,10 @@ export function SpeechPanel() {
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {recentEvents.map((evt) => {
+                {/* 🛡️ 修正：明確告知 TypeScript 這個 evt 物件的長相 */}
+                {recentEvents.map((evt: { id: string; timestamp: string; event_type: string; source: string; data?: any }) => {
                   let summary = String(evt.event_type)
-                  const itemData = evt.data
+                  const itemData = evt.data as { intent?: string; text?: string } | undefined
 
                   if (evt.event_type === 'intent_recognized') summary = `意圖: ${itemData?.intent || ''}`
                   if (evt.event_type === 'asr_result') summary = `轉寫: ${itemData?.text || ''}`
@@ -246,7 +246,7 @@ export function SpeechPanel() {
         </div>
       )}
 
-      {/* 🎙️ 視圖 3：主畫面 (Main Speech View) */}
+      {/* 🎙️ 視圖 3：主畫面 */}
       {viewMode === 'main' && (
         <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-left-4 duration-300">
 
