@@ -1,0 +1,5 @@
+# TODO: v1 — multi-module coexistence, resource budgets, prerequisites
+# This profile is intentionally empty. verify.py will refuse to run it.
+profile: integration
+description: "多模組共存前置檢查"
+checks: []

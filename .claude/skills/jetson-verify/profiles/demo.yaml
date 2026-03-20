@@ -1,0 +1,5 @@
+# TODO: v2 — demo readiness checklist, go/no-go report
+# This profile is intentionally empty. verify.py will refuse to run it.
+profile: demo
+description: "展示前 readiness check"
+checks: []

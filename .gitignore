@@ -14,6 +14,7 @@ go2_robot_sdk/coverage.xml
 .claude/settings.local.json
 .claude/skills/
 !.claude/skills/jetson-verify/
+logs/jetson-verify/*.json
 test_results/*.json
 .coverage
 coverage.xml

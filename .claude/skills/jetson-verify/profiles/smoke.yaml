@@ -1,0 +1,77 @@
+profile: smoke
+description: "部署後基本健康檢查：system → ROS2 → modules"
+min_checks: 1
+
+checks:
+  # -- Group 1: System (blocking except gpu_temp) --
+
+  - id: system.memory
+    command: "awk '/MemAvailable:/ {print int($2/1024)}' /proc/meminfo"
+    expect: ">= 800"
+    blocking: true
+    timeout_sec: 5
+    message_template: "{value}MB available (min 800MB)"
+
+  - id: system.disk
+    command: "df --output=avail /home | tail -1 | awk '{print int($1/1024)}'"
+    expect: ">= 500"
+    blocking: true
+    timeout_sec: 5
+    message_template: "{value}MB free on /home (min 500MB)"
+
+  - id: system.gpu_temp
+    command: "cat /sys/devices/virtual/thermal/thermal_zone1/temp 2>/dev/null | awk '{print int($1/1000)}'"
+    expect: "<= 75"
+    blocking: false
+    timeout_sec: 5
+    message_template: "GPU {value}°C (warn >75°C)"
+
+  # -- Group 2: ROS2 base (all blocking) --
+
+  - id: ros2.daemon
+    command: "source /opt/ros/humble/setup.bash && ros2 daemon status 2>&1 | grep -c 'is running' || true"
+    expect: ">= 1"
+    blocking: true
+    timeout_sec: 10
+    message_template: "ROS2 daemon running"
+
+  - id: ros2.topic_count
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic list 2>/dev/null | wc -l"
+    expect: ">= 1"
+    blocking: true
+    timeout_sec: 15
+    message_template: "{value} topics discovered"
+
+  # -- Group 3: Module checks (with precondition, non-blocking) --
+
+  - id: module.face.state_publishing
+    precondition: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | grep -q face_identity_node"
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && timeout 3 ros2 topic echo --once /state/perception/face 2>/dev/null"
+    expect: "nonempty"
+    blocking: false
+    timeout_sec: 5
+    message_template: "face state topic producing data"
+
+  - id: module.speech.state_publishing
+    precondition: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | grep -q stt_intent_node"
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && timeout 3 ros2 topic echo --once /state/interaction/speech 2>/dev/null"
+    expect: "nonempty"
+    blocking: false
+    timeout_sec: 5
+    message_template: "speech state topic producing data"
+
+  - id: module.vision.node_alive
+    precondition: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | grep -q vision_perception_node"
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && timeout 8 ros2 topic hz /vision_perception/debug_image --window 3 2>&1 | head -1"
+    expect: "nonempty"
+    blocking: false
+    timeout_sec: 12
+    message_template: "vision debug_image: {value}"
+
+  - id: module.go2.webrtc_subscriber
+    precondition: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | grep -q go2_driver_node"
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic info /webrtc_req 2>/dev/null | awk '/Subscription count:/ {print $NF}'"
+    expect: ">= 1"
+    blocking: false
+    timeout_sec: 10
+    message_template: "webrtc_req has {value} subscriber(s)"
