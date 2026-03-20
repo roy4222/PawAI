@@ -6,7 +6,7 @@
 
 **Architecture:** Python executor (`verify.py`) reads check definitions from YAML profiles, delegates command execution to a transport abstraction (`transport.py`) that auto-detects Jetson vs WSL, and outputs structured JSON (stdout) + human summary (stderr). Checks follow a 5-status model: PASS/WARN/FAIL/SKIP/ERROR.
 
-**Tech Stack:** Python 3.10+ (stdlib only — no pip dependencies), PyYAML (already available in ROS2 env), pytest
+**Tech Stack:** Python 3.10+ (stdlib + PyYAML), pytest. PyYAML 在 ROS2 Jetson 環境已有；WSL 上需確認 `python3 -c "import yaml"` 通過，否則 `uv pip install pyyaml`。
 
 **Spec:** `docs/superpowers/specs/2026-03-20-jetson-verify-skill-design.md`
 
@@ -835,23 +835,17 @@ git commit -m "feat(skill): add smoke.yaml, SKILL.md, gotchas, stub profiles, ou
 
 ---
 
-## Task 4: Install ralph-loop + Local Dry Run
+## Task 4: PyYAML Check + Local Dry Run
 
 **Files:**
-- None created (plugin install)
+- None created
 
-- [ ] **Step 1: Install ralph-loop**
+- [ ] **Step 1: Verify PyYAML available**
 
-```bash
-claude plugin install ralph-loop
-```
+Run: `python3 -c "import yaml; print(yaml.__version__)"`
+Expected: Prints version. If ImportError: `uv pip install pyyaml`
 
-- [ ] **Step 2: Verify installation**
-
-Run: `/ralph-loop:help`
-Expected: Shows ralph-loop usage instructions.
-
-- [ ] **Step 3: Local dry run of verify.py (WSL, remote mode)**
+- [ ] **Step 2: Local dry run of verify.py (WSL, remote mode)**
 
 This tests the full pipeline on WSL pointing at Jetson via SSH. If Jetson is unreachable, expect exit 2 with SSH error — that's correct behavior confirming the transport path works.
 
@@ -886,7 +880,7 @@ print(f'profile={d[\"profile\"]} overall={d[\"overall\"]} checks={len(d[\"checks
 Run: `python3 -m pytest tests/jetson-verify/ -v`
 Expected: All tests PASS.
 
-- [ ] **Step 6: Final commit (if any remaining changes)**
+- [ ] **Step 5: Final commit (if any remaining changes)**
 
 ```bash
 git status
@@ -903,5 +897,10 @@ After all 4 tasks are done:
 - [ ] `python3 .claude/skills/jetson-verify/scripts/verify.py --profile smoke` — runs without crash (PASS or ERROR depending on SSH)
 - [ ] `python3 .claude/skills/jetson-verify/scripts/verify.py --profile integration` — exits 2 with stub message
 - [ ] `logs/jetson-verify/latest.json` exists and is valid JSON
-- [ ] `ralph-loop` plugin responds to `/ralph-loop:help`
 - [ ] All files committed to git
+
+## Manual Follow-up (not part of implementation tasks)
+
+- [ ] Install ralph-loop: `claude plugin install ralph-loop`
+- [ ] Verify: `/ralph-loop:help`
+- [ ] SSH 到 Jetson 跑一次真實 smoke: `python3 .claude/skills/jetson-verify/scripts/verify.py --profile smoke`
