@@ -130,7 +130,7 @@ export interface PoseState {
   current_pose: string | null;
   confidence: number;
   track_id: number | null;
-  status: "active" | "inactive" | "loading";
+  status: "active" | "inactive" | "loading" | "error";
 }
 
 // ══════════════════════════════════════════════════════════════════
