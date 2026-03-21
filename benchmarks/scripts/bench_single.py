@@ -29,6 +29,7 @@ ADAPTER_REGISTRY = {
     "pose_rtmpose": "benchmarks.adapters.pose_rtmpose:PoseRTMPoseAdapter",
     "gesture_mediapipe": "benchmarks.adapters.gesture_mediapipe:GestureMediaPipeAdapter",
     "pose_mediapipe": "benchmarks.adapters.pose_mediapipe:PoseMediaPipeAdapter",
+    "face_scrfd": "benchmarks.adapters.face_scrfd:FaceSCRFDAdapter",
 }
 
 

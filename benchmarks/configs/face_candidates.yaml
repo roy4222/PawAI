@@ -30,6 +30,34 @@ models:
       metrics:
         min_mAP_0.5: 0.60
 
+  - name: scrfd_500m
+    adapter: face_scrfd
+    params:
+      model_path: /home/jetson/face_models/det_500m.onnx
+      providers: ["CUDAExecutionProvider", "CPUExecutionProvider"]
+      input_size: [640, 640]
+
+    entry_criteria:
+      installability: verified
+      runtime_viability: unknown
+      gpu_path: cuda
+      rationale: "InsightFace SCRFD-500M，2.4MB，CUDA EP，預期比 YuNet 更快"
+      reject_if: "FPS 無明顯提升 or RAM 超額"
+
+    benchmark:
+      n_warmup: 50
+      n_measure: 200
+      input_source: benchmarks/test_inputs/images/
+
+    feasibility_gate:
+      min_fps: 3.0
+      max_ram_mb: 500
+      must_not_crash: true
+
+    quality_gate:
+      metrics:
+        min_mAP_0.5: 0.60
+
   - name: yunet_legacy
     adapter: face_yunet
     params:
