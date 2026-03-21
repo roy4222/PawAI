@@ -2,8 +2,8 @@
 # These override code defaults where needed.
 face_identity_node:
   ros__parameters:
-    # YuNet legacy needed for Jetson OpenCV 4.5.4
-    yunet_model: "/home/jetson/face_models/face_detection_yunet_legacy.onnx"
+    # YuNet 2023mar for OpenCV 4.11+ (legacy has dynamic shape incompatibility)
+    yunet_model: "/home/jetson/face_models/face_detection_yunet_2023mar.onnx"
     sface_model: "/home/jetson/face_models/face_recognition_sface_2021dec.onnx"
     db_dir: "/home/jetson/face_db"
     model_path: "/home/jetson/face_db/model_sface.pkl"
