@@ -46,24 +46,28 @@ class STTWhisperAdapter(BenchAdapter):
         logger.info(f"Whisper {self._model_size} loaded in {elapsed:.1f}s")
 
     def prepare_input(self, input_ref: str) -> np.ndarray:
-        """Load audio file or generate synthetic 3-second audio."""
-        if os.path.isfile(input_ref) and input_ref.endswith((".wav", ".mp3")):
-            # Load real audio file
-            try:
-                import soundfile as sf
-                audio, sr = sf.read(input_ref, dtype="float32")
-                if sr != 16000:
-                    # Resample to 16kHz
-                    from scipy.signal import resample
-                    audio = resample(audio, int(len(audio) * 16000 / sr))
-                return audio
-            except ImportError:
-                pass
+        """Load audio file. Use input_ref='synthetic' for noise-based feasibility test."""
+        if input_ref == "synthetic":
+            # Explicit synthetic mode — 3s random noise for feasibility-only
+            return np.random.randn(int(3.0 * 16000)).astype(np.float32) * 0.01
 
-        # Fallback: synthetic 3-second silence + noise (simulates real input length)
-        duration_sec = 3.0
-        sample_rate = 16000
-        audio = np.random.randn(int(duration_sec * sample_rate)).astype(np.float32) * 0.01
+        if not os.path.isfile(input_ref):
+            raise FileNotFoundError(
+                f"Audio file not found: {input_ref}. "
+                f"Use 'synthetic' for noise-based feasibility test."
+            )
+
+        try:
+            import soundfile as sf
+        except ImportError:
+            raise ImportError(
+                "soundfile not installed. Run: uv pip install soundfile"
+            )
+
+        audio, sr = sf.read(input_ref, dtype="float32")
+        if sr != 16000:
+            from scipy.signal import resample
+            audio = resample(audio, int(len(audio) * 16000 / sr))
         return audio
 
     def infer(self, input_data: np.ndarray) -> dict:

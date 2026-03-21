@@ -50,8 +50,12 @@ def _finger_curled(kps: np.ndarray, tip_idx: int, mcp_idx: int, wrist: np.ndarra
 def classify_gesture(
     hand_kps: np.ndarray,
     hand_scores: np.ndarray,
+    min_score: float | None = None,
 ) -> tuple[str | None, float]:
     """Single-frame static gesture classification.
+
+    Args:
+        min_score: Override for _MIN_SCORE. Pass from ROS parameter for runtime tuning.
 
     Returns:
         ("stop" | "point" | "fist", confidence) or (None, 0.0).
@@ -59,8 +63,9 @@ def classify_gesture(
     if hand_kps.shape != (21, 2) or hand_scores.shape != (21,):
         return None, 0.0
 
+    threshold = min_score if min_score is not None else _MIN_SCORE
     avg_score = float(np.mean(hand_scores))
-    if avg_score < _MIN_SCORE:
+    if avg_score < threshold:
         return None, 0.0
 
     wrist = hand_kps[_WRIST]

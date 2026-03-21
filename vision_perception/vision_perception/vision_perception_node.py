@@ -64,6 +64,7 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("mock_scenario", "standing_idle")
         self.declare_parameter("rtmpose_mode", "balanced")  # "lightweight" or "balanced"
         self.declare_parameter("rtmpose_device", "cuda")    # "cuda" or "cpu"
+        self.declare_parameter("gesture_min_score", 0.1)    # hand keypoint confidence threshold
 
         backend = self.get_parameter("inference_backend").value
         self.use_camera = self.get_parameter("use_camera").value
@@ -72,6 +73,7 @@ class VisionPerceptionNode(Node):
         gesture_frames = self.get_parameter("gesture_vote_frames").value
         pose_frames = self.get_parameter("pose_vote_frames").value
         mock_scenario = self.get_parameter("mock_scenario").value
+        self.gesture_min_score = self.get_parameter("gesture_min_score").value
 
         # --- State ---
         self.shutting_down = False
@@ -165,8 +167,12 @@ class VisionPerceptionNode(Node):
             self.pose_pub.publish(msg)
 
         # --- Gesture classification (dual hand, pick higher confidence) ---
-        g_left, c_left = classify_gesture(result.left_hand_kps, result.left_hand_scores)
-        g_right, c_right = classify_gesture(result.right_hand_kps, result.right_hand_scores)
+        g_left, c_left = classify_gesture(
+            result.left_hand_kps, result.left_hand_scores,
+            min_score=self.gesture_min_score)
+        g_right, c_right = classify_gesture(
+            result.right_hand_kps, result.right_hand_scores,
+            min_score=self.gesture_min_score)
 
         if c_left > c_right and g_left is not None:
             gesture_raw, gesture_conf, hand = g_left, c_left, "left"
@@ -174,6 +180,15 @@ class VisionPerceptionNode(Node):
             gesture_raw, gesture_conf, hand = g_right, c_right, "right"
         else:
             gesture_raw, gesture_conf, hand = None, 0.0, self.last_hand
+
+        # Debug: hand keypoint confidence (throttled to avoid log flood)
+        import numpy as np
+        self.get_logger().info(
+            f"hand L={np.mean(result.left_hand_scores):.3f} "
+            f"R={np.mean(result.right_hand_scores):.3f} "
+            f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+            throttle_duration_sec=5.0,
+        )
 
         if gesture_raw is not None:
             self.gesture_buffer.append(gesture_raw)

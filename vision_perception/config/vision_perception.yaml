@@ -4,10 +4,11 @@ vision_perception_node:
   ros__parameters:
     inference_backend: "mock"
     use_camera: false
-    publish_fps: 8.0
+    publish_fps: 4.0
     tick_period: 0.05
     color_topic: "/camera/camera/color/image_raw"
     depth_topic: "/camera/camera/aligned_depth_to_color/image_raw"
-    gesture_vote_frames: 5
+    gesture_vote_frames: 3
+    gesture_min_score: 0.1
     pose_vote_frames: 20
     mock_scenario: "standing_idle"

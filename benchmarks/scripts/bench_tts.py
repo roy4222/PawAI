@@ -94,13 +94,12 @@ def bench_edge_tts(n_runs=10):
     print(f"Benchmarking: edge-tts (cloud, Microsoft Neural) ({n_runs} runs)")
     print(f"{'='*60}")
 
-    # Check if edge-tts is installed
-    try:
-        subprocess.run(["edge-tts", "--version"], capture_output=True, timeout=5)
-    except FileNotFoundError:
-        print("  Installing edge-tts...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "edge-tts"],
-                       capture_output=True, timeout=60)
+    # Check edge-tts is installed (do NOT auto-install during benchmark)
+    edge_tts_path = os.path.expanduser("~/.local/bin/edge-tts")
+    if not os.path.exists(edge_tts_path):
+        print("  ERROR: edge-tts not found. Install first: uv pip install edge-tts")
+        return {"model": "edge_tts_zh_TW", "success_rate": "0/0",
+                "p50_s": 0, "p95_s": 0, "ram_delta_mb": 0}, []
 
     os.makedirs(OUT_DIR, exist_ok=True)
     ram_before = get_ram_used_mb()

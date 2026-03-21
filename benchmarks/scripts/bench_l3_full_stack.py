@@ -72,8 +72,10 @@ def run_l3():
             try:
                 face.infer(test_img)
                 counts["face"] += 1
-            except:
+            except Exception as e:
                 errors["face"] += 1
+                if errors["face"] <= 3:
+                    logger.warning(f"face error: {e}")
             time.sleep(1 / 8.0)  # ~8Hz
 
     def pose_loop():
@@ -81,8 +83,10 @@ def run_l3():
             try:
                 pose.infer(test_img)
                 counts["pose"] += 1
-            except:
+            except Exception as e:
                 errors["pose"] += 1
+                if errors["pose"] <= 3:
+                    logger.warning(f"pose error: {e}")
 
     def whisper_loop():
         if not whisper_model:
@@ -91,8 +95,10 @@ def run_l3():
             try:
                 list(whisper_model.transcribe(audio_input, language="zh", beam_size=1)[0])
                 counts["whisper"] += 1
-            except:
+            except Exception as e:
                 errors["whisper"] += 1
+                if errors["whisper"] <= 3:
+                    logger.warning(f"whisper error: {e}")
             time.sleep(5.0)  # on-demand every 5s
 
     threads = [
@@ -153,9 +159,14 @@ def run_l3():
     print(f"  Crashed: {result['crashed']}")
     print(f"{'='*60}")
 
-    with open("/tmp/l3_full_stack.json", "w") as f:
-        json.dump(result, f, indent=2, default=str)
-    print(f"  Saved: /tmp/l3_full_stack.json")
+    from datetime import datetime
+    date_str = datetime.now().strftime("%Y%m%d")
+    out_dir = "benchmarks/results/raw"
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"l3_full_stack_{date_str}.jsonl")
+    with open(out_path, "a") as f:
+        f.write(json.dumps(result, default=str) + "\n")
+    print(f"  Saved: {out_path}")
 
 
 if __name__ == "__main__":

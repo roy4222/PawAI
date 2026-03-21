@@ -61,21 +61,21 @@ class FaceSCRFDAdapter(BenchAdapter):
 
         outputs = self._session.run(None, {self._input_name: img_batch})
 
-        # SCRFD outputs vary by model variant, but typically:
-        # Multiple outputs for different strides (scores + bboxes + keypoints)
-        # For benchmarking, we just count detections from the first score output
-        n_faces = 0
+        # SCRFD outputs: multiple stride tensors (scores + bboxes + keypoints)
+        # WARNING: No bbox decode or NMS here — raw anchor count only.
+        # This value is NOT comparable to YuNet's n_faces (which has NMS).
+        raw_count = 0
         scores_list = []
         for out in outputs:
             if out.ndim == 3 and out.shape[-1] == 1:
-                # Score output: (batch, n_anchors, 1)
                 score_flat = out[0, :, 0]
-                n_faces += int(np.sum(score_flat > 0.5))
+                raw_count += int(np.sum(score_flat > 0.5))
                 scores_list.extend(score_flat[score_flat > 0.5].tolist())
 
         return {
-            "n_faces": n_faces,
-            "scores": scores_list[:10],  # cap for readability
+            "raw_anchor_count": raw_count,  # NOT real face count (no NMS)
+            "scores": scores_list[:10],
+            "n_faces": -1,  # placeholder — needs decode+NMS for real count
         }
 
     def cleanup(self) -> None:
