@@ -41,10 +41,24 @@
 | **mediapipe_hands** | **16.8** | 60ms | CPU 0% | PASS |
 | rtmpose_hand (wholebody) | 9.3 | 107ms | CUDA ~95% | PASS |
 
-MediaPipe Hands 比 RTMPose wholebody 快 1.8 倍，但 RTMPose 同時出 pose + gesture。
+MediaPipe Hands 比 RTMPose wholebody 快 1.8 倍。
 
-## 決策（3/21 回填）
+**3/21 Foxglove 實測結論**：RTMPose wholebody 的手部 keypoints 在正常距離下不可靠（座標散在臉部區域，非手部），gesture classifier 收到的是噪點。MediaPipe Hands 的手部 keypoints 準確落在手上，已改為主線。
+
+## 最終架構：同節點雙引擎（3/21 實作）
+
+```
+D435 camera frame
+  ↓
+vision_perception_node
+  ├── RTMPose lightweight (CUDA) → body keypoints → pose_classifier → /event/pose_detected
+  └── MediaPipe Hands (CPU)     → hand keypoints → gesture_classifier → /event/gesture_detected
+```
+
+Launch：`gesture_backend:=mediapipe`（預設仍為 rtmpose，需手動切換）
+
+## 決策（3/21 更新）
 | 模型 | Decision Code | Placement | 依據 |
 |------|:---:|---|---|
-| **RTMPose hand (wholebody lw)** | **JETSON_LOCAL** | jetson（主線） | 與 pose 共用推理零額外成本，系統最佳解 |
-| MediaPipe Hands | **HYBRID** | jetson（CPU fallback） | 16.8 FPS CPU-only，GPU 滿載時或需要獨立手勢偵測時啟用 |
+| **MediaPipe Hands** | **JETSON_LOCAL** | jetson（**主線**） | 手部 keypoints 準確、16.8 FPS CPU-only、Foxglove 實測通過 |
+| RTMPose hand (wholebody) | **REJECTED** | — | 手部 keypoints 在正常距離不可靠（座標偏移到臉部），不適合手勢辨識 |

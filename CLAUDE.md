@@ -128,11 +128,16 @@ bash scripts/clean_face_env.sh --all
 ### 手勢+姿勢 pipeline（vision_perception）
 
 ```bash
-# Phase 2 真推理（Jetson + D435，RTMPose wholebody）
+# Phase 2 真推理（Jetson + D435，雙引擎：RTMPose pose + MediaPipe gesture）
 colcon build --packages-select vision_perception
 source install/setup.zsh
 ros2 launch vision_perception vision_perception.launch.py \
-  inference_backend:=rtmpose use_camera:=true rtmpose_mode:=balanced
+  inference_backend:=rtmpose use_camera:=true rtmpose_mode:=lightweight \
+  gesture_backend:=mediapipe
+
+# 純 RTMPose 模式（手勢用 wholebody hand keypoints，精度較低）
+ros2 launch vision_perception vision_perception.launch.py \
+  inference_backend:=rtmpose use_camera:=true rtmpose_mode:=lightweight
 
 # Phase 1 mock mode（不需相機，開發機或 Jetson 都可）
 ros2 launch vision_perception vision_perception.launch.py \

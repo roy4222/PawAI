@@ -30,7 +30,7 @@
 | 語音閉環 | [FROZEN] | E2E 已通（ASR→LLM→TTS→Megaphone→Go2），10/10 對話、9/10 播放。等硬體到貨做最後一輪（外接喇叭/麥克風 A/B、自激測試） |
 | 人臉閉環 | [USABLE] | Jetson smoke passed（3/18）。D435 + state/event/debug_image 全通。int32 序列化 bug 已修。待驗：有人時識別準確率 |
 | 姿勢辨識 | [USABLE] | RTMPose Phase 2 真推理通過（3/18）。balanced mode, D435 真影像, pose_detected 真人可觸發。GPU 91-99% 滿載但溫度安全(66°C)。debug_image ~3.8Hz。延遲偏高但可用 |
-| 手勢辨識 | [PENDING] | RTMPose keypoint 有產出，但手勢 classifier 尚未在真影像上驗證。待下一輪測試 |
+| 手勢辨識 | [USABLE] | **雙引擎架構**（3/21）：MediaPipe Hands (CPU) 做手勢 + RTMPose (GPU) 做姿勢。RTMPose wholebody 手部 keypoints 不可靠（已驗證），改用 MediaPipe。Foxglove 實測通過 |
 | FastAPI Gateway | [PENDING] | 骨架待建 |
 | Mock Event Server | [AVAILABLE] | vision_perception mock_event_publisher 可直接用，循環發 gesture+pose 假事件 |
 | PawAI Studio | [PENDING] | 鄔負責，mock_event_publisher 已可接 |
