@@ -182,7 +182,6 @@ class VisionPerceptionNode(Node):
             gesture_raw, gesture_conf, hand = None, 0.0, self.last_hand
 
         # Debug: hand keypoint confidence (throttled to avoid log flood)
-        import numpy as np
         self.get_logger().info(
             f"hand L={np.mean(result.left_hand_scores):.3f} "
             f"R={np.mean(result.right_hand_scores):.3f} "

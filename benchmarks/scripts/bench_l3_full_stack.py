@@ -131,6 +131,7 @@ def run_l3():
     whisper_rate = counts["whisper"] / DURATION_SEC
 
     result = {
+        "_type": "exploratory/stress-only",  # NOT comparable to L1/L2 schema
         "duration_sec": DURATION_SEC,
         "face_count": counts["face"],
         "face_fps": round(face_fps, 1),

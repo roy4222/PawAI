@@ -75,7 +75,7 @@ class FaceSCRFDAdapter(BenchAdapter):
         return {
             "raw_anchor_count": raw_count,  # NOT real face count (no NMS)
             "scores": scores_list[:10],
-            "n_faces": -1,  # placeholder — needs decode+NMS for real count
+            # n_faces intentionally omitted — requires decode+NMS to be meaningful
         }
 
     def cleanup(self) -> None:

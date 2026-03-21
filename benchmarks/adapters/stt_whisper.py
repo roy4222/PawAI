@@ -27,7 +27,7 @@ class STTWhisperAdapter(BenchAdapter):
         except ImportError:
             raise ImportError(
                 "faster-whisper not installed. "
-                "Run: pip3 install faster-whisper"
+                "Run: uv pip install faster-whisper"
             )
 
         self._model_size = config.get("model_size", "small")
