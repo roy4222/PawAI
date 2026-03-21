@@ -1,0 +1,14 @@
+Jetson Orin Nano 8GB
+JetPack: R36.4.3
+CUDA: 12.6
+Python: 3.10.12
+onnxruntime-gpu: 1.23.0 (restored after removing CPU-only 1.23.2)
+numpy: 1.26.4 (downgraded from 2.2.6)
+rtmlib: 0.0.15
+nvpmodel: not locked (sudo unavailable via SSH)
+
+Models tested:
+- balanced: yolox_m + rtmw-dw-x-l (CUDA EP)
+- lightweight: yolox_tiny + rtmw-dw-l-m (CUDA EP)
+
+Note: First balanced run (1.21 FPS) was CPU-only fallback, removed from results.

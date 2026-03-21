@@ -1,0 +1,14 @@
+Jetson Orin Nano 8GB
+JetPack: R36.4.3
+CUDA: 12.6
+Python: 3.10.12
+OpenCV: 4.13.0
+onnxruntime: 1.23.2 (NOTE: CPU-only, GPU version was overwritten)
+numpy: 2.2.6 → downgraded to 1.26.4 mid-session
+nvpmodel: not locked (sudo unavailable via SSH)
+
+Known issues:
+- onnxruntime 1.23.2 (CPU) had overwritten onnxruntime-gpu 1.23.0
+- numpy 2.x incompatible with onnxruntime-gpu 1.23.0
+- yunet_legacy incompatible with OpenCV 4.13 (dynamic shape error)
+- face benchmark ran with onnxruntime CPU (before fix), FPS still valid (YuNet is CPU-only)
