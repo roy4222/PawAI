@@ -26,6 +26,7 @@ logger = logging.getLogger("bench_single")
 # Adapter registry: adapter name -> module.Class
 ADAPTER_REGISTRY = {
     "face_yunet": "benchmarks.adapters.face_yunet:FaceYuNetAdapter",
+    "pose_rtmpose": "benchmarks.adapters.pose_rtmpose:PoseRTMPoseAdapter",
 }
 
 

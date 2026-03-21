@@ -51,8 +51,10 @@ class JetsonMonitor:
             self._run_fallback()
 
     def _run_jtop(self) -> None:
-        # Key names for jetson-stats >= 4.x on JetPack 6.x
-        # Orin Nano has 6 CPU cores; we average all cores
+        # jetson-stats 4.x on JetPack 6.x (Orin Nano)
+        # stats dict keys: GPU (float %), CPU1-6 (int %), RAM (float 0-1 ratio),
+        #   "Temp gpu" (float °C), "Power TOT" (int mW)
+        # jetson.memory["RAM"]["used"] gives kB (more precise than stats["RAM"])
         try:
             with jtop() as jetson:
                 while jetson.ok() and not self._stop_event.is_set():
@@ -60,12 +62,16 @@ class JetsonMonitor:
                     cpu_vals = [v for k, v in stats.items()
                                 if k.startswith("CPU") and isinstance(v, (int, float))]
                     cpu_avg = sum(cpu_vals) / len(cpu_vals) if cpu_vals else 0
+                    # RAM: use jetson.memory for kB precision
+                    ram_info = getattr(jetson, "memory", {})
+                    ram_dict = ram_info.get("RAM", {}) if isinstance(ram_info, dict) else {}
+                    ram_used_mb = ram_dict.get("used", 0) / 1024  # kB → MB
                     self._records.append({
                         "timestamp": time.time(),
                         "gpu_util_pct": stats.get("GPU", 0),
                         "cpu_util_pct": round(cpu_avg, 1),
-                        "ram_used_mb": stats.get("RAM", 0),
-                        "temp_gpu_c": stats.get("Temp GPU", 0),
+                        "ram_used_mb": round(ram_used_mb, 1),
+                        "temp_gpu_c": stats.get("Temp gpu", stats.get("Temp GPU", 0)),
                         "power_total_mw": stats.get("Power TOT", 0),
                     })
                     time.sleep(self.interval)

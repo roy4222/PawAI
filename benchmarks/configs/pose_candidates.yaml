@@ -1,0 +1,59 @@
+task: pose_estimation
+description: "姿勢+手勢推理模型選型 — Batch 2"
+
+models:
+  - name: rtmpose_balanced
+    adapter: pose_rtmpose
+    params:
+      mode: balanced
+      device: cuda
+      backend: onnxruntime
+
+    entry_criteria:
+      installability: verified
+      runtime_viability: verified
+      gpu_path: cuda
+      rationale: "現有主線，RTMPose wholebody balanced mode。3/18 實測 ~3.8 Hz（face 同跑）"
+      reject_if: null
+
+    benchmark:
+      n_warmup: 20
+      n_measure: 100
+      input_source: benchmarks/test_inputs/images/
+
+    feasibility_gate:
+      min_fps: 2.0
+      max_ram_mb: 2000
+      must_not_crash: true
+
+    quality_gate:
+      metrics:
+        min_pose_accuracy: 0.60
+
+  - name: rtmpose_lightweight
+    adapter: pose_rtmpose
+    params:
+      mode: lightweight
+      device: cuda
+      backend: onnxruntime
+
+    entry_criteria:
+      installability: verified
+      runtime_viability: unknown
+      gpu_path: cuda
+      rationale: "rtmlib lightweight mode，預期比 balanced 更快但精度略低"
+      reject_if: "FPS 無明顯提升 or 精度崩壞"
+
+    benchmark:
+      n_warmup: 20
+      n_measure: 100
+      input_source: benchmarks/test_inputs/images/
+
+    feasibility_gate:
+      min_fps: 2.0
+      max_ram_mb: 2000
+      must_not_crash: true
+
+    quality_gate:
+      metrics:
+        min_pose_accuracy: 0.60
