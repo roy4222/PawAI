@@ -18,6 +18,7 @@ def generate_launch_description():
         DeclareLaunchArgument("use_camera", default_value="false"),
         DeclareLaunchArgument("mock_scenario", default_value="standing_idle"),
         DeclareLaunchArgument("gesture_backend", default_value="rtmpose"),
+        DeclareLaunchArgument("pose_backend", default_value="rtmpose"),
         DeclareLaunchArgument("rtmpose_mode", default_value="balanced"),
         Node(
             package="vision_perception",
@@ -29,6 +30,7 @@ def generate_launch_description():
                 {"use_camera": LaunchConfiguration("use_camera")},
                 {"mock_scenario": LaunchConfiguration("mock_scenario")},
                 {"gesture_backend": LaunchConfiguration("gesture_backend")},
+                {"pose_backend": LaunchConfiguration("pose_backend")},
                 {"rtmpose_mode": LaunchConfiguration("rtmpose_mode")},
             ],
             output="screen",

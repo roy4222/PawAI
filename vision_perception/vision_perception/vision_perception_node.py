@@ -66,6 +66,7 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("rtmpose_device", "cuda")    # "cuda" or "cpu"
         self.declare_parameter("gesture_min_score", 0.1)    # hand keypoint confidence threshold
         self.declare_parameter("gesture_backend", "rtmpose")  # "rtmpose" or "mediapipe"
+        self.declare_parameter("pose_backend", "rtmpose")      # "rtmpose" or "mediapipe"
 
         backend = self.get_parameter("inference_backend").value
         self.use_camera = self.get_parameter("use_camera").value
@@ -90,10 +91,21 @@ class VisionPerceptionNode(Node):
         self.last_pose: str | None = None
         self.last_hand: str = "right"
 
-        # --- Inference adapter ---
+        # --- Backend configuration ---
+        pose_backend = self.get_parameter("pose_backend").value
+        gesture_backend = self.get_parameter("gesture_backend").value
+
+        if pose_backend == "mediapipe" and gesture_backend == "rtmpose":
+            raise ValueError(
+                "pose_backend=mediapipe + gesture_backend=rtmpose is not supported. "
+                "Use mediapipe/mediapipe or rtmpose/rtmpose or rtmpose/mediapipe."
+            )
+
+        # --- RTMPose adapter (only load if pose_backend needs it) ---
+        self.adapter = None
         if backend == "mock":
             self.adapter = MockInference(scenario=mock_scenario)
-        elif backend == "rtmpose":
+        elif backend == "rtmpose" and pose_backend == "rtmpose":
             from .rtmpose_inference import RTMPoseInference
             rtmpose_mode = self.get_parameter("rtmpose_mode").value
             rtmpose_device = self.get_parameter("rtmpose_device").value
@@ -102,11 +114,21 @@ class VisionPerceptionNode(Node):
                 backend="onnxruntime",
                 device=rtmpose_device,
             )
+        elif pose_backend == "mediapipe":
+            pass  # No RTMPose needed — fully MediaPipe
         else:
-            raise ValueError(f"Unknown inference_backend: {backend}. Use 'mock' or 'rtmpose'.")
+            raise ValueError(f"Unknown inference_backend: {backend}")
 
-        # --- Gesture backend (optional MediaPipe Hands for CPU-based hand detection) ---
-        gesture_backend = self.get_parameter("gesture_backend").value
+        # --- MediaPipe Pose (only if pose_backend=mediapipe) ---
+        self.mp_pose = None
+        if pose_backend == "mediapipe":
+            from .mediapipe_pose import MediaPipePose
+            self.mp_pose = MediaPipePose(complexity=1, min_confidence=0.5)
+            self.get_logger().info("Pose backend: MediaPipe Pose (CPU)")
+        else:
+            self.get_logger().info("Pose backend: RTMPose")
+
+        # --- MediaPipe Hands (only if gesture_backend=mediapipe) ---
         self.mp_hands = None
         if gesture_backend == "mediapipe":
             from .mediapipe_hands import MediaPipeHands
@@ -114,7 +136,7 @@ class VisionPerceptionNode(Node):
                                             static_mode=False)
             self.get_logger().info("Gesture backend: MediaPipe Hands (CPU)")
         else:
-            self.get_logger().info("Gesture backend: RTMPose wholebody hand keypoints")
+            self.get_logger().info("Gesture backend: RTMPose wholebody")
 
         # --- Camera subscription (only if use_camera=true) ---
         if self.use_camera:
@@ -159,15 +181,24 @@ class VisionPerceptionNode(Node):
                 return  # no frame yet
 
         # --- Inference ---
-        try:
-            result: InferenceResult = self.adapter.infer(image)
-        except Exception as exc:
-            self.get_logger().warning(f"Inference failed: {exc}", throttle_duration_sec=1.0)
-            return
+        result = None
+        if self.adapter is not None:
+            try:
+                result = self.adapter.infer(image)
+            except Exception as exc:
+                self.get_logger().warning(f"Inference failed: {exc}", throttle_duration_sec=1.0)
+
+        # --- Pose keypoints source ---
+        if self.mp_pose is not None and image is not None:
+            body_kps, body_scores = self.mp_pose.detect(image)
+        elif result is not None:
+            body_kps, body_scores = result.body_kps, result.body_scores
+        else:
+            return  # no inference source available
 
         # --- Pose classification ---
-        bbox_ratio = _bbox_ratio_from_kps(result.body_kps)
-        pose_raw, pose_conf = classify_pose(result.body_kps, result.body_scores, bbox_ratio)
+        bbox_ratio = _bbox_ratio_from_kps(body_kps)
+        pose_raw, pose_conf = classify_pose(body_kps, body_scores, bbox_ratio)
         if pose_raw is not None:
             self.pose_buffer.append(pose_raw)
         pose_vote = _majority(self.pose_buffer)
@@ -223,11 +254,11 @@ class VisionPerceptionNode(Node):
                 self.last_publish_ts = now
                 try:
                     debug = image.copy()
-                    # Draw body keypoints
-                    for i in range(len(result.body_kps)):
-                        if result.body_scores[i] > 0.3:
-                            x, y = int(result.body_kps[i][0]), int(result.body_kps[i][1])
-                            cv2.circle(debug, (x, y), 3, (0, 255, 0), -1)
+                    # Draw body keypoints (from pose source)
+                    for i in range(len(body_kps)):
+                        if body_scores[i] > 0.3:
+                            x, y = int(body_kps[i][0]), int(body_kps[i][1])
+                            cv2.circle(debug, (x, y), 4, (0, 255, 0), -1)
                     # Draw hand keypoints + bounding box (from gesture source)
                     for hand_kps, hand_scores, color, label_text in [
                         (lh_kps, lh_scores, (255, 100, 0), "L"),
@@ -261,6 +292,8 @@ class VisionPerceptionNode(Node):
             self.timer.cancel()
         if hasattr(self, "mp_hands") and self.mp_hands is not None:
             self.mp_hands.close()
+        if hasattr(self, "mp_pose") and self.mp_pose is not None:
+            self.mp_pose.close()
 
 
 def main():

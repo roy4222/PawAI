@@ -11,5 +11,6 @@ vision_perception_node:
     gesture_vote_frames: 3
     gesture_min_score: 0.1
     gesture_backend: "rtmpose"    # "rtmpose" or "mediapipe"
+    pose_backend: "rtmpose"       # "rtmpose" or "mediapipe"
     pose_vote_frames: 20
     mock_scenario: "standing_idle"
