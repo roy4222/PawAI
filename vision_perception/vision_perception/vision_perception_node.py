@@ -86,7 +86,8 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("rtmpose_mode", "balanced")  # "lightweight" or "balanced"
         self.declare_parameter("rtmpose_device", "cuda")    # "cuda" or "cpu"
         self.declare_parameter("gesture_min_score", 0.1)    # hand keypoint confidence threshold
-        self.declare_parameter("gesture_backend", "rtmpose")  # "rtmpose" or "mediapipe"
+        self.declare_parameter("gesture_backend", "rtmpose")  # "rtmpose", "mediapipe", or "recognizer"
+        self.declare_parameter("gesture_recognizer_model", "~/face_models/gesture_recognizer.task")
         self.declare_parameter("pose_backend", "rtmpose")      # "rtmpose" or "mediapipe"
         self.declare_parameter("pose_complexity", 0)            # 0=lite(fast), 1=full, 2=heavy
         self.declare_parameter("max_hands", 1)                  # 1=single(fast), 2=dual (launch: max_hands:=2)
@@ -158,8 +159,9 @@ class VisionPerceptionNode(Node):
         else:
             self.get_logger().info("Pose backend: RTMPose")
 
-        # --- MediaPipe Hands (only if gesture_backend=mediapipe) ---
+        # --- Gesture backend selection ---
         self.mp_hands = None
+        self.gesture_recognizer = None
         if gesture_backend == "mediapipe":
             from .mediapipe_hands import MediaPipeHands
             max_hands = int(self.get_parameter("max_hands").value or 1)
@@ -167,6 +169,14 @@ class VisionPerceptionNode(Node):
             self.mp_hands = MediaPipeHands(max_hands=max_hands, min_confidence=0.5,
                                             static_mode=False, model_complexity=hands_complexity)
             self.get_logger().info(f"Gesture backend: MediaPipe Hands (CPU, max_hands={max_hands}, complexity={hands_complexity})")
+        elif gesture_backend == "recognizer":
+            from .gesture_recognizer_backend import GestureRecognizerBackend
+            model_path = str(self.get_parameter("gesture_recognizer_model").value
+                             or "~/face_models/gesture_recognizer.task")
+            max_hands = int(self.get_parameter("max_hands").value or 2)
+            self.gesture_recognizer = GestureRecognizerBackend(
+                model_path=model_path, max_hands=max_hands)
+            self.get_logger().info(f"Gesture backend: Gesture Recognizer Task API (max_hands={max_hands})")
         else:
             self.get_logger().info("Gesture backend: RTMPose wholebody")
 
@@ -251,42 +261,61 @@ class VisionPerceptionNode(Node):
             msg.data = json.dumps(build_pose_event(pose_vote, pose_vote_conf))
             self.pose_pub.publish(msg)
 
-        # --- Gesture classification (run hands every N ticks to save CPU) ---
+        # --- Gesture classification ---
+        # Recognizer runs every tick (single-pass, no separate hand detection).
+        # MediaPipe Hands + classifier skips ticks via gesture_every_n_ticks.
         self._tick_counter += 1
-        run_hands = (self._tick_counter % self._gesture_every_n == 0)
+        run_hands = (self.gesture_recognizer is not None
+                     or self._tick_counter % self._gesture_every_n == 0)
 
         if run_hands:
-            if self.mp_hands is not None and image is not None:
-                lh_kps, lh_scores, rh_kps, rh_scores = self.mp_hands.detect(image)
-            elif result is not None:
-                lh_kps, lh_scores = result.left_hand_kps, result.left_hand_scores
-                rh_kps, rh_scores = result.right_hand_kps, result.right_hand_scores
+            gesture_raw: str | None = None
+            hand = self.last_hand
+
+            if self.gesture_recognizer is not None and image is not None:
+                # --- Gesture Recognizer path (single-pass: detect + classify) ---
+                detections, lh_kps, lh_scores, rh_kps, rh_scores = \
+                    self.gesture_recognizer.detect(image)
+                self._cached_lh = (lh_kps, lh_scores)
+                self._cached_rh = (rh_kps, rh_scores)
+                if detections:
+                    best = max(detections, key=lambda d: d[1])
+                    gesture_raw, _, hand = best
+
+                self.get_logger().info(
+                    f"recognizer: {len(detections)} hands, "
+                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+                    throttle_duration_sec=5.0,
+                )
             else:
-                lh_kps, lh_scores = self._cached_lh
-                rh_kps, rh_scores = self._cached_rh
+                # --- MediaPipe Hands + classifier path ---
+                if self.mp_hands is not None and image is not None:
+                    lh_kps, lh_scores, rh_kps, rh_scores = self.mp_hands.detect(image)
+                elif result is not None:
+                    lh_kps, lh_scores = result.left_hand_kps, result.left_hand_scores
+                    rh_kps, rh_scores = result.right_hand_kps, result.right_hand_scores
+                else:
+                    lh_kps, lh_scores = self._cached_lh
+                    rh_kps, rh_scores = self._cached_rh
 
-            # Cache for non-hands ticks and debug image
-            self._cached_lh = (lh_kps, lh_scores)
-            self._cached_rh = (rh_kps, rh_scores)
+                self._cached_lh = (lh_kps, lh_scores)
+                self._cached_rh = (rh_kps, rh_scores)
 
-            g_left, c_left = classify_gesture(lh_kps, lh_scores,
-                                               min_score=self.gesture_min_score)
-            g_right, c_right = classify_gesture(rh_kps, rh_scores,
-                                                 min_score=self.gesture_min_score)
+                g_left, c_left = classify_gesture(lh_kps, lh_scores,
+                                                   min_score=self.gesture_min_score)
+                g_right, c_right = classify_gesture(rh_kps, rh_scores,
+                                                     min_score=self.gesture_min_score)
 
-            if c_left > c_right and g_left is not None:
-                gesture_raw, hand = g_left, "left"
-            elif g_right is not None:
-                gesture_raw, hand = g_right, "right"
-            else:
-                gesture_raw, hand = None, self.last_hand
+                if c_left > c_right and g_left is not None:
+                    gesture_raw, hand = g_left, "left"
+                elif g_right is not None:
+                    gesture_raw, hand = g_right, "right"
 
-            # Debug log (throttled)
-            self.get_logger().info(
-                f"hand L={np.mean(lh_scores):.3f} R={np.mean(rh_scores):.3f} "
-                f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
-                throttle_duration_sec=5.0,
-            )
+                self.get_logger().info(
+                    f"hand L={np.mean(lh_scores):.3f} R={np.mean(rh_scores):.3f} "
+                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+                    throttle_duration_sec=5.0,
+                )
 
             if gesture_raw is not None:
                 self.gesture_buffer.append(gesture_raw)
@@ -363,6 +392,8 @@ class VisionPerceptionNode(Node):
             self.mp_hands.close()
         if hasattr(self, "mp_pose") and self.mp_pose is not None:
             self.mp_pose.close()
+        if hasattr(self, "gesture_recognizer") and self.gesture_recognizer is not None:
+            self.gesture_recognizer.close()
 
 
 def main():

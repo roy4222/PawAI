@@ -26,6 +26,8 @@ def generate_launch_description():
         DeclareLaunchArgument("hands_complexity", default_value="0"),
         DeclareLaunchArgument("publish_fps", default_value="8.0"),
         DeclareLaunchArgument("gesture_every_n_ticks", default_value="3"),
+        DeclareLaunchArgument("gesture_recognizer_model",
+                              default_value="~/face_models/gesture_recognizer.task"),
         Node(
             package="vision_perception",
             executable="vision_perception_node",
@@ -43,6 +45,7 @@ def generate_launch_description():
                 {"hands_complexity": ParameterValue(LaunchConfiguration("hands_complexity"), value_type=int)},
                 {"publish_fps": ParameterValue(LaunchConfiguration("publish_fps"), value_type=float)},
                 {"gesture_every_n_ticks": ParameterValue(LaunchConfiguration("gesture_every_n_ticks"), value_type=int)},
+                {"gesture_recognizer_model": LaunchConfiguration("gesture_recognizer_model")},
             ],
             output="screen",
         ),
