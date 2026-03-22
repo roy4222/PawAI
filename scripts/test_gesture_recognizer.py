@@ -69,13 +69,13 @@ def test_import():
 def test_model_load(model_path: str):
     """Test 2: Can we load the model?"""
     print("\n=== Test 2: Model Load ===")
-    import mediapipe as mp
+    from mediapipe.tasks import python
     from mediapipe.tasks.python import vision
 
     t0 = time.time()
     try:
         options = vision.GestureRecognizerOptions(
-            base_options=mp.tasks.python.BaseOptions(
+            base_options=python.BaseOptions(
                 model_asset_path=model_path
             ),
             running_mode=vision.RunningMode.IMAGE,
@@ -100,6 +100,7 @@ def test_live_stream(duration: int, device: int, model_path: str,
     print(f"\n=== Test 3: Live Stream ({duration}s, device={device}) ===")
     import cv2
     import mediapipe as mp
+    from mediapipe.tasks import python
     from mediapipe.tasks.python import vision
 
     cap = cv2.VideoCapture(device)
@@ -114,7 +115,7 @@ def test_live_stream(duration: int, device: int, model_path: str,
 
     # Use VIDEO mode (synchronous, simpler for benchmarking)
     options = vision.GestureRecognizerOptions(
-        base_options=mp.tasks.python.BaseOptions(
+        base_options=python.BaseOptions(
             model_asset_path=model_path
         ),
         running_mode=vision.RunningMode.VIDEO,
@@ -186,10 +187,46 @@ def test_live_stream(duration: int, device: int, model_path: str,
     return passed
 
 
+def test_single_image(model_path: str) -> bool:
+    """Test 2b: Recognize gesture from a synthetic test image."""
+    print("\n=== Test 2b: Single Image Recognition ===")
+    import mediapipe as mp
+    from mediapipe.tasks import python
+    from mediapipe.tasks.python import vision
+    import numpy as np
+
+    try:
+        options = vision.GestureRecognizerOptions(
+            base_options=python.BaseOptions(model_asset_path=model_path),
+            running_mode=vision.RunningMode.IMAGE,
+            num_hands=1,
+        )
+        recognizer = vision.GestureRecognizer.create_from_options(options)
+
+        # Create a blank image (no hand = should return no gestures or Unknown)
+        blank = np.zeros((480, 640, 3), dtype=np.uint8)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=blank)
+
+        t0 = time.time()
+        result = recognizer.recognize(mp_image)
+        latency = (time.time() - t0) * 1000
+
+        n_gestures = len(result.gestures) if result.gestures else 0
+        print(f"  Blank image: {n_gestures} hands detected, latency={latency:.1f}ms")
+        print(f"  [OK] recognize() works on this platform")
+
+        recognizer.close()
+        return True
+    except Exception as e:
+        print(f"  [FAIL] {e}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description="Test MediaPipe Gesture Recognizer on Jetson")
     parser.add_argument("--duration", type=int, default=30, help="Live stream duration (seconds)")
-    parser.add_argument("--device", type=int, default=0, help="Camera device index")
+    parser.add_argument("--device", type=int, default=-1,
+                        help="Camera device index (-1 = skip live stream test)")
     parser.add_argument("--model-path", default=_DEFAULT_MODEL_PATH,
                         help=f"Path to gesture_recognizer.task (default: {_DEFAULT_MODEL_PATH})")
     parser.add_argument("--min-fps", type=float, default=10.0, help="Minimum FPS to pass (default: 10)")
@@ -205,9 +242,18 @@ def main():
         print("\n[ABORT] Model load failed.")
         sys.exit(1)
 
-    if not test_live_stream(args.duration, args.device, model_path, args.min_fps):
-        print("\n[FAIL] Quality gate not met.")
-        sys.exit(2)
+    if not test_single_image(model_path):
+        print("\n[ABORT] Single image recognition failed.")
+        sys.exit(1)
+
+    if args.device >= 0:
+        if not test_live_stream(args.duration, args.device, model_path, args.min_fps):
+            print("\n[FAIL] Quality gate not met.")
+            sys.exit(2)
+    else:
+        print("\n=== Skipping live stream test (no --device specified) ===")
+        print("  To test with camera: --device 0")
+        print("  D435 requires ROS2 realsense2_camera node (not direct OpenCV)")
 
     print("\n=== All tests passed ===")
 
