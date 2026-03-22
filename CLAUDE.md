@@ -135,6 +135,13 @@ ros2 launch vision_perception vision_perception.launch.py \
   inference_backend:=rtmpose use_camera:=true \
   pose_backend:=mediapipe gesture_backend:=mediapipe
 
+# 效能調參（3/22 新增 launch args）
+# pose_complexity:=0 (lite,快) / 1 (full)
+# hands_complexity:=0 (lite) / 1 (full)
+# max_hands:=1 (單手,快) / 2 (雙手)
+# publish_fps:=15 (debug 用高 FPS)
+# gesture_every_n_ticks:=3 (每 3 tick 跑一次手部推理)
+
 # RTMPose + MediaPipe 混合（pose 走 GPU，gesture 走 CPU）
 ros2 launch vision_perception vision_perception.launch.py \
   inference_backend:=rtmpose use_camera:=true rtmpose_mode:=lightweight \

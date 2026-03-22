@@ -124,15 +124,16 @@ keypoints, scores = wholebody(img)
 
 > **注意**：「推估」數據基於 RTX 1660 Ti benchmark → Orin Nano 算力比換算，或社群在類似硬體上的回報。所有數據需以本專案 Jetson Orin Nano + JetPack 6.x 實測確認。
 
-### 推薦落地順序（2026-03-18 更新）
+### 推薦落地順序（2026-03-22 更新）
 
-1. **Phase 1**（3/16-3/18）：✅ 完成 — `vision_perception_node` mock mode + 23 unit tests pass + Jetson smoke test 通過
-2. **Phase 2**（3/18）：✅ 完成 — RTMPose wholebody balanced on Jetson（rtmlib 0.0.15 + onnxruntime-gpu 1.23.0），~7.5 FPS（隨機噪聲）/ ~3.8 Hz debug_image（D435 + face 同跑），GPU 91-99%
-3. **Phase 2b**（3/25 決策點）：FPS ~3.8-7.5，低於原定 15 FPS 紅線。待評估：切 `lightweight` mode 提速、或接受低 FPS 做 demo
-4. **Phase 3**（4/1-4/6）：手勢分類閾值校正（需 1.5-3m 距離實測手部 keypoint 檢出率）
-5. **Phase 4**（4/6-4/13）：端到端測試 + Demo B 微調
+1. **Phase 1**（3/16-3/18）：✅ 完成 — mock mode + 23 unit tests + Jetson smoke test
+2. **Phase 2**（3/18）：✅ 完成 — RTMPose wholebody on Jetson，GPU 91-99%
+3. **Phase 2b**（3/21）：✅ 完成 — 決策：全 MediaPipe CPU（GPU 0%，16.8 FPS hands）
+4. **Phase 3**（3/22）：✅ 完成 — FPS 優化 2.5→8.5、骨架可視化（火柴人）、hands model_complexity=0、gesture_every_n_ticks=3 分頻、32 tests pass、Gesture Recognizer Task API Jetson 驗證通過（import OK、load 0.1s、inference 47ms）
+5. **Phase 4**（4/1-4/6）：手勢分類閾值校正 + live 測試
+6. **Phase 5**（4/6-4/13）：端到端測試 + Demo B 微調
 
-> **⚠️ 移植風險提醒**：MediaPipe Hands（21 keypoints）與 DWPose hand（21×2 keypoints, COCO-WholeBody）的 keypoint 定義、索引順序、座標系統不同。Phase 1 的 x86 demo **只驗證 UX 互動流程與 ROS2 事件格式**，不驗證最終分類閾值。Phase 2 部署 DWPose 時，角度閾值、距離比、手勢規則都需要對照 COCO-WholeBody keypoint 定義重新校正。
+> **Gesture Recognizer Task API**（3/22 驗證）：MediaPipe 內建 7 種手勢辨識（Open_Palm=stop, Closed_Fist=fist, Pointing_Up=point, Thumb_Up, Victory 等）。Jetson 驗證通過但尚未整合到主線。現行方案：MediaPipe Hands + gesture_classifier.py 規則分類。
 
 ---
 

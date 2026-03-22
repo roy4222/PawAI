@@ -132,29 +132,32 @@ DWPose 推理（TensorRT, 社群值：~22ms/frame）
 ### 方法三：混合法（推薦實作方式）
 
 ```python
-# 虛擬碼：4 姿勢分類
-def classify_pose(landmarks, prev_landmarks, buffer):
-    hip_angle = calc_angle(shoulder, hip, knee)
-    knee_angle = calc_angle(hip, knee, ankle)
-    trunk_angle = calc_trunk_angle(shoulder, hip)
-    bbox_ratio = calc_bbox_ratio(landmarks)
+# 實際分類規則（pose_classifier.py, 3/22 更新，6 類 first-match）
+def classify_pose(body_kps, body_scores, bbox_ratio):
+    hip_angle = angle(shoulder, hip, knee)
+    knee_angle = angle(hip, knee, ankle)
+    trunk_angle = trunk_angle(shoulder, hip)
 
     # 1. 跌倒優先判斷（安全功能）
     if bbox_ratio > 1.0 and trunk_angle > 60:
-        buffer.append("fallen")
+        return "fallen"
     # 2. 站立
-    elif hip_angle > 160 and knee_angle > 160:
-        buffer.append("standing")
-    # 3. 坐下
-    elif 70 < hip_angle < 130 and trunk_angle < 30:
-        buffer.append("sitting")
+    if hip_angle > 160 and knee_angle > 160:
+        return "standing"
+    # 3. 彎腰（3/22 新增）
+    if trunk_angle > 35 and hip_angle < 140 and knee_angle > 130 and bbox_ratio <= 1.0:
+        return "bending"
     # 4. 蹲下
-    elif hip_angle < 80 and knee_angle < 80:
-        buffer.append("crouching")
+    if hip_angle < 80 and knee_angle < 80:
+        return "crouching"
+    # 5. 坐下
+    if 70 < hip_angle < 130 and trunk_angle < 35:
+        return "sitting"
+    # 6. 模糊
+    return None
 
-    # 20 幀投票機制（減少誤報）
-    if len(buffer) >= 20:
-        return most_common(buffer[-20:])
+    # 投票機制：pose_vote_frames=20（連續 20 幀多數決）
+    # confidence = 投票比例（非模型信心度）
 ```
 
 ### 跌倒偵測精度（研究數據）
@@ -302,15 +305,16 @@ DWPose 一個模型同時處理手勢+姿勢，記憶體只算一次：
 
 ---
 
-## 落地順序（2026-03-18 更新）
+## 落地順序（2026-03-22 更新）
 
 | Phase | 時間 | 內容 | 狀態 |
 |:-----:|------|------|:----:|
 | 1 | 3/16-3/18 | `vision_perception_node` mock mode + 23 unit tests + Jetson smoke test | ✅ 完成 |
 | 2 | 3/18 | RTMPose wholebody balanced on Jetson（rtmlib + onnxruntime-gpu），~3.8-7.5 FPS | ✅ 完成 |
-| 2b | 3/25 決策點 | FPS 低於 15 紅線，評估 lightweight mode 或接受現狀 | 待定 |
-| 3 | 4/1-4/6 | 姿勢分類閾值校正 + 跌倒偵測穩定性測試 | 待做 |
-| 4 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
+| 2b | 3/21 | 決策：全 MediaPipe CPU（pose+gesture），GPU 0%，~18.5 FPS (pose) | ✅ 完成 |
+| 3 | 3/22 | bending 新增 + FPS 優化（2.5→8.5 FPS）+ 骨架可視化 + 型別安全 + 32 tests | ✅ 完成 |
+| 4 | 4/1-4/6 | 姿勢分類閾值校正 + 跌倒偵測穩定性測試 | 待做 |
+| 5 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
 
 ---
 
