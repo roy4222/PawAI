@@ -13,7 +13,7 @@ the codebase evolves.
 import json
 import unittest
 
-from speech_processor.llm_bridge_node import (
+from speech_processor.llm_contract import (
     BANNED_API_IDS,
     LLM_REQUIRED_FIELDS,
     P0_SKILLS,

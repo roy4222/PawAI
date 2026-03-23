@@ -7,7 +7,7 @@ empty input, simplified Chinese variants, Whisper misrecognition,
 
 import pytest
 
-from speech_processor.stt_intent_node import IntentClassifier, IntentMatch
+from speech_processor.intent_classifier import IntentClassifier, IntentMatch
 
 
 # ---------------------------------------------------------------------------

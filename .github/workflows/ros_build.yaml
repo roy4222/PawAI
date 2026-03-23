@@ -21,18 +21,44 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install pytest flake8
+        run: pip install pytest pytest-cov flake8 numpy opencv-python-headless
       - name: Flake8 lint (report-only)
         run: |
-          flake8 speech_processor/ go2_robot_sdk/ coco_detector/ \
-            lidar_processor/ src/search_logic/ \
+          flake8 speech_processor/ go2_robot_sdk/ face_perception/ \
+            vision_perception/ benchmarks/ \
             --max-line-length=100 --extend-ignore=E203 --max-complexity=10 \
             --exit-zero
       - name: Pure Python unit tests (no ROS2 needed)
         env:
-          PYTHONPATH: speech_processor
+          PYTHONPATH: speech_processor:vision_perception:benchmarks
         run: |
-          pytest speech_processor/test/test_speech_test_observer.py -v --tb=short
+          pytest \
+            speech_processor/test/test_speech_test_observer.py \
+            vision_perception/test/test_gesture_classifier.py \
+            vision_perception/test/test_pose_classifier.py \
+            vision_perception/test/test_event_builder.py \
+            vision_perception/test/test_interaction_rules.py \
+            benchmarks/test/test_criteria.py \
+            benchmarks/test/test_base_adapter.py \
+            benchmarks/test/test_reporter.py \
+            benchmarks/test/test_runner.py \
+            benchmarks/test/test_monitor.py \
+            vision_perception/test/test_mediapipe_pose_mapping.py \
+            vision_perception/test/test_gesture_recognizer_backend.py \
+            speech_processor/test/test_intent_classifier.py \
+            speech_processor/test/test_llm_contract.py \
+            -v --tb=short \
+            --cov=speech_processor/speech_processor \
+            --cov=vision_perception/vision_perception \
+            --cov=benchmarks \
+            --cov-report=term --cov-report=xml:coverage.xml
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30
       - name: Python syntax check
         run: |
           find . -name '*.py' \
