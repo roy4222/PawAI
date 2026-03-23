@@ -126,6 +126,8 @@ class LlmBridgeNode(Node):
         self._face_greet_history: dict = {}  # (track_id, name) -> timestamp
         self._latest_face_state: dict | None = None
         self._llm_lock = threading.Lock()
+        self._greet_cooldown_s = 5.0
+        self._last_greet_ts = 0.0
 
         self.last_trigger = ""
         self.last_intent = ""
@@ -313,6 +315,16 @@ class LlmBridgeNode(Node):
             return
 
         try:
+            # Source-agnostic greet cooldown — blocks both TTS and action
+            if fallback_intent == "greet":
+                now = time.time()
+                if now - self._last_greet_ts < self._greet_cooldown_s:
+                    self.get_logger().info(
+                        f"Greet cooldown ({source}), skipping duplicate"
+                    )
+                    return
+                self._last_greet_ts = now
+
             if self.force_fallback:
                 self.get_logger().info("force_fallback=True, skipping LLM")
                 result = None

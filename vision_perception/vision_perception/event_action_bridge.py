@@ -21,8 +21,9 @@ _SPORT_TOPIC = "rt/api/sport/request"
 
 # 注意：/event/gesture_detected 的 gesture enum 用的是 v2.0 contract 值
 # fist 實作層發出的是 "ok"（GESTURE_COMPAT_MAP 已轉換）
+# Demo 期間 wave→hello 暫停：hello 統一由 llm_bridge_node 處理（語音或人臉觸發）
+# 避免 event_action_bridge 和 llm_bridge_node 同時發 hello 動作
 GESTURE_ACTION_MAP = {
-    "wave":      {"api_id": _HELLO, "topic": _SPORT_TOPIC, "tts": "你好！"},
     "stop":      {"api_id": _STOP_MOVE, "topic": _SPORT_TOPIC, "tts": None},
     "ok":        {"api_id": _CONTENT, "topic": _SPORT_TOPIC, "tts": None},  # fist -> ok via compat map
     "thumbs_up": {"api_id": _CONTENT, "topic": _SPORT_TOPIC, "tts": "謝謝！"},
