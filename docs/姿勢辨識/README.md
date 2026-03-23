@@ -107,9 +107,14 @@ DWPose 推理（TensorRT, 社群值：~22ms/frame）
 
 | 角度 | Landmarks | 站立 | 坐下 | 蹲下 | 跌倒 |
 |------|-----------|:----:|:----:|:----:|:----:|
-| **髖關節角度** (肩→髖→膝) | shoulder, hip, knee | >160° | 70-120° | <70° | 不定 |
-| **膝關節角度** (髖→膝→踝) | hip, knee, ankle | >160° | 70-120° | <70° | 不定 |
-| **軀幹角度** (肩→髖→垂直線) | shoulder, hip | 0-15° | 0-30° | 15-60° | >60° |
+| **髖關節角度** (肩→髖→膝) | shoulder, hip, knee | >155° | 100-150° | <145° | 不定 |
+| **膝關節角度** (髖→膝→踝) | hip, knee, ankle | >155° | — | <145° | 不定 |
+| **軀幹角度** (肩→髖→垂直線) | shoulder, hip | 0-15° | <35° | >10° | >60° |
+
+> **3/23 Jetson 實測角度範圍**（MediaPipe Pose, D435 640x480@15Hz）：
+> - 站: hip=168-180°, knee=164-180°, trunk=1-10°
+> - 坐: hip=91-129°, knee=69-132°, trunk=2-22°
+> - 蹲: hip=36-65°, knee=32-57°, trunk=5-17°
 
 **關鍵 Landmarks**（DWPose 17-point COCO format）：
 
@@ -141,17 +146,17 @@ def classify_pose(body_kps, body_scores, bbox_ratio):
     # 1. 跌倒優先判斷（安全功能）
     if bbox_ratio > 1.0 and trunk_angle > 60:
         return "fallen"
-    # 2. 站立
-    if hip_angle > 160 and knee_angle > 160:
+    # 2. 站立（3/23 調參：160→155）
+    if hip_angle > 155 and knee_angle > 155:
         return "standing"
     # 3. 彎腰（3/22 新增）
     if trunk_angle > 35 and hip_angle < 140 and knee_angle > 130 and bbox_ratio <= 1.0:
         return "bending"
-    # 4. 蹲下
-    if hip_angle < 80 and knee_angle < 80:
+    # 4. 蹲下（3/23 調參：<80→<145 + trunk>10 前傾條件）
+    if hip_angle < 145 and knee_angle < 145 and trunk_angle > 10:
         return "crouching"
-    # 5. 坐下
-    if 70 < hip_angle < 130 and trunk_angle < 35:
+    # 5. 坐下（3/23 調參：70-130→100-150）
+    if 100 < hip_angle < 150 and trunk_angle < 35:
         return "sitting"
     # 6. 模糊
     return None
@@ -313,7 +318,7 @@ DWPose 一個模型同時處理手勢+姿勢，記憶體只算一次：
 | 2 | 3/18 | RTMPose wholebody balanced on Jetson（rtmlib + onnxruntime-gpu），~3.8-7.5 FPS | ✅ 完成 |
 | 2b | 3/21 | 決策：全 MediaPipe CPU（pose+gesture），GPU 0%，~18.5 FPS (pose) | ✅ 完成 |
 | 3 | 3/22 | bending 新增 + FPS 優化（2.5→8.5 FPS）+ 骨架可視化 + 型別安全 + 32 tests | ✅ 完成 |
-| 4 | 4/1-4/6 | 姿勢分類閾值校正 + 跌倒偵測穩定性測試 | 待做 |
+| 4 | 3/23 | 三感知壓測通過（face+pose+gesture, RAM 1.2GB, temp 52°C）+ pose debug log 加入 + 閾值第一輪實機調參（standing/sitting/crouching 全穩定） | ✅ 完成 |
 | 5 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
 
 ---
