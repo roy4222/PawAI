@@ -16,6 +16,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
@@ -199,9 +200,14 @@ class FaceIdentityNode(Node):
             String, "/event/face_identity", 10
         )
 
-        # --- Subscriptions ---
-        self.create_subscription(Image, color_topic, self.cb_color, 10)
-        self.create_subscription(Image, depth_topic, self.cb_depth, 10)
+        # --- Subscriptions (BEST_EFFORT to match D435 ROS2 driver QoS) ---
+        image_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+        )
+        self.create_subscription(Image, color_topic, self.cb_color, image_qos)
+        self.create_subscription(Image, depth_topic, self.cb_depth, image_qos)
         self.timer = self.create_timer(tick_period, self.tick)
 
         self.get_logger().info(

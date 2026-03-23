@@ -12,16 +12,22 @@ import json
 
 
 # ── Skill → Go2 Command mapping (spec §3) ──────────────────────────────
+# api_id 權威來源：go2_robot_sdk/domain/constants/robot_commands.py (ROBOT_CMD)
+_HELLO = 1016
+_STOP_MOVE = 1003
+_SIT = 1009
+_STAND_UP = 1004
+_CONTENT = 1020
 
 SKILL_TO_CMD = {
-    "hello":     {"api_id": 1016, "parameter": "1016"},
-    "stop_move": {"api_id": 1003, "parameter": "1003"},
-    "sit":       {"api_id": 1009, "parameter": "1009"},
-    "stand":     {"api_id": 1004, "parameter": "1004"},  # StandUp (was 1002 BalanceStand)
-    "content":   {"api_id": 1020, "parameter": "1020"},
+    "hello":     {"api_id": _HELLO, "parameter": str(_HELLO)},
+    "stop_move": {"api_id": _STOP_MOVE, "parameter": str(_STOP_MOVE)},
+    "sit":       {"api_id": _SIT, "parameter": str(_SIT)},
+    "stand":     {"api_id": _STAND_UP, "parameter": str(_STAND_UP)},
+    "content":   {"api_id": _CONTENT, "parameter": str(_CONTENT)},
 }
 
-BANNED_API_IDS = {1030, 1031, 1301}
+BANNED_API_IDS = {1030, 1031, 1301}  # FrontFlip, FrontJump, Handstand
 
 # P0 today: only these skills are validated
 P0_SKILLS = {"hello", "stop_move", "sit", "stand"}

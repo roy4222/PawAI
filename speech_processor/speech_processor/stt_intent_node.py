@@ -6,7 +6,6 @@
 import io
 import json
 import queue
-import re
 import threading
 import time
 import wave

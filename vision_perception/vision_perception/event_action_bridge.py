@@ -13,13 +13,19 @@ try:
 except ImportError:
     WebRtcReq = None
 
+# api_id 權威來源：go2_robot_sdk/domain/constants/robot_commands.py (ROBOT_CMD)
+_HELLO = 1016
+_STOP_MOVE = 1003
+_CONTENT = 1020
+_SPORT_TOPIC = "rt/api/sport/request"
+
 # 注意：/event/gesture_detected 的 gesture enum 用的是 v2.0 contract 值
 # fist 實作層發出的是 "ok"（GESTURE_COMPAT_MAP 已轉換）
 GESTURE_ACTION_MAP = {
-    "wave":      {"api_id": 1016, "topic": "rt/api/sport/request", "tts": "你好！"},
-    "stop":      {"api_id": 1003, "topic": "rt/api/sport/request", "tts": None},
-    "ok":        {"api_id": 1020, "topic": "rt/api/sport/request", "tts": None},  # fist -> ok via compat map
-    "thumbs_up": {"api_id": 1020, "topic": "rt/api/sport/request", "tts": "謝謝！"},
+    "wave":      {"api_id": _HELLO, "topic": _SPORT_TOPIC, "tts": "你好！"},
+    "stop":      {"api_id": _STOP_MOVE, "topic": _SPORT_TOPIC, "tts": None},
+    "ok":        {"api_id": _CONTENT, "topic": _SPORT_TOPIC, "tts": None},  # fist -> ok via compat map
+    "thumbs_up": {"api_id": _CONTENT, "topic": _SPORT_TOPIC, "tts": "謝謝！"},
 }
 
 POSE_ACTION_MAP = {
