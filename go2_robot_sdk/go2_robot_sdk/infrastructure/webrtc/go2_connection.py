@@ -531,7 +531,7 @@ class Go2Connection:
         try:
             if hasattr(self, 'http_client'):
                 self.http_client.close()
-        except:
+        except Exception:
             pass
 
 

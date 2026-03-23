@@ -779,15 +779,6 @@ class EnhancedTTSNode(Node):
         except Exception as e:
             self.get_logger().warning(f"Gain boost failed: {e}")
 
-        # Save debug WAV for offline analysis
-        dbg_path = f"/tmp/megaphone_debug_{int(time.time())}.wav"
-        try:
-            with open(dbg_path, "wb") as f:
-                f.write(wav_data)
-            self.get_logger().info(f"Debug WAV saved: {dbg_path} ({len(wav_data)} bytes)")
-        except Exception:
-            pass
-
         b64_encoded = base64.b64encode(wav_data).decode("utf-8")
         chunks = [b64_encoded[i:i + MEGAPHONE_CHUNK_SIZE]
                   for i in range(0, len(b64_encoded), MEGAPHONE_CHUNK_SIZE)]

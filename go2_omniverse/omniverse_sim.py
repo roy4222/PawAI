@@ -131,7 +131,7 @@ def setup_custom_env():
         if (args_cli.custom_env == "office" and args_cli.terrain == 'flat'):
             cfg_scene = sim_utils.UsdFileCfg(usd_path="./envs/office.usd")
             cfg_scene.func("/World/office", cfg_scene, translation=(0.0, 0.0, 0.0))
-    except:
+    except Exception:
         print("Error loading custom environment. You should download custom envs folder from: https://drive.google.com/drive/folders/1vVGuO1KIX1K6mD6mBHDZGm9nk2vaRyj3?usp=sharing")
 
 

@@ -32,7 +32,7 @@ def get_ram_used_mb():
                 if len(parts) >= 2:
                     info[parts[0].rstrip(":")] = int(parts[1])
         return (info.get("MemTotal", 0) - info.get("MemAvailable", 0)) / 1024
-    except:
+    except Exception:
         return 0
 
 

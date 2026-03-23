@@ -140,7 +140,7 @@ def pub_robo_data_ros2(robot_type, num_envs, base_node, env, annotator_lst, star
                         )
                     base_node.publish_lidar(point_cloud, j)
                 start_time = time.time()
-        except :
+        except Exception:
             pass
 
 

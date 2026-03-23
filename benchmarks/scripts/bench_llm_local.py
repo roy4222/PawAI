@@ -138,7 +138,7 @@ def get_ram_used_mb():
                 if len(parts) >= 2:
                     info[parts[0].rstrip(":")] = int(parts[1])
         return (info.get("MemTotal", 0) - info.get("MemAvailable", 0)) / 1024
-    except:
+    except Exception:
         return 0
 
 
@@ -160,7 +160,7 @@ def main():
                 data=json.dumps({"model": model, "keep_alive": 0}).encode(),
                 headers={"Content-Type": "application/json"},
             ), timeout=10)
-        except:
+        except Exception:
             pass
         time.sleep(5)
 

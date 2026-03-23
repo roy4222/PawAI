@@ -98,7 +98,7 @@ jobs:
           pip3 install wasmtime aiortc aiohttp cryptography pydub pycryptodome || \
           pip3 install --break-system-packages wasmtime aiortc aiohttp cryptography pydub pycryptodome || true
       - name: build and test
-        uses: ros-tooling/action-ros-ci@master
+        uses: ros-tooling/action-ros-ci@v0.3
         with:
           target-ros2-distro: ${{ matrix.ros_distribution }}
           vcs-repo-file-url: ""
