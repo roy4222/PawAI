@@ -131,12 +131,12 @@ keypoints, scores = wholebody(img)
 3. **Phase 2b**（3/21）：✅ 完成 — 決策：全 MediaPipe CPU（GPU 0%，16.8 FPS hands）
 4. **Phase 3**（3/22）：✅ 完成 — FPS 優化 2.5→8.5、骨架可視化（火柴人）、型別安全、32 tests
 5. **Phase 3b**（3/22）：✅ 完成 — Gesture Recognizer Task API 整合為 `gesture_backend=recognizer` 選項。7 種內建手勢（stop/fist/point/thumbs_up/victory/thumbs_down/i_love_you）。Jetson live 測通過（7.2 FPS、手勢辨識正確、手部骨架 overlay 正常）。38 tests pass
-6. **Phase 4**（4/1-4/6）：live A/B 驗證 recognizer vs mediapipe → 決定是否升為預設
+6. **Phase 4**（3/23）：✅ 完成 — 三感知壓測通過（face+pose+gesture 同跑 60s，RAM 1.2GB/7.4GB，temp 52°C，GPU 0%）。interaction_router 場景驗證通過（welcome/gesture_command/fall_alert）。**recognizer 確定為推薦後端**（mediapipe 後端缺 thumbs_up、point 規則太嚴）
 7. **Phase 5**（4/6-4/13）：端到端測試 + Demo B 微調
 
-> **三種 gesture backend**（3/22 更新）：
-> - `mediapipe`（現行預設）：MediaPipe Hands + gesture_classifier.py 規則，3 種手勢
-> - `recognizer`（新）：Gesture Recognizer Task API，7 種內建手勢，單模型一步到位
+> **三種 gesture backend**（3/23 更新）：
+> - `recognizer`（**推薦**）：Gesture Recognizer Task API，7 種內建手勢，單模型一步到位，3/23 場景驗證 stop/point/thumbs_up 全通過
+> - `mediapipe`：MediaPipe Hands + gesture_classifier.py 規則，只有 3 種手勢（無 thumbs_up），point 規則過嚴
 > - `rtmpose`（已棄用）：RTMPose wholebody 手部 keypoints 不可靠
 >
 > 使用 recognizer：`gesture_backend:=recognizer`（launch override）
@@ -433,6 +433,22 @@ event_action_bridge（3/18 新建）
 | `ok`/`fist` | api_id 1020（回應動作） | — | 3s |
 
 > `event_action_bridge` 不觸及語音事件或人臉事件（由 `llm_bridge_node` 單獨處理），維持單一控制權。
+
+### interaction_router 高層事件（2026-03-23 新增）
+
+薄的事件融合層，訂閱 face + gesture + pose → 發布高層互動事件：
+
+| 輸出 Topic | 觸發條件 | Schema |
+|-----------|---------|--------|
+| `/event/interaction/welcome` | `identity_stable` + 已知人臉 | `{stamp, event_type, track_id, name, sim, distance_m}` |
+| `/event/interaction/gesture_command` | 白名單手勢（stop/point/thumbs_up） | `{stamp, event_type, gesture, confidence, hand, who, face_track_id}` |
+| `/event/interaction/fall_alert` | `fallen` 持續 ≥ 2s | `{stamp, event_type, pose, confidence, persist_sec, who, face_track_id}` |
+
+- 決策邏輯獨立為 `interaction_rules.py`（純函式，零 ROS2 依賴，14 tests）
+- fallen 用 1Hz timer 檢查持續性，避免重複 timer
+- stop 無 cooldown（安全優先）
+- `welcomed_tracks`：`track_lost` 時移除，允許同一人 re-welcome
+- 與 `event_action_bridge` 共存（各自訂閱原始事件，互不干擾）
 
 **Event Schema**（對齊 `interaction_contract.md` v2.0）：
 ```json
