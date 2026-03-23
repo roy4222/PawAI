@@ -9,13 +9,17 @@ interface MetricChipProps {
   value: number
   unit?: string
   trend?: "up" | "down" | "stable"
+  className?: string
 }
 
-export function MetricChip({ label, value, unit, trend }: MetricChipProps) {
+export function MetricChip({ label, value, unit, trend, className }: MetricChipProps) {
   return (
     <Badge
       variant="outline"
-      className="border-border/50 bg-transparent gap-1 font-mono text-xs px-2 py-0.5"
+      className={cn(
+        "border-border/50 bg-transparent gap-1 font-mono text-xs px-2 py-0.5",
+        className
+      )}
     >
       <span className="text-muted-foreground">{label}:</span>
       <span className="text-foreground">

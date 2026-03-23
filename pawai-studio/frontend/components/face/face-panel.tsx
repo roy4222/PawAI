@@ -3,11 +3,11 @@
 import { User, UserX } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { EventItem } from '@/components/shared/event-item'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useStateStore } from '@/stores/state-store'
 import { useEventStore } from '@/stores/event-store'
 import { FaceTrackCard } from './face-track-card'
-import type { FaceState } from '@/contracts/types'
+import type { FaceState, FaceTrack } from '@/contracts/types'
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   track_started: '新追蹤',
@@ -17,7 +17,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 }
 
 const PLACEHOLDER_SRC = "/mock/face-placeholder.svg"
-const SHOW_PLACEHOLDER = true  // M2 時改 false，換成真實元件
+const SHOW_PLACEHOLDER = false  // M2 時改 false，換成真實元件
 
 export function FacePanel() {
   const faceState = useStateStore((s) => s.faceState) as FaceState | null
@@ -27,13 +27,39 @@ export function FacePanel() {
     [allEvents]
   )
 
+  const [vanishingTracks, setVanishingTracks] = useState<FaceTrack[]>([])
+  const prevTracksRef = useRef<FaceTrack[]>([])
+
+  useEffect(() => {
+    const currentTracks = faceState?.tracks ?? []
+    const prevTracks = prevTracksRef.current
+    // 找出消失的 track（存在於 prevTracks 但不在 currentTracks 中）
+    const disappeared = prevTracks.filter(pt =>
+      !currentTracks.some(ct => ct.track_id === pt.track_id)
+    )
+    if (disappeared.length > 0) {
+      setVanishingTracks(prev => [...prev, ...disappeared])
+      // 5 秒後移除
+      const timer = setTimeout(() => {
+        setVanishingTracks(prev => prev.filter(t => !disappeared.some(d => d.track_id === t.track_id)))
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+    prevTracksRef.current = currentTracks
+  }, [faceState?.tracks])
+
   const status = !faceState
-    ? 'inactive' as const
+    ? 'loading' as const
     : faceState.face_count > 0
       ? 'active' as const
       : 'inactive' as const
 
   const tracks = faceState?.tracks ?? []
+  const allTracks = useMemo(() => {
+    const currentIds = new Set(tracks.map(t => t.track_id))
+    const vanishingWithoutCurrent = vanishingTracks.filter(vt => !currentIds.has(vt.track_id))
+    return [...tracks, ...vanishingWithoutCurrent]
+  }, [tracks, vanishingTracks])
 
   return (
     <PanelCard
@@ -51,10 +77,19 @@ export function FacePanel() {
         )}
 
         {/* Track list */}
-        {tracks.length > 0 ? (
+        {status === 'loading' ? (
+          <div className="flex flex-col items-center justify-center py-6 gap-2 text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-2 border-warning border-t-transparent" />
+            <span className="text-sm">正在連線...</span>
+          </div>
+        ) : allTracks.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {tracks.map((t) => (
-              <FaceTrackCard key={t.track_id} track={t} />
+            {allTracks.map((t) => (
+              <FaceTrackCard
+                key={t.track_id}
+                track={t}
+                isVanishing={vanishingTracks.some(vt => vt.track_id === t.track_id)}
+              />
             ))}
           </div>
         ) : (
@@ -64,8 +99,8 @@ export function FacePanel() {
           </div>
         )}
 
-        {/* Event history */}
-        {faceEvents.length > 0 && (
+        {/* Event history - Optional for M2 */}
+        {false && faceEvents.length > 0 && (
           <div className="flex flex-col gap-1 border-t border-border/30 pt-2 mt-1">
             <span className="text-xs text-muted-foreground mb-1">最近事件</span>
             {faceEvents.map((e) => {
