@@ -471,11 +471,10 @@ class LlmBridgeNode(Node):
             f"reply={reply_text!r} reason={reasoning}"
         )
 
-        # stop_move: action FIRST, then TTS (spec §2.6 exception)
-        if selected_skill == "stop_move":
+        # Action-only intents: send action immediately, skip TTS for speed
+        ACTION_ONLY_SKILLS = {"stop_move", "sit", "stand"}
+        if selected_skill in ACTION_ONLY_SKILLS:
             self._send_action(selected_skill)
-            if reply_text:
-                self._send_tts(reply_text)
             return
 
         # Normal flow: TTS first, action after delay
@@ -514,10 +513,10 @@ class LlmBridgeNode(Node):
             f"RuleBrain fallback: intent={intent} skill={skill} reply={reply!r}"
         )
 
-        if intent == "stop" and skill:
+        # Action-only intents: send action immediately, skip TTS
+        ACTION_ONLY_INTENTS = {"stop", "sit", "stand"}
+        if intent in ACTION_ONLY_INTENTS and skill:
             self._send_action(skill)
-            if reply:
-                self._send_tts(reply)
             return
 
         if reply:

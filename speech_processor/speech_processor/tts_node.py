@@ -404,7 +404,7 @@ class TTSProvider_EdgeTTS:
             import edge_tts
 
             async def _gen():
-                communicate = edge_tts.Communicate(text, self.voice)
+                communicate = edge_tts.Communicate(text, self.voice, rate="+10%")
                 chunks = []
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
@@ -499,6 +499,9 @@ class EnhancedTTSNode(Node):
 
         # Log initialization
         self._log_initialization()
+
+        # Cache warmup: pre-synthesize common template replies in background
+        threading.Thread(target=self._warmup_cache, daemon=True).start()
 
     def _declare_parameters(self) -> None:
         """Declare all node parameters"""
@@ -919,6 +922,37 @@ class EnhancedTTSNode(Node):
         req.parameter = parameter
         req.topic = str(self.RTC_TOPIC["AUDIO_HUB_REQ"])
         self.audio_pub.publish(req)
+
+    _WARMUP_PHRASES = [
+        "哈囉，我在這裡。",
+        "收到，我過去找你。",
+        "好的，停止動作。",
+        "好的，坐下。",
+        "好的，站起來。",
+        "收到，正在拍照。",
+        "我目前狀態正常。",
+        "請再說一次。",
+    ]
+
+    def _warmup_cache(self) -> None:
+        """Pre-synthesize common replies into cache at startup."""
+        if self.tts_provider is None:
+            return
+        cache_voice = (
+            self.config.edge_tts_voice
+            if self.config.provider == TTSProvider.EDGE_TTS
+            else self.config.voice_name
+        )
+        count = 0
+        for phrase in self._WARMUP_PHRASES:
+            if self.cache.get(phrase, cache_voice, self.config.provider.value):
+                continue  # already cached
+            audio = self.tts_provider.synthesize(phrase)
+            if audio:
+                self.cache.put(phrase, cache_voice, self.config.provider.value, audio)
+                count += 1
+        if count:
+            self.get_logger().info(f"🔥 Cache warmup: {count} phrases pre-synthesized")
 
     def _log_initialization(self) -> None:
         """Log initialization details"""
