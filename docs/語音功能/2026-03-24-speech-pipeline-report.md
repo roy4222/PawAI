@@ -144,7 +144,7 @@
 
 ## 六、Fallback 路徑驗證
 
-### 四條降級路徑全部通過
+### 五條路徑驗證結果
 
 | Test | 場景 | LLM 行為 | TTS 行為 | 結果 |
 |------|------|---------|---------|:---:|
@@ -152,12 +152,15 @@
 | 2 半離線 | Cloud LLM down | `LLM connection refused` → RuleBrain | edge-tts 播放 | ✅ |
 | 3 全離線 | tunnel 斷 + Piper | fast path / RuleBrain | Piper `Provider: piper` 播放 | ✅ |
 | 4 TTS 降級 | edge-tts 失敗 | fast path | `edge-tts failed` → Piper fallback 播放 | ✅ |
+| 5 Local LLM | 手動切換 Ollama 1.5B | Ollama JSON 5/5, 中文穩定 | edge-tts 播放 | ✅ |
+
+**Test 5 備註**：Ollama 1.5B + edge-tts 路徑為**手動切換**驗證（`-p llm_endpoint:=http://localhost:11434/...`），確認可跑通。LLM 單次延遲 ~7s（含 Ollama cold start），非穩態數據。`Cloud → Ollama 自動 fallback` 尚未實作。
 
 ### 降級鏈
 
 ```
-LLM 層：Cloud Qwen2.5-7B → RuleBrain 模板
-         （Ollama 1.5B 可手動切換，尚未自動 fallback）
+LLM 層：Cloud Qwen2.5-7B → RuleBrain 模板（自動）
+         Ollama 1.5B 可手動切換（Cloud → Ollama 自動 fallback 尚未實作）
 
 TTS 層：edge-tts → Piper 自動 fallback
 
@@ -197,8 +200,10 @@ USB 喇叭 (plughw:3,0, 48kHz)
 ### 已知問題
 - ASR 長句（「請回復你現在的狀態」）辨識不穩
 - qwen2.5:1.5b intent 映射偏差（come_here/stop/take_photo）
-- Cloud → Ollama 自動 fallback 尚未實作（目前 Cloud → RuleBrain）
+- Cloud → Ollama 自動 fallback 尚未實作（目前 Cloud → RuleBrain，Ollama 需手動切換）
+- Ollama 1.5B 延遲不穩（cold start ~7s，穩態 ~2.3s）
 - USB 裝置 card number 拔插後可能漂移
+- Qwen3 系列（0.6B/0.8B/1.7B）全部無法產出結構化 JSON，不適合本專案
 
 ### 待辦（按優先序）
 1. LLM system prompt 修正 intent 映射
