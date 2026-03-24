@@ -164,6 +164,12 @@ class LlmBridgeNode(Node):
         self.declare_parameter("action_delay_s", 0.5)
         self.declare_parameter("state_publish_hz", 2.0)
         self.declare_parameter("force_fallback", False)
+        self.declare_parameter("enable_local_llm", True)
+        self.declare_parameter(
+            "local_llm_endpoint",
+            "http://localhost:11434/v1/chat/completions",
+        )
+        self.declare_parameter("local_llm_model", "qwen2.5:1.5b")
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -191,6 +197,9 @@ class LlmBridgeNode(Node):
         self.action_delay_s = _float("action_delay_s")
         self.state_publish_hz = _float("state_publish_hz")
         self.force_fallback = _bool("force_fallback")
+        self.enable_local_llm = _bool("enable_local_llm")
+        self.local_llm_endpoint = _str("local_llm_endpoint")
+        self.local_llm_model = _str("local_llm_model")
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
@@ -348,6 +357,12 @@ class LlmBridgeNode(Node):
                 result = None
             else:
                 result = self._call_cloud_llm(user_message)
+
+            # Cloud failed → try local Ollama before RuleBrain
+            if result is None and self.enable_local_llm:
+                self.get_logger().info("Cloud LLM failed, trying local Ollama")
+                result = self._call_local_llm(user_message)
+
             if result is not None:
                 self._dispatch(result, source)
             elif self.enable_fallback:
@@ -359,40 +374,49 @@ class LlmBridgeNode(Node):
             self._llm_lock.release()
 
     def _call_cloud_llm(self, user_message: str) -> dict | None:
+        return self._call_llm(
+            self.llm_endpoint, self.llm_model, user_message, "cloud"
+        )
+
+    def _call_local_llm(self, user_message: str) -> dict | None:
+        return self._call_llm(
+            self.local_llm_endpoint, self.local_llm_model, user_message, "local"
+        )
+
+    def _call_llm(
+        self, endpoint: str, model: str, user_message: str, label: str = "cloud"
+    ) -> dict | None:
         if requests is None:
             self.last_error = "requests library not available"
             self.get_logger().error(self.last_error)
             return None
 
         body = {
-            "model": self.llm_model,
+            "model": model,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
             "temperature": self.llm_temperature,
             "max_tokens": self.llm_max_tokens,
-            # Disable Qwen3.5 thinking/reasoning mode for faster, cleaner JSON output
-            "chat_template_kwargs": {"enable_thinking": False},
         }
+        # vLLM-specific: disable thinking mode (not supported by Ollama)
+        if label == "cloud":
+            body["chat_template_kwargs"] = {"enable_thinking": False}
 
         try:
-            resp = requests.post(
-                self.llm_endpoint,
-                json=body,
-                timeout=self.llm_timeout,
-            )
+            resp = requests.post(endpoint, json=body, timeout=self.llm_timeout)
             resp.raise_for_status()
         except requests.exceptions.Timeout:
-            self.last_error = f"LLM timeout ({self.llm_timeout}s)"
+            self.last_error = f"LLM[{label}] timeout ({self.llm_timeout}s)"
             self.get_logger().warn(self.last_error)
             return None
         except requests.exceptions.ConnectionError:
-            self.last_error = "LLM connection refused"
+            self.last_error = f"LLM[{label}] connection refused"
             self.get_logger().warn(self.last_error)
             return None
         except requests.exceptions.RequestException as exc:
-            self.last_error = f"LLM request error: {exc}"
+            self.last_error = f"LLM[{label}] request error: {exc}"
             self.get_logger().error(self.last_error)
             return None
 
@@ -400,13 +424,13 @@ class LlmBridgeNode(Node):
             data = resp.json()
             raw_content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError) as exc:
-            self.last_error = f"LLM response structure error: {exc}"
+            self.last_error = f"LLM[{label}] response structure error: {exc}"
             self.get_logger().error(self.last_error)
             return None
 
         result = parse_llm_response(raw_content)
         if result is None:
-            self.last_error = f"LLM response parse/validation failed: {raw_content[:200]}"
+            self.last_error = f"LLM[{label}] response parse/validation failed: {raw_content[:200]}"
             self.get_logger().error(self.last_error)
             return None
 

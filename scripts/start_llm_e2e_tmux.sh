@@ -34,6 +34,9 @@ CONN_TYPE="${CONN_TYPE:-webrtc}"
 LLM_ENDPOINT="${LLM_ENDPOINT:-http://localhost:8000/v1/chat/completions}"
 LLM_MODEL="${LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
 LLM_TIMEOUT="${LLM_TIMEOUT:-5.0}"
+ENABLE_LOCAL_LLM="${ENABLE_LOCAL_LLM:-true}"
+LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/completions}"
+LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
 # ── ASR ──
 ASR_PROVIDER_ORDER='["whisper_local"]'
@@ -136,7 +139,7 @@ STT_PANE="$(tmux split-window -h -P -F '#{pane_id}' -t "$GO2_PANE" \
 
 # Pane 3: LLM Bridge Node (replaces intent_tts_bridge_node)
 tmux split-window -v -t "$STT_PANE" \
-  "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor llm_bridge_node --ros-args -p llm_endpoint:=\"$LLM_ENDPOINT\" -p llm_model:=\"$LLM_MODEL\" -p llm_timeout:=$LLM_TIMEOUT'"
+  "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 run speech_processor llm_bridge_node --ros-args -p llm_endpoint:=\"$LLM_ENDPOINT\" -p llm_model:=\"$LLM_MODEL\" -p llm_timeout:=$LLM_TIMEOUT -p enable_local_llm:=$ENABLE_LOCAL_LLM -p local_llm_endpoint:=\"$LOCAL_LLM_ENDPOINT\" -p local_llm_model:=\"$LOCAL_LLM_MODEL\"'"
 
 # Pane 4: TTS Node (Piper + audio_track)
 tmux split-window -v -t "$GO2_PANE" \
