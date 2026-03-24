@@ -60,15 +60,14 @@ ros2 run speech_processor tts_node --ros-args -p provider:=piper \
   -p playback_method:=datachannel
 ```
 
-### 語音 + LLM 主線（2026-03-24 更新：外接設備）
+### 語音 + LLM 主線（2026-03-24 更新：edge-tts + fast path）
 
 ```bash
-# 一鍵啟動（推薦）— 預設走 USB 外接麥克風+喇叭
+# 一鍵啟動（推薦）— edge-tts + USB 外接設備 + intent fast path
 bash scripts/start_llm_e2e_tmux.sh
-# 預設模型：Qwen2.5-7B-Instruct（純文字，啟動 ~100s）
-# 覆蓋模型：LLM_MODEL="Qwen/Qwen2.5-3B-Instruct" bash scripts/start_llm_e2e_tmux.sh
+# 全離線模式（Piper TTS）：TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 # 切回 HyperX + Megaphone：
-# LOCAL_PLAYBACK=false INPUT_DEVICE=0 CHANNELS=2 CAPTURE_SAMPLE_RATE=44100 bash scripts/start_llm_e2e_tmux.sh
+# LOCAL_PLAYBACK=false INPUT_DEVICE=0 CHANNELS=2 CAPTURE_SAMPLE_RATE=44100 TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 
 # 或手動啟動：
 # 1. SSH tunnel 到 RTX 8000（Cloud LLM）

@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-24（外接音訊設備驗證通過）
+**最後更新**：2026-03-24（edge-tts + fast path，已知 intent E2E ~3.4s）
 **硬底線**：2026/4/13 文件繳交，五月展示
 
 ---
@@ -9,11 +9,11 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **外接設備 E2E 通過** | 3/24 | USB 麥克風+喇叭驗證通過，清晰度大幅改善 |
+| 語音 (speech_processor) | **edge-tts + fast path** | 3/24 | 已知 intent ~3.4s，LLM path ~6s，edge-tts 主線 |
 | 人臉 (face_perception) | Jetson smoke 通過 | 3/18 | QoS 3/23 已修（RELIABLE→BEST_EFFORT），待上機驗證 |
 | 手勢 (vision_perception) | Phase 1 完成 | 3/23 | Gesture Recognizer 模式穩定，23 unit tests |
 | 姿勢 (vision_perception) | Phase 1 完成 | 3/23 | MediaPipe Pose CPU 18.5 FPS |
-| LLM (llm_bridge_node) | 雲端主線可用 | 3/18 | Qwen2.5-7B on RTX 8000，~1.5s（Prefix Cache） |
+| LLM (llm_bridge_node) | 本地+雲端+fast path | 3/24 | fast path 跳 LLM，Ollama 1.5B 本地，Cloud 7B 備用 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26 |
 | CI | 14 test files, 198 cases | 3/23 | fast-gate + flake8 report-only |
 | interaction_executive | 空殼 | — | 系統無統一中控，事件雙重消費風險 |
@@ -27,6 +27,10 @@
 - **qwen2.5:1.5b 本地 LLM 驗證通過**：JSON parse 6/6，中文穩定，建議為本地 fallback 主力
 - Echo 自激 5/5 無觸發，cooldown 1000ms 足夠
 - 本地 E2E 延遲基線：P50 8.1s / P95 13.6s
+- **edge-tts 整合**：合成 P50 0.72s（vs Piper 2.0s），Piper 自動 fallback
+- **intent fast path**：greet/stop/sit/stand + conf >= 0.8 跳過 LLM → E2E ~3.4s
+- **reply_text 硬截斷 12 字**：小模型不遵守 prompt 限制，code 層面強制
+- **max_tokens 120→80**：JSON envelope 50 tok + 短 reply 足夠
 
 ### 3/23
 
