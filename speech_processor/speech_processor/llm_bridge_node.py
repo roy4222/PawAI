@@ -123,6 +123,7 @@ class LlmBridgeNode(Node):
 
         # State
         self._seen_sessions: set = set()
+        self._seen_sessions_lock = threading.Lock()
         self._face_greet_history: dict = {}  # (track_id, name) -> timestamp
         self._latest_face_state: dict | None = None
         self._llm_lock = threading.Lock()
@@ -213,17 +214,17 @@ class LlmBridgeNode(Node):
         session_id = str(payload.get("session_id", "")).strip()
         intent = str(payload.get("intent", "unknown")).strip() or "unknown"
 
-        # Dedup by session_id
-        if session_id and session_id in self._seen_sessions:
-            return
+        # Dedup by session_id (thread-safe)
+        with self._seen_sessions_lock:
+            if session_id and session_id in self._seen_sessions:
+                return
+            if session_id:
+                self._seen_sessions.add(session_id)
+                if len(self._seen_sessions) > 200:
+                    self._seen_sessions = set(list(self._seen_sessions)[-100:])
 
         if intent == "hallucination":
             return
-
-        if session_id:
-            self._seen_sessions.add(session_id)
-            if len(self._seen_sessions) > 200:
-                self._seen_sessions = set(list(self._seen_sessions)[-100:])
 
         asr_text = str(payload.get("text", "")).strip()
         confidence = float(payload.get("confidence", 0.0))

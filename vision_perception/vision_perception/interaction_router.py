@@ -8,6 +8,7 @@ NOT a full executive/brain. Only applies three simple rules:
 Downstream nodes (event_action_bridge or future brain) consume these events.
 """
 import json
+import threading
 import time
 
 import rclpy
@@ -49,6 +50,7 @@ class InteractionRouter(Node):
         self._welcome_name_ts: dict[str, float] = {}  # name → last welcome timestamp
         self._fallen_first_ts: float | None = None
         self._fallen_timer = None  # ROS2 Timer, at most one
+        self._fallen_lock = threading.Lock()
         self._last_action_ts: dict[str, float] = {}
 
         # Subscriptions
@@ -181,30 +183,32 @@ class InteractionRouter(Node):
 
         pose = data.get("pose", "")
 
-        if pose == "fallen":
-            # Only create timer if one doesn't exist yet
-            if self._fallen_timer is None:
-                self._fallen_first_ts = data.get("stamp", time.time())
-                self._fallen_timer = self.create_timer(
-                    1.0, self._check_fallen
-                )
-                self.get_logger().info("Fallen detected — timer started")
-        else:
-            # Non-fallen: cancel timer and reset
-            if self._fallen_timer is not None:
-                self._fallen_timer.cancel()
-                self._fallen_timer = None
-                self.get_logger().debug("Fallen timer cancelled — pose reset")
-            self._fallen_first_ts = None
+        with self._fallen_lock:
+            if pose == "fallen":
+                # Only create timer if one doesn't exist yet
+                if self._fallen_timer is None:
+                    self._fallen_first_ts = data.get("stamp", time.time())
+                    self._fallen_timer = self.create_timer(
+                        1.0, self._check_fallen
+                    )
+                    self.get_logger().info("Fallen detected — timer started")
+            else:
+                # Non-fallen: cancel timer and reset
+                if self._fallen_timer is not None:
+                    self._fallen_timer.cancel()
+                    self._fallen_timer = None
+                    self.get_logger().debug("Fallen timer cancelled — pose reset")
+                self._fallen_first_ts = None
 
     def _check_fallen(self):
         """Timer callback (1Hz): check if fallen has persisted long enough."""
-        if self._fallen_first_ts is None:
-            # Safety: shouldn't happen, but cancel timer
-            if self._fallen_timer is not None:
-                self._fallen_timer.cancel()
-                self._fallen_timer = None
-            return
+        with self._fallen_lock:
+            if self._fallen_first_ts is None:
+                # Safety: shouldn't happen, but cancel timer
+                if self._fallen_timer is not None:
+                    self._fallen_timer.cancel()
+                    self._fallen_timer = None
+                return
 
         if not should_fall_alert(
             "fallen", self._fallen_first_ts, self._fallen_persist
