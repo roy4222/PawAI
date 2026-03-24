@@ -373,6 +373,7 @@ class SttIntentNode(Node):
         self.declare_parameter("capture_sample_rate", 16000)
         self.declare_parameter("frame_samples", 512)
         self.declare_parameter("channels", 2)  # HyperX SoloCast is stereo-only; downmix in callback
+        self.declare_parameter("mic_gain", 1.0)  # software gain for low-sensitivity mics
         self.declare_parameter("input_device", -1)
         self.declare_parameter("alsa_device", "")
         self.declare_parameter("max_record_seconds", 6.0)
@@ -414,6 +415,7 @@ class SttIntentNode(Node):
         self.capture_sample_rate = int(self.get_parameter("capture_sample_rate").value)
         self.frame_samples = int(self.get_parameter("frame_samples").value)
         self.channels = int(self.get_parameter("channels").value)
+        self.mic_gain = float(self.get_parameter("mic_gain").value)
         self.input_device = int(self.get_parameter("input_device").value)
         self.alsa_device = str(self.get_parameter("alsa_device").value)
         self.max_record_seconds = float(self.get_parameter("max_record_seconds").value)
@@ -630,10 +632,16 @@ class SttIntentNode(Node):
             if resampled.size == 0:
                 continue
 
-            self._pre_roll_frames.append(resampled)
+            # Apply software gain only to recording buffer (not VAD)
+            if self.mic_gain != 1.0:
+                boosted = np.clip(resampled * self.mic_gain, -1.0, 1.0)
+            else:
+                boosted = resampled
+
+            self._pre_roll_frames.append(boosted)
             with self._record_lock:
                 if self._recorder_state.is_recording:
-                    self._recorder_state.chunks.append(resampled)
+                    self._recorder_state.chunks.append(boosted)
 
             if self.energy_vad_enabled:
                 self._energy_vad_process(resampled)
