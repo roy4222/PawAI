@@ -85,6 +85,7 @@ class TTSProvider(Enum):
     GOOGLE = "google"
     AMAZON = "amazon"
     OPENAI = "openai"
+    EDGE_TTS = "edge_tts"
 
 
 @dataclass
@@ -124,6 +125,9 @@ class TTSConfig:
     piper_noise_scale: float = 0.667
     piper_noise_w: float = 0.8
     piper_use_cuda: bool = False
+
+    # edge-tts specific settings
+    edge_tts_voice: str = "zh-CN-XiaoxiaoNeural"
 
 
 class AudioCache:
@@ -387,6 +391,37 @@ class TTSProvider_Piper:
                 pass
 
 
+class TTSProvider_EdgeTTS:
+    """Microsoft Edge TTS (cloud, high quality, zh-TW/zh-CN support)"""
+
+    def __init__(self, config: TTSConfig):
+        self.voice = config.edge_tts_voice
+        self.timeout = 10
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        try:
+            import asyncio
+            import edge_tts
+
+            async def _gen():
+                communicate = edge_tts.Communicate(text, self.voice)
+                chunks = []
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        chunks.append(chunk["data"])
+                return b"".join(chunks)
+
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(
+                    asyncio.wait_for(_gen(), timeout=self.timeout)
+                ) or None
+            finally:
+                loop.close()
+        except Exception:
+            return None
+
+
 class AudioProcessor:
     """Audio processing utilities"""
 
@@ -503,6 +538,9 @@ class EnhancedTTSNode(Node):
         )
         self.declare_parameter("piper_noise_w", _env_float("PIPER_NOISE_W", 0.8))
         self.declare_parameter("piper_use_cuda", _env_bool("PIPER_USE_CUDA", False))
+        self.declare_parameter(
+            "edge_tts_voice", _env_str("EDGE_TTS_VOICE", "zh-CN-XiaoxiaoNeural")
+        )
 
     def _load_configuration(self) -> TTSConfig:
         """Load configuration from parameters"""
@@ -587,6 +625,9 @@ class EnhancedTTSNode(Node):
             piper_use_cuda=self.get_parameter("piper_use_cuda")
             .get_parameter_value()
             .bool_value,
+            edge_tts_voice=self.get_parameter("edge_tts_voice")
+            .get_parameter_value()
+            .string_value,
         )
 
     def _create_tts_provider(self):
@@ -600,6 +641,8 @@ class EnhancedTTSNode(Node):
             return TTSProvider_MeloTTS(self.config)
         elif self.config.provider == TTSProvider.PIPER:
             return TTSProvider_Piper(self.config)
+        elif self.config.provider == TTSProvider.EDGE_TTS:
+            return TTSProvider_EdgeTTS(self.config)
         else:
             self.get_logger().error(f"Unsupported TTS provider: {self.config.provider}")
             return None
@@ -641,10 +684,17 @@ class EnhancedTTSNode(Node):
             # processing window (~8s), picking up Go2's playback as input.
             self._publish_tts_playing(True)
 
+            # Resolve cache voice identity (edge-tts uses its own voice param)
+            cache_voice = (
+                self.config.edge_tts_voice
+                if self.config.provider == TTSProvider.EDGE_TTS
+                else self.config.voice_name
+            )
+
             # Check cache first
             cache_hit = False
             audio_data = self.cache.get(
-                text, self.config.voice_name, self.config.provider.value
+                text, cache_voice, self.config.provider.value
             )
 
             if audio_data:
@@ -659,11 +709,24 @@ class EnhancedTTSNode(Node):
                 self.get_logger().info("🔊 Generating new speech...")
                 audio_data = self.tts_provider.synthesize(text)
 
+                # Piper fallback if edge-tts fails
+                if audio_data is None and self.config.provider == TTSProvider.EDGE_TTS:
+                    self.get_logger().warn("edge-tts failed, falling back to Piper")
+                    try:
+                        piper_fb = TTSProvider_Piper(self.config)
+                        audio_data = piper_fb.synthesize(text)
+                        if audio_data:
+                            # Cache under piper key, not edge_tts
+                            self.cache.put(text, cache_voice, "piper", audio_data)
+                            self.get_logger().info("💾 Piper fallback cached")
+                    except Exception:
+                        pass
+
                 if audio_data:
                     # Cache the result
                     if self.cache.put(
                         text,
-                        self.config.voice_name,
+                        cache_voice,
                         self.config.provider.value,
                         audio_data,
                     ):

@@ -49,7 +49,8 @@ MAX_RECORD_SECONDS="10.0"
 SPEECH_END_GRACE_MS="250"
 
 # ── TTS ──
-TTS_PROVIDER="piper"
+TTS_PROVIDER="${TTS_PROVIDER:-edge_tts}"    # edge_tts (cloud, best quality) or piper (local fallback)
+EDGE_TTS_VOICE="${EDGE_TTS_VOICE:-zh-CN-XiaoxiaoNeural}"
 PIPER_MODEL_PATH="/home/jetson/models/piper/zh_CN-huayan-medium.onnx"
 PIPER_CONFIG_PATH="/home/jetson/models/piper/zh_CN-huayan-medium.onnx.json"
 PIPER_SPEAKER_ID="0"
@@ -139,7 +140,7 @@ tmux split-window -v -t "$STT_PANE" \
 
 # Pane 4: TTS Node (Piper + audio_track)
 tmux split-window -v -t "$GO2_PANE" \
-  "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export PATH=\"$HOME/.local/bin:\$PATH\" && amixer -c 3 set PCM 147 >/dev/null 2>&1; ros2 run speech_processor tts_node --ros-args -p provider:=$TTS_PROVIDER -p piper_model_path:=$PIPER_MODEL_PATH -p piper_config_path:=$PIPER_CONFIG_PATH -p piper_speaker_id:=$PIPER_SPEAKER_ID -p piper_length_scale:=$PIPER_LENGTH_SCALE -p piper_noise_scale:=$PIPER_NOISE_SCALE -p piper_noise_w:=$PIPER_NOISE_W -p local_playback:=$LOCAL_PLAYBACK -p local_output_device:=$LOCAL_OUTPUT_DEVICE -p playback_method:=$PLAYBACK_METHOD -p robot_chunk_interval_sec:=$ROBOT_CHUNK_INTERVAL_SEC -p robot_playback_tail_sec:=$ROBOT_PLAYBACK_TAIL_SEC -p robot_volume:=$ROBOT_VOLUME'"
+  "zsh -lc 'cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export PATH=\"$HOME/.local/bin:\$PATH\" && amixer -c 3 set PCM 147 >/dev/null 2>&1; ros2 run speech_processor tts_node --ros-args -p provider:=$TTS_PROVIDER -p edge_tts_voice:=$EDGE_TTS_VOICE -p piper_model_path:=$PIPER_MODEL_PATH -p piper_config_path:=$PIPER_CONFIG_PATH -p piper_speaker_id:=$PIPER_SPEAKER_ID -p piper_length_scale:=$PIPER_LENGTH_SCALE -p piper_noise_scale:=$PIPER_NOISE_SCALE -p piper_noise_w:=$PIPER_NOISE_W -p local_playback:=$LOCAL_PLAYBACK -p local_output_device:=$LOCAL_OUTPUT_DEVICE -p playback_method:=$PLAYBACK_METHOD -p robot_chunk_interval_sec:=$ROBOT_CHUNK_INTERVAL_SEC -p robot_playback_tail_sec:=$ROBOT_PLAYBACK_TAIL_SEC -p robot_volume:=$ROBOT_VOLUME'"
 
 # ════════════════════════════════════════════════════
 # Layout & options

@@ -231,7 +231,7 @@ class LlmBridgeNode(Node):
         self.last_source = "speech"
         threading.Thread(
             target=self._call_llm_and_act,
-            args=(user_message, intent, "speech", None),
+            args=(user_message, intent, "speech", None, confidence),
             daemon=True,
         ).start()
 
@@ -303,12 +303,17 @@ class LlmBridgeNode(Node):
 
     # ── LLM call + action dispatch ──────────────────────────────────────
 
+    # Known intents that can skip LLM when confidence is high
+    FAST_PATH_INTENTS = {"greet", "stop", "sit", "stand"}
+    FAST_PATH_MIN_CONFIDENCE = 0.8
+
     def _call_llm_and_act(
         self,
         user_message: str,
         fallback_intent: str,
         source: str,
         face_name: str | None = None,
+        confidence: float = 0.0,
     ) -> None:
         if not self._llm_lock.acquire(blocking=False):
             self.get_logger().warn("LLM call already in progress, skipping")
@@ -324,6 +329,19 @@ class LlmBridgeNode(Node):
                     )
                     return
                 self._last_greet_ts = now
+
+            # Fast path: high-confidence known intents skip LLM entirely
+            if (
+                not self.force_fallback
+                and fallback_intent in self.FAST_PATH_INTENTS
+                and confidence >= self.FAST_PATH_MIN_CONFIDENCE
+                and source == "speech"
+            ):
+                self.get_logger().info(
+                    f"Fast path: intent={fallback_intent} conf={confidence:.2f}, skipping LLM"
+                )
+                self._rule_fallback(fallback_intent, source, face_name)
+                return
 
             if self.force_fallback:
                 self.get_logger().info("force_fallback=True, skipping LLM")
