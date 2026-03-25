@@ -9,7 +9,7 @@ import time
 
 # Only these gestures produce a gesture_command event.
 # Everything else is ignored (node layer logs them as debug).
-GESTURE_WHITELIST = {"stop", "point", "thumbs_up"}
+GESTURE_WHITELIST = {"stop", "thumbs_up", "ok"}
 
 
 def should_welcome(

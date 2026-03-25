@@ -90,15 +90,11 @@ class TestShouldGestureCommand:
         assert result["who"] == "Roy"
         assert result["face_track_id"] == 1
 
-    def test_whitelist_point_without_face_state(self):
+    def test_point_not_in_whitelist_returns_none(self):
         from vision_perception.interaction_rules import should_gesture_command
 
         gesture = {"gesture": "point", "confidence": 0.85, "hand": "left"}
-        result = should_gesture_command(gesture, None)
-        assert result is not None
-        assert result["gesture"] == "point"
-        assert result["who"] is None
-        assert result["face_track_id"] is None
+        assert should_gesture_command(gesture, None) is None
 
     def test_whitelist_thumbs_up_with_only_unknown_faces(self):
         from vision_perception.interaction_rules import should_gesture_command
@@ -110,6 +106,14 @@ class TestShouldGestureCommand:
         assert result["gesture"] == "thumbs_up"
         assert result["who"] is None
         assert result["face_track_id"] is None
+
+    def test_whitelist_ok_gesture(self):
+        from vision_perception.interaction_rules import should_gesture_command
+
+        gesture = {"gesture": "ok", "confidence": 0.8, "hand": "right"}
+        result = should_gesture_command(gesture, None)
+        assert result is not None
+        assert result["gesture"] == "ok"
 
     def test_non_whitelist_gesture_wave_returns_none(self):
         from vision_perception.interaction_rules import should_gesture_command
