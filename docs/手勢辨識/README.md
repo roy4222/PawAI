@@ -5,9 +5,10 @@
 ## 目標效果
 
 - 用手勢指揮機器狗
-- **靜態手勢**：停止 (手掌張開)、指向 (食指指向)、確認 (握拳)
-- **動態手勢**：招手 (揮手來回)
-- **4/13 Demo 目標**：wave / stop / point / fist 四種手勢，成功率 ≥ 70%
+- **靜態手勢**：停止 (stop)、確認 (thumbs_up)、同意 (ok)
+- **4/13 Demo 目標**：stop / thumbs_up / ok 三種手勢，成功率 ≥ 70%
+
+> **2026-03-25 更新**：point 已從主線手勢清單移除（Gesture Recognizer 辨識不穩定），wave 為動態手勢保留研究。主線手勢為 stop / thumbs_up / ok。
 
 ### 手勢可靠度分級（2026-03-17 社群調查）
 
@@ -35,18 +36,18 @@
 
 ---
 
-## 技術選型結論（2026-03-17 更新）
+## 技術選型結論（2026-03-25 更新）
 
-### 推薦方案：分層策略
+### 主線方案：MediaPipe Gesture Recognizer
 
 | 優先序 | 方案 | 理由 |
 |:------:|------|------|
-| **首選** | **rtmlib + RTMPose + onnxruntime-gpu** | 繞過 MMPose 編譯地獄、`pip install rtmlib` 即可用、支援 TensorRT EP |
-| 備案 1 | **YOLO11n-pose-hands** (Ultralytics) | 安裝最簡（`pip install ultralytics`）、Jetson 部署路徑最成熟、但只有手不含 body |
-| 備案 2 | PINTO0309/hand-gesture-recognition-using-onnx | 純 ONNX、輕量、內建 MLP 手勢分類器 |
-| 備案 3 | trt_pose_hand (NVIDIA) | 6 類內建、但程式碼停更(~2021)、JetPack 6 相容性未驗證 |
+| **主線** | **MediaPipe Gesture Recognizer Task API** | CPU 7.2 FPS（Jetson 實測），7 種內建手勢，GPU 0%，RAM 友善，3/23 場景驗證通過 |
+| 備援 | **MediaPipe Hands + gesture_classifier.py** | CPU 16.8 FPS，但只有 3 種手勢（缺 thumbs_up），point 規則過嚴 |
+| 備援 | **rtmlib + RTMPose wholebody** | GPU 91-99% 滿載，3.8-7.5 FPS，手部 keypoints 不穩定，已降為備援 |
 | **不推薦** | ~~MMPose + MMDeploy 全套~~ | JetPack 6 零社群驗證、MMCV 編譯 OOM、Issue 零回覆 |
-| **不推薦** | ~~MediaPipe Hands~~ | Jetson ARM64 無官方 wheel、GPU delegate 不可用 |
+
+> **決策變更紀錄（3/21）**：原推薦 RTMPose wholebody 為主線，但 Jetson 實測 GPU 91-99% 滿載、手部 keypoint 不穩定。3/21 決策改為全 MediaPipe CPU pipeline（GPU 0%），3/22 整合 Gesture Recognizer Task API，3/23 場景驗證通過後確定為主線。
 
 ### ⚠️ 重大發現：DWPose 45 FPS 數據可疑（2026-03-17 調查）
 
@@ -94,9 +95,9 @@ keypoints, scores = wholebody(img)
 
 兩者**不是完全等價替換**：DWPose 蒸餾後精度略優，但 RTMPose 的社群資源、匯出文件、Jetson 可行性都明顯更好。
 
-### ⚠️ MediaPipe 在 Jetson 上的已知問題
+### MediaPipe 在 Jetson 上的狀況（3/16 調查 → 3/21 實測推翻）
 
-> **重要**：這是 2026-03-16 深入調查後的結論，推翻了先前的初步評估。
+> **2026-03-21 更新**：以下問題在實測中**已被推翻**。MediaPipe 在 Jetson ARM64 上可以正常運行（CPU-only），Gesture Recognizer 7.2 FPS、Hands 16.8 FPS，已確定為主線方案。原始調查結論保留供參考。
 
 1. **無法 `pip install`**：PyPI 無 Linux ARM64 wheel，必須從 source build（需 Bazel，耗時 1-2 小時）
 2. **GPU 加速不可用**：即使 build 成功，TFLite GPU delegate 在 Jetson 上無法正確初始化
@@ -104,25 +105,23 @@ keypoints, scores = wholebody(img)
 4. **社群 wheel 過舊**：PINTO0309/mediapipe-bin 停在 v0.8.5，不支援新版 Task API
 5. **JetPack 6.x 建構困難**：CUDA 12.6 + 新 linker 導致編譯失敗
 
-**結論**：MediaPipe 適合開發機 demo（x86 筆電/桌機），但**不適合 Jetson 部署**。
+**原始結論（已推翻）**：~~MediaPipe 不適合 Jetson 部署~~。實測證明 CPU-only 模式可用，且 GPU 0% 的特性反而有利於多感知共存。
 
 ---
 
-## 方案比較（Jetson Orin Nano 8GB — 2026-03-17 實測數據更新）
+## 方案比較（Jetson Orin Nano 8GB — 2026-03-25 實測數據更新）
 
-| 方案 | Keypoints | FPS (Orin Nano) | 記憶體 | 安裝難度 | 手勢分類 |
-|------|-----------|:---------------:|:------:|:--------:|:--------:|
-| **rtmlib + RTMPose-m (body)** | 17 body | **推估 50-100** | ~150MB | **低** (pip) | 需自建 |
-| **rtmlib + RTMPose-l (wholebody)** | 133 全身 | **推估 15-25** | ~200MB | **低** (pip) | 需自建 |
-| **rtmlib + Hand** | 21 hand | **推估 60-100+** | ~100MB | **低** (pip) | 需自建 |
-| **YOLO11n-pose-hands** | 21 hand | **推估 40-60** | ~100-200MB | **低** (pip) | 需自建 |
-| PINTO0309 hand-onnx | 21 hand | 推估 25-40 | ~100-150MB | 低 (pip) | **MLP 內建** |
-| DWPose wholebody (TensorRT) | 133 全身 | **⚠️ 推估 3-5** | ~200MB | **極高** | 需自建 |
-| MMPose + MMDeploy 全套 | 可選 | 理論較快 | ~150-300MB | **極高** | 需自建 |
-| trt_pose_hand (NVIDIA) | 21 hand | 推估 50-60 | ~150MB | 高 (JetPack 6?) | **6 類內建** |
-| MediaPipe Hands | 21 hand | <5-25 (CPU) | ~200-350MB | ❌ 不可行 | 需自建 |
+| 方案 | Keypoints | FPS (Orin Nano) | GPU 佔用 | 手勢分類 | 狀態 |
+|------|-----------|:---------------:|:--------:|:--------:|:----:|
+| **MediaPipe Gesture Recognizer** | 21 hand | **7.2 (CPU 實測)** | **0%** | **7 種內建** | **主線** |
+| **MediaPipe Hands** | 21 hand | **16.8 (CPU 實測)** | **0%** | 需自建（3 種） | 備援 |
+| rtmlib + RTMPose-l (wholebody) | 133 全身 | **3.8-7.5 (GPU 實測)** | 91-99% | 需自建 | 備援 |
+| rtmlib + RTMPose-m (body) | 17 body | 推估 50-100 | — | 需自建 | 未測 |
+| YOLO11n-pose-hands | 21 hand | 推估 40-60 | — | 需自建 | 未測 |
+| DWPose wholebody (TensorRT) | 133 全身 | ⚠️ 推估 3-5 | — | 需自建 | 不可用 |
+| trt_pose_hand (NVIDIA) | 21 hand | 推估 50-60 | — | 6 類內建 | 未測 |
 
-> **注意**：「推估」數據基於 RTX 1660 Ti benchmark → Orin Nano 算力比換算，或社群在類似硬體上的回報。所有數據需以本專案 Jetson Orin Nano + JetPack 6.x 實測確認。
+> **2026-03-25 結論**：MediaPipe Gesture Recognizer 在 Jetson 上 CPU-only 7.2 FPS、GPU 0%、三感知壓測通過（RAM 1.2GB, temp 52°C）。RTMPose wholebody 因 GPU 滿載已降為備援。
 
 ### 推薦落地順序（2026-03-22 更新）
 
@@ -145,29 +144,26 @@ keypoints, scores = wholebody(img)
 
 ## 邊緣端 (Jetson 8GB) - 即時反應
 
-### 手部關鍵點偵測
+### 手部關鍵點偵測與手勢辨識
 
-#### rtmlib + RTMPose（主路徑）
+#### MediaPipe Gesture Recognizer（主線，2026-03-25 確定）
 
-- **不需要安裝 mmcv / mmpose / mmdet**，繞過 Jetson 上的編譯地獄
-- `pip install rtmlib` + `onnxruntime-gpu`（Jetson Zoo pre-built）
-- 支援 RTMPose body / hand / wholebody 全系列
-- 三種模式可選：`lightweight`（最快）/ `balanced`（推薦）/ `performance`（最準）
-- TensorRT backend 可用（需額外安裝 tensorrt python binding）
-- **Phase 2 第一天就用這個起步**，不要先試 DWPose
+- **Gesture Recognizer Task API**：單模型一步到位，內建 7 種手勢分類
+- CPU-only 7.2 FPS，**GPU 0%**（與 face/pose 共存零衝突）
+- 主線手勢：stop / thumbs_up / ok
+- 啟動：`gesture_backend:=recognizer`（launch override）
 
-#### DWPose wholebody（研究線，不是 Phase 2 起步選項）
+#### MediaPipe Hands + gesture_classifier.py（備援）
 
-- RTMPose 的蒸餾版本，133 keypoints（[COCO-WholeBody](https://github.com/jin-s13/COCO-WholeBody) 標準）
-- **⚠️ Jetson 上零成功記錄**，推算 FPS 只有 3-5（不可用）
-- **定位**：待 RTMPose 路徑穩定且 FPS 有餘裕後，再評估是否值得切換以獲得更好的手部精度
+- CPU-only 16.8 FPS，GPU 0%
+- 只有 3 種手勢（stop/ok/fist），缺 thumbs_up，point 規則過嚴
+- 啟動：`gesture_backend:=mediapipe`
 
-#### trt_pose_hand（次選，風險上調）
+#### rtmlib + RTMPose wholebody（備援，GPU 密集）
 
-- NVIDIA-AI-IOT 官方維護，但**程式碼停更 ~2021**
-- 21 keypoints + 6 類手勢 (fist/pan/stop/fine/peace/no hand)
-- TensorRT 原生，有 ROS2 wrapper（`ros2_trt_pose_hand`）
-- **⚠️ 風險**：torch2trt 在 JetPack 6 + PyTorch 2.x 上可能 build 失敗
+- GPU 91-99% 滿載，3.8-7.5 FPS
+- 手部 keypoints 不穩定，已降為備援
+- 啟動：`gesture_backend:=rtmpose`（已棄用標記）
 
 ### 靜態手勢分類
 
@@ -424,13 +420,15 @@ event_action_bridge（3/18 新建）
 /webrtc_req (Go2 動作) + /tts (語音回覆)
 ```
 
-### event_action_bridge 手勢→動作映射（2026-03-18）
+### event_action_bridge 手勢→動作映射（2026-03-23 更新）
 
 | 手勢 | Go2 動作 | TTS | Cooldown |
 |------|---------|-----|:--------:|
-| `wave` | api_id 1016（運動命令） | "你好！" | 3s |
 | `stop` | api_id 1003（緊急停止） | — | **無**（安全優先） |
-| `ok`/`fist` | api_id 1020（回應動作） | — | 3s |
+| `ok` | api_id 1020（回應動作） | — | 3s |
+| `thumbs_up` | api_id 1020（回應動作） | "收到！" | 3s |
+
+> **3/23 變更**：移除 wave→hello 映射（hello 統一由 llm_bridge 處理）。主線手勢為 stop / thumbs_up / ok。
 
 > `event_action_bridge` 不觸及語音事件或人臉事件（由 `llm_bridge_node` 單獨處理），維持單一控制權。
 
@@ -469,16 +467,17 @@ event_action_bridge（3/18 新建）
 
 ---
 
-## 手勢定義與 Skill 對應（2026-03-17 更新）
+## 手勢定義與 Skill 對應（2026-03-25 更新）
 
 | 手勢 | 類型 | 對應 Skill | 可靠度 | 優先序 |
 |------|------|------------|:------:|:------:|
-| stop ✋ | 靜態 | `stop()` | Tier 1 | P1 |
-| point 👉 | 靜態 | `navigate_to(direction)` | Tier 1 | P1 |
-| fist ✊ | 靜態 | `confirm()` | Tier 1 | P1 |
-| wave 👋 | 靜態+動態 | `follow_person()` | 需時序 | P1 |
+| stop | 靜態 | `stop()` | Tier 1 | P0 |
+| thumbs_up | 靜態 | `confirm()` | Tier 2 | P1 |
+| ok | 靜態 | `acknowledge()` | Tier 2 | P1 |
 
-> **變更記錄**：OK 👌 → Fist ✊（2026-03-17）。理由見 §手勢可靠度分級。
+> **變更記錄**：
+> - 3/17：OK → Fist（DWPose 遮擋場景 AP 低）
+> - 3/23：主線切換為 Gesture Recognizer，支援 stop/thumbs_up/ok 三種。point 因辨識不穩定移除，wave 需時序分析保留研究。
 
 ### 多模態衝突處理
 

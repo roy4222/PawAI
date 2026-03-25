@@ -17,6 +17,8 @@ setup(
     install_requires=[
         "setuptools",
         "numpy",
+        "opencv-python",
+        "mediapipe==0.10.18",
     ],
     zip_safe=True,
     maintainer="Roy",

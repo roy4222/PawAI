@@ -1,0 +1,56 @@
+# requirements-jetson.txt
+# Jetson Orin Nano 8GB (JetPack 6.x, CUDA 12.6) 專用依賴
+# 安裝順序有要求——按序號執行
+#
+# 前提：ROS2 Humble 已安裝（/opt/ros/humble/）
+# 前提：uv 已安裝（pip install uv）
+
+# ── 1. Jetson AI Lab wheels（必須先裝，指定 index URL）──
+# onnxruntime-gpu 需要 Jetson AI Lab 的 wheel（含 CUDA/TensorRT EP）
+--extra-index-url https://pypi.jetson-ai-lab.io/jp6/cu126
+onnxruntime-gpu==1.23.0
+
+# ── 2. CTranslate2 CUDA（faster-whisper 依賴）──
+# 手動安裝到 ~/.local/ctranslate2-cuda/
+# 安裝後需設定 LD_LIBRARY_PATH=$HOME/.local/ctranslate2-cuda/lib
+# 啟動腳本已處理（start_llm_e2e_tmux.sh, start_full_demo_tmux.sh）
+
+# ── 3. rtmlib（RTMPose 備援，必須 --no-deps 避免拉回 CPU onnxruntime）──
+# uv pip install --no-deps rtmlib
+
+# ── 4. 核心 Python 依賴 ──
+aiortc==1.9.0
+aiohttp
+requests
+av
+cryptography
+pycryptodome
+PyYAML
+numpy==1.26.4
+opencv-python
+lz4>=4.0
+pydub
+sounddevice
+faster-whisper
+edge-tts
+mediapipe==0.10.18
+silero-vad
+
+# ── 5. 本地 LLM（Ollama，獨立安裝）──
+# curl -fsSL https://ollama.com/install.sh | sh
+# ollama pull qwen2.5:1.5b
+
+# ── 6. Piper TTS（本地 fallback）──
+# uv pip install piper-phonemize piper-tts
+# 模型下載到 ~/models/piper/zh_CN-huayan-medium.onnx
+
+# ── 7. 人臉模型 ──
+# YuNet 2023mar: ~/face_models/face_detection_yunet_2023mar.onnx
+# SFace 2021dec: ~/face_models/face_recognition_sface_2021dec.onnx
+# face_db: ~/face_db/
+
+# ── 注意事項 ──
+# - Whisper 必須用 cuda + float16，CPU int8 不支援會 silent fail
+# - MediaPipe 0.10.18 是最後有 aarch64 wheel 的版本，之後被 Google 移除
+# - rtmlib 必須 --no-deps 安裝，否則會拉回 CPU 版 onnxruntime 覆蓋 GPU 版
+# - LD_LIBRARY_PATH 必須含 $HOME/.local/ctranslate2-cuda/lib

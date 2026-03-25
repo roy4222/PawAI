@@ -1,9 +1,10 @@
-# 人臉辨識（YuNet + SFace）
+# 人臉辨識（YuNet 2023mar + SFace）
 
 本文件只保留目前有效流程與最新排障結果。
 
-- 主線目標：先把 `YuNet + SFace` 在 Jetson 上穩定跑通、可監看、可量測。
-- 目前狀態：**USABLE** — Jetson smoke passed（2026-03-18）。D435 + state/event/debug_image 全通。
+- 主線目標：`YuNet 2023mar + SFace` 在 Jetson 上穩定跑通、可監看、可量測。
+- 目前狀態：**USABLE** — Jetson smoke passed（2026-03-18），QoS 修正（2026-03-23），YuNet 升級 2023mar（2026-03-25）。
+- **Benchmark 決策**：YuNet 2023mar CPU 71.3 FPS（JETSON_LOCAL），備援 SCRFD-500M（JETSON_LOCAL）。
 - 已暫停：Go2 互動控制 MVP（本輪未成功，相關內容先移除，後續另開章節）。
 
 ---
@@ -43,10 +44,10 @@
 
 模型：
 
-- YuNet：`/home/jetson/face_models/face_detection_yunet_legacy.onnx`
+- YuNet：`/home/jetson/face_models/face_detection_yunet_2023mar.onnx`（**2023mar 版本，CPU 71.3 FPS**）
 - SFace：`/home/jetson/face_models/face_recognition_sface_2021dec.onnx`
 
-> 註：本專案在 Jetson OpenCV 4.5.4 上，`2023mar` YuNet 會有相容性問題，已改用 `legacy` 版本。
+> **2026-03-25 更新**：經 Benchmark 實測（見 `benchmarks/results/archive/`），主線已升級為 **YuNet 2023mar**。先前 legacy 版本因 OpenCV 相容性問題使用，現已解決。備援為 SCRFD-500M（JETSON_LOCAL）。
 
 ---
 
@@ -64,7 +65,7 @@
 解法：
 
 - 前端改同源 `/api/*` 代理。
-- 後端固定改用 `face_detection_yunet_legacy.onnx`。
+- 後端固定改用 `face_detection_yunet_2023mar.onnx`（原為 legacy，3/25 升級）。
 
 ---
 
@@ -210,7 +211,7 @@ source /opt/ros/humble/setup.bash
 python3 /home/jetson/elder_and_dog/scripts/face_identity_infer_cv.py \
   --db-dir /home/jetson/face_db \
   --model-path /home/jetson/face_db/model_sface.pkl \
-  --yunet-model /home/jetson/face_models/face_detection_yunet_legacy.onnx \
+  --yunet-model /home/jetson/face_models/face_detection_yunet_2023mar.onnx \
   --sface-model /home/jetson/face_models/face_recognition_sface_2021dec.onnx \
   --det-score-threshold 0.35 \
   --min-face-area-ratio 0.001 \
@@ -258,11 +259,13 @@ ps -eo pid,pcpu,pmem,cmd --sort=-pcpu | head -n 15
 
 ---
 
-## 已修復問題（2026-03-18）
+## 已修復問題（2026-03-18 ~ 03-23）
 
 - **np.int32 JSON 序列化 crash**：`to_bbox()` 回傳 `np.int32`，`json.dumps` 無法序列化。修復：bbox 座標轉 Python `int()`。（commit `ca1547d`）
 - **Jetson smoke 通過**：D435 + face_identity_node + foxglove_bridge 同時跑穩定，`/face_identity/debug_image` ~6.6 Hz，`/state/perception/face` ~20 Hz。
 - **face_db 已更新**：alice 30 張、grama 30 張（自動 retrain）
+- **QoS 修正（2026-03-23）**：D435 camera image subscription 從 `RELIABLE` 改為 `BEST_EFFORT`。RealSense ROS2 driver 預設發布 `BEST_EFFORT`，若 subscriber 用 `RELIABLE` 會導致收不到影像（QoS incompatible）。
+- **YuNet 升級至 2023mar**（2026-03-25）：經 Benchmark 實測 CPU 71.3 FPS，取代先前的 legacy 版本。
 
 ---
 

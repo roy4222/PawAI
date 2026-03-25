@@ -1,11 +1,19 @@
-# ROS2 介面契約 v2.0
+# ROS2 介面契約 v2.1
 
 **文件定位**：PawAI 系統 ROS2 Topic/Action/Service 介面規格
 **適用範圍**：Layer 1-3 所有模組
-**版本**：v2.0
-**凍結日期**：2026-03-13
+**版本**：v2.1
+**凍結日期**：2026-03-25
 **對齊來源**：[mission/README.md](../mission/README.md) v2.0、[event-schema.md](../Pawai-studio/event-schema.md) v1.0
 
+> **v2.1 變更摘要**：
+> - 新增 interaction_router 三個高層事件 topic：`/event/interaction/welcome`、`/event/interaction/gesture_command`、`/event/interaction/fall_alert`
+> - `event_action_bridge` 改訂閱 interaction_router 輸出（不再訂閱 raw gesture/pose events）
+> - `event_action_bridge` 新增訂閱 `/state/tts_playing`（TTS guard 邏輯）
+> - `/event/gesture_detected` gesture enum 擴充（新增 `thumbs_up`、`thumbs_down`、`victory`、`i_love_you`）
+> - 修正 gesture/pose 發布者名稱為 `vision_perception_node`（原誤標為 `gesture_perception_node` / `pose_perception_node`）
+> - 修正降級表 LLM 型號為 Qwen2.5-7B-Instruct（Cloud）+ qwen2.5:1.5b（Ollama 本地）
+>
 > **v2.0 變更摘要**：
 > - `/event/face_detected` → `/event/face_identity`（4 種 event_type）
 > - `/state/perception/face` 欄位對齊實作（`stable_name` / `sim` / `mode`）
@@ -43,8 +51,12 @@
 | `/state/executive/brain` | State | 2 Hz | 大腦決策狀態 |
 | `/event/face_identity` | Event | 觸發式 | 人臉身份事件 |
 | `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 |
-| `/event/gesture_detected` | Event | 觸發式 | 手勢事件（P1） |
-| `/event/pose_detected` | Event | 觸發式 | 姿勢事件（P1） |
+| `/event/gesture_detected` | Event | 觸發式 | 手勢事件 |
+| `/event/pose_detected` | Event | 觸發式 | 姿勢事件 |
+| `/event/interaction/welcome` | Event | 觸發式 | 迎賓事件（interaction_router） |
+| `/event/interaction/gesture_command` | Event | 觸發式 | 手勢指令事件（interaction_router） |
+| `/event/interaction/fall_alert` | Event | 觸發式 | 跌倒警報事件（interaction_router） |
+| `/state/tts_playing` | State | 變更式 | TTS 播放狀態（latched） |
 | `/tts` | Command | 觸發式 | TTS 輸入文字 |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 |
 
@@ -198,10 +210,29 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 | Level | 名稱 | Brain 實作 |
 |:-----:|------|-----------|
-| 0 | 雲端完整 | CloudBrain (Qwen3.5-9B/27B) |
-| 1 | 本地 LLM | LocalBrain (Qwen3.5-0.8B INT4) |
+| 0 | 雲端完整 | CloudBrain (Qwen2.5-7B-Instruct, RTX 8000 vLLM) |
+| 1 | 本地 LLM | LocalBrain (qwen2.5:1.5b, Ollama on Jetson) |
 | 2 | 規則模式 | RuleBrain (Intent → Task → Skill) |
 | 3 | 最小保底 | MinimalBrain (stop/greet/bye only) |
+
+---
+
+### 3.4 `/state/tts_playing`
+
+**說明**：TTS 播放狀態（latched，變更時發布）
+**發布者**：`tts_node`
+**訂閱者**：`stt_intent_node`（echo gate）、`event_action_bridge`（TTS guard）
+**QoS**：Reliable, TransientLocal, depth=1
+**Message Type**：`std_msgs/Bool`
+
+**行為**：
+- `true`：TTS 正在播放（合成開始到播放完成+cooldown 0.5s 期間）
+- `false`：TTS 空閒
+- 啟動時立即發布 `false`，確保 latched topic 有初始值
+
+**用途**：
+- `stt_intent_node` 用此做 **echo gate**：TTS 播放中 + 結束後 1.0s cooldown 期間靜音麥克風
+- `event_action_bridge` 用此做 **TTS guard**：非安全手勢在 TTS 播放中被跳過，安全手勢（stop）和 fall_alert 不受影響
 
 ---
 
@@ -302,10 +333,11 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.3 `/event/gesture_detected`（P1）
+### 4.3 `/event/gesture_detected`
 
 **說明**：手勢辨識事件（觸發式）
-**發布者**：`gesture_perception_node`（待實作）
+**發布者**：`vision_perception_node`
+**訂閱者**：`interaction_router`、`vision_status_display`
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -314,18 +346,34 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 {
   "stamp":       { "type": "float" },
   "event_type":  { "type": "string", "enum": ["gesture_detected"] },
-  "gesture":     { "type": "string", "enum": ["wave", "stop", "point", "ok"], "description": "手勢類型" },
-  "confidence":  { "type": "float",  "range": "[0.0, 1.0]" },
+  "gesture":     { "type": "string", "enum": ["wave", "stop", "point", "ok", "thumbs_up", "thumbs_down", "victory", "i_love_you"], "description": "手勢類型" },
+  "confidence":  { "type": "float",  "range": "[0.0, 1.0]", "description": "vote ratio（緩衝區投票比例），非原始分類器信心值" },
   "hand":        { "type": "string", "enum": ["left", "right"] }
 }
 ```
 
+**gesture enum 說明**：
+
+| gesture | 來源 | 說明 |
+|---------|------|------|
+| `stop` | Gesture Recognizer (Open_Palm) / MediaPipe Hands | 停止 |
+| `ok` | Gesture Recognizer (Closed_Fist → COMPAT_MAP) | OK |
+| `point` | Gesture Recognizer (Pointing_Up) / MediaPipe Hands | 指向 |
+| `wave` | MediaPipe Hands（時序分析） | 揮手 |
+| `thumbs_up` | Gesture Recognizer (Thumb_Up) | 讚 |
+| `thumbs_down` | Gesture Recognizer (Thumb_Down) | 倒讚 |
+| `victory` | Gesture Recognizer (Victory) | 勝利 |
+| `i_love_you` | Gesture Recognizer (ILoveYou) | 我愛你 |
+
+> **Note**：`fist` 在 event_builder 的 `GESTURE_COMPAT_MAP` 中映射為 `ok`，下游收到的一律是 `ok`。
+
 ---
 
-### 4.4 `/event/pose_detected`（P1）
+### 4.4 `/event/pose_detected`
 
 **說明**：姿勢辨識事件（觸發式）
-**發布者**：`pose_perception_node`（待實作）
+**發布者**：`vision_perception_node`
+**訂閱者**：`interaction_router`、`vision_status_display`
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -337,6 +385,128 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "pose":        { "type": "string", "enum": ["standing", "sitting", "crouching", "fallen"] },
   "confidence":  { "type": "float",  "range": "[0.0, 1.0]" },
   "track_id":    { "type": "int",    "description": "關聯的人臉 track_id（若可對應）" }
+}
+```
+
+---
+
+### 4.5 `/event/interaction/welcome`
+
+**說明**：迎賓事件（已知人臉首次穩定辨識時觸發）
+**發布者**：`interaction_router`
+**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**：
+```json
+{
+  "stamp":       { "type": "float" },
+  "event_type":  { "type": "string", "enum": ["welcome"] },
+  "track_id":    { "type": "int",            "description": "人臉 track_id" },
+  "name":        { "type": "string",         "description": "穩定化身份名稱" },
+  "sim":         { "type": "float",          "description": "SFace 相似度分數" },
+  "distance_m":  { "type": "float | null",   "description": "深度距離" }
+}
+```
+
+**觸發規則**：
+- 來源事件：`/event/face_identity` 中 `event_type == "identity_stable"` 且 `stable_name != "unknown"`
+- 同一 track_id 在一個 session 中只觸發一次
+- 同一 name 在 30 秒內不重複觸發（name-based debounce）
+- `track_lost` 事件會清除該 track 的 welcome 記錄，重新進入可再觸發
+
+**範例**：
+```json
+{
+  "stamp": 1773561601.800,
+  "event_type": "welcome",
+  "track_id": 1,
+  "name": "Roy",
+  "sim": 0.42,
+  "distance_m": 1.25
+}
+```
+
+---
+
+### 4.6 `/event/interaction/gesture_command`
+
+**說明**：手勢指令事件（白名單手勢觸發，附帶人臉上下文）
+**發布者**：`interaction_router`
+**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**：
+```json
+{
+  "stamp":          { "type": "float" },
+  "event_type":     { "type": "string", "enum": ["gesture_command"] },
+  "gesture":        { "type": "string", "enum": ["stop", "ok", "thumbs_up"], "description": "白名單手勢" },
+  "confidence":     { "type": "float",  "range": "[0.0, 1.0]" },
+  "hand":           { "type": "string", "enum": ["left", "right", "unknown"] },
+  "who":            { "type": "string | null", "description": "最近已知人臉名稱（無已知人臉時 null）" },
+  "face_track_id":  { "type": "int | null",    "description": "對應的人臉 track_id" }
+}
+```
+
+**觸發規則**：
+- 僅白名單手勢觸發：`stop`、`ok`、`thumbs_up`（由 `interaction_rules.GESTURE_WHITELIST` 定義）
+- `stop` 手勢不受 cooldown 限制（安全優先）
+- 其他手勢有 `gesture_cooldown`（預設 2.0 秒）
+
+**範例**：
+```json
+{
+  "stamp": 1773561605.200,
+  "event_type": "gesture_command",
+  "gesture": "stop",
+  "confidence": 0.85,
+  "hand": "right",
+  "who": "Roy",
+  "face_track_id": 1
+}
+```
+
+---
+
+### 4.7 `/event/interaction/fall_alert`
+
+**說明**：跌倒警報事件（fallen 姿勢持續超過閾值時觸發）
+**發布者**：`interaction_router`
+**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**：
+```json
+{
+  "stamp":          { "type": "float" },
+  "event_type":     { "type": "string", "enum": ["fall_alert"] },
+  "pose":           { "type": "string", "enum": ["fallen"] },
+  "confidence":     { "type": "float",  "range": "[0.0, 1.0]" },
+  "persist_sec":    { "type": "float",  "description": "fallen 持續秒數" },
+  "who":            { "type": "string | null", "description": "最近已知人臉名稱（無已知人臉時 null）" },
+  "face_track_id":  { "type": "int | null",    "description": "對應的人臉 track_id" }
+}
+```
+
+**觸發規則**：
+- `fallen` 姿勢持續超過 `fallen_persist_sec`（預設 2.0 秒）
+- 有 `fall_alert_cooldown`（預設 15.0 秒），避免連續告警
+- 姿勢恢復後計時器重置
+
+**範例**：
+```json
+{
+  "stamp": 1773561620.500,
+  "event_type": "fall_alert",
+  "pose": "fallen",
+  "confidence": 1.0,
+  "persist_sec": 2.15,
+  "who": "Roy",
+  "face_track_id": 1
 }
 ```
 
@@ -504,6 +674,7 @@ self.publisher.publish(msg)
 | `/state/perception/face` | Reliable | Volatile | 10 | 10 Hz |
 | `/state/interaction/speech` | Reliable | Volatile | 10 | 5 Hz |
 | `/state/executive/brain` | Reliable | Volatile | 10 | 2 Hz |
+| `/state/tts_playing` | Reliable | TransientLocal | 1 | 變更式 |
 
 ### 8.2 Event Topics
 
@@ -513,6 +684,9 @@ self.publisher.publish(msg)
 | `/event/speech_intent_recognized` | Reliable | Volatile | 10 |
 | `/event/gesture_detected` | Reliable | Volatile | 10 |
 | `/event/pose_detected` | Reliable | Volatile | 10 |
+| `/event/interaction/welcome` | Reliable | Volatile | 10 |
+| `/event/interaction/gesture_command` | Reliable | Volatile | 10 |
+| `/event/interaction/fall_alert` | Reliable | Volatile | 10 |
 
 ### 8.3 Command Topics
 
@@ -563,6 +737,7 @@ if not required.issubset(payload.keys()):
 |------|------|----------|------|
 | v1.0 | 2026-03-09 | 介面凍結 | System Architect |
 | v2.0 | 2026-03-13 | 對齊 mission v2.0：face_identity 事件、speech/brain state schema、P1 topics | System Architect |
+| v2.1 | 2026-03-25 | interaction_router 三事件、/state/tts_playing、gesture enum 擴充、發布者名稱修正、LLM 型號修正 | System Architect |
 
 ---
 
@@ -575,4 +750,4 @@ if not required.issubset(payload.keys()):
 ---
 
 *維護者：System Architect*
-*狀態：v2.0 凍結*
+*狀態：v2.1 凍結*

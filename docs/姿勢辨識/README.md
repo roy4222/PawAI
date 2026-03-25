@@ -5,97 +5,97 @@
 ## 目標效果
 
 - 辨識人體姿勢，觸發對應行為
-- **4 種基本姿勢**：站立 (standing)、坐下 (sitting)、蹲下 (crouching)、跌倒 (fallen)
-- **4/13 Demo 目標**：4 種姿勢辨識成功率 ≥ 70%（Demo B）
+- **5 種姿勢**：站立 (standing)、坐下 (sitting)、蹲下 (crouching)、跌倒 (fallen)、彎腰 (bending)
+- **4/13 Demo 目標**：5 種姿勢辨識成功率 ≥ 70%（Demo B）
 - **跌倒偵測為安全功能**：辨識到 fallen → 觸發語音警報 + PawAI Studio 強制展開 PosePanel
 
 ---
 
-## 技術選型結論（2026-03-16）
+## 技術選型結論（2026-03-25 更新）
 
-### 推薦方案：與手勢辨識共用 wholebody 推理
+### 主線方案：MediaPipe Pose（CPU-only）
 
 | 優先序 | 方案 | 理由 |
 |:------:|------|------|
-| **主路徑** | **rtmlib + RTMPose wholebody** | `pip install rtmlib` 即可用、支援 onnxruntime-gpu / TensorRT EP、一個模型同時產出 body + hand keypoints（手勢+姿勢共用） |
-| 升級選項 | DWPose wholebody (TensorRT) | RTMPose 蒸餾版，手部精度略優；但 Jetson 上零成功記錄，待 RTMPose 路徑穩定後再評估是否值得切換 |
-| 備援 | body-only + hand-only 雙模型 | 若 wholebody 在 Jetson 上無法穩定達到展示需求（FPS、手部檢出率或記憶體餘量不足），降級為分開推理 |
-| 次選 | trt_pose (NVIDIA) | TensorRT 原生、Jetson Nano 上 社群值：ResNet 15-16 FPS / DenseNet 9-10 FPS |
-| **不推薦** | ~~MediaPipe Pose~~ | Jetson ARM64 無官方 pip wheel、社群值：CPU-only ~7-20 FPS |
+| **主線** | **MediaPipe Pose** | CPU 18.5 FPS（Jetson 實測），GPU 0%，三感知壓測通過（RAM 1.2GB, temp 52°C），3/23 場景驗證通過 |
+| 備援 | **rtmlib + RTMPose lightweight** | GPU 加速可用，但 balanced mode 91-99% GPU 滿載；lightweight 未測但預期更快 |
+| 備援 | trt_pose (NVIDIA) | TensorRT 原生、Jetson Nano 上 社群值：ResNet 15-16 FPS / DenseNet 9-10 FPS |
 | 不推薦 | MoveNet | 只有 17 keypoints、無手部、Jetson GPU delegate 有問題 |
 
-### DWPose vs RTMPose 差異
+> **決策變更紀錄（3/21）**：原推薦 RTMPose wholebody 為主路徑，但 Jetson 實測 GPU 91-99% 滿載。3/21 決策改為全 MediaPipe CPU pipeline，GPU 0% 的特性有利於多感知共存。MediaPipe Pose CPU 18.5 FPS 已足夠展示需求。
 
-> 詳見 [`../手勢辨識/README.md`](../手勢辨識/README.md) § DWPose vs RTMPose 差異
+### 與手勢辨識的架構關係
 
-- **RTMPose**：MMPose 原版，提供 body-only / hand-only / wholebody 等多種 config，ONNX/TensorRT 匯出路徑較成熟。**本專案主路徑（經由 rtmlib 部署）**
-- **DWPose**：RTMPose 的蒸餾版，wholebody 133 keypoints，精度略優（尤其手部）。**升級選項 — 待 RTMPose 路徑穩定後再評估**
-
-### 為什麼跟手勢辨識共用 DWPose？
-
-DWPose 一次推理輸出 133 個 keypoints（[COCO-WholeBody](https://github.com/jin-s13/COCO-WholeBody) 標準）：
-- **17 body keypoints** → 餵給姿勢分類器（standing/sitting/crouching/fallen）
-- **6 foot keypoints**（左右腳各 3）→ 輔助姿勢判斷（腳尖/腳跟方向）
-- **21 hand keypoints ×2** → 餵給手勢分類器（wave/stop/point/fist）— 實作用 fist，v2.0 契約仍用 ok，待 3/25 benchmark 後正式切換（過渡期用 `GESTURE_COMPAT_MAP`）
-- **68 face keypoints** → 備用（表情辨識等）
-
-**只跑一個模型，分兩個分類器**，比分開跑 Hands + Pose 更省資源。
-
-### 落地策略：先分開做，共用推理
+**現行架構（3/25）**：MediaPipe Pose + MediaPipe Gesture Recognizer 各自獨立運行，皆為 CPU-only，GPU 0%。
 
 ```
 D435 camera frame
   ↓
-DWPose 推理（TensorRT, 社群值：~22ms/frame）
-  ↓ 133 keypoints
-  ├── body keypoints (17) + foot (6) → pose_classifier → /event/pose_detected
-  └── hand keypoints (21×2) → gesture_classifier → /event/gesture_detected
+vision_perception_node（統一入口）
+  ├── MediaPipe Pose（CPU, 18.5 FPS）→ pose_classifier → /event/pose_detected
+  └── MediaPipe Gesture Recognizer（CPU, 7.2 FPS）→ /event/gesture_detected
 ```
 
-這完全符合你的建議「先分開做分類器，共用底層推理」。
+**備援架構**：RTMPose wholebody 單模型同時產出 body + hand keypoints，一次推理兩個分類器。但 GPU 91-99% 滿載，已降為備援。
 
 ---
 
-## ⚠️ MediaPipe Pose 在 Jetson 上的已知問題
+## MediaPipe Pose 在 Jetson 上的實測結果
 
-> 與手勢辨識相同的問題，見 [`../手勢辨識/README.md`](../手勢辨識/README.md)
+> **2026-03-21 實測推翻先前調查結論**：MediaPipe Pose 在 Jetson ARM64 上可以正常運行（CPU-only），確定為主線方案。
 
-1. **無法 `pip install`**：PyPI 無 Linux ARM64 wheel
-2. **GPU 加速不可用**：TFLite GPU delegate 在 Jetson 上失效
-3. **CPU-only 效能差**：社群值：Jetson Nano 上 ~7 FPS（CPU），預估：Orin Nano 10-25 FPS
-4. **model_complexity=2 太重**：~80-100ms/frame，不適合即時
+**Jetson 實測數據（3/21-3/23）**：
+- **FPS**：18.5 FPS（CPU-only，pose_complexity=1）
+- **GPU 佔用**：0%（純 CPU 推理）
+- **RAM 佔用**：三感知同跑（face+pose+gesture）1.2GB
+- **溫度**：52°C（三感知壓測 60s）
+- 33 keypoints（含 3D 座標），pose_classifier 使用其中的 body keypoints 做角度法分類
 
-**結論**：MediaPipe Pose 適合楊在 x86 筆電上做概念驗證（UX 流程與事件格式），**不適合 Jetson 部署**。
+**先前調查（3/16，已推翻）曾認為**：
+1. ~~無法 pip install~~（實際可用）
+2. ~~GPU 加速不可用~~（CPU-only 即已足夠）
+3. ~~CPU-only 效能差~~（實測 18.5 FPS，完全可用）
 
-> **⚠️ 移植風險提醒**：MediaPipe Pose（33 keypoints, 含 3D 座標）與 DWPose body（17 keypoints, COCO format, 2D only）的 keypoint 集合、索引、座標系統完全不同。Phase 1 的 x86 demo **只驗證 UX 互動流程與 ROS2 事件格式**，不驗證最終分類閾值。Phase 2 部署 DWPose 時，角度閾值、高度比、投票 buffer 參數都需要對照 COCO 17-point 定義重新校正。
+**結論**：MediaPipe Pose CPU-only 18.5 FPS 已足夠展示需求，且 GPU 0% 有利於多感知共存。
 
 ---
 
-## 方案比較（Jetson Orin Nano 8GB）
+## 方案比較（Jetson Orin Nano 8GB — 2026-03-25 實測數據更新）
 
-| 方案 | Body Keypoints | FPS (Orin Nano) | 記憶體 | 3D 座標 |
-|------|:--------------:|:---------------:|:------:|:-------:|
-| **DWPose** (RTMPose) | 17 body + 6 foot + hand/face | 社群值：~45 FPS † | ~200MB | ❌ 2D |
-| **trt_pose** | 17-18 | 社群值：15-16 FPS (Nano) | ~150MB | ❌ 2D |
-| MediaPipe Pose | 33 | 社群值：7-25 FPS (CPU) | ~150-300MB | ✅ 有 |
-| MoveNet Lightning | 17 | 無 Jetson 數據 | — | ❌ 2D |
+| 方案 | Body Keypoints | FPS (Orin Nano) | GPU 佔用 | 3D 座標 | 狀態 |
+|------|:--------------:|:---------------:|:--------:|:-------:|:----:|
+| **MediaPipe Pose** | 33 | **18.5 (CPU 實測)** | **0%** | ✅ 有 | **主線** |
+| RTMPose wholebody (rtmlib) | 17 body + 6 foot + hand/face | **3.8-7.5 (GPU 實測)** | 91-99% | ❌ 2D | 備援 |
+| trt_pose | 17-18 | 社群值：15-16 FPS (Nano) | — | ❌ 2D | 未測 |
+| MoveNet Lightning | 17 | 無 Jetson 數據 | — | ❌ 2D | 不推薦 |
 
-> † DWPose 45 FPS 數據來自[社群實作文章](https://johal.in/dwpose-wholebody-python-yolo-detect-2026-2/)，非官方 benchmark。
+### 本專案實測（2026-03-21 ~ 03-23, Jetson Orin Nano + JetPack 6.x）
 
-### 本專案實測（2026-03-18, Jetson Orin Nano + JetPack 6.x）
+**主線：MediaPipe Pose（3/21 確定）**
+
+| 項目 | 數值 |
+|------|------|
+| 方案 | MediaPipe Pose（CPU-only） |
+| 輸入 | D435 640x480@15Hz RGB |
+| **推理 FPS** | **18.5 FPS** |
+| GPU 使用率 | **0%** |
+| 溫度 | 52°C（三感知壓測 60s） |
+| RAM | 三感知共跑 1.2GB / 7.4GB（餘量充足） |
+| pose_detected | ✅ standing/sitting/crouching/fallen/bending 全穩定 |
+
+**L3 三感知壓測結果（3/23）**：face(CPU) + pose(CPU) + gesture(CPU) 同跑 60s → RAM 1.2GB, temp 52°C, GPU 0%。
+
+**備援：RTMPose wholebody（3/18 實測，已降為備援）**
 
 | 項目 | 數值 |
 |------|------|
 | 方案 | rtmlib 0.0.15 + onnxruntime-gpu 1.23.0（Jetson AI Lab wheel） |
 | 模型 | RTMPose wholebody balanced（YOLOX-m + rtmw-dw-x-l） |
-| 輸入 | D435 640x480@30Hz RGB |
 | **推理 FPS** | **~7.5 FPS**（隨機噪聲）/ **~3.8 Hz debug_image**（真實 D435 + face 同跑） |
 | GPU 使用率 | 91-99%（幾乎滿載） |
-| 溫度 | GPU 66°C（安全，上限 ~95°C） |
-| RAM | 5.0/7.6 GB（餘 2.4GB） |
-| pose_detected | ✅ 真人可觸發（sitting, crouching 正確反應） |
+| 溫度 | GPU 66°C |
 
-**結論**：balanced mode 可用但延遲偏高。若需提升 FPS，可嘗試 `lightweight` mode（未測）。
+**結論**：MediaPipe Pose CPU 18.5 FPS + GPU 0% 遠優於 RTMPose GPU 滿載方案，且三感知共存零衝突。
 
 ---
 
@@ -251,66 +251,57 @@ vision_perception_node (方案 A) / pose_perception_node (方案 B)
 
 ## 與手勢辨識共用架構
 
-### 共用推理，分類器獨立
+### 現行架構：MediaPipe 獨立推理（3/21 確定）
 
 ```
-D435 RGB frame (30 FPS)
+D435 RGB frame (15 FPS)
   ↓
-[RTMPose wholebody 推理 (rtmlib)] ← 一次推理，133 keypoints
-  ↓
-  ├── body (17) + foot (6) → pose_classifier → /event/pose_detected
-  │                                           → /state/perception/pose (v2.1 內部)
-  └── hand (21×2) → gesture_classifier → /event/gesture_detected
+vision_perception_node（統一入口，CPU-only）
+  ├── MediaPipe Pose（18.5 FPS）→ pose_classifier → /event/pose_detected
+  │                                                → /state/perception/pose (v2.1 內部)
+  └── MediaPipe Gesture Recognizer（7.2 FPS）→ /event/gesture_detected
 ```
 
-**主路徑**：rtmlib + RTMPose wholebody，單模型同時產出 body + hand keypoints。
-**升級選項**：DWPose wholebody（精度略優），待主路徑穩定後評估。
-**備援**：若 wholebody 在 Jetson 上無法穩定達到展示需求（FPS、手部檢出率或記憶體餘量不足），降級為 hand-only + body-only 雙模型。
+**主線**：MediaPipe Pose + Gesture Recognizer 各自獨立推理，皆為 CPU-only，GPU 0%。
+**備援**：rtmlib + RTMPose wholebody 單模型（GPU 密集，已降為備援）。
 
 **好處**：
-- 一個模型、一次推理、兩個分類器
+- GPU 0%，與 face_perception（YuNet CPU）完美共存
 - 分類器獨立，好 debug（哪邊錯一眼看出來）
-- 記憶體只佔 ~200MB（不是 400MB）
+- 三感知壓測通過：RAM 1.2GB, temp 52°C
 
-### 可能的 Node 架構
+### Node 架構（已落地）
 
-**方案 A：單一 Node（推薦）**
+**方案 A：單一 Node（現行）**
 ```
-vision_perception_node          ← 統一命名
-  ├── RTMPose wholebody 推理 (rtmlib)
-  ├── pose_classifier → /event/pose_detected
-  └── gesture_classifier → /event/gesture_detected
-```
-
-**方案 B：推理 + 分類分開**
-```
-dwpose_inference_node → /internal/keypoints (內部 topic)
-  ├── pose_perception_node → /event/pose_detected
-  └── gesture_perception_node → /event/gesture_detected
+vision_perception_node          ← 統一入口
+  ├── MediaPipe Pose（CPU, 18.5 FPS）
+  │   └── pose_classifier → /event/pose_detected
+  └── MediaPipe Gesture Recognizer（CPU, 7.2 FPS）
+      └── → /event/gesture_detected
 ```
 
-方案 A 延遲更低（省一次 topic 傳輸），方案 B 更好 debug。
-建議 Phase 1 用 A，有問題再拆成 B。
-
-> **命名約定**：方案 A 用 `vision_perception_node`（統一入口）；方案 B 拆分時沿用 `interaction_contract.md` 中的 `pose_perception_node` / `gesture_perception_node`。前面 Node 設計段落中的 `pose_perception_node` 是方案 B 語境下的命名。
+> Phase 1 起即採用方案 A（單一 Node），延遲低、好 debug。
 
 ---
 
-## 記憶體預算（與手勢辨識共用）
+## 記憶體預算（三感知共存實測）
 
-DWPose 一個模型同時處理手勢+姿勢，記憶體只算一次：
+**L3 壓測實測結果（2026-03-23）**：
 
-| 模組 | 記憶體占用 |
-|------|:--------:|
-| DWPose TensorRT（手勢+姿勢共用） | ~200MB |
-| 分類器邏輯（純 Python 規則） | ~10MB |
-| **合計** | **~210MB** |
+| 模組 | 記憶體占用 | GPU |
+|------|:--------:|:---:|
+| face_perception（YuNet CPU） | 包含在下方 | 0% |
+| MediaPipe Pose（CPU） | 包含在下方 | 0% |
+| MediaPipe Gesture Recognizer（CPU） | 包含在下方 | 0% |
+| **三感知合計** | **1.2GB** | **0%** |
+| **溫度** | **52°C** | — |
 
-加上現有模組，總共 ~5.1-5.9GB，剩餘 ≥ 2GB。✅
+加上 ROS2 + D435 + 其他常駐，剩餘 ≥ 6GB。遠優於原 RTMPose GPU 方案。
 
 ---
 
-## 落地順序（2026-03-22 更新）
+## 落地順序（2026-03-25 更新）
 
 | Phase | 時間 | 內容 | 狀態 |
 |:-----:|------|------|:----:|
@@ -408,17 +399,16 @@ DWPose 2D keypoints (x_pixel, y_pixel, confidence)
 | DWPose + YOLO 完整 pipeline (RTX 4090) | 4.2GB VRAM | `社群值`，Jetson 統一記憶體會不同 |
 | 分類器邏輯 | ~10MB | `預估` |
 
-### 與其他模組共存風險
+### 與其他模組共存（3/23 壓測驗證通過）
 
-| 共存場景 | 風險 | 對策 |
-|---------|------|------|
-| DWPose + Whisper ASR | ASR warmup ~12s 佔 GPU，pose FPS 會掉 | 分時排程：ASR warmup 完才開 pose 全速 |
-| DWPose + YuNet 人臉 | YuNet 很輕（~100MB），低風險 | 可共存 |
-| DWPose + Piper TTS | TTS 觸發式，短暫佔用 | 低風險，但播放期間 pose 可能掉 1-2 FPS |
+| 共存場景 | 風險 | 實測結果 |
+|---------|------|---------|
+| MediaPipe Pose + YuNet 人臉 | 極低 | ✅ 皆 CPU-only，GPU 0%，零衝突 |
+| MediaPipe Pose + Gesture Recognizer | 極低 | ✅ 三感知同跑 60s，RAM 1.2GB, temp 52°C |
+| MediaPipe Pose + Whisper ASR (CUDA) | 低 | Whisper 用 GPU，pose 用 CPU，互不干擾。L2 測試 Whisper+pose = -20% FPS（RTMPose 時代），MediaPipe CPU 不受影響 |
+| MediaPipe Pose + edge-tts | 極低 | edge-tts 為雲端合成，不佔本地 GPU/CPU 推理資源 |
 
-**實測計畫**：Phase 2 部署 DWPose 時，用 `tegrastats` 記錄 GPU util / memory，確認與 Whisper 共存不超預算。
-
-> **⚠️ 專案直接結論：在本專案中，姿勢推理 node 應在 Whisper warmup 完成後（`warmup_done: true`）才啟動全速推理。啟動序列建議：D435 → YuNet → ASR warmup → DWPose 全速。**
+> **結論**：MediaPipe CPU-only pipeline 與所有現有模組共存零衝突，無需分時排程。
 
 ---
 
@@ -430,8 +420,8 @@ DWPose 2D keypoints (x_pixel, y_pixel, confidence)
 
 ```
 人站在 D435 前（0.5-4m）
-  → DWPose 推理 → 17 body keypoints
-  → pose_classifier 規則分類（角度法 + 高度比法 + 投票 buffer）
+  → MediaPipe Pose 推理（CPU, 18.5 FPS）→ 33 body keypoints
+  → pose_classifier 規則分類（角度法 + 高度比法 + 20 幀投票 buffer）
   → /event/pose_detected 發布（姿勢變化時）
   → PawAI Studio PosePanel 即時更新
   → fallen 觸發語音警報（/tts "偵測到跌倒，請注意安全！"）
@@ -441,13 +431,13 @@ DWPose 2D keypoints (x_pixel, y_pixel, confidence)
 
 | 元件 | 4/13 必要？ | 狀態 | 負責 |
 |------|:----------:|:----:|:----:|
-| D435 RGB 串流 | ✅ | 已有 | — |
-| DWPose TensorRT on Jetson | ✅ | ❌ 待部署 | Roy (Phase 2) |
-| pose_classifier（規則分類器） | ✅ | ❌ 待寫 | Roy/楊 (Phase 2-3) |
-| `/event/pose_detected` 發布 | ✅ | schema 已定義 | Phase 3 |
+| D435 RGB 串流 | ✅ | ✅ 已有 | — |
+| MediaPipe Pose on Jetson | ✅ | ✅ 已完成（18.5 FPS） | Roy |
+| pose_classifier（規則分類器） | ✅ | ✅ 已完成（6 類 first-match） | Roy |
+| `/event/pose_detected` 發布 | ✅ | ✅ 已完成 | Phase 3 |
 | PosePanel 前端 | ✅ | ❌ 待寫 | 鄔 |
-| fallen → /tts 語音警報 | ✅ | 需 Executive 串接 | Phase 4 |
-| D435 depth 輔助 | 加分 | 已有 depth 串流 | Phase 3 |
+| fallen → /tts 語音警報 | ✅ | ✅ event_action_bridge 已串接 | Phase 4 |
+| D435 depth 輔助 | 加分 | 已有 depth 串流 | Phase 5 |
 
 ### 可砍的（如果時間不夠）
 
@@ -460,7 +450,7 @@ DWPose 2D keypoints (x_pixel, y_pixel, confidence)
 
 | 指標 | 目標 |
 |------|------|
-| 4 種姿勢辨識成功率 | ≥ 70%（Demo B gate） |
+| 5 種姿勢辨識成功率 | ≥ 70%（Demo B gate） |
 | 跌倒偵測響應時間 | < 2s（從跌倒到語音警報） |
 | 連續運行穩定性 | 不 crash 跑完 Demo 流程（~5 分鐘） |
 

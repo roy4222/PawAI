@@ -2,7 +2,7 @@
 """Topic contract checker — report-only, v1.
 
 Statically scans node source files for create_publisher / create_subscription
-calls and cross-references them against the v2.0 frozen topic list from
+calls and cross-references them against the v2.1 frozen topic list from
 docs/architecture/interaction_contract.md §2.
 
 Exit code is always 0 (report-only).  Warnings are printed to stderr.
@@ -56,7 +56,6 @@ INTERNAL_TOPICS = {
     "/tts_audio_raw",
     "/intent",
     "/asr_result",
-    "/state/tts_playing",
     "/state/interaction/tts_bridge",
     "/state/interaction/llm_bridge",
     "/state/interaction/asr",
@@ -92,6 +91,9 @@ INTERNAL_TOPICS = {
     "/face_depth/compare_image",
     "/face_depth/debug_image",
     "/face_enroll/debug_image",
+    # Vision perception debug topics
+    "/vision_perception/debug_image",
+    "/vision_perception/status_image",
     # Search logic
     "/patrol_command",
     "/patrol_status",
@@ -125,6 +127,8 @@ def find_node_files():
     scan_dirs = [
         os.path.join(REPO_ROOT, "go2_robot_sdk", "go2_robot_sdk"),
         os.path.join(REPO_ROOT, "speech_processor", "speech_processor"),
+        os.path.join(REPO_ROOT, "face_perception", "face_perception"),
+        os.path.join(REPO_ROOT, "vision_perception", "vision_perception"),
         os.path.join(REPO_ROOT, "coco_detector", "coco_detector"),
         os.path.join(REPO_ROOT, "lidar_processor", "lidar_processor"),
         os.path.join(REPO_ROOT, "src", "search_logic", "search_logic"),

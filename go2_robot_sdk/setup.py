@@ -28,7 +28,19 @@ setup(
 
 
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'aiortc==1.9.0',
+        'aiohttp',
+        'requests',
+        'av',
+        'cryptography',
+        'pycryptodome',
+        'PyYAML',
+        'numpy',
+        'opencv-python',
+        'lz4>=4.0',
+    ],
     zip_safe=True,
     maintainer='brimo',
     maintainer_email='abizov94@gmail.com',

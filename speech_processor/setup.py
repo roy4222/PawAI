@@ -21,6 +21,8 @@ setup(
         "numpy",
         "sounddevice",
         "silero-vad",
+        "faster-whisper",
+        "edge-tts",
     ],
     zip_safe=True,
     maintainer="Nuralem Abizov",
