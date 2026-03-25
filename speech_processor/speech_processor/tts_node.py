@@ -24,9 +24,12 @@ import wave
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from enum import Enum
+import logging
 import threading
 
 import numpy as np
+
+_logger = logging.getLogger(__name__)
 from pydub import AudioSegment
 from pydub.playback import play
 import rclpy
@@ -170,7 +173,8 @@ class AudioCache:
                 with open(cache_path, "wb") as f:
                     f.write(audio_data)
                 return True
-            except Exception:
+            except Exception as e:
+                _logger.warning("AudioCache.put failed: %s", e)
                 return False
 
     def clear(self) -> bool:
@@ -185,7 +189,8 @@ class AudioCache:
                     if os.path.isfile(file_path):
                         os.unlink(file_path)
                 return True
-            except Exception:
+            except Exception as e:
+                _logger.warning("AudioCache.clear failed: %s", e)
                 return False
 
     def get_cache_stats(self) -> Dict[str, Any]:
@@ -207,7 +212,8 @@ class AudioCache:
                     "total_size_mb": round(total_size / (1024 * 1024), 2),
                     "cache_dir": self.cache_dir,
                 }
-            except Exception:
+            except Exception as e:
+                _logger.warning("AudioCache.get_cache_stats failed: %s", e)
                 return {"enabled": True, "error": "Unable to read cache stats"}
 
 
@@ -308,7 +314,8 @@ class TTSProvider_MeloTTS:
             mp3_io = io.BytesIO()
             audio.export(mp3_io, format="mp3")
             return mp3_io.getvalue()
-        except Exception:
+        except Exception as e:
+            _logger.warning("MeloTTS synthesize failed: %s", e)
             return None
 
 
@@ -381,14 +388,15 @@ class TTSProvider_Piper:
                 wav_data = f.read()
 
             return wav_data
-        except Exception:
+        except Exception as e:
+            _logger.warning("Piper synthesize failed: %s", e)
             return None
         finally:
             try:
                 if wav_path is not None and os.path.exists(wav_path):
                     os.unlink(wav_path)
-            except Exception:
-                pass
+            except Exception as e:
+                _logger.debug("Piper tmp cleanup failed: %s", e)
 
 
 class TTSProvider_EdgeTTS:
@@ -418,7 +426,8 @@ class TTSProvider_EdgeTTS:
                 ) or None
             finally:
                 loop.close()
-        except Exception:
+        except Exception as e:
+            _logger.warning("edge-tts synthesize failed: %s", e)
             return None
 
 
@@ -445,7 +454,8 @@ class AudioProcessor:
             wav_io = io.BytesIO()
             audio.export(wav_io, format="wav")
             return wav_io.getvalue()
-        except Exception:
+        except Exception as e:
+            _logger.warning("convert_to_wav failed: %s", e)
             return None
 
     @staticmethod
@@ -460,7 +470,8 @@ class AudioProcessor:
                 audio = AudioSegment.from_file(io.BytesIO(audio_data))
 
             return len(audio) / 1000.0  # Convert ms to seconds
-        except Exception:
+        except Exception as e:
+            _logger.warning("get_duration failed: %s", e)
             return 0.0
 
     @staticmethod
@@ -721,9 +732,9 @@ class EnhancedTTSNode(Node):
                         if audio_data:
                             # Cache under piper key, not edge_tts
                             self.cache.put(text, cache_voice, "piper", audio_data)
-                            self.get_logger().info("💾 Piper fallback cached")
-                    except Exception:
-                        pass
+                            self.get_logger().info("Piper fallback cached")
+                    except Exception as e:
+                        self.get_logger().warning(f"Piper fallback also failed: {e}")
 
                 if audio_data:
                     # Cache the result
@@ -983,12 +994,14 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        print(f"❌ TTS Node error: {e}")
+        print(f"TTS Node error: {e}")
     finally:
         try:
-            rclpy.shutdown()
+            node.destroy_node()
         except Exception:
             pass
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
