@@ -147,8 +147,8 @@
 |---|------|:------:|:---------:|:----:|
 | 1 | 語音功能 | **P0** | 本地保底 + 雲端增強 | ✅ E2E 已驗證 |
 | 2 | 人臉辨識 | **P0** | 純本地 | ✅ ROS2 package 完成 |
-| 3 | 手勢辨識 | **P1** | 本地 | 🔄 MediaPipe 排除，改 GPU 方案（RTMPose） |
-| 4 | 姿勢辨識 | **P1** | 本地 | 🔄 MediaPipe 排除，改 GPU 方案（RTMPose） |
+| 3 | 手勢辨識 | **P1** | 本地 | ✅ MediaPipe Gesture Recognizer（CPU 7.2 FPS），RTMPose 備援 |
+| 4 | 姿勢辨識 | **P1** | 本地 | ✅ MediaPipe Pose（CPU 18.5 FPS），RTMPose 備援 |
 | 5 | AI 大腦 (PawAI Studio) | **P0** | 雲端為主 | ✅ 閉環確認 |
 | 6 | 辨識物體 | **P1** | 本地（YOLO） | 核心五功能之一，4/13 前需完成 |
 | 7 | 導航避障 | P2 | 待定 | 加分功能，核心穩了再做 |
@@ -159,15 +159,13 @@
 #### 本地保底鏈路（Jetson 8GB）
 
 ```
-Sherpa-onnx KWS 常駐 (~50MB)
-  → 喚醒成功
-  → 播預錄「我在」（掩蓋模型載入時間）
-  → 載入本地語音堆疊（ASR + TTS，必要時載入本地小 LLM）
-  → Whisper Small (CTranslate2 CUDA)
-  → 雲端 LLM 或本地意圖判定
-  → Piper TTS → Go2 喇叭（或外接 USB 喇叭）
-  → keep-alive 30s（連續對話免喚醒）
-  → 超時自動卸載 / 「掰掰」立即卸載
+Energy VAD 持續監聽（always-on，無喚醒詞）
+  → 語音偵測
+  → Whisper Small (faster-whisper CUDA float16, ~12s warmup)
+  → Intent 分類（高信心 ≥ 0.8 → fast path 跳過 LLM）
+  → 雲端 LLM（Cloud Qwen2.5-7B）或本地 LLM（Ollama 1.5B）或 RuleBrain fallback
+  → edge-tts 雲端合成（P50 0.72s）或 Piper 本地 fallback
+  → USB 外接喇叭（主線）或 Go2 Megaphone DataChannel
 ```
 
 #### 雲端增強模式（RTX 8000）
@@ -183,37 +181,38 @@ Sherpa-onnx KWS 常駐 (~50MB)
 
 | Level | 條件 | 行為 |
 |:-----:|------|------|
-| 0 | 雲端正常 | Qwen2.5-7B-Instruct 完整對話 + Studio 全功能 |
-| 1 | 雲端斷線 | 本地 Qwen2.5-0.8B 基本對話 + 簡化 Studio |
-| 2 | Jetson 記憶體不足 | Rule Intent + 模板回覆 + 狀態顯示 |
-| 3 | 最小保底 | 喚醒 + ASR + 固定指令（停止/掰掰/打招呼） |
+| 0 | 雲端正常 | Cloud Qwen2.5-7B 完整對話 + edge-tts + Studio 全功能 |
+| 1 | 雲端 LLM 斷線 | 自動切換 Ollama qwen2.5:1.5b 基本對話 + edge-tts |
+| 2 | 雲端全斷（LLM+TTS） | RuleBrain 模板回覆 + Piper 本地 TTS |
+| 3 | 最小保底 | ASR + Intent fast path + RuleBrain + Piper（停止/掰掰/打招呼） |
 
 #### 語音狀態機
 
 ```
-idle_wakeword → wake_ack → loading_local_stack → listening
-  → transcribing → local_asr_done → cloud_brain_pending
-  → speaking → keep_alive → idle_wakeword
-  → (雲端超時) → fallback_local_reply → speaking
-  → (卸載) → unloading → idle_wakeword
+idle_listening (Energy VAD 持續監聽)
+  → voice_detected → recording → transcribing (Whisper CUDA)
+  → intent_classified → [high confidence] fast_path → speaking
+                       → [low confidence]  llm_pending (Cloud→Ollama→RuleBrain)
+  → reply_ready → tts_synthesizing (edge-tts / Piper fallback)
+  → speaking → echo_cooldown → idle_listening
 ```
 
 #### 關鍵技術選型
 
 | 模組 | 選型 | 說明 |
 |------|------|------|
-| 喚醒詞 | Sherpa-onnx KWS | 中文原生、離線、Apache 2.0（評估中） |
-| ASR | Whisper Small (CTranslate2 CUDA) | 本地離線，有幻覺問題待處理 |
-| 本地 LLM | Qwen2.5-0.8B INT4 | 僅斷網 fallback 時動態載入（智商待測） |
-| 雲端 LLM | Qwen2.5-7B-Instruct (vLLM) | 系統中樞大腦，延遲 ~2.7-4.1s |
-| TTS | Piper | 本地合成，低延遲（MeloTTS 已淘汰：太重） |
+| 喚醒詞 | 未實作（always-on listening） | Sherpa-onnx KWS 評估後暫緩，目前用 Energy VAD 持續監聽 |
+| ASR | Whisper Small (faster-whisper CUDA float16) | 本地離線，RTF 0.13，有幻覺問題（過濾規則已建） |
+| 本地 LLM | Ollama qwen2.5:1.5b | 雲端斷線 fallback，JSON 穩定，中文可用 |
+| 雲端 LLM | Qwen2.5-7B-Instruct (vLLM) | 系統中樞大腦，Prefix Cache 後延遲 ~1.5s |
+| TTS | edge-tts（雲端主線）+ Piper（本地 fallback） | edge-tts P50 0.72s vs Piper 2.0s，MeloTTS 已淘汰 |
 
 #### 核心檔案
 
 - `speech_processor/speech_processor/stt_intent_node.py` — ASR + Intent 整合節點
-- `speech_processor/speech_processor/tts_node.py` — TTS + Go2 播放
-- `speech_processor/speech_processor/intent_tts_bridge_node.py` — Intent → 模板回覆
-- `scripts/start_asr_tts_no_vad_tmux.sh` — 主線啟動腳本
+- `speech_processor/speech_processor/tts_node.py` — TTS + Go2/USB 播放（edge-tts/Piper/MeloTTS/ElevenLabs）
+- `speech_processor/speech_processor/llm_bridge_node.py` — LLM 三級 fallback + Go2 動作
+- `scripts/start_llm_e2e_tmux.sh` — 主線啟動腳本（edge-tts + USB 外接設備）
 
 ### 5.3 功能 2：人臉辨識
 
@@ -258,23 +257,27 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ### 5.4 功能 3：手勢辨識 🔄
 
-**MediaPipe 已排除**（Jetson ARM64 無官方 wheel、CPU-only 無 GPU 加速）。改用 GPU 可部署方案。
+**主線：MediaPipe Gesture Recognizer**（CPU 7.2 FPS，0.10.18 aarch64 wheel）。
 
-- **首選**：rtmlib + RTMPose wholebody（`pip install rtmlib`，支援 onnxruntime-gpu / TensorRT EP）
-- **備案**：YOLO11n-pose-hands (Ultralytics)
-- 4 種手勢：wave / stop / point / fist，目標成功率 ≥ 70%
-- Phase 1 mock mode 已完成（23 unit tests pass），待載入實際 GPU 模型
+> 3/21 benchmark 後選定。MediaPipe 0.10.18 提供 aarch64 wheel（之後版本移除），CPU-only 但 FPS 足夠。Google 明確不支援 Jetson GPU 加速。
+
+- **主線**：MediaPipe Gesture Recognizer（stop / point / thumbs_up / ok）
+- **備援**：RTMPose wholebody（rtmlib + onnxruntime-gpu）
+- 目標成功率 ≥ 70%
+- Phase 1 完成（23 unit tests pass），Jetson 場景驗證通過
 
 > 詳見 [`docs/手勢辨識/README.md`](../手勢辨識/README.md)
 
 ### 5.5 功能 4：姿勢辨識 🔄
 
-**MediaPipe Pose 已排除**（同上理由）。與手勢共用 RTMPose wholebody 推理。
+**主線：MediaPipe Pose**（CPU 18.5 FPS，17 keypoints COCO format）。
 
-- 一個模型產出 133 keypoints（body + hand），分兩個分類器
-- 4 種姿勢：standing / sitting / crouching / fallen，目標成功率 ≥ 70%
-- 跌倒偵測為安全功能，觸發語音警報
-- Phase 1 mock mode 已完成，待載入實際 GPU 模型
+> 3/21 benchmark 選定。CPU 模式效能足夠且不佔 GPU（留給 Whisper CUDA）。
+
+- **主線**：MediaPipe Pose（standing / sitting / crouching / fallen / bending）
+- **備援**：RTMPose lightweight（GPU，與 Whisper 共存需注意 VRAM）
+- 跌倒偵測為安全功能，持續 2s 觸發語音警報
+- Phase 1 完成，Jetson 場景驗證通過，L3 壓測 60s 通過（RAM 1.2GB, 52°C, GPU 0%）
 
 > 詳見 [`docs/姿勢辨識/README.md`](../姿勢辨識/README.md)
 

@@ -68,7 +68,7 @@ class FaceIdentityNode(Node):
         self.declare_parameter("model_path", "/home/jetson/face_db/model_sface.pkl")
         self.declare_parameter(
             "yunet_model",
-            "/home/jetson/face_models/face_detection_yunet_legacy.onnx",
+            "/home/jetson/face_models/face_detection_yunet_2023mar.onnx",
         )
         self.declare_parameter(
             "sface_model",
