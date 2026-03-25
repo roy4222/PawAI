@@ -1,8 +1,0 @@
-build
-log
-install
-.vscode
-__pycache__
-.env
-IsaacSim-ros_workspaces/build_ws
-envs

@@ -1,23 +1,57 @@
-build
-log
-install
-.vscode
-__pycache__
-.env
+## ROS2 build artifacts
+build/
+log/
+install/
+
+## IDE / OS
+.vscode/
 .DS_Store
-go2_robot_sdk/.coverage
-go2_robot_sdk/coverage.xml
+
+## Python
+__pycache__/
+*.pyc
+.coverage
+coverage.xml
+.ruff_cache/
+.pytest_cache/
+
+## Environment
+.env
 .env.local
 .env.*.local
-.venv310/
+.venv*/
+
+## ROS2 runtime logs
+.ros_logs/
+
+## Data files (should not be in repo)
+*.ply
+tts_cache/
+
+## Claude Code
 .claude/test_results/*.csv
 .claude/settings.local.json
 .claude/skills/
 !.claude/skills/jetson-verify/
+!.claude/skills/project-onboard/
+!.claude/skills/update-docs/
+!.claude/skills/jetson-deploy/
+!.claude/skills/jetson-status/
+!.claude/skills/jetson-verify/
+
+## Package-level coverage (legacy paths)
+go2_robot_sdk/.coverage
+go2_robot_sdk/coverage.xml
+
+## Test outputs
 logs/jetson-verify/*.json
 test_results/*.json
-.coverage
-coverage.xml
+
+## Docs
 PROJECT_MAP.md
-# Benchmark raw results (working area)
+
+## Benchmark raw results (working area)
 benchmarks/results/raw/*.jsonl
+
+## Node.js (pawai-studio has its own, root should not)
+node_modules/
