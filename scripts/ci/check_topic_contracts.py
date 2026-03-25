@@ -197,7 +197,7 @@ def main():
     warnings = 0
 
     # ── Check 1: contract topics present in code ─────────────────────
-    print("=== Topic Contract Check (report-only) ===\n")
+    print("=== Topic Contract Check ===\n")
     print(f"Contract topics: {len(CONTRACT_TOPICS)}")
     print(f"Code topics found: {len(all_code_topics)}")
     print()
@@ -214,21 +214,25 @@ def main():
     print()
 
     # ── Check 2: code topics not in contract or whitelist ────────────
+    fails = 0
     ghost_topics = all_code_topics - CONTRACT_TOPICS - INTERNAL_TOPICS
     if ghost_topics:
         print("Ghost topics (in code but not in contract or whitelist):")
         for t in sorted(ghost_topics):
             files = all_mentioned.get(t, [])
-            print(f"  [INFO] {t}  files={files}", file=sys.stderr)
-            warnings += 1
+            print(f"  [FAIL] {t}  files={files}", file=sys.stderr)
+            fails += 1
     else:
         print("No ghost topics found.")
 
     print()
-    print(f"Total warnings: {warnings}")
-    print("(report-only — exit 0 regardless)")
+    print(f"Total: {len(CONTRACT_TOPICS) - warnings} OK, {warnings} WARN, {fails} FAIL")
 
-    # Always exit 0 — report-only mode
+    # FAIL = ghost topics found → exit 1 (blocks CI)
+    # WARN = contract topic not in code → exit 0 (e.g. brain_node not yet implemented)
+    if fails > 0:
+        print("FAILED: ghost topics detected — update contract or whitelist")
+        sys.exit(1)
     sys.exit(0)
 
 

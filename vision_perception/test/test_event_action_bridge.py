@@ -7,7 +7,27 @@ Behavioral contract:
   - other gestures: skipped when TTS is playing
 """
 import json
+import sys
 import unittest
+from unittest.mock import MagicMock
+
+# Mock ROS2 modules so event_action_bridge can be imported without rclpy
+if "rclpy" not in sys.modules:
+    rclpy_mock = MagicMock()
+    rclpy_mock.node.Node = type("Node", (), {})
+    rclpy_mock.qos.QoSProfile = MagicMock()
+    rclpy_mock.qos.DurabilityPolicy = MagicMock()
+    sys.modules["rclpy"] = rclpy_mock
+    sys.modules["rclpy.node"] = rclpy_mock.node
+    sys.modules["rclpy.qos"] = rclpy_mock.qos
+if "std_msgs" not in sys.modules:
+    std_mock = MagicMock()
+    sys.modules["std_msgs"] = std_mock
+    sys.modules["std_msgs.msg"] = std_mock.msg
+if "go2_interfaces" not in sys.modules:
+    go2_mock = MagicMock()
+    sys.modules["go2_interfaces"] = go2_mock
+    sys.modules["go2_interfaces.msg"] = go2_mock.msg
 
 
 class TestGestureActionMap(unittest.TestCase):

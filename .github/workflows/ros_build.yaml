@@ -34,19 +34,20 @@ jobs:
         run: |
           pytest \
             speech_processor/test/test_speech_test_observer.py \
+            speech_processor/test/test_intent_classifier.py \
+            speech_processor/test/test_llm_contract.py \
             vision_perception/test/test_gesture_classifier.py \
             vision_perception/test/test_pose_classifier.py \
             vision_perception/test/test_event_builder.py \
             vision_perception/test/test_interaction_rules.py \
+            vision_perception/test/test_event_action_bridge.py \
+            vision_perception/test/test_mediapipe_pose_mapping.py \
+            vision_perception/test/test_gesture_recognizer_backend.py \
             benchmarks/test/test_criteria.py \
             benchmarks/test/test_base_adapter.py \
             benchmarks/test/test_reporter.py \
             benchmarks/test/test_runner.py \
             benchmarks/test/test_monitor.py \
-            vision_perception/test/test_mediapipe_pose_mapping.py \
-            vision_perception/test/test_gesture_recognizer_backend.py \
-            speech_processor/test/test_intent_classifier.py \
-            speech_processor/test/test_llm_contract.py \
             -v --tb=short \
             --cov=speech_processor/speech_processor \
             --cov=vision_perception/vision_perception \
@@ -66,8 +67,8 @@ jobs:
             -not -path './.git/*' -not -path '*/node_modules/*' \
             -print0 | xargs -0 -r python3 -m py_compile
           echo "All Python files pass syntax check."
-      - name: Topic contract check (report-only)
-        run: python scripts/ci/check_topic_contracts.py || true
+      - name: Topic contract check
+        run: python scripts/ci/check_topic_contracts.py
 
   # ── Tier 2: ROS2 Build + colcon test (< 5 min) ─────────────────
   test_environment:
