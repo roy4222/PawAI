@@ -115,8 +115,11 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
                             loop
                         )
                     else:
-                        # Fallback to synchronous send
-                        connection.data_channel.send(command)
+                        # No running event loop — cannot safely send cross-thread
+                        logger.error(
+                            f"Cannot send command to {robot_id}: "
+                            "asyncio event loop not running (cross-thread send is unsafe)"
+                        )
                     logger.debug(f"Command sent to robot {robot_id}: {command[:50]}")
                 else:
                     logger.warning(f"No data channel available for robot {robot_id}")

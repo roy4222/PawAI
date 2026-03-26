@@ -717,6 +717,7 @@ class EnhancedTTSNode(Node):
             else:
                 if self.tts_provider is None:
                     self.get_logger().error("❌ TTS provider is not initialized")
+                    self._publish_tts_playing(False)
                     return
 
                 # Generate new speech
@@ -747,6 +748,7 @@ class EnhancedTTSNode(Node):
                         self.get_logger().info("💾 Audio cached successfully")
                 else:
                     self.get_logger().error("❌ Failed to generate speech")
+                    self._publish_tts_playing(False)
                     return
 
             # Process and play audio

@@ -11,6 +11,7 @@ import time
 import wave
 from abc import ABC, abstractmethod
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from secrets import token_hex
@@ -310,6 +311,8 @@ class SttIntentNode(Node):
         self._recorder_state = RecorderState()
         self._active_capture_rate = self.capture_sample_rate or self.sample_rate
         self._processing_lock = threading.Lock()
+        # Bounded thread pool to prevent per-session thread explosion
+        self._asr_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="asr")
         self._last_error = ""
         self._last_provider = ""
         self._last_intent = ""
@@ -760,11 +763,9 @@ class SttIntentNode(Node):
         audio_bytes = self._encode_wav(audio)
         session_id = state.session_id or self._new_session_id()
         self._state = "TRANSCRIBING"
-        threading.Thread(
-            target=self._process_audio_session,
-            args=(session_id, audio_bytes, reason),
-            daemon=True,
-        ).start()
+        self._asr_executor.submit(
+            self._process_audio_session, session_id, audio_bytes, reason
+        )
 
     def _encode_wav(self, audio: np.ndarray) -> bytes:
         clipped = np.clip(audio, -1.0, 1.0)

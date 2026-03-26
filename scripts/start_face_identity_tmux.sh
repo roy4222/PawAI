@@ -26,7 +26,7 @@ if ! ros2 pkg list 2>/dev/null | grep -q realsense2_camera; then
 fi
 
 # Check model files
-YUNET="/home/jetson/face_models/face_detection_yunet_legacy.onnx"
+YUNET="/home/jetson/face_models/face_detection_yunet_2023mar.onnx"
 SFACE="/home/jetson/face_models/face_recognition_sface_2021dec.onnx"
 FACE_DB="/home/jetson/face_db"
 

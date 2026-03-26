@@ -15,6 +15,7 @@ Spec: docs/superpowers/specs/2026-03-16-llm-integration-mini-spec.md v2.0
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import rclpy
@@ -137,6 +138,9 @@ class LlmBridgeNode(Node):
         self.last_error = ""
         self.last_source = ""
 
+        # Bounded thread pool to prevent per-event thread explosion
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="llm")
+
         # State publish timer
         self.state_timer = self.create_timer(
             1.0 / self.state_publish_hz, self._publish_state
@@ -239,11 +243,9 @@ class LlmBridgeNode(Node):
         )
 
         self.last_source = "speech"
-        threading.Thread(
-            target=self._call_llm_and_act,
-            args=(user_message, intent, "speech", None, confidence),
-            daemon=True,
-        ).start()
+        self._executor.submit(
+            self._call_llm_and_act, user_message, intent, "speech", None, confidence
+        )
 
     # ── Face trigger (spec §2.4 Path B) ─────────────────────────────────
 
@@ -281,11 +283,9 @@ class LlmBridgeNode(Node):
         )
 
         self.last_source = "face"
-        threading.Thread(
-            target=self._call_llm_and_act,
-            args=(user_message, "greet", "face", stable_name),
-            daemon=True,
-        ).start()
+        self._executor.submit(
+            self._call_llm_and_act, user_message, "greet", "face", stable_name
+        )
 
     # ── Face state (context only) ───────────────────────────────────────
 
