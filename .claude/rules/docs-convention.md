@@ -16,7 +16,7 @@ paths:
 
 ## 更新原則
 - 改了程式碼 → 同步更新對應的 `docs/模組/README.md`
-- 新增/移除 ROS2 topic → 同步更新 `docs/architecture/interaction_contract.md`
+- 新增/移除 ROS2 topic → 同步更新 `docs/architecture/contracts/interaction_contract.md`
 - 每日收工 → 更新 `references/project-status.md`
 - 不主動重寫沒碰到的文件
 

@@ -145,7 +145,7 @@ description: >
 ## 權威文件
 指向 docs/ 下的真相來源，不重寫其內容。
 - docs/XXX/README.md — 說明
-- docs/architecture/interaction_contract.md §X — 相關介面
+- docs/architecture/contracts/interaction_contract.md §X — 相關介面
 
 ## 核心程式檔案
 | 檔案 | 用途 |

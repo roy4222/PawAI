@@ -9,7 +9,7 @@
 
 - **手勢辨識設計**：`docs/手勢辨識/README.md`
 - **姿勢辨識設計**：`docs/姿勢辨識/README.md`
-- **ROS2 介面契約**：`docs/architecture/interaction_contract.md` (gesture/pose topics)
+- **ROS2 介面契約**：`docs/architecture/contracts/interaction_contract.md` (gesture/pose topics)
 - **視覺系統研究**：memory `project_vision_research_0322.md`
 
 ## 核心程式

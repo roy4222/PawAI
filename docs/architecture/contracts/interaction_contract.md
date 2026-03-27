@@ -4,7 +4,7 @@
 **適用範圍**：Layer 1-3 所有模組
 **版本**：v2.1
 **凍結日期**：2026-03-25
-**對齊來源**：[mission/README.md](../mission/README.md) v2.0、[event-schema.md](../Pawai-studio/event-schema.md) v1.0
+**對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
 
 > **v2.1 變更摘要**：
 > - 新增 interaction_router 三個高層事件 topic：`/event/interaction/welcome`、`/event/interaction/gesture_command`、`/event/interaction/fall_alert`
@@ -743,9 +743,9 @@ if not required.issubset(payload.keys()):
 
 ## 11. 相關文件
 
-- [mission/README.md](../mission/README.md) — 專案總覽與功能閉環設計
-- [Pawai-studio/event-schema.md](../Pawai-studio/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
-- [Pawai-studio/brain-adapter.md](../Pawai-studio/brain-adapter.md) — Brain Adapter 介面與四級降級
+- [mission/README.md](../../mission/README.md) — 專案總覽與功能閉環設計
+- [Pawai-studio/specs/event-schema.md](../../Pawai-studio/specs/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
+- [Pawai-studio/specs/brain-adapter.md](../../Pawai-studio/specs/brain-adapter.md) — Brain Adapter 介面與四級降級
 
 ---
 

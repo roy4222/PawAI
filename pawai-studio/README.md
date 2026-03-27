@@ -79,13 +79,13 @@ curl -X POST http://localhost:8001/mock/scenario/demo_a
 
 | 需求 | 路徑 |
 |------|------|
-| Event / State Schema | [`../docs/Pawai-studio/event-schema.md`](../docs/Pawai-studio/event-schema.md) |
+| Event / State Schema | [`../docs/Pawai-studio/specs/event-schema.md`](../docs/Pawai-studio/specs/event-schema.md) |
 | Design Tokens | [`docs/design-tokens.md`](docs/design-tokens.md) |
 | Git Workflow | [`docs/git-workflow.md`](docs/git-workflow.md) |
 | 新人上手 | [`docs/onboarding.md`](docs/onboarding.md) |
-| 系統架構 | [`../docs/Pawai-studio/system-architecture.md`](../docs/Pawai-studio/system-architecture.md) |
-| UI 編排規則 | [`../docs/Pawai-studio/ui-orchestration.md`](../docs/Pawai-studio/ui-orchestration.md) |
-| Brain Adapter | [`../docs/Pawai-studio/brain-adapter.md`](../docs/Pawai-studio/brain-adapter.md) |
+| 系統架構 | [`../docs/Pawai-studio/specs/system-architecture.md`](../docs/Pawai-studio/specs/system-architecture.md) |
+| UI 編排規則 | [`../docs/Pawai-studio/specs/ui-orchestration.md`](../docs/Pawai-studio/specs/ui-orchestration.md) |
+| Brain Adapter | [`../docs/Pawai-studio/specs/brain-adapter.md`](../docs/Pawai-studio/specs/brain-adapter.md) |
 
 ---
 

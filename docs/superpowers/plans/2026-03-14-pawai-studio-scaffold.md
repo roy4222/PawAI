@@ -9,7 +9,7 @@
 **Tech Stack:** Next.js 14, Tailwind CSS, shadcn/ui, Zustand, FastAPI, uvicorn, WebSocket
 
 **Spec:** `docs/superpowers/specs/2026-03-14-pawai-studio-scaffold-design.md`
-**Schema 真相來源:** `docs/Pawai-studio/event-schema.md`
+**Schema 真相來源:** `docs/Pawai-studio/specs/event-schema.md`
 
 ---
 
@@ -36,7 +36,7 @@
 `RobotState`、`LayoutChangeEvent`、`PanelLayout`/`PanelConfig` 等進階型別留到整合階段再補。
 
 ```python
-"""PawAI Studio schemas — 對齊 docs/Pawai-studio/event-schema.md"""
+"""PawAI Studio schemas — 對齊 docs/Pawai-studio/specs/event-schema.md"""
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Literal
@@ -649,7 +649,7 @@ git commit -m "feat(frontend): apply design tokens — dark theme + AI purple"
 
 - [ ] **Step 1: Create types.ts**
 
-Mirror all interfaces from `docs/Pawai-studio/event-schema.md` into TypeScript. Include: PawAIEvent, FaceIdentityEvent, FaceState, FaceTrack, SpeechIntentEvent, SpeechState, GestureEvent, GestureState, PoseEvent, PoseState, BrainState, SystemHealth, SkillCommand, ChatCommand, MockTrigger, LayoutPreset.
+Mirror all interfaces from `docs/Pawai-studio/specs/event-schema.md` into TypeScript. Include: PawAIEvent, FaceIdentityEvent, FaceState, FaceTrack, SpeechIntentEvent, SpeechState, GestureEvent, GestureState, PoseEvent, PoseState, BrainState, SystemHealth, SkillCommand, ChatCommand, MockTrigger, LayoutPreset.
 
 - [ ] **Step 2: Verify no TS errors**
 

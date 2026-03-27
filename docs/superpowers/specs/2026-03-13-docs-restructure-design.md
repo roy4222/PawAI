@@ -203,9 +203,9 @@ docs/
 
 **改為引用**：
 - 三層架構圖 → 「詳見 `docs/mission/README.md` §5」
-- 完整 Topic 表 → 「詳見 `docs/architecture/interaction_contract.md`」
-- WebRTC api_id 完整表 → 「詳見 `docs/architecture/interaction_contract.md`」
-- 完整節點清單 → 「詳見 `docs/architecture/interaction_contract.md`」
+- 完整 Topic 表 → 「詳見 `docs/architecture/contracts/interaction_contract.md`」
+- WebRTC api_id 完整表 → 「詳見 `docs/architecture/contracts/interaction_contract.md`」
+- 完整節點清單 → 「詳見 `docs/architecture/contracts/interaction_contract.md`」
 
 **保留摘要**（嚴格限制）：
 - 語音主線 1 條 topic 速查

@@ -4,7 +4,7 @@
 > - `speech_processor` — 未採用 Clean Architecture 分層（扁平結構，無 domain/application/infrastructure 子目錄）
 > - `gesture_module` — 尚未建立
 >
-> 系統層架構見 [Pawai-studio/system-architecture.md](../Pawai-studio/system-architecture.md)。
+> 系統層架構見 [Pawai-studio/specs/system-architecture.md](../../Pawai-studio/specs/system-architecture.md)。
 
 # Clean Architecture 分層原則
 

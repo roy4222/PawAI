@@ -1,4 +1,4 @@
-"""PawAI Studio schemas — 對齊 docs/Pawai-studio/event-schema.md"""
+"""PawAI Studio schemas — 對齊 docs/Pawai-studio/specs/event-schema.md"""
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Literal

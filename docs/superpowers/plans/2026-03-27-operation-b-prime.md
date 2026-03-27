@@ -50,7 +50,7 @@ vision_perception/launch/
 scripts/start_full_demo_tmux.sh         # Replace bridge/router with executive
 scripts/clean_speech_env.sh             # Add executive to cleanup targets
 vision_perception/setup.py              # Add obstacle_avoidance_node entry
-docs/architecture/interaction_contract.md  # v2.2 update
+docs/architecture/contracts/interaction_contract.md  # v2.2 update
 references/project-status.md            # Daily updates
 ```
 
@@ -1140,7 +1140,7 @@ git commit -m "feat(executive): add ROS2 node + config + launch (Day 4)"
 **Files:**
 - Modify: `scripts/start_full_demo_tmux.sh`
 - Modify: `scripts/clean_full_demo.sh` (from Task 1)
-- Modify: `docs/architecture/interaction_contract.md`
+- Modify: `docs/architecture/contracts/interaction_contract.md`
 
 ### Subtask 5.1: Update Demo Script
 
@@ -1196,7 +1196,7 @@ Test 5: Crash recovery — kill executive, run clean + restart, < 3 min
 
 - [ ] **Step 5: Update interaction_contract.md to v2.2**
 
-Add to `docs/architecture/interaction_contract.md`:
+Add to `docs/architecture/contracts/interaction_contract.md`:
 
 ```markdown
 ### v2.2 Changes (2026-04-01)
@@ -1222,7 +1222,7 @@ Add to `docs/architecture/interaction_contract.md`:
 
 ```bash
 git add scripts/start_full_demo_tmux.sh scripts/clean_full_demo.sh \
-    docs/architecture/interaction_contract.md
+    docs/architecture/contracts/interaction_contract.md
 git commit -m "feat(executive): migrate from bridge+router to executive v0 (Day 5)
 
 - Replace event_action_bridge + interaction_router in demo script

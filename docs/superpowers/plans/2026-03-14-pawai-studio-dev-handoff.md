@@ -80,13 +80,13 @@ python mock_server.py
 
 | 需求 | 路徑 |
 |------|------|
-| Event / State Schema | [`../docs/Pawai-studio/event-schema.md`](../docs/Pawai-studio/event-schema.md) |
+| Event / State Schema | [`../docs/Pawai-studio/specs/event-schema.md`](../docs/Pawai-studio/specs/event-schema.md) |
 | Design Tokens | [`docs/design-tokens.md`](docs/design-tokens.md) |
 | Git Workflow | [`docs/git-workflow.md`](docs/git-workflow.md) |
 | 新人上手 | [`docs/onboarding.md`](docs/onboarding.md) |
-| 系統架構 | [`../docs/Pawai-studio/system-architecture.md`](../docs/Pawai-studio/system-architecture.md) |
-| UI 編排規則 | [`../docs/Pawai-studio/ui-orchestration.md`](../docs/Pawai-studio/ui-orchestration.md) |
-| Brain Adapter | [`../docs/Pawai-studio/brain-adapter.md`](../docs/Pawai-studio/brain-adapter.md) |
+| 系統架構 | [`../docs/Pawai-studio/specs/system-architecture.md`](../docs/Pawai-studio/specs/system-architecture.md) |
+| UI 編排規則 | [`../docs/Pawai-studio/specs/ui-orchestration.md`](../docs/Pawai-studio/specs/ui-orchestration.md) |
+| Brain Adapter | [`../docs/Pawai-studio/specs/brain-adapter.md`](../docs/Pawai-studio/specs/brain-adapter.md) |
 
 ---
 
@@ -109,7 +109,7 @@ Next.js 16 + React 19 + TypeScript + Tailwind CSS + shadcn/ui + Zustand
 
 - [ ] **Step 2: Verify no broken links**
 
-Run: `ls pawai-studio/docs/design-tokens.md pawai-studio/docs/git-workflow.md docs/Pawai-studio/event-schema.md docs/Pawai-studio/system-architecture.md docs/Pawai-studio/ui-orchestration.md docs/Pawai-studio/brain-adapter.md`
+Run: `ls pawai-studio/docs/design-tokens.md pawai-studio/docs/git-workflow.md docs/Pawai-studio/specs/event-schema.md docs/Pawai-studio/specs/system-architecture.md docs/Pawai-studio/specs/ui-orchestration.md docs/Pawai-studio/specs/brain-adapter.md`
 Expected: all files exist
 
 - [ ] **Step 3: Commit**
@@ -248,7 +248,7 @@ git commit -m "docs: add developer redirect banner to Pawai-studio README"
 ### Task 4: Annotate `event-schema.md` — mark `last_tts_text` as Gateway-derived
 
 **Files:**
-- Modify: `docs/Pawai-studio/event-schema.md:173`
+- Modify: `docs/Pawai-studio/specs/event-schema.md:173`
 
 - [ ] **Step 1: Add annotation to `last_tts_text` field**
 
@@ -267,7 +267,7 @@ to:
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/Pawai-studio/event-schema.md
+git add docs/Pawai-studio/specs/event-schema.md
 git commit -m "docs: annotate SpeechState.last_tts_text as Gateway-derived field"
 ```
 
@@ -288,7 +288,7 @@ Expected: no errors (docs changes shouldn't break build)
 
 **Files:**
 - Rewrite: `pawai-studio/docs/face-panel-spec.md`
-- Reference: `docs/Pawai-studio/event-schema.md` (FaceState, FaceIdentityEvent, FaceTrack)
+- Reference: `docs/Pawai-studio/specs/event-schema.md` (FaceState, FaceIdentityEvent, FaceTrack)
 - Reference: `pawai-studio/frontend/contracts/types.ts:24-52`
 - Reference: `pawai-studio/frontend/stores/state-store.ts` (useStateStore → faceState)
 - Reference: `pawai-studio/frontend/components/shared/panel-card.tsx`
@@ -299,7 +299,7 @@ Expected: no errors (docs changes shouldn't break build)
 ```markdown
 # Face Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.1 FaceState / §1.2 FaceIdentityEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.1 FaceState / §1.2 FaceIdentityEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -445,7 +445,7 @@ PanelCard (icon=User, title="人臉辨識", count=face_count)
 
 | 需求 | 看哪裡 |
 |------|--------|
-| FaceState / FaceTrack / FaceIdentityEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.1 + §1.2 |
+| FaceState / FaceTrack / FaceIdentityEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.1 + §1.2 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
@@ -505,7 +505,7 @@ git commit -m "docs(face): rewrite panel spec to AI-ready format"
 
 **Files:**
 - Rewrite: `pawai-studio/docs/speech-panel-spec.md`
-- Reference: `docs/Pawai-studio/event-schema.md` (SpeechState, SpeechIntentEvent)
+- Reference: `docs/Pawai-studio/specs/event-schema.md` (SpeechState, SpeechIntentEvent)
 - Reference: `pawai-studio/frontend/contracts/types.ts:58-88`
 
 - [ ] **Step 1: Rewrite the spec**
@@ -513,7 +513,7 @@ git commit -m "docs(face): rewrite panel spec to AI-ready format"
 ```markdown
 # Speech Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 SpeechState / §1.3 SpeechIntentEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.2 SpeechState / §1.3 SpeechIntentEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -662,7 +662,7 @@ PanelCard (icon=Mic, title="語音互動")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| SpeechState / SpeechPhase / SpeechIntentEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 + §1.3 |
+| SpeechState / SpeechPhase / SpeechIntentEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.2 + §1.3 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
@@ -720,7 +720,7 @@ git commit -m "docs(speech): rewrite panel spec to AI-ready format"
 
 **Files:**
 - Rewrite: `pawai-studio/docs/gesture-panel-spec.md`
-- Reference: `docs/Pawai-studio/event-schema.md` (GestureState, GestureEvent)
+- Reference: `docs/Pawai-studio/specs/event-schema.md` (GestureState, GestureEvent)
 - Reference: `pawai-studio/frontend/contracts/types.ts:94-111`
 
 - [ ] **Step 1: Rewrite the spec**
@@ -728,7 +728,7 @@ git commit -m "docs(speech): rewrite panel spec to AI-ready format"
 ```markdown
 # Gesture Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -855,7 +855,7 @@ PanelCard (icon=Hand, title="手勢辨識")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 + §1.4 |
+| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 + §1.4 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |
@@ -911,7 +911,7 @@ git commit -m "docs(gesture): rewrite panel spec to AI-ready format"
 
 **Files:**
 - Rewrite: `pawai-studio/docs/pose-panel-spec.md`
-- Reference: `docs/Pawai-studio/event-schema.md` (PoseState, PoseEvent)
+- Reference: `docs/Pawai-studio/specs/event-schema.md` (PoseState, PoseEvent)
 - Reference: `pawai-studio/frontend/contracts/types.ts:117-134`
 
 - [ ] **Step 1: Rewrite the spec**
@@ -919,7 +919,7 @@ git commit -m "docs(gesture): rewrite panel spec to AI-ready format"
 ```markdown
 # Pose Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.6 PoseState / §1.5 PoseEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.6 PoseState / §1.5 PoseEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -1076,7 +1076,7 @@ PanelCard (icon=Activity, title="姿勢辨識")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| PoseState / PoseEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.6 + §1.5 |
+| PoseState / PoseEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.6 + §1.5 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |

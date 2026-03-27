@@ -1,6 +1,6 @@
 # Speech Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 SpeechState / §1.3 SpeechIntentEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.2 SpeechState / §1.3 SpeechIntentEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -223,7 +223,7 @@ PanelCard (icon=Mic, title="語音互動")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| SpeechState / SpeechPhase / SpeechIntentEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.2 + §1.3 |
+| SpeechState / SpeechPhase / SpeechIntentEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.2 + §1.3 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |

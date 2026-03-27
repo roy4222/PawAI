@@ -786,7 +786,7 @@ bash scripts/start_object_stress_test_tmux.sh 60
 | 文件 | 路徑 |
 |------|------|
 | 物體辨識模組設計 v1.1 | `docs/辨識物體/README.md` |
-| ROS2 介面契約 v2.1 | `docs/architecture/interaction_contract.md` |
+| ROS2 介面契約 v2.1 | `docs/architecture/contracts/interaction_contract.md` |
 | PawAI Mission v2.2 | `docs/mission/README.md` |
 | 3/23 三感知壓測數據 | `docs/research/` + MEMORY.md |
 | Benchmark 框架規格 | `docs/superpowers/specs/2026-03-19-unified-benchmark-framework-design.md` |

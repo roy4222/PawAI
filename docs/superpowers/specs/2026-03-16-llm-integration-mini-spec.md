@@ -4,7 +4,7 @@
 **日期**：2026-03-16
 **目的**：凍結三路並行開發的接縫，確保 GPU Server / 本機 / Jetson 三路產出能無痛整合
 **有效期**：今天（2026-03-16）的衝刺開發
-**前置文件**：[interaction_contract.md](../../architecture/interaction_contract.md) v2.0、[brain-adapter.md](../../Pawai-studio/brain-adapter.md) v1.0
+**前置文件**：[interaction_contract.md](../../architecture/contracts/interaction_contract.md) v2.0、[brain-adapter.md](../../Pawai-studio/specs/brain-adapter.md) v1.0
 
 ---
 

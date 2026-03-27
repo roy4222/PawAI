@@ -76,12 +76,12 @@ docs/Pawai-studio/
 ## 真相來源索引
 | 需求 | 路徑 |
 |------|------|
-| Event/State Schema | ../docs/Pawai-studio/event-schema.md |
+| Event/State Schema | ../docs/Pawai-studio/specs/event-schema.md |
 | Design Tokens | docs/design-tokens.md |
 | Git Workflow | docs/git-workflow.md |
 | 新人上手 | docs/onboarding.md |
-| 系統架構 | ../docs/Pawai-studio/system-architecture.md |
-| UI 編排規則 | ../docs/Pawai-studio/ui-orchestration.md |
+| 系統架構 | ../docs/Pawai-studio/specs/system-architecture.md |
+| UI 編排規則 | ../docs/Pawai-studio/specs/ui-orchestration.md |
 
 ## 技術棧
 Next.js 16 + React 19 + TypeScript + Tailwind CSS + shadcn/ui + Zustand
@@ -143,7 +143,7 @@ frontend/components/chat/chat-panel.tsx 是唯一完整範例
 ```markdown
 # [Feature] Panel Spec
 
-> 真相來源：../../docs/Pawai-studio/event-schema.md
+> 真相來源：../../docs/Pawai-studio/specs/event-schema.md
 > 參考實作：../frontend/components/chat/chat-panel.tsx
 > Design Tokens：design-tokens.md
 
@@ -206,7 +206,7 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 ## 7. 參考來源
 | 需求 | 看哪裡 |
 |------|--------|
-| Event/State 欄位定義 | ../../docs/Pawai-studio/event-schema.md |
+| Event/State 欄位定義 | ../../docs/Pawai-studio/specs/event-schema.md |
 | 色彩/字體/間距 | design-tokens.md |
 | PanelCard 用法 | frontend/components/shared/panel-card.tsx |
 | StatusBadge 用法 | frontend/components/shared/status-badge.tsx |
@@ -333,8 +333,8 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 
 | 層級 | 來源 | 角色 |
 |------|------|------|
-| L1 | `docs/Pawai-studio/event-schema.md` | Studio/Gateway JSON 真相來源 |
-| L2 | `docs/architecture/interaction_contract.md` | ROS2 Topic 真相來源 |
+| L1 | `docs/Pawai-studio/specs/event-schema.md` | Studio/Gateway JSON 真相來源 |
+| L2 | `docs/architecture/contracts/interaction_contract.md` | ROS2 Topic 真相來源 |
 | L3 | `types.ts` / `schemas.py` | 實作鏡像（應對齊 L1） |
 
 ### 4.2 核對結果
@@ -375,7 +375,7 @@ import type { XxxState, XxxEvent } from '@/contracts/types'
 2. **新增 `pawai-studio/docs/onboarding.md`** — 5 分鐘上手指南
 3. **重寫 4 份 Panel Spec** — 統一 AI-ready 格式（Section 2 模板）
 4. **修改 `docs/Pawai-studio/README.md`** — 加頂部導向提示
-5. **修改 `docs/Pawai-studio/event-schema.md`** — `last_tts_text` 加「Gateway-derived field」註解
+5. **修改 `docs/Pawai-studio/specs/event-schema.md`** — `last_tts_text` 加「Gateway-derived field」註解
 
 ---
 

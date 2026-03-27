@@ -8,10 +8,10 @@
 ## 權威文件
 
 - **Studio 設計規格**：`docs/Pawai-studio/README.md`
-- **系統架構**：`docs/Pawai-studio/system-architecture.md`
-- **事件 Schema**：`docs/Pawai-studio/event-schema.md`
-- **UI 編排**：`docs/Pawai-studio/ui-orchestration.md`
-- **Brain Adapter**：`docs/Pawai-studio/brain-adapter.md`
+- **系統架構**：`docs/Pawai-studio/specs/system-architecture.md`
+- **事件 Schema**：`docs/Pawai-studio/specs/event-schema.md`
+- **UI 編排**：`docs/Pawai-studio/specs/ui-orchestration.md`
+- **Brain Adapter**：`docs/Pawai-studio/specs/brain-adapter.md`
 - **開發者入口**：`pawai-studio/README.md`
 
 ## 核心程式

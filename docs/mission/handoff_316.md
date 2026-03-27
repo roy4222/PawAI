@@ -88,7 +88,7 @@
 | 文件 | 狀態 | 位置 |
 |------|------|------|
 | mission/README.md v2.0 | ✅ 已完成 | `docs/mission/README.md` |
-| interaction_contract.md v2.0 | ✅ 已完成 | `docs/architecture/interaction_contract.md` |
+| interaction_contract.md v2.0 | ✅ 已完成 | `docs/architecture/contracts/interaction_contract.md` |
 | Pawai-studio/ 五份設計文件 | ✅ 已完成 | `docs/Pawai-studio/` |
 | 本交付清單 | ✅ 已完成 | `docs/mission/handoff_316.md` |
 
@@ -187,10 +187,10 @@
 
 | 交接項目 | 內容 | 位置 |
 |----------|------|------|
-| **Gateway API 文件** | REST + WebSocket 端點規格 | `docs/Pawai-studio/system-architecture.md` |
-| **Event Schema** | 所有事件/狀態的 TypeScript 型別 | `docs/Pawai-studio/event-schema.md` |
-| **UI Orchestration** | 面板切換規則 + layout preset | `docs/Pawai-studio/ui-orchestration.md` |
-| **Mock Server** | 啟動方式 + 端點說明 | `docs/Pawai-studio/system-architecture.md` § Mock Event Server |
+| **Gateway API 文件** | REST + WebSocket 端點規格 | `docs/Pawai-studio/specs/system-architecture.md` |
+| **Event Schema** | 所有事件/狀態的 TypeScript 型別 | `docs/Pawai-studio/specs/event-schema.md` |
+| **UI Orchestration** | 面板切換規則 + layout preset | `docs/Pawai-studio/specs/ui-orchestration.md` |
+| **Mock Server** | 啟動方式 + 端點說明 | `docs/Pawai-studio/specs/system-architecture.md` § Mock Event Server |
 | **面板元件清單** | 11 個面板的資料來源對應 | `docs/Pawai-studio/README.md` § 面板清單 |
 | **啟動指令** | Mock Server + Gateway 啟動 | Roy 口頭 + README |
 

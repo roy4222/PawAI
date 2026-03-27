@@ -1,6 +1,6 @@
 # Gesture Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
+> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -195,7 +195,7 @@ PanelCard (icon=Hand, title="手勢辨識")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/event-schema.md](../../docs/Pawai-studio/event-schema.md) §2.5 + §1.4 |
+| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 + §1.4 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |

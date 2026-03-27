@@ -894,7 +894,7 @@ speech_processor/
 | 文件 | 路徑 |
 |------|------|
 | 專案總覽 | `docs/mission/README.md` |
-| ROS2 介面契約 | `docs/architecture/interaction_contract.md` |
+| ROS2 介面契約 | `docs/architecture/contracts/interaction_contract.md` |
 | 語音模組 | `docs/語音功能/README.md` |
 | 人臉模組 | `docs/人臉辨識/README.md` |
 | 手勢模組 | `docs/手勢辨識/README.md` |

@@ -1,5 +1,7 @@
 # PawAI Mission 入口頁
 
+> Status: current
+
 **專案名稱**：老人與狗 (Elder and Dog) / PawAI
 **文件版本**：v2.2
 **定案日期**：2026-03-07

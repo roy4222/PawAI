@@ -258,7 +258,7 @@ Jetson 真機
 ### 8.1 型別產生鏈
 
 ```
-docs/Pawai-studio/event-schema.md（設計真相來源，唯一）
+docs/Pawai-studio/specs/event-schema.md（設計真相來源，唯一）
     ↓ 手動對齊
 backend/schemas.py（Pydantic 實作對齊檔）
     ↓ 手動對齊

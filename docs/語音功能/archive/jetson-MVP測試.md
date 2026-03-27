@@ -139,7 +139,7 @@
 | Topic | 狀態 | 說明 |
 |-------|------|------|
 | `/event/speech_intent_recognized` | 主要採用 | 與 `README.md` 一致，MVP 測試主用 |
-| `/event/speech_intent` | 契約版名稱 | 與 `docs/architecture/interaction_contract.md` 一致 |
+| `/event/speech_intent` | 契約版名稱 | 與 `docs/architecture/contracts/interaction_contract.md` 一致 |
 
 ### 3.3 建議做法
 
