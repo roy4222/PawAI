@@ -25,12 +25,28 @@ if [[ -z "$FILE" ]] || [[ ! -f "$FILE" ]]; then
   exit 0
 fi
 
-# --- Python: py_compile ---
+# --- Python: py_compile + import sanity ---
 if [[ "$FILE" == *.py ]]; then
+  # 1. Syntax check (blocking)
   if ! python3 -m py_compile "$FILE" 2>&1; then
     echo "SYNTAX ERROR in $FILE — please fix before proceeding." >&2
     exit 2
   fi
+  # 2. Quick import sanity: detect duplicate imports (warning only)
+  python3 -c "
+import ast, sys
+with open('$FILE') as f:
+    tree = ast.parse(f.read())
+seen = set()
+for node in ast.walk(tree):
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        key = ast.dump(node)
+        if key in seen:
+            mod = getattr(node, 'module', '') or ''
+            names = ', '.join(a.name for a in node.names)
+            print(f'DUPLICATE IMPORT: {mod}.{names} (line {node.lineno})', file=sys.stderr)
+        seen.add(key)
+" 2>&1 || true
   exit 0
 fi
 

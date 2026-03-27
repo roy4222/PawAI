@@ -5,9 +5,11 @@
 
 # PawAI Studio 設計文件
 
-**文件版本**：v2.1
-**最後更新**：2026-03-16
-**對齊來源**：[mission/README.md](../mission/README.md) v2.0
+**文件版本**：v2.2
+**最後更新**：2026-03-27
+**對齊來源**：[mission/README.md](../mission/README.md) v2.2
+
+> **時程更新**：前端開發已於 3/26 截止。後端（Studio Gateway + WebSocket bridge）4/9 後由團隊啟動開發。Sprint B-prime（3/28-4/7）聚焦七大感知模組上機，Studio 後端交 interface draft。
 
 ---
 

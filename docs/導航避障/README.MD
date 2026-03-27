@@ -4,19 +4,23 @@
 > 平台：Unitree Go2 + Jetson Orin Nano 8GB + 3D LiDAR + Intel RealSense D435  
 > 軟體主線：ROS2 Humble + Nav2 + AMCL + DWB
 
-**更新日期：** 2026-03-03  
-**當前階段：** Phase A — 安全與穩定止血（Week 1-2）  
-**核心策略：** 先安全、再穩定、最後流暢
+**更新日期：** 2026-03-27
+**當前階段：** 策略轉向 — LiDAR 正式棄用，改用 D435 Depth 反應式避障
+**核心策略：** 最簡方案優先，demo 保命層
 
 ---
 
 ## 快速導讀（30 秒）
 
-- **問題本質**：不是「控制器不夠先進」，而是「感測太稀疏 + 安全包絡太小」
-- **當前瓶頸**：感測資料新鮮度不足（低頻 + burst/gap），導致「可定位但不可安全連續避障」
-- **解法方向**：先修 LiDAR 感測 → 再加 D435 近場補強 → 調安全參數 → 最後優化體感
-- **研究結論**：5 個開源專案皆「借概念不搬整套」，保留 Nav2 主線
-- **下一步**：先通過 freshness gate（`gap/age/stale-stop`）→ 再做 stride 與 D435 整合
+- **3/26 決策**：Go2 Pro 3D LiDAR 透過 WebRTC 傳輸，實測 0.03-2Hz，gap_max > 1.0s，**正式棄用**
+- **新方案**：D435 ROI Depth Threshold（~50 行 numpy），反應式避障
+- **預估工時**：10-12 小時（含 30 次防撞測試）
+- **優先級**：P2 加分項，不搶 P0 穩定性
+- **Sprint 排程**：Day 6-7（4/2-4/3）實作 + hardening
+- **詳細研究**：[2026-03-25-reactive-obstacle-avoidance.md](./2026-03-25-reactive-obstacle-avoidance.md)
+- **實作計畫**：[Sprint B-prime](../mission/sprint-b-prime.md) Day 6-7
+
+> 以下為歷史記錄（3/3 版本的 LiDAR + Nav2 方案），保留供參考。
 
 **詳細落地計畫**：[落地計畫_v2.md](./落地計畫_v2.md)  
 **每週執行細節**：[weekly_plan.md](./weekly_plan.md)  

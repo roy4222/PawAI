@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-26（3/26 會議決策 + 時程更新 + 物體辨識策略調整 + 審計修復 4 項）
+**最後更新**：2026-03-27（Sprint B-prime 規劃完成，3/28 啟動 11 天衝刺）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -103,43 +103,50 @@
 - `docs/research/2026-03-25-reactive-obstacle-avoidance.md`（D435 避障，34KB）
 - `docs/research/2026-03-25-go2-sdk-capability-and-architecture.md`（SDK 能力 + Clean Architecture 藍圖，41KB）
 
-## 待辦（按優先序）
+## Sprint B-prime（3/28-4/7，一人衝刺）
 
-### 3/26 整合日（已完成）
-1. Deploy to Jetson（rsync + colcon build）
-2. `bash scripts/start_full_demo_tmux.sh` — 10 window cold start
-3. 四模組同跑不 OOM（RAM < 6.5GB）
-4. face QoS 改動上機正常（debug_image 有影像）
-5. 語音與視覺不互相卡住（Whisper CUDA + MediaPipe CPU）
-6. 基本事件進出（你好→回應、stop→停、人臉→問候）
+> 完整每日任務見 [`docs/mission/sprint-b-prime.md`](../docs/mission/sprint-b-prime.md)
 
-### 整合後（3/27-4/6）
-7. Demo A 30 輪驗收 ≥ 90%
-8. Demo B E2E（手勢→Go2 真機 5 輪）
-9. tts_node silent exceptions 上機驗證
-10. Flake8 改 blocking（確認違規量後）
+| Day | 日期 | 主題 | 驗收標準 |
+|:---:|------|------|---------|
+| 1 | 3/28 | Baseline Contract | 3x cold start + 1x crash recovery |
+| 2 | 3/29 | 硬體上機：可跑 | Jetson + D435 固定，bring-up pass |
+| 3 | 3/30 | 硬體上機：可用 | 3x 重開機 + 2 分鐘行走 + 熱管理 |
+| 4 | 3/31 | Executive v0：State Machine | 19 tests pass + ROS2 node 啟動 |
+| 5 | 4/1 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
+| 6 | 4/2 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
+| 7 | 4/3 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
+| 8 | 4/4 | 物體辨識 Hard Gate | Go/No-Go → Phase 0（4-6h timebox） |
+| 9 | 4/5 | Freeze + Hardening (上) | Demo A 30 輪 ≥ 90% + Demo B 5 輪 ≥ 4/5 |
+| 10 | 4/6 | Freeze + Hardening (下) | 操作手冊 + crash drill + 最終 E2E |
+| 11 | 4/7 | Handoff Day | docs 重組 + Starlight scaffold + 分工文件 |
 
-### 4/13 前
-11. 物體辨識 Phase 0-3（YOLO26n，預設目標，~3 天）
-12. D435 反應式避障 Phase 0（~10-12hr，尚未測試 D435+Go2 導航）
-13. 文件繳交（Ch1-5，分工見上方）
-14. 介紹網站基本架構（硬體介紹、模型介紹、Demo 截圖/影片）
+### 砍刀順序（時程爆炸時）
+1. 物體辨識 → 2. 硬體擴張 → 3. Executive 完整版 → 4. 導航避障
 
-### 系統風險
-14. interaction_executive 空殼 → py_trees explore
-15. Demo C scope 收斂（Studio WebSocket bridge）
-16. Jetson 硬編碼路徑（52 files）
+## 待辦（Sprint 後 / 4/9 團隊接手）
+
+- Demo A 30 輪持續監控
+- Studio 後端開發（FastAPI + WebSocket bridge）
+- Starlight 文件站 + 展示站
+- 文件繳交 Ch1-5（4/13 硬底線）
+- Flake8 改 blocking
+- Jetson 硬編碼路徑清理
 
 ## 里程碑
 
 | 日期 | 事項 |
 |------|------|
 | **3/26** | **四模組整合日 + 教授會議** ✅ |
-| 3/26 | 前端網站截止 |
-| 3/27-4/2 | 整合測試 + Demo A/B 驗收 + 文件撰寫 |
-| 4/2 | 物體辨識開發啟動（預設目標策略） |
-| 4/6 | P0 穩定化（Demo A ≥ 90%） |
-| **4/9** | **教授會議（檢視文件+進度）** |
+| **3/27** | **Sprint B-prime 規劃完成** ✅ |
+| **3/28** | Sprint 啟動 — Baseline Contract Day |
+| 3/29-30 | 硬體上機（可跑→可用） |
+| 3/31-4/1 | Executive v0 開發 + 整合 |
+| 4/2-3 | 導航避障開發 + 30 次防撞 |
+| 4/4 | 物體辨識 Hard Gate |
+| 4/5-6 | Freeze + Hardening |
+| **4/7** | **Handoff Day** |
+| **4/9** | **教授會議 + 團隊分工啟動** |
 | **4/13** | **文件繳交（硬底線）** |
 | **4/16** | **卓斯科技線上會議（暫定）** |
 | **5/16** | **省夜 Demo（暖身展示）** |

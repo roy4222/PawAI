@@ -8,13 +8,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **pip install 一律改成用 uv pip install**（專案使用 uv 管理 Python 依賴）
 - Code Review 角色設定：Linus Torvalds 風格，嚴格審核程式碼品質與潛在風險
 
+## 工作紀律（基於 51 sessions 的摩擦分析）
+
+- **不要擴張 scope**：只做我要求的，不要提議額外清理、重構、或「順便改」。我會主動擴張
+- **寫完 Python 後自我檢查**：確認所有 import 存在、沒有 hardcoded 測試值、boolean casting 正確、timestamp 用真實來源
+- **指定 skill 就用那個 skill**：不要替換成其他 skill、不要手動探索檔案、不要自行 brainstorm。先執行指令，再問問題
+- **每個任務完成後停下來確認**，不要連續做多個任務
+
+## Jetson 環境硬規則
+
+- source 時用 `setup.zsh`（不是 `setup.bash`），兩者不可混用
+- tmux 不繼承 `LD_LIBRARY_PATH` — 啟動腳本中必須 export
+- Jetson CUDA int8 支援有限 — Whisper 必須用 `cuda` + `float16`
+- bash-specific 腳本用 `bash -c`，不要假設 zsh 相容
+
 ---
 
 ## 專案概述
 
 **專題名稱：老人與狗 / PawAI**
 **硬底線：2026/4/13 文件繳交，五月展示／驗收**
-**當前日期：2026-03-26（3/26 會議完成，時程更新至 6 月，物體辨識策略調整，審計 4 項修復）**
+**當前日期：2026-03-27（Sprint B-prime 規劃完成，3/28 啟動 11 天衝刺）**
 
 以 Unitree Go2 Pro 為載體的 **embodied AI 互動陪伴平台**。核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
 
