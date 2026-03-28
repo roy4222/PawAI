@@ -54,17 +54,52 @@ echo gate 阻止 ASR 自激（total 1.5s）
 | `/tts` | 輸入 | 要說的文字 |
 | `/asr_result` | 輸出 | 原始 ASR 文字 |
 
+## Noisy Profile v1（2026-03-28）
+
+Go2 伺服噪音環境下的 ASR 參數調校結果。
+
+**啟動方式：**
+```bash
+ENABLE_ACTIONS=false bash scripts/start_full_demo_tmux.sh
+```
+
+**參數（寫在 start_full_demo_tmux.sh 的 launch arg）：**
+- `mic_gain=8.0`（預設，v1 甜蜜點。gain 10/12 測試過，噪音放大更嚴重）
+- `energy_vad.start_threshold=0.02`（原 0.015，避免 Go2 噪音誤觸發）
+- `energy_vad.stop_threshold=0.015`
+- `energy_vad.silence_duration_ms=1000`
+- `energy_vad.min_speech_ms=500`
+
+**Whisper 改善（寫在 stt_intent_node.py）：**
+- `vad_filter=True`（啟用 silero VAD，過濾非語音段）
+- `no_speech_threshold=0.6`（拒絕低信心結果）
+- `log_prob_threshold=-1.0`
+- 幻覺黑名單 6→22 pattern + 短文字（< 2 字）過濾
+
+**安全門：** `ENABLE_ACTIONS` 環境變數
+- `true`（預設）：llm_bridge 和 event_action_bridge 正常發布 `/webrtc_req`
+- `false`：兩條動作路徑都關閉，Go2 不會因垃圾 intent 做危險動作
+
+**A/B 測試結果（固定音檔 controlled test）：**
+
+| 組別 | gain | 正確+部分 | 備註 |
+|:----:|:----:|:---------:|------|
+| v1 | 8.0 | **64%** | 甜蜜點 |
+| v2 | 10.0 | 43% | 觸發暴增但品質下降 |
+| v5 | 12.0 | 62% | 無改善，出現幻覺 |
+
+**結論：** Whisper Small 在中文短句+機器噪音場景已到上限，下一步評估替代 ASR（SenseVoice）。
+
 ## 已知問題
 
-- VAD 斷句延遲 2-10s 是最大瓶頸（不是 LLM）
-- USB 麥克風收音弱，需靠近或加 mic_gain
-- Whisper 幻覺：靜音/噪音被誤解為假文字
-- USB device index 重開機後可能漂移
+- **Whisper Small 中文短句辨識差**：「哈囉小狗」幾乎全錯，「拍一張照片」穩定正確。短句+噪音是模型極限
+- USB 麥克風收音弱，需靠近（< 80cm）+ mic_gain 8.0
+- USB device index 重開機後漂移 → 用 `source scripts/device_detect.sh`
 - MeloTTS 和 ElevenLabs 已棄用（3/26 決議）
 
 ## 下一步
 
-- Sprint B-prime Day 1：baseline 穩定化
+- **替代 ASR 研究**：SenseVoice（中文+噪音專精，比 Whisper 快）
 - Sprint Day 4-5：整合進 executive v0
 - system prompt 調整（intent 映射偏差）
 

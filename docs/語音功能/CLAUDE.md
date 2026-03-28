@@ -17,8 +17,10 @@
 
 ## 常見陷阱
 
-- USB 麥克風 UACDemoV1.0：device 24, mono, 48kHz, mic_gain:=4.0
+- USB 麥克風 UACDemoV1.0：device index 會飄（24→0），用 `source scripts/device_detect.sh`
 - USB 喇叭 CD002-AUDIO：`plughw:3,0`，card number 重開機可能漂移
+- mic_gain 預設 8.0（noisy profile v1），不要改回 4.0 除非安靜環境
+- Whisper vad_filter=True + no_speech_threshold=0.6 已啟用，不要關掉
 - zsh glob 會炸陣列：用 `'["whisper_local"]'` 加引號
 - LD_LIBRARY_PATH 必須含 `/home/jetson/.local/ctranslate2-cuda/lib`
 - LLM timeout > 2s → fallback 到 RuleBrain
