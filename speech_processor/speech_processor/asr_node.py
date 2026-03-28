@@ -112,7 +112,11 @@ class AsrNode(Node):
         self.status_pub.publish(msg)
 
     def _on_segment(self, msg: String) -> None:
-        payload = json.loads(msg.data)
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().error(f"Malformed JSON in segment: {e}")
+            return
         session_id = payload.get("session_id")
         sample_rate = int(payload.get("sample_rate", 16000))
         encoded = payload.get("audio_base64", "")

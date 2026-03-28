@@ -11,6 +11,7 @@ deploy .task file to Jetson).
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import time
@@ -25,6 +26,7 @@ _MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/"
     "gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
 )
+_MODEL_SHA256 = "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482"
 
 # Map MediaPipe gesture labels → project event names
 _GESTURE_MAP = {
@@ -61,6 +63,19 @@ class GestureRecognizerBackend:
                     f"and download failed: {e}. "
                     f"Please download manually from: {_MODEL_URL}"
                 ) from e
+
+        # Verify model integrity
+        sha256 = hashlib.sha256()
+        with open(model_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256.update(chunk)
+        actual = sha256.hexdigest()
+        if actual != _MODEL_SHA256:
+            logger.warning(
+                f"Gesture model checksum mismatch: "
+                f"expected {_MODEL_SHA256[:16]}..., got {actual[:16]}... "
+                f"Model may be corrupted or tampered with."
+            )
 
         import mediapipe as mp
         from mediapipe.tasks import python
