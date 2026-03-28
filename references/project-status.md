@@ -130,16 +130,15 @@
 
 | Day | 日期 | 主題 | 驗收標準 |
 |:---:|------|------|---------|
-| 1 | 3/28 | Baseline Contract | 3x cold start + 1x crash recovery |
-| 2 | 3/29 | 硬體上機：可跑 | Jetson + D435 固定，bring-up pass |
-| 3 | 3/30 | 硬體上機：可用 | 3x 重開機 + 2 分鐘行走 + 熱管理 |
-| 4 | 3/31 | Executive v0：State Machine | 19 tests pass + ROS2 node 啟動 |
-| 5 | 4/1 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
-| 6 | 4/2 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
-| 7 | 4/3 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
-| 8 | 4/4 | 物體辨識 Hard Gate | Go/No-Go → Phase 0（4-6h timebox） |
-| 9 | 4/5 | Freeze + Hardening (上) | Demo A 30 輪 ≥ 90% + Demo B 5 輪 ≥ 4/5 |
-| 10 | 4/6 | Freeze + Hardening (下) | 操作手冊 + crash drill + 最終 E2E |
+| 1 | 3/28 | Baseline Contract | 3x cold start + 1x crash recovery ✅ |
+| **2** | **3/29** | **ASR 替換：可順暢溝通** | **正確+部分 >= 80%，高風險誤判 = 0** |
+| 3-4 | 3/30-31 | 硬體上機：可跑+可用 | Jetson + D435 固定 + 3x 重開機 + 行走穩定 |
+| 5 | 4/1 | Executive v0：State Machine | 19 tests pass + ROS2 node 啟動 |
+| 6 | 4/2 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
+| 7 | 4/3 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
+| 8 | 4/4 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
+| 9 | 4/5 | 物體辨識 Hard Gate | Go/No-Go → Phase 0（4-6h timebox）|
+| 10 | 4/6 | Freeze + Hardening | Demo A 30 輪 + Demo B 5 輪 + crash drill |
 | 11 | 4/7 | Handoff Day | docs 重組 + Starlight scaffold + 分工文件 |
 
 ### 砍刀順序（時程爆炸時）

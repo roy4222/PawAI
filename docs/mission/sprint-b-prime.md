@@ -22,13 +22,13 @@
 
 | # | 模組 | 現況 | Sprint 結束時 | 主要工作日 |
 |:-:|------|:----:|-------------|:----------:|
-| 1 | 人臉辨識 | 95% | baseline 穩定 + 上機 | Day 1-3 |
-| 2 | 語音功能 | 80% | E2E 穩定 + prompt 調整 | Day 1-3 |
-| 3 | 手勢辨識 | 90% | 上機 + executive 整合 | Day 1-5 |
-| 4 | 姿勢辨識 | 92% | 上機 + fallen→EMERGENCY | Day 1-5 |
-| 5 | AI 大腦 | 70% | executive v0 state machine | Day 4-5 |
-| 6 | 導航避障 | 5% | D435 depth 反應式避障 | Day 6-7 |
-| 7 | 物體辨識 | 0% | Hard Gate → Phase 0（如果 Go） | Day 8 |
+| 1 | 人臉辨識 | 95% | baseline 穩定 + 上機 | Day 1, 3-4 |
+| 2 | 語音功能 | 80% → **ASR 替換中** | Cloud ASR + Local fallback，可順暢溝通 | **Day 2** |
+| 3 | 手勢辨識 | 90% | 上機 + executive 整合 | Day 3-6 |
+| 4 | 姿勢辨識 | 92% | 上機 + fallen→EMERGENCY | Day 3-6 |
+| 5 | AI 大腦 | 70% | executive v0 state machine | Day 5-6 |
+| 6 | 導航避障 | 5% | D435 depth 反應式避障 | Day 7-8 |
+| 7 | 物體辨識 | 0% | Hard Gate → Phase 0（如果 Go） | Day 9 |
 
 ---
 
@@ -55,57 +55,75 @@
 
 ## Daily Breakdown
 
-### Day 1（3/28 六）— Baseline Contract Day
+### Day 1（3/28 六）— Baseline Contract Day ✅
 
 > 鎖定地基。產出可重現的啟動流程。
 
 **交付物 checklist：**
-- [ ] Topic Graph 快照（`ros2 topic list` + `ros2 node list` 存檔）
-- [ ] QoS 配置表（每個 topic 的 QoS profile 確認）
-- [ ] Device Mapping（USB mic/speaker/D435 的 device index 固定策略）
-- [ ] 啟動順序文件（哪個 node 先起、等多久、怎麼確認 ready）
-- [ ] 最小 demo 腳本（cold start → 4 模組 → 基本互動）
-- [ ] Crash/Restart SOP（當機→清環境→重啟→恢復）
+- [x] Topic Graph 快照（51 topics, 16 nodes）
+- [x] QoS 配置表（靜態推導 + runtime 驗證一致）
+- [x] Device Mapping（mic card 24→0 飄移確認，device_detect.sh 解決）
+- [x] 啟動順序文件（10 window + sleep + ready 判定）
+- [x] 最小 demo 腳本（clean_full_demo.sh + device_detect.sh）
+- [x] Crash/Restart SOP（文件化 + 1m26s 恢復）
 
-**驗收：** 3 次 cold start 全成功 + 1 次 crash recovery drill < 3 分鐘
+**驗收：** 3/3 cold start PASS + 1/1 crash recovery PASS（1m26s < 3min）✅
 
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 1
+**額外完成：**
+- Noisy profile v1：gain=8.0 + VAD=0.02（3 組 A/B 測試）
+- ENABLE_ACTIONS 安全門
+- 安全修復 #5 #7
 
 ---
 
-### Day 2（3/29 日）— 硬體上機：可跑
+### Day 2（3/29 日）— ASR 替換：可順暢溝通
 
-> Jetson + 感測器固定到 Go2，能開機帶起全系統。
+> Whisper Small 中文短句+噪音已到上限（64% 正確+部分）。
+> 語音是 Demo 核心，不能用就不該上機。先解決語音再碰硬體。
+
+**前置研究（4 個問題先收斂）：**
+- [ ] SenseVoice 能否在 RTX 8000 穩定提供低延遲 API
+- [ ] Jetson 端整合：是否只需新增 ASRProvider，不用重寫 stt_intent_node
+- [ ] Fallback 條件定義（timeout? connection error?）
+- [ ] 固定音檔測試如何沿用到 cloud/local 雙 provider
 
 **交付物 checklist：**
+- [ ] Cloud ASR 部署在 RTX 8000（SenseVoice 或同等方案）
+- [ ] stt_intent_node 新增 cloud ASR provider
+- [ ] Cloud → Local Whisper fallback 機制
+- [ ] 固定音檔 A/B 測試（cloud vs local）
+
+**驗收標準：**
+- 固定音檔正確+部分 >= 80%
+- 短句（「哈囉小狗」「請停止」）正確率 >= 60%
+- 高風險 intent 誤判 = 0
+- 通過後才能把 `ENABLE_ACTIONS` 改回 true
+
+**不做：** 硬體上機、executive v0、導航避障
+
+---
+
+### Day 3-4（3/30-31）— 硬體上機：可跑 + 可用
+
+> 語音驗收通過後，才把 Jetson + 感測器固定到 Go2。
+
+**Day 3 交付物（可跑）：**
 - [ ] Jetson 固定（Go2 行走不鬆脫）
 - [ ] D435 固定（視角穩定不晃）
 - [ ] USB 麥克風/喇叭接線（不影響行走）
 - [ ] 供電穩定（行走時不斷電）
 - [ ] Bring-up 測試通過
 
-**不做：** 走線美觀、長期固定、外殼設計
-
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 2
-
----
-
-### Day 3（3/30 一）— 硬體上機：可用
-
-> 重開機一致性 + 行走穩定性。
-
-**交付物 checklist：**
+**Day 4 交付物（可用）：**
 - [ ] 3 次完全斷電重開，每次 bring-up 成功
 - [ ] Go2 行走 2 分鐘，硬體不鬆脫
 - [ ] 連續運行 30 分鐘，Jetson < 75°C
 - [ ] 重開機後 USB device index 不漂移
 - [ ] 上機版 `start_full_demo_tmux.sh` 確認可跑
 
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 2
-
 ---
 
-### Day 4（3/31 二）— Executive v0：State Machine
+### Day 5（4/1 三）— Executive v0：State Machine
 
 > 建立 thin orchestrator，統一事件路由。Demo Controller，不是 AI Brain。
 
@@ -133,7 +151,7 @@
 
 ---
 
-### Day 5（4/1 三）— Executive v0：整合 + Bridge 遷移
+### Day 6（4/2 四）— Executive v0：整合 + Bridge 遷移
 
 > executive v0 取代 event_action_bridge + interaction_router。
 
@@ -153,7 +171,7 @@
 
 ---
 
-### Day 6（4/2 四）— 導航避障：D435 Depth
+### Day 7（4/3 五）— 導航避障：D435 Depth
 
 > 50 行 numpy → ROS2 node → Go2 反應式避障。
 
@@ -177,7 +195,7 @@
 
 ---
 
-### Day 7（4/3 五）— 導航避障：Hardening
+### Day 8（4/4 六）— 導航避障：Hardening
 
 > 30 次防撞測試，量化 pass/fail/warning。
 
@@ -194,7 +212,7 @@
 
 ---
 
-### Day 8（4/4 六）— 物體辨識 Hard Gate
+### Day 9（4/5 日）— 物體辨識 Hard Gate
 
 > Go/No-Go。最多 4-6 小時 timebox。
 
@@ -213,28 +231,18 @@
 
 ---
 
-### Day 9（4/5 日）— Freeze + Hardening (上)
+### Day 10（4/6 一）— Freeze + Hardening
 
 > 不加新功能。只修 demo 失敗路徑。
 
 **交付物 checklist：**
 - [ ] Demo A 30 輪語音測試 → 目標 ≥ 90% (27/30)
 - [ ] Demo B 5 輪手勢→Go2 真機 → 目標 ≥ 4/5
-- [ ] 每次修改都回歸完整 E2E
-
-**鐵律：** Day 8 如果硬上了 object detection，今天不能繼續開發它
-
----
-
-### Day 10（4/6 一）— Freeze + Hardening (下)
-
-> 補文件。確認可操作性。
-
-**交付物 checklist：**
 - [ ] Crash recovery drill 3 輪，每輪 < 3 分鐘
 - [ ] Demo 操作手冊（非技術人員照做也能跑）
 - [ ] `/executive/status` 壓測監控驗證
 - [ ] 最終 E2E regression pass
+- [ ] 每次修改都回歸完整 E2E
 
 ---
 
