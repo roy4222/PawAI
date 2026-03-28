@@ -6,6 +6,7 @@
 import io
 import json
 import queue
+import re
 import threading
 import time
 import wave
@@ -205,8 +206,10 @@ class WhisperLocalProvider(ASRProvider):
             segments, info = self._model.transcribe(
                 audio_io,
                 language=language or self.language,
-                vad_filter=False,
+                vad_filter=True,
                 beam_size=1,
+                no_speech_threshold=0.6,
+                log_prob_threshold=-1.0,
             )
             text = "".join(segment.text for segment in segments).strip()
 
@@ -266,6 +269,22 @@ class SttIntentNode(Node):
         "zither",
         "索兰娅",
         "索蘭婭",
+        "谢谢大家",
+        "謝謝大家",
+        "谢谢收看",
+        "謝謝收看",
+        "请订阅",
+        "請訂閱",
+        "感谢观看",
+        "感謝觀看",
+        "下期再见",
+        "下期再見",
+        "欢迎订阅",
+        "歡迎訂閱",
+        "关注我",
+        "關注我",
+        "subtitles",
+        "thank you for watching",
     )
 
     def __init__(self) -> None:
@@ -813,6 +832,14 @@ class SttIntentNode(Node):
                 transcript_result.degraded,
                 reason,
             )
+
+            # Short text filter — discard transcripts with < 2 meaningful chars
+            meaningful = re.sub(r'[\s\u3000.,!?。，！？、…\-\u2014\u2026]+', '', transcript)
+            if len(meaningful) < 2:
+                self.get_logger().info(
+                    f"Short text discarded ({len(meaningful)} chars): {transcript!r}"
+                )
+                return
 
             # Whisper hallucination filter — publish as hallucination intent so
             # the observer records a miss instead of the round vanishing.

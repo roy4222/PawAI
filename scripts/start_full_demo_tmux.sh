@@ -35,7 +35,10 @@ LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 INPUT_DEVICE="${INPUT_DEVICE:-24}"
 CHANNELS="${CHANNELS:-1}"
 CAPTURE_SAMPLE_RATE="${CAPTURE_SAMPLE_RATE:-48000}"
-MIC_GAIN="${MIC_GAIN:-4.0}"
+MIC_GAIN="${MIC_GAIN:-8.0}"
+
+# ── Actions ──
+ENABLE_ACTIONS="${ENABLE_ACTIONS:-true}"
 
 # ── TTS ──
 TTS_PROVIDER="${TTS_PROVIDER:-edge_tts}"
@@ -130,7 +133,11 @@ tmux send-keys -t "$SESSION:asr" \
     -p whisper_local.device:=cuda -p whisper_local.compute_type:=float16 \
     -p input_device:=$INPUT_DEVICE -p channels:=$CHANNELS \
     -p sample_rate:=16000 -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE \
-    -p mic_gain:=$MIC_GAIN" Enter
+    -p mic_gain:=$MIC_GAIN \
+    -p energy_vad.start_threshold:=0.02 \
+    -p energy_vad.stop_threshold:=0.015 \
+    -p energy_vad.silence_duration_ms:=1000 \
+    -p energy_vad.min_speech_ms:=500" Enter
 sleep 15
 
 # === Phase 3: 決策/執行層 ===
@@ -160,14 +167,20 @@ tmux send-keys -t "$SESSION:llm" \
     -p llm_timeout:=$LLM_TIMEOUT \
     -p enable_local_llm:=$ENABLE_LOCAL_LLM \
     -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
-    -p local_llm_model:='$LOCAL_LLM_MODEL'" Enter
+    -p local_llm_model:='$LOCAL_LLM_MODEL' \
+    -p enable_actions:=$ENABLE_ACTIONS" Enter
 sleep 3
 
 # --- Window 8: Event Action Bridge (subscribes to interaction_router output) ---
 echo "[9/10] Starting event_action_bridge..."
 tmux new-window -t "$SESSION" -n bridge
-tmux send-keys -t "$SESSION:bridge" \
-  "$ROS_SETUP && ros2 launch vision_perception event_action_bridge.launch.py" Enter
+if [ "$ENABLE_ACTIONS" = "true" ]; then
+  tmux send-keys -t "$SESSION:bridge" \
+    "$ROS_SETUP && ros2 launch vision_perception event_action_bridge.launch.py" Enter
+else
+  tmux send-keys -t "$SESSION:bridge" \
+    "echo '[DISABLED] event_action_bridge — ENABLE_ACTIONS=false'" Enter
+fi
 sleep 2
 
 # --- Window 9: Foxglove Bridge ---
