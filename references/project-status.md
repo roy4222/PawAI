@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-28（Sprint Day 1 完成 — Baseline Contract）
+**最後更新**：2026-03-28（Sprint Day 1 完成 + 語音 noisy profile v1）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -61,6 +61,14 @@
 - 新增 `scripts/clean_full_demo.sh`（全環境清理）
 - 新增 `scripts/device_detect.sh`（USB 音訊裝置自動偵測，source 介面）
 - 新增 `docs/operations/baseline-contract.md`（啟動順序 + QoS + SOP + 驗收記錄）
+
+### 語音 Noisy Profile v1
+- **問題：** Go2 伺服噪音下 Whisper 產生幻覺，垃圾 intent 觸發 Go2 危險動作
+- **安全門：** `ENABLE_ACTIONS=false` 封鎖 llm_bridge + event_action_bridge 的 `/webrtc_req`
+- **ASR 調校：** 3 組 A/B 測試（gain 8/10/12），固定音檔 controlled test
+- **結果：** gain=8.0 + VAD start=0.02 是甜蜜點（64% 正確+部分），gain 更高反而噪音放大
+- **Whisper 改善：** vad_filter=True + no_speech_threshold=0.6 + 擴充幻覺黑名單（6→22）
+- **結論：** Whisper Small 在中文短句+噪音場景的上限已到，**明天優先研究替代 ASR（SenseVoice）**
 
 ---
 
