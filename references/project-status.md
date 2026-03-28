@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-27（Sprint B-prime 規劃完成，3/28 啟動 11 天衝刺）
+**最後更新**：2026-03-28（Sprint Day 1 完成 — Baseline Contract）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -48,6 +48,19 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 1 完成（3/28）
+
+### Baseline Contract
+- **3/3 cold start PASS** + **1/1 crash recovery PASS**（1m26s < 3min）
+- Topic graph 快照：51 topics, 16 nodes
+- QoS runtime 驗證：全部符合靜態推導，`/state/tts_playing` TRANSIENT_LOCAL 確認
+- Device mapping：mic card 24→0（device drift 確認），speaker plughw:3,0
+- 新增 `scripts/clean_full_demo.sh`（全環境清理）
+- 新增 `scripts/device_detect.sh`（USB 音訊裝置自動偵測，source 介面）
+- 新增 `docs/operations/baseline-contract.md`（啟動順序 + QoS + SOP + 驗收記錄）
 
 ---
 
@@ -139,7 +152,7 @@
 |------|------|
 | **3/26** | **四模組整合日 + 教授會議** ✅ |
 | **3/27** | **Sprint B-prime 規劃完成** ✅ |
-| **3/28** | Sprint 啟動 — Baseline Contract Day |
+| **3/28** | **Sprint Day 1 — Baseline Contract PASS** ✅ |
 | 3/29-30 | 硬體上機（可跑→可用） |
 | 3/31-4/1 | Executive v0 開發 + 整合 |
 | 4/2-3 | 導航避障開發 + 30 次防撞 |
