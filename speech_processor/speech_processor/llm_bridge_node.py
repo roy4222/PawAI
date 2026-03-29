@@ -263,8 +263,12 @@ class LlmBridgeNode(Node):
         if stable_name == "unknown":
             return
 
-        track_id = int(payload.get("track_id", 0))
-        sim = float(payload.get("sim", 0.0))
+        try:
+            track_id = int(payload.get("track_id", 0))
+            sim = float(payload.get("sim", 0.0))
+        except (ValueError, TypeError):
+            self.get_logger().warning("Invalid track_id/sim in face event, skipping")
+            return
         distance_m = payload.get("distance_m")
 
         # Cooldown dedup

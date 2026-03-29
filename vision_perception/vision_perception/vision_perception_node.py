@@ -227,8 +227,13 @@ class VisionPerceptionNode(Node):
         )
 
     def _cb_color(self, msg):
+        try:
+            frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except Exception as e:
+            self.get_logger().warning(f"imgmsg_to_cv2 failed: {e}")
+            return
         with self.lock:
-            self.color = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+            self.color = frame
 
     def _tick(self):
         if self.shutting_down or not rclpy.ok():

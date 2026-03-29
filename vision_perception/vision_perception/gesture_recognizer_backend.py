@@ -15,6 +15,8 @@ import hashlib
 import logging
 import os
 import time
+import socket
+import shutil
 import urllib.request
 
 import cv2
@@ -55,7 +57,9 @@ class GestureRecognizerBackend:
             logger.info(f"Model not found at {model_path}, downloading...")
             try:
                 os.makedirs(os.path.dirname(model_path), exist_ok=True)
-                urllib.request.urlretrieve(_MODEL_URL, model_path)
+                with urllib.request.urlopen(_MODEL_URL, timeout=30) as resp, \
+                        open(model_path, "wb") as out:
+                    shutil.copyfileobj(resp, out)
                 logger.info(f"Downloaded gesture_recognizer.task to {model_path}")
             except Exception as e:
                 raise RuntimeError(
