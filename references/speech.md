@@ -3,7 +3,7 @@
 ## 定位
 
 ASR（語音轉文字）+ Intent 分類 + LLM 對話 + TTS（文字轉語音）+ Go2 播放。
-E2E 流程：使用者說話 → Whisper → Intent 分類 → fast path（已知 intent）或 LLM → edge-tts/Piper → USB 喇叭。
+E2E 流程：使用者說話 → SenseVoice（cloud → local → Whisper fallback） → Intent 分類 → fast path（已知 intent）或 LLM → edge-tts/Piper → USB 喇叭。
 
 ## 權威文件
 

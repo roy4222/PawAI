@@ -9,9 +9,9 @@
 | 項目 | 值 |
 |------|---|
 | 狀態 | Demo ready |
-| 版本/決策 | Whisper small (CUDA) + edge-tts + Cloud Qwen2.5-7B |
-| 完成度 | 80% |
-| 最後驗證 | 2026-03-25 |
+| 版本/決策 | SenseVoice cloud + SenseVoice local (sherpa-onnx int8) + Whisper fallback + edge-tts + Cloud Qwen2.5-7B |
+| 完成度 | 85% |
+| 最後驗證 | 2026-03-29 |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
 | 測試 | `python3 -m pytest speech_processor/test/ -v` |
 
@@ -30,7 +30,8 @@ TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 ```
 USB 麥克風 (UACDemoV1.0, 48kHz mono)
     |
-stt_intent_node（Energy VAD -> Whisper small CUDA float16 -> Intent 分類）
+stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
+    |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
 llm_bridge_node（Cloud Qwen2.5-7B -> Ollama 1.5B -> RuleBrain 三級 fallback）
     | /tts
@@ -88,19 +89,40 @@ ENABLE_ACTIONS=false bash scripts/start_full_demo_tmux.sh
 | v2 | 10.0 | 43% | 觸發暴增但品質下降 |
 | v5 | 12.0 | 62% | 無改善，出現幻覺 |
 
-**結論：** Whisper Small 在中文短句+機器噪音場景已到上限，下一步評估替代 ASR（SenseVoice）。
+**結論：** Whisper Small 在中文短句+機器噪音場景已到上限（64%），已被 SenseVoice 替換（92%）。
+
+## ASR 三級 Fallback（2026-03-29 驗證通過）
+
+```
+sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx int8) → whisper_local
+```
+
+**Cloud server**：`scripts/sensevoice_server.py`（FastAPI + FunASR SenseVoiceSmall，port 8001，需 SSH tunnel）
+**Local model**：`~/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx`（228MB，CPU only，352MB RAM）
+
+**等量三方 A/B 測試（各 25 筆，Go2 噪音環境）：**
+
+| 指標 | SenseVoice Cloud | SenseVoice Local | Whisper Local |
+|------|:---:|:---:|:---:|
+| 正確+部分 | 92% | 92% | 52% |
+| Intent 正確 | 96% | 92% | 56% |
+| 幻覺/亂碼 | 0 | 0 | 8% |
+| 延遲 | ~600ms | ~400ms | ~3000ms |
+| 需要網路 | 是 | 否 | 否 |
+
+**Fallback 行為**：cloud 斷 → `Connection refused` warn → 自動切 sensevoice_local（`degraded=True`）→ 如模型缺失再切 whisper_local。
 
 ## 已知問題
 
-- **Whisper Small 中文短句辨識差**：「哈囉小狗」幾乎全錯，「拍一張照片」穩定正確。短句+噪音是模型極限
 - USB 麥克風收音弱，需靠近（< 80cm）+ mic_gain 8.0
 - USB device index 重開機後漂移 → 用 `source scripts/device_detect.sh`
 - MeloTTS 和 ElevenLabs 已棄用（3/26 決議）
+- SenseVoice 對「現在請停止動作」辨識不穩（stop intent 約 60% 正確）
 
 ## 下一步
 
-- **替代 ASR 研究**：SenseVoice（中文+噪音專精，比 Whisper 快）
-- Sprint Day 4-5：整合進 executive v0
+- Sprint Day 3-4：硬體上機
+- Sprint Day 5-6：整合進 executive v0
 - system prompt 調整（intent 映射偏差）
 
 ## 子資料夾

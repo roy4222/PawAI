@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-28（Sprint Day 1 完成 + 語音 noisy profile v1）
+**最後更新**：2026-03-29（Sprint Day 2 完成 — SenseVoice ASR 三級 fallback）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -9,7 +9,7 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **Demo ready** | 3/25 | edge-tts + fast path + Cloud→Ollama→RuleBrain，Whisper CUDA float16 OK，USB mic 收音弱需調 gain |
+| 語音 (speech_processor) | **Demo ready** | 3/29 | SenseVoice cloud+local 三級 ASR fallback（92% correct+partial），edge-tts + Cloud→Ollama→RuleBrain |
 | 人臉 (face_perception) | **整合測試通過** | 3/25 | YuNet 2023mar + SFace，偵測+識別+WELCOME 觸發+LLM 問候 全通 |
 | 手勢 (vision_perception) | **整合測試通過** | 3/25 | Gesture Recognizer：stop/thumbs_up 正確觸發 Go2 動作 |
 | 姿勢 (vision_perception) | **整合測試通過** | 3/25 | MediaPipe Pose CPU，四模組同跑正常 |
@@ -48,6 +48,25 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 2 完成（3/29）
+
+### ASR 替換：SenseVoice 三級 Fallback
+- **SenseVoice cloud**（FunASR on RTX 8000）：92% correct+partial，0 幻覺，~600ms
+- **SenseVoice local**（sherpa-onnx int8 on Jetson CPU）：92% correct+partial，0 幻覺，~400ms，352MB RAM
+- **Whisper local**（最後防線）：52% correct+partial，8% 幻覺
+- **Qwen3-ASR-1.7B** 也測了（96%），但延遲 2x、模型 8.5x，SenseVoice 更適合
+- Fallback 鏈驗證通過：cloud 斷 → local SenseVoice → Whisper 全自動
+- `sensevoice_server.py` 部署在 RTX 8000 GPU 1（1.1GB VRAM）
+- 審計 #5 #6 #7 #9 安全修復
+
+### 驗收標準
+- [x] 固定音檔正確+部分 >= 80%（實測 92%）
+- [x] 高風險 intent 誤判 = 0
+- [x] Cloud → Local fallback 自動切換
+- [ ] `ENABLE_ACTIONS` 尚未改回 true（等等量 A/B 補測再開）
 
 ---
 

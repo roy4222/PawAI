@@ -74,24 +74,20 @@ ros2 run speech_processor tts_node --ros-args -p provider:=piper \
   -p playback_method:=datachannel
 ```
 
-### 語音 + LLM 主線（2026-03-24 更新：edge-tts + fast path）
+### 語音 + LLM 主線（2026-03-29 更新：SenseVoice ASR 三級 fallback）
 
 ```bash
-# 一鍵啟動（推薦）— edge-tts + USB 外接設備 + intent fast path
+# 一鍵啟動（推薦）— SenseVoice cloud ASR + edge-tts + USB 外接設備
 bash scripts/start_llm_e2e_tmux.sh
 # 全離線模式（Piper TTS）：TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
-# 切回 HyperX + Megaphone：
-# LOCAL_PLAYBACK=false INPUT_DEVICE=0 CHANNELS=2 CAPTURE_SAMPLE_RATE=44100 TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
+# 只用本地 ASR（不需 tunnel）：
+# ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]' bash scripts/start_llm_e2e_tmux.sh
 
-# 或手動啟動：
-# 1. SSH tunnel 到 RTX 8000（Cloud LLM）
-ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5
-# 2. llm_bridge_node
-ros2 run speech_processor llm_bridge_node --ros-args \
-  -p llm_endpoint:="http://localhost:8000/v1/chat/completions" \
-  -p llm_model:="Qwen/Qwen2.5-7B-Instruct"
-# 3. 強制走 RuleBrain fallback（debug 用）
-ros2 run speech_processor llm_bridge_node --ros-args -p force_fallback:=true
+# SSH tunnel（Cloud ASR + Cloud LLM）
+ssh -f -N -L 8001:localhost:8001 -L 8000:localhost:8000 $USER@<server>
+
+# ASR provider 順序：sensevoice_cloud → sensevoice_local → whisper_local
+# Cloud ASR server（RTX 8000）：scripts/sensevoice_server.py（port 8001）
 ```
 
 ### PawAI Studio（前端開發用）
@@ -219,7 +215,7 @@ sudo bash benchmarks/scripts/prepare_env.sh --drop-cache  # 含清 page cache
 | face | YuNet 2023mar | 71.3 (CPU) | JETSON_LOCAL | SCRFD-500M | JETSON_LOCAL |
 | pose | MediaPipe Pose | 18.5 (CPU) | JETSON_LOCAL | RTMPose lw | JETSON_LOCAL |
 | gesture | Gesture Recognizer | 7.2 (CPU) | JETSON_LOCAL | MediaPipe Hands | JETSON_LOCAL |
-| stt | Whisper small | RTF 0.13 (CUDA) | JETSON_LOCAL | Whisper tiny | JETSON_LOCAL |
+| stt | SenseVoice cloud (FunASR) | ~600ms | CLOUD | SenseVoice local (sherpa-onnx int8) | JETSON_LOCAL |
 | tts | edge-tts | P50 1.13s | CLOUD | Piper huayan | JETSON_LOCAL |
 | llm (local) | Qwen2.5-0.5B | P50 0.8s, 139MB | JETSON_LOCAL | Qwen2.5-1.5B | HYBRID |
 
