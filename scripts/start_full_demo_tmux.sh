@@ -32,6 +32,9 @@ LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/complet
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
 # ── ASR ──
+ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"whisper_local\"]'}"
+QWEN_ASR_BASE_URL="${QWEN_ASR_BASE_URL:-http://127.0.0.1:8001/v1/audio/transcriptions}"
+QWEN_ASR_TIMEOUT="${QWEN_ASR_TIMEOUT:-3.0}"
 INPUT_DEVICE="${INPUT_DEVICE:-24}"
 CHANNELS="${CHANNELS:-1}"
 CAPTURE_SAMPLE_RATE="${CAPTURE_SAMPLE_RATE:-48000}"
@@ -71,8 +74,16 @@ LLM_HEALTH_URL="${LLM_ENDPOINT%/chat/completions}/models"
 echo "[preflight] Checking LLM endpoint: $LLM_HEALTH_URL ..."
 if ! curl -sf --max-time 3 "$LLM_HEALTH_URL" >/dev/null 2>&1; then
   echo "[WARN] LLM endpoint unreachable: $LLM_HEALTH_URL"
-  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5"
+  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8000:localhost:8000 \$USER@<server>"
   echo "[HINT] Ollama fallback will be used if enabled (ENABLE_LOCAL_LLM=$ENABLE_LOCAL_LLM)"
+fi
+
+# Preflight: SenseVoice ASR endpoint reachability
+ASR_HEALTH_URL="${QWEN_ASR_BASE_URL%/v1/audio/transcriptions}/health"
+echo "[preflight] Checking ASR endpoint: $ASR_HEALTH_URL ..."
+if ! curl -sf --max-time 3 "$ASR_HEALTH_URL" >/dev/null 2>&1; then
+  echo "[WARN] SenseVoice ASR unreachable — will fallback to local Whisper"
+  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8001:localhost:8001 \$USER@<server>"
 fi
 
 # === Phase 1: 基礎設施 ===
@@ -129,7 +140,10 @@ tmux new-window -t "$SESSION" -n asr
 tmux send-keys -t "$SESSION:asr" \
   "$ROS_SETUP && \
   ros2 run speech_processor stt_intent_node --ros-args \
-    -p provider_order:='[\"whisper_local\"]' \
+    -p provider_order:=$ASR_PROVIDER_ORDER \
+    -p qwen_asr.base_url:='$QWEN_ASR_BASE_URL' \
+    -p qwen_asr.timeout_sec:=$QWEN_ASR_TIMEOUT \
+    -p qwen_asr.model_name:=sensevoice \
     -p whisper_local.device:=cuda -p whisper_local.compute_type:=float16 \
     -p input_device:=$INPUT_DEVICE -p channels:=$CHANNELS \
     -p sample_rate:=16000 -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE \

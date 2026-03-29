@@ -39,7 +39,9 @@ LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/complet
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
 # ── ASR ──
-ASR_PROVIDER_ORDER='["whisper_local"]'
+ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"whisper_local\"]'}"
+QWEN_ASR_BASE_URL="${QWEN_ASR_BASE_URL:-http://127.0.0.1:8001/v1/audio/transcriptions}"
+QWEN_ASR_TIMEOUT="${QWEN_ASR_TIMEOUT:-3.0}"
 ASR_MODEL="small"
 ASR_DEVICE="cuda"
 ASR_COMPUTE_TYPE="float16"
@@ -96,10 +98,18 @@ LLM_HEALTH_URL="${LLM_ENDPOINT%/chat/completions}/models"
 echo "[PRE] Checking LLM endpoint: $LLM_HEALTH_URL ..."
 if ! curl -sf --max-time 3 "$LLM_HEALTH_URL" >/dev/null 2>&1; then
   echo "[WARN] LLM endpoint unreachable: $LLM_HEALTH_URL"
-  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5"
-  echo "[HINT] Or set LLM_ENDPOINT=http://140.136.155.5:8000/v1/chat/completions for direct connection"
+  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8000:localhost:8000 \$USER@<server>"
+  echo "[HINT] Or set LLM_ENDPOINT for direct connection"
   read -rp "Continue anyway? (y/N) " CONT
   [ "$CONT" = "y" ] || exit 1
+fi
+
+# Check SenseVoice ASR endpoint reachability
+ASR_HEALTH_URL="${QWEN_ASR_BASE_URL%/v1/audio/transcriptions}/health"
+echo "[PRE] Checking ASR endpoint: $ASR_HEALTH_URL ..."
+if ! curl -sf --max-time 3 "$ASR_HEALTH_URL" >/dev/null 2>&1; then
+  echo "[WARN] SenseVoice ASR unreachable — will fallback to local Whisper"
+  echo "[HINT] Start SSH tunnel: ssh -f -N -L 8001:localhost:8001 \$USER@<server>"
 fi
 
 # ════════════════════════════════════════════════════
@@ -135,7 +145,7 @@ GO2_PANE="$(tmux list-panes -t "$SESSION_NAME":0 -F '#{pane_id}')"
 
 # Pane 2: STT Intent Node (ASR)
 STT_PANE="$(tmux split-window -h -P -F '#{pane_id}' -t "$GO2_PANE" \
-  "zsh -lc 'setopt nonomatch; cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-} && ros2 run speech_processor stt_intent_node --ros-args -p provider_order:=\"$ASR_PROVIDER_ORDER\" -p whisper_local.model_name:=$ASR_MODEL -p whisper_local.device:=$ASR_DEVICE -p whisper_local.compute_type:=$ASR_COMPUTE_TYPE -p whisper_local.cpu_threads:=$ASR_CPU_THREADS -p input_device:=$INPUT_DEVICE -p channels:=$CHANNELS -p sample_rate:=$SAMPLE_RATE -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE -p max_record_seconds:=$MAX_RECORD_SECONDS -p speech_end_grace_ms:=$SPEECH_END_GRACE_MS'")"
+  "zsh -lc 'setopt nonomatch; cd $WORKDIR && source /opt/ros/humble/setup.zsh && source install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-} && ros2 run speech_processor stt_intent_node --ros-args -p provider_order:=\"$ASR_PROVIDER_ORDER\" -p qwen_asr.base_url:=\"$QWEN_ASR_BASE_URL\" -p qwen_asr.timeout_sec:=$QWEN_ASR_TIMEOUT -p qwen_asr.model_name:=sensevoice -p whisper_local.model_name:=$ASR_MODEL -p whisper_local.device:=$ASR_DEVICE -p whisper_local.compute_type:=$ASR_COMPUTE_TYPE -p whisper_local.cpu_threads:=$ASR_CPU_THREADS -p input_device:=$INPUT_DEVICE -p channels:=$CHANNELS -p sample_rate:=$SAMPLE_RATE -p capture_sample_rate:=$CAPTURE_SAMPLE_RATE -p max_record_seconds:=$MAX_RECORD_SECONDS -p speech_end_grace_ms:=$SPEECH_END_GRACE_MS'")"
 
 # Pane 3: LLM Bridge Node (replaces intent_tts_bridge_node)
 tmux split-window -v -t "$STT_PANE" \

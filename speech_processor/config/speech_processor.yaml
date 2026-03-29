@@ -23,8 +23,8 @@ stt_intent_node:
 
     qwen_asr.base_url: "http://127.0.0.1:8001/v1/audio/transcriptions"
     qwen_asr.api_key: ""
-    qwen_asr.timeout_sec: 2.0
-    qwen_asr.model_name: "qwen-asr"
+    qwen_asr.timeout_sec: 3.0
+    qwen_asr.model_name: "sensevoice"
     qwen_asr.response_text_field: "text"
 
     whisper_local.model_name: "tiny"
