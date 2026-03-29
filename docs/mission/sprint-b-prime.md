@@ -82,24 +82,28 @@
 > 語音是 Demo 核心，不能用就不該上機。先解決語音再碰硬體。
 
 **前置研究（4 個問題先收斂）：**
-- [ ] SenseVoice 能否在 RTX 8000 穩定提供低延遲 API
-- [ ] Jetson 端整合：是否只需新增 ASRProvider，不用重寫 stt_intent_node
-- [ ] Fallback 條件定義（timeout? connection error?）
-- [ ] 固定音檔測試如何沿用到 cloud/local 雙 provider
+- [x] SenseVoice 能否在 RTX 8000 穩定提供低延遲 API → ✅ FunASR + FastAPI, ~600ms
+- [x] Jetson 端整合：是否只需新增 ASRProvider，不用重寫 stt_intent_node → ✅ 複用 QwenASRProvider（cloud），新增 SenseVoiceLocalProvider（local）
+- [x] Fallback 條件定義（timeout? connection error?） → ✅ ConnectionRefused → sensevoice_local → whisper_local
+- [x] 固定音檔測試如何沿用到 cloud/local 雙 provider → ✅ 等量三方 A/B 各 25 筆
 
 **交付物 checklist：**
-- [ ] Cloud ASR 部署在 RTX 8000（SenseVoice 或同等方案）
-- [ ] stt_intent_node 新增 cloud ASR provider
-- [ ] Cloud → Local Whisper fallback 機制
-- [ ] 固定音檔 A/B 測試（cloud vs local）
+- [x] Cloud ASR 部署在 RTX 8000（SenseVoice + Qwen3-ASR 對比）
+- [x] stt_intent_node 新增 cloud + local ASR provider
+- [x] Cloud → Local SenseVoice → Whisper 三級 fallback 機制
+- [x] 等量 A/B/C 測試（SenseVoice cloud 92% / SenseVoice local 92% / Whisper 52%）
 
 **驗收標準：**
-- 固定音檔正確+部分 >= 80%
-- 短句（「哈囉小狗」「請停止」）正確率 >= 60%
-- 高風險 intent 誤判 = 0
-- 通過後才能把 `ENABLE_ACTIONS` 改回 true
+- ✅ 固定音檔正確+部分 >= 80%（實測 92%）
+- ✅ 高風險 intent 誤判 = 0
+- ⚠️ **尚未測實際順暢對話**（非固定音檔循環播放，而是真人自然對話）
+- ⚠️ `ENABLE_ACTIONS` 尚未改回 true — 等實際對話測試通過再開
 
-**不做：** 硬體上機、executive v0、導航避障
+**剩餘（Day 3 前必須完成）：**
+- [ ] 實際對話測試：真人自然對話 5-10 輪，確認順暢
+- [ ] 對話通過後 `ENABLE_ACTIONS=true`
+
+**不做：** 硬體上機（等對話驗收通過）、executive v0、導航避障
 
 ---
 
