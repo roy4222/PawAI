@@ -39,7 +39,7 @@ LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/complet
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
 # ── ASR ──
-ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"whisper_local\"]'}"
+ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"sensevoice_local\",\"whisper_local\"]'}"
 QWEN_ASR_BASE_URL="${QWEN_ASR_BASE_URL:-http://127.0.0.1:8001/v1/audio/transcriptions}"
 QWEN_ASR_TIMEOUT="${QWEN_ASR_TIMEOUT:-3.0}"
 ASR_MODEL="small"

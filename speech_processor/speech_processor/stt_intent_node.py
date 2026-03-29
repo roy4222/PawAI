@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
 from secrets import token_hex
+from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -252,6 +253,85 @@ class WhisperLocalProvider(ASRProvider):
         )
 
 
+class SenseVoiceLocalProvider(ASRProvider):
+    """Local SenseVoice via sherpa-onnx (int8 ONNX, CPU only)."""
+
+    def __init__(
+        self,
+        model_path: str,
+        tokens_path: str,
+        language: str,
+        num_threads: int,
+    ) -> None:
+        super().__init__(provider_name="sensevoice_local", timeout_sec=10.0)
+        self.model_path = model_path
+        self.tokens_path = tokens_path
+        self.language = language
+        self.num_threads = max(1, num_threads)
+        self._recognizer = None
+        self._lock = threading.Lock()
+        self._available = True
+
+    def _ensure_model(self) -> None:
+        if self._recognizer is not None:
+            return
+        try:
+            import sherpa_onnx
+
+            model = str(Path(self.model_path).expanduser())
+            tokens = str(Path(self.tokens_path).expanduser())
+            if not Path(model).exists():
+                raise FileNotFoundError(f"Model not found: {model}")
+            if not Path(tokens).exists():
+                raise FileNotFoundError(f"Tokens not found: {tokens}")
+
+            self._recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+                model=model,
+                tokens=tokens,
+                language=self.language,
+                use_itn=True,
+                num_threads=self.num_threads,
+                provider="cpu",
+            )
+        except Exception as e:
+            self._available = False
+            raise RuntimeError(f"SenseVoice local init failed: {e}") from e
+
+    def transcribe(
+        self, audio_bytes: bytes, sample_rate: int, language: str
+    ) -> ASRResult:
+        if not self._available:
+            raise RuntimeError("SenseVoice local not available")
+        with self._lock:
+            self._ensure_model()
+            started = time.monotonic()
+
+            with io.BytesIO(audio_bytes) as wav_io:
+                with wave.open(wav_io, "rb") as wf:
+                    raw_pcm = wf.readframes(wf.getnframes())
+                    sw = wf.getsampwidth()
+            if sw == 2:
+                audio_np = np.frombuffer(raw_pcm, dtype=np.int16).astype(np.float32) / 32768.0
+            else:
+                audio_np = np.frombuffer(raw_pcm, dtype=np.int16).astype(np.float32) / 32768.0
+
+            stream = self._recognizer.create_stream()
+            stream.accept_waveform(sample_rate, audio_np.tolist())
+            self._recognizer.decode_stream(stream)
+            text = stream.result.text.strip()
+
+            # Clean SenseVoice tags like <|zh|><|NEUTRAL|>
+            text = re.sub(r"<\|[^|]*\|>", "", text).strip()
+
+            latency_ms = (time.monotonic() - started) * 1000.0
+            return ASRResult(
+                text=text,
+                provider=self.provider_name,
+                latency_ms=latency_ms,
+                raw={"backend": "sherpa_onnx_sensevoice"},
+            )
+
+
 @dataclass
 class RecorderState:
     is_recording: bool = False
@@ -404,7 +484,7 @@ class SttIntentNode(Node):
         self.declare_parameter("pre_roll_ms", 300)
         self.declare_parameter("state_publish_hz", 5.0)
         self.declare_parameter("language", "zh")
-        self.declare_parameter("provider_order", ["qwen_cloud", "whisper_local"])
+        self.declare_parameter("provider_order", ["qwen_cloud", "sensevoice_local", "whisper_local"])
 
         self.declare_parameter("vad_event_topic", "/event/speech_activity")
         self.declare_parameter("state_topic", "/state/interaction/speech")
@@ -418,6 +498,12 @@ class SttIntentNode(Node):
         self.declare_parameter("qwen_asr.timeout_sec", 2.0)
         self.declare_parameter("qwen_asr.model_name", "qwen-asr")
         self.declare_parameter("qwen_asr.response_text_field", "text")
+
+        self.declare_parameter("sensevoice_local.model_path",
+                               "/home/jetson/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx")
+        self.declare_parameter("sensevoice_local.tokens_path",
+                               "/home/jetson/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/tokens.txt")
+        self.declare_parameter("sensevoice_local.num_threads", 4)
 
         self.declare_parameter("whisper_local.model_name", "tiny")
         self.declare_parameter("whisper_local.timeout_sec", 4.0)
@@ -461,6 +547,16 @@ class SttIntentNode(Node):
         self.qwen_model_name = str(self.get_parameter("qwen_asr.model_name").value)
         self.qwen_response_text_field = str(
             self.get_parameter("qwen_asr.response_text_field").value
+        )
+
+        self.sensevoice_local_model_path = str(
+            self.get_parameter("sensevoice_local.model_path").value
+        )
+        self.sensevoice_local_tokens_path = str(
+            self.get_parameter("sensevoice_local.tokens_path").value
+        )
+        self.sensevoice_local_num_threads = int(
+            self.get_parameter("sensevoice_local.num_threads").value
         )
 
         self.whisper_model_name = str(
@@ -509,6 +605,28 @@ class SttIntentNode(Node):
             model_name=self.qwen_model_name,
             response_text_field=self.qwen_response_text_field,
         )
+        try:
+            import sherpa_onnx  # noqa: F401
+            model_path = Path(self.sensevoice_local_model_path).expanduser()
+            tokens_path = Path(self.sensevoice_local_tokens_path).expanduser()
+            if model_path.exists() and tokens_path.exists():
+                providers["sensevoice_local"] = SenseVoiceLocalProvider(
+                    model_path=self.sensevoice_local_model_path,
+                    tokens_path=self.sensevoice_local_tokens_path,
+                    language=self.language,
+                    num_threads=self.sensevoice_local_num_threads,
+                )
+            else:
+                missing = []
+                if not model_path.exists():
+                    missing.append(str(model_path))
+                if not tokens_path.exists():
+                    missing.append(str(tokens_path))
+                self.get_logger().info(
+                    f"SenseVoice local files missing: {missing}, skipping"
+                )
+        except ImportError:
+            self.get_logger().info("sherpa-onnx not installed, sensevoice_local skipped")
         providers["whisper_local"] = WhisperLocalProvider(
             model_name=self.whisper_model_name,
             timeout_sec=self.whisper_timeout_sec,

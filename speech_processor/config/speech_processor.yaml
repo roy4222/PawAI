@@ -19,12 +19,17 @@ stt_intent_node:
     pre_roll_ms: 300
     state_publish_hz: 5.0
     language: "zh"
-    provider_order: ["qwen_cloud", "whisper_local"]
+    provider_order: ["qwen_cloud", "sensevoice_local", "whisper_local"]
 
     qwen_asr.base_url: "http://127.0.0.1:8001/v1/audio/transcriptions"
     qwen_asr.api_key: ""
     qwen_asr.timeout_sec: 3.0
     qwen_asr.model_name: "sensevoice"
+
+    # SenseVoice local (sherpa-onnx, int8, CPU)
+    sensevoice_local.model_path: "/home/jetson/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx"
+    sensevoice_local.tokens_path: "/home/jetson/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/tokens.txt"
+    sensevoice_local.num_threads: 4
     qwen_asr.response_text_field: "text"
 
     whisper_local.model_name: "tiny"
