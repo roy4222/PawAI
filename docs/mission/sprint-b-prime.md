@@ -117,12 +117,12 @@
 - [x] 驗證工具建立（Foxglove layout + verification observer + JSONL 882 筆）
 - [x] 模型策略收斂：ASR SenseVoice 三級 fallback、LLM Cloud→RuleBrain（砍 Ollama）、TTS edge-tts
 
-**Day 3 交付物（可跑）— 待硬體操作：**
-- [ ] Jetson 固定（Go2 行走不鬆脫）
-- [ ] D435 固定（視角穩定不晃）
-- [ ] USB 麥克風/喇叭接線（不影響行走）
-- [ ] 供電穩定（行走時不斷電）
-- [ ] Bring-up 測試通過
+**Day 3 交付物（可跑）— 3/30 晚完成：**
+- [x] Jetson 固定（Go2 BAT 28.8V → XL4015 降壓 19V → DC jack）
+- [x] D435 固定
+- [x] USB 麥克風/喇叭接線（⚠️ 喇叭 USB 間歇斷開，已束帶固定）
+- [x] 供電穩定（Go2 BAT 供電 Jetson 正常運行）
+- [x] Bring-up 測試通過（full demo 10 window + ASR/LLM/TTS 鏈路通）
 
 **Day 4 交付物（可用）：**
 - [ ] 3 次完全斷電重開，每次 bring-up 成功

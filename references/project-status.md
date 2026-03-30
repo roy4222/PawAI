@@ -63,9 +63,18 @@
   - TTS：edge-tts + USB 喇叭 plughw:3,0
 - **排查修復**：USB 喇叭未插、麥克風 device drift 24→0、LLM endpoint 直連→localhost tunnel、observer QoS import
 
+### 硬體上機（3/30 晚完成）
+- **供電**：Go2 BAT (XT30, 28.8V) → XL4015 DC-DC 降壓 → 19V → Jetson DC jack
+- **固定**：Jetson + D435 + USB 麥克風 + USB 喇叭全部上 Go2
+- **Bring-up**：full demo 10 window 啟動成功，ASR/LLM/TTS 鏈路通
+- **已知問題**：
+  - 喇叭 USB 間歇斷開（已束帶固定，待觀察）
+  - 麥克風 device drift（啟動腳本 device=24 但實際=0，每次需確認）
+  - LLM SSH tunnel 需手動開
+
 ### 結論
-- 四核心功能驗證通過，可進硬體上機
-- 硬體操作（Jetson/D435/USB 固定到 Go2）待實際動手
+- Day 3 超進度：桌測 + 硬體上機一天完成（原定兩天）
+- 明天 Day 4 只剩穩定性驗證（3x 重開機 + 行走 + 熱測試）
 
 ---
 
