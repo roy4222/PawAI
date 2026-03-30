@@ -1,0 +1,49 @@
+{
+  "configById": {
+    "Image!face_debug": {
+      "imageMode": {
+        "imageTopic": "/face_identity/debug_image"
+      }
+    },
+    "Image!vision_status": {
+      "imageMode": {
+        "imageTopic": "/vision_perception/status_image"
+      }
+    },
+    "RawMessages!events": {
+      "topicPath": "/event/face_identity",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!state": {
+      "topicPath": "/state/perception/face",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1.0
+  },
+  "layout": {
+    "direction": "column",
+    "first": {
+      "direction": "row",
+      "first": "Image!face_debug",
+      "second": "Image!vision_status",
+      "splitPercentage": 50
+    },
+    "second": {
+      "direction": "row",
+      "first": "RawMessages!events",
+      "second": "RawMessages!state",
+      "splitPercentage": 50
+    },
+    "splitPercentage": 55
+  }
+}

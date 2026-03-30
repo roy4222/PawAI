@@ -45,6 +45,7 @@ go2_robot_sdk/coverage.xml
 
 ## Test outputs
 logs/jetson-verify/*.json
+logs/*.jsonl
 test_results/*.json
 
 ## Docs
