@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-29（Sprint Day 2 完成 — SenseVoice ASR 三級 fallback）
+**最後更新**：2026-03-30（Sprint Day 3 完成 — 四核心桌測 10/10 + Go2 動作補驗 PASS）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -9,10 +9,10 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **Demo ready** | 3/29 | SenseVoice cloud+local 三級 ASR fallback（92% correct+partial），edge-tts + Cloud→Ollama→RuleBrain |
-| 人臉 (face_perception) | **整合測試通過** | 3/25 | YuNet 2023mar + SFace，偵測+識別+WELCOME 觸發+LLM 問候 全通 |
-| 手勢 (vision_perception) | **整合測試通過** | 3/25 | Gesture Recognizer：stop/thumbs_up 正確觸發 Go2 動作 |
-| 姿勢 (vision_perception) | **整合測試通過** | 3/25 | MediaPipe Pose CPU，四模組同跑正常 |
+| 語音 (speech_processor) | **Demo ready** | 3/30 | SenseVoice cloud+local 三級 ASR fallback（92%），edge-tts，Cloud 7B→RuleBrain（砍 Ollama 1.5B） |
+| 人臉 (face_perception) | **桌測通過** | 3/30 | YuNet 2023mar + SFace，54 identity_stable + 15 WELCOME，Day 3 驗證 |
+| 手勢 (vision_perception) | **桌測通過** | 3/30 | Gesture Recognizer：stop 9x / thumbs_up 6x → Go2 動作觸發 PASS |
+| 姿勢 (vision_perception) | **桌測通過** | 3/30 | MediaPipe Pose CPU，standing 10 / sitting 8 / fallen 1，四模組同跑穩定 |
 | LLM (llm_bridge_node) | 本地+雲端+fast path | 3/24 | Cloud 7B → Ollama 1.5B → RuleBrain 三級 fallback |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **16 test files, 214+ cases** | 3/25 | fast-gate + **blocking contract check** + git pre-commit hook |
@@ -48,6 +48,24 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 3 完成（3/30）
+
+### 四核心桌測 + Go2 動作補驗
+- **Phase 1 桌測**：10/10 PASS（face + speech + gesture + pose）
+- **Phase 2 動作**：stop→stop_move 3x、thumbs_up→content 3x、PASS
+- **驗證工具**：Foxglove layout（4-panel）+ verification_observer.py（5 topic → JSONL 882 筆）
+- **模型策略收斂**：
+  - ASR：SenseVoice cloud → SenseVoice local → Whisper local（三級 fallback）
+  - LLM：Cloud Qwen2.5-7B → RuleBrain（**砍掉 Ollama 1.5B**，展示期要可預測不要半智能）
+  - TTS：edge-tts + USB 喇叭 plughw:3,0
+- **排查修復**：USB 喇叭未插、麥克風 device drift 24→0、LLM endpoint 直連→localhost tunnel、observer QoS import
+
+### 結論
+- 四核心功能驗證通過，可進硬體上機
+- 硬體操作（Jetson/D435/USB 固定到 Go2）待實際動手
 
 ---
 
@@ -150,8 +168,9 @@
 | Day | 日期 | 主題 | 驗收標準 |
 |:---:|------|------|---------|
 | 1 | 3/28 | Baseline Contract | 3x cold start + 1x crash recovery ✅ |
-| **2** | **3/29** | **ASR 替換：可順暢溝通** | **正確+部分 >= 80%，高風險誤判 = 0** |
-| 3-4 | 3/30-31 | 硬體上機：可跑+可用 | Jetson + D435 固定 + 3x 重開機 + 行走穩定 |
+| 2 | 3/29 | ASR 替換：可順暢溝通 | 正確+部分 >= 80%，高風險誤判 = 0 ✅ |
+| **3** | **3/30** | **四核心桌測 + 動作補驗** | **10/10 PASS + Go2 動作 PASS ✅** |
+| 4 | 3/31 | 硬體上機：可跑+可用 | Jetson + D435 固定 + 3x 重開機 + 行走穩定 |
 | 5 | 4/1 | Executive v0：State Machine | 19 tests pass + ROS2 node 啟動 |
 | 6 | 4/2 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
 | 7 | 4/3 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |

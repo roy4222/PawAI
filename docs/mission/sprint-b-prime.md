@@ -96,12 +96,12 @@
 **驗收標準：**
 - ✅ 固定音檔正確+部分 >= 80%（實測 92%）
 - ✅ 高風險 intent 誤判 = 0
-- ⚠️ **尚未測實際順暢對話**（非固定音檔循環播放，而是真人自然對話）
-- ⚠️ `ENABLE_ACTIONS` 尚未改回 true — 等實際對話測試通過再開
+- ✅ 實際對話測試通過（Day 3 真人自然對話，SenseVoice local 92% 可讀）
+- ✅ `ENABLE_ACTIONS=true` 補驗通過（stop→stop_move, thumbs_up→content 各 3 次）
 
 **剩餘（Day 3 前必須完成）：**
-- [ ] 實際對話測試：真人自然對話 5-10 輪，確認順暢
-- [ ] 對話通過後 `ENABLE_ACTIONS=true`
+- [x] 實際對話測試：真人自然對話 5-10 輪，確認順暢
+- [x] 對話通過後 `ENABLE_ACTIONS=true`
 
 **不做：** 硬體上機（等對話驗收通過）、executive v0、導航避障
 
@@ -111,7 +111,13 @@
 
 > 語音驗收通過後，才把 Jetson + 感測器固定到 Go2。
 
-**Day 3 交付物（可跑）：**
+**Day 3 前置驗證（3/30 完成）：**
+- [x] 四核心桌測 10/10 PASS（face + speech + gesture + pose）
+- [x] Go2 動作補驗 PASS（stop_move + content 各 3 次）
+- [x] 驗證工具建立（Foxglove layout + verification observer + JSONL 882 筆）
+- [x] 模型策略收斂：ASR SenseVoice 三級 fallback、LLM Cloud→RuleBrain（砍 Ollama）、TTS edge-tts
+
+**Day 3 交付物（可跑）— 待硬體操作：**
 - [ ] Jetson 固定（Go2 行走不鬆脫）
 - [ ] D435 固定（視角穩定不晃）
 - [ ] USB 麥克風/喇叭接線（不影響行走）
