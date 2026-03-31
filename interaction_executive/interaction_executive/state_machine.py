@@ -45,13 +45,15 @@ class EventResult:
     new_state: Optional[ExecutiveState] = None
 
 
-# Go2 action constants — values from ROBOT_CMD in robot_commands.py
-ACTION_DAMP    = {"api_id": 1001}   # Damp (soft stop)
-ACTION_STOP    = {"api_id": 1003}   # StopMove
-ACTION_STAND   = {"api_id": 1004}   # StandUp
-ACTION_SIT     = {"api_id": 1009}   # Sit
-ACTION_HELLO   = {"api_id": 1016}   # Hello/wave
-ACTION_CONTENT = {"api_id": 1020}   # Content/happy
+# Go2 action constants — values from ROBOT_CMD + WebRtcReq fields
+_SPORT = "rt/api/sport/request"
+
+ACTION_DAMP    = {"api_id": 1001, "topic": _SPORT, "parameter": "1001", "priority": 0}
+ACTION_STOP    = {"api_id": 1003, "topic": _SPORT, "parameter": "1003", "priority": 1}
+ACTION_STAND   = {"api_id": 1004, "topic": _SPORT, "parameter": "1004", "priority": 0}
+ACTION_SIT     = {"api_id": 1009, "topic": _SPORT, "parameter": "1009", "priority": 0}
+ACTION_HELLO   = {"api_id": 1016, "topic": _SPORT, "parameter": "1016", "priority": 0}
+ACTION_CONTENT = {"api_id": 1020, "topic": _SPORT, "parameter": "1020", "priority": 0}
 
 DEDUP_WINDOW = 5.0          # seconds
 STATE_TIMEOUT = 30.0        # seconds per state

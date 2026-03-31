@@ -115,9 +115,14 @@ class LlmBridgeNode(Node):
         self.create_subscription(
             String, self.intent_event_topic, self._on_speech_event, 10
         )
-        self.create_subscription(
-            String, self.face_event_topic, self._on_face_event, 10
-        )
+        if self.subscribe_face:
+            self.create_subscription(
+                String, self.face_event_topic, self._on_face_event, 10
+            )
+        else:
+            self.get_logger().info(
+                "Face subscription disabled (subscribe_face=false)"
+            )
         self.create_subscription(
             String, self.face_state_topic, self._on_face_state, 10
         )
@@ -175,6 +180,7 @@ class LlmBridgeNode(Node):
             "http://localhost:11434/v1/chat/completions",
         )
         self.declare_parameter("local_llm_model", "qwen2.5:1.5b")
+        self.declare_parameter("subscribe_face", True)
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -205,6 +211,7 @@ class LlmBridgeNode(Node):
         self.enable_local_llm = _bool("enable_local_llm")
         self.local_llm_endpoint = _str("local_llm_endpoint")
         self.local_llm_model = _str("local_llm_model")
+        self.subscribe_face = _bool("subscribe_face")
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 

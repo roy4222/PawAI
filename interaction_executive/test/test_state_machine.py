@@ -52,6 +52,22 @@ class TestApiIdAlignment:
     def test_content_matches(self):
         assert ACTION_CONTENT["api_id"] == self.ROBOT_CMD["Content"]
 
+    def test_all_actions_have_required_fields(self):
+        """Every action must have topic, parameter, priority for WebRtcReq."""
+        for name, action in [
+            ("DAMP", ACTION_DAMP), ("STOP", ACTION_STOP),
+            ("STAND", ACTION_STAND), ("SIT", ACTION_SIT),
+            ("HELLO", ACTION_HELLO), ("CONTENT", ACTION_CONTENT),
+        ]:
+            assert "topic" in action, f"{name} missing topic"
+            assert "parameter" in action, f"{name} missing parameter"
+            assert "priority" in action, f"{name} missing priority"
+            assert action["topic"] == "rt/api/sport/request", f"{name} wrong topic"
+            assert action["parameter"] == str(action["api_id"]), f"{name} parameter != api_id"
+
+    def test_stop_has_priority_1(self):
+        assert ACTION_STOP["priority"] == 1
+
 
 class TestBasicTransitions:
     def setup_method(self):

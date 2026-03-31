@@ -63,6 +63,7 @@ pkill -f vision_perception_node 2>/dev/null || true
 pkill -f vision_status_display 2>/dev/null || true
 pkill -f interaction_router 2>/dev/null || true
 pkill -f event_action_bridge 2>/dev/null || true
+pkill -f interaction_executive 2>/dev/null || true
 pkill -f stt_intent_node 2>/dev/null || true
 pkill -f tts_node 2>/dev/null || true
 pkill -f llm_bridge_node 2>/dev/null || true
@@ -127,15 +128,15 @@ tmux send-keys -t "$SESSION:vision" \
     max_hands:=2 publish_fps:=8" Enter
 sleep 5
 
-# --- Window 4: Interaction Router (REQUIRED: bridge depends on router output) ---
-echo "[5/10] Starting interaction_router..."
-tmux new-window -t "$SESSION" -n router
-tmux send-keys -t "$SESSION:router" \
-  "$ROS_SETUP && ros2 launch vision_perception interaction_router.launch.py" Enter
+# --- Window 4: Interaction Executive v0 (replaces router + bridge) ---
+echo "[5/9] Starting interaction_executive..."
+tmux new-window -t "$SESSION" -n executive
+tmux send-keys -t "$SESSION:executive" \
+  "$ROS_SETUP && ros2 launch interaction_executive interaction_executive.launch.py" Enter
 sleep 2
 
 # --- Window 5: ASR + Intent ---
-echo "[6/10] Starting stt_intent_node (Whisper CUDA warmup ~12s)..."
+echo "[6/9] Starting stt_intent_node (Whisper CUDA warmup ~12s)..."
 tmux new-window -t "$SESSION" -n asr
 tmux send-keys -t "$SESSION:asr" \
   "$ROS_SETUP && \
@@ -157,7 +158,7 @@ sleep 15
 # === Phase 3: 決策/執行層 ===
 
 # --- Window 6: TTS ---
-echo "[7/10] Starting tts_node ($TTS_PROVIDER)..."
+echo "[7/9] Starting tts_node ($TTS_PROVIDER)..."
 tmux new-window -t "$SESSION" -n tts
 tmux send-keys -t "$SESSION:tts" \
   "$ROS_SETUP && amixer -c 3 set PCM 147 >/dev/null 2>&1; \
@@ -172,7 +173,7 @@ tmux send-keys -t "$SESSION:tts" \
 sleep 3
 
 # --- Window 7: LLM Bridge ---
-echo "[8/10] Starting llm_bridge_node (Cloud + Ollama fallback)..."
+echo "[8/9] Starting llm_bridge_node (Cloud + Ollama fallback, face=executive)..."
 tmux new-window -t "$SESSION" -n llm
 tmux send-keys -t "$SESSION:llm" \
   "$ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args \
@@ -182,23 +183,12 @@ tmux send-keys -t "$SESSION:llm" \
     -p enable_local_llm:=$ENABLE_LOCAL_LLM \
     -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
     -p local_llm_model:='$LOCAL_LLM_MODEL' \
-    -p enable_actions:=$ENABLE_ACTIONS" Enter
+    -p enable_actions:=$ENABLE_ACTIONS \
+    -p subscribe_face:=false" Enter
 sleep 3
 
-# --- Window 8: Event Action Bridge (subscribes to interaction_router output) ---
-echo "[9/10] Starting event_action_bridge..."
-tmux new-window -t "$SESSION" -n bridge
-if [ "$ENABLE_ACTIONS" = "true" ]; then
-  tmux send-keys -t "$SESSION:bridge" \
-    "$ROS_SETUP && ros2 launch vision_perception event_action_bridge.launch.py" Enter
-else
-  tmux send-keys -t "$SESSION:bridge" \
-    "echo '[DISABLED] event_action_bridge — ENABLE_ACTIONS=false'" Enter
-fi
-sleep 2
-
-# --- Window 9: Foxglove Bridge ---
-echo "[10/10] Starting Foxglove bridge..."
+# --- Window 8: Foxglove Bridge ---
+echo "[9/9] Starting Foxglove bridge..."
 tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
   "$ROS_SETUP && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765" Enter
@@ -210,16 +200,15 @@ echo ""
 echo "=== All started ==="
 echo ""
 echo "Windows:"
-echo "  go2     — Go2 Driver (WebRTC)"
-echo "  camera  — D435 Camera"
-echo "  face    — Face Identity (YuNet 2023mar + SFace)"
-echo "  vision  — Gesture + Pose (Recognizer + MediaPipe CPU)"
-echo "  router  — Interaction Router (welcome/gesture_cmd/fall_alert)"
-echo "  asr     — ASR + Intent (Whisper small CUDA)"
-echo "  tts     — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
-echo "  llm     — LLM Bridge (Cloud→Ollama→RuleBrain)"
-echo "  bridge  — Event → Action Bridge (subscribes to router)"
-echo "  fox     — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765)"
+echo "  go2       — Go2 Driver (WebRTC)"
+echo "  camera    — D435 Camera"
+echo "  face      — Face Identity (YuNet 2023mar + SFace)"
+echo "  vision    — Gesture + Pose (Recognizer + MediaPipe CPU)"
+echo "  executive — Interaction Executive v0 (face/gesture/pose → action)"
+echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
+echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
+echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
+echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765)"
 echo ""
 echo "To attach: tmux attach -t $SESSION"
 echo "To kill:   tmux kill-session -t $SESSION"

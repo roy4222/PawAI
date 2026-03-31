@@ -140,9 +140,15 @@ class InteractionExecutiveNode(Node):
 
         if result.action:
             req = WebRtcReq()
+            req.id = 0
+            req.topic = result.action.get("topic", "rt/api/sport/request")
             req.api_id = result.action.get("api_id", 0)
+            req.parameter = result.action.get("parameter", "")
+            req.priority = result.action.get("priority", 0)
             self._pub_webrtc.publish(req)
-            self.get_logger().info(f"Action: api_id={req.api_id}")
+            self.get_logger().info(
+                f"Action: api_id={req.api_id} priority={req.priority}"
+            )
 
     def _publish_status(self):
         status = self._sm.get_status()

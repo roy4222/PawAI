@@ -81,6 +81,7 @@ LAUNCH_PATTERNS=(
     "ros2 launch face_perception"
     "ros2 launch vision_perception"
     "ros2 launch foxglove_bridge"
+    "ros2 launch interaction_executive"
     "ros2 run speech_processor"
 )
 for pat in "${LAUNCH_PATTERNS[@]}"; do
@@ -98,7 +99,7 @@ sleep 1
 
 # ── Step 5: Verify ──
 echo "[5/5] Verifying..."
-VERIFY_PATTERN='(go2_driver_node|robot_state_publisher|pointcloud_to_laserscan|joy_node|teleop|twist_mux|realsense2_camera|rs_launch\.py|face_identity|face_perception\.launch|vision_perception_node|vision_status_display|interaction_router|stt_intent_node|tts_node|llm_bridge_node|event_action_bridge|foxglove_bridge|interaction_executive|obstacle_avoidance|ros2 launch go2_robot_sdk|ros2 launch realsense2_camera|ros2 launch face_perception|ros2 launch vision_perception|ros2 launch foxglove_bridge|ros2 run speech_processor)'
+VERIFY_PATTERN='(go2_driver_node|robot_state_publisher|pointcloud_to_laserscan|joy_node|teleop|twist_mux|realsense2_camera|rs_launch\.py|face_identity|face_perception\.launch|vision_perception_node|vision_status_display|interaction_router|stt_intent_node|tts_node|llm_bridge_node|event_action_bridge|foxglove_bridge|interaction_executive|obstacle_avoidance|ros2 launch go2_robot_sdk|ros2 launch realsense2_camera|ros2 launch face_perception|ros2 launch vision_perception|ros2 launch foxglove_bridge|ros2 launch interaction_executive|ros2 run speech_processor)'
 RESIDUAL=$(ps aux | grep -E "$VERIFY_PATTERN" | grep -v grep | wc -l || true)
 if [ "$RESIDUAL" -gt 0 ]; then
     echo ""
