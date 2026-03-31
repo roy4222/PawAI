@@ -24,9 +24,11 @@ paths:
 - **Go2 OTA**：連外網會自動更新韌體，Demo 當天 Ethernet 直連
 - **Go2 重開機後 WebRTC ICE** 可能 FROZEN→FAILED，通常第二個 candidate 成功（等 10s+）
 
-## Go2 動作 API ID
-- 1001: Sit
-- 1002: Stand
+## Go2 動作 API ID（權威：go2_robot_sdk/domain/constants/robot_commands.py）
+- 1001: Damp (soft stop)
+- 1002: BalanceStand
 - 1003: StopMove
-- 1004: Damp (soft stop)
-- 1020: Content/Wave
+- 1004: StandUp
+- 1009: Sit
+- 1016: Hello
+- 1020: Content

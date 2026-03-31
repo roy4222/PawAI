@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import io
 import logging
 import time
@@ -37,15 +38,23 @@ _model = None
 def load_model(device: str = "cuda:0"):
     """Load SenseVoiceSmall via FunASR. Called once at startup."""
     global _model
-    from funasr import AutoModel
+    try:
+        from funasr import AutoModel
+    except ImportError:
+        logger.error("funasr not installed. Run: pip install funasr")
+        raise
 
     logger.info(f"Loading SenseVoiceSmall on {device} ...")
-    _model = AutoModel(
-        model="iic/SenseVoiceSmall",
-        device=device,
-        vad_model="fsmn-vad",
-        trust_remote_code=True,
-    )
+    try:
+        _model = AutoModel(
+            model="iic/SenseVoiceSmall",
+            device=device,
+            vad_model="fsmn-vad",
+            trust_remote_code=True,
+        )
+    except Exception as e:
+        logger.error(f"Failed to load SenseVoiceSmall on {device}: {e}")
+        raise
     logger.info("SenseVoiceSmall loaded.")
 
 
@@ -95,12 +104,23 @@ async def transcribe(
         except ImportError:
             logger.warning(f"librosa not installed, cannot resample {sr}->{target_sr}")
 
-    # Run inference
+    # Guard: model must be loaded
+    if _model is None:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Model not loaded"},
+        )
+
+    # Run inference in thread pool to avoid blocking the async event loop
+    loop = asyncio.get_event_loop()
     try:
-        result = _model.generate(
-            input=audio_np,
-            language=language or "zh",
-            use_itn=True,
+        result = await loop.run_in_executor(
+            None,
+            lambda: _model.generate(
+                input=audio_np,
+                language=language or "zh",
+                use_itn=True,
+            ),
         )
     except Exception as e:
         logger.error(f"SenseVoice inference failed: {e}")
@@ -132,6 +152,11 @@ async def transcribe(
 
 @app.get("/health")
 async def health():
+    if _model is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "model": "SenseVoiceSmall", "detail": "not loaded"},
+        )
     return {"status": "ok", "model": "SenseVoiceSmall"}
 
 

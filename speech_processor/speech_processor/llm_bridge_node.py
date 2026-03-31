@@ -329,7 +329,8 @@ class LlmBridgeNode(Node):
         face_name: str | None = None,
         confidence: float = 0.0,
     ) -> None:
-        if not self._llm_lock.acquire(blocking=False):
+        acquired = self._llm_lock.acquire(blocking=False)
+        if not acquired:
             self.get_logger().warn("LLM call already in progress, skipping")
             return
 
