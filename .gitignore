@@ -10,6 +10,7 @@ install/
 ## Python
 __pycache__/
 *.pyc
+*.egg-info/
 .coverage
 coverage.xml
 .ruff_cache/

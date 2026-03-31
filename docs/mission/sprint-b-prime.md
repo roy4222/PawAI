@@ -124,12 +124,16 @@
 - [x] 供電穩定（Go2 BAT 供電 Jetson 正常運行）
 - [x] Bring-up 測試通過（full demo 10 window + ASR/LLM/TTS 鏈路通）
 
-**Day 4 交付物（可用）：**
-- [ ] 3 次完全斷電重開，每次 bring-up 成功
-- [ ] Go2 行走 2 分鐘，硬體不鬆脫
-- [ ] 連續運行 30 分鐘，Jetson < 75°C
-- [ ] 重開機後 USB device index 不漂移
-- [ ] 上機版 `start_full_demo_tmux.sh` 確認可跑
+**Day 4 交付物（可用）— 3/31 完成：**
+- [x] 3 次完全斷電重開，每次 bring-up 成功
+- [x] Go2 行走 2 分鐘，硬體不鬆脫（熱熔膠固定 USB 接頭後解決）
+- [x] 連續運行 30 分鐘，Jetson peak 56.2°C < 75°C
+- [x] 重開機後 USB device index 不漂移（3 輪 mic=0, spk=plughw:1,0）
+- [x] 上機版 `start_full_demo_tmux.sh` 確認可跑（3 次）
+- [x] XL4015 電壓調整 18.8V → 19.2V（原值偏低導致行走時斷電）
+- [x] USB 喇叭反覆斷連 → 熱熔膠固定解決
+- [x] Jetson 啟動腳本同步（SenseVoice 三級 fallback）
+- [x] Bug fix: llm_bridge lock race + sensevoice null check + async blocking
 
 ---
 
@@ -137,14 +141,17 @@
 
 > 建立 thin orchestrator，統一事件路由。Demo Controller，不是 AI Brain。
 
-**交付物 checklist：**
-- [ ] `interaction_executive` ROS2 package scaffold
-- [ ] 純 Python state machine + 19 個 unit tests（TDD，先紅再綠）
-- [ ] 狀態：IDLE → GREETING → CONVERSING → EXECUTING → EMERGENCY → OBSTACLE_STOP
-- [ ] 優先序：EMERGENCY > obstacle > stop > speech > gesture > face
-- [ ] 5s dedup、30s timeout、obstacle debounce 2s
-- [ ] ROS2 node + `/executive/status` 2Hz 廣播
-- [ ] launch file + config
+**交付物 checklist — 3/31 完成（提前一天）：**
+- [x] `interaction_executive` ROS2 package scaffold
+- [x] 純 Python state machine + 27 個 unit tests（19 state + 6 api_id alignment + 2 obstacle edge）
+- [x] 狀態：IDLE → GREETING → CONVERSING → EXECUTING → EMERGENCY → OBSTACLE_STOP
+- [x] 優先序：EMERGENCY > obstacle > stop > speech > gesture > face
+- [x] 5s dedup、30s timeout、obstacle debounce 2s
+- [x] ROS2 node + `/executive/status` 2Hz 廣播
+- [x] launch file + config
+- [x] api_id 修正（計畫裡 Damp/Sit/Stand 寫錯，已對齊 robot_commands.py）
+- [x] action constants 補 topic/parameter/priority for WebRtcReq
+- [x] Jetson 部署驗證：`/executive/status` → `{"state": "idle"}`
 
 **關鍵設計：**
 ```
