@@ -951,9 +951,9 @@ class SttIntentNode(Node):
                 reason,
             )
 
-            # Short text filter — discard transcripts with < 2 meaningful chars
+            # Short text filter — discard empty transcripts (keep single-char commands like 停/坐/站)
             meaningful = re.sub(r'[\s\u3000.,!?。，！？、…\-\u2014\u2026]+', '', transcript)
-            if len(meaningful) < 2:
+            if len(meaningful) < 1:
                 self.get_logger().info(
                     f"Short text discarded ({len(meaningful)} chars): {transcript!r}"
                 )
