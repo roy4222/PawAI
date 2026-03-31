@@ -1,0 +1,6 @@
+interaction_executive_node:
+  ros__parameters:
+    state_timeout: 30.0
+    dedup_window: 5.0
+    obstacle_debounce: 2.0
+    obstacle_min_duration: 1.0
