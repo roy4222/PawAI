@@ -168,27 +168,72 @@
 
 ---
 
-### Day 6（4/2 四）— Executive v0：整合 + Bridge 遷移
+### Day 6（4/1 二）— ASR 修復 + Executive 整合 + 語音上機驗收
 
-> executive v0 取代 event_action_bridge + interaction_router。
+> Day 5 提前完成，但上機後語音互動不流暢。最高優先修 ASR，再整合 executive。
 
-**交付物 checklist：**
-- [ ] 5 個邊界測試通過：
-  - 人臉+語音同時 → dedup
-  - 對話中 stop 手勢 → 中斷
-  - 跌倒誤報 → EMERGENCY → timeout
-  - LLM timeout > 2s → RuleBrain
-  - crash → restart → re-subscribe
-- [ ] `/executive/status` 可在 Foxglove 即時看到
-- [ ] **同步更新 `start_full_demo_tmux.sh`**（移除 bridge/router，改啟 executive）
-- [ ] **同步更新 Crash/Restart SOP**
+**修訂原因**：3/31 實測發現 Cloud ASR 全 timeout（server blocking + tunnel 不穩）、local ASR 噪音辨識垃圾、short text filter 殺單字指令。利用領先的 2 天插入四核心上機驗收。
+
+**上午：ASR 修復**
+- [ ] 推 sensevoice_server.py async fix 到 RTX 8000 + 重啟 server
+- [ ] stt_intent_node short text threshold < 2 → < 1（已在 WSL 完成）
+- [ ] 考慮 ASR timeout 3s → 5s
+- [ ] 靜止語音 5 輪測試（你好/坐下/站起來/停/你叫什麼名字）→ Cloud ASR 無 timeout
+
+**中午：Executive Jetson 整合**
+- [ ] rsync 所有 Day 5+6 改動到 Jetson + colcon build
+- [ ] 6 個邊界測試：
+  - Face welcome → TTS（只從 executive）
+  - Speech chat → LLM 回覆（從 llm_bridge）
+  - Stop gesture → StopMove（從 executive）
+  - Face + Speech 同時 → 不重複 TTS
+  - Gesture stop 同時 speech → Stop 優先
+  - Crash recovery < 3min
 - [ ] 更新 `interaction_contract.md` v2.2
 
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 5
+**下午：語音上機驗收（10 輪）**
+- [ ] Cloud ASR 成功率 ≥ 80%
+- [ ] Intent 正確率 ≥ 80%
+- [ ] TTS 播放成功率 100%
+- [ ] 無重複 TTS（executive/llm_bridge 分工正確）
 
 ---
 
-### Day 7（4/3 五）— 導航避障：D435 Depth
+### Day 7（4/2 三）— 四核心上機驗收
+
+> 不寫新功能。在 Go2 真機上系統性驗證四核心互動品質。
+
+**人臉辨識驗收（5 項）：**
+- [ ] 走到鏡頭前 1.5m → identity_stable < 3s
+- [ ] 已註冊的人 → 正確辨識 + TTS 叫名字
+- [ ] 未註冊的人 → 不觸發 welcome
+- [ ] 離開再回來（30s 後）→ 再次 welcome
+- [ ] 兩人同時 → 分別問候，不混淆
+
+**手勢辨識驗收（5 項）：**
+- [ ] Stop 伸手掌 → Go2 StopMove < 1s
+- [ ] Thumbs up → Go2 Content + TTS「謝謝」
+- [ ] 非白名單手勢 → 不觸發動作
+- [ ] 距離 1-3m → 手勢正常辨識
+- [ ] 連續 stop 3 次 → dedup 5s 內只觸發 1 次
+
+**姿勢辨識驗收（4 項）：**
+- [ ] Standing → 正確辨識
+- [ ] Sitting → 正確辨識
+- [ ] Fallen 模擬跌倒 → EMERGENCY + TTS「偵測到跌倒」
+- [ ] Fallen 恢復站立 → EMERGENCY → IDLE（timeout 30s）
+
+**整合場景驗收（4 項）：**
+- [ ] 走近→被認出→說「你好」→比讚 → 順序正確
+- [ ] 對話中比 stop → 立即停止
+- [ ] 跌倒警報中說話 → EMERGENCY 不被語音打斷
+- [ ] 5 分鐘自由互動 → 整體流暢度主觀評分
+
+**記錄**：verification_observer.py JSONL + PASS/FAIL 標記
+
+---
+
+### Day 8（4/3 四）— 導航避障：D435 Depth
 
 > 50 行 numpy → ROS2 node → Go2 反應式避障。
 
@@ -199,7 +244,7 @@
 - [ ] 室內 10 次防撞測試，記錄 stop latency
 - [ ] 更新 `start_full_demo_tmux.sh` 加入 obstacle window
 
-**降級策略（現在鎖定）：**
+**降級策略（鎖定）：**
 
 | 場景 | 策略 |
 |------|------|
@@ -208,13 +253,13 @@
 | 誤停 > 20% | Demo A 用、Demo B 關 |
 | 整體不穩 | 完全停用 |
 
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 6
-
 ---
 
-### Day 8（4/4 六）— 導航避障：Hardening
+### Day 9（4/4 五）— 導航避障 Hardening OR 物體辨識 Hard Gate
 
-> 30 次防撞測試，量化 pass/fail/warning。
+> 視 Day 8 結果決定。導航避障穩定 → 做 30 次 Hardening。不穩 → 跳物體辨識。
+
+**導航避障 Hardening（如果 Day 8 穩定）：**
 
 | Metric | Pass | Warning (Damp-only) | Fail (停用) |
 |--------|:----:|:-------------------:|:-----------:|
@@ -223,32 +268,13 @@
 | Stop latency | P95 < 500ms | 500-1000ms | > 1s |
 | Frame drop | ≤ 5% | 6-15% | > 15% |
 
-**任一落灰區 → 統一降 Damp-only。**
-
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 7
-
----
-
-### Day 9（4/5 日）— 物體辨識 Hard Gate
-
-> Go/No-Go。最多 4-6 小時 timebox。
-
-**Go 條件（全部同時滿足）：**
-1. 前 7 天 baseline 穩定（Demo A 5 輪 ≥ 4/5）
-2. Jetson RAM headroom ≥ 1.5GB
-3. GPU 無持續滿載
-4. D435 pipeline 不衝突
-5. 半天內能完成 Phase 0
-
-**如果 Go：** Phase 0-1（ultralytics → TensorRT 轉換），不碰 ROS2
-**如果 No-Go：** 直接進 Day 9，不辯論
-**超時：** 4-6h 到就停，不管做到哪
-
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 8
+**物體辨識 Hard Gate（如果導航避障跳過）：**
+- Go/No-Go，最多 4-6h timebox
+- Go 條件：baseline 穩定 + RAM ≥ 1.5GB + GPU 不滿載 + D435 不衝突
 
 ---
 
-### Day 10（4/6 一）— Freeze + Hardening
+### Day 10（4/5 六）— Freeze + Hardening
 
 > 不加新功能。只修 demo 失敗路徑。
 
@@ -259,11 +285,10 @@
 - [ ] Demo 操作手冊（非技術人員照做也能跑）
 - [ ] `/executive/status` 壓測監控驗證
 - [ ] 最終 E2E regression pass
-- [ ] 每次修改都回歸完整 E2E
 
 ---
 
-### Day 11（4/7 二）— Handoff Day
+### Day 11（4/6 日）— Handoff Day
 
 > 整理交付。為 4/9 會議準備。
 
