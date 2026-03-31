@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-30（Sprint Day 3 完成 — 四核心桌測 10/10 + Go2 動作補驗 PASS）
+**最後更新**：2026-03-31（Sprint Day 4+5 完成 — GATE C 通過 + Executive v0 State Machine）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -16,7 +16,7 @@
 | LLM (llm_bridge_node) | 本地+雲端+fast path | 3/24 | Cloud 7B → Ollama 1.5B → RuleBrain 三級 fallback |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **16 test files, 214+ cases** | 3/25 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | 空殼 | — | 系統無統一中控，py_trees explore 排定 |
+| interaction_executive | **v0 完成** | 3/31 | State machine 27 tests + ROS2 node + /executive/status 2Hz，listen-only（Day 6 遷移 bridges） |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
 | 導航避障 | **研究完成** | 3/25 | **LiDAR 正式放棄**，D435 depth camera 下一步（未測），~10-12hr |
 
@@ -48,6 +48,31 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 4+5 完成（3/31）
+
+### Day 4：硬體穩定性驗證 — GATE C 通過
+- **3x 冷開機** bring-up 全部成功，USB index 穩定（mic=0, spk=plughw:1,0）
+- **Go2 行走 2 分鐘**：硬體不鬆脫（熱熔膠固定 USB 接頭後）
+- **30 分鐘連續運行**：peak 56.2°C < 75°C，16 node 全程無掉，喇叭全程在線
+- **XL4015 電壓調整**：18.8V → 19.2V（原值偏低導致 Go2 行走時 Jetson 斷電）
+- **USB 喇叭反覆斷連**：根因是振動 + 接觸不良，熱熔膠固定後解決
+- **啟動腳本同步**：Jetson 舊版只有 whisper_local，已推新版含 SenseVoice 三級 fallback
+
+### Day 5：Executive v0 State Machine
+- **Package scaffold**：interaction_executive ROS2 package（setup.py/cfg/package.xml）
+- **TDD**：27 tests GREEN（19 state machine + 6 api_id alignment + 2 obstacle edge cases）
+- **State machine**：純 Python，6 狀態（IDLE/GREETING/CONVERSING/EXECUTING/EMERGENCY/OBSTACLE_STOP）
+- **ROS2 node**：訂閱 5 event topics → /tts + /webrtc_req + /executive/status(2Hz)
+- **api_id 修正**：計畫裡 Damp/Sit/Stand 寫錯，已對齊 robot_commands.py 權威來源
+- **Jetson 部署驗證**：`/executive/status` → `{"state": "idle"}` 確認
+
+### Bug Fixes（審查報告 3 個 critical）
+- **llm_bridge_node lock race**：acquire(False) fail 時 finally release 未持有的 lock → crash
+- **sensevoice_server model null check**：model 未載入時直接 crash → 503
+- **sensevoice_server blocking generate()**：async handler 裡跑 blocking call → run_in_executor
 
 ---
 
@@ -179,8 +204,8 @@
 | 1 | 3/28 | Baseline Contract | 3x cold start + 1x crash recovery ✅ |
 | 2 | 3/29 | ASR 替換：可順暢溝通 | 正確+部分 >= 80%，高風險誤判 = 0 ✅ |
 | **3** | **3/30** | **四核心桌測 + 動作補驗** | **10/10 PASS + Go2 動作 PASS ✅** |
-| 4 | 3/31 | 硬體上機：可跑+可用 | Jetson + D435 固定 + 3x 重開機 + 行走穩定 |
-| 5 | 4/1 | Executive v0：State Machine | 19 tests pass + ROS2 node 啟動 |
+| **4** | **3/31** | **硬體穩定性 GATE C** | **3x 重開機 + 行走 + 30min 56°C + USB 穩定 ✅** |
+| **5** | **3/31** | **Executive v0 State Machine** | **27 tests + ROS2 node + Jetson 部署 ✅** |
 | 6 | 4/2 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
 | 7 | 4/3 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
 | 8 | 4/4 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
