@@ -32,6 +32,7 @@ setup(
             "event_action_bridge = vision_perception.event_action_bridge:main",
             "vision_status_display = vision_perception.vision_status_display:main",
             "interaction_router = vision_perception.interaction_router:main",
+            "obstacle_avoidance_node = vision_perception.obstacle_avoidance_node:main",
         ],
     },
 )
