@@ -45,8 +45,8 @@ Go2 (WebRTC /webrtc_req)
 - `depth_frame`: numpy array `(H, W)` float32，單位 meters（由 node 轉換）
 
 ### 處理流程
-1. **ROI 裁切**：取上半部中央區域（避開地板）
-   - 垂直：上 40%~80%（跳過天花板和地板）
+1. **ROI 裁切**：取中央前方帶狀區域（跳過天花板和地板）
+   - 垂直：40%~80%（D435 裝在額頭朝前，上方是天花板，下方是地板）
    - 水平：中央 60%
 2. **無效值過濾**：`depth == 0` 或 `depth > max_range` 視為無效，不參與計算
 3. **障礙物統計**：
@@ -98,7 +98,7 @@ class ObstacleResult:
 2. 轉換 uint16 mm → float32 meters
 3. 呼叫 `ObstacleDetector.detect()`
 4. **幀級 debounce**：連續 `N` 幀（預設 3）都是 danger 才發 event（避免 depth 抖動誤觸發）
-5. 發布 event（rate-limited，預設 5 Hz）
+5. 發布 event（rate-limited，預設 5 Hz）— payload 只含 `stamp/event_type/distance_min/obstacle_ratio`，`zone` 不進 event（內部 log only）
 6. 每幀 log zone 狀態（debug level）
 
 ### Event Schema（對齊 contract v2.2）
@@ -107,8 +107,7 @@ class ObstacleResult:
   "stamp": 1775012345.678,
   "event_type": "obstacle_detected",
   "distance_min": 0.45,
-  "obstacle_ratio": 0.23,
-  "zone": "danger"
+  "obstacle_ratio": 0.23
 }
 ```
 
