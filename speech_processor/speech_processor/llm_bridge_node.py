@@ -285,6 +285,11 @@ class LlmBridgeNode(Node):
         if now - last < self.face_greet_cooldown_s:
             return
         self._face_greet_history[key] = now
+        if len(self._face_greet_history) > 200:
+            # Keep only the 100 most recent entries
+            sorted_keys = sorted(self._face_greet_history, key=self._face_greet_history.get)
+            for k in sorted_keys[:100]:
+                del self._face_greet_history[k]
 
         dist_str = f"{distance_m}m" if distance_m is not None else "未知"
         user_message = (

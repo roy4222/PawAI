@@ -99,6 +99,10 @@ class ExecutiveStateMachine:
             return self.handle_event(EventType.TIMEOUT)
         return None
 
+    def reset_obstacle_clear(self):
+        """Call when a new obstacle is detected to reset the clear timer."""
+        self._obstacle_clear_time = None
+
     def try_obstacle_clear(self) -> Optional[EventResult]:
         """Call when no obstacle detected. Returns result if debounce passed."""
         if self._state != ExecutiveState.OBSTACLE_STOP:

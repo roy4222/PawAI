@@ -80,7 +80,7 @@ class InteractionExecutiveNode(Node):
             return
         event_type_str = data.get("event_type", "")
         if event_type_str == "identity_stable":
-            identity = data.get("identity", "unknown")
+            identity = data.get("stable_name", "unknown")
             if identity != "unknown":
                 result = self._sm.handle_event(
                     EventType.FACE_WELCOME, source=identity, data=data
@@ -134,14 +134,11 @@ class InteractionExecutiveNode(Node):
     def _check_obstacle_clear(self):
         if self._sm.state.value == "obstacle_stop":
             if (time.monotonic() - self._last_obstacle_time) > 2.0:
-                self._sm._obstacle_clear_time = (
-                    self._sm._obstacle_clear_time or time.monotonic()
-                )
                 result = self._sm.try_obstacle_clear()
                 if result:
                     self._execute_result(result)
             else:
-                self._sm._obstacle_clear_time = None
+                self._sm.reset_obstacle_clear()
 
     def _send_forward(self):
         """10Hz timer — publish cmd_vel while forward command is active."""
