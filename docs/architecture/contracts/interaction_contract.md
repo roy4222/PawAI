@@ -581,7 +581,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "event_type":      { "type": "string", "enum": ["obstacle_detected"] },
   "distance_min":    { "type": "float",  "unit": "meters", "description": "最近障礙物距離" },
   "obstacle_ratio":  { "type": "float",  "range": "[0.0, 1.0]", "description": "ROI 內障礙物佔比" },
-  "timestamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" }
+  "zone":            { "type": "string", "enum": ["danger"], "description": "判定區域（只在 danger 時發布）" }
 }
 ```
 

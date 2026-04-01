@@ -98,7 +98,7 @@ class ObstacleResult:
 2. 轉換 uint16 mm → float32 meters
 3. 呼叫 `ObstacleDetector.detect()`
 4. **幀級 debounce**：連續 `N` 幀（預設 3）都是 danger 才發 event（避免 depth 抖動誤觸發）
-5. 發布 event（rate-limited，預設 5 Hz）— payload 只含 `stamp/event_type/distance_min/obstacle_ratio`，`zone` 不進 event（內部 log only）
+5. 發布 event（rate-limited，預設 5 Hz）— payload 含 `stamp/event_type/distance_min/obstacle_ratio/zone`
 6. 每幀 log zone 狀態（debug level）
 
 ### Event Schema（對齊 contract v2.2）
@@ -107,7 +107,8 @@ class ObstacleResult:
   "stamp": 1775012345.678,
   "event_type": "obstacle_detected",
   "distance_min": 0.45,
-  "obstacle_ratio": 0.23
+  "obstacle_ratio": 0.23,
+  "zone": "danger"
 }
 ```
 
