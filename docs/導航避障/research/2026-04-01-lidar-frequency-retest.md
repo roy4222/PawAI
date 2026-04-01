@@ -77,9 +77,37 @@
 | 加載後降頻 | 嚴重 | **無（16 node 無影響）** |
 | 整體判定 | ~~判死~~ | **復活（reactive/local safety）** |
 
+## Go2 行走中測試（120 秒，16 nodes + cmd_vel 0.15 m/s）
+
+| 指標 | 數值 |
+|------|------|
+| 平均頻率 | **5.0-6.1 Hz** |
+| Max interval | 0.254s |
+| Gap > 1s | **0 次** |
+| 行走降頻幅度 | 7.3 → 5.5 Hz（~25% 下降） |
+
+**行走時馬達控制擠壓 WebRTC 頻寬，但仍穩定 ≥ 5Hz，無 burst+gap。**
+
+## 全測試總表
+
+| 條件 | /point_cloud2 Hz | Gap > 1s | 判定 |
+|------|:----------------:|:--------:|:----:|
+| 靜止 + 純 driver | 7.3 | 0 | ✅ PASS |
+| 靜止 + 16 nodes | 7.3 | 0 | ✅ PASS |
+| 行走 + 16 nodes | 5.0-6.1 | 0 | ✅ PASS |
+
+## 最終結論
+
+**LiDAR 路線正式復活。** 5Hz+ 穩定、無 gap、行走中仍可用。
+
+可開啟的路線：
+- [x] Reactive LiDAR obstacle avoidance（360° 防撞，比 D435 87° 覆蓋更廣）
+- [ ] Local costmap / collision_monitor
+- [ ] Limited local planner（已知地圖 + 局部避障）
+- [ ] SLAM 建圖（需進一步測試 slam_toolbox 穩定性）
+
 ## 待測
 
-- [ ] Go2 行走中是否仍穩
 - [ ] 連續 5 分鐘穩定性
 - [ ] SLAM 建圖測試（slam_toolbox + LiDAR）
 - [ ] Nav2 local planner 可行性
