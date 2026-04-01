@@ -54,6 +54,7 @@ ACTION_STAND   = {"api_id": 1004, "topic": _SPORT, "parameter": "1004", "priorit
 ACTION_SIT     = {"api_id": 1009, "topic": _SPORT, "parameter": "1009", "priority": 0}
 ACTION_HELLO   = {"api_id": 1016, "topic": _SPORT, "parameter": "1016", "priority": 0}
 ACTION_CONTENT = {"api_id": 1020, "topic": _SPORT, "parameter": "1020", "priority": 0}
+ACTION_FORWARD = {"cmd_vel": True, "x": 0.3, "y": 0.0, "z": 0.0}  # continuous forward
 
 DEDUP_WINDOW = 5.0          # seconds
 STATE_TIMEOUT = 30.0        # seconds per state
@@ -232,6 +233,13 @@ class ExecutiveStateMachine:
         elif intent == "stand":
             self._set_state(ExecutiveState.EXECUTING)
             return EventResult(action=ACTION_STAND, new_state=ExecutiveState.EXECUTING)
+        elif intent == "come_here":
+            self._set_state(ExecutiveState.EXECUTING)
+            return EventResult(
+                tts="好的，我過來了",
+                action=ACTION_FORWARD,
+                new_state=ExecutiveState.EXECUTING,
+            )
         else:
             self._set_state(ExecutiveState.CONVERSING)
             return EventResult(new_state=ExecutiveState.CONVERSING)

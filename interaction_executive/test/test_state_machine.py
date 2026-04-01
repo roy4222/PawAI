@@ -102,6 +102,25 @@ class TestBasicTransitions:
         assert self.sm.state == ExecutiveState.EXECUTING
         assert result.action is not None
 
+    def test_come_here_starts_forward(self):
+        result = self.sm.handle_event(
+            EventType.SPEECH_INTENT, source="mic", data={"intent": "come_here"}
+        )
+        assert self.sm.state == ExecutiveState.EXECUTING
+        assert result.action is not None
+        assert result.action.get("cmd_vel") is True
+        assert result.action["x"] == 0.3
+        assert result.tts is not None
+
+    def test_come_here_interrupted_by_obstacle(self):
+        self.sm.handle_event(
+            EventType.SPEECH_INTENT, source="mic", data={"intent": "come_here"}
+        )
+        assert self.sm.state == ExecutiveState.EXECUTING
+        result = self.sm.handle_event(EventType.OBSTACLE)
+        assert self.sm.state == ExecutiveState.OBSTACLE_STOP
+        assert result.action is not None
+
     def test_stop_gesture_returns_to_idle(self):
         self.sm.handle_event(
             EventType.SPEECH_INTENT,

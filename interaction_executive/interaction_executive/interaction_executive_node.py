@@ -10,11 +10,13 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from geometry_msgs.msg import Twist
 from std_msgs.msg import String
 from go2_interfaces.msg import WebRtcReq
 
 from .state_machine import (
     ExecutiveStateMachine,
+    ExecutiveState,
     EventType,
     EventResult,
 )
@@ -36,6 +38,7 @@ class InteractionExecutiveNode(Node):
         # --- Publishers ---
         self._pub_tts = self.create_publisher(String, "/tts", 10)
         self._pub_webrtc = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+        self._pub_cmd_vel = self.create_publisher(Twist, "/cmd_vel", 10)
         self._pub_status = self.create_publisher(String, "/executive/status", QOS_STATE)
 
         # --- Subscribers ---
@@ -61,6 +64,8 @@ class InteractionExecutiveNode(Node):
         self._obstacle_clear_timer = self.create_timer(0.5, self._check_obstacle_clear)
 
         self._last_obstacle_time = 0.0
+        self._forward_cmd = None  # Active forward command {x, y, z} or None
+        self._forward_timer = self.create_timer(0.1, self._send_forward)  # 10Hz cmd_vel
 
         self.get_logger().info("Executive v0 started — thin orchestrator mode")
 
@@ -131,6 +136,26 @@ class InteractionExecutiveNode(Node):
             else:
                 self._sm._obstacle_clear_time = None
 
+    def _send_forward(self):
+        """10Hz timer — publish cmd_vel while forward command is active."""
+        if self._forward_cmd is None:
+            return
+        # Stop forwarding if state changed to obstacle_stop or idle
+        state = self._sm.state
+        if state in (ExecutiveState.OBSTACLE_STOP, ExecutiveState.IDLE):
+            self.get_logger().info(
+                f"Forward stopped — state={state.value}"
+            )
+            self._forward_cmd = None
+            # Send zero velocity to ensure stop
+            self._pub_cmd_vel.publish(Twist())
+            return
+        twist = Twist()
+        twist.linear.x = self._forward_cmd["x"]
+        twist.linear.y = self._forward_cmd["y"]
+        twist.angular.z = self._forward_cmd["z"]
+        self._pub_cmd_vel.publish(twist)
+
     def _execute_result(self, result: EventResult):
         if result.tts:
             msg = String()
@@ -139,16 +164,32 @@ class InteractionExecutiveNode(Node):
             self.get_logger().info(f"TTS: {result.tts}")
 
         if result.action:
-            req = WebRtcReq()
-            req.id = 0
-            req.topic = result.action.get("topic", "rt/api/sport/request")
-            req.api_id = result.action.get("api_id", 0)
-            req.parameter = result.action.get("parameter", "")
-            req.priority = result.action.get("priority", 0)
-            self._pub_webrtc.publish(req)
-            self.get_logger().info(
-                f"Action: api_id={req.api_id} priority={req.priority}"
-            )
+            if result.action.get("cmd_vel"):
+                # Continuous movement command
+                self._forward_cmd = {
+                    "x": result.action.get("x", 0.0),
+                    "y": result.action.get("y", 0.0),
+                    "z": result.action.get("z", 0.0),
+                }
+                self.get_logger().info(
+                    f"Forward: x={self._forward_cmd['x']} y={self._forward_cmd['y']}"
+                )
+            else:
+                # One-shot WebRtcReq action
+                # Stop any forward movement when a one-shot action fires
+                if self._forward_cmd is not None:
+                    self._forward_cmd = None
+                    self._pub_cmd_vel.publish(Twist())
+                req = WebRtcReq()
+                req.id = 0
+                req.topic = result.action.get("topic", "rt/api/sport/request")
+                req.api_id = result.action.get("api_id", 0)
+                req.parameter = result.action.get("parameter", "")
+                req.priority = result.action.get("priority", 0)
+                self._pub_webrtc.publish(req)
+                self.get_logger().info(
+                    f"Action: api_id={req.api_id} priority={req.priority}"
+                )
 
     def _publish_status(self):
         status = self._sm.get_status()
