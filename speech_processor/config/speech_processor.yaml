@@ -15,8 +15,8 @@ stt_intent_node:
     text_input_topic: "/speech/text_input"
 
     max_record_seconds: 6.0
-    speech_end_grace_ms: 250
-    pre_roll_ms: 300
+    speech_end_grace_ms: 500
+    pre_roll_ms: 500
     state_publish_hz: 5.0
     language: "zh"
     provider_order: ["qwen_cloud", "sensevoice_local", "whisper_local"]

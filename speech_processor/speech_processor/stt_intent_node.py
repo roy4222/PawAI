@@ -518,6 +518,10 @@ class SttIntentNode(Node):
         self.declare_parameter("energy_vad.stop_threshold", 0.01)
         self.declare_parameter("energy_vad.silence_duration_ms", 800)
         self.declare_parameter("energy_vad.min_speech_ms", 300)
+        self.declare_parameter("energy_vad.adaptive", False)
+        self.declare_parameter("energy_vad.noise_start_ratio", 2.5)
+        self.declare_parameter("energy_vad.noise_stop_ratio", 1.8)
+        self.declare_parameter("energy_vad.noise_floor_alpha", 0.02)
 
     def _load_parameters(self) -> None:
         self.sample_rate = int(self.get_parameter("sample_rate").value)
@@ -590,6 +594,17 @@ class SttIntentNode(Node):
         self.energy_vad_min_speech_ms = int(
             self.get_parameter("energy_vad.min_speech_ms").value
         )
+        self.adaptive_vad = bool(self.get_parameter("energy_vad.adaptive").value)
+        self.noise_start_ratio = float(
+            self.get_parameter("energy_vad.noise_start_ratio").value
+        )
+        self.noise_stop_ratio = float(
+            self.get_parameter("energy_vad.noise_stop_ratio").value
+        )
+        self.noise_floor_alpha = float(
+            self.get_parameter("energy_vad.noise_floor_alpha").value
+        )
+        self._noise_floor = self.energy_vad_start_threshold * 0.5
 
         pre_roll_samples = int(self.sample_rate * (self.pre_roll_ms / 1000.0))
         self.pre_roll_frame_count = max(
@@ -791,8 +806,27 @@ class SttIntentNode(Node):
         rms = float(np.sqrt(np.mean(frame**2)))
         now = time.monotonic()
 
+        # Adaptive noise floor estimation
+        if self.adaptive_vad:
+            start_thresh = max(
+                self.energy_vad_start_threshold,
+                self._noise_floor * self.noise_start_ratio,
+            )
+            stop_thresh = max(
+                self.energy_vad_stop_threshold,
+                self._noise_floor * self.noise_stop_ratio,
+            )
+        else:
+            start_thresh = self.energy_vad_start_threshold
+            stop_thresh = self.energy_vad_stop_threshold
+
         if not self._energy_vad_speaking:
-            if rms >= self.energy_vad_start_threshold:
+            # Update noise floor only when not speaking
+            if self.adaptive_vad:
+                alpha = self.noise_floor_alpha
+                self._noise_floor = (1 - alpha) * self._noise_floor + alpha * rms
+
+            if rms >= start_thresh:
                 with self._record_lock:
                     if self._recorder_state.is_recording:
                         return
@@ -801,9 +835,13 @@ class SttIntentNode(Node):
                 self._energy_vad_speech_start = now
                 session_id = self._new_session_id(prefix="ev")
                 self._handle_speech_start(session_id)
-                self.get_logger().info(f"Energy VAD: speech start (rms={rms:.4f})")
+                self.get_logger().info(
+                    f"Energy VAD: speech start (rms={rms:.4f}"
+                    + (f", floor={self._noise_floor:.4f}, thresh={start_thresh:.4f})"
+                       if self.adaptive_vad else ")")
+                )
         else:
-            if rms < self.energy_vad_stop_threshold:
+            if rms < stop_thresh:
                 if self._energy_vad_silence_start == 0.0:
                     self._energy_vad_silence_start = now
                 elif (

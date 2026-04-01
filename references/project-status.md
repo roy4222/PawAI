@@ -9,7 +9,7 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **桌測 Demo ready / 上機 FAIL** | 4/1 | 安靜環境 E2E 4/5 PASS；Go2 風扇噪音下 ~25% — 硬體 SNR 限制 |
+| 語音 (speech_processor) | **聊天可用 / 命令未達標** | 4/1 | 安靜 4/5 PASS；Go2 噪音下聊天互動可用，stop 等命令不可靠→改靠手勢 |
 | 人臉 (face_perception) | **Executive 整合通過** | 4/1 | Gate B face welcome → TTS 問候 PASS |
 | 手勢 (vision_perception) | **Executive 整合通過** | 4/1 | Gate B stop gesture → StopMove + dedup PASS |
 | 姿勢 (vision_perception) | **桌測通過** | 3/30 | MediaPipe Pose CPU，standing 10 / sitting 8 / fallen 1，四模組同跑穩定 |
@@ -70,12 +70,25 @@
 - **Gesture stop + Speech 同時**：stop 優先序正確 ✅
 - **Crash recovery**：殺 executive → 重啟 → 7 秒恢復 ✅
 
-### Gate C — Go2 上機語音驗收：FAIL
-- **根因**：Go2 內建風扇持續噪音（非 LiDAR），壓過 1m 外的語音
-- **mic_gain=8.0**：~25% 準確率（靠近 30cm 勉強可用）
-- **mic_gain=12.0**：~25% 準確率（噪音也被放大，無改善）
-- **結論**：硬體 SNR 限制，現有全向麥克風不可行
-- **Day 7 待決策**：軟體降噪（noisereduce）或換指向性麥克風
+### Gate C — Go2 上機語音驗收：拆分判定
+
+#### Gate C-command（語音命令控制）：FAIL
+- **stop 語音指令不可靠** — 被 VAD 截斷或 ASR 辨識錯誤，安全關鍵指令不能依賴語音
+- **transcript 準確率 ~25%** — Go2 風扇噪音壓過語音（mic_gain 8.0/12.0 均無效）
+- **Demo 對策**：stop 改靠手勢 stop（Gate B 已驗證 100%），不用語音
+
+#### Gate C-conversation（聊天陪伴互動）：PASS with caveat
+- **使用者體驗**：講話後機器人幾乎都有合理回應
+- **come_here / take_photo**：完全正確辨識 + 正確回覆
+- **greet**：ASR 文字糊但 LLM chat fallback 回覆自然（「你好呀」「哈囉，我在這裡」）
+- **status**：未被正確辨識為 status intent，但 LLM 回覆仍合理（「好的，有需要再叫我」）
+- **結論**：聊天可用，命令控制未達標。Demo 詞庫應偏向容錯高的句子
+
+#### 噪音調查結論
+- **主噪音源**：Go2 內建散熱風扇（非 LiDAR），無法軟體關閉
+- **adaptive VAD**（noise floor EMA + 動態 threshold）已實作並部署，改善觸發穩定性但不改善 ASR 準確率
+- **根因**：硬體 SNR — 全向麥克風收到的語音被風扇噪音蓋住
+- **Day 7+ 方向**：軟體降噪（noisereduce）或物理隔離麥克風
 
 ### 基礎設施改善
 - **interaction_contract.md v2.2**：新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)、deprecate router+bridge
