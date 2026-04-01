@@ -18,7 +18,7 @@
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 整合通過** | 4/1 | Gate B 6/6 PASS（face/speech/gesture/dedup/priority/crash 7s recovery） |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
-| 導航避障 | **桌測通過** | 4/1 | D435 depth ROI 反應式避障，ObstacleDetector 7 tests + node + launch，Jetson 桌測偵測+恢復 PASS |
+| 導航避障 | **雙層避障桌測通過** | 4/1 | D435 depth 前方防撞 + LiDAR 360° safety（7Hz 靜/5Hz 走，No gap），SLAM/Nav2 永久關閉 |
 
 ## 3/26 會議決策
 
@@ -97,6 +97,34 @@
 - **TDD**：7 unit tests GREEN，全 CI 225 tests PASS
 - **Jetson 桌測**：椅子 41cm → OBSTACLE ratio 65% → executive Damp → 移除後 debounce 2s → idle 恢復 ✅
 - **待做**：Go2 上機 10x 防撞測試、`start_full_demo_tmux.sh` 加 obstacle window
+
+### LiDAR 重測 — 舊結論推翻 + 最終架構決策
+
+**舊結論（2026-02/03）**：LiDAR 0.03-2Hz burst+gap → 判死
+**新測量（2026-04-01）**：
+
+| 條件 | /point_cloud2 Hz | Gap > 1s |
+|------|:----------------:|:--------:|
+| 靜止 + 純 driver | 7.3 | 0 |
+| 靜止 + 16 nodes | 7.3 | 0 |
+| 行走 0.3 m/s | 4-6 | 0（1 次 1.09s 在轉換期） |
+
+**LiDAR 復活為 reactive safety 主線**，但 SLAM/Nav2 永久關閉：
+- CycloneDDS：Go2 Pro 韌體不支援，永久關閉
+- LiDAR 頻率天花板：~7.35Hz（韌體硬限），我們的 fork 已有 6 項獨有優化，超過上游
+- Full SLAM：5Hz 品質差，jitter 高，業界最低門檻 7Hz
+- Nav2：controller_frequency=3.0 只是「能跑就好」，動態避障不可能
+
+**最終避障架構**：
+- **D435 depth**：前方 87° 精確防撞（30fps，桌測通過）
+- **LiDAR**：360° 安全防護（5-7Hz，行走測試通過）
+- **Go2 移動**：api_id 預設動作 + cmd_vel，MAX_LINEAR_X 調高到 0.5 m/s（行走測試 0.3 m/s 正常）
+
+### Go2 行走測試
+- **0.20 m/s**：走得不甘不願（「被拖著的小狗」），太慢
+- **0.30 m/s**：正常行走，3 輪測試通過
+- **MAX_LINEAR_X**：0.22 → 0.5 m/s（Go2 官方最高 5.0 m/s）
+- **已知問題**：行走中 Jetson 曾斷電一次（供電波動），重開後正常
 
 ### 基礎設施改善
 - **interaction_contract.md v2.2**：新增 `/executive/status`(v0)、`/event/obstacle_detected`(實作完成)、deprecate router+bridge
