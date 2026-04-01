@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-03-31（Sprint Day 4+5 完成 — GATE C 通過 + Executive v0 State Machine）
+**最後更新**：2026-04-01（Sprint Day 6 — Gate A/B PASS, Gate C FAIL 噪音阻塞）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -9,14 +9,14 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **Demo ready** | 3/30 | SenseVoice cloud+local 三級 ASR fallback（92%），edge-tts，Cloud 7B→RuleBrain（砍 Ollama 1.5B） |
-| 人臉 (face_perception) | **桌測通過** | 3/30 | YuNet 2023mar + SFace，54 identity_stable + 15 WELCOME，Day 3 驗證 |
-| 手勢 (vision_perception) | **桌測通過** | 3/30 | Gesture Recognizer：stop 9x / thumbs_up 6x → Go2 動作觸發 PASS |
+| 語音 (speech_processor) | **桌測 Demo ready / 上機 FAIL** | 4/1 | 安靜環境 E2E 4/5 PASS；Go2 風扇噪音下 ~25% — 硬體 SNR 限制 |
+| 人臉 (face_perception) | **Executive 整合通過** | 4/1 | Gate B face welcome → TTS 問候 PASS |
+| 手勢 (vision_perception) | **Executive 整合通過** | 4/1 | Gate B stop gesture → StopMove + dedup PASS |
 | 姿勢 (vision_perception) | **桌測通過** | 3/30 | MediaPipe Pose CPU，standing 10 / sitting 8 / fallen 1，四模組同跑穩定 |
-| LLM (llm_bridge_node) | 本地+雲端+fast path | 3/24 | Cloud 7B → Ollama 1.5B → RuleBrain 三級 fallback |
+| LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **16 test files, 214+ cases** | 3/25 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 完成** | 3/31 | State machine 27 tests + ROS2 node + /executive/status 2Hz，listen-only（Day 6 遷移 bridges） |
+| interaction_executive | **v0 整合通過** | 4/1 | Gate B 6/6 PASS（face/speech/gesture/dedup/priority/crash 7s recovery） |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
 | 導航避障 | **研究完成** | 3/25 | **LiDAR 正式放棄**，D435 depth camera 下一步（未測），~10-12hr |
 
@@ -48,6 +48,39 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 6 完成（4/1）
+
+### Gate A — 安靜環境 ASR E2E：PASS (4/5)
+- **Cloud ASR 恢復**：sensevoice_server.py async fix 生效，不再全 timeout
+- **ASR timeout**：3s → 5s（tunnel latency 餘裕）
+- **sensevoice_server.py**：加 `disable_update=True`（離線模型載入，避免重啟時 modelscope API 失敗）
+- **E2E 流程通**：ASR → LLM → TTS → 喇叭播放，完整鏈路驗證
+- **已知缺口**：單字「停」被 VAD 吞掉（min_speech_ms 斷句不穩定），Demo 改用「停下來」
+- **SSH tunnel 永久化**：Jetson systemd user service，開機自動起、斷線重連
+- **USB speaker 穩定化**：改用 `plughw:CD002AUDIO,0`（by ALSA name，不受 device drift 影響）
+
+### Gate B — Executive 邊界測試：PASS (6/6)
+- **Face welcome → TTS**：executive 收到 identity_stable → TTS「roy 你好」 ✅
+- **Speech chat → LLM**：intent → LLM 回覆 → TTS 播放 ✅
+- **Stop gesture → StopMove**：executive api_id=1003 priority=1 ✅
+- **Face + Speech 同時**：llm_bridge greet cooldown dedup 正確 ✅
+- **Gesture stop + Speech 同時**：stop 優先序正確 ✅
+- **Crash recovery**：殺 executive → 重啟 → 7 秒恢復 ✅
+
+### Gate C — Go2 上機語音驗收：FAIL
+- **根因**：Go2 內建風扇持續噪音（非 LiDAR），壓過 1m 外的語音
+- **mic_gain=8.0**：~25% 準確率（靠近 30cm 勉強可用）
+- **mic_gain=12.0**：~25% 準確率（噪音也被放大，無改善）
+- **結論**：硬體 SNR 限制，現有全向麥克風不可行
+- **Day 7 待決策**：軟體降噪（noisereduce）或換指向性麥克風
+
+### 基礎設施改善
+- **interaction_contract.md v2.2**：新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)、deprecate router+bridge
+- **Jetson GPU tunnel systemd**：`gpu-tunnel.service`（SSH key + auto-reconnect）
+- **USB speaker by name**：`plughw:CD002AUDIO,0` 取代 `plughw:N,0`
 
 ---
 
@@ -206,7 +239,7 @@
 | **3** | **3/30** | **四核心桌測 + 動作補驗** | **10/10 PASS + Go2 動作 PASS ✅** |
 | **4** | **3/31** | **硬體穩定性 GATE C** | **3x 重開機 + 行走 + 30min 56°C + USB 穩定 ✅** |
 | **5** | **3/31** | **Executive v0 State Machine** | **27 tests + ROS2 node + Jetson 部署 ✅** |
-| 6 | 4/2 | Executive v0：整合 | 5 邊界測試 + bridge 遷移 + 腳本同步 |
+| **6** | **4/1** | **ASR 修復 + Executive 整合 + 上機驗收** | **Gate A 4/5 ✅ Gate B 6/6 ✅ Gate C FAIL（噪音）** |
 | 7 | 4/3 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
 | 8 | 4/4 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
 | 9 | 4/5 | 物體辨識 Hard Gate | Go/No-Go → Phase 0（4-6h timebox）|

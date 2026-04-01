@@ -174,28 +174,36 @@
 
 **修訂原因**：3/31 實測發現 Cloud ASR 全 timeout（server blocking + tunnel 不穩）、local ASR 噪音辨識垃圾、short text filter 殺單字指令。利用領先的 2 天插入四核心上機驗收。
 
-**上午：ASR 修復**
-- [ ] 推 sensevoice_server.py async fix 到 RTX 8000 + 重啟 server
-- [ ] stt_intent_node short text threshold < 2 → < 1（已在 WSL 完成）
-- [ ] 考慮 ASR timeout 3s → 5s
-- [ ] 靜止語音 5 輪測試（你好/坐下/站起來/停/你叫什麼名字）→ Cloud ASR 無 timeout
+**上午：ASR 修復 — ✅ 全部完成**
+- [x] 推 sensevoice_server.py async fix 到 RTX 8000 + 重啟 server
+- [x] stt_intent_node short text threshold < 2 → < 1（已在 WSL 完成）
+- [x] ASR timeout 3s → 5s
+- [x] sensevoice_server.py 加 `disable_update=True`（離線模型載入）
+- [x] SSH tunnel 永久化（Jetson systemd user service，開機自動起）
+- [x] USB speaker 穩定化（改用 `plughw:CD002AUDIO,0` by ALSA name）
 
-**中午：Executive Jetson 整合**
-- [ ] rsync 所有 Day 5+6 改動到 Jetson + colcon build
-- [ ] 6 個邊界測試：
-  - Face welcome → TTS（只從 executive）
-  - Speech chat → LLM 回覆（從 llm_bridge）
-  - Stop gesture → StopMove（從 executive）
-  - Face + Speech 同時 → 不重複 TTS
-  - Gesture stop 同時 speech → Stop 優先
-  - Crash recovery < 3min
-- [ ] 更新 `interaction_contract.md` v2.2
+**Gate A — 安靜環境 ASR E2E：✅ PASS (4/5)**
+- [x] 靜止語音 5 輪測試 → greet/come_here/take_photo/status PASS，stop 單字 FAIL（VAD 斷句）
+- [x] Cloud ASR 恢復（18/20 走 qwen_cloud，不再 timeout）
+- [x] E2E 完整流程通（ASR → LLM → TTS → 喇叭播放）
 
-**下午：語音上機驗收（10 輪）**
-- [ ] Cloud ASR 成功率 ≥ 80%
-- [ ] Intent 正確率 ≥ 80%
-- [ ] TTS 播放成功率 100%
-- [ ] 無重複 TTS（executive/llm_bridge 分工正確）
+**Gate B — Executive 邊界測試：✅ PASS (6/6)**
+- [x] rsync + colcon build + 8 window 啟動
+- [x] Face welcome → TTS 問候（roy 你好）
+- [x] Speech chat → LLM 回覆
+- [x] Stop gesture → StopMove（api_id=1003）
+- [x] Face + Speech 同時 → greet cooldown dedup 正確
+- [x] Gesture stop + Speech 同時 → Stop 優先
+- [x] Crash recovery 7 秒
+- [x] 更新 `interaction_contract.md` v2.2
+
+**Gate C — Go2 上機語音驗收：❌ FAIL**
+- [ ] ~~Cloud ASR 成功率 ≥ 80%~~ — Go2 風扇噪音下 ~25%
+- [ ] ~~Intent 正確率 ≥ 80%~~ — 硬體 SNR 限制
+- [x] TTS 播放成功率 100%（零 error）
+- [x] 無重複 TTS（executive/llm_bridge 分工正確）
+- **根因**：Go2 內建散熱風扇（非 LiDAR）持續噪音壓過語音，mic_gain 8.0/12.0 均無效
+- **Day 7 待決策**：軟體降噪（noisereduce）或換指向性麥克風
 
 ---
 
