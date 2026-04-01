@@ -1,0 +1,158 @@
+{
+  "configById": {
+    "3D!go2main": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 5.0,
+        "phi": 60,
+        "thetaOffset": 45,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "base_link",
+      "scene": {
+        "backgroundColor": "#1a1a2e",
+        "enableStats": false,
+        "labelScaleFactor": 1,
+        "transforms": {
+          "showLabel": true,
+          "axisScale": 0.3,
+          "lineWidth": 0.01,
+          "enablePreloading": true
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/point_cloud2": {
+          "visible": true,
+          "pointSize": 4,
+          "pointShape": "circle",
+          "colorMode": "colormap",
+          "colorField": "intensity",
+          "colorMap": "turbo",
+          "decayTime": 0.5
+        },
+        "/scan": {
+          "visible": true,
+          "pointSize": 3,
+          "pointShape": "circle",
+          "colorMode": "flat",
+          "flatColor": "#00ff88",
+          "decayTime": 0
+        },
+        "/camera/camera/aligned_depth_to_color/image_raw": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "go2-grid-001": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Grid",
+          "instanceId": "go2-grid-001",
+          "layerId": "foxglove.Grid",
+          "size": 20,
+          "divisions": 20,
+          "lineWidth": 1,
+          "color": "#333355",
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "order": 1
+        },
+        "go2-urdf-001": {
+          "visible": true,
+          "frameLocked": true,
+          "label": "Go2 URDF",
+          "instanceId": "go2-urdf-001",
+          "layerId": "foxglove.Urdf",
+          "sourceType": "param",
+          "url": "",
+          "filePath": "",
+          "parameter": "/robot_description",
+          "topic": "",
+          "framePrefix": "",
+          "displayMode": "auto",
+          "fallbackColor": "#ffffff",
+          "order": 2
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/goal_pose",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {}
+    },
+    "Image!rgb": {
+      "imageMode": {
+        "imageTopic": "/camera/camera/color/image_raw"
+      }
+    },
+    "Image!depth": {
+      "imageMode": {
+        "imageTopic": "/camera/camera/aligned_depth_to_color/image_raw"
+      }
+    },
+    "RawMessages!obstacle": {
+      "topicPath": "/event/obstacle_detected",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!status": {
+      "topicPath": "/executive/status",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false
+    },
+    "RawMessages!heartbeat": {
+      "topicPath": "/state/obstacle/d435_alive",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1.0
+  },
+  "layout": {
+    "direction": "row",
+    "first": "3D!go2main",
+    "second": {
+      "direction": "column",
+      "first": {
+        "direction": "row",
+        "first": "Image!rgb",
+        "second": "Image!depth",
+        "splitPercentage": 50
+      },
+      "second": {
+        "direction": "column",
+        "first": "RawMessages!obstacle",
+        "second": {
+          "direction": "row",
+          "first": "RawMessages!status",
+          "second": "RawMessages!heartbeat",
+          "splitPercentage": 50
+        },
+        "splitPercentage": 40
+      },
+      "splitPercentage": 40
+    },
+    "splitPercentage": 65
+  }
+}

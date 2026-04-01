@@ -95,6 +95,7 @@ tmux new-session -d -s "$SESSION" -n go2
 tmux send-keys -t "$SESSION:go2" \
   "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && export CONN_TYPE=$CONN_TYPE && \
   ros2 launch go2_robot_sdk robot.launch.py \
+    enable_lidar:=true decode_lidar:=true \
     enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false" Enter
 sleep 10
 
@@ -128,8 +129,22 @@ tmux send-keys -t "$SESSION:vision" \
     max_hands:=2 publish_fps:=8" Enter
 sleep 5
 
-# --- Window 4: Interaction Executive v0 (replaces router + bridge) ---
-echo "[5/9] Starting interaction_executive..."
+# --- Window 4a: D435 Obstacle Avoidance ---
+echo "[5a/11] Starting D435 obstacle_avoidance_node..."
+tmux new-window -t "$SESSION" -n d435obs
+tmux send-keys -t "$SESSION:d435obs" \
+  "$ROS_SETUP && ros2 launch vision_perception obstacle_avoidance.launch.py" Enter
+sleep 2
+
+# --- Window 4b: LiDAR Obstacle ---
+echo "[5b/11] Starting LiDAR lidar_obstacle_node..."
+tmux new-window -t "$SESSION" -n lidarobs
+tmux send-keys -t "$SESSION:lidarobs" \
+  "$ROS_SETUP && ros2 run vision_perception lidar_obstacle_node" Enter
+sleep 2
+
+# --- Window 5: Interaction Executive v0 (replaces router + bridge) ---
+echo "[6/11] Starting interaction_executive..."
 tmux new-window -t "$SESSION" -n executive
 tmux send-keys -t "$SESSION:executive" \
   "$ROS_SETUP && ros2 launch interaction_executive interaction_executive.launch.py" Enter
@@ -200,11 +215,13 @@ echo ""
 echo "=== All started ==="
 echo ""
 echo "Windows:"
-echo "  go2       — Go2 Driver (WebRTC)"
+echo "  go2       — Go2 Driver (WebRTC + LiDAR)"
 echo "  camera    — D435 Camera"
 echo "  face      — Face Identity (YuNet 2023mar + SFace)"
 echo "  vision    — Gesture + Pose (Recognizer + MediaPipe CPU)"
-echo "  executive — Interaction Executive v0 (face/gesture/pose → action)"
+echo "  d435obs   — D435 Obstacle Avoidance (front depth)"
+echo "  lidarobs  — LiDAR Obstacle (360° safety)"
+echo "  executive — Interaction Executive v0 (face/gesture/pose/obstacle → action)"
 echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
 echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
