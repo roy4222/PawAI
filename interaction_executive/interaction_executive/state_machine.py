@@ -135,7 +135,7 @@ class ExecutiveStateMachine:
         if event_type == EventType.OBSTACLE:
             self._set_state(ExecutiveState.OBSTACLE_STOP)
             return EventResult(
-                action=ACTION_DAMP,
+                action=ACTION_STOP,
                 new_state=ExecutiveState.OBSTACLE_STOP,
             )
 

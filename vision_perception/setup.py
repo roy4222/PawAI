@@ -33,6 +33,7 @@ setup(
             "vision_status_display = vision_perception.vision_status_display:main",
             "interaction_router = vision_perception.interaction_router:main",
             "obstacle_avoidance_node = vision_perception.obstacle_avoidance_node:main",
+            "lidar_obstacle_node = vision_perception.lidar_obstacle_node:main",
         ],
     },
 )

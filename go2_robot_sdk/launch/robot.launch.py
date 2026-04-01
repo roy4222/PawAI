@@ -158,8 +158,8 @@ class Go2NodeFactory:
             ),
             DeclareLaunchArgument(
                 "pcl2ls_min_height",
-                default_value="-0.2",
-                description="pointcloud_to_laserscan min height filter",
+                default_value="-0.7",
+                description="pointcloud_to_laserscan min height filter (Go2 LiDAR z=-0.575)",
             ),
             DeclareLaunchArgument(
                 "pcl2ls_max_height",
