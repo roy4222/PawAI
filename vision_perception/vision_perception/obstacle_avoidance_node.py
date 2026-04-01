@@ -16,6 +16,7 @@ from .obstacle_detector import ObstacleDetector
 
 QOS_EVENT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 QOS_SENSOR = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
+QOS_STATE = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
 
 
 class ObstacleAvoidanceNode(Node):
@@ -53,12 +54,16 @@ class ObstacleAvoidanceNode(Node):
         self._pub = self.create_publisher(
             String, "/event/obstacle_detected", QOS_EVENT,
         )
+        self._pub_heartbeat = self.create_publisher(
+            String, "/state/obstacle/d435_alive", QOS_STATE,
+        )
         self.create_subscription(Image, depth_topic, self._on_depth, QOS_SENSOR)
 
         self._publish_interval = 1.0 / self.get_parameter("publish_rate_hz").value
         self._debounce_needed = int(self.get_parameter("debounce_frames").value)
         self._danger_streak = 0
         self._last_publish_time = 0.0
+        self._last_heartbeat_time = 0.0
 
         self.get_logger().info(
             f"ObstacleAvoidanceNode started — threshold={self._detector.threshold_m}m, "
@@ -107,6 +112,16 @@ class ObstacleAvoidanceNode(Node):
                 f"OBSTACLE: min={result.distance_min:.2f}m "
                 f"ratio={result.obstacle_ratio:.0%}"
             )
+
+        # Heartbeat: signal that this node is alive and processing depth
+        now_hb = time.monotonic()
+        if (now_hb - self._last_heartbeat_time) >= 0.5:
+            hb = String()
+            hb.data = json.dumps({
+                "stamp": time.time(), "zone": result.zone,
+            })
+            self._pub_heartbeat.publish(hb)
+            self._last_heartbeat_time = now_hb
 
 
 def main(args=None):

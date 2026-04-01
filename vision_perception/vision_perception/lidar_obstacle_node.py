@@ -15,6 +15,7 @@ from .lidar_obstacle_detector import LidarObstacleDetector
 
 QOS_EVENT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
 QOS_SENSOR = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
+QOS_STATE = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
 
 
 class LidarObstacleNode(Node):
@@ -41,12 +42,16 @@ class LidarObstacleNode(Node):
         self._pub = self.create_publisher(
             String, "/event/obstacle_detected", QOS_EVENT,
         )
+        self._pub_heartbeat = self.create_publisher(
+            String, "/state/obstacle/lidar_alive", QOS_STATE,
+        )
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SENSOR)
 
         self._publish_interval = 1.0 / self.get_parameter("publish_rate_hz").value
         self._debounce_needed = int(self.get_parameter("debounce_frames").value)
         self._danger_streak = 0
         self._last_publish_time = 0.0
+        self._last_heartbeat_time = 0.0
 
         self.get_logger().info(
             f"LidarObstacleNode started — safety={self._detector.safety_distance_m}m, "
@@ -98,6 +103,16 @@ class LidarObstacleNode(Node):
                 f"dir={result.direction_deg:.0f}deg "
                 f"count={result.obstacle_count}"
             )
+
+        # Heartbeat: signal that this node is alive and processing scans
+        now_hb = time.monotonic()
+        if (now_hb - self._last_heartbeat_time) >= 0.5:
+            hb = String()
+            hb.data = json.dumps({
+                "stamp": time.time(), "zone": result.zone,
+            })
+            self._pub_heartbeat.publish(hb)
+            self._last_heartbeat_time = now_hb
 
 
 def main(args=None):

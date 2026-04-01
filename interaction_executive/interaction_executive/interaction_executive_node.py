@@ -57,6 +57,9 @@ class InteractionExecutiveNode(Node):
         self.create_subscription(
             String, "/event/obstacle_detected", self._on_obstacle, QOS_EVENT
         )
+        self.create_subscription(
+            String, "/state/obstacle/d435_alive", self._on_d435_heartbeat, QOS_EVENT
+        )
 
         # --- Timers ---
         self._timeout_timer = self.create_timer(1.0, self._check_timeout)
@@ -64,6 +67,7 @@ class InteractionExecutiveNode(Node):
         self._obstacle_clear_timer = self.create_timer(0.5, self._check_obstacle_clear)
 
         self._last_obstacle_time = 0.0
+        self._last_d435_heartbeat = 0.0  # Sensor guard for forward motion
         self._forward_cmd = None  # Active forward command {x, y, z} or None
         self._forward_timer = self.create_timer(0.1, self._send_forward)  # 10Hz cmd_vel
 
@@ -119,6 +123,9 @@ class InteractionExecutiveNode(Node):
         result = self._sm.handle_event(EventType.OBSTACLE)
         self._execute_result(result)
 
+    def _on_d435_heartbeat(self, msg: String):
+        self._last_d435_heartbeat = time.monotonic()
+
     def _check_timeout(self):
         result = self._sm.check_timeout()
         if result:
@@ -140,16 +147,37 @@ class InteractionExecutiveNode(Node):
         """10Hz timer — publish cmd_vel while forward command is active."""
         if self._forward_cmd is None:
             return
-        # Stop forwarding if state changed to obstacle_stop or idle
+
+        # Guard 1: state check
         state = self._sm.state
         if state in (ExecutiveState.OBSTACLE_STOP, ExecutiveState.IDLE):
             self.get_logger().info(
                 f"Forward stopped — state={state.value}"
             )
             self._forward_cmd = None
-            # Send zero velocity to ensure stop
             self._pub_cmd_vel.publish(Twist())
             return
+
+        # Guard 2: never received D435 heartbeat → refuse forward
+        if self._last_d435_heartbeat == 0.0:
+            self.get_logger().warn(
+                "D435 obstacle chain not detected — refusing forward"
+            )
+            self._forward_cmd = None
+            self._pub_cmd_vel.publish(Twist())
+            return
+
+        # Guard 3: D435 heartbeat stale > 1s → emergency stop forward
+        now = time.monotonic()
+        if (now - self._last_d435_heartbeat) > 1.0:
+            self.get_logger().warn(
+                "D435 obstacle chain stale >1s — stopping forward for safety"
+            )
+            self._forward_cmd = None
+            self._pub_cmd_vel.publish(Twist())
+            return
+
+        # All guards passed — safe to move
         twist = Twist()
         twist.linear.x = self._forward_cmd["x"]
         twist.linear.y = self._forward_cmd["y"]
