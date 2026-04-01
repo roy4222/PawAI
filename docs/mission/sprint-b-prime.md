@@ -245,11 +245,12 @@
 
 > 50 行 numpy → ROS2 node → Go2 反應式避障。
 
-**交付物 checklist：**
-- [ ] `obstacle_detector.py`（純 Python/numpy）+ 7 個 unit tests（TDD）
-- [ ] `obstacle_avoidance_node.py`（ROS2 node，訂閱 D435 depth）
-- [ ] executive v0 訂閱 `/event/obstacle_detected` → Go2 Damp
-- [ ] 室內 10 次防撞測試，記錄 stop latency
+**交付物 checklist（Day 6 提前完成 TDD + 桌測）：**
+- [x] `obstacle_detector.py`（純 Python/numpy）+ 7 個 unit tests（TDD）— Day 6 完成
+- [x] `obstacle_avoidance_node.py`（ROS2 node，訂閱 D435 depth）— Day 6 完成
+- [x] executive v0 訂閱 `/event/obstacle_detected` → Go2 Damp — Day 5 已實作，Day 6 桌測驗證
+- [x] Jetson 桌測：椅子 41cm → OBSTACLE → Damp → 移除恢復 idle ✅
+- [ ] Go2 上機 10 次防撞測試，記錄 stop latency
 - [ ] 更新 `start_full_demo_tmux.sh` 加入 obstacle window
 
 **降級策略（鎖定）：**

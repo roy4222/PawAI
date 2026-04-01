@@ -15,10 +15,10 @@
 | 姿勢 (vision_perception) | **桌測通過** | 3/30 | MediaPipe Pose CPU，standing 10 / sitting 8 / fallen 1，四模組同跑穩定 |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
-| CI | **16 test files, 214+ cases** | 3/25 | fast-gate + **blocking contract check** + git pre-commit hook |
+| CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 整合通過** | 4/1 | Gate B 6/6 PASS（face/speech/gesture/dedup/priority/crash 7s recovery） |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
-| 導航避障 | **研究完成** | 3/25 | **LiDAR 正式放棄**，D435 depth camera 下一步（未測），~10-12hr |
+| 導航避障 | **桌測通過** | 4/1 | D435 depth ROI 反應式避障，ObstacleDetector 7 tests + node + launch，Jetson 桌測偵測+恢復 PASS |
 
 ## 3/26 會議決策
 
@@ -90,10 +90,19 @@
 - **根因**：硬體 SNR — 全向麥克風收到的語音被風扇噪音蓋住
 - **Day 7+ 方向**：軟體降噪（noisereduce）或物理隔離麥克風
 
+### 導航避障 — D435 反應式避障實作 + 桌測通過
+- **ObstacleDetector**：純 Python/numpy，ROI depth 分析，三段式判定（clear/warning/danger）
+- **obstacle_avoidance_node**：ROS2 node，D435 depth 訂閱，幀級 debounce 3 幀，rate-limited 5Hz
+- **Launch file**：全參數暴露（ROI 四邊、threshold、debounce、depth_topic）
+- **TDD**：7 unit tests GREEN，全 CI 225 tests PASS
+- **Jetson 桌測**：椅子 41cm → OBSTACLE ratio 65% → executive Damp → 移除後 debounce 2s → idle 恢復 ✅
+- **待做**：Go2 上機 10x 防撞測試、`start_full_demo_tmux.sh` 加 obstacle window
+
 ### 基礎設施改善
-- **interaction_contract.md v2.2**：新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)、deprecate router+bridge
+- **interaction_contract.md v2.2**：新增 `/executive/status`(v0)、`/event/obstacle_detected`(實作完成)、deprecate router+bridge
 - **Jetson GPU tunnel systemd**：`gpu-tunnel.service`（SSH key + auto-reconnect）
 - **USB speaker by name**：`plughw:CD002AUDIO,0` 取代 `plughw:N,0`
+- **Adaptive VAD**：noise floor EMA + 動態 threshold（stt_intent_node，`energy_vad.adaptive` 參數）
 
 ---
 
