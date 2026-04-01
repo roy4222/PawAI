@@ -82,10 +82,36 @@ ros2 launch go2_robot_sdk robot.launch.py enable_lidar:=true decode_lidar:=true
 - D435 + LiDAR 雙層融合尚未實作（目前各自獨立）
 - 上機 10x 防撞測試待做
 
-## 下一步
+## 開發路線圖（2026-04-01 確定）
+
+### 優先做（Sprint 剩餘時間）
+
+| # | 功能 | 感測器 | 預估 | 說明 |
+|:-:|------|--------|:----:|------|
+| 1 | **LiDAR 360° reactive stop** | LiDAR /scan | 1-2hr | 訂閱 /scan，任意方向 < 閾值 → Damp。最實用的主安全功能 |
+| 2 | **D435 + LiDAR 雙層安全** | 兩者 | 1hr | LiDAR 全向粗偵測 + D435 前方精細偵測，兩者都發 obstacle event |
+| 3 | **受控前進 + 遇障自動停** | 兩者 | 0.5-1hr | 語音「過來」→ 前進 → 遇障自動 Damp。Demo 最有展示性 |
+| 4 | **三段速度控制** | D435 | 1hr | 遠（>1.2m）正常走、中（0.8-1.2m）減速、近（<0.8m）停 |
+
+### 可選（視時間）
+
+| # | 功能 | 說明 |
+|:-:|------|------|
+| 5 | 簡單後退脫困 | 前方停住 → 後方 LiDAR 安全 → 小退一步 |
+| 6 | 左右偏向避障 | D435 分左/中/右 ROI，哪邊空就小轉 |
+| 7 | 安全圍欄 | 展場邊界距離限制 |
+| 8 | 簡單跟隨 | D435 depth 保持前方人距離（複雜度高） |
+
+### 永久不做
+
+- Full SLAM 建圖
+- Nav2 全域導航
+- 自主到目標點
+- 完整繞障路徑規劃
+
+### 待做（基礎）
 
 - Go2 上機 10x 防撞測試（D435）
-- LiDAR 360° reactive node 實作（訂閱 /scan → obstacle event）
 - `start_full_demo_tmux.sh` 加 obstacle window
 - 降級策略測試（Damp-only / 停用）
 
