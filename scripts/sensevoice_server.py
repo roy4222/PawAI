@@ -51,6 +51,7 @@ def load_model(device: str = "cuda:0"):
             device=device,
             vad_model="fsmn-vad",
             trust_remote_code=True,
+            disable_update=True,
         )
     except Exception as e:
         logger.error(f"Failed to load SenseVoiceSmall on {device}: {e}")

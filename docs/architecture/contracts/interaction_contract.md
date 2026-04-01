@@ -1,11 +1,20 @@
-# ROS2 介面契約 v2.1
+# ROS2 介面契約 v2.2
 
 **文件定位**：PawAI 系統 ROS2 Topic/Action/Service 介面規格
 **適用範圍**：Layer 1-3 所有模組
-**版本**：v2.1
-**凍結日期**：2026-03-25
+**版本**：v2.2
+**凍結日期**：2026-04-01
 **對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
 
+> **v2.2 變更摘要**：
+> - 新增 `interaction_executive_node`（取代 `interaction_router` + `event_action_bridge`）
+> - 新增 `/executive/status`（v0 implemented，2 Hz state machine 狀態廣播）
+> - `/state/executive/brain` 標記為 **planned / not yet implemented**（executive 完整版會統一到此 topic）
+> - 新增 `/event/obstacle_detected`（**planned / Day 8**，obstacle_avoidance_node 發布）
+> - `interaction_router` → **deprecated**（v0 不再啟動，功能已吸收進 executive）
+> - `event_action_bridge` → **deprecated**（v0 不再啟動，功能已吸收進 executive）
+> - `/event/interaction/welcome`、`/event/interaction/gesture_command`、`/event/interaction/fall_alert` → **deprecated**（executive 內部處理）
+>
 > **v2.1 變更摘要**：
 > - 新增 interaction_router 三個高層事件 topic：`/event/interaction/welcome`、`/event/interaction/gesture_command`、`/event/interaction/fall_alert`
 > - `event_action_bridge` 改訂閱 interaction_router 輸出（不再訂閱 raw gesture/pose events）
@@ -44,21 +53,23 @@
 
 ## 2. Topic 總覽
 
-| Topic | 類型 | 頻率 | 說明 |
-|-------|------|------|------|
-| `/state/perception/face` | State | 10 Hz | 人臉追蹤狀態 |
-| `/state/interaction/speech` | State | 5 Hz | 語音管線狀態 |
-| `/state/executive/brain` | State | 2 Hz | 大腦決策狀態 |
-| `/event/face_identity` | Event | 觸發式 | 人臉身份事件 |
-| `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 |
-| `/event/gesture_detected` | Event | 觸發式 | 手勢事件 |
-| `/event/pose_detected` | Event | 觸發式 | 姿勢事件 |
-| `/event/interaction/welcome` | Event | 觸發式 | 迎賓事件（interaction_router） |
-| `/event/interaction/gesture_command` | Event | 觸發式 | 手勢指令事件（interaction_router） |
-| `/event/interaction/fall_alert` | Event | 觸發式 | 跌倒警報事件（interaction_router） |
-| `/state/tts_playing` | State | 變更式 | TTS 播放狀態（latched） |
-| `/tts` | Command | 觸發式 | TTS 輸入文字 |
-| `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 |
+| Topic | 類型 | 頻率 | 說明 | 狀態 |
+|-------|------|------|------|:----:|
+| `/state/perception/face` | State | 10 Hz | 人臉追蹤狀態 | active |
+| `/state/interaction/speech` | State | 5 Hz | 語音管線狀態 | active |
+| `/state/executive/brain` | State | 2 Hz | 大腦決策狀態（完整版） | **planned** |
+| `/executive/status` | State | 2 Hz | Executive v0 state machine 狀態 | **v0 implemented** |
+| `/event/face_identity` | Event | 觸發式 | 人臉身份事件 | active |
+| `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 | active |
+| `/event/gesture_detected` | Event | 觸發式 | 手勢事件 | active |
+| `/event/pose_detected` | Event | 觸發式 | 姿勢事件 | active |
+| `/event/obstacle_detected` | Event | 觸發式 | 障礙物偵測事件 | **planned** |
+| `/event/interaction/welcome` | Event | 觸發式 | ~~迎賓事件（interaction_router）~~ | **deprecated** |
+| `/event/interaction/gesture_command` | Event | 觸發式 | ~~手勢指令事件（interaction_router）~~ | **deprecated** |
+| `/event/interaction/fall_alert` | Event | 觸發式 | ~~跌倒警報事件（interaction_router）~~ | **deprecated** |
+| `/state/tts_playing` | State | 變更式 | TTS 播放狀態（latched） | active |
+| `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
+| `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 
 ---
 
@@ -170,13 +181,16 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 3.3 `/state/executive/brain`
+### 3.3 `/state/executive/brain` ⚠️ planned / not yet implemented
 
-**說明**：大腦決策狀態（持續發布）
-**發布者**：`interaction_executive_node`
+**說明**：大腦決策狀態（完整版，持續發布）
+**發布者**：`interaction_executive_node`（未來完整版）
 **發布頻率**：2 Hz
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
+
+> **v2.2 注記**：此 topic 為 v2.0 設計時規劃，executive 完整版會實作此 schema。
+> 目前 v0 使用 `/executive/status`（見 3.5 節）發布簡化版狀態。
 
 **Schema**：
 ```json
@@ -232,7 +246,39 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 **用途**：
 - `stt_intent_node` 用此做 **echo gate**：TTS 播放中 + 結束後 1.0s cooldown 期間靜音麥克風
-- `event_action_bridge` 用此做 **TTS guard**：非安全手勢在 TTS 播放中被跳過，安全手勢（stop）和 fall_alert 不受影響
+- `event_action_bridge` ~~用此做 **TTS guard**~~ (deprecated, v2.2)
+
+---
+
+### 3.5 `/executive/status` — v0 implemented
+
+**說明**：Executive v0 state machine 狀態廣播
+**發布者**：`interaction_executive_node`
+**發布頻率**：2 Hz
+**QoS**：BestEffort, TransientLocal, depth=1
+**Message Type**：`std_msgs/String` (JSON)
+
+> **v2.2 注記**：此為 v0 簡化版狀態 topic。Executive 完整版會改用 `/state/executive/brain`（見 3.3 節），屆時此 topic 將 deprecated。
+
+**Schema**：
+```json
+{
+  "state":           { "type": "string", "enum": ["idle", "greeting", "conversing", "executing", "emergency", "obstacle_stop"] },
+  "previous_state":  { "type": "string", "description": "上一個狀態" },
+  "state_duration":  { "type": "float",  "unit": "seconds", "description": "當前狀態持續時間" },
+  "timestamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" }
+}
+```
+
+**範例**：
+```json
+{
+  "state": "greeting",
+  "previous_state": "idle",
+  "state_duration": 2.3,
+  "timestamp": 1773561603.456
+}
+```
 
 ---
 
@@ -337,7 +383,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 **說明**：手勢辨識事件（觸發式）
 **發布者**：`vision_perception_node`
-**訂閱者**：`interaction_router`、`vision_status_display`
+**訂閱者**：`interaction_executive_node`、`vision_status_display`（~~`interaction_router`~~ deprecated）
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -373,7 +419,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 **說明**：姿勢辨識事件（觸發式）
 **發布者**：`vision_perception_node`
-**訂閱者**：`interaction_router`、`vision_status_display`
+**訂閱者**：`interaction_executive_node`、`vision_status_display`（~~`interaction_router`~~ deprecated）
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -390,11 +436,13 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.5 `/event/interaction/welcome`
+### 4.5 `/event/interaction/welcome` ⚠️ deprecated (v2.2)
+
+> **v2.2**：此 topic 由 `interaction_executive_node` 內部處理，不再外部發布。保留文件供參考。
 
 **說明**：迎賓事件（已知人臉首次穩定辨識時觸發）
-**發布者**：`interaction_router`
-**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**發布者**：~~`interaction_router`~~ (deprecated)
+**訂閱者**：~~`event_action_bridge`~~ (deprecated)
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -430,11 +478,13 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.6 `/event/interaction/gesture_command`
+### 4.6 `/event/interaction/gesture_command` ⚠️ deprecated (v2.2)
+
+> **v2.2**：此 topic 由 `interaction_executive_node` 內部處理，不再外部發布。保留文件供參考。
 
 **說明**：手勢指令事件（白名單手勢觸發，附帶人臉上下文）
-**發布者**：`interaction_router`
-**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**發布者**：~~`interaction_router`~~ (deprecated)
+**訂閱者**：~~`event_action_bridge`~~ (deprecated)
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -471,11 +521,13 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.7 `/event/interaction/fall_alert`
+### 4.7 `/event/interaction/fall_alert` ⚠️ deprecated (v2.2)
+
+> **v2.2**：此 topic 由 `interaction_executive_node` 內部處理，不再外部發布。保留文件供參考。
 
 **說明**：跌倒警報事件（fallen 姿勢持續超過閾值時觸發）
-**發布者**：`interaction_router`
-**訂閱者**：`event_action_bridge`（未來：`brain_node`）
+**發布者**：~~`interaction_router`~~ (deprecated)
+**訂閱者**：~~`event_action_bridge`~~ (deprecated)
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
@@ -507,6 +559,29 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "persist_sec": 2.15,
   "who": "Roy",
   "face_track_id": 1
+}
+```
+
+---
+
+### 4.8 `/event/obstacle_detected` ⚠️ planned (Day 8)
+
+> **v2.2**：此 topic 由 Day 8 的 `obstacle_avoidance_node` 實作，目前先佔位。
+
+**說明**：障礙物偵測事件（D435 depth 前方有近距離障礙物時觸發）
+**發布者**：`obstacle_avoidance_node`（planned）
+**訂閱者**：`interaction_executive_node`
+**QoS**：BestEffort, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**（暫定）：
+```json
+{
+  "stamp":           { "type": "float",  "unit": "seconds (Unix timestamp)" },
+  "event_type":      { "type": "string", "enum": ["obstacle_detected"] },
+  "distance_min":    { "type": "float",  "unit": "meters", "description": "最近障礙物距離" },
+  "obstacle_ratio":  { "type": "float",  "range": "[0.0, 1.0]", "description": "ROI 內障礙物佔比" },
+  "timestamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" }
 }
 ```
 
@@ -669,24 +744,26 @@ self.publisher.publish(msg)
 
 ### 8.1 State Topics
 
-| Topic | Reliability | Durability | Depth | 頻率 |
-|-------|-------------|------------|-------|------|
-| `/state/perception/face` | Reliable | Volatile | 10 | 10 Hz |
-| `/state/interaction/speech` | Reliable | Volatile | 10 | 5 Hz |
-| `/state/executive/brain` | Reliable | Volatile | 10 | 2 Hz |
-| `/state/tts_playing` | Reliable | TransientLocal | 1 | 變更式 |
+| Topic | Reliability | Durability | Depth | 頻率 | 狀態 |
+|-------|-------------|------------|-------|------|:----:|
+| `/state/perception/face` | Reliable | Volatile | 10 | 10 Hz | active |
+| `/state/interaction/speech` | Reliable | Volatile | 10 | 5 Hz | active |
+| `/state/executive/brain` | Reliable | Volatile | 10 | 2 Hz | planned |
+| `/executive/status` | BestEffort | TransientLocal | 1 | 2 Hz | v0 |
+| `/state/tts_playing` | Reliable | TransientLocal | 1 | 變更式 | active |
 
 ### 8.2 Event Topics
 
-| Topic | Reliability | Durability | Depth |
-|-------|-------------|------------|-------|
-| `/event/face_identity` | Reliable | Volatile | 10 |
-| `/event/speech_intent_recognized` | Reliable | Volatile | 10 |
-| `/event/gesture_detected` | Reliable | Volatile | 10 |
-| `/event/pose_detected` | Reliable | Volatile | 10 |
-| `/event/interaction/welcome` | Reliable | Volatile | 10 |
-| `/event/interaction/gesture_command` | Reliable | Volatile | 10 |
-| `/event/interaction/fall_alert` | Reliable | Volatile | 10 |
+| Topic | Reliability | Durability | Depth | 狀態 |
+|-------|-------------|------------|-------|:----:|
+| `/event/face_identity` | Reliable | Volatile | 10 | active |
+| `/event/speech_intent_recognized` | Reliable | Volatile | 10 | active |
+| `/event/gesture_detected` | Reliable | Volatile | 10 | active |
+| `/event/pose_detected` | Reliable | Volatile | 10 | active |
+| `/event/obstacle_detected` | BestEffort | Volatile | 10 | planned |
+| `/event/interaction/welcome` | Reliable | Volatile | 10 | deprecated |
+| `/event/interaction/gesture_command` | Reliable | Volatile | 10 | deprecated |
+| `/event/interaction/fall_alert` | Reliable | Volatile | 10 | deprecated |
 
 ### 8.3 Command Topics
 
@@ -738,6 +815,7 @@ if not required.issubset(payload.keys()):
 | v1.0 | 2026-03-09 | 介面凍結 | System Architect |
 | v2.0 | 2026-03-13 | 對齊 mission v2.0：face_identity 事件、speech/brain state schema、P1 topics | System Architect |
 | v2.1 | 2026-03-25 | interaction_router 三事件、/state/tts_playing、gesture enum 擴充、發布者名稱修正、LLM 型號修正 | System Architect |
+| v2.2 | 2026-04-01 | Executive v0 取代 router+bridge；新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)；deprecate interaction_router/event_action_bridge 及其 3 個 topic；`/state/executive/brain` 標記 planned | System Architect |
 
 ---
 
@@ -750,4 +828,4 @@ if not required.issubset(payload.keys()):
 ---
 
 *維護者：System Architect*
-*狀態：v2.1 凍結*
+*狀態：v2.2 凍結*
