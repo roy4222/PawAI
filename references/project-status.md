@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-01（Sprint Day 6 — Gate A/B PASS, Gate C FAIL 噪音阻塞）
+**最後更新**：2026-04-01（Sprint Day 7 — LiDAR+D435 雙層避障 + safety guard + Foxglove 3D）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -16,9 +16,9 @@
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 整合通過** | 4/1 | Gate B 6/6 PASS（face/speech/gesture/dedup/priority/crash 7s recovery） |
+| interaction_executive | **v0 + come_here + safety guard** | 4/1 | Gate B 6/6 + come_here forward + sensor guard 三道防線 |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
-| 導航避障 | **雙層避障桌測通過** | 4/1 | D435 depth 前方防撞 + LiDAR 360° safety（7Hz 靜/5Hz 走，No gap），SLAM/Nav2 永久關閉 |
+| 導航避障 | **雙層避障 Jetson 驗證通過** | 4/1 | D435+LiDAR 雙層 + come_here→obstacle→StopMove + safety guard + Foxglove 3D dashboard |
 
 ## 3/26 會議決策
 
@@ -48,6 +48,49 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 7 完成（4/1）
+
+### LiDAR 360° Reactive Stop — 13 tests + Jetson PASS
+- **LidarObstacleDetector**：純 Python，subscribe `/scan`，360° 任意方向 < 0.5m → danger
+- **lidar_obstacle_node**：ROS2 node，frame debounce 3 幀，rate limit 5Hz
+- **TDD**：13 unit tests GREEN
+- **上機發現 & 修正**：`pcl2ls_min_height` -0.2 → -0.7（Go2 LiDAR z=-0.575m 被全部過濾）
+- **LiDAR 覆蓋率分析**：22/120 有效點（18%），前方僅 4 點 — 硬體限制，LiDAR 為補充感知
+
+### D435 + LiDAR 雙層安全 — 雙 publisher Jetson PASS
+- 兩個 node 同時發布到 `/event/obstacle_detected`
+- Executive source-agnostic，收到任一來源就進 OBSTACLE_STOP
+- **修正**：OBSTACLE_STOP 改用 StopMove(1003)，Damp(1001) 會讓 Go2 癱軟摔倒
+
+### come_here 受控前進 + 遇障自動停 — Jetson PASS
+- 語音 `come_here` intent → cmd_vel x=0.3 持續前進 + TTS「好的，我過來了」
+- 10Hz forward timer，OBSTACLE_STOP 或 IDLE 時自動停
+- 2 新 tests（come_here_starts_forward, come_here_interrupted_by_obstacle）
+
+### Safety Guard — 三道防線防撞牆
+- **根因**：Go2 撞牆兩次 — D435 obstacle node 沒開 + 無感測器看門狗
+- **obstacle_avoidance_node**：新增 `/state/obstacle/d435_alive` heartbeat 2Hz
+- **lidar_obstacle_node**：新增 `/state/obstacle/lidar_alive` heartbeat 2Hz
+- **Executive sensor guard**（_send_forward 每 tick 檢查）：
+  1. state check：OBSTACLE_STOP / IDLE → 停
+  2. never-seen guard：從未收到 D435 heartbeat → 拒絕前進
+  3. stale guard：heartbeat > 1s → 緊急停止
+- **Jetson 驗證**：不開 D435 → come_here 被拒（"refusing forward"）
+
+### Foxglove 3D Dashboard
+- **新增** `foxglove/go2-3d-dashboard.json`：
+  - 3D panel：URDF 模型 + LiDAR PointCloud2 + LaserScan + D435 depth
+  - Image panels：RGB + depth
+  - Raw Messages：obstacle event + executive status + heartbeat
+- **啟動腳本**：`start_full_demo_tmux.sh` 新增 d435obs + lidarobs windows + enable_lidar
+
+### 數據
+- **Commits**：6（b0812f5, 623d821, ac292ab, 8fda23f + docs）
+- **Tests**：88 vision + 31 executive = 119 total, all GREEN
+- **新增程式碼**：~500 行（4 新檔 + 4 修改檔）
 
 ---
 
@@ -290,8 +333,8 @@
 | **4** | **3/31** | **硬體穩定性 GATE C** | **3x 重開機 + 行走 + 30min 56°C + USB 穩定 ✅** |
 | **5** | **3/31** | **Executive v0 State Machine** | **27 tests + ROS2 node + Jetson 部署 ✅** |
 | **6** | **4/1** | **ASR 修復 + Executive 整合 + 上機驗收** | **Gate A 4/5 ✅ Gate B 6/6 ✅ Gate C FAIL（噪音）** |
-| 7 | 4/3 | 導航避障：D435 Depth | 7 tests + ROS2 node + 10x 防撞 |
-| 8 | 4/4 | 導航避障：Hardening | 30x 防撞 + Pass/Warning/Fail 判定 |
+| **7** | **4/1** | **導航避障：LiDAR+D435+Safety+Foxglove** | **20 tests + 雙層避障 + safety guard + 3D dashboard ✅** |
+| 8 | 4/4 | 導航避障：Hardening | 10x 防撞 + 三段速度 + Foxglove 微調 |
 | 9 | 4/5 | 物體辨識 Hard Gate | Go/No-Go → Phase 0（4-6h timebox）|
 | 10 | 4/6 | Freeze + Hardening | Demo A 30 輪 + Demo B 5 輪 + crash drill |
 | 11 | 4/7 | Handoff Day | docs 重組 + Starlight scaffold + 分工文件 |

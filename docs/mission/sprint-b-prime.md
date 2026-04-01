@@ -241,17 +241,39 @@
 
 ---
 
-### Day 8（4/3 四）— 導航避障：D435 Depth
+### Day 7（4/1 二）— 導航避障：LiDAR + D435 雙層 + Safety + Foxglove ✅
 
-> 50 行 numpy → ROS2 node → Go2 反應式避障。
+> Day 6 提前完成 D435 TDD + 桌測。Day 7 補上 LiDAR + 雙層 + come_here + safety guard + 3D 可視化。
 
-**交付物 checklist（Day 6 提前完成 TDD + 桌測）：**
-- [x] `obstacle_detector.py`（純 Python/numpy）+ 7 個 unit tests（TDD）— Day 6 完成
-- [x] `obstacle_avoidance_node.py`（ROS2 node，訂閱 D435 depth）— Day 6 完成
-- [x] executive v0 訂閱 `/event/obstacle_detected` → Go2 Damp — Day 5 已實作，Day 6 桌測驗證
-- [x] Jetson 桌測：椅子 41cm → OBSTACLE → Damp → 移除恢復 idle ✅
-- [ ] Go2 上機 10 次防撞測試，記錄 stop latency
-- [ ] 更新 `start_full_demo_tmux.sh` 加入 obstacle window
+**交付物 checklist：**
+- [x] `obstacle_detector.py` + 7 tests — Day 6
+- [x] `obstacle_avoidance_node.py` + Jetson 桌測 — Day 6
+- [x] `lidar_obstacle_detector.py` + 13 tests — Day 7
+- [x] `lidar_obstacle_node.py` + Jetson 驗證 — Day 7
+- [x] D435 + LiDAR 雙 publisher → executive source-agnostic — Day 7
+- [x] come_here → cmd_vel 0.3 → obstacle → StopMove(1003) — Day 7
+- [x] Safety guard: heartbeat 看門狗 + 三道防線 — Day 7
+- [x] Foxglove 3D dashboard (URDF + LiDAR + D435 depth) — Day 7
+- [x] `start_full_demo_tmux.sh` + d435obs + lidarobs windows + enable_lidar — Day 7
+- [x] `pcl2ls_min_height` -0.2 → -0.7 修正 — Day 7
+- [x] OBSTACLE_STOP: Damp(1001) → StopMove(1003) 修正 — Day 7
+
+**上機發現：**
+- LiDAR 覆蓋率僅 18%（22/120），前方 4 點 — 硬體限制
+- Go2 撞牆兩次 → 加 safety guard + heartbeat 修復
+- Damp 會讓 Go2 癱軟 → 改用 StopMove
+
+---
+
+### Day 8（4/3 四）— 導航避障 Hardening（原 Day 8+9 合併）
+
+> Day 7 超進度，原 Day 8 D435 已完成。Hardening 前移。
+
+**待做 checklist：**
+- [ ] Go2 上機 10 次防撞測試（D435 + LiDAR 雙層）
+- [ ] 三段速度控制（遠正常 / 中減速 / 近停）
+- [ ] Foxglove 3D dashboard 實際連線微調
+- [ ] 殺 obstacle node → sensor guard 1s 停（上機驗證）
 
 **降級策略（鎖定）：**
 
