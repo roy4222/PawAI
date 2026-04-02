@@ -202,11 +202,18 @@ tmux send-keys -t "$SESSION:llm" \
     -p subscribe_face:=false" Enter
 sleep 3
 
-# --- Window 8: Foxglove Bridge ---
-echo "[9/9] Starting Foxglove bridge..."
+# --- Static TF: base_link → camera_link (D435 mounted on Go2) ---
+echo "[9/10] Publishing base_link → camera_link static TF..."
+tmux new-window -t "$SESSION" -n camtf
+tmux send-keys -t "$SESSION:camtf" \
+  "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher 0.15 0 0.1 0 0 0 base_link camera_link" Enter
+sleep 1
+
+# --- Window 9: Foxglove Bridge ---
+echo "[10/10] Starting Foxglove bridge..."
 tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
-  "$ROS_SETUP && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765" Enter
+  "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p best_effort_qos_topic_whitelist:='[\"/(point_cloud2|scan|camera/.*/image_raw)\"]'" Enter
 
 # === Options ===
 tmux set-option -t "$SESSION" remain-on-exit on >/dev/null
@@ -225,7 +232,8 @@ echo "  executive — Interaction Executive v0 (face/gesture/pose/obstacle → a
 echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
 echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
-echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765)"
+echo "  camtf     — Static TF: base_link → camera_link (D435)"
+echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765, best_effort QoS)"
 echo ""
 echo "To attach: tmux attach -t $SESSION"
 echo "To kill:   tmux kill-session -t $SESSION"

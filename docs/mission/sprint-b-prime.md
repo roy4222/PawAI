@@ -265,14 +265,22 @@
 
 ---
 
-### Day 8（4/3 四）— 導航避障 Hardening（原 Day 8+9 合併）
+### Day 8（4/2 三）— Foxglove 3D 診斷修復 + 部署同步
 
-> Day 7 超進度，原 Day 8 D435 已完成。Hardening 前移。
+> Day 7 程式碼未同步到 Jetson。Foxglove 3D dashboard 從未在真機上驗證。
+
+**已完成：**
+- [x] WSL → Jetson rsync + colcon build（obstacle nodes 部署）
+- [x] Foxglove CLI 診斷（fox_doctor.py — 6 項全 PASS）
+- [x] URDF parameter 修正：`/robot_description` → `/go2_robot_state_publisher.robot_description`
+- [x] Static TF 修正：新增 `camtf` window（base_link → camera_link）
+- [x] foxglove_bridge QoS 修正：`best_effort_qos_topic_whitelist` 排除 `/tf_static`
+- [x] D435 depth 在 Foxglove 3D panel 顯示正常
 
 **待做 checklist：**
+- [ ] LiDAR 點雲/LaserScan 在 Foxglove 顯示（有效點少，需調整視角或 pointSize）
 - [ ] Go2 上機 10 次防撞測試（D435 + LiDAR 雙層）
 - [ ] 三段速度控制（遠正常 / 中減速 / 近停）
-- [ ] Foxglove 3D dashboard 實際連線微調
 - [ ] 殺 obstacle node → sensor guard 1s 停（上機驗證）
 
 **降級策略（鎖定）：**

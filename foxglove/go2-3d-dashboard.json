@@ -73,7 +73,7 @@
           "sourceType": "param",
           "url": "",
           "filePath": "",
-          "parameter": "/robot_description",
+          "parameter": "/go2_robot_state_publisher.robot_description",
           "topic": "",
           "framePrefix": "",
           "displayMode": "auto",

@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-01（Sprint Day 7 — LiDAR+D435 雙層避障 + safety guard + Foxglove 3D）
+**最後更新**：2026-04-02（Sprint Day 8 — Foxglove 3D 診斷修復 + 部署同步）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -48,6 +48,35 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 8 進行中（4/2）
+
+### Foxglove 3D Dashboard 診斷 + 修復
+
+**問題**：Day 7 完成的 Foxglove 3D dashboard 程式碼從未在真機上驗證。上機後 3D panel 只顯示 TF frame 名稱，沒有 URDF 模型、LiDAR 點雲或 D435 depth。
+
+**根因診斷（3 個）**：
+1. **URDF parameter 名稱錯誤**：foxglove_bridge 在 ROS2 用 `節點名.參數名` 格式暴露參數，layout 寫 `/robot_description` 應為 `/go2_robot_state_publisher.robot_description`
+2. **TF tree 斷裂**：Go2 tree（odom→base_link）和 D435 tree（camera_link→camera_color_optical_frame）是兩棵獨立的樹，缺少 `base_link → camera_link` static transform
+3. **foxglove_bridge QoS 衝突**：`best_effort_qos_topic_whitelist:='[".*"]'` 把 `/tf_static`（RELIABLE+TRANSIENT_LOCAL）也強制成 BEST_EFFORT → static TF 收不到。改為只匹配 sensor topics：`["/(point_cloud2|scan|camera/.*/image_raw)"]`
+
+**修復**：
+- `foxglove/go2-3d-dashboard.json`：URDF parameter 名稱修正
+- `scripts/start_full_demo_tmux.sh`：新增 `camtf` window（static TF publisher base_link→camera_link）+ foxglove bridge 改用 `ros2 run` 帶 QoS whitelist
+- Day 7 程式碼 rsync 到 Jetson + colcon build（obstacle nodes 部署）
+
+**當前狀態**：
+- URDF 模型：✅ 顯示正常
+- D435 depth：✅ 顯示正常
+- LiDAR 點雲/LaserScan：待驗證（Go2 LiDAR 覆蓋率 18%，有效點少，可能需要調整 pointSize 或視角）
+- RawMessages (obstacle/status/heartbeat)：待驗證
+- 四核心上機驗收（18 項）：未開始
+
+**工具產出**：
+- `/tmp/fox_doctor.py` — Foxglove CLI 診斷腳本（6 項檢查 + topic rate）
+- foxglove_bridge WebSocket 研究：`best_effort_qos_topic_whitelist` 會影響 `/tf_static` 的 TRANSIENT_LOCAL 訂閱
 
 ---
 
