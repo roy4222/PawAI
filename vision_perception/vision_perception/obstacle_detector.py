@@ -38,6 +38,11 @@ class ObstacleDetector:
         self.threshold_m = threshold_m
         self.warning_m = warning_m
         self.max_range_m = max_range_m
+        # H4 fix: validate ROI ratios to prevent silent empty slice
+        if roi_top_ratio >= roi_bottom_ratio:
+            raise ValueError(f"roi_top_ratio ({roi_top_ratio}) must be < roi_bottom_ratio ({roi_bottom_ratio})")
+        if roi_left_ratio >= roi_right_ratio:
+            raise ValueError(f"roi_left_ratio ({roi_left_ratio}) must be < roi_right_ratio ({roi_right_ratio})")
         self.roi_top = roi_top_ratio
         self.roi_bottom = roi_bottom_ratio
         self.roi_left = roi_left_ratio

@@ -12,7 +12,7 @@ from ...domain.constants import RTC_TOPIC
 
 logger = logging.getLogger(__name__)
 
-MAX_LINEAR_X = 0.5
+MAX_LINEAR_X = 0.5  # C6: authoritative limit; move_service.MAX_LINEAR (0.3) is legacy
 MAX_LINEAR_Y = 0.3
 MAX_ANGULAR_Z = 0.5
 DEADBAND = 0.01

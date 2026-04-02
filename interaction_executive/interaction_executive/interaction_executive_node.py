@@ -5,6 +5,7 @@ publishes actions and status. Day 5 scope: listen-only alongside
 existing bridges. Day 6 will migrate bridges to this node.
 """
 import json
+import threading
 import time
 
 import rclpy
@@ -66,6 +67,7 @@ class InteractionExecutiveNode(Node):
         self._status_timer = self.create_timer(0.5, self._publish_status)
         self._obstacle_clear_timer = self.create_timer(0.5, self._check_obstacle_clear)
 
+        self._lock = threading.Lock()  # C1 fix: protect shared state
         self._last_obstacle_time = 0.0
         self._last_d435_heartbeat = 0.0  # Sensor guard for forward motion
         self._forward_cmd = None  # Active forward command {x, y, z} or None
@@ -119,12 +121,14 @@ class InteractionExecutiveNode(Node):
             self._execute_result(result)
 
     def _on_obstacle(self, msg: String):
-        self._last_obstacle_time = time.monotonic()
+        with self._lock:
+            self._last_obstacle_time = time.monotonic()
         result = self._sm.handle_event(EventType.OBSTACLE)
         self._execute_result(result)
 
     def _on_d435_heartbeat(self, msg: String):
-        self._last_d435_heartbeat = time.monotonic()
+        with self._lock:
+            self._last_d435_heartbeat = time.monotonic()
 
     def _check_timeout(self):
         result = self._sm.check_timeout()
@@ -133,7 +137,9 @@ class InteractionExecutiveNode(Node):
 
     def _check_obstacle_clear(self):
         if self._sm.state.value == "obstacle_stop":
-            if (time.monotonic() - self._last_obstacle_time) > 2.0:
+            with self._lock:
+                elapsed = time.monotonic() - self._last_obstacle_time
+            if elapsed > 2.0:
                 result = self._sm.try_obstacle_clear()
                 if result:
                     self._execute_result(result)
@@ -142,44 +148,45 @@ class InteractionExecutiveNode(Node):
 
     def _send_forward(self):
         """10Hz timer — publish cmd_vel while forward command is active."""
-        if self._forward_cmd is None:
-            return
+        with self._lock:
+            if self._forward_cmd is None:
+                return
 
-        # Guard 1: state check
-        state = self._sm.state
-        if state in (ExecutiveState.OBSTACLE_STOP, ExecutiveState.IDLE):
-            self.get_logger().info(
-                f"Forward stopped — state={state.value}"
-            )
-            self._forward_cmd = None
-            self._pub_cmd_vel.publish(Twist())
-            return
+            # Guard 1: state check
+            state = self._sm.state
+            if state in (ExecutiveState.OBSTACLE_STOP, ExecutiveState.IDLE):
+                self.get_logger().info(
+                    f"Forward stopped — state={state.value}"
+                )
+                self._forward_cmd = None
+                self._pub_cmd_vel.publish(Twist())
+                return
 
-        # Guard 2: never received D435 heartbeat → refuse forward
-        if self._last_d435_heartbeat == 0.0:
-            self.get_logger().warn(
-                "D435 obstacle chain not detected — refusing forward"
-            )
-            self._forward_cmd = None
-            self._pub_cmd_vel.publish(Twist())
-            return
+            # Guard 2: never received D435 heartbeat → refuse forward
+            if self._last_d435_heartbeat == 0.0:
+                self.get_logger().warn(
+                    "D435 obstacle chain not detected — refusing forward"
+                )
+                self._forward_cmd = None
+                self._pub_cmd_vel.publish(Twist())
+                return
 
-        # Guard 3: D435 heartbeat stale > 1s → emergency stop forward
-        now = time.monotonic()
-        if (now - self._last_d435_heartbeat) > 1.0:
-            self.get_logger().warn(
-                "D435 obstacle chain stale >1s — stopping forward for safety"
-            )
-            self._forward_cmd = None
-            self._pub_cmd_vel.publish(Twist())
-            return
+            # Guard 3: D435 heartbeat stale > 1s → emergency stop forward
+            now = time.monotonic()
+            if (now - self._last_d435_heartbeat) > 1.0:
+                self.get_logger().warn(
+                    "D435 obstacle chain stale >1s — stopping forward for safety"
+                )
+                self._forward_cmd = None
+                self._pub_cmd_vel.publish(Twist())
+                return
 
-        # All guards passed — safe to move
-        twist = Twist()
-        twist.linear.x = self._forward_cmd["x"]
-        twist.linear.y = self._forward_cmd["y"]
-        twist.angular.z = self._forward_cmd["z"]
-        self._pub_cmd_vel.publish(twist)
+            # All guards passed — safe to move
+            twist = Twist()
+            twist.linear.x = self._forward_cmd["x"]
+            twist.linear.y = self._forward_cmd["y"]
+            twist.angular.z = self._forward_cmd["z"]
+            self._pub_cmd_vel.publish(twist)
 
     def _execute_result(self, result: EventResult):
         if result.tts:
@@ -191,19 +198,22 @@ class InteractionExecutiveNode(Node):
         if result.action:
             if result.action.get("cmd_vel"):
                 # Continuous movement command
-                self._forward_cmd = {
-                    "x": result.action.get("x", 0.0),
-                    "y": result.action.get("y", 0.0),
-                    "z": result.action.get("z", 0.0),
-                }
+                with self._lock:
+                    self._forward_cmd = {
+                        "x": result.action.get("x", 0.0),
+                        "y": result.action.get("y", 0.0),
+                        "z": result.action.get("z", 0.0),
+                    }
                 self.get_logger().info(
                     f"Forward: x={self._forward_cmd['x']} y={self._forward_cmd['y']}"
                 )
             else:
                 # One-shot WebRtcReq action
                 # Stop any forward movement when a one-shot action fires
-                if self._forward_cmd is not None:
+                with self._lock:
+                    was_forward = self._forward_cmd is not None
                     self._forward_cmd = None
+                if was_forward:
                     self._pub_cmd_vel.publish(Twist())
                 req = WebRtcReq()
                 req.id = 0

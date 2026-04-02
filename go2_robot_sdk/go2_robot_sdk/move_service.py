@@ -32,7 +32,7 @@ class MoveService(Node):
         super().__init__('move_service')
 
         # Safety limits
-        self.MAX_LINEAR = 0.3   # m/s
+        self.MAX_LINEAR = 0.5   # m/s  (C6: aligned with robot_control_service)
         self.MAX_ANGULAR = 0.5  # rad/s
         self.MAX_DURATION = 10.0  # seconds
         self.PUBLISH_RATE = 10  # Hz

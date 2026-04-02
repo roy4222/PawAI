@@ -90,6 +90,10 @@ class ExecutiveStateMachine:
         if key in self._dedup and (now - self._dedup[key]) < DEDUP_WINDOW:
             return True
         self._dedup[key] = now
+        # C2 fix: purge expired entries to prevent unbounded growth
+        expired = [k for k, t in self._dedup.items() if (now - t) > DEDUP_WINDOW * 2]
+        for k in expired:
+            del self._dedup[k]
         return False
 
     def check_timeout(self) -> Optional[EventResult]:

@@ -97,10 +97,12 @@ class ObstacleAvoidanceNode(Node):
             self._danger_streak >= self._debounce_needed
             and (now - self._last_publish_time) >= self._publish_interval
         ):
+            # C3 fix: avoid float("inf") in JSON (non-standard)
+            dist_min = round(result.distance_min, 3) if result.distance_min != float("inf") else None
             event = {
                 "stamp": time.time(),
                 "event_type": "obstacle_detected",
-                "distance_min": round(result.distance_min, 3),
+                "distance_min": dist_min,
                 "obstacle_ratio": round(result.obstacle_ratio, 3),
                 "zone": result.zone,
             }
