@@ -51,7 +51,7 @@
 
 ---
 
-## Sprint Day 8 進行中（4/2）
+## Sprint Day 6 完成（4/2）
 
 ### Foxglove 3D Dashboard 診斷 + 修復
 
@@ -67,12 +67,43 @@
 - `scripts/start_full_demo_tmux.sh`：新增 `camtf` window（static TF publisher base_link→camera_link）+ foxglove bridge 改用 `ros2 run` 帶 QoS whitelist
 - Day 7 程式碼 rsync 到 Jetson + colcon build（obstacle nodes 部署）
 
-**當前狀態**：
-- URDF 模型：✅ 顯示正常
-- D435 depth：✅ 顯示正常
-- LiDAR 點雲/LaserScan：待驗證（Go2 LiDAR 覆蓋率 18%，有效點少，可能需要調整 pointSize 或視角）
-- RawMessages (obstacle/status/heartbeat)：待驗證
-- 四核心上機驗收（18 項）：未開始
+**額外修復（layout visibility tuning）**：
+- Display frame 必須手動設成 `base_link`（import layout 不會自動套用）
+- pointSize 4→10、decayTime 0→3.0（LiDAR ~2-4Hz 太慢，舊值會讓點瞬間消失）
+- colorMode 改 flat（排障期用高對比色，不依賴 intensity）
+
+**最終狀態**：
+- URDF 模型：✅
+- D435 depth：✅
+- LiDAR /scan：✅（稀疏但真實，~25/120 有效點，硬體限制）
+- LiDAR /point_cloud2：✅（117K 點，稀疏分佈）
+- RawMessages (obstacle/status/heartbeat)：✅（executive idle + d435_alive heartbeat 確認）
+
+**Foxglove 3D Dashboard 結論**：可視化工具達到 Day 8 Hardening 的 debug 需求。LiDAR 覆蓋率 ~21% 是硬體事實，不是軟體問題。
+
+### Sensor Guard 驗證 — PASS
+- 殺 d435obs → 發 come_here → "D435 obstacle chain stale >1s — stopping forward for safety"
+- Go2 幾乎沒動（一瞬間微動即停）
+- TTS「好的，我過來了」正常播放
+
+### 10x 防撞測試 — 1/10 PASS（Go2 沒電中斷）
+- Round 1：Go2 前進 → D435 偵測障礙物 → OBSTACLE_STOP → 自動停 ✅
+- Round 2+：姿勢辨識 fallen 誤判反覆觸發 EMERGENCY，擋住 come_here
+- WebRTC DataChannel 在 Jetson 休眠後斷連 → 重啟 driver 修復
+- Go2 電量耗盡，測試中斷
+
+### 排查修復
+- **WebRTC 斷連**：Jetson 休眠導致 WebRTC DataChannel 靜默斷開，driver 不知道。重啟 driver 後 AUDIO STATE 回傳恢復，cmd_vel 恢復正常
+- **USB 喇叭 device drift**：plughw:3,0 → plughw:CD002AUDIO,0（ALSA by-name 避免漂移）
+- **LiDAR 可視化定性**：D435 是導航避障主力，LiDAR 是 360° safety net，不追 SLAM
+
+### 已知問題（明天必修）
+- **fallen 誤判**：站在 D435 前方被 pose 誤判為 fallen → EMERGENCY 擋住所有指令
+- **WebRTC 斷連偵測**：driver 不知道 DataChannel 已斷，需要 heartbeat 機制
+
+### Commits
+- `da356ef` fix(foxglove): URDF param name + static TF + QoS whitelist
+- `0759aa7` fix(foxglove): layout visibility tuning for sparse LiDAR
 
 **工具產出**：
 - `/tmp/fox_doctor.py` — Foxglove CLI 診斷腳本（6 項檢查 + topic rate）

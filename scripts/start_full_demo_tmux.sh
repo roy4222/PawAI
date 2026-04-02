@@ -49,7 +49,7 @@ EDGE_TTS_VOICE="${EDGE_TTS_VOICE:-zh-CN-XiaoxiaoNeural}"
 PIPER_MODEL_PATH="/home/jetson/models/piper/zh_CN-huayan-medium.onnx"
 PIPER_CONFIG_PATH="/home/jetson/models/piper/zh_CN-huayan-medium.onnx.json"
 LOCAL_PLAYBACK="${LOCAL_PLAYBACK:-true}"
-LOCAL_OUTPUT_DEVICE="${LOCAL_OUTPUT_DEVICE:-plughw:3,0}"
+LOCAL_OUTPUT_DEVICE="${LOCAL_OUTPUT_DEVICE:-plughw:CD002AUDIO,0}"
 
 echo "============================================================"
 echo "  PawAI 四功能 Demo"
