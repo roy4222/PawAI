@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 雙層避障 Jetson 驗證通過 + safety guard 上機通過 |
+| 狀態 | 雙層避障 + safety guard 上機通過 + Foxglove 3D 可視化完成 |
 | 版本/決策 | D435 ROI + LiDAR reactive safety（SLAM/Nav2 永久關閉） |
-| 完成度 | 80% |
-| 最後驗證 | 2026-04-01 |
+| 完成度 | 85% |
+| 最後驗證 | 2026-04-02 |
 | 入口檔案 | D435: `obstacle_avoidance_node.py` / LiDAR: `lidar_obstacle_node.py` |
 | 測試 | D435: 7 tests / LiDAR: 13 tests（共 20 tests） |
 
@@ -94,12 +94,31 @@ bash scripts/start_full_demo_tmux.sh
 
 ## 已知問題
 
+### 硬體
 - Go2 行走時 Jetson 曾斷電一次（供電波動 / USB 拉扯）
 - LiDAR 行走中頻率降 ~35%（7.3→4-6Hz）
 - **LiDAR 覆蓋率僅 18%**（22/120 有效點）— Go2 voxel 編碼硬體限制，不可修
 - LiDAR 定位為「補充感知」，D435 才是前方防撞主力
+
+### 避障邏輯
 - `pcl2ls_min_height` 必須設為 -0.7（Go2 LiDAR z=-0.575m）
 - **OBSTACLE_STOP 改用 StopMove(1003)**，不用 Damp(1001)（Damp 會讓 Go2 癱軟摔倒）
+- **fallen 誤判會擋住 come_here**：pose 把站在鏡頭前的人判為 fallen → EMERGENCY（30s timeout）→ 期間所有 speech intent 被忽略
+
+### WebRTC
+- **Jetson 休眠後 WebRTC DataChannel 靜默斷連**：driver 不知道 DC 已斷，持續發 "WebRTC request sent" 但 Go2 不動。修復：重啟 go2 driver window
+- **Go2 重開機後 ICE 連線可能 FROZEN→FAILED**：通常第二個 candidate 成功，但需等 10s+
+
+### Foxglove 3D 可視化（2026-04-02 踩坑記錄）
+- **URDF parameter 名稱**：foxglove_bridge ROS2 用 `節點名.參數名` 格式，必須寫 `/go2_robot_state_publisher.robot_description`，不是 `/robot_description`
+- **TF tree 斷裂**：Go2 tree（odom→base_link）和 D435 tree（camera_link→...）是兩棵獨立樹，需要 `static_transform_publisher base_link camera_link`（啟動腳本 camtf window）
+- **QoS whitelist 不能用 `[".*"]`**：會把 `/tf_static`（RELIABLE+TRANSIENT_LOCAL）也強制成 BEST_EFFORT → static TF 收不到。正確值：`["/(point_cloud2|scan|camera/.*/image_raw)"]`
+- **LiDAR decayTime**：預設 0（只顯示瞬間）對 2-4Hz LiDAR 太快，必須 ≥3.0
+- **Display frame 不會自動套用**：import layout 後必須手動在 3D panel 設 Fixed Frame = `base_link`
+- **pointSize 太小看不到**：LiDAR 稀疏點需要 pointSize ≥6，colorMode flat 比 turbo 更適合 debug
+
+### USB 喇叭
+- **ALSA device drift**：USB 喇叭 card number 重開機後會飄，用 `plughw:CD002AUDIO,0`（by-name）取代 `plughw:3,0`（by-number）
 
 ## 開發路線圖（2026-04-01 確定）
 
@@ -137,9 +156,10 @@ bash scripts/start_full_demo_tmux.sh
 
 ### 待做（基礎）
 
-- Go2 上機 10x 防撞測試（D435 + LiDAR 雙層）
+- Go2 上機 10x 防撞測試（**1/10 PASS**，剩 9 輪，Go2 沒電中斷）
 - 降級策略測試（停用 LiDAR / 停用 D435 / 全停用）
-- Foxglove 3D dashboard 實際連線微調
+- ~~Foxglove 3D dashboard 實際連線微調~~ ✅（2026-04-02 完成）
+- Sensor guard 上機驗證 ✅（2026-04-02 PASS）
 
 ## 子資料夾
 
