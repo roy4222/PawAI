@@ -3,7 +3,7 @@
     "3D!go2main": {
       "cameraState": {
         "perspective": true,
-        "distance": 5.0,
+        "distance": 3.0,
         "phi": 60,
         "thetaOffset": 45,
         "target": [0, 0, 0],
@@ -30,20 +30,19 @@
       "topics": {
         "/point_cloud2": {
           "visible": true,
-          "pointSize": 4,
+          "pointSize": 10,
           "pointShape": "circle",
-          "colorMode": "colormap",
-          "colorField": "intensity",
-          "colorMap": "turbo",
-          "decayTime": 0.5
+          "colorMode": "flat",
+          "flatColor": "#ff6b00",
+          "decayTime": 3.0
         },
         "/scan": {
           "visible": true,
-          "pointSize": 3,
+          "pointSize": 6,
           "pointShape": "circle",
           "colorMode": "flat",
           "flatColor": "#00ff88",
-          "decayTime": 0
+          "decayTime": 3.0
         },
         "/camera/camera/aligned_depth_to_color/image_raw": {
           "visible": true
