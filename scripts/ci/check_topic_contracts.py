@@ -94,6 +94,7 @@ INTERNAL_TOPICS = {
     # Vision perception debug topics
     "/vision_perception/debug_image",
     "/vision_perception/status_image",
+    "/obstacle/debug_image",
     # Search logic
     "/patrol_command",
     "/patrol_status",

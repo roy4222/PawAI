@@ -4,7 +4,7 @@
 
 ## 不能做
 
-- 不要改 fallen 判定閾值（bbox_ratio > 1.0 AND trunk_angle > 60°）除非有完整測試
+- 不要改 fallen 判定閾值（bbox_ratio > 1.0 AND trunk_angle > 60° AND vertical_ratio < 0.4）除非有完整測試
 - 不要預設用 RTMPose（GPU 91-99%，主線是 MediaPipe CPU 0%）
 - 不要動 COCO 17-point keypoint 索引
 

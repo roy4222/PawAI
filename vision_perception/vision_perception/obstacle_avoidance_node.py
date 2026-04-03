@@ -24,15 +24,15 @@ class ObstacleAvoidanceNode(Node):
         super().__init__("obstacle_avoidance_node")
 
         # Parameters
-        self.declare_parameter("threshold_m", 0.8)
-        self.declare_parameter("warning_m", 1.2)
+        self.declare_parameter("threshold_m", 2.0)
+        self.declare_parameter("warning_m", 2.5)
         self.declare_parameter("max_range_m", 3.0)
         self.declare_parameter("roi_top_ratio", 0.4)
         self.declare_parameter("roi_bottom_ratio", 0.8)
         self.declare_parameter("roi_left_ratio", 0.2)
         self.declare_parameter("roi_right_ratio", 0.8)
         self.declare_parameter("obstacle_ratio_trigger", 0.15)
-        self.declare_parameter("publish_rate_hz", 5.0)
+        self.declare_parameter("publish_rate_hz", 15.0)
         self.declare_parameter("debounce_frames", 3)
         self.declare_parameter(
             "depth_topic",

@@ -25,9 +25,9 @@
 | 1 | 人臉辨識 | 95% | **95%** ✅ | Day 1, 3-4 |
 | 2 | 語音功能 | 80% | **85%** ✅ | Day 2, 6 |
 | 3 | 手勢辨識 | 90% | **95%** ✅ | Day 3-6 |
-| 4 | 姿勢辨識 | 92% | **90%** ✅ | Day 3-6 |
+| 4 | 姿勢辨識 | 92% | **95%** ✅ fallen 修復 | Day 3-6, 7 |
 | 5 | AI 大腦 | 70% | **85%** ✅ | Day 5-7 |
-| 6 | 導航避障 | 5% | **80%** ✅ | Day 6-7 |
+| 6 | 導航避障 | 5% | **停用**（鏡頭角度限制） | Day 6-8 |
 | 7 | 物體辨識 | 0% | **10%**（研究完） | Day 9 |
 
 ---
@@ -277,20 +277,11 @@
 - [x] foxglove_bridge QoS 修正：`best_effort_qos_topic_whitelist` 排除 `/tf_static`
 - [x] D435 depth 在 Foxglove 3D panel 顯示正常
 
-**待做 checklist：**
-- [ ] LiDAR 點雲/LaserScan 在 Foxglove 顯示（有效點少，需調整視角或 pointSize）
-- [ ] Go2 上機 10 次防撞測試（D435 + LiDAR 雙層）
-- [ ] 三段速度控制（遠正常 / 中減速 / 近停）
-- [ ] 殺 obstacle node → sensor guard 1s 停（上機驗證）
-
-**降級策略（鎖定）：**
-
-| 場景 | 策略 |
-|------|------|
-| metrics 全過 | Damp + BackMove |
-| 漏停 > 10% | Damp-only |
-| 誤停 > 20% | Demo A 用、Demo B 關 |
-| 整體不穩 | 完全停用 |
+**Day 7 (4/3) 防撞測試結果 → 降級決策：完全停用**
+- [x] 3 輪 come_here 防撞測試（threshold 1.2→1.5→2.0m）— 全部撞上
+- **根因**：D435 鏡頭角度朝上，低障礙物只在 ~0.4m 才進入 FOV，煞車距離不足
+- **降級策略觸發**：整體不穩 → **完全停用**
+- Demo 不啟用 come_here / obstacle nodes
 
 ---
 

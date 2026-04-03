@@ -90,7 +90,14 @@ def classify_pose(
     trunk_angle = _trunk_angle_deg(shoulder, hip)
 
     # 1. fallen (safety priority)
-    if bbox_ratio is not None and bbox_ratio > 1.0 and trunk_angle > 60:
+    #    Extra guard: vertical_ratio = (hip_y - shoulder_y) / torso_length
+    #    Standing frontal ≈ 0.85-1.0; lying flat ≈ 0.0-0.17
+    #    Threshold 0.4 prevents frontal-standing misdetection at any distance
+    torso_len = float(np.linalg.norm(hip - shoulder))
+    vertical_ratio = (hip[1] - shoulder[1]) / torso_len if torso_len > 1e-6 else 1.0
+    if (bbox_ratio is not None and bbox_ratio > 1.0
+            and trunk_angle > 60
+            and vertical_ratio < 0.4):
         return "fallen", avg_score
 
     # 2. standing

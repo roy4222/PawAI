@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-02（Sprint Day 8 — Foxglove 3D 診斷修復 + 部署同步）
+**最後更新**：2026-04-03（Sprint Day 7 — fallen 修復 + 導航避障停用）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -12,13 +12,13 @@
 | 語音 (speech_processor) | **聊天可用 / 命令未達標** | 4/1 | 安靜 4/5 PASS；Go2 噪音下聊天互動可用，stop 等命令不可靠→改靠手勢 |
 | 人臉 (face_perception) | **Executive 整合通過** | 4/1 | Gate B face welcome → TTS 問候 PASS |
 | 手勢 (vision_perception) | **Executive 整合通過** | 4/1 | Gate B stop gesture → StopMove + dedup PASS |
-| 姿勢 (vision_perception) | **桌測通過** | 3/30 | MediaPipe Pose CPU，standing 10 / sitting 8 / fallen 1，四模組同跑穩定 |
+| 姿勢 (vision_perception) | **fallen 修復驗證通過** | 4/3 | vertical_ratio guard 修復正面站姿誤判，Jetson 真機確認不再觸發 EMERGENCY |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 + come_here + safety guard** | 4/1 | Gate B 6/6 + come_here forward + sensor guard 三道防線 |
+| interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
 | 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
-| 導航避障 | **雙層避障 Jetson 驗證通過** | 4/1 | D435+LiDAR 雙層 + come_here→obstacle→StopMove + safety guard + Foxglove 3D dashboard |
+| 導航避障 | **停用** | 4/3 | D435 鏡頭角度限制（朝上，低障礙物偵測不到），煞車距離不足反覆撞上。Demo 不啟用，列為未來改善 |
 
 ## 3/26 會議決策
 
@@ -48,6 +48,29 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 7 完成（4/3）
+
+### Fallen 誤判修復 — Jetson 真機驗證 PASS
+- **根因**：`pose_classifier.py` 的 fallen 條件 `bbox_ratio > 1.0 AND trunk_angle > 60` 在正面站姿時誤觸發（肩膀展開 → bbox 寬 > 高）
+- **修復**：新增 `vertical_ratio = (hip_y - shoulder_y) / torso_length` guard，閾值 0.4（相對尺度，不受距離影響）
+- **驗證**：Jetson 上 D435 前站立，bbox_r=1.14 時 raw=None（不再判 fallen），vote 持續 standing
+- **測試**：14/14 pose classifier tests PASS（+3 新增：近距正面站立、遠距正面站立、躺平確認）
+- 91/91 vision tests 全 PASS
+
+### 導航避障 — 停用決策
+- **測試過程**：threshold 從 0.8m → 1.2m → 1.5m → 2.0m，三輪 come_here 測試全部撞上
+- **根因**：D435 裝在 Go2 頭上偏上方，低於鏡頭高度的障礙物在遠處看不到，只有 ~0.4m 才進入 FOV
+- **延遲鏈分析**：debounce 100ms + rate limiter 200ms + WebRTC 300ms + Go2 減速 500-1000ms ≈ 1-1.5s
+- **結論**：硬體鏡頭角度問題，軟體無法克服。Demo 不啟用導航避障
+- **產出**：`obstacle_debug_overlay.py` — depth debug overlay node（Foxglove 可視化 ROI + min_depth + zone）
+- **Jetson 供電問題**：Go2 行走時 Jetson 兩次斷電，疑似 XL4015 電壓波動
+
+### 參數變更記錄
+- `obstacle_avoidance_node.py`：threshold 0.8→2.0, warning 1.2→2.5, publish_rate 5→15
+- `pose_classifier.py`：fallen 條件加 vertical_ratio < 0.4 guard
 
 ---
 

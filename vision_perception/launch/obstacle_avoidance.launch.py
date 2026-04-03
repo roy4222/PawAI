@@ -8,15 +8,15 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription(
         [
-            DeclareLaunchArgument("threshold_m", default_value="0.8"),
-            DeclareLaunchArgument("warning_m", default_value="1.2"),
+            DeclareLaunchArgument("threshold_m", default_value="2.0"),
+            DeclareLaunchArgument("warning_m", default_value="2.5"),
             DeclareLaunchArgument("max_range_m", default_value="3.0"),
             DeclareLaunchArgument("roi_top_ratio", default_value="0.4"),
             DeclareLaunchArgument("roi_bottom_ratio", default_value="0.8"),
             DeclareLaunchArgument("roi_left_ratio", default_value="0.2"),
             DeclareLaunchArgument("roi_right_ratio", default_value="0.8"),
             DeclareLaunchArgument("obstacle_ratio_trigger", default_value="0.15"),
-            DeclareLaunchArgument("publish_rate_hz", default_value="5.0"),
+            DeclareLaunchArgument("publish_rate_hz", default_value="15.0"),
             DeclareLaunchArgument("debounce_frames", default_value="3"),
             DeclareLaunchArgument(
                 "depth_topic",

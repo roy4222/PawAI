@@ -146,3 +146,61 @@ class TestClassifyPose:
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, conf = classify_pose(kps, scores, bbox_ratio=1.5)
         assert pose == "fallen"
+
+    def test_frontal_standing_near_not_fallen(self):
+        """Near distance (~1m): shoulders spread wide, bbox_ratio > 1.0,
+        but shoulder clearly above hip → vertical_ratio high → NOT fallen."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Wide shoulders (frontal view, near camera)
+        kps[5] = [100, 200]    # L_SHOULDER
+        kps[6] = [350, 200]    # R_SHOULDER
+        kps[11] = [180, 350]   # L_HIP
+        kps[12] = [270, 350]   # R_HIP
+        kps[13] = [180, 480]   # L_KNEE
+        kps[14] = [270, 480]   # R_KNEE
+        kps[15] = [180, 600]   # L_ANKLE
+        kps[16] = [270, 600]   # R_ANKLE
+        kps[0] = [225, 150]    # NOSE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # bbox width=250, height=400 → ratio=0.625, but test with forced ratio
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.25)
+        assert pose != "fallen", "Frontal standing near camera must not be fallen"
+
+    def test_frontal_standing_far_not_fallen(self):
+        """Far distance (~3m): smaller keypoints but same proportions.
+        vertical_ratio is scale-invariant → still NOT fallen."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Scaled-down version (far from camera)
+        kps[5] = [290, 200]    # L_SHOULDER
+        kps[6] = [370, 200]    # R_SHOULDER
+        kps[11] = [310, 250]   # L_HIP
+        kps[12] = [350, 250]   # R_HIP
+        kps[13] = [310, 295]   # L_KNEE
+        kps[14] = [350, 295]   # R_KNEE
+        kps[15] = [310, 335]   # L_ANKLE
+        kps[16] = [350, 335]   # R_ANKLE
+        kps[0] = [330, 185]    # NOSE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.1)
+        assert pose != "fallen", "Frontal standing far from camera must not be fallen"
+
+    def test_actual_fallen_still_detected(self):
+        """Person lying flat: shoulder and hip at same Y level → fallen."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Lying horizontally: all joints at roughly same Y
+        kps[5] = [100, 300]    # L_SHOULDER
+        kps[6] = [140, 305]    # R_SHOULDER
+        kps[11] = [250, 310]   # L_HIP
+        kps[12] = [290, 308]   # R_HIP
+        kps[13] = [370, 305]   # L_KNEE
+        kps[14] = [410, 310]   # R_KNEE
+        kps[15] = [470, 300]   # L_ANKLE
+        kps[16] = [510, 305]   # R_ANKLE
+        kps[0] = [60, 295]     # NOSE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # Wide bbox (person lying across frame)
+        pose, _ = classify_pose(kps, scores, bbox_ratio=2.5)
+        assert pose == "fallen", "Person lying flat must be detected as fallen"

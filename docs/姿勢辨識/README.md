@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 整合測試通過 |
+| 狀態 | fallen 修復驗證通過 |
 | 版本/決策 | MediaPipe Pose (CPU 18.5 FPS) |
-| 完成度 | 92% |
-| 最後驗證 | 2026-03-25 |
+| 完成度 | 95% |
+| 最後驗證 | 2026-04-03 |
 | 入口檔案 | `vision_perception/vision_perception/pose_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
 
@@ -44,7 +44,7 @@ interaction_executive_node → fallen = EMERGENCY
 | standing | hip_angle > 155° |
 | sitting | 100° < hip < 150°, trunk < 35° |
 | crouching | hip < 145°, knee < 145°, trunk > 10° |
-| fallen | bbox_ratio > 1.0 AND trunk > 60° |
+| fallen | bbox_ratio > 1.0 AND trunk > 60° AND vertical_ratio < 0.4 |
 | bending | trunk > 35°, hip < 140°, knee > 130° |
 
 ## 操作限制與已知問題
@@ -52,6 +52,7 @@ interaction_executive_node → fallen = EMERGENCY
 - **有效範圍**：D435 前方約 **4-5m** 以內
 - **僅支援單人追蹤**：多人時 MediaPipe 只追蹤一人
 - RTMPose balanced mode GPU 91-99%（備援方案，主線用 MediaPipe CPU 0%）
+- ~~正面站姿被誤判為 fallen~~ — **已修復（4/3）**：新增 `vertical_ratio` guard，用 shoulder-hip 垂直差 / torso 長度作為相對尺度（閾值 0.4），不受距離影響
 - 跌倒偵測可能誤報（椅子上趴下）
 - 幽靈跌倒偵測：投票 buffer（20 幀多數決）已大幅降低誤報，但未完全消除
 - 側面坐姿 hip_angle 和 trunk_angle 計算偏差，Demo 時建議正面面向攝影機
