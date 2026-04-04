@@ -17,7 +17,7 @@
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
-| 物體辨識 | **環境驗證中斷** | 4/4 | YOLO26n 載入成功（CPU 407ms），但 ultralytics 破壞 torch 環境，已修復，Go/No-Go 延後 |
+| 物體辨識 | **Go 判定通過** | 4/4 | YOLO26n ONNX + ORT TensorRT EP = 15 FPS 穩定，RAM +1GB，GPU 0%。Phase C（最小 ROS2 node）待做 |
 | 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
 ## 3/26 會議決策
@@ -65,13 +65,31 @@
 - **更新** mission/README.md、interaction_contract.md、導航避障/README.md — obstacle 標記 disabled
 - **更新** `start_full_demo_tmux.sh` — 移除 d435obs/lidarobs windows，enable_lidar=false，10 window 重編號
 
-### 物體辨識 Go/No-Go — 環境驗證中斷
-- RAM 5.2GB available ✅、GPU 0% ✅（Go 條件 2/4 過）
+### 物體辨識 Go/No-Go — GO ✅
+
+**環境事故與修復**：
 - `pip install ultralytics` 拉升 torch 2.11.0+cu130 + numpy 2.2.6，破壞 CUDA 環境
-- YOLO26n 載入成功但只能跑 CPU（407ms/frame）
-- **環境修復**：移除 ultralytics/polars → numpy 降回 1.26.4 → 下載安裝 Jetson 官方 torch wheel（2.5.0a0+nv24.08）→ symlink libcusparseLt.so.0
-- 修復後全部模組恢復：torch CUDA=True、mediapipe、onnxruntime-gpu、faster_whisper 全 PASS
+- **環境修復**：移除 ultralytics/polars → numpy 降回 1.26.4 → Jetson 官方 torch wheel（2.5.0a0+nv24.08）→ symlink libcusparseLt.so.0
 - **教訓**：Jetson 上不要用 `pip install` 裝有 torch 依賴的套件，會覆蓋 Jetson 專用 wheel
+
+**部署路徑轉向**：不裝 ultralytics，改用 ONNX Runtime 直接推理
+- WSL 上用 ultralytics 匯出 `yolo26n.pt` → `yolo26n.onnx`（9.5MB，output shape 1×300×6，NMS-free）
+- Jetson 上用已有的 `onnxruntime-gpu 1.23.0`（TensorRT EP + FP16）直接載入推理
+
+**Phase A — 安裝 + import gate**：PASS
+- ORT providers: TensorRT + CUDA + CPU
+- ONNX 推理 output shape (1,300,6) 正確
+- TRT cache 建立成功
+
+**Phase B — 真實 D435 feed 60 秒共存壓測**：PASS
+- **15.0 FPS 穩定**（70 秒零掉幀）
+- RAM: 3667/7620 MB（+1GB，available 3.8GB）
+- GPU: 0%（TensorRT 推理太快或走 DLA）
+- 溫度: 56°C、功耗: 8.9W
+- 四核心模組 16 nodes 全正常
+- chair 偵測 confidence 0.91-0.93 穩定
+
+**Phase C — 最小 ROS2 node**：待做（明天）
 
 ### Jetson 供電問題 — 升級為最大硬體風險
 - 4/4 單日 Jetson 強制關機 3 次（非網路斷連，是直接斷電）
