@@ -285,22 +285,23 @@
 
 ---
 
-### Day 9（4/4 五）— 導航避障 Hardening OR 物體辨識 Hard Gate
+### Day 9（4/4 五）— 四核心驗收 + 文件化 + 物體辨識 Go/No-Go（中斷）
 
-> 視 Day 8 結果決定。導航避障穩定 → 做 30 次 Hardening。不穩 → 跳物體辨識。
+> 導航避障已停用（Day 8），走物體辨識 Hard Gate 路線。但 Jetson 供電問題 + ultralytics 環境破壞導致計畫調整。
 
-**導航避障 Hardening（如果 Day 8 穩定）：**
+**已完成：**
+- [x] `start_full_demo_tmux.sh` 移除 obstacle windows + enable_lidar=false + 重編號
+- [x] 新建 `docs/mission/demo-scope.md`（Demo 範圍 + 已知限制 + 安全措施）
+- [x] 更新 mission/README.md、interaction_contract.md、導航避障/README.md — obstacle disabled
+- [x] 四核心上機驗收 14/18（人臉 3/5、手勢 5/5、姿勢 4/4、整合 0/4）
+- [x] 物體辨識 Go 條件：RAM 5.2GB ✅、GPU 0% ✅
+- [x] Jetson 環境修復（ultralytics 破壞 torch/numpy → 回滾成功）
 
-| Metric | Pass | Warning (Damp-only) | Fail (停用) |
-|--------|:----:|:-------------------:|:-----------:|
-| 漏停率 | ≤ 3% | 4-10% | > 10% |
-| 誤停率 | ≤ 10% | 11-20% | > 20% |
-| Stop latency | P95 < 500ms | 500-1000ms | > 1s |
-| Frame drop | ≤ 5% | 6-15% | > 15% |
+**未完成（Jetson 斷電 3 次 + 環境救援耗時）：**
+- [ ] 整合場景驗收 4 項（#15-#18）
+- [ ] 物體辨識 Go/No-Go 最終判定（YOLO26n 載入成功但 D435 衝突未測）
 
-**物體辨識 Hard Gate（如果導航避障跳過）：**
-- Go/No-Go，最多 4-6h timebox
-- Go 條件：baseline 穩定 + RAM ≥ 1.5GB + GPU 不滿載 + D435 不衝突
+**Jetson 供電**：升級為最大硬體風險，Demo 前必須解決
 
 ---
 

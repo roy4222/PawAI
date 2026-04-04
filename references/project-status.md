@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-03（Sprint Day 7 — fallen 修復 + 導航避障停用）
+**最後更新**：2026-04-04（Sprint Day 9 — 四核心驗收 + 文件化 + 環境修復）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -10,15 +10,15 @@
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
 | 語音 (speech_processor) | **聊天可用 / 命令未達標** | 4/1 | 安靜 4/5 PASS；Go2 噪音下聊天互動可用，stop 等命令不可靠→改靠手勢 |
-| 人臉 (face_perception) | **Executive 整合通過** | 4/1 | Gate B face welcome → TTS 問候 PASS |
-| 手勢 (vision_perception) | **Executive 整合通過** | 4/1 | Gate B stop gesture → StopMove + dedup PASS |
-| 姿勢 (vision_perception) | **fallen 修復驗證通過** | 4/3 | vertical_ratio guard 修復正面站姿誤判，Jetson 真機確認不再觸發 EMERGENCY |
+| 人臉 (face_perception) | **上機驗收 3/5** | 4/4 | identity_stable ✅、辨識+TTS ✅、離開再回來 ✅、未註冊/兩人 SKIP（缺第二人） |
+| 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
+| 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
-| 物體辨識 | **研究完成** | 3/25 | YOLO26n，**預設目標（非自由搜尋）**，~3 天實作 |
-| 導航避障 | **停用** | 4/3 | D435 鏡頭角度限制（朝上，低障礙物偵測不到），煞車距離不足反覆撞上。Demo 不啟用，列為未來改善 |
+| 物體辨識 | **環境驗證中斷** | 4/4 | YOLO26n 載入成功（CPU 407ms），但 ultralytics 破壞 torch 環境，已修復，Go/No-Go 延後 |
+| 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
 ## 3/26 會議決策
 
@@ -48,6 +48,35 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 9（4/4）
+
+### 四核心上機驗收 — 14/18 PASS
+- **人臉** 3/5：identity_stable <3s ✅、已註冊辨識+TTS ✅、離開再回來 ✅、未註冊/兩人 SKIP（缺第二人）
+- **手勢** 5/5：stop ✅、thumbs_up ✅、非白名單 ✅、距離 1-3m ✅、dedup ✅
+- **姿勢** 4/4：standing ✅、sitting ✅、fallen→EMERGENCY ✅、恢復→IDLE(30s) ✅
+- **整合場景** 0/4：未測（Jetson 供電斷電 3 次）
+- 人臉追蹤抖動嚴重（30s 內 40+ tracks），但辨識本身正確
+
+### 文件化
+- **新建** `docs/mission/demo-scope.md`（Demo 啟用/停用功能 + 已知限制 + 安全措施）
+- **更新** mission/README.md、interaction_contract.md、導航避障/README.md — obstacle 標記 disabled
+- **更新** `start_full_demo_tmux.sh` — 移除 d435obs/lidarobs windows，enable_lidar=false，10 window 重編號
+
+### 物體辨識 Go/No-Go — 環境驗證中斷
+- RAM 5.2GB available ✅、GPU 0% ✅（Go 條件 2/4 過）
+- `pip install ultralytics` 拉升 torch 2.11.0+cu130 + numpy 2.2.6，破壞 CUDA 環境
+- YOLO26n 載入成功但只能跑 CPU（407ms/frame）
+- **環境修復**：移除 ultralytics/polars → numpy 降回 1.26.4 → 下載安裝 Jetson 官方 torch wheel（2.5.0a0+nv24.08）→ symlink libcusparseLt.so.0
+- 修復後全部模組恢復：torch CUDA=True、mediapipe、onnxruntime-gpu、faster_whisper 全 PASS
+- **教訓**：Jetson 上不要用 `pip install` 裝有 torch 依賴的套件，會覆蓋 Jetson 專用 wheel
+
+### Jetson 供電問題 — 升級為最大硬體風險
+- 4/4 單日 Jetson 強制關機 3 次（非網路斷連，是直接斷電）
+- 根因：Go2 BAT → XL4015 降壓 19V → Jetson，高負載時電壓不穩
+- Demo 前必須解決（獨立電源或更好的降壓模組）
 
 ---
 
