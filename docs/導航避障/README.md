@@ -1,17 +1,34 @@
 # 導航避障
 
-> Status: current
+> Status: **disabled** (Demo 停用，程式碼保留)
 
 > 雙層反應式避障：D435 前方精確防撞 + LiDAR 360° 安全防護。不做 SLAM/Nav2 自主導航。
+> **2026-04-03 決定 Demo 停用**，原因見下方「停用決策」。
+
+## 停用決策（2026-04-03）
+
+**結論**：Demo 不啟用導航避障，列為未來改善。
+
+**測試過程**：
+- threshold 從 0.8m → 1.2m → 1.5m → 2.0m，3 輪 come_here 防撞測試全部撞上
+- **根因**：D435 裝在 Go2 頭上偏上方，低於鏡頭高度的障礙物在遠處看不到，只有 ~0.4m 才進入 FOV
+- **延遲鏈**：debounce 100ms + rate limiter 200ms + WebRTC 300ms + Go2 減速 500-1000ms ≈ 1-1.5s
+- 硬體鏡頭角度問題，軟體無法克服
+
+**影響**：
+- `start_full_demo_tmux.sh` 已移除 d435obs / lidarobs windows
+- `enable_lidar:=false`（不解碼 LiDAR）
+- Executive 中 come_here 功能暫停
+- 20 個 unit tests（D435 7 + LiDAR 13）保留在 CI，程式碼不刪
 
 ## 狀態卡
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 雙層避障 + safety guard 上機通過 + Foxglove 3D 可視化完成 |
+| 狀態 | **Demo 停用**（程式碼 + tests 保留） |
 | 版本/決策 | D435 ROI + LiDAR reactive safety（SLAM/Nav2 永久關閉） |
-| 完成度 | 85% |
-| 最後驗證 | 2026-04-02 |
+| 完成度 | 實作完成，上機驗證未通過 |
+| 最後驗證 | 2026-04-03（停用決策） |
 | 入口檔案 | D435: `obstacle_avoidance_node.py` / LiDAR: `lidar_obstacle_node.py` |
 | 測試 | D435: 7 tests / LiDAR: 13 tests（共 20 tests） |
 

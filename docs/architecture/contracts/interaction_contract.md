@@ -63,7 +63,7 @@
 | `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 | active |
 | `/event/gesture_detected` | Event | 觸發式 | 手勢事件 | active |
 | `/event/pose_detected` | Event | 觸發式 | 姿勢事件 | active |
-| `/event/obstacle_detected` | Event | 觸發式 | 障礙物偵測事件 | **planned** |
+| `/event/obstacle_detected` | Event | 觸發式 | 障礙物偵測事件 | **disabled** (Demo 停用，程式碼保留) |
 | `/event/interaction/welcome` | Event | 觸發式 | ~~迎賓事件（interaction_router）~~ | **deprecated** |
 | `/event/interaction/gesture_command` | Event | 觸發式 | ~~手勢指令事件（interaction_router）~~ | **deprecated** |
 | `/event/interaction/fall_alert` | Event | 觸發式 | ~~跌倒警報事件（interaction_router）~~ | **deprecated** |
@@ -564,9 +564,9 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.8 `/event/obstacle_detected` ⚠️ planned (Day 8)
+### 4.8 `/event/obstacle_detected` ⛔ disabled (Demo 停用)
 
-> **v2.2**：此 topic 由 Day 8 的 `obstacle_avoidance_node` 實作，目前先佔位。
+> **v2.2**：已實作（obstacle_avoidance_node + lidar_obstacle_node），但因 D435 鏡頭角度限制導致防撞不可靠，Demo 停用。程式碼與 schema 保留供未來改善。
 
 **說明**：障礙物偵測事件（D435 depth 前方有近距離障礙物時觸發）
 **發布者**：`obstacle_avoidance_node`（planned）
@@ -760,7 +760,7 @@ self.publisher.publish(msg)
 | `/event/speech_intent_recognized` | Reliable | Volatile | 10 | active |
 | `/event/gesture_detected` | Reliable | Volatile | 10 | active |
 | `/event/pose_detected` | Reliable | Volatile | 10 | active |
-| `/event/obstacle_detected` | BestEffort | Volatile | 10 | planned |
+| `/event/obstacle_detected` | BestEffort | Volatile | 10 | disabled |
 | `/event/interaction/welcome` | Reliable | Volatile | 10 | deprecated |
 | `/event/interaction/gesture_command` | Reliable | Volatile | 10 | deprecated |
 | `/event/interaction/fall_alert` | Reliable | Volatile | 10 | deprecated |
