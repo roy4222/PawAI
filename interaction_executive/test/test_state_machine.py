@@ -253,3 +253,91 @@ class TestTimeout:
         )
         result = self.sm.handle_event(EventType.TIMEOUT)
         assert self.sm.state == ExecutiveState.IDLE
+
+
+class TestObjectDetection:
+    """Object perception → TTS prompt (Day 10 object_perception integration)."""
+
+    def setup_method(self):
+        self.sm = ExecutiveStateMachine()
+
+    def test_cup_triggers_tts(self):
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:cup",
+            data={"class_name": "cup"},
+        )
+        assert result.tts == "你要喝水嗎？"
+        assert result.action is None  # no Go2 action, just TTS
+
+    def test_bottle_triggers_tts(self):
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:bottle",
+            data={"class_name": "bottle"},
+        )
+        assert result.tts == "喝點水吧"
+
+    def test_book_triggers_tts(self):
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:book",
+            data={"class_name": "book"},
+        )
+        assert result.tts == "在看書啊"
+
+    def test_unknown_class_silently_ignored(self):
+        """Non-P0 classes (e.g., refrigerator) must not trigger TTS."""
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:refrigerator",
+            data={"class_name": "refrigerator"},
+        )
+        assert result.tts is None
+        assert result.action is None
+
+    def test_object_does_not_interrupt_emergency(self):
+        """Fallen → EMERGENCY state must not be interrupted by object detection."""
+        self.sm.handle_event(EventType.POSE_FALLEN)
+        assert self.sm.state == ExecutiveState.EMERGENCY
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:cup",
+            data={"class_name": "cup"},
+        )
+        # EMERGENCY handler returns empty result (no TTS, no state change)
+        assert result.tts is None
+        assert self.sm.state == ExecutiveState.EMERGENCY
+
+    def test_object_cooldown_dedup(self):
+        """Same class within 5s should be deduped."""
+        r1 = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:cup",
+            data={"class_name": "cup"},
+        )
+        assert r1.tts == "你要喝水嗎？"
+        # Immediate repeat — deduped
+        r2 = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:cup",
+            data={"class_name": "cup"},
+        )
+        assert r2.tts is None  # deduped empty result
+
+    def test_object_priority_lower_than_face(self):
+        """OBJECT_DETECTED priority must be lower than FACE_WELCOME."""
+        assert EventType.OBJECT_DETECTED.priority > EventType.FACE_WELCOME.priority
+
+    def test_object_in_greeting_state_ignored(self):
+        """While greeting, object events should not steal focus."""
+        self.sm.handle_event(EventType.FACE_WELCOME, source="roy")
+        assert self.sm.state == ExecutiveState.GREETING
+        result = self.sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source="obj:cup",
+            data={"class_name": "cup"},
+        )
+        # _handle_greeting doesn't dispatch OBJECT_DETECTED → empty result
+        assert result.tts is None
+        assert self.sm.state == ExecutiveState.GREETING

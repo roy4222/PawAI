@@ -29,7 +29,8 @@ class EventType(IntEnum):
     GESTURE = 2           # stop gesture or other
     SPEECH_INTENT = 3     # voice command
     FACE_WELCOME = 4      # face identity
-    OBSTACLE_CLEARED = 5  # obstacle cleared (internal)
+    OBJECT_DETECTED = 5   # object perception (P0 class → TTS prompt)
+    OBSTACLE_CLEARED = 6  # obstacle cleared (internal)
     TIMEOUT = 99          # state timeout (internal)
 
     @property
@@ -60,6 +61,15 @@ DEDUP_WINDOW = 5.0          # seconds
 STATE_TIMEOUT = 30.0        # seconds per state
 OBSTACLE_DEBOUNCE = 2.0     # seconds before obstacle_cleared takes effect
 OBSTACLE_MIN_DURATION = 1.0  # minimum time in OBSTACLE_STOP
+
+# Object perception → TTS prompt map (Day 13 expansion).
+# Only these classes trigger interaction; all other COCO classes are ignored.
+# Keys match class_name in /event/object_detected (underscored COCO names).
+OBJECT_TTS_MAP: dict[str, str] = {
+    "cup": "你要喝水嗎？",
+    "bottle": "喝點水吧",
+    "book": "在看書啊",
+}
 
 
 class ExecutiveStateMachine:
@@ -202,6 +212,8 @@ class ExecutiveStateMachine:
             return self._route_speech(data)
         if event_type == EventType.GESTURE:
             return self._route_gesture(data)
+        if event_type == EventType.OBJECT_DETECTED:
+            return self._route_object(data)
         return EventResult()
 
     def _handle_greeting(self, event_type: EventType, source: str,
@@ -255,10 +267,23 @@ class ExecutiveStateMachine:
     def _route_gesture(self, data: dict) -> EventResult:
         gesture = data.get("gesture", "")
         if gesture == "thumbs_up":
-            return EventResult(tts="謝謝！", action=ACTION_CONTENT)
+            return EventResult(tts="謝謝!", action=ACTION_CONTENT)
         if gesture == "ok":
             return EventResult(action=ACTION_CONTENT)
         return EventResult()
+
+    def _route_object(self, data: dict) -> EventResult:
+        """Route object detection event to TTS prompt.
+
+        Only triggers for classes in OBJECT_TTS_MAP (cup, bottle, book).
+        All other COCO classes are silently ignored (no TTS, no state change).
+        Stays in IDLE — does not interrupt active interaction.
+        """
+        class_name = data.get("class_name", "")
+        tts = OBJECT_TTS_MAP.get(class_name)
+        if tts is None:
+            return EventResult()
+        return EventResult(tts=tts)
 
     def get_status(self) -> dict:
         """Return current status for /executive/status topic."""

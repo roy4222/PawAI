@@ -61,6 +61,9 @@ class InteractionExecutiveNode(Node):
         self.create_subscription(
             String, "/state/obstacle/d435_alive", self._on_d435_heartbeat, QOS_EVENT
         )
+        self.create_subscription(
+            String, "/event/object_detected", self._on_object, QOS_EVENT
+        )
 
         # --- Timers ---
         self._timeout_timer = self.create_timer(1.0, self._check_timeout)
@@ -124,6 +127,32 @@ class InteractionExecutiveNode(Node):
         with self._lock:
             self._last_obstacle_time = time.monotonic()
         result = self._sm.handle_event(EventType.OBSTACLE)
+        self._execute_result(result)
+
+    def _on_object(self, msg: String):
+        """Handle /event/object_detected — dispatch first object to state machine.
+
+        Schema: {"stamp": float, "event_type": "object_detected",
+                 "objects": [{"class_name": str, "confidence": float, "bbox": [4]}]}
+        Only the first object in the array is routed (keeps Executive simple).
+        Only P0 classes in OBJECT_TTS_MAP trigger TTS; others silently ignored.
+        """
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        objects = data.get("objects", [])
+        if not objects:
+            return
+        first = objects[0]
+        class_name = first.get("class_name", "")
+        if not class_name:
+            return
+        result = self._sm.handle_event(
+            EventType.OBJECT_DETECTED,
+            source=f"obj:{class_name}",
+            data={"class_name": class_name},
+        )
         self._execute_result(result)
 
     def _on_d435_heartbeat(self, msg: String):
