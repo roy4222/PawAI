@@ -569,7 +569,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 **說明**：物體偵測事件（COCO 80 class，預設全開；per-class cooldown 5s 去重）
 **發布者**：`object_perception_node`
-**訂閱者**：`interaction_executive_node`（待整合）
+**訂閱者**：`interaction_executive_node`（Day 10 晚已整合，3 class TTS 話術：cup/bottle/book）
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 

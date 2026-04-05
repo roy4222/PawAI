@@ -126,12 +126,28 @@ ros2 launch object_perception object_perception.launch.py
 
 **TRT 參數陷阱**：`trt_engine_cache_enable` 和 `trt_fp16_enable` 的值必須是 `"True"`/`"False"` 字串，不是 `"1"`/`"0"`，否則會 fallback 到 CPU。
 
+## Executive 整合（Day 10 晚完成）
+
+`interaction_executive_node` 已訂閱 `/event/object_detected`，支援 3 個高價值 class 的 TTS 話術（其他 COCO 77 class 靜默忽略）：
+
+| class | TTS 話術 |
+|-------|---------|
+| `cup` | 「你要喝水嗎？」 |
+| `bottle` | 「喝點水吧」 |
+| `book` | 「在看書啊」 |
+
+**行為約束**：
+- 只在 IDLE 狀態觸發（Greeting / Conversing / Emergency 不被打斷）
+- Per-class 5s cooldown dedup（避免同物品反覆觸發）
+- Priority 5（低於 face / speech / gesture / obstacle / fall）
+- 未來擴展新 class：修改 `interaction_executive/state_machine.py` 的 `OBJECT_TTS_MAP`
+
 ## 已知問題
 
-- Executive 整合未做（events 沒人訂閱）
+- Jetson 實機驗證順延 Day 11（sync commit 4694fb9 + 真機拿 cup 測試）
 - 沒整合進 `start_full_demo_tmux.sh`（等穩定後再加）
 - 追蹤、3D depth、target selection 未做
-- **Jetson 供電不穩**：4/4 單日斷電 3 次，Demo 前必須解決
+- **Jetson 供電不穩**：累積斷電 5 次，Demo 前必須解決
 
 ## 下一步
 

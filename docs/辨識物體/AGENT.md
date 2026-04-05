@@ -58,7 +58,9 @@ class_whitelist: [0, 16, 39, 41, 56, 60]
 - [x] 不裝 ultralytics — 改用 ONNX Runtime 直接推理
 - [x] Phase C 完成 — ROS2 node 在 Jetson 單獨跑 5 分鐘穩定
 - [x] Contract v2.3 登記 — `/event/object_detected` active
-- [ ] Executive 整合 — 訂閱 event + state machine 處理
+- [x] Contract v2.4 — COCO 80 class 擴充 + `class_whitelist` 參數
+- [x] Executive 整合（Day 10 晚）— `_on_object()` handler + OBJECT_TTS_MAP (cup/bottle/book)
+- [ ] Jetson 實機驗證 executive 整合 — 順延 Day 11（sync commit 4694fb9）
 - [ ] `start_full_demo_tmux.sh` 加入 window
 - [ ] 整合場景驗收（配合其他感知模組）
 
