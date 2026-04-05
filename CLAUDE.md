@@ -191,6 +191,33 @@ bash scripts/start_stress_test_tmux.sh 120    # 指定時間
 - onnxruntime-gpu 安裝：`pip install onnxruntime-gpu==1.23.0 --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 --extra-index-url https://pypi.org/simple/`
 - rtmlib 安裝：`pip install --no-deps rtmlib`（避免拉回 CPU onnxruntime）
 
+### 物體辨識 pipeline（object_perception，Jetson 上）
+
+```bash
+# 前提：D435 camera 已啟動
+ros2 launch realsense2_camera rs_launch.py enable_depth:=false pointcloud.enable:=false
+
+# 啟動物體辨識 node（COCO 80 class 全開，YOLO26n ONNX + TensorRT EP FP16）
+colcon build --packages-select object_perception
+source install/setup.zsh
+ros2 launch object_perception object_perception.launch.py
+
+# 縮減為原 P0 6 類（person/dog/bottle/cup/chair/dining_table）
+ros2 launch object_perception object_perception.launch.py \
+  class_whitelist:='[0, 16, 39, 41, 56, 60]'
+
+# 驗證 topic
+ros2 topic hz /perception/object/debug_image        # ~6-8 Hz
+ros2 topic echo /event/object_detected --once       # JSON event
+```
+
+**已知陷阱**（見 `docs/辨識物體/CLAUDE.md`）：
+- **不要 `pip install ultralytics`**（會破壞 Jetson torch wheel）
+- TRT provider 參數值必須 `"True"`/`"False"` 字串，非 `"1"`/`"0"`
+- `class_whitelist` 空 list 需用 `ParameterDescriptor(INTEGER_ARRAY)`，yaml 不要寫 `: []`
+- 模型路徑：`/home/jetson/models/yolo26n.onnx`（9.5MB, output `(1,300,6)` NMS-free）
+- TRT cache：`/home/jetson/trt_cache/`（首次啟動 3-10 分鐘）
+
 ### 模型選型 Benchmark（2026-03-19 新建）
 
 ```bash

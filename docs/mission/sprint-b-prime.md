@@ -297,19 +297,40 @@
 - [x] 物體辨識 Go 條件：RAM 5.2GB ✅、GPU 0% ✅
 - [x] Jetson 環境修復（ultralytics 破壞 torch/numpy → 回滾成功）
 
+**Day 9 晚間完成（環境修復後）：**
+- [x] 物體辨識 Go/No-Go 最終判定 — **GO**（Phase B 真實 D435 feed 60s 共存壓測 PASS：15 FPS, +1GB RAM, GPU 0%, 56°C）
+
 **未完成（Jetson 斷電 3 次 + 環境救援耗時）：**
-- [ ] 整合場景驗收 4 項（#15-#18）
-- [ ] 物體辨識 Go/No-Go 最終判定（YOLO26n 載入成功但 D435 衝突未測）
+- [ ] 整合場景驗收 4 項（#15-#18，順延 Day 11）
 
 **Jetson 供電**：升級為最大硬體風險，Demo 前必須解決
 
 ---
 
-### Day 10（4/5 六）— Freeze + Hardening
+### Day 10（4/5 六）— Phase C 物體辨識 + COCO 80 擴充
 
-> 不加新功能。只修 demo 失敗路徑。
+> 計畫原本是 Freeze + Hardening，但昨天 Phase C（ROS2 node）還沒做，今天優先補。Freeze checklist 順延 Day 11。
 
-**交付物 checklist：**
+**今日實際完成：**
+- [x] **Phase C**：`object_perception/` package 從零建立（setup.py / package.xml / node / config / launch / tests）
+- [x] `object_perception_node.py`：D435 RGB → letterbox → YOLO26n ONNX → per-class cooldown dedup → event + debug_image
+- [x] Contract v2.3：登記 `/event/object_detected` + `/perception/object/debug_image`，CI scan dir + whitelist 更新
+- [x] Jetson build + 21 tests PASS，TensorRT EP FP16 生效
+- [x] **TRT 陷阱修復**：`trt_engine_cache_enable` / `trt_fp16_enable` 值必須 `"True"`/`"False"` 字串
+- [x] 5 分鐘穩定性測試 PASS（RAM +7MB, 48°C, 6.5 Hz debug image, providers: TRT+CUDA+CPU）
+- [x] 文件同步：README / AGENT.md / project-status.md 更新
+- [x] **Phase C+ COCO 80 擴充**：新建 `coco_classes.py`（80 class + HSV class_color 生成器）
+- [x] ROS2 參數 `class_whitelist`（預設空=全開 80 類，可縮減回 P0 6 類）
+- [x] **rclpy 坑修復**：空 list 參數需 `ParameterDescriptor(INTEGER_ARRAY)`；yaml 不能有 `class_whitelist: []`（會覆蓋 declare default）
+- [x] Tests 21 → **28 PASS**（+COCO 80 + class_color 驗證）
+- [x] Contract v2.3 → v2.4：`class_name` enum → reference `coco_classes.py`
+- [x] Jetson 實機驗證：非 P0 class 真的發 event（`refrigerator` COCO 72 已抓到）
+
+**Day 9 遺留（未做）：**
+- [ ] 整合場景驗收 4 項（#15-#18）
+- [ ] Jetson 供電排查 — 今日又斷電 2 次（累積 5 次），Demo 前必須解決
+
+**Freeze checklist 順延 Day 11：**
 - [ ] Demo A 30 輪語音測試 → 目標 ≥ 90% (27/30)
 - [ ] Demo B 5 輪手勢→Go2 真機 → 目標 ≥ 4/5
 - [ ] Crash recovery drill 3 輪，每輪 < 3 分鐘
