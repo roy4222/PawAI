@@ -1,0 +1,10 @@
+object_perception_node:
+  ros__parameters:
+    model_path: "/home/jetson/models/yolo26n.onnx"
+    trt_cache_dir: "/home/jetson/trt_cache/"
+    color_topic: "/camera/camera/color/image_raw"
+    confidence_threshold: 0.5
+    input_size: 640
+    tick_period: 0.067
+    publish_fps: 8.0
+    class_cooldown_sec: 5.0

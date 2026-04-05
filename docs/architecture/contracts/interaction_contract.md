@@ -1,9 +1,9 @@
-# ROS2 介面契約 v2.2
+# ROS2 介面契約 v2.3
 
 **文件定位**：PawAI 系統 ROS2 Topic/Action/Service 介面規格
 **適用範圍**：Layer 1-3 所有模組
-**版本**：v2.2
-**凍結日期**：2026-04-01
+**版本**：v2.3
+**凍結日期**：2026-04-05
 **對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
 
 > **v2.2 變更摘要**：
@@ -63,6 +63,7 @@
 | `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 | active |
 | `/event/gesture_detected` | Event | 觸發式 | 手勢事件 | active |
 | `/event/pose_detected` | Event | 觸發式 | 姿勢事件 | active |
+| `/event/object_detected` | Event | 觸���式 | 物體偵測事件（YOLO26n） | active |
 | `/event/obstacle_detected` | Event | 觸發式 | 障礙物偵測事件 | **disabled** (Demo 停用，程式碼保留) |
 | `/event/interaction/welcome` | Event | 觸發式 | ~~迎賓事件（interaction_router）~~ | **deprecated** |
 | `/event/interaction/gesture_command` | Event | 觸發式 | ~~手勢指令事件（interaction_router）~~ | **deprecated** |
@@ -564,7 +565,43 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ---
 
-### 4.8 `/event/obstacle_detected` ⛔ disabled (Demo 停用)
+### 4.8 `/event/object_detected`
+
+**說明**：物體偵測事件（P0 目標物出現時觸發，per-class cooldown 5s 去重）
+**發布者**：`object_perception_node`
+**訂閱者**：`interaction_executive_node`（待整合）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**：
+```json
+{
+  "stamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" },
+  "event_type":  { "type": "string", "enum": ["object_detected"] },
+  "objects":     { "type": "array", "items": {
+    "class_name":  { "type": "string", "enum": ["person", "dog", "bottle", "cup", "chair", "dining_table"] },
+    "confidence":  { "type": "float",  "range": "[0.0, 1.0]" },
+    "bbox":        { "type": "array[4]", "items": "int", "description": "[x1, y1, x2, y2] pixel coords" }
+  }}
+}
+```
+
+**P0 偵測目標**（6 class，COCO subset）：
+
+| Class | COCO ID | 命名 |
+|-------|:-------:|------|
+| person | 0 | `person` |
+| dog | 16 | `dog` |
+| bottle | 39 | `bottle` |
+| cup | 41 | `cup` |
+| chair | 56 | `chair` |
+| dining table | 60 | `dining_table`（底線，非空格） |
+
+**觸發規則**：新 P0 class 出現且 cooldown 過期時發布。同 class 連續偵測不重複。
+
+---
+
+### 4.9 `/event/obstacle_detected` ⛔ disabled (Demo 停用)
 
 > **v2.2**：已實作（obstacle_avoidance_node + lidar_obstacle_node），但因 D435 鏡頭角度限制導致防撞不可靠，Demo 停用。程式碼與 schema 保留供未來改善。
 
@@ -760,6 +797,7 @@ self.publisher.publish(msg)
 | `/event/speech_intent_recognized` | Reliable | Volatile | 10 | active |
 | `/event/gesture_detected` | Reliable | Volatile | 10 | active |
 | `/event/pose_detected` | Reliable | Volatile | 10 | active |
+| `/event/object_detected` | Reliable | Volatile | 10 | active |
 | `/event/obstacle_detected` | BestEffort | Volatile | 10 | disabled |
 | `/event/interaction/welcome` | Reliable | Volatile | 10 | deprecated |
 | `/event/interaction/gesture_command` | Reliable | Volatile | 10 | deprecated |
@@ -816,6 +854,7 @@ if not required.issubset(payload.keys()):
 | v2.0 | 2026-03-13 | 對齊 mission v2.0：face_identity 事件、speech/brain state schema、P1 topics | System Architect |
 | v2.1 | 2026-03-25 | interaction_router 三事件、/state/tts_playing、gesture enum 擴充、發布者名稱修正、LLM 型號修正 | System Architect |
 | v2.2 | 2026-04-01 | Executive v0 取代 router+bridge；新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)；deprecate interaction_router/event_action_bridge 及其 3 個 topic；`/state/executive/brain` 標記 planned | System Architect |
+| v2.3 | 2026-04-05 | 新增 `/event/object_detected`（YOLO26n 物體偵測，多物件 objects 陣列 schema）；obstacle_detected 章節重編號 4.8→4.9 | System Architect |
 
 ---
 

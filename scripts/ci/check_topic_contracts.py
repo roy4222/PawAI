@@ -95,6 +95,7 @@ INTERNAL_TOPICS = {
     "/vision_perception/debug_image",
     "/vision_perception/status_image",
     "/obstacle/debug_image",
+    "/perception/object/debug_image",
     # Search logic
     "/patrol_command",
     "/patrol_status",
@@ -133,6 +134,7 @@ def find_node_files():
         os.path.join(REPO_ROOT, "speech_processor", "speech_processor"),
         os.path.join(REPO_ROOT, "face_perception", "face_perception"),
         os.path.join(REPO_ROOT, "vision_perception", "vision_perception"),
+        os.path.join(REPO_ROOT, "object_perception", "object_perception"),
         os.path.join(REPO_ROOT, "coco_detector", "coco_detector"),
         os.path.join(REPO_ROOT, "lidar_processor", "lidar_processor"),
         os.path.join(REPO_ROOT, "src", "search_logic", "search_logic"),

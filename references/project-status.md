@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-04（Sprint Day 9 — 四核心驗收 + 文件化 + 環境修復）
+**最後更新**：2026-04-05（Sprint Day 10 — Phase C object_perception ROS2 node 完成）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -17,7 +17,7 @@
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
-| 物體辨識 | **Go 判定通過** | 4/4 | YOLO26n ONNX + ORT TensorRT EP = 15 FPS 穩定，RAM +1GB，GPU 0%。Phase C（最小 ROS2 node）待做 |
+| 物體辨識 | **Phase C 完成** | 4/5 | `object_perception/` package + ROS2 node，Jetson 5 分鐘穩定性 PASS（RAM +7MB, 48°C, 6.5Hz debug image）。TRT EP FP16 生效。Executive 整合待做 |
 | 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
 ## 3/26 會議決策
@@ -48,6 +48,51 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 10（4/5）
+
+### Phase C — object_perception ROS2 node 完成
+
+**新建 package**：`object_perception/`
+- `object_perception_node.py`：D435 RGB → letterbox → YOLO26n ONNX → dedup → event + debug_image
+- `config/object_perception.yaml` + `launch/object_perception.launch.py`
+- `test/test_object_perception.py`：**21/21 PASS**（P0_CLASSES / letterbox / rescale_bbox / roundtrip / dedup / event schema）
+
+**關鍵設計**：
+- 不裝 ultralytics，ONNX Runtime 直接推理
+- Event schema 用 `objects` 陣列（多物件）
+- Per-class cooldown 5s 去重
+- `dining_table` 底線命名（統一契約與 consumer）
+- bbox 強轉 Python int（避免 np.int32 JSON 陷阱）
+
+**Contract 更新到 v2.3**：
+- 新增 `/event/object_detected`（Reliable, Volatile, depth=10, active）
+- `/perception/object/debug_image` 加入 INTERNAL_TOPICS whitelist
+- CI `check_topic_contracts.py` 新增 scan dir
+- CI 通過：14 OK, 2 WARN, 0 FAIL
+
+**Jetson 驗證**：
+- colcon build 成功
+- 21/21 tests PASS
+- **TRT 陷阱**：`trt_engine_cache_enable` / `trt_fp16_enable` 值必須是 `"True"`/`"False"` 字串，不是 `"1"`/`"0"`。用錯會 fallback 到 CPU。修正後 TensorRT + CUDA provider 成功啟用
+
+**5 分鐘穩定性測試 PASS**：
+| 指標 | 結果 |
+|------|------|
+| Node 存活 | 10+ 分鐘無 crash |
+| RAM | 2312 → 2319 MB（+7MB，無 leak） |
+| 溫度 | 48.1 → 47.9°C（持平略降） |
+| Debug image Hz | 6.3-6.8 Hz（目標 8.0） |
+| Event 去重 | 正確（15s 發 2 筆，cooldown 生效） |
+| Providers | TensorRT + CUDA + CPU |
+
+### 未做（留給 Day 11）
+- Executive 整合（訂閱 `/event/object_detected`）
+- `start_full_demo_tmux.sh` 加 object window
+- 4 核心整合場景驗收（Day 9 遺留 0/4）
+- Jetson 供電排查
 
 ---
 
