@@ -1,8 +1,8 @@
-# ROS2 介面契約 v2.3
+# ROS2 介面契約 v2.4
 
 **文件定位**：PawAI 系統 ROS2 Topic/Action/Service 介面規格
 **適用範圍**：Layer 1-3 所有模組
-**版本**：v2.3
+**版本**：v2.4
 **凍結日期**：2026-04-05
 **對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
 
@@ -567,7 +567,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 ### 4.8 `/event/object_detected`
 
-**說明**：物體偵測事件（P0 目標物出現時觸發，per-class cooldown 5s 去重）
+**說明**：物體偵測事件（COCO 80 class，預設全開；per-class cooldown 5s 去重）
 **發布者**：`object_perception_node`
 **訂閱者**：`interaction_executive_node`（待整合）
 **QoS**：Reliable, Volatile, depth=10
@@ -579,14 +579,16 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "stamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" },
   "event_type":  { "type": "string", "enum": ["object_detected"] },
   "objects":     { "type": "array", "items": {
-    "class_name":  { "type": "string", "enum": ["person", "dog", "bottle", "cup", "chair", "dining_table"] },
+    "class_name":  { "type": "string", "description": "COCO 80 class name (underscored)，完整列表見 object_perception/object_perception/coco_classes.py" },
     "confidence":  { "type": "float",  "range": "[0.0, 1.0]" },
     "bbox":        { "type": "array[4]", "items": "int", "description": "[x1, y1, x2, y2] pixel coords" }
   }}
 }
 ```
 
-**P0 偵測目標**（6 class，COCO subset）：
+**類別範圍**：COCO 80 class（YOLO 0-79 contiguous IDs）。原名含空格者統一底線（例：`dining table` → `dining_table`、`cell phone` → `cell_phone`、`traffic light` → `traffic_light`）。完整映射見 `object_perception/object_perception/coco_classes.py`。
+
+**常用 P0 subset**（demo 展示目標，可用 `class_whitelist` 參數縮減）：
 
 | Class | COCO ID | 命名 |
 |-------|:-------:|------|
@@ -595,9 +597,13 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 | bottle | 39 | `bottle` |
 | cup | 41 | `cup` |
 | chair | 56 | `chair` |
-| dining table | 60 | `dining_table`（底線，非空格） |
+| dining table | 60 | `dining_table` |
 
-**觸發規則**：新 P0 class 出現且 cooldown 過期時發布。同 class 連續偵測不重複。
+**觸發規則**：
+- 預設 `class_whitelist=[]` 表示 COCO 80 class 全開
+- `class_whitelist=[0,16,39,41,56,60]` 可縮減為原 P0 6 class
+- 新 class 出現且 per-class cooldown（預設 5s）過期時發布
+- 同 class 連續偵測不重複發 event
 
 ---
 
@@ -855,6 +861,7 @@ if not required.issubset(payload.keys()):
 | v2.1 | 2026-03-25 | interaction_router 三事件、/state/tts_playing、gesture enum 擴充、發布者名稱修正、LLM 型號修正 | System Architect |
 | v2.2 | 2026-04-01 | Executive v0 取代 router+bridge；新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)；deprecate interaction_router/event_action_bridge 及其 3 個 topic；`/state/executive/brain` 標記 planned | System Architect |
 | v2.3 | 2026-04-05 | 新增 `/event/object_detected`（YOLO26n 物體偵測，多物件 objects 陣列 schema）；obstacle_detected 章節重編號 4.8→4.9 | System Architect |
+| v2.4 | 2026-04-05 | `/event/object_detected` 擴充至 COCO 80 class（預設全開）；`class_name` enum → reference `coco_classes.py`；新增 `class_whitelist` 參數可縮減 | System Architect |
 
 ---
 

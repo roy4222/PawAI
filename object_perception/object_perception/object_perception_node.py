@@ -7,30 +7,13 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-# P0 target classes (COCO ID → name, underscore for JSON consistency)
-P0_CLASSES = {
-    0: "person",
-    16: "dog",
-    39: "bottle",
-    41: "cup",
-    56: "chair",
-    60: "dining_table",
-}
-
-# BGR colors per class for debug overlay
-_CLASS_COLORS = {
-    "person": (0, 255, 0),
-    "dog": (255, 165, 0),
-    "bottle": (255, 0, 0),
-    "cup": (0, 255, 255),
-    "chair": (200, 200, 0),
-    "dining_table": (128, 0, 128),
-}
+from object_perception.coco_classes import COCO_CLASSES, class_color
 
 
 class ObjectPerceptionNode(Node):
@@ -46,6 +29,15 @@ class ObjectPerceptionNode(Node):
         self.declare_parameter("tick_period", 0.067)
         self.declare_parameter("publish_fps", 8.0)
         self.declare_parameter("class_cooldown_sec", 5.0)
+        # Empty list default needs explicit type descriptor (rclpy can't infer from [])
+        self.declare_parameter(
+            "class_whitelist",
+            [],
+            ParameterDescriptor(
+                type=ParameterType.PARAMETER_INTEGER_ARRAY,
+                description="COCO class IDs to detect; empty = all 80 classes",
+            ),
+        )
 
         model_path = str(self.get_parameter("model_path").value)
         trt_cache_dir = str(self.get_parameter("trt_cache_dir").value)
@@ -55,6 +47,9 @@ class ObjectPerceptionNode(Node):
         tick_period = float(self.get_parameter("tick_period").value)
         publish_fps = float(self.get_parameter("publish_fps").value)
         self.class_cooldown = float(self.get_parameter("class_cooldown_sec").value)
+
+        wl = list(self.get_parameter("class_whitelist").value or [])
+        self.allowed_classes: set = set(int(i) for i in wl) if wl else set(COCO_CLASSES.keys())
 
         self.publish_period = 1.0 / max(1.0, publish_fps)
         self.last_publish_ts = 0.0
@@ -94,10 +89,15 @@ class ObjectPerceptionNode(Node):
         # --- Timer ---
         self.timer = self.create_timer(tick_period, self._tick)
 
+        wl_desc = (
+            f"全部 {len(self.allowed_classes)} class"
+            if len(self.allowed_classes) == len(COCO_CLASSES)
+            else f"{len(self.allowed_classes)} class whitelist: {sorted(self.allowed_classes)}"
+        )
         self.get_logger().info(
             f"ObjectPerceptionNode started — model={model_path}, "
             f"conf={self.conf_thresh}, tick={tick_period:.3f}s, "
-            f"publish_fps={publish_fps}"
+            f"publish_fps={publish_fps}, {wl_desc}"
         )
 
     # ------------------------------------------------------------------
@@ -213,8 +213,10 @@ class ObjectPerceptionNode(Node):
             if conf < self.conf_thresh:
                 continue
             class_id = int(det[5])
-            if class_id not in P0_CLASSES:
+            if class_id not in self.allowed_classes:
                 continue
+            if class_id not in COCO_CLASSES:
+                continue  # unexpected id (shouldn't happen for YOLO26n 0-79)
             x1, y1, x2, y2 = self.rescale_bbox(
                 det[0], det[1], det[2], det[3],
                 scale, pad_left, pad_top, orig_w, orig_h,
@@ -222,7 +224,8 @@ class ObjectPerceptionNode(Node):
             if x2 <= x1 or y2 <= y1:
                 continue
             detections.append({
-                "class_name": P0_CLASSES[class_id],
+                "class_id": class_id,  # internal-only, stripped before event publish
+                "class_name": COCO_CLASSES[class_id],
                 "confidence": round(conf, 3),
                 "bbox": [x1, y1, x2, y2],
             })
@@ -247,13 +250,17 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     def _publish_events(self, detections: list):
         now = time.time()
-        # Collect new classes that pass cooldown
+        # Collect new classes that pass cooldown (strip internal class_id from payload)
         new_objects = []
         for det in detections:
             cls = det["class_name"]
             last = self._cooldowns.get(cls, 0.0)
             if now - last >= self.class_cooldown:
-                new_objects.append(det)
+                new_objects.append({
+                    "class_name": det["class_name"],
+                    "confidence": det["confidence"],
+                    "bbox": det["bbox"],
+                })
                 self._cooldowns[cls] = now
 
         if not new_objects:
@@ -277,7 +284,7 @@ class ObjectPerceptionNode(Node):
             cls = det["class_name"]
             conf = det["confidence"]
             x1, y1, x2, y2 = det["bbox"]
-            color = _CLASS_COLORS.get(cls, (0, 255, 0))
+            color = class_color(det.get("class_id", 0))
 
             cv2.rectangle(debug, (x1, y1), (x2, y2), color, 2)
             label = f"{cls} {conf:.2f}"

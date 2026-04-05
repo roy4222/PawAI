@@ -27,11 +27,16 @@ QoS：event 用 Reliable depth=10，debug_image 用 depth=1（latest only），c
 - 模型檔案：`/home/jetson/models/yolo26n.onnx`（9.5MB）
 - **不裝 ultralytics**（4/4 踩坑，會破壞 Jetson torch wheel）
 
-## 預設辨識目標（P0 白名單，6 class）
+## 預設辨識目標 — COCO 80 class（預設全開）
 
-person, dog, bottle, cup, chair, dining_table
+自 v0.2（2026-04-05）起，預設 `class_whitelist=[]` 表示全開 80 類。完整列表見 `object_perception/object_perception/coco_classes.py`。
 
-模型本身是 COCO 80 class，`P0_CLASSES` dict 在 node 裡過濾。
+要縮回原 P0 6 類（`person, dog, bottle, cup, chair, dining_table`）：
+```yaml
+class_whitelist: [0, 16, 39, 41, 56, 60]
+```
+
+命名規則：COCO 原名含空格者統一底線（例 `dining table` → `dining_table`、`cell phone` → `cell_phone`）。
 
 ## 參數（`config/object_perception.yaml`）
 
@@ -45,6 +50,7 @@ person, dog, bottle, cup, chair, dining_table
 | `tick_period` | 0.067 | 推理 tick（~15Hz 上限） |
 | `publish_fps` | 8.0 | Debug image 發布 rate 上限 |
 | `class_cooldown_sec` | 5.0 | Per-class event 去重 cooldown |
+| `class_whitelist` | `[]` | 空 list = COCO 80 全開；`[0,16,39,41,56,60]` = P0 6 類 |
 
 ## 接手確認清單
 

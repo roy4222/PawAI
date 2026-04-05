@@ -1,4 +1,4 @@
-"""Tests for object_perception_node — letterbox, rescale, dedup, P0 classes."""
+"""Tests for object_perception — COCO 80 classes, letterbox, rescale, dedup."""
 
 import json
 import time
@@ -6,31 +6,78 @@ import time
 import numpy as np
 import pytest
 
-from object_perception.object_perception_node import (
-    ObjectPerceptionNode,
-    P0_CLASSES,
-)
+from object_perception.coco_classes import COCO_CLASSES, class_color
+from object_perception.object_perception_node import ObjectPerceptionNode
 
 
 # ------------------------------------------------------------------
-# P0 class map
+# COCO 80 class map
 # ------------------------------------------------------------------
-class TestP0Classes:
-    def test_has_six_classes(self):
-        assert len(P0_CLASSES) == 6
+class TestCocoClasses:
+    def test_has_80_classes(self):
+        assert len(COCO_CLASSES) == 80
 
-    def test_expected_classes(self):
-        expected = {"person", "dog", "bottle", "cup", "chair", "dining_table"}
-        assert set(P0_CLASSES.values()) == expected
+    def test_all_ids_contiguous(self):
+        """YOLO uses contiguous 0-79, not the 91-ID scheme from original COCO paper."""
+        assert set(COCO_CLASSES.keys()) == set(range(80))
+
+    def test_all_names_underscored(self):
+        """No class name should contain a space (JSON consistency)."""
+        for name in COCO_CLASSES.values():
+            assert " " not in name, f"class name '{name}' contains space"
 
     def test_class_ids_are_int(self):
-        for k in P0_CLASSES:
+        for k in COCO_CLASSES:
             assert isinstance(k, int)
+
+    def test_p0_subset_preserved(self):
+        """Original P0 6 classes must remain at correct IDs."""
+        assert COCO_CLASSES[0] == "person"
+        assert COCO_CLASSES[16] == "dog"
+        assert COCO_CLASSES[39] == "bottle"
+        assert COCO_CLASSES[41] == "cup"
+        assert COCO_CLASSES[56] == "chair"
+        assert COCO_CLASSES[60] == "dining_table"
 
     def test_dining_table_underscore(self):
         """COCO uses 'dining table' but we use 'dining_table' for JSON consistency."""
-        assert "dining_table" in P0_CLASSES.values()
-        assert "dining table" not in P0_CLASSES.values()
+        assert COCO_CLASSES[60] == "dining_table"
+        assert "dining table" not in COCO_CLASSES.values()
+
+    def test_common_underscored_names(self):
+        """Spot-check other originally-spaced names are also underscored."""
+        assert COCO_CLASSES[67] == "cell_phone"  # was "cell phone"
+        assert COCO_CLASSES[9] == "traffic_light"  # was "traffic light"
+        assert COCO_CLASSES[77] == "teddy_bear"  # was "teddy bear"
+        assert COCO_CLASSES[52] == "hot_dog"  # was "hot dog"
+
+
+# ------------------------------------------------------------------
+# class_color generator
+# ------------------------------------------------------------------
+class TestClassColor:
+    def test_deterministic(self):
+        assert class_color(16) == class_color(16)
+        assert class_color(0) == class_color(0)
+
+    def test_returns_bgr_tuple(self):
+        c = class_color(42)
+        assert isinstance(c, tuple)
+        assert len(c) == 3
+        for v in c:
+            assert isinstance(v, int)
+            assert 0 <= v <= 255
+
+    def test_distinct_for_common_classes(self):
+        """Nearby common classes should get visually distinct colors."""
+        colors = {class_color(i) for i in [0, 16, 39, 41, 56, 60, 63, 66, 67, 73]}
+        assert len(colors) == 10  # all unique
+
+    def test_covers_all_80_classes(self):
+        """No crash for any valid class_id."""
+        for i in range(80):
+            c = class_color(i)
+            assert len(c) == 3
 
 
 # ------------------------------------------------------------------

@@ -66,9 +66,25 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 | Node process CPU | 38.5% |
 | ONNX providers | TensorRT + CUDA + CPU |
 
-## P0 偵測目標（6 class）
+## 偵測類別 — COCO 80 class（預設全開）
 
-模型本身認 COCO 80 類，node 在 `P0_CLASSES` 白名單過濾為以下 6 類：
+自 v0.2（2026-04-05）起，node 預設辨識**完整 COCO 80 類**。完整類別 ID → name 映射見 `object_perception/object_perception/coco_classes.py`。
+
+### Class whitelist（可選縮減）
+
+ROS2 參數 `class_whitelist` 控制：
+- `[]`（預設）— 全開 80 類
+- `[0, 16, 39, 41, 56, 60]` — 縮減為原 P0 6 類
+
+Launch 時覆寫：
+```bash
+ros2 launch object_perception object_perception.launch.py \
+  class_whitelist:='[0, 16, 39, 41, 56, 60]'
+```
+
+或改 `config/object_perception.yaml`。
+
+### 常用 P0 subset（Demo 展示目標）
 
 | Class | COCO ID | 命名 | 用途 |
 |-------|:-------:|------|------|
@@ -77,9 +93,16 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 | bottle | 39 | `bottle` | 小物展示 |
 | cup | 41 | `cup` | 小物展示 |
 | chair | 56 | `chair` | 環境理解 |
-| dining table | 60 | `dining_table`（底線，非空格） | 環境理解 |
+| dining table | 60 | `dining_table` | 環境理解 |
 
-若要增減類別，修改 `object_perception/object_perception/object_perception_node.py` 的 `P0_CLASSES` dict。
+### 命名規則
+
+COCO 原名含空格者統一改底線（JSON consistency）：
+- `dining table` → `dining_table`
+- `cell phone` → `cell_phone`
+- `traffic light` → `traffic_light`
+- `teddy bear` → `teddy_bear`
+- 等等（共 15 個原含空格名稱）
 
 ## 部署路徑
 

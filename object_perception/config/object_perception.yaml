@@ -8,3 +8,8 @@ object_perception_node:
     tick_period: 0.067
     publish_fps: 8.0
     class_cooldown_sec: 5.0
+    # Class whitelist: declared default is [] (all 80 COCO classes).
+    # To restrict, uncomment and set explicitly (see object_perception/coco_classes.py).
+    # Common P0 subset:
+    # class_whitelist: [0, 16, 39, 41, 56, 60]
+    # = [person, dog, bottle, cup, chair, dining_table]

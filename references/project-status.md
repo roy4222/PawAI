@@ -17,7 +17,7 @@
 | Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
-| 物體辨識 | **Phase C 完成** | 4/5 | `object_perception/` package + ROS2 node，Jetson 5 分鐘穩定性 PASS（RAM +7MB, 48°C, 6.5Hz debug image）。TRT EP FP16 生效。Executive 整合待做 |
+| 物體辨識 | **Phase C+ COCO 80** | 4/5 | `object_perception/` package，COCO 80 class 預設全開（可用 `class_whitelist` 縮減）。Jetson 5 分鐘穩定性 PASS。28 tests PASS。Executive 整合待做 |
 | 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
 ## 3/26 會議決策
@@ -87,6 +87,18 @@
 | Debug image Hz | 6.3-6.8 Hz（目標 8.0） |
 | Event 去重 | 正確（15s 發 2 筆，cooldown 生效） |
 | Providers | TensorRT + CUDA + CPU |
+
+### 14:XX — COCO 80 class 擴充（Phase C+）
+
+原本 `P0_CLASSES` 白名單只認 6 類（Foxglove 只看得到 chair）。擴充為完整 COCO 80 class：
+
+- **新增** `object_perception/object_perception/coco_classes.py`：COCO 80 dict + `class_color()` HSV 生成器
+- **新增** ROS2 參數 `class_whitelist`：`[]`=全開，`[0,16,39,41,56,60]`=原 P0
+- **改 node filter** 從 `P0_CLASSES` → `self.allowed_classes`
+- **Debug overlay 顏色** 改用 `class_color(class_id)`，80 class 各自獨特色
+- **契約 v2.3 → v2.4**：`class_name` enum → reference `coco_classes.py`
+
+**Tests 21 → 28 PASS**（+COCO 80 subset + class_color 測試 +命名規則驗證）。
 
 ### 未做（留給 Day 11）
 - Executive 整合（訂閱 `/event/object_detected`）
