@@ -326,6 +326,22 @@
 - [x] Contract v2.3 → v2.4：`class_name` enum → reference `coco_classes.py`
 - [x] Jetson 實機驗證：非 P0 class 真的發 event（`refrigerator` COCO 72 已抓到）
 
+**晚間追加：object → executive 整合草稿（commit `4694fb9`）**
+- [x] `state_machine.py` 新增 `EventType.OBJECT_DETECTED`（priority 5，在 FACE_WELCOME 之後）
+- [x] `OBJECT_TTS_MAP`：3 個高價值 class 話術（cup→「你要喝水嗎？」、bottle→「喝點水吧」、book→「在看書啊」）
+- [x] `_route_object()`：只有 MAP 內 class 觸發 TTS，其他 COCO 79 class 靜默忽略
+- [x] `_handle_idle()` 分派 OBJECT_DETECTED；Greeting/Conversing/Emergency 狀態不被打斷
+- [x] `interaction_executive_node.py` 加 `_on_object()` handler 訂閱 `/event/object_detected`
+- [x] 單元測試 31 → **39 PASS**（+8 TestObjectDetection cases）
+- [x] 全專案測試 67/67 PASS（39 executive + 28 object_perception），contract 0 FAIL
+- [ ] Jetson 上機驗證 — 順延 Day 11 早上（sync + colcon build + 真機拿 cup 測試）
+
+**4 判準（取代 90% KPI）**：
+- [ ] 整合場景驗收 4/4 全 PASS
+- [ ] Object event 真的觸發互動（拿 cup/bottle/book 到鏡頭前 → TTS 觸發）
+- [ ] Face tracking 5 分鐘測試 ≤ 5 tracks（現 40+）
+- [ ] Speech 安靜環境 E2E < 3s
+
 **Day 9 遺留（未做）：**
 - [ ] 整合場景驗收 4 項（#15-#18）
 - [ ] Jetson 供電排查 — 今日又斷電 2 次（累積 5 次），Demo 前必須解決
@@ -340,17 +356,75 @@
 
 ---
 
-### Day 11（4/6 日）— Handoff Day
+### Day 11（4/6 日）— 整合驗收 + 最致命 bug 修
 
-> 整理交付。為 4/9 會議準備。
+> Handoff Day 順延到 4/9 會議後。優先跑整合場景驗收，用事實決定修什麼 bug。
 
-**交付物 checklist：**
-- [ ] docs/ 可交接重組（中文→英文目錄、`.MD`→`.md`、刪 `.docx`）
-- [ ] Starlight scaffold（空框架 + sidebar + 內容對照表）
-- [ ] 4/9 會議分工文件（誰寫哪個頁面）
-- [ ] 展示站 wireframe
-- [ ] 系統狀態快照
-- [ ] Studio backend interface draft
+**主軸**：先跑驗收、再修 bug，不追擴展。
+
+**早上（4h）：**
+- [ ] Sync commit `4694fb9` 到 Jetson + `colcon build --packages-select interaction_executive`
+- [ ] 啟動 Go2 + full demo stack
+- [ ] **Object 上機驗證**：拿 cup / bottle / book 到鏡頭前 → 確認 executive 真的觸發 TTS
+- [ ] **整合場景驗收 4/4**：
+  - [ ] #15 走近 → 被認出 → 說「你好」 → 比讚
+  - [ ] #16 對話中比 stop → 立即停止
+  - [ ] #17 跌倒中說話 → EMERGENCY 不被語音打斷
+  - [ ] #18 5 分鐘自由互動 → 流暢度主觀評分
+- [ ] 每項寫 bug log（模組 / 行為 / log line / 優先級）
+
+**下午（4h）：**
+- [ ] 修**最致命的 1-2 個 bug**（基於早上 bug list 的實測結果）
+- [ ] 修完**再跑對應場景一次**確認修好
+
+**晚上（1h）：**
+- [ ] 收工歸檔 + push
+- [ ] 寫 Day 12 的 TODO（1-3 行）
+
+**不做**：不擴展 Executive interaction mode、不動 VAD、不碰分工清單。
+
+---
+
+### Day 12（4/7 一）— Face tracking 抖動修復
+
+**早上（4h）：**
+- [ ] Day 11 延續 bug 修（如有）
+- [ ] Object integration 深度驗證（不同距離、光線）
+
+**下午（4h）：**
+- [ ] **Face tracking 抖動修復**：
+  - `face_identity_node.py` IOU threshold / track lifetime / re-id 策略
+  - 驗收標準：**5 分鐘 greeting 測試 ≤ 5 tracks**（現 40+）
+- [ ] 可能需要多輪 tune
+
+**晚上（1h）：**
+- [ ] 收工歸檔 + push
+
+---
+
+### Day 13（4/8 二）— Speech VAD/ASR + 最終驗收
+
+**早上（4h）：**
+- [ ] **Speech VAD 或 ASR 優化**（二擇一）：
+  - 低風險：silero-vad 取代 energy VAD
+  - 高風險高回報：ASR 遷到電腦
+- [ ] 目標：**安靜環境 E2E < 3s**
+
+**下午（4h）：**
+- [ ] **整合場景驗收終輪 4/4 PASS**
+- [ ] **Jetson 供電量測**（1h 背景任務）：USB 電表接上記錄 spike，不買零件
+- [ ] Minor polish
+
+**晚上（1h）：**
+- [ ] 分工清單定稿（4/9 會議用）
+- [ ] 4/9 會議 10 分鐘簡報大綱
+- [ ] Push + 收工
+
+**4 判準檢查（必過）：**
+- [ ] 整合場景驗收 4/4 全 PASS
+- [ ] Object event 真的觸發互動（cup/bottle/book TTS）
+- [ ] Face tracking ≤ 5 tracks / 5 min
+- [ ] Speech 安靜環境 E2E < 3s
 
 ---
 
