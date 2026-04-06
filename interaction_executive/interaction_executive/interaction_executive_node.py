@@ -34,7 +34,11 @@ class InteractionExecutiveNode(Node):
     def __init__(self):
         super().__init__("interaction_executive_node")
 
-        self._sm = ExecutiveStateMachine()
+        self.declare_parameter("enable_fallen", True)
+        enable_fallen = self.get_parameter("enable_fallen").value
+        self._sm = ExecutiveStateMachine(enable_fallen=enable_fallen)
+        if not enable_fallen:
+            self.get_logger().warn("Fallen/EMERGENCY detection DISABLED (demo mode)")
 
         # --- Publishers ---
         self._pub_tts = self.create_publisher(String, "/tts", 10)

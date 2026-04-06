@@ -133,7 +133,7 @@ sleep 5
 echo "[5/10] Starting interaction_executive..."
 tmux new-window -t "$SESSION" -n executive
 tmux send-keys -t "$SESSION:executive" \
-  "$ROS_SETUP && ros2 launch interaction_executive interaction_executive.launch.py" Enter
+  "$ROS_SETUP && ros2 launch interaction_executive interaction_executive.launch.py enable_fallen:=false" Enter
 sleep 2
 
 # --- Window 5: ASR + Intent ---
@@ -201,6 +201,13 @@ tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
   "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p best_effort_qos_topic_whitelist:='[\"/(point_cloud2|scan|camera/.*/image_raw)\"]'" Enter
 
+# --- Window 9: Studio Gateway (speech bridge, port 8080) ---
+echo "[11/11] Starting Studio Gateway (speech bridge, port 8080)..."
+tmux new-window -t "$SESSION" -n gateway
+tmux send-keys -t "$SESSION:gateway" \
+  "$ROS_SETUP && python3 $WS/pawai-studio/gateway/studio_gateway.py" Enter
+sleep 2
+
 # === Options ===
 tmux set-option -t "$SESSION" remain-on-exit on >/dev/null
 
@@ -218,6 +225,7 @@ echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
 echo "  camtf     — Static TF: base_link → camera_link (D435)"
 echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765, best_effort QoS)"
+echo "  gateway   — Studio Gateway (http://$(hostname -I | awk '{print $1}'):8080/speech)"
 echo ""
 echo "To attach: tmux attach -t $SESSION"
 echo "To kill:   tmux kill-session -t $SESSION"

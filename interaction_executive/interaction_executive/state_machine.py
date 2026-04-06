@@ -73,13 +73,14 @@ OBJECT_TTS_MAP: dict[str, str] = {
 
 
 class ExecutiveStateMachine:
-    def __init__(self):
+    def __init__(self, enable_fallen: bool = True):
         self._state = ExecutiveState.IDLE
         self._previous_state = ExecutiveState.IDLE
         self._state_enter_time = time.monotonic()
         self._dedup: dict[str, float] = {}
         self._obstacle_clear_time: Optional[float] = None
         self._obstacle_enter_time: Optional[float] = None
+        self.enable_fallen = enable_fallen
 
     @property
     def state(self) -> ExecutiveState:
@@ -141,8 +142,8 @@ class ExecutiveStateMachine:
             if self._is_deduped(event_type, source):
                 return EventResult()
 
-        # --- EMERGENCY: fallen ---
-        if event_type == EventType.POSE_FALLEN:
+        # --- EMERGENCY: fallen (can be disabled for demo) ---
+        if event_type == EventType.POSE_FALLEN and self.enable_fallen:
             self._set_state(ExecutiveState.EMERGENCY)
             return EventResult(
                 tts="偵測到跌倒，你還好嗎？",
@@ -220,12 +221,16 @@ class ExecutiveStateMachine:
                          data: dict) -> EventResult:
         if event_type == EventType.SPEECH_INTENT:
             return self._route_speech(data)
+        if event_type == EventType.GESTURE:
+            return self._route_gesture(data)
         return EventResult()
 
     def _handle_conversing(self, event_type: EventType, source: str,
                            data: dict) -> EventResult:
         if event_type == EventType.SPEECH_INTENT:
             return self._route_speech(data)
+        if event_type == EventType.GESTURE:
+            return self._route_gesture(data)
         return EventResult()
 
     def _handle_executing(self, event_type: EventType, source: str,

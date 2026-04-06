@@ -54,6 +54,8 @@ let ws = null;
 let wsText = null;
 let mediaRecorder = null;
 let audioChunks = [];
+let recordStart = 0;
+const MIN_RECORD_MS = 500;
 const textInput = document.getElementById('textInput');
 
 function connect() {
@@ -105,15 +107,22 @@ async function startRecording() {
 
   mediaRecorder.onstop = async function() {
     stream.getTracks().forEach(function(t) { t.stop(); });
-    var blob = new Blob(audioChunks);
+    var elapsed = Date.now() - recordStart;
+    if (elapsed < MIN_RECORD_MS) {
+      statusEl.textContent = 'Too short \u2014 hold longer';
+      return;
+    }
+    var blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
     var buffer = await blob.arrayBuffer();
+    console.log('[speech] Sending audio: ' + buffer.byteLength + ' bytes, type=' + blob.type + ', duration=' + elapsed + 'ms');
     if (ws && ws.readyState === WebSocket.OPEN) {
-      statusEl.textContent = 'Processing...';
+      statusEl.textContent = 'Processing... (' + (buffer.byteLength / 1024).toFixed(1) + ' KB)';
       btn.disabled = true;
       ws.send(buffer);
     }
   };
 
+  recordStart = Date.now();
   mediaRecorder.start();
 }
 
