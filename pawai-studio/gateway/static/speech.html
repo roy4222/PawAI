@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PawAI Speech Bridge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, sans-serif; background: #1a1a2e; color: #eee; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  .container { text-align: center; max-width: 480px; width: 100%; padding: 2rem; }
+  h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+  .subtitle { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+  #status { font-size: 1.1rem; margin-bottom: 1.5rem; color: #4ecdc4; min-height: 1.5em; }
+  #btn { width: 120px; height: 120px; border-radius: 50%; border: 4px solid #4ecdc4; background: transparent; color: #4ecdc4; font-size: 1rem; cursor: pointer; transition: all 0.2s; user-select: none; -webkit-user-select: none; }
+  #btn:active, #btn.recording { background: #e74c3c; border-color: #e74c3c; color: #fff; transform: scale(1.1); }
+  #btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .result { margin-top: 2rem; text-align: left; background: #16213e; border-radius: 8px; padding: 1rem; min-height: 100px; }
+  .result h3 { color: #4ecdc4; margin-bottom: 0.5rem; font-size: 0.85rem; text-transform: uppercase; }
+  .result p { margin-bottom: 0.5rem; }
+  .label { color: #888; font-size: 0.8rem; }
+  .value { font-size: 1.1rem; }
+  .error { color: #e74c3c; }
+  .intent-tag { display: inline-block; background: #4ecdc4; color: #1a1a2e; padding: 2px 10px; border-radius: 12px; font-weight: bold; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>PawAI Speech Bridge</h1>
+  <p class="subtitle">Push-to-talk &rarr; Go2</p>
+  <p id="status">Connecting...</p>
+
+  <button id="btn" disabled>Hold to Talk</button>
+
+  <div class="result">
+    <h3>Result</h3>
+    <p><span class="label">ASR: </span><span id="asr" class="value">&mdash;</span></p>
+    <p><span class="label">Intent: </span><span id="intent" class="value">&mdash;</span></p>
+    <p><span class="label">Latency: </span><span id="latency" class="value">&mdash;</span></p>
+  </div>
+</div>
+
+<script>
+const btn = document.getElementById('btn');
+const statusEl = document.getElementById('status');
+const asrEl = document.getElementById('asr');
+const intentEl = document.getElementById('intent');
+const latencyEl = document.getElementById('latency');
+
+let ws = null;
+let mediaRecorder = null;
+let audioChunks = [];
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws/speech');
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = function() {
+    statusEl.textContent = 'Ready \u2014 hold button to talk';
+    statusEl.style.color = '#4ecdc4';
+    btn.disabled = false;
+  };
+  ws.onmessage = function(e) {
+    var data = JSON.parse(e.data);
+    if (data.error) {
+      asrEl.textContent = data.error;
+      asrEl.classList.add('error');
+      intentEl.textContent = '\u2014';
+      latencyEl.textContent = '\u2014';
+    } else {
+      asrEl.textContent = data.asr || '(empty)';
+      asrEl.classList.remove('error');
+      intentEl.innerHTML = '<span class="intent-tag">' + data.intent + '</span> (' + (data.confidence * 100).toFixed(0) + '%)';
+      latencyEl.textContent = data.latency_ms.toFixed(0) + ' ms';
+    }
+    statusEl.textContent = 'Ready \u2014 hold button to talk';
+    btn.disabled = false;
+  };
+  ws.onclose = function() {
+    statusEl.textContent = 'Disconnected \u2014 reconnecting...';
+    statusEl.style.color = '#e74c3c';
+    btn.disabled = true;
+    setTimeout(connect, 2000);
+  };
+  ws.onerror = function() { ws.close(); };
+}
+
+async function startRecording() {
+  var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  audioChunks = [];
+
+  var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus' : '';
+  mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
+
+  mediaRecorder.ondataavailable = function(e) {
+    if (e.data.size > 0) audioChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = async function() {
+    stream.getTracks().forEach(function(t) { t.stop(); });
+    var blob = new Blob(audioChunks);
+    var buffer = await blob.arrayBuffer();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      statusEl.textContent = 'Processing...';
+      btn.disabled = true;
+      ws.send(buffer);
+    }
+  };
+
+  mediaRecorder.start();
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+}
+
+btn.addEventListener('mousedown', function(e) { e.preventDefault(); btn.classList.add('recording'); startRecording(); });
+btn.addEventListener('mouseup', function() { btn.classList.remove('recording'); stopRecording(); });
+btn.addEventListener('mouseleave', function() { btn.classList.remove('recording'); stopRecording(); });
+btn.addEventListener('touchstart', function(e) { e.preventDefault(); btn.classList.add('recording'); startRecording(); });
+btn.addEventListener('touchend', function() { btn.classList.remove('recording'); stopRecording(); });
+
+connect();
+</script>
+</body>
+</html>
