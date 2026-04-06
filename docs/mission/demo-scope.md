@@ -1,27 +1,37 @@
 # Demo 範圍與已知限制
 
-**最後更新**：2026-04-04
+**最後更新**：2026-04-06
 **適用展示**：5/16 省夜 Demo、5/18 正式展示
+**Demo 模式**：混合模式 — 視覺互動為主 + 網頁語音輔助
 
 ---
+
+## Demo 模式說明
+
+Go2 負責視覺感知（face/gesture/pose/object）+ Executive 決策 + TTS 播放。
+語音入口由**瀏覽器收音**（Studio Gateway）提供，不依賴 Go2 機身麥克風。
+
+使用者看到的仍然是機器狗在互動，只是收音點不在狗身上。
+**Demo 話術**：「PawAI 以多模態互動為核心，語音入口可由 Studio 外部麥克風輔助。」
 
 ## Demo 啟用功能
 
 | # | 功能 | 狀態 | Demo 角色 |
 |:-:|------|:----:|-----------|
 | 1 | 人臉辨識 | ✅ | 走近認出 → TTS 叫名字問候 |
-| 2 | 語音互動（聊天） | ✅ | 中文自然對話，Cloud LLM → RuleBrain fallback |
+| 2 | 語音互動（網頁） | ✅ | 瀏覽器 push-to-talk → Cloud ASR → LLM → TTS（繞過 Go2 風扇噪音） |
 | 3 | 手勢辨識 | ✅ | stop（伸手掌）→ StopMove、thumbs_up → Content |
 | 4 | 姿勢辨識 | ✅ | standing/sitting 辨識、fallen → EMERGENCY 警報 |
 | 5 | AI 大腦（Executive） | ✅ | 事件聚合 + 優先序仲裁 + 狀態機 |
-| 6 | 物體辨識 | 待定 | Go/No-Go 判定中（YOLO26n，預設目標） |
+| 6 | 物體辨識 | ✅ | cup 觸發 TTS「你要喝水嗎？」（YOLO26n，大物件為主） |
+| 7 | Studio Gateway | ✅ | FastAPI + rclpy on Jetson:8080，瀏覽器語音入口 |
 
 ## Demo 停用功能
 
 | # | 功能 | 停用原因 | 替代方案 |
 |:-:|------|----------|----------|
-| 7 | 導航避障 | D435 鏡頭角度朝上，低障礙物在 ~0.4m 才進入 FOV，煞車距離不足反覆撞上（3 輪測試全失敗）| 人工監控 + 手勢 stop |
-| — | 語音命令控制 | Go2 風扇噪音壓過語音，ASR 準確率 ~25%，安全關鍵指令（stop）不可靠 | 手勢 stop 取代語音 stop |
+| — | Go2 機身語音 | Go2 風扇噪音 ASR ~25%，不可用 | Studio Gateway 網頁語音 |
+| — | 導航避障 | D435 鏡頭角度限制，煞車距離不足 | 人工監控 + 手勢 stop |
 | — | come_here 前進 | 依賴導航避障，停用後無安全保障 | Demo 不使用自主前進 |
 
 ## 已知限制

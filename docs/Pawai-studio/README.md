@@ -8,12 +8,12 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 前端開發截止，後端 4/9 後啟動 |
-| 版本/決策 | Next.js + FastAPI + Redis |
-| 完成度 | 50%（前端框架完成，後端 WebSocket bridge 不存在） |
-| 最後驗證 | 2026-03-16 |
-| 入口檔案 | `pawai-studio/frontend/` |
-| 測試 | `cd pawai-studio && bash start.sh` |
+| 狀態 | **Gateway 文字模式 E2E 通過**（4/6） |
+| 版本/決策 | Next.js（前端）+ FastAPI + rclpy（Gateway） |
+| 完成度 | Gateway speech bridge ✅，前端面板接真實數據待做 |
+| 最後驗證 | 2026-04-06 |
+| 入口檔案 | `pawai-studio/gateway/`（Gateway）、`pawai-studio/frontend/`（前端） |
+| 測試 | Gateway: `python3 pawai-studio/gateway/studio_gateway.py` → http://JETSON_IP:8080/speech |
 
 ## 啟動方式
 
@@ -28,12 +28,10 @@ bash pawai-studio/start.sh
 ```
 使用者操作（Chat / 技能按鈕 / 面板）
     ↓
-Studio Frontend (Next.js React)
+Studio Frontend (Next.js React) ← 前端面板
     ↓ WebSocket
-Studio Gateway (FastAPI) ← 待建
-    ↓ Redis Pub/Sub
-ROS2 Bridge ← 待建
-    ↓
+Studio Gateway (FastAPI + rclpy, Jetson:8080) ← **已建，speech bridge 通過**
+    ↓ rclpy 直接 publish（本機，無跨機 DDS）
 ROS2 Topics（face/speech/gesture/pose/brain）
 ```
 

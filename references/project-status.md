@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-05（Sprint Day 10 — Phase C object_perception ROS2 node 完成）
+**最後更新**：2026-04-06（Sprint Day 11 — 混合模式策略轉向 + Studio Gateway E2E 通過）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -9,15 +9,15 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **聊天可用 / 命令未達標** | 4/1 | 安靜 4/5 PASS；Go2 噪音下聊天互動可用，stop 等命令不可靠→改靠手勢 |
-| 人臉 (face_perception) | **上機驗收 3/5** | 4/4 | identity_stable ✅、辨識+TTS ✅、離開再回來 ✅、未註冊/兩人 SKIP（缺第二人） |
+| 語音 (speech_processor) | **Go2 機身 ASR 失效 / 網頁語音通過** | 4/6 | Go2 風扇噪音 ASR ~25%→不可用；**Studio Gateway 文字模式 E2E 通過**（Web → LLM → TTS → USB 喇叭）；錄音模式待修 |
+| 人臉 (face_perception) | **greeting 可靠化** | 4/6 | sim_threshold 0.35→0.30，identity_stable 21 次/2min（調前 1-3 次），Executive idle→greeting 確認通；track 抖動仍在（45 tracks/2min），Day 12 修 |
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
-| Studio (pawai-studio) | 前端開發中 | 3/16 | Next.js，前端截止 3/26（已截止），後端 4/9 後啟動，WebSocket bridge 不存在 |
+| Studio (pawai-studio) | **Gateway 文字模式 E2E 通過** | 4/6 | Gateway = Studio 第一個真後端能力（FastAPI+rclpy on Jetson:8080）；Web push-to-talk 頁面已建；錄音模式待修；前端 Next.js 不動 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
-| 物體辨識 | **Phase C+ COCO 80** | 4/5 | `object_perception/` package，COCO 80 class 預設全開（可用 `class_whitelist` 縮減）。Jetson 5 分鐘穩定性 PASS。28 tests PASS。Executive 整合待做 |
+| 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
 | 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
 ## 3/26 會議決策
@@ -48,6 +48,54 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 11（4/6）
+
+### 策略轉向：混合模式
+
+**根因**：Go2 風扇噪音導致機身 ASR 完全不可用（~25%），語音互動 = Demo 核心，不能沒有。
+**決策**：Demo 改為「視覺互動為主 + 網頁語音輔助」。語音入口從 Go2 麥克風移到瀏覽器。
+**實作**：Studio Gateway（FastAPI + rclpy on Jetson:8080），瀏覽器 push-to-talk → ASR → intent → ROS2 → LLM → TTS。
+
+### Face 調參 — greeting 可靠化
+- `sim_threshold_upper`: 0.35 → 0.30，`sim_threshold_lower`: 0.25 → 0.22
+- `track_iou_threshold`: 0.15，`track_max_misses`: 20，`stable_hits`: 2
+- 2 分鐘 smoke test：`identity_stable: roy` 21 次（調前 1-3 次），零誤認
+- Executive `idle → greeting` 確認通了（之前一直卡 idle）
+
+### Object 上機驗證
+- cup 觸發 TTS「你要喝水嗎？」✅（threshold 0.5）
+- book 偶爾辨識（0.3 threshold 下 2 次，0.79/0.56）
+- bottle 未偵測到 → Demo 不展示
+- 非白名單（chair/person/cell_phone）靜默 ✅
+- **結論**：管線通，限制在 YOLO26n 偵測率。cup 當主力展示物
+
+### Studio Gateway — 文字模式 E2E 通過
+- `pawai-studio/gateway/` 從零建立（server + asr_client + web page + 8 tests）
+- WebSocket 400 修復：websockets 16→13 + wsproto backend
+- 文字輸入 E2E：「今天天氣如何」→ LLM「我還好，你在哪裡?」→ TTS USB 喇叭播放 ✅
+- 錄音模式：MediaRecorder blob 太短（~600 bytes），待修
+
+### 整合場景驗收（部分）
+- #15 走近/問候/比讚：face greeting ✅，speech 靠網頁文字模式 ✅
+- #16 stop 手勢：event 有抓到 ✅
+- #17 跌倒：EMERGENCY 觸發 ✅，TTS「偵測到跌倒」✅
+- #18 自由互動：中途 Jetson 斷電中斷
+
+### 供電問題量化
+- Jetson 穩態功耗：~10W（VDD_IN 4.93V / 2.0A），DC jack 端 ~12W / 0.6A@20V
+- 功耗 spike：3.04A（~15W），電壓瞬降 4888mV → 斷電
+- 4/6 單日斷電 3+ 次（累計 8+ 次）
+- XL4015 19.8V 已是 Jetson 上限（規格 9-20V），不能再升
+- 獨立電源測試穩定，確認問題在 Go2 BAT → XL4015 鏈路
+
+### 未完成
+- [ ] Web Audio 錄音修復（MediaRecorder blob 太短）
+- [ ] 混合模式 demo flow 3 輪驗收
+- [ ] Face tracking 抖動深度修復（≤5 tracks/5min）
+- [ ] 供電方案定案
 
 ---
 

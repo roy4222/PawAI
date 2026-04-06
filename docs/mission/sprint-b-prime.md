@@ -356,32 +356,38 @@
 
 ---
 
-### Day 11（4/6 日）— 整合驗收 + 最致命 bug 修
+### Day 11（4/6 日）— 整合驗收 + 策略轉向 + Studio Gateway
 
-> Handoff Day 順延到 4/9 會議後。優先跑整合場景驗收，用事實決定修什麼 bug。
+> 原計劃跑整合場景驗收再修 bug。實測發現 Go2 機身 ASR 完全不可用（風扇噪音），策略轉向混合模式。
 
-**主軸**：先跑驗收、再修 bug，不追擴展。
+**策略轉向**：Go2 機身 ASR 失效 → Demo 改為「視覺互動為主 + 網頁語音輔助」。語音入口從 Go2 麥克風移到瀏覽器（Studio Gateway）。
 
-**早上（4h）：**
-- [ ] Sync commit `4694fb9` 到 Jetson + `colcon build --packages-select interaction_executive`
-- [ ] 啟動 Go2 + full demo stack
-- [ ] **Object 上機驗證**：拿 cup / bottle / book 到鏡頭前 → 確認 executive 真的觸發 TTS
-- [ ] **整合場景驗收 4/4**：
-  - [ ] #15 走近 → 被認出 → 說「你好」 → 比讚
-  - [ ] #16 對話中比 stop → 立即停止
-  - [ ] #17 跌倒中說話 → EMERGENCY 不被語音打斷
-  - [ ] #18 5 分鐘自由互動 → 流暢度主觀評分
-- [ ] 每項寫 bug log（模組 / 行為 / log line / 優先級）
+**早上：**
+- [x] Sync + Build（interaction_executive + object_perception）
+- [x] 前置檢查 4/4（供電 / tunnel / USB / D435）
+- [x] **Object 上機驗證**：cup 觸發 TTS ✅，book 偶爾 ✅，bottle 未偵測 ❌
+- [x] **整合場景驗收**（部分，Jetson 斷電中斷）：
+  - [x] #15 走近/問候/比讚 — face greeting ✅，speech 需靠網頁
+  - [x] #16 stop 手勢 — event 有抓到 ✅
+  - [x] #17 跌倒 — EMERGENCY + TTS ✅
+  - [ ] #18 5 分鐘自由互動 — Jetson 斷電中斷
 
-**下午（4h）：**
-- [ ] 修**最致命的 1-2 個 bug**（基於早上 bug list 的實測結果）
-- [ ] 修完**再跑對應場景一次**確認修好
+**下午（致命 bug = face greeting 不可靠）：**
+- [x] Face 調參：sim_threshold 0.35→0.30，identity_stable 1-3→21 次/2min
+- [x] Executive idle→greeting 確認通了
+- [x] 供電壓力測試：穩態 10W，spike 3A/15W → 斷電根因確認
 
-**晚上（1h）：**
-- [ ] 收工歸檔 + push
-- [ ] 寫 Day 12 的 TODO（1-3 行）
+**晚上（策略轉向 + Gateway 實作）：**
+- [x] 混合模式 spec + plan 完成
+- [x] Studio Gateway 從零建立（FastAPI + rclpy + Web push-to-talk）
+- [x] **文字模式 E2E 通過**：Web 文字 → LLM → TTS → USB 喇叭 ✅
+- [x] 8 unit tests PASS
+- [ ] 錄音模式待修（MediaRecorder blob 太短）
 
-**不做**：不擴展 Executive interaction mode、不動 VAD、不碰分工清單。
+**Day 12 TODO：**
+- 修 Web Audio 錄音
+- 混合模式 demo flow 3 輪驗收
+- Face tracking 抖動修復
 
 ---
 

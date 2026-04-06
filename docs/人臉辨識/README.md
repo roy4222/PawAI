@@ -38,8 +38,13 @@ face_identity_node（YuNet 偵測 -> SFace embedding -> IOU 追蹤）
 interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 ```
 
-**Hysteresis 穩定化**：sim_threshold_upper=0.35 / lower=0.25，避免 known/unknown 抖動。
-**face_db**：`/home/jetson/face_db/`，目前有 alice、grama 兩人。
+**Hysteresis 穩定化**（4/6 Jetson 調參）：
+- `sim_threshold_upper`: 0.35 → **0.30**，`sim_threshold_lower`: 0.25 → **0.22**
+- `track_iou_threshold`: **0.15**，`track_max_misses`: **20**，`stable_hits`: **2**，`unknown_grace_s`: **2.5**
+- 調參後 2 分鐘 smoke test：`identity_stable: roy` 21 次（調前 1-3 次），零誤認
+- **已知限制**：track 抖動仍在（45 tracks/2min，目標 ≤5），根因是 YuNet 偵測不穩定
+
+**face_db**：`/home/jetson/face_db/`，目前有 roy、grama 兩人。
 
 ## 輸入/輸出
 
