@@ -9,14 +9,14 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **Go2 機身 ASR 失效 / 網頁語音通過** | 4/6 | Go2 風扇噪音 ASR ~25%→不可用；**Studio Gateway 文字模式 E2E 通過**（Web → LLM → TTS → USB 喇叭）；錄音模式待修 |
+| 語音 (speech_processor) | **網頁語音 E2E 通過（文字+錄音）** | 4/6 | Go2 機身 ASR 不可用（風扇噪音）；**Studio Gateway 錄音模式 E2E 通過**：瀏覽器說話→ASR~430ms→LLM~1.5s→TTS→USB 喇叭，E2E ~2s |
 | 人臉 (face_perception) | **greeting 可靠化** | 4/6 | sim_threshold 0.35→0.30，identity_stable 21 次/2min（調前 1-3 次），Executive idle→greeting 確認通；track 抖動仍在（45 tracks/2min），Day 12 修 |
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
-| Studio (pawai-studio) | **Gateway 文字模式 E2E 通過** | 4/6 | Gateway = Studio 第一個真後端能力（FastAPI+rclpy on Jetson:8080）；Web push-to-talk 頁面已建；錄音模式待修；前端 Next.js 不動 |
+| Studio (pawai-studio) | **Gateway 錄音+文字 E2E 通過** | 4/6 | Gateway（FastAPI+rclpy on Jetson:8080）；push-to-talk 錄音 E2E ~2s；文字輸入也通；前端 Next.js 不動 |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 + safety guard** | 4/3 | Gate B 6/6，come_here 暫停（避障不可靠） |
+| interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
 | 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
 
@@ -76,7 +76,13 @@
 - `pawai-studio/gateway/` 從零建立（server + asr_client + web page + 8 tests）
 - WebSocket 400 修復：websockets 16→13 + wsproto backend
 - 文字輸入 E2E：「今天天氣如何」→ LLM「我還好，你在哪裡?」→ TTS USB 喇叭播放 ✅
-- 錄音模式：MediaRecorder blob 太短（~600 bytes），待修
+- **錄音模式 E2E 通過**：瀏覽器說「你好」→ ASR「你好。」→ LLM「哈囉，我在這裡。」→ TTS 播放 ✅
+- 延遲：ASR ~430ms + LLM ~1.5s = **E2E ~2s**（比 Go2 機身 5-14s 大幅改善）
+
+### Executive 改善
+- thumbs_up 在 GREETING/CONVERSING 狀態也能路由（之前只有 IDLE 才生效）
+- `enable_fallen` 參數化：全域預設 true，demo 腳本帶 `enable_fallen:=false`
+- 39 tests PASS
 
 ### 整合場景驗收（部分）
 - #15 走近/問候/比讚：face greeting ✅，speech 靠網頁文字模式 ✅
@@ -92,10 +98,11 @@
 - 獨立電源測試穩定，確認問題在 Go2 BAT → XL4015 鏈路
 
 ### 未完成
-- [ ] Web Audio 錄音修復（MediaRecorder blob 太短）
-- [ ] 混合模式 demo flow 3 輪驗收
+- [x] ~~Web Audio 錄音修復~~ → **已通過**（Chrome 麥克風設定問題，非程式碼）
+- [ ] 混合模式 demo flow 3 輪驗收（視覺+語音完整流程）
 - [ ] Face tracking 抖動深度修復（≤5 tracks/5min）
 - [ ] 供電方案定案
+- [ ] thumbs_up in GREETING 真機驗證
 
 ---
 

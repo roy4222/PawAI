@@ -382,10 +382,14 @@
 - [x] Studio Gateway 從零建立（FastAPI + rclpy + Web push-to-talk）
 - [x] **文字模式 E2E 通過**：Web 文字 → LLM → TTS → USB 喇叭 ✅
 - [x] 8 unit tests PASS
-- [ ] 錄音模式待修（MediaRecorder blob 太短）
+- [x] **錄音模式 E2E 通過**：瀏覽器說話→ASR~430ms→LLM~1.5s→TTS，E2E ~2s ✅
+- [x] thumbs_up 在 GREETING/CONVERSING 也生效（之前只有 IDLE）
+- [x] `enable_fallen` 參數化：demo 關閉，全域預設不改
+- [x] gateway window 加入 `start_full_demo_tmux.sh`
+- [x] 39 executive tests PASS
 
 **Day 12 TODO：**
-- 修 Web Audio 錄音
+- 全力衝刺 PawAI Studio
 - 混合模式 demo flow 3 輪驗收
 - Face tracking 抖動修復
 
