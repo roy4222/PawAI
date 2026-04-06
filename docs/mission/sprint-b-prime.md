@@ -395,19 +395,29 @@
 
 ---
 
-### Day 12（4/7 一）— Face tracking 抖動修復
+### Day 12（4/7 一）— PawAI Studio 接真實 ROS2 + speech bridge 併入
 
-**早上（4h）：**
-- [ ] Day 11 延續 bug 修（如有）
-- [ ] Object integration 深度驗證（不同距離、光線）
+> 原計劃 Face tracking 修復，改為全力衝刺 Studio。Studio 取代 Foxglove 成為 Demo 觀測台。Face tracking 順延。
 
-**下午（4h）：**
-- [ ] **Face tracking 抖動修復**：
-  - `face_identity_node.py` IOU threshold / track lifetime / re-id 策略
-  - 驗收標準：**5 分鐘 greeting 測試 ≤ 5 tracks**（現 40+）
-- [ ] 可能需要多輪 tune
+**主線**：讓 Studio 從 mock 數據升級為真實 ROS2 感知數據。
 
-**晚上（1h）：**
+**上午：**
+- [ ] Gateway 加 ROS2 subscriptions（face / gesture / pose / object / executive status）
+- [ ] 新增 `/ws/events` WebSocket broadcast endpoint
+- [ ] 用 wscat 驗證事件流
+
+**中午前：**
+- [ ] Studio 前端 WebSocket URL 改指向 Gateway（Jetson:8080）
+- [ ] 4 個 panel（face / speech / gesture / pose）接上真實數據
+- [ ] 驗證：打開 Studio 看到即時感知狀態
+
+**下午：**
+- [ ] Speech bridge push-to-talk 併入 Studio（chat 或 speech panel）
+- [ ] Studio 同時能「看」（感知面板）和「說」（語音輸入）
+
+**傍晚：**
+- [ ] 文件更新（project-status / demo-scope / Pawai-studio README）
+- [ ] 分工清單（UI 整理 / 文書 / 說明頁可分出去）
 - [ ] 收工歸檔 + push
 
 ---
