@@ -205,7 +205,7 @@ tmux send-keys -t "$SESSION:fox" \
 echo "[11/11] Starting Studio Gateway (speech bridge, port 8080)..."
 tmux new-window -t "$SESSION" -n gateway
 tmux send-keys -t "$SESSION:gateway" \
-  "$ROS_SETUP && python3 $WS/pawai-studio/gateway/studio_gateway.py" Enter
+  "$ROS_SETUP && python3 $WORKDIR/pawai-studio/gateway/studio_gateway.py" Enter
 sleep 2
 
 # === Options ===
