@@ -10,6 +10,15 @@ face_identity_node:
     # Operational thresholds (more permissive than code default 0.90)
     det_score_threshold: 0.35
     min_face_area_ratio: 0.001
+    # Jetson real-world tuning: allow noisier bbox association and longer hold
+    # to reduce track churn from slight pose/camera jitter.
+    track_iou_threshold: 0.15
+    track_max_misses: 20
+    stable_hits: 2
+    unknown_grace_s: 2.5
+    # Recognition thresholds (relaxed for D435 + Jetson real-world conditions)
+    sim_threshold_upper: 0.30
+    sim_threshold_lower: 0.22
     # Disable compare image (saves bandwidth)
     publish_compare_image: false
     # Always headless on Jetson (no DISPLAY)
