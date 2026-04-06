@@ -68,26 +68,34 @@ class GatewayNode(Node):
 
 
 # ── FastAPI App ──────────────────────────────────────────────────
-app = FastAPI(title="PawAI Studio Gateway")
 node: GatewayNode | None = None
 classifier: IntentClassifier | None = None
 
 
-@app.on_event("startup")
-async def startup():
+def _spin_ros2(ros_node: Node) -> None:
+    try:
+        rclpy.spin(ros_node)
+    except Exception:
+        pass  # ExternalShutdownException on clean exit
+
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global node, classifier
     rclpy.init()
     node = GatewayNode()
     classifier = IntentClassifier()
-    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread = threading.Thread(target=_spin_ros2, args=(node,), daemon=True)
     spin_thread.start()
-
-
-@app.on_event("shutdown")
-async def shutdown():
+    yield
     if node:
         node.destroy_node()
     rclpy.try_shutdown()
+
+
+app = FastAPI(title="PawAI Studio Gateway", lifespan=lifespan)
 
 
 @app.get("/speech")
@@ -98,6 +106,49 @@ async def speech_page():
 @app.get("/health")
 async def health():
     return {"status": "ok", "node": node is not None}
+
+
+@app.websocket("/ws/text")
+async def ws_text(ws: WebSocket):
+    """Text-only mode: receive text, classify intent, publish to ROS2."""
+    await ws.accept()
+    try:
+        while True:
+            text = await ws.receive_text()
+            text = text.strip()
+            if not text:
+                await ws.send_json({"error": "empty_text", "published": False})
+                continue
+            session_id = str(uuid.uuid4())[:8]
+            started = time.monotonic()
+            match = classifier.classify(text)
+            intent = match.intent if match.intent != "unknown" else "chat"
+            total_latency = (time.monotonic() - started) * 1000
+
+            payload = {
+                "stamp": time.time(),
+                "event_type": "intent_recognized",
+                "intent": intent,
+                "text": text,
+                "confidence": round(match.confidence, 3),
+                "provider": "text_input",
+                "source": "web_bridge",
+                "session_id": session_id,
+                "matched_keywords": match.matched_keywords,
+                "latency_ms": round(total_latency, 2),
+                "degraded": False,
+                "timestamp": datetime.now().isoformat(),
+            }
+            node.publish_speech_event(payload)
+            await ws.send_json({
+                "asr": text,
+                "intent": intent,
+                "confidence": round(match.confidence, 3),
+                "latency_ms": round(total_latency, 2),
+                "published": True,
+            })
+    except WebSocketDisconnect:
+        pass
 
 
 @app.websocket("/ws/speech")
@@ -111,12 +162,15 @@ async def ws_speech(ws: WebSocket):
 
             try:
                 # 1. Resample to 16kHz mono WAV
+                print(f"[gateway] Received audio: {len(audio_bytes)} bytes", flush=True)
                 wav16k = await asyncio.to_thread(resample_to_wav16k, audio_bytes)
+                print(f"[gateway] Resampled WAV: {len(wav16k)} bytes", flush=True)
 
                 # 2. ASR
                 asr_result = await asyncio.to_thread(transcribe, wav16k, ASR_URL)
                 text = asr_result["text"].strip()
                 asr_latency = asr_result["latency_ms"]
+                print(f"[gateway] ASR result: text={text!r} latency={asr_latency}ms", flush=True)
 
                 if not text:
                     await ws.send_json({"error": "empty_asr", "published": False})
@@ -163,4 +217,4 @@ async def ws_speech(ws: WebSocket):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+    uvicorn.run(app, host="0.0.0.0", port=PORT, ws="wsproto")

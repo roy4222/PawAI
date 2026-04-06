@@ -31,6 +31,10 @@
 
   <button id="btn" disabled>Hold to Talk</button>
 
+  <div style="margin-top:1.5rem;">
+    <input id="textInput" type="text" placeholder="or type here and press Enter" style="width:80%;padding:8px;border-radius:6px;border:1px solid #4ecdc4;background:#16213e;color:#eee;font-size:1rem;">
+  </div>
+
   <div class="result">
     <h3>Result</h3>
     <p><span class="label">ASR: </span><span id="asr" class="value">&mdash;</span></p>
@@ -47,8 +51,10 @@ const intentEl = document.getElementById('intent');
 const latencyEl = document.getElementById('latency');
 
 let ws = null;
+let wsText = null;
 let mediaRecorder = null;
 let audioChunks = [];
+const textInput = document.getElementById('textInput');
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -123,7 +129,40 @@ btn.addEventListener('mouseleave', function() { btn.classList.remove('recording'
 btn.addEventListener('touchstart', function(e) { e.preventDefault(); btn.classList.add('recording'); startRecording(); });
 btn.addEventListener('touchend', function() { btn.classList.remove('recording'); stopRecording(); });
 
+// ── Text input mode ──
+function connectText() {
+  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsText = new WebSocket(proto + '//' + location.host + '/ws/text');
+  wsText.onmessage = function(e) {
+    var data = JSON.parse(e.data);
+    if (data.error) {
+      asrEl.textContent = data.error;
+      asrEl.classList.add('error');
+    } else {
+      asrEl.textContent = data.asr || '(empty)';
+      asrEl.classList.remove('error');
+      intentEl.innerHTML = '<span class="intent-tag">' + data.intent + '</span> (' + (data.confidence * 100).toFixed(0) + '%)';
+      latencyEl.textContent = data.latency_ms.toFixed(0) + ' ms';
+    }
+    statusEl.textContent = 'Ready';
+  };
+  wsText.onclose = function() { setTimeout(connectText, 2000); };
+  wsText.onerror = function() { wsText.close(); };
+}
+
+textInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && wsText && wsText.readyState === WebSocket.OPEN) {
+    var text = textInput.value.trim();
+    if (text) {
+      statusEl.textContent = 'Processing...';
+      wsText.send(text);
+      textInput.value = '';
+    }
+  }
+});
+
 connect();
+connectText();
 </script>
 </body>
 </html>
