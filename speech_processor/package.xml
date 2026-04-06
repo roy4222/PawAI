@@ -11,7 +11,7 @@
   <author email="abizov94@gmail.com">brimo</author>
   
   <buildtool_depend>ament_python</buildtool_depend>
-  
+
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>go2_interfaces</depend>

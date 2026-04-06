@@ -21,9 +21,43 @@ from std_msgs.msg import String
 
 from .event_builder import build_gesture_event, build_pose_event
 from .gesture_classifier import classify_gesture
-from .inference_adapter import InferenceResult
 from .mock_inference import MockInference
-from .pose_classifier import classify_pose
+from .pose_classifier import (
+    classify_pose,
+    _angle_deg,
+    _trunk_angle_deg,
+    _mid,
+    _L_SHOULDER,
+    _R_SHOULDER,
+    _L_HIP,
+    _R_HIP,
+    _L_KNEE,
+    _R_KNEE,
+    _L_ANKLE,
+    _R_ANKLE,
+)
+
+# COCO 17-point skeleton pairs for stick figure visualization
+_SKELETON = [
+    (0, 5), (0, 6),       # nose → shoulders
+    (5, 7), (7, 9),       # L shoulder → elbow → wrist
+    (6, 8), (8, 10),      # R shoulder → elbow → wrist
+    (5, 6),               # shoulder span
+    (5, 11), (6, 12),     # shoulders → hips
+    (11, 12),             # hip span
+    (11, 13), (13, 15),   # L hip → knee → ankle
+    (12, 14), (14, 16),   # R hip → knee → ankle
+]
+
+# MediaPipe 21-point hand skeleton connections
+_HAND_CONNECTIONS = [
+    (0, 1), (1, 2), (2, 3), (3, 4),        # thumb
+    (0, 5), (5, 6), (6, 7), (7, 8),        # index
+    (0, 9), (9, 10), (10, 11), (11, 12),   # middle
+    (0, 13), (13, 14), (14, 15), (15, 16), # ring
+    (0, 17), (17, 18), (18, 19), (19, 20), # pinky
+    (5, 9), (9, 13), (13, 17),             # palm
+]
 
 
 def _majority(buffer: deque) -> str | None:
@@ -65,23 +99,28 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("rtmpose_mode", "balanced")  # "lightweight" or "balanced"
         self.declare_parameter("rtmpose_device", "cuda")    # "cuda" or "cpu"
         self.declare_parameter("gesture_min_score", 0.1)    # hand keypoint confidence threshold
-        self.declare_parameter("gesture_backend", "rtmpose")  # "rtmpose" or "mediapipe"
+        self.declare_parameter("gesture_backend", "rtmpose")  # "rtmpose", "mediapipe", or "recognizer"
+        self.declare_parameter("gesture_recognizer_model", "~/face_models/gesture_recognizer.task")
         self.declare_parameter("pose_backend", "rtmpose")      # "rtmpose" or "mediapipe"
+        self.declare_parameter("pose_complexity", 0)            # 0=lite(fast), 1=full, 2=heavy
+        self.declare_parameter("max_hands", 1)                  # 1=single(fast), 2=dual (launch: max_hands:=2)
+        self.declare_parameter("hands_complexity", 0)          # 0=lite(fast), 1=full
+        self.declare_parameter("gesture_every_n_ticks", 3)      # run hands every N ticks (1=every tick)
 
-        backend = self.get_parameter("inference_backend").value
-        self.use_camera = self.get_parameter("use_camera").value
-        publish_fps = self.get_parameter("publish_fps").value
-        tick_period = self.get_parameter("tick_period").value
-        gesture_frames = self.get_parameter("gesture_vote_frames").value
-        pose_frames = self.get_parameter("pose_vote_frames").value
-        mock_scenario = self.get_parameter("mock_scenario").value
-        self.gesture_min_score = self.get_parameter("gesture_min_score").value
+        backend = str(self.get_parameter("inference_backend").value or "mock")
+        self.use_camera = bool(self.get_parameter("use_camera").value)
+        publish_fps = float(self.get_parameter("publish_fps").value or 8.0)
+        tick_period = float(self.get_parameter("tick_period").value or 0.05)
+        gesture_frames = int(self.get_parameter("gesture_vote_frames").value or 5)
+        pose_frames = int(self.get_parameter("pose_vote_frames").value or 20)
+        mock_scenario = str(self.get_parameter("mock_scenario").value or "standing_idle")
+        self.gesture_min_score = float(self.get_parameter("gesture_min_score").value or 0.1)
 
         # --- State ---
         self.shutting_down = False
         self.lock = threading.Lock()
         self.color = None
-        self.publish_period = 1.0 / max(0.1, float(publish_fps))
+        self.publish_period = 1.0 / max(1.0, publish_fps)
         self.last_publish_ts = 0.0
 
         # Temporal buffers (node-managed, not in classifiers)
@@ -90,10 +129,14 @@ class VisionPerceptionNode(Node):
         self.last_gesture: str | None = None
         self.last_pose: str | None = None
         self.last_hand: str = "right"
+        self._tick_counter: int = 0
+        self._gesture_every_n = int(self.get_parameter("gesture_every_n_ticks").value or 3)
+        self._cached_lh = (np.zeros((21, 2), dtype=np.float32), np.zeros(21, dtype=np.float32))
+        self._cached_rh = (np.zeros((21, 2), dtype=np.float32), np.zeros(21, dtype=np.float32))
 
         # --- Backend configuration ---
-        pose_backend = self.get_parameter("pose_backend").value
-        gesture_backend = self.get_parameter("gesture_backend").value
+        pose_backend = str(self.get_parameter("pose_backend").value or "rtmpose")
+        gesture_backend = str(self.get_parameter("gesture_backend").value or "rtmpose")
 
         if pose_backend == "mediapipe" and gesture_backend == "rtmpose":
             raise ValueError(
@@ -107,8 +150,8 @@ class VisionPerceptionNode(Node):
             self.adapter = MockInference(scenario=mock_scenario)
         elif backend == "rtmpose" and pose_backend == "rtmpose":
             from .rtmpose_inference import RTMPoseInference
-            rtmpose_mode = self.get_parameter("rtmpose_mode").value
-            rtmpose_device = self.get_parameter("rtmpose_device").value
+            rtmpose_mode = str(self.get_parameter("rtmpose_mode").value or "balanced")
+            rtmpose_device = str(self.get_parameter("rtmpose_device").value or "cuda")
             self.adapter = RTMPoseInference(
                 mode=rtmpose_mode,
                 backend="onnxruntime",
@@ -123,28 +166,47 @@ class VisionPerceptionNode(Node):
         self.mp_pose = None
         if pose_backend == "mediapipe":
             from .mediapipe_pose import MediaPipePose
-            self.mp_pose = MediaPipePose(complexity=1, min_confidence=0.5)
-            self.get_logger().info("Pose backend: MediaPipe Pose (CPU)")
+            pose_complexity = int(self.get_parameter("pose_complexity").value or 0)
+            self.mp_pose = MediaPipePose(complexity=pose_complexity, min_confidence=0.5)
+            self.get_logger().info(f"Pose backend: MediaPipe Pose (CPU, complexity={pose_complexity})")
         else:
             self.get_logger().info("Pose backend: RTMPose")
 
-        # --- MediaPipe Hands (only if gesture_backend=mediapipe) ---
+        # --- Gesture backend selection ---
         self.mp_hands = None
+        self.gesture_recognizer = None
         if gesture_backend == "mediapipe":
             from .mediapipe_hands import MediaPipeHands
-            self.mp_hands = MediaPipeHands(max_hands=2, min_confidence=0.5,
-                                            static_mode=False)
-            self.get_logger().info("Gesture backend: MediaPipe Hands (CPU)")
+            max_hands = int(self.get_parameter("max_hands").value or 1)
+            hands_complexity = int(self.get_parameter("hands_complexity").value or 0)
+            self.mp_hands = MediaPipeHands(max_hands=max_hands, min_confidence=0.5,
+                                            static_mode=False, model_complexity=hands_complexity)
+            self.get_logger().info(f"Gesture backend: MediaPipe Hands (CPU, max_hands={max_hands}, complexity={hands_complexity})")
+        elif gesture_backend == "recognizer":
+            from .gesture_recognizer_backend import GestureRecognizerBackend
+            model_path = str(self.get_parameter("gesture_recognizer_model").value
+                             or "~/face_models/gesture_recognizer.task")
+            max_hands = int(self.get_parameter("max_hands").value or 2)
+            self.gesture_recognizer = GestureRecognizerBackend(
+                model_path=model_path, max_hands=max_hands)
+            self.get_logger().info(f"Gesture backend: Gesture Recognizer Task API (max_hands={max_hands})")
         else:
             self.get_logger().info("Gesture backend: RTMPose wholebody")
 
         # --- Camera subscription (only if use_camera=true) ---
         if self.use_camera:
             from cv_bridge import CvBridge
+            from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
             from sensor_msgs.msg import Image
             self.bridge = CvBridge()
-            color_topic = self.get_parameter("color_topic").value
-            self.create_subscription(Image, color_topic, self._cb_color, 10)
+            color_topic = str(self.get_parameter("color_topic").value or "/camera/camera/color/image_raw")
+            # depth=1 + KEEP_LAST: only process latest frame, drop stale ones
+            image_qos = QoSProfile(
+                depth=1,
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+                history=HistoryPolicy.KEEP_LAST,
+            )
+            self.create_subscription(Image, color_topic, self._cb_color, image_qos)
 
         # --- Publishers (QoS: Reliable, Volatile, depth=10) ---
         self.gesture_pub = self.create_publisher(String, "/event/gesture_detected", 10)
@@ -203,63 +265,124 @@ class VisionPerceptionNode(Node):
             self.pose_buffer.append(pose_raw)
         pose_vote = _majority(self.pose_buffer)
 
+        # Pose debug log: print angles every ~1s (20 ticks)
+        if self._tick_counter % 20 == 0:
+            avg_score = float(np.mean(body_scores))
+            if avg_score >= 0.2:
+                shoulder = _mid(body_kps[_L_SHOULDER], body_kps[_R_SHOULDER])
+                hip = _mid(body_kps[_L_HIP], body_kps[_R_HIP])
+                knee = _mid(body_kps[_L_KNEE], body_kps[_R_KNEE])
+                ankle = _mid(body_kps[_L_ANKLE], body_kps[_R_ANKLE])
+                h_a = _angle_deg(shoulder, hip, knee)
+                k_a = _angle_deg(hip, knee, ankle)
+                t_a = _trunk_angle_deg(shoulder, hip)
+                br = bbox_ratio if bbox_ratio is not None else 0.0
+                self.get_logger().info(
+                    f"pose: raw={pose_raw} hip={h_a:.0f} knee={k_a:.0f} "
+                    f"trunk={t_a:.0f} bbox_r={br:.2f} vote={pose_vote}"
+                )
+
         if pose_vote is not None and pose_vote != self.last_pose:
             self.last_pose = pose_vote
+            # Use vote ratio as confidence (semantic match with majority vote)
+            pose_vote_count = sum(1 for x in self.pose_buffer if x == pose_vote)
+            pose_vote_conf = round(pose_vote_count / len(self.pose_buffer), 4) if self.pose_buffer else 0.0
             msg = String()
-            msg.data = json.dumps(build_pose_event(pose_vote, pose_conf))
+            msg.data = json.dumps(build_pose_event(pose_vote, pose_vote_conf))
             self.pose_pub.publish(msg)
 
-        # --- Gesture classification (dual hand, pick higher confidence) ---
-        # Select hand keypoint source: MediaPipe (CPU) or RTMPose (from wholebody)
-        if self.mp_hands is not None and image is not None:
-            lh_kps, lh_scores, rh_kps, rh_scores = self.mp_hands.detect(image)
-        else:
-            lh_kps, lh_scores = result.left_hand_kps, result.left_hand_scores
-            rh_kps, rh_scores = result.right_hand_kps, result.right_hand_scores
+        # --- Gesture classification ---
+        # Recognizer runs every tick (single-pass, no separate hand detection).
+        # MediaPipe Hands + classifier skips ticks via gesture_every_n_ticks.
+        self._tick_counter += 1
+        run_hands = (self.gesture_recognizer is not None
+                     or self._tick_counter % self._gesture_every_n == 0)
 
-        g_left, c_left = classify_gesture(lh_kps, lh_scores,
-                                           min_score=self.gesture_min_score)
-        g_right, c_right = classify_gesture(rh_kps, rh_scores,
-                                             min_score=self.gesture_min_score)
+        if run_hands:
+            gesture_raw: str | None = None
+            hand = self.last_hand
 
-        if c_left > c_right and g_left is not None:
-            gesture_raw, gesture_conf, hand = g_left, c_left, "left"
-        elif g_right is not None:
-            gesture_raw, gesture_conf, hand = g_right, c_right, "right"
-        else:
-            gesture_raw, gesture_conf, hand = None, 0.0, self.last_hand
+            if self.gesture_recognizer is not None and image is not None:
+                # --- Gesture Recognizer path (single-pass: detect + classify) ---
+                detections, lh_kps, lh_scores, rh_kps, rh_scores = \
+                    self.gesture_recognizer.detect(image)
+                self._cached_lh = (lh_kps, lh_scores)
+                self._cached_rh = (rh_kps, rh_scores)
+                if detections:
+                    best = max(detections, key=lambda d: d[1])
+                    gesture_raw, _, hand = best
 
-        # Debug log (throttled)
-        self.get_logger().info(
-            f"hand L={np.mean(lh_scores):.3f} R={np.mean(rh_scores):.3f} "
-            f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
-            throttle_duration_sec=5.0,
-        )
+                self.get_logger().info(
+                    f"recognizer: {len(detections)} hands, "
+                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+                    throttle_duration_sec=5.0,
+                )
+            else:
+                # --- MediaPipe Hands + classifier path ---
+                if self.mp_hands is not None and image is not None:
+                    lh_kps, lh_scores, rh_kps, rh_scores = self.mp_hands.detect(image)
+                elif result is not None:
+                    lh_kps, lh_scores = result.left_hand_kps, result.left_hand_scores
+                    rh_kps, rh_scores = result.right_hand_kps, result.right_hand_scores
+                else:
+                    lh_kps, lh_scores = self._cached_lh
+                    rh_kps, rh_scores = self._cached_rh
 
-        if gesture_raw is not None:
-            self.gesture_buffer.append(gesture_raw)
-            self.last_hand = hand
-        gesture_vote = _majority(self.gesture_buffer)
+                self._cached_lh = (lh_kps, lh_scores)
+                self._cached_rh = (rh_kps, rh_scores)
 
-        if gesture_vote is not None and gesture_vote != self.last_gesture:
-            self.last_gesture = gesture_vote
-            msg = String()
-            msg.data = json.dumps(build_gesture_event(gesture_vote, gesture_conf, self.last_hand))
-            self.gesture_pub.publish(msg)
+                g_left, c_left = classify_gesture(lh_kps, lh_scores,
+                                                   min_score=self.gesture_min_score)
+                g_right, c_right = classify_gesture(rh_kps, rh_scores,
+                                                     min_score=self.gesture_min_score)
+
+                if c_left > c_right and g_left is not None:
+                    gesture_raw, hand = g_left, "left"
+                elif g_right is not None:
+                    gesture_raw, hand = g_right, "right"
+
+                self.get_logger().info(
+                    f"hand L={np.mean(lh_scores):.3f} R={np.mean(rh_scores):.3f} "
+                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+                    throttle_duration_sec=5.0,
+                )
+
+            if gesture_raw is not None:
+                self.gesture_buffer.append(gesture_raw)
+                self.last_hand = hand
+            gesture_vote = _majority(self.gesture_buffer)
+
+            if gesture_vote is not None and gesture_vote != self.last_gesture:
+                self.last_gesture = gesture_vote
+                # Use vote ratio as confidence (semantic match with majority vote)
+                vote_count = sum(1 for x in self.gesture_buffer if x == gesture_vote)
+                vote_conf = round(vote_count / len(self.gesture_buffer), 4) if self.gesture_buffer else 0.0
+                msg = String()
+                msg.data = json.dumps(build_gesture_event(gesture_vote, vote_conf, self.last_hand))
+                self.gesture_pub.publish(msg)
 
         # --- Debug image (keypoint overlay, rate-limited) ---
         if self.use_camera and self.debug_pub is not None and image is not None:
             now = time.time()
             if now - self.last_publish_ts >= self.publish_period:
                 self.last_publish_ts = now
+                # Use cached hand data for drawing (may be from previous tick)
+                lh_kps, lh_scores = self._cached_lh
+                rh_kps, rh_scores = self._cached_rh
                 try:
                     debug = image.copy()
-                    # Draw body keypoints (from pose source)
+                    # Draw body skeleton lines
+                    for i, j in _SKELETON:
+                        if body_scores[i] > 0.3 and body_scores[j] > 0.3:
+                            pt1 = (int(body_kps[i][0]), int(body_kps[i][1]))
+                            pt2 = (int(body_kps[j][0]), int(body_kps[j][1]))
+                            cv2.line(debug, pt1, pt2, (0, 255, 0), 2)
+                    # Draw body keypoints
                     for i in range(len(body_kps)):
                         if body_scores[i] > 0.3:
                             x, y = int(body_kps[i][0]), int(body_kps[i][1])
                             cv2.circle(debug, (x, y), 4, (0, 255, 0), -1)
-                    # Draw hand keypoints + bounding box (from gesture source)
+                    # Draw hand skeleton + keypoints + bounding box
                     for hand_kps, hand_scores, color, label_text in [
                         (lh_kps, lh_scores, (255, 100, 0), "L"),
                         (rh_kps, rh_scores, (0, 100, 255), "R"),
@@ -270,16 +393,21 @@ class VisionPerceptionNode(Node):
                                 x, y = int(hand_kps[i][0]), int(hand_kps[i][1])
                                 cv2.circle(debug, (x, y), 5, color, -1)
                                 valid_pts.append((x, y))
-                        # Draw hand bounding box if enough points
+                        # Draw hand skeleton lines
                         if len(valid_pts) >= 5:
+                            for i, j in _HAND_CONNECTIONS:
+                                if hand_scores[i] > 0.05 and hand_scores[j] > 0.05:
+                                    pt1 = (int(hand_kps[i][0]), int(hand_kps[i][1]))
+                                    pt2 = (int(hand_kps[j][0]), int(hand_kps[j][1]))
+                                    cv2.line(debug, pt1, pt2, color, 1)
                             xs = [p[0] for p in valid_pts]
                             ys = [p[1] for p in valid_pts]
                             cv2.rectangle(debug, (min(xs)-5, min(ys)-5),
                                           (max(xs)+5, max(ys)+5), color, 2)
                             cv2.putText(debug, label_text, (min(xs)-5, min(ys)-15),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                    # Labels: pose + gesture + confidence
-                    g_label = gesture_vote or gesture_raw or "?"
+                    # Labels: pose + gesture (use last known values)
+                    g_label = self.last_gesture or "?"
                     label = f"pose:{pose_vote or '?'}  gesture:{g_label} ({self.last_hand})"
                     cv2.putText(debug, label, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                     self.debug_pub.publish(self.bridge.cv2_to_imgmsg(debug, encoding="bgr8"))
@@ -294,6 +422,10 @@ class VisionPerceptionNode(Node):
             self.mp_hands.close()
         if hasattr(self, "mp_pose") and self.mp_pose is not None:
             self.mp_pose.close()
+        if hasattr(self, "gesture_recognizer") and self.gesture_recognizer is not None:
+            self.gesture_recognizer.close()
+        if hasattr(self, "adapter") and self.adapter is not None and hasattr(self.adapter, "close"):
+            self.adapter.close()
 
 
 def main():

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """L3: Full stack coexistence test — face + pose + whisper simultaneously."""
-import sys
-import time
-import threading
-import logging
 import json
+import logging
+import os
+import sys
+import threading
+import time
 
 sys.path.insert(0, ".")
 

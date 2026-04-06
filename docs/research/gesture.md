@@ -58,8 +58,50 @@ vision_perception_node
 Launch：`pose_backend:=mediapipe gesture_backend:=mediapipe`
 全 CPU 推理，GPU 0%，RTMPose 不載入。
 
-## 決策（3/21 更新）
+## 決策（3/22 更新）
 | 模型 | Decision Code | Placement | 依據 |
 |------|:---:|---|---|
 | **MediaPipe Hands** | **JETSON_LOCAL** | jetson（**主線**） | 手部 keypoints 準確、16.8 FPS CPU-only、Foxglove 實測通過 |
 | RTMPose hand (wholebody) | **REJECTED** | — | 手部 keypoints 在正常距離不可靠（座標偏移到臉部），不適合手勢辨識 |
+
+## Gesture Recognizer Task API 驗證（3/22 Jetson 實測）
+
+MediaPipe 內建 Gesture Recognizer（7 類 + Unknown），在 Jetson 上獨立驗證：
+
+| 項目 | 結果 |
+|------|------|
+| Import `mediapipe.tasks.python.vision` | PASS |
+| Model load（gesture_recognizer.task, 8.4MB） | PASS（0.1s） |
+| `recognize()` 推理延遲 | 47.1ms（~21 FPS） |
+| 空白影像無誤報 | PASS（0 hands） |
+
+內建手勢與專案對應：Open_Palm=stop, Closed_Fist=fist, Pointing_Up=point, Thumb_Up=thumbs_up, Victory=victory, Thumb_Down=thumbs_down, ILoveYou=i_love_you。
+
+### 整合測試（3/22 Jetson live）
+
+已整合為 `gesture_backend=recognizer` 選項（不改預設）。Live 測試結果：
+
+| 項目 | 結果 |
+|------|------|
+| FPS（recognizer + pose） | 7.2 FPS |
+| stop（Open_Palm） | PASS |
+| point（Pointing_Up） | PASS |
+| thumbs_up（Thumb_Up） | PASS |
+| thumbs_down（Thumb_Down） | PASS |
+| 手部骨架 overlay | PASS（21 點 + 連線） |
+| 無人誤報（30s） | 1 event（thumbs_up，稍敏感） |
+| 38 unit tests | PASS |
+
+**結論**：整合完成，作為 `gesture_backend=recognizer` 可選。待 live A/B 驗證後再考慮升為預設。
+
+## FPS 優化（3/22）
+
+| 優化 | 效果 |
+|------|------|
+| pose complexity 1→0 | Pose 推理加速 |
+| hands model_complexity=0 | Hands 推理加速 |
+| gesture_every_n_ticks=3 | 2/3 tick 跳過手部推理 |
+| camera 30→15 FPS | 減少 subscription callback 排隊 |
+| QoS depth=1 BEST_EFFORT | 只取最新幀 |
+| publish_fps clamp 修正 | 移除 10 FPS 人為上限 |
+| **結果** | **2.5 FPS → 8.5 FPS（單手）/ 5.3 FPS（雙手）** |

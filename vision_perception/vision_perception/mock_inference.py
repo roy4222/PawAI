@@ -95,6 +95,21 @@ def _point_hand() -> np.ndarray:
     return kps
 
 
+def _bending_body() -> np.ndarray:
+    """Bending forward — trunk ~50 deg, hip ~110 deg, legs straight ~170 deg."""
+    kps = np.zeros((17, 2), dtype=np.float32)
+    kps[0] = [400, 200]   # nose (forward)
+    kps[5] = [370, 220]   # l_shoulder (leaning forward)
+    kps[6] = [430, 220]   # r_shoulder
+    kps[11] = [300, 280]  # l_hip
+    kps[12] = [340, 280]  # r_hip
+    kps[13] = [300, 380]  # l_knee (straight down)
+    kps[14] = [340, 380]  # r_knee
+    kps[15] = [300, 460]  # l_ankle
+    kps[16] = [340, 460]  # r_ankle
+    return kps
+
+
 def _idle_hand() -> np.ndarray:
     return np.zeros((21, 2), dtype=np.float32)
 
@@ -103,6 +118,7 @@ def _idle_hand() -> np.ndarray:
 _register("standing_idle", _standing_body(), _idle_hand(), _idle_hand())
 _register("sitting", _sitting_body(), _idle_hand(), _idle_hand())
 _register("fallen", _fallen_body(), _idle_hand(), _idle_hand())
+_register("bending", _bending_body(), _idle_hand(), _idle_hand())
 _register("stop", _standing_body(), _stop_hand(), _idle_hand())
 _register("fist", _standing_body(), _fist_hand(), _idle_hand())
 _register("point", _standing_body(), _point_hand(), _idle_hand())

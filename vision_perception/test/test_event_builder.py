@@ -1,5 +1,4 @@
 """Tests for event_builder — validates contract v2.0 alignment."""
-import pytest
 
 
 class TestBuildGestureEvent:

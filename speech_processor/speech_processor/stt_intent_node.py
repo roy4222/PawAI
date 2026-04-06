@@ -32,6 +32,8 @@ SUPPORTED_INTENTS = (
     "greet",
     "come_here",
     "stop",
+    "sit",
+    "stand",
     "take_photo",
     "status",
 )
@@ -111,6 +113,23 @@ class IntentClassifier:
                 ("停", 0.5),
                 # Whisper 短音誤辨為英文
                 ("king", 0.9),
+            ],
+            "sit": [
+                ("坐下", 1.0),
+                ("坐", 0.8),
+                ("坐好", 0.9),
+                ("sit", 0.8),
+                ("sit down", 1.0),
+            ],
+            "stand": [
+                ("站起來", 1.0),
+                ("起來", 0.9),
+                ("站好", 0.9),
+                ("站起", 0.9),
+                ("stand", 0.8),
+                ("stand up", 1.0),
+                # 簡體 / Whisper 誤辨
+                ("站起来", 1.0),
             ],
             "take_photo": [
                 ("拍照", 1.0),

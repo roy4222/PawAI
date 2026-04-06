@@ -1,7 +1,6 @@
 # vision_perception/test/test_gesture_classifier.py
 """Tests for gesture_classifier — pure Python, no ROS2."""
 import numpy as np
-import pytest
 
 
 def _make_hand(positions: dict[int, tuple[float, float]]) -> tuple[np.ndarray, np.ndarray]:

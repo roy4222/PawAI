@@ -4,7 +4,6 @@ Provides hand keypoints in pixel coordinates, compatible with gesture_classifier
 Runs on CPU (TFLite XNNPACK), does NOT compete with GPU models.
 """
 import logging
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -16,7 +15,7 @@ class MediaPipeHands:
     """Lightweight wrapper around mediapipe.solutions.hands."""
 
     def __init__(self, max_hands: int = 2, min_confidence: float = 0.5,
-                 static_mode: bool = False):
+                 static_mode: bool = False, model_complexity: int = 1):
         try:
             import mediapipe as mp
         except ImportError:
@@ -27,10 +26,11 @@ class MediaPipeHands:
         self._hands = mp.solutions.hands.Hands(
             static_image_mode=static_mode,
             max_num_hands=max_hands,
+            model_complexity=model_complexity,
             min_detection_confidence=min_confidence,
         )
         logger.info(f"MediaPipe Hands loaded: max_hands={max_hands}, "
-                     f"static={static_mode}, min_conf={min_confidence}")
+                     f"complexity={model_complexity}, min_conf={min_confidence}")
 
     def detect(self, image_bgr: np.ndarray) -> tuple[
         np.ndarray, np.ndarray, np.ndarray, np.ndarray
@@ -43,15 +43,17 @@ class MediaPipeHands:
             Each scores is (21,) float32 confidence.
             Returns zeros if hand not detected.
         """
-        h, w = image_bgr.shape[:2]
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
-        result = self._hands.process(image_rgb)
-
         left_kps = np.zeros((21, 2), dtype=np.float32)
         left_scores = np.zeros(21, dtype=np.float32)
         right_kps = np.zeros((21, 2), dtype=np.float32)
         right_scores = np.zeros(21, dtype=np.float32)
+
+        if self._hands is None:
+            return left_kps, left_scores, right_kps, right_scores
+
+        h, w = image_bgr.shape[:2]
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        result = self._hands.process(image_rgb)
 
         if not result.multi_hand_landmarks:
             return left_kps, left_scores, right_kps, right_scores

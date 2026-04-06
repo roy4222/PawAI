@@ -6,7 +6,6 @@ so pose_classifier works without any changes.
 Runs on CPU (TFLite XNNPACK), does NOT use GPU.
 """
 import logging
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -14,11 +13,16 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # MediaPipe 33-point → COCO 17-point index mapping.
-# Only the 8 points used by pose_classifier are mapped;
-# the other 9 COCO indices are left as zeros.
+# 13 of 17 COCO points are mapped (nose + upper/lower body).
+# Eyes and ears (COCO 1-4) are omitted — not needed for classification or visualization.
 _MP_TO_COCO = {
+    0: 0,    # NOSE: MediaPipe index 0
     5: 11,   # L_SHOULDER: MediaPipe index 11
     6: 12,   # R_SHOULDER: MediaPipe index 12
+    7: 13,   # L_ELBOW: MediaPipe index 13
+    8: 14,   # R_ELBOW: MediaPipe index 14
+    9: 15,   # L_WRIST: MediaPipe index 15
+    10: 16,  # R_WRIST: MediaPipe index 16
     11: 23,  # L_HIP: MediaPipe index 23
     12: 24,  # R_HIP: MediaPipe index 24
     13: 25,  # L_KNEE: MediaPipe index 25
@@ -57,10 +61,12 @@ class MediaPipePose:
         h, w = image_bgr.shape[:2]
         image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-        result = self._pose.process(image_rgb)
-
         body_kps = np.zeros((17, 2), dtype=np.float32)
         body_scores = np.zeros(17, dtype=np.float32)
+
+        if self._pose is None:
+            return body_kps, body_scores
+        result = self._pose.process(image_rgb)
 
         if result.pose_landmarks is None:
             return body_kps, body_scores

@@ -33,7 +33,7 @@ class MockEventPublisher(Node):
         super().__init__("mock_event_publisher")
 
         self.declare_parameter("interval", 0.5)  # publish interval within each scenario
-        self.interval = self.get_parameter("interval").value
+        self.interval = float(self.get_parameter("interval").value or 0.5)
 
         self.gesture_pub = self.create_publisher(String, "/event/gesture_detected", 10)
         self.pose_pub = self.create_publisher(String, "/event/pose_detected", 10)

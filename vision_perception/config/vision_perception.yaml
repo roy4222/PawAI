@@ -4,7 +4,7 @@ vision_perception_node:
   ros__parameters:
     inference_backend: "mock"
     use_camera: false
-    publish_fps: 4.0
+    publish_fps: 8.0
     tick_period: 0.05
     color_topic: "/camera/camera/color/image_raw"
     depth_topic: "/camera/camera/aligned_depth_to_color/image_raw"
@@ -12,5 +12,9 @@ vision_perception_node:
     gesture_min_score: 0.1
     gesture_backend: "rtmpose"    # "rtmpose" or "mediapipe"
     pose_backend: "rtmpose"       # "rtmpose" or "mediapipe"
+    pose_complexity: 0            # 0=lite(fast), 1=full, 2=heavy
+    max_hands: 1                  # 1=single(fast, default), 2=dual (launch override: max_hands:=2)
+    hands_complexity: 0           # 0=lite(fast), 1=full
+    gesture_every_n_ticks: 3      # run hands every N ticks (1=every, 3=skip 2)
     pose_vote_frames: 20
     mock_scenario: "standing_idle"

@@ -38,14 +38,14 @@ SKILL_TO_CMD = {
     "hello":     {"api_id": 1016, "parameter": "1016"},
     "stop_move": {"api_id": 1003, "parameter": "1003"},
     "sit":       {"api_id": 1009, "parameter": "1009"},
-    "stand":     {"api_id": 1002, "parameter": "1002"},
+    "stand":     {"api_id": 1004, "parameter": "1004"},  # StandUp (was 1002 BalanceStand)
     "content":   {"api_id": 1020, "parameter": "1020"},
 }
 
 BANNED_API_IDS = {1030, 1031, 1301}
 
 # P0 today: only these skills are validated
-P0_SKILLS = {"hello", "stop_move"}
+P0_SKILLS = {"hello", "stop_move", "sit", "stand"}
 
 # Required fields in every LLM JSON response
 LLM_REQUIRED_FIELDS = {"intent", "reply_text", "selected_skill", "reasoning", "confidence"}
@@ -84,6 +84,8 @@ REPLY_TEMPLATES = {
     "greet": "哈囉，我在這裡。",
     "come_here": "收到，我過去找你。",
     "stop": "好的，停止動作。",
+    "sit": "好的，坐下。",
+    "stand": "好的，站起來。",
     "take_photo": "收到，正在拍照。",
     "status": "我目前狀態正常。",
     "unknown": "請再說一次。",
@@ -92,6 +94,8 @@ REPLY_TEMPLATES = {
 RULE_SKILL_MAP = {
     "greet": "hello",
     "stop": "stop_move",
+    "sit": "sit",
+    "stand": "stand",
 }
 
 # ── System prompt (spec §1.5) ───────────────────────────────────────────
@@ -106,9 +110,9 @@ SYSTEM_PROMPT = """\
 你只能輸出單一 JSON object，不要輸出任何其他文字。
 JSON 必須包含以下五個欄位：
 
-intent — 只能是以下之一：greet, stop, status, chat, ignored
+intent — 只能是以下之一：greet, stop, sit, stand, status, chat, ignored
 reply_text — 你要說的中文回覆（一句話，不超過 25 字。人臉事件時要叫出對方名字）
-selected_skill — 只能是以下之一："hello", "stop_move", null
+selected_skill — 只能是以下之一："hello", "stop_move", "sit", "stand", null
 reasoning — 一句話決策摘要，不超過 20 字
 confidence — 0.0 到 1.0
 
@@ -116,6 +120,8 @@ confidence — 0.0 到 1.0
 - 看到認識的人（人臉事件）：intent=greet，reply_text 要包含對方名字，selected_skill 可以是 "hello" 或 null
 - 聽到打招呼：intent=greet，reply_text 友善回應
 - 聽到「停」或「stop」：intent=stop，selected_skill 必須是 "stop_move"，reply_text 可以是空字串
+- 聽到「坐下」「坐」：intent=sit，selected_skill 必須是 "sit"，reply_text 簡短確認
+- 聽到「站起來」「起來」「站好」：intent=stand，selected_skill 必須是 "stand"，reply_text 簡短確認
 - 聽到問狀態（「怎麼樣」「在做什麼」「狀態」等）：intent=status，reply_text 必須說明目前狀況
 - 不確定時：intent=chat，reply_text 必須是友善的回應
 - greet/chat/status 的 reply_text 必須非空（只有 stop 和 ignored 允許空）

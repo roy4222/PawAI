@@ -107,9 +107,14 @@ DWPose 推理（TensorRT, 社群值：~22ms/frame）
 
 | 角度 | Landmarks | 站立 | 坐下 | 蹲下 | 跌倒 |
 |------|-----------|:----:|:----:|:----:|:----:|
-| **髖關節角度** (肩→髖→膝) | shoulder, hip, knee | >160° | 70-120° | <70° | 不定 |
-| **膝關節角度** (髖→膝→踝) | hip, knee, ankle | >160° | 70-120° | <70° | 不定 |
-| **軀幹角度** (肩→髖→垂直線) | shoulder, hip | 0-15° | 0-30° | 15-60° | >60° |
+| **髖關節角度** (肩→髖→膝) | shoulder, hip, knee | >155° | 100-150° | <145° | 不定 |
+| **膝關節角度** (髖→膝→踝) | hip, knee, ankle | >155° | — | <145° | 不定 |
+| **軀幹角度** (肩→髖→垂直線) | shoulder, hip | 0-15° | <35° | >10° | >60° |
+
+> **3/23 Jetson 實測角度範圍**（MediaPipe Pose, D435 640x480@15Hz）：
+> - 站: hip=168-180°, knee=164-180°, trunk=1-10°
+> - 坐: hip=91-129°, knee=69-132°, trunk=2-22°
+> - 蹲: hip=36-65°, knee=32-57°, trunk=5-17°
 
 **關鍵 Landmarks**（DWPose 17-point COCO format）：
 
@@ -132,29 +137,32 @@ DWPose 推理（TensorRT, 社群值：~22ms/frame）
 ### 方法三：混合法（推薦實作方式）
 
 ```python
-# 虛擬碼：4 姿勢分類
-def classify_pose(landmarks, prev_landmarks, buffer):
-    hip_angle = calc_angle(shoulder, hip, knee)
-    knee_angle = calc_angle(hip, knee, ankle)
-    trunk_angle = calc_trunk_angle(shoulder, hip)
-    bbox_ratio = calc_bbox_ratio(landmarks)
+# 實際分類規則（pose_classifier.py, 3/22 更新，6 類 first-match）
+def classify_pose(body_kps, body_scores, bbox_ratio):
+    hip_angle = angle(shoulder, hip, knee)
+    knee_angle = angle(hip, knee, ankle)
+    trunk_angle = trunk_angle(shoulder, hip)
 
     # 1. 跌倒優先判斷（安全功能）
     if bbox_ratio > 1.0 and trunk_angle > 60:
-        buffer.append("fallen")
-    # 2. 站立
-    elif hip_angle > 160 and knee_angle > 160:
-        buffer.append("standing")
-    # 3. 坐下
-    elif 70 < hip_angle < 130 and trunk_angle < 30:
-        buffer.append("sitting")
-    # 4. 蹲下
-    elif hip_angle < 80 and knee_angle < 80:
-        buffer.append("crouching")
+        return "fallen"
+    # 2. 站立（3/23 調參：160→155）
+    if hip_angle > 155 and knee_angle > 155:
+        return "standing"
+    # 3. 彎腰（3/22 新增）
+    if trunk_angle > 35 and hip_angle < 140 and knee_angle > 130 and bbox_ratio <= 1.0:
+        return "bending"
+    # 4. 蹲下（3/23 調參：<80→<145 + trunk>10 前傾條件）
+    if hip_angle < 145 and knee_angle < 145 and trunk_angle > 10:
+        return "crouching"
+    # 5. 坐下（3/23 調參：70-130→100-150）
+    if 100 < hip_angle < 150 and trunk_angle < 35:
+        return "sitting"
+    # 6. 模糊
+    return None
 
-    # 20 幀投票機制（減少誤報）
-    if len(buffer) >= 20:
-        return most_common(buffer[-20:])
+    # 投票機制：pose_vote_frames=20（連續 20 幀多數決）
+    # confidence = 投票比例（非模型信心度）
 ```
 
 ### 跌倒偵測精度（研究數據）
@@ -302,15 +310,16 @@ DWPose 一個模型同時處理手勢+姿勢，記憶體只算一次：
 
 ---
 
-## 落地順序（2026-03-18 更新）
+## 落地順序（2026-03-22 更新）
 
 | Phase | 時間 | 內容 | 狀態 |
 |:-----:|------|------|:----:|
 | 1 | 3/16-3/18 | `vision_perception_node` mock mode + 23 unit tests + Jetson smoke test | ✅ 完成 |
 | 2 | 3/18 | RTMPose wholebody balanced on Jetson（rtmlib + onnxruntime-gpu），~3.8-7.5 FPS | ✅ 完成 |
-| 2b | 3/25 決策點 | FPS 低於 15 紅線，評估 lightweight mode 或接受現狀 | 待定 |
-| 3 | 4/1-4/6 | 姿勢分類閾值校正 + 跌倒偵測穩定性測試 | 待做 |
-| 4 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
+| 2b | 3/21 | 決策：全 MediaPipe CPU（pose+gesture），GPU 0%，~18.5 FPS (pose) | ✅ 完成 |
+| 3 | 3/22 | bending 新增 + FPS 優化（2.5→8.5 FPS）+ 骨架可視化 + 型別安全 + 32 tests | ✅ 完成 |
+| 4 | 3/23 | 三感知壓測通過（face+pose+gesture, RAM 1.2GB, temp 52°C）+ pose debug log 加入 + 閾值第一輪實機調參（standing/sitting/crouching 全穩定） | ✅ 完成 |
+| 5 | 4/6-4/13 | 端到端測試 + Demo B 微調 | 待做 |
 
 ---
 

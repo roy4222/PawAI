@@ -17,6 +17,9 @@ def build_gesture_event(gesture: str, confidence: float, hand: str) -> dict:
 
     stamp and event_type are auto-generated.
     Applies GESTURE_COMPAT_MAP (impl uses "fist", contract sends "ok").
+
+    Note: confidence is vote ratio (fraction of buffer frames matching the gesture),
+    not raw classifier confidence. E.g. 0.67 = 2/3 frames voted for this gesture.
     """
     return {
         "stamp": time.time(),
@@ -33,6 +36,9 @@ def build_pose_event(pose: str, confidence: float, track_id: int = 0) -> dict:
     track_id: Phase 1 always 0 (no face association).
     Warning: track_id=0 is a Phase 1 internal convention, NOT a contract sentinel.
     Downstream must not use this value for face association logic.
+
+    Note: confidence is vote ratio (fraction of buffer frames matching the pose),
+    not raw classifier confidence. E.g. 0.85 = 17/20 frames voted for this pose.
     """
     return {
         "stamp": time.time(),

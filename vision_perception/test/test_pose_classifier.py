@@ -2,7 +2,6 @@
 """Tests for pose_classifier — pure Python, no ROS2."""
 import math
 import numpy as np
-import pytest
 
 
 def _body_from_angles(hip_angle_deg: float, knee_angle_deg: float,
@@ -57,17 +56,8 @@ class TestClassifyPose:
 
     def test_sitting(self):
         from vision_perception.pose_classifier import classify_pose
-        # Direct keypoints: upright trunk, knees bent 90° forward
-        # hip_angle(shoulder→hip→knee) ≈ 90°, trunk_angle ≈ 0°
-        kps = np.zeros((17, 2), dtype=np.float32)
-        kps[5] = [200, 200]   # l_shoulder (directly above hip)
-        kps[6] = [220, 200]   # r_shoulder
-        kps[11] = [200, 300]  # l_hip
-        kps[12] = [220, 300]  # r_hip
-        kps[13] = [300, 300]  # l_knee (straight out at hip height)
-        kps[14] = [320, 300]  # r_knee
-        kps[15] = [300, 400]  # l_ankle (below knee)
-        kps[16] = [320, 400]  # r_ankle
+        # Upright trunk, hip_angle ≈ 120°, trunk ≈ 5°
+        kps = _body_from_angles(hip_angle_deg=120, knee_angle_deg=100, trunk_angle_deg=5)
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, conf = classify_pose(kps, scores, bbox_ratio=0.6)
         assert pose == "sitting"
@@ -101,8 +91,18 @@ class TestClassifyPose:
 
     def test_ambiguous_returns_none(self):
         from vision_perception.pose_classifier import classify_pose
-        # hip=140, knee=140, trunk=40 — doesn't match any rule cleanly
-        kps = _body_from_angles(hip_angle_deg=140, knee_angle_deg=140, trunk_angle_deg=40)
+        # Use direct keypoints to control exact angles.
+        # Target: hip≈153, trunk≈3 → gap between standing(>155) and sitting(<150)
+        # trunk < 10 → not crouching
+        kps = np.zeros((17, 2), dtype=np.float32)
+        kps[5] = [205, 200]   # l_shoulder (nearly straight above hip)
+        kps[6] = [225, 200]
+        kps[11] = [200, 300]  # l_hip
+        kps[12] = [220, 300]
+        kps[13] = [140, 400]  # l_knee (offset left → hip≈152°)
+        kps[14] = [160, 400]
+        kps[15] = [140, 500]  # l_ankle (straight down from knee)
+        kps[16] = [160, 500]
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, conf = classify_pose(kps, scores, bbox_ratio=0.7)
         assert pose is None
@@ -121,3 +121,28 @@ class TestClassifyPose:
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, conf = classify_pose(kps, scores, bbox_ratio=None)
         assert pose == "standing"
+
+    def test_bending(self):
+        from vision_perception.pose_classifier import classify_pose
+        # trunk forward 50°, hip bent 110°, legs straight 170°
+        kps = _body_from_angles(hip_angle_deg=110, knee_angle_deg=170, trunk_angle_deg=50)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, conf = classify_pose(kps, scores, bbox_ratio=0.6)
+        assert pose == "bending"
+        assert conf > 0.5
+
+    def test_bending_vs_crouching(self):
+        from vision_perception.pose_classifier import classify_pose
+        # trunk forward but knees bent → not bending (knee < 130)
+        kps = _body_from_angles(hip_angle_deg=110, knee_angle_deg=60, trunk_angle_deg=50)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, conf = classify_pose(kps, scores, bbox_ratio=0.6)
+        assert pose != "bending"
+
+    def test_bending_vs_fallen(self):
+        from vision_perception.pose_classifier import classify_pose
+        # trunk forward + wide bbox → fallen takes priority
+        kps = _body_from_angles(hip_angle_deg=110, knee_angle_deg=170, trunk_angle_deg=70)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, conf = classify_pose(kps, scores, bbox_ratio=1.5)
+        assert pose == "fallen"
