@@ -9,7 +9,7 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **網頁語音 E2E 通過（文字+錄音）** | 4/6 | Go2 機身 ASR 不可用（風扇噪音）；**Studio Gateway 錄音模式 E2E 通過**：瀏覽器說話→ASR~430ms→LLM~1.5s→TTS→USB 喇叭，E2E ~2s |
+| 語音 (speech_processor) | **Chat 閉環 12 句對話通過** | 4/8 | **Studio Chat 閉環實機驗證通過**：文字+語音→ROS2→LLM→/tts→AI bubble+喇叭；12 句連續對話全部正確回覆；E2E ~2s；**待改善**：LLM 回覆過短（max_tokens=120/25字限制）、無多輪 memory、回覆缺乏個性 |
 | 人臉 (face_perception) | **greeting 可靠化** | 4/6 | sim_threshold 0.35→0.30，identity_stable 21 次/2min（調前 1-3 次），Executive idle→greeting 確認通；track 抖動仍在（45 tracks/2min），Day 12 修 |
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
