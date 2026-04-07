@@ -57,7 +57,7 @@ export function PanelContainer({ children, position }: PanelContainerProps) {
   if (position === "sidebar") {
     return (
       <aside
-        className="relative flex flex-col gap-3 overflow-y-auto p-4 border-l border-border/40 bg-background animate-in slide-in-from-right-4 duration-300"
+        className="relative flex flex-col gap-3 overflow-y-auto p-4 border-l border-border/40 bg-background animate-in slide-in-from-right-4 duration-300 h-full"
         style={{ width }}
       >
         {/* Resize handle */}

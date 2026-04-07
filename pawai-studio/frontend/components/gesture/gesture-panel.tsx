@@ -160,8 +160,8 @@ export function GesturePanel() {
                 <span className="text-[11px] text-muted-foreground font-medium px-0.5">
                   最近偵測記錄
                 </span>
-                {gestureEvents.map((evt) => (
-                  <EventHistoryItem key={evt.id} event={evt} />
+                {gestureEvents.map((evt, i) => (
+                  <EventHistoryItem key={`${evt.id}-${i}`} event={evt} />
                 ))}
               </div>
             )}

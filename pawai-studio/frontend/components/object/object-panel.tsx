@@ -145,8 +145,8 @@ export function ObjectPanel() {
                 <span className="text-[11px] text-muted-foreground font-medium px-0.5">
                   偵測記錄
                 </span>
-                {objectEvents.map((evt) => (
-                  <ObjectEventItem key={evt.id} event={evt} />
+                {objectEvents.map((evt, i) => (
+                  <ObjectEventItem key={`${evt.id}-${i}`} event={evt} />
                 ))}
               </div>
             )}

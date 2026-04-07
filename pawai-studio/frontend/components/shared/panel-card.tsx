@@ -83,9 +83,11 @@ export function PanelCard({
       </CardHeader>
       <div className={cn(
         "overflow-hidden transition-all duration-200",
-        collapsed ? "max-h-0" : "max-h-[800px]"
+        collapsed ? "max-h-0" : "max-h-[400px]"
       )}>
-        <CardContent className="p-3 pt-0">{children}</CardContent>
+        <CardContent className="p-3 pt-0 overflow-y-auto max-h-[380px]">
+          {children}
+        </CardContent>
       </div>
     </Card>
   )
