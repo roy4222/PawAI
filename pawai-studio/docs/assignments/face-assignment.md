@@ -108,7 +108,7 @@ const faceState = useStateStore(s => s.faceState);
 
 ```bash
 # 啟動 mock server
-cd pawai-studio/backend && uvicorn mock_server:app --port 8001 --reload
+cd pawai-studio/backend && uvicorn mock_server:app --port 8080 --reload
 
 # 啟動前端
 cd pawai-studio/frontend && npm run dev
@@ -117,7 +117,7 @@ cd pawai-studio/frontend && npm run dev
 # 你應該會看到每 2 秒有新的人臉資料跳出來
 
 # 手動觸發特定事件
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "face", "event_type": "identity_stable", "data": {"track_id": 1, "stable_name": "Roy", "sim": 0.92, "distance_m": 1.5, "face_count": 1, "tracks": [{"track_id": 1, "stable_name": "Roy", "sim": 0.92, "distance_m": 1.5, "bbox": [100,100,200,280], "mode": "stable"}], "stamp": 0}}'
 ```

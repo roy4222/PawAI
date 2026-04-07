@@ -4,18 +4,43 @@
 
 ## 環境啟動（所有人必讀）
 
+### 一鍵啟動（推薦）
+
 ```bash
-# 1. 前端（Terminal 1）
+# 從 repo 根目錄執行
+bash pawai-studio/start.sh
+```
+
+這會自動：
+1. 檢查 python3 / node 環境
+2. 自動安裝缺少的 Python 依賴（fastapi, uvicorn, pydantic, wsproto）
+3. 自動 `npm install`（如果 node_modules 不存在）
+4. 啟動 Mock Server（port 8080）
+5. 啟動 Frontend（port 3000）
+
+啟動成功後會看到：
+```
+  🌐 Studio:      http://localhost:3000/studio
+  🔧 Mock Server:  http://localhost:8080
+  📡 WebSocket:    ws://localhost:8080/ws/events
+```
+
+按 `Ctrl+C` 停止全部。
+
+### 手動啟動（如果一鍵啟動有問題）
+
+```bash
+# Terminal 1：Mock Server
+cd pawai-studio/backend
+pip install fastapi uvicorn pydantic wsproto
+python3 -m uvicorn mock_server:app --host 0.0.0.0 --port 8080 --ws wsproto
+# → http://localhost:8080/docs （API 文件）
+
+# Terminal 2：前端
 cd pawai-studio/frontend
 npm install
 npm run dev
 # → http://localhost:3000/studio
-
-# 2. Mock Server（Terminal 2）
-cd pawai-studio/backend
-pip install fastapi uvicorn pydantic
-uvicorn mock_server:app --host 0.0.0.0 --port 8001 --reload
-# → http://localhost:8001/docs （API 文件）
 ```
 
 開好後打開瀏覽器，你會看到每 2 秒自動跳出各模組的模擬資料。
@@ -40,15 +65,15 @@ uvicorn mock_server:app --host 0.0.0.0 --port 8001 --reload
 
 ```bash
 # 觸發 Demo A 場景（face → speech → brain 連續事件）
-curl -X POST http://localhost:8001/mock/scenario/demo_a
+curl -X POST http://localhost:8080/mock/scenario/demo_a
 
 # 觸發指定模組的單一事件
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "pose", "event_type": "pose_detected", "data": {"current_pose": "fallen", "confidence": 0.95, "track_id": 1, "active": true, "status": "active", "stamp": 0}}'
 
 # 觸發 face 事件
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "face", "event_type": "identity_stable", "data": {"track_id": 1, "stable_name": "Roy", "sim": 0.92, "distance_m": 1.5}}'
 ```
@@ -57,11 +82,11 @@ curl -X POST http://localhost:8001/mock/trigger \
 
 ```bash
 # 文字聊天（前端 ChatPanel 已接好）
-# WebSocket: ws://localhost:8001/ws/text
+# WebSocket: ws://localhost:8080/ws/text
 # 送出文字 → 回傳 {asr, intent, confidence} + 自動 broadcast TTS 回覆
 
 # 語音聊天（前端 push-to-talk 已接好）
-# WebSocket: ws://localhost:8001/ws/speech
+# WebSocket: ws://localhost:8080/ws/speech
 # 送出 audio bytes → 回傳 {asr, intent, confidence, latency_ms}
 ```
 
@@ -69,13 +94,13 @@ curl -X POST http://localhost:8001/mock/trigger \
 
 ```bash
 # 系統健康狀態
-curl http://localhost:8001/api/health
+curl http://localhost:8080/api/health
 
 # 大腦狀態
-curl http://localhost:8001/api/brain
+curl http://localhost:8080/api/brain
 
 # 發送指令
-curl -X POST http://localhost:8001/api/command \
+curl -X POST http://localhost:8080/api/command \
   -H "Content-Type: application/json" \
   -d '{"skill_id": "hello", "source": "studio"}'
 ```

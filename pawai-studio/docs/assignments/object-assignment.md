@@ -128,7 +128,7 @@ dog     █ 1
 
 ```bash
 # 啟動 mock server
-cd pawai-studio/backend && uvicorn mock_server:app --port 8001 --reload
+cd pawai-studio/backend && uvicorn mock_server:app --port 8080 --reload
 
 # 啟動前端
 cd pawai-studio/frontend && npm run dev
@@ -137,10 +137,10 @@ cd pawai-studio/frontend && npm run dev
 # 每 2 秒有隨機物體事件
 
 # 手動觸發指定物體
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "object", "event_type": "object_detected", "data": {"stamp": 0, "active": true, "status": "active", "objects": [{"class_name": "cup", "class_id": 41, "confidence": 0.92, "bbox": [100,100,250,300]}, {"class_name": "bottle", "class_id": 39, "confidence": 0.78, "bbox": [300,150,400,350]}], "detected_objects": [{"class_name": "cup", "class_id": 41, "confidence": 0.92, "bbox": [100,100,250,300]}, {"class_name": "bottle", "class_id": 39, "confidence": 0.78, "bbox": [300,150,400,350]}]}}'
 
 # 觸發 Demo A 場景（連續事件流）
-curl -X POST http://localhost:8001/mock/scenario/demo_a
+curl -X POST http://localhost:8080/mock/scenario/demo_a
 ```

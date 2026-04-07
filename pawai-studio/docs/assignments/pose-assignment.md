@@ -129,7 +129,7 @@ Tailwind 參考：
 
 ```bash
 # 啟動 mock server
-cd pawai-studio/backend && uvicorn mock_server:app --port 8001 --reload
+cd pawai-studio/backend && uvicorn mock_server:app --port 8080 --reload
 
 # 啟動前端
 cd pawai-studio/frontend && npm run dev
@@ -138,12 +138,12 @@ cd pawai-studio/frontend && npm run dev
 # 每 2 秒有隨機姿勢事件（包括 fallen！）
 
 # 手動觸發跌倒事件（測試你的跌倒警報效果）
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "pose", "event_type": "pose_detected", "data": {"stamp": 0, "active": true, "current_pose": "fallen", "confidence": 0.95, "track_id": 1, "status": "active"}}'
 
 # 手動觸發站立（恢復正常）
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "pose", "event_type": "pose_detected", "data": {"stamp": 0, "active": true, "current_pose": "standing", "confidence": 0.90, "track_id": 1, "status": "active"}}'
 ```

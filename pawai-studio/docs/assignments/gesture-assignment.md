@@ -112,7 +112,7 @@ ok    █████ 5
 
 ```bash
 # 啟動 mock server
-cd pawai-studio/backend && uvicorn mock_server:app --port 8001 --reload
+cd pawai-studio/backend && uvicorn mock_server:app --port 8080 --reload
 
 # 啟動前端
 cd pawai-studio/frontend && npm run dev
@@ -121,12 +121,12 @@ cd pawai-studio/frontend && npm run dev
 # 每 2 秒有隨機手勢事件
 
 # 手動觸發 stop 手勢
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "gesture", "event_type": "gesture_detected", "data": {"stamp": 0, "active": true, "current_gesture": "stop", "confidence": 0.95, "hand": "right", "status": "active"}}'
 
 # 手動觸發 wave 手勢
-curl -X POST http://localhost:8001/mock/trigger \
+curl -X POST http://localhost:8080/mock/trigger \
   -H "Content-Type: application/json" \
   -d '{"event_source": "gesture", "event_type": "gesture_detected", "data": {"stamp": 0, "active": true, "current_gesture": "wave", "confidence": 0.88, "hand": "left", "status": "active"}}'
 ```
