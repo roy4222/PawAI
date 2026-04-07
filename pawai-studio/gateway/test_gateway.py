@@ -167,6 +167,34 @@ class TestROS2Transform:
         assert "data" in env
 
 
+class TestBuildTtsEvent:
+    """Test the build_tts_event helper imported from studio_gateway."""
+
+    def test_basic_event_structure(self):
+        sys.path.insert(0, str(Path(__file__).parent))
+        from studio_gateway import build_tts_event
+        env = build_tts_event("roy，你好！")
+        assert env["source"] == "tts"
+        assert env["event_type"] == "tts_speaking"
+        assert env["data"]["text"] == "roy，你好！"
+        assert env["data"]["phase"] == "speaking"
+        assert env["data"]["origin"] == "unknown"
+        assert "id" in env
+        assert "timestamp" in env
+
+    def test_source_is_tts_not_speech(self):
+        """TTS events must use source='tts' to avoid polluting ChatPanel."""
+        from studio_gateway import build_tts_event
+        env = build_tts_event("test")
+        assert env["source"] == "tts"
+        assert env["source"] != "speech"
+
+    def test_chinese_text_preserved(self):
+        from studio_gateway import build_tts_event
+        env = build_tts_event("謝謝你的幫忙")
+        assert env["data"]["text"] == "謝謝你的幫忙"
+
+
 class TestPayloadSchema:
     def test_speech_event_has_all_contract_fields(self):
         """Verify payload matches interaction_contract.md v2.4 §4.2."""

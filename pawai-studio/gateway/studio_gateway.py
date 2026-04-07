@@ -68,6 +68,21 @@ FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
 MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 5MB payload cap for speech
 
 
+def build_tts_event(text: str) -> dict:
+    """Wrap plain-text /tts message into PawAIEvent envelope."""
+    return {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "tts",
+        "event_type": "tts_speaking",
+        "data": {
+            "text": text,
+            "phase": "speaking",
+            "origin": "unknown",
+        },
+    }
+
+
 # ── WebSocket Connection Manager ────────────────────────────────
 class ConnectionManager:
     def __init__(self) -> None:
@@ -114,8 +129,13 @@ class GatewayNode(Node):
                 QOS_EVENT,
             )
 
+        # /tts — plain text from llm_bridge_node / interaction_executive_node
+        self.create_subscription(
+            String, "/tts", self._on_tts_msg, QOS_EVENT
+        )
+
         self.get_logger().info(
-            f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} topics"
+            f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} topics + /tts"
         )
 
         # ── Video subscribers — ROS2 Image → JPEG → WebSocket binary ──
@@ -209,6 +229,16 @@ class GatewayNode(Node):
             "data": data,
         }
 
+        asyncio.run_coroutine_threadsafe(
+            ws_manager.broadcast(envelope), self._loop
+        )
+
+    def _on_tts_msg(self, msg: String) -> None:
+        """Wrap plain-text /tts into PawAIEvent envelope and broadcast."""
+        text = msg.data.strip()
+        if not text:
+            return
+        envelope = build_tts_event(text)
         asyncio.run_coroutine_threadsafe(
             ws_manager.broadcast(envelope), self._loop
         )

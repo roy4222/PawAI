@@ -4,11 +4,12 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Square, Camera, User, Hand, Brain } from "lucide-react"
 import { useStateStore } from "@/stores/state-store"
 import { useAudioRecorder } from "@/hooks/use-audio-recorder"
+import { useTextCommand } from "@/hooks/use-text-command"
+import { AudioVisualizer } from "@/components/chat/audio-visualizer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { getGatewayHttpUrl } from "@/lib/gateway-url"
 
 interface UserMessage {
   id: string
@@ -64,7 +65,12 @@ export function ChatPanel() {
   const poseState = useStateStore((s) => s.poseState)
   const brainState = useStateStore((s) => s.brainState)
   const stateMap = { faceState, speechState, gestureState, poseState, brainState }
-  const { isRecording, isProcessing, lastResult: voiceResult, error: voiceError, startRecording, stopRecording } = useAudioRecorder()
+  const { isRecording, isProcessing, audioLevels, lastResult: voiceResult, error: voiceError, startRecording, stopRecording } = useAudioRecorder()
+  const { sendText } = useTextCommand()
+  const lastTtsText = useStateStore((s) => s.lastTtsText)
+  const lastTtsAt = useStateStore((s) => s.lastTtsAt)
+  const pendingRequestIdRef = useRef<string | null>(null)
+  const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevVoiceResultRef = useRef(voiceResult)
@@ -76,7 +82,35 @@ export function ChatPanel() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isThinking])
 
-  // Voice result → add as voice message
+  // Cleanup pending timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
+    }
+  }, [])
+
+  // TTS reply → AI bubble (only when pending)
+  useEffect(() => {
+    if (lastTtsAt && lastTtsText && pendingRequestIdRef.current) {
+      pendingRequestIdRef.current = null
+      if (pendingTimeoutRef.current) {
+        clearTimeout(pendingTimeoutRef.current)
+        pendingTimeoutRef.current = null
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external store change
+      setIsThinking(false)
+
+      const aiMsg: AIMessage = {
+        id: `ai-${Date.now()}`,
+        type: "ai",
+        text: lastTtsText,
+        timestamp: formatTime(new Date()),
+      }
+      setMessages((prev) => [...prev, aiMsg])
+    }
+  }, [lastTtsAt, lastTtsText])
+
+  // Voice result → add as voice message + enter pending
   useEffect(() => {
     if (voiceResult && voiceResult !== prevVoiceResultRef.current) {
       prevVoiceResultRef.current = voiceResult
@@ -88,7 +122,21 @@ export function ChatPanel() {
         confidence: voiceResult.confidence,
         timestamp: formatTime(new Date()),
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external hook state
       setMessages((prev) => [...prev, voiceMsg])
+
+      // Enter pending for TTS reply
+      const requestId = `voice-${Date.now()}`
+      pendingRequestIdRef.current = requestId
+      setIsThinking(true)
+
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
+      pendingTimeoutRef.current = setTimeout(() => {
+        if (pendingRequestIdRef.current === requestId) {
+          pendingRequestIdRef.current = null
+          setIsThinking(false)
+        }
+      }, 8000)
     }
   }, [voiceResult])
 
@@ -104,7 +152,7 @@ export function ChatPanel() {
     adjustTextareaHeight()
   }, [inputText, adjustTextareaHeight])
 
-  async function handleSend() {
+  function handleSend() {
     const text = inputText.trim()
     if (!text || isThinking) return
 
@@ -116,43 +164,45 @@ export function ChatPanel() {
     }
     setMessages((prev) => [...prev, userMsg])
     setInputText("")
-    setIsThinking(true)
 
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
     }
 
-    try {
-      const gatewayUrl = getGatewayHttpUrl()
-      const res = await fetch(`${gatewayUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          command_type: "chat",
-          text,
-          session_id: "studio-session",
-        }),
-      })
-      const json = await res.json()
-      const aiMsg: AIMessage = {
-        id: `ai-${Date.now()}`,
-        type: "ai",
-        text: json.reply ?? "（無回應）",
-        timestamp: formatTime(new Date()),
-      }
-      setMessages((prev) => [...prev, aiMsg])
-    } catch {
+    // Send via /ws/text
+    const sent = sendText(text)
+    if (!sent) {
       const errMsg: AIMessage = {
         id: `ai-err-${Date.now()}`,
         type: "ai",
-        text: "連線失敗，請確認 Gateway 是否啟動。",
+        text: "文字通道未連線，請確認 Gateway 是否啟動。",
         timestamp: formatTime(new Date()),
       }
       setMessages((prev) => [...prev, errMsg])
-    } finally {
-      setIsThinking(false)
-      textareaRef.current?.focus()
+      return
     }
+
+    // Enter pending — wait for TTS reply
+    setIsThinking(true)
+    const requestId = `req-${Date.now()}`
+    pendingRequestIdRef.current = requestId
+
+    if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
+    pendingTimeoutRef.current = setTimeout(() => {
+      if (pendingRequestIdRef.current === requestId) {
+        pendingRequestIdRef.current = null
+        setIsThinking(false)
+        const errMsg: AIMessage = {
+          id: `ai-timeout-${Date.now()}`,
+          type: "ai",
+          text: "回應逾時，請確認 LLM 是否在線。",
+          timestamp: formatTime(new Date()),
+        }
+        setMessages((prev) => [...prev, errMsg])
+      }
+    }, 8000)
+
+    textareaRef.current?.focus()
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -186,22 +236,30 @@ export function ChatPanel() {
           "px-4 py-3 text-[15px] leading-relaxed"
         )}
       />
-      {/* Mic button */}
+      {/* Mic button — expands to pill with audio bars when recording */}
       <Button
         onClick={() => isRecording ? stopRecording() : startRecording()}
         disabled={isThinking || isProcessing}
-        size="icon"
+        size={isRecording && audioLevels.length > 0 ? "default" : "icon"}
         className={cn(
-          "absolute right-12 bottom-2.5 h-8 w-8 rounded-lg transition-all duration-200",
+          "absolute bottom-2.5 transition-all duration-200",
           isRecording
-            ? "bg-red-500 hover:bg-red-600 text-white shadow-sm animate-pulse"
+            ? "right-12 h-8 px-3 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm flex items-center gap-2"
             : isProcessing
-              ? "bg-amber-500 text-white cursor-wait"
-              : "bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+              ? "right-12 h-8 w-8 rounded-lg bg-amber-500 text-white cursor-wait"
+              : "right-12 h-8 w-8 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
         )}
         title={isRecording ? "停止錄音" : isProcessing ? "辨識中..." : "語音輸入"}
       >
-        {isRecording ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
+        {isRecording ? (
+          <>
+            <AudioVisualizer levels={audioLevels} isActive={isRecording} />
+            {audioLevels.length === 0 && <Mic className="h-3.5 w-3.5 animate-pulse" />}
+            <Square className="h-3 w-3 shrink-0" />
+          </>
+        ) : (
+          <Mic className="h-4 w-4" />
+        )}
       </Button>
       {/* Send button */}
       <Button

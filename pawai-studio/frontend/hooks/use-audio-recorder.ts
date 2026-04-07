@@ -14,6 +14,7 @@ interface AsrResult {
 interface UseAudioRecorderResult {
   isRecording: boolean;
   isProcessing: boolean;
+  audioLevels: number[];
   lastResult: AsrResult | null;
   error: string | null;
   startRecording: () => Promise<void>;
@@ -47,13 +48,26 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   const [lastResult, setLastResult] = useState<AsrResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const startTimeRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number>(0);
 
-  // Cleanup on unmount — stop mic, close socket
+  // Shared cleanup for AudioContext + animation frame
+  const cleanupAudioAnalysis = useCallback(() => {
+    cancelAnimationFrame(animFrameRef.current);
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    setAudioLevels([]);
+  }, []);
+
+  // Cleanup on unmount — stop mic, close socket, close audio analysis
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -61,8 +75,9 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       }
       streamRef.current?.getTracks().forEach((t) => t.stop());
       wsRef.current?.close();
+      cleanupAudioAnalysis();
     };
-  }, []);
+  }, [cleanupAudioAnalysis]);
 
   const sendAudio = useCallback((blob: Blob) => {
     setIsProcessing(true);
@@ -126,9 +141,10 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       };
 
       recorder.onstop = () => {
-        // Stop all tracks
+        // Stop all tracks + audio analysis
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
+        cleanupAudioAnalysis();
 
         // Check minimum duration
         const elapsed = Date.now() - startTimeRef.current;
@@ -154,11 +170,37 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
+
+      // Audio visualization via AnalyserNode
+      try {
+        const audioCtx = new AudioContext();
+        const sourceNode = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        sourceNode.connect(analyser);
+        audioCtxRef.current = audioCtx;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const BINS = 7;
+
+        const updateLevels = () => {
+          analyser.getByteFrequencyData(dataArray);
+          const levels: number[] = [];
+          for (let i = 0; i < BINS; i++) {
+            levels.push(dataArray[i] / 255);
+          }
+          setAudioLevels(levels);
+          animFrameRef.current = requestAnimationFrame(updateLevels);
+        };
+        animFrameRef.current = requestAnimationFrame(updateLevels);
+      } catch {
+        // AudioContext not available — audioLevels stays empty (fallback pulse)
+      }
     } catch (err) {
       setError("無法存取麥克風");
       console.error("getUserMedia error:", err);
     }
-  }, [sendAudio]);
+  }, [sendAudio, cleanupAudioAnalysis]);
 
   const stopRecording = useCallback(() => {
     const recorder = mediaRecorderRef.current;
@@ -169,5 +211,5 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     setIsRecording(false);
   }, []);
 
-  return { isRecording, isProcessing, lastResult, error, startRecording, stopRecording };
+  return { isRecording, isProcessing, audioLevels, lastResult, error, startRecording, stopRecording };
 }

@@ -312,6 +312,15 @@ async def ws_text(ws: WebSocket):
                 "latency_ms": round(random.uniform(50, 200), 1),
                 "published": True,
             })
+            # Broadcast mock TTS event so ChatPanel shows AI reply
+            mock_reply = f"收到「{text[:20]}」，這是模擬回覆。"
+            tts_event = PawAIEvent(
+                id=_uid(), timestamp=_ts(), source="tts",
+                event_type="tts_speaking",
+                data={"text": mock_reply, "phase": "speaking", "origin": "mock"},
+            ).model_dump()
+            await asyncio.sleep(0.5)  # simulate LLM latency
+            await manager.broadcast(tts_event)
     except WebSocketDisconnect:
         pass
 

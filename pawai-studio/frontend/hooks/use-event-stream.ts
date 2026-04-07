@@ -29,6 +29,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateBrainState = useStateStore((s) => s.updateBrainState);
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
+  const updateTts = useStateStore((s) => s.updateTts);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -79,6 +80,11 @@ export function useEventStream(): UseEventStreamResult {
           }
           break;
         }
+        case "tts":
+          if ("text" in data) {
+            updateTts(data.text as string);
+          }
+          break;
         case "system":
           if ("jetson" in data) {
             updateSystemHealth(data as unknown as SystemHealth);
@@ -100,6 +106,7 @@ export function useEventStream(): UseEventStreamResult {
       updateBrainState,
       updateSystemHealth,
       updateObjectState,
+      updateTts,
       evaluateEvent,
     ]
   );

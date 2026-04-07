@@ -19,6 +19,8 @@ interface StateStore {
   brainState: BrainState | null;
   systemHealth: SystemHealth | null;
   objectState: ObjectState | null;
+  lastTtsText: string | null;
+  lastTtsAt: number | null;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -27,6 +29,7 @@ interface StateStore {
   updateBrainState: (state: BrainState) => void;
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
+  updateTts: (text: string) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -37,6 +40,8 @@ export const useStateStore = create<StateStore>((set) => ({
   brainState: null,
   systemHealth: null,
   objectState: null,
+  lastTtsText: null,
+  lastTtsAt: null,
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -45,4 +50,5 @@ export const useStateStore = create<StateStore>((set) => ({
   updateBrainState: (state) => set({ brainState: state }),
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),
+  updateTts: (text) => set({ lastTtsText: text, lastTtsAt: Date.now() }),
 }));
