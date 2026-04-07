@@ -19,6 +19,7 @@ from schemas import (
     ChatCommand,
     FaceIdentityData,
     FaceState,
+    FaceTrack,
     GestureData,
     GestureState,
     MockTrigger,
@@ -150,9 +151,12 @@ async def periodic_mock_push() -> None:
     while True:
         await asyncio.sleep(2)
         if manager.active:
-            source = random.choice(list(MOCK_GENERATORS.keys()))
-            event = MOCK_GENERATORS[source]()
-            await manager.broadcast(event)
+            try:
+                source = random.choice(list(MOCK_GENERATORS.keys()))
+                event = MOCK_GENERATORS[source]()
+                await manager.broadcast(event)
+            except Exception as e:
+                print(f"[mock] Error generating {source} event: {e}", flush=True)
 
 # ── Demo A 場景 ─────────────────────────────────────────────────────
 

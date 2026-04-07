@@ -1,7 +1,6 @@
 "use client";
 
 import { useEventStream } from "@/hooks/use-event-stream";
-import { useEventStore } from "@/stores/event-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { StudioLayout } from "@/components/layout/studio-layout";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -9,6 +8,7 @@ import { FacePanel } from "@/components/face/face-panel";
 import { SpeechPanel } from "@/components/speech/speech-panel";
 import { GesturePanel } from "@/components/gesture/gesture-panel";
 import { PosePanel } from "@/components/pose/pose-panel";
+import { ObjectPanel } from "@/components/object/object-panel";
 import type { PanelId } from "@/contracts/types";
 
 // Sidebar panel registry — add new panels here
@@ -17,11 +17,11 @@ const SIDEBAR_PANELS: { id: PanelId; component: React.FC }[] = [
   { id: "speech", component: SpeechPanel },
   { id: "gesture", component: GesturePanel },
   { id: "pose", component: PosePanel },
+  { id: "object", component: ObjectPanel },
 ];
 
 export default function StudioPage() {
   const { isConnected } = useEventStream();
-  const events = useEventStore((s) => s.events);
   const activePanels = useLayoutStore((s) => s.activePanels);
 
   // Build sidebar: show all registered panels that are in activePanels
@@ -38,7 +38,7 @@ export default function StudioPage() {
   return (
     <StudioLayout
       isConnected={isConnected}
-      mainPanel={<ChatPanel events={events} />}
+      mainPanel={<ChatPanel />}
       sidebarPanels={panels}
     />
   );

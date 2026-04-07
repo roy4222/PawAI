@@ -13,6 +13,7 @@ import type {
   PoseState,
   BrainState,
   SystemHealth,
+  ObjectState,
 } from "@/contracts/types";
 
 interface UseEventStreamResult {
@@ -27,6 +28,7 @@ export function useEventStream(): UseEventStreamResult {
   const updatePoseState = useStateStore((s) => s.updatePoseState);
   const updateBrainState = useStateStore((s) => s.updateBrainState);
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
+  const updateObjectState = useStateStore((s) => s.updateObjectState);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -63,6 +65,20 @@ export function useEventStream(): UseEventStreamResult {
             updateBrainState(data as unknown as BrainState);
           }
           break;
+        case "object": {
+          // Normalize: ROS2 sends `objects[]`, frontend state expects `detected_objects`
+          const objData = { ...data } as Record<string, unknown>;
+          if ("objects" in objData && !("detected_objects" in objData)) {
+            objData.detected_objects = objData.objects;
+          }
+          if ("detected_objects" in objData || "objects" in objData) {
+            const arr = (objData.detected_objects ?? objData.objects ?? []) as unknown[];
+            objData.active = arr.length > 0;
+            objData.status = arr.length > 0 ? "active" : "inactive";
+            updateObjectState(objData as unknown as ObjectState);
+          }
+          break;
+        }
         case "system":
           if ("jetson" in data) {
             updateSystemHealth(data as unknown as SystemHealth);
@@ -83,6 +99,7 @@ export function useEventStream(): UseEventStreamResult {
       updatePoseState,
       updateBrainState,
       updateSystemHealth,
+      updateObjectState,
       evaluateEvent,
     ]
   );

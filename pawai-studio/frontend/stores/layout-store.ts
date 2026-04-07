@@ -11,8 +11,8 @@ const PRESET_PANELS: Record<LayoutPreset, PanelId[]> = {
   chat_camera_speech: ["chat", "camera", "speech"],
   chat_gesture: ["chat", "gesture"],
   chat_pose: ["chat", "pose"],
-  chat_full: ["chat", "face", "speech", "gesture", "pose"],
-  demo: ["chat", "camera", "face", "speech"],
+  chat_full: ["chat", "face", "speech", "gesture", "pose", "object"],
+  demo: ["chat", "face", "speech", "gesture", "pose", "object"],
 };
 
 const MAX_PANELS = 4;
@@ -29,6 +29,7 @@ const PANEL_PRIORITY: Record<PanelId, number> = {
   gesture: 8,
   pose: 8,
   face: 9,
+  object: 10,
 };
 
 interface LayoutStore {

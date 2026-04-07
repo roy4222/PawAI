@@ -64,6 +64,7 @@ export function FacePanel() {
   return (
     <PanelCard
       title="人臉辨識"
+      href="/studio/face"
       icon={<User className="h-4 w-4" />}
       status={status}
       count={faceState?.face_count}
@@ -84,9 +85,9 @@ export function FacePanel() {
           </div>
         ) : allTracks.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {allTracks.map((t) => (
+            {allTracks.map((t, i) => (
               <FaceTrackCard
-                key={t.track_id}
+                key={`${t.track_id}-${i}`}
                 track={t}
                 isVanishing={vanishingTracks.some(vt => vt.track_id === t.track_id)}
               />

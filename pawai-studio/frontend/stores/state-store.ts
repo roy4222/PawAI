@@ -8,6 +8,7 @@ import type {
   PoseState,
   BrainState,
   SystemHealth,
+  ObjectState,
 } from "@/contracts/types";
 
 interface StateStore {
@@ -17,6 +18,7 @@ interface StateStore {
   poseState: PoseState | null;
   brainState: BrainState | null;
   systemHealth: SystemHealth | null;
+  objectState: ObjectState | null;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -24,6 +26,7 @@ interface StateStore {
   updatePoseState: (state: PoseState) => void;
   updateBrainState: (state: BrainState) => void;
   updateSystemHealth: (state: SystemHealth) => void;
+  updateObjectState: (state: ObjectState) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -33,6 +36,7 @@ export const useStateStore = create<StateStore>((set) => ({
   poseState: null,
   brainState: null,
   systemHealth: null,
+  objectState: null,
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -40,4 +44,5 @@ export const useStateStore = create<StateStore>((set) => ({
   updatePoseState: (state) => set({ poseState: state }),
   updateBrainState: (state) => set({ brainState: state }),
   updateSystemHealth: (state) => set({ systemHealth: state }),
+  updateObjectState: (state) => set({ objectState: state }),
 }));

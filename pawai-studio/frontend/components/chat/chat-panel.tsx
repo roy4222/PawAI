@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { ArrowUp, PawPrint, Sparkles } from "lucide-react"
+import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Camera, User, Hand, Brain } from "lucide-react"
+import { useStateStore } from "@/stores/state-store"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { EventItem } from "@/components/shared/event-item"
 import { cn } from "@/lib/utils"
-import type { PawAIEvent } from "@/contracts/types"
 
 interface UserMessage {
   id: string
@@ -22,29 +21,39 @@ interface AIMessage {
   timestamp: string
 }
 
-interface EventMessage {
-  id: string
-  type: "event"
-  event: PawAIEvent
-}
-
-type ChatMessage = UserMessage | AIMessage | EventMessage
+type ChatMessage = UserMessage | AIMessage
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
 }
 
-interface ChatPanelProps {
-  events?: PawAIEvent[]
-}
+const MODULE_STATUS = [
+  { name: "Face", icon: User, key: "faceState" as const },
+  { name: "Speech", icon: Mic, key: "speechState" as const },
+  { name: "Gesture", icon: Hand, key: "gestureState" as const },
+  { name: "Pose", icon: Activity, key: "poseState" as const },
+  { name: "Brain", icon: Brain, key: "brainState" as const },
+]
 
-export function ChatPanel({ events = [] }: ChatPanelProps) {
+const QUICK_ACTIONS = [
+  { label: "打個招呼", desc: "讓 PawAI 揮手問好", Icon: HandMetal },
+  { label: "查看狀態", desc: "系統健康與模組狀態", Icon: Activity },
+  { label: "語音對話", desc: "開啟語音互動模式", Icon: Mic },
+  { label: "拍張照片", desc: "拍攝當前場景照片", Icon: Camera },
+]
+
+export function ChatPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState("")
   const [isThinking, setIsThinking] = useState(false)
+  const faceState = useStateStore((s) => s.faceState)
+  const speechState = useStateStore((s) => s.speechState)
+  const gestureState = useStateStore((s) => s.gestureState)
+  const poseState = useStateStore((s) => s.poseState)
+  const brainState = useStateStore((s) => s.brainState)
+  const stateMap = { faceState, speechState, gestureState, poseState, brainState }
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const prevEventsLenRef = useRef(0)
 
   const hasMessages = messages.length > 0
 
@@ -65,22 +74,6 @@ export function ChatPanel({ events = [] }: ChatPanelProps) {
     adjustTextareaHeight()
   }, [inputText, adjustTextareaHeight])
 
-  // Inject incoming events as inline event cards
-  useEffect(() => {
-    if (events.length > prevEventsLenRef.current) {
-      const newEvents = events.slice(prevEventsLenRef.current)
-      prevEventsLenRef.current = events.length
-      setMessages((prev) => [
-        ...prev,
-        ...newEvents.map((e) => ({
-          id: `event-${e.id}`,
-          type: "event" as const,
-          event: e,
-        })),
-      ])
-    }
-  }, [events])
-
   async function handleSend() {
     const text = inputText.trim()
     if (!text || isThinking) return
@@ -100,7 +93,8 @@ export function ChatPanel({ events = [] }: ChatPanelProps) {
     }
 
     try {
-      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:8000"
+      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL
+        ?? (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8080` : "http://localhost:8080")
       const res = await fetch(`${gatewayUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,53 +171,84 @@ export function ChatPanel({ events = [] }: ChatPanelProps) {
     </div>
   )
 
-  // ── Welcome view (no messages yet) ──
+  // ── Welcome view (no messages yet) — Mission Control ──
   if (!hasMessages) {
     return (
-      <div className="flex flex-col items-center justify-center h-full px-6">
-        <div className="flex flex-col items-center gap-6 w-full max-w-2xl -mt-20">
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20">
-              <PawPrint className="h-6 w-6 text-primary" />
+      <div className="relative flex flex-col items-center justify-center h-full px-6 control-grid control-glow">
+        <div className="flex flex-col items-center gap-8 w-full max-w-2xl -mt-16">
+          {/* Hero */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-400/20 hud-ring">
+              <PawPrint className="h-8 w-8 text-sky-400" />
+              <div className="absolute inset-0 rounded-2xl hud-pulse" />
             </div>
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+            <h1 className="text-3xl font-bold text-foreground tracking-tighter">
               PawAI Studio
             </h1>
-            <p className="text-sm text-muted-foreground">
-              你的 AI 機器狗控制中樞
+            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground/60">
+              Embodied AI Control Center
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 w-full max-w-md mt-2">
-            {[
-              { label: "打個招呼", desc: "讓 PawAI 揮手問好" },
-              { label: "查看狀態", desc: "系統健康與模組狀態" },
-              { label: "開始巡邏", desc: "啟動自主巡邏模式" },
-              { label: "拍張照片", desc: "拍攝當前場景照片" },
-            ].map((item) => (
+          {/* Module Status Strip */}
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/30 bg-surface/30 backdrop-blur-sm">
+            {MODULE_STATUS.map(({ name, icon: Icon, key }) => {
+              const active = stateMap[key] != null
+              return (
+                <div key={name} className="flex items-center gap-1.5 px-2">
+                  <Icon className={cn(
+                    "h-3.5 w-3.5 transition-colors duration-300",
+                    active ? "text-emerald-400" : "text-muted-foreground/40"
+                  )} />
+                  <span className={cn(
+                    "text-[11px] font-mono transition-colors duration-300",
+                    active ? "text-foreground/80" : "text-muted-foreground/40"
+                  )}>
+                    {name}
+                  </span>
+                  <div className={cn(
+                    "w-1.5 h-1.5 rounded-full transition-all duration-300",
+                    active ? "bg-emerald-400 motion-safe:animate-pulse" : "bg-muted-foreground/20"
+                  )} />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-2.5 w-full max-w-md">
+            {QUICK_ACTIONS.map(({ label, desc, Icon }) => (
               <button
-                key={item.label}
+                key={label}
                 onClick={() => {
-                  setInputText(item.label)
+                  setInputText(label)
                   textareaRef.current?.focus()
                 }}
                 className={cn(
-                  "flex flex-col items-start gap-0.5 rounded-xl border border-border/50 px-4 py-3",
-                  "bg-surface/50 hover:bg-surface-hover hover:border-border",
-                  "transition-all duration-150 cursor-pointer text-left group"
+                  "relative flex items-center gap-3 rounded-xl border border-border/30 px-4 py-3",
+                  "bg-surface/30 backdrop-blur-sm overflow-hidden",
+                  "hover:bg-surface-hover hover:border-sky-400/20",
+                  "hover:shadow-[0_0_20px_rgba(56,189,248,0.06)]",
+                  "transition-all duration-200 cursor-pointer text-left group"
                 )}
               >
-                <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
-                  {item.label}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {item.desc}
-                </span>
+                {/* Left accent bar */}
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sky-400/30 group-hover:bg-sky-400/60 transition-colors" />
+                <Icon className="h-4 w-4 text-muted-foreground group-hover:text-sky-400 transition-colors shrink-0" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-foreground group-hover:text-foreground transition-colors">
+                    {label}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground/60">
+                    {desc}
+                  </span>
+                </div>
               </button>
             ))}
           </div>
 
-          <div className="w-full mt-4">
+          {/* Composer */}
+          <div className="w-full mt-2">
             {composerInput}
           </div>
         </div>
@@ -265,21 +290,6 @@ export function ChatPanel({ events = [] }: ChatPanelProps) {
                 </div>
               )
             }
-
-            const e = msg.event
-            const summary = typeof e.data === "object" && e.data !== null
-              ? Object.entries(e.data).map(([k, v]) => `${k}=${v}`).join(" ")
-              : ""
-            return (
-              <div key={msg.id} className="rounded-xl border border-border/50 bg-surface/30 overflow-hidden">
-                <EventItem
-                  timestamp={new Date(e.timestamp).toLocaleTimeString("zh-TW", { hour12: false })}
-                  eventType={e.event_type}
-                  source={e.source}
-                  summary={summary}
-                />
-              </div>
-            )
           })}
 
           {isThinking && (

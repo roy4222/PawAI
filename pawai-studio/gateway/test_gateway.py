@@ -80,6 +80,93 @@ class TestIntentClassification:
         assert match.intent == "unknown"
 
 
+class TestROS2Transform:
+    """Test _on_ros2_msg field transforms without ROS2 runtime."""
+
+    def _make_envelope(self, source: str, payload: dict) -> dict:
+        """Simulate the transform logic from GatewayNode._on_ros2_msg."""
+        import uuid as _uuid
+        from datetime import datetime as _dt
+
+        data = dict(payload)
+        event_type = data.pop("event_type", f"{source}_update")
+
+        if source == "gesture" and "gesture" in data:
+            data.setdefault("current_gesture", data.get("gesture"))
+            data.setdefault("active", True)
+            data.setdefault("status", "active")
+
+        if source == "pose" and "pose" in data:
+            data.setdefault("current_pose", data.get("pose"))
+            data.setdefault("active", True)
+            data.setdefault("status", "active")
+
+        if source == "speech":
+            data.setdefault("phase", "listening")
+
+        return {
+            "id": str(_uuid.uuid4()),
+            "timestamp": _dt.now().astimezone().isoformat(),
+            "source": source,
+            "event_type": event_type,
+            "data": data,
+        }
+
+    def test_face_passthrough(self):
+        payload = {"stamp": 1.0, "face_count": 2, "tracks": []}
+        env = self._make_envelope("face", payload)
+        assert env["source"] == "face"
+        assert "face_count" in env["data"]
+        assert env["data"]["face_count"] == 2
+
+    def test_gesture_adds_status(self):
+        payload = {"stamp": 1.0, "event_type": "gesture_detected",
+                   "gesture": "wave", "confidence": 0.9, "hand": "right"}
+        env = self._make_envelope("gesture", payload)
+        assert env["data"]["status"] == "active"
+        assert env["data"]["current_gesture"] == "wave"
+        assert env["data"]["active"] is True
+        assert env["event_type"] == "gesture_detected"
+
+    def test_pose_adds_current_pose(self):
+        payload = {"stamp": 1.0, "event_type": "pose_detected",
+                   "pose": "standing", "confidence": 0.85, "track_id": 0}
+        env = self._make_envelope("pose", payload)
+        assert env["data"]["current_pose"] == "standing"
+        assert env["data"]["status"] == "active"
+        assert env["data"]["active"] is True
+
+    def test_speech_adds_phase_fallback(self):
+        payload = {"stamp": 1.0, "event_type": "intent_recognized",
+                   "intent": "greet", "text": "hello", "confidence": 0.9,
+                   "provider": "whisper"}
+        env = self._make_envelope("speech", payload)
+        assert env["data"]["phase"] == "listening"
+
+    def test_speech_preserves_existing_phase(self):
+        payload = {"stamp": 1.0, "event_type": "asr_result",
+                   "phase": "transcribing", "text": "hi", "confidence": 0.8,
+                   "provider": "whisper"}
+        env = self._make_envelope("speech", payload)
+        assert env["data"]["phase"] == "transcribing"
+
+    def test_object_passthrough(self):
+        payload = {"stamp": 1.0, "event_type": "object_detected",
+                   "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 100, 100]}]}
+        env = self._make_envelope("object", payload)
+        assert env["source"] == "object"
+        assert "objects" in env["data"]
+
+    def test_envelope_has_required_fields(self):
+        payload = {"stamp": 1.0, "face_count": 1, "tracks": []}
+        env = self._make_envelope("face", payload)
+        assert "id" in env
+        assert "timestamp" in env
+        assert "source" in env
+        assert "event_type" in env
+        assert "data" in env
+
+
 class TestPayloadSchema:
     def test_speech_event_has_all_contract_fields(self):
         """Verify payload matches interaction_contract.md v2.4 §4.2."""

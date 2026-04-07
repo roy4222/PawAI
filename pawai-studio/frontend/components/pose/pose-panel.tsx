@@ -40,6 +40,7 @@ export function PosePanel() {
   return (
     <PanelCard
       title="姿勢辨識"
+      href="/studio/pose"
       icon={<Activity className="h-4 w-4" />}
       status={status}
     >

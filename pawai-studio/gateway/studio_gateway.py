@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Studio Gateway — Speech Bridge server.
+"""Studio Gateway — ROS2 Bridge + Speech Bridge server.
 
-Runs on Jetson. Browser push-to-talk → ASR → intent → ROS2 publish.
-Executive 零改動。
+Runs on Jetson. Subscribes to ROS2 perception topics, broadcasts to
+browser via WebSocket. Also handles browser push-to-talk → ASR → ROS2.
 
 Usage:
     source /opt/ros/humble/setup.zsh
@@ -47,15 +47,67 @@ QOS_EVENT = QoSProfile(
     depth=10,
 )
 
+# ROS2 topic → frontend source mapping
+TOPIC_MAP: dict[str, str] = {
+    "/state/perception/face":          "face",
+    "/event/gesture_detected":         "gesture",
+    "/event/pose_detected":            "pose",
+    "/event/speech_intent_recognized": "speech",
+    "/event/object_detected":          "object",
+}
+
+FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
+MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 5MB payload cap for speech
+
+
+# ── WebSocket Connection Manager ────────────────────────────────
+class ConnectionManager:
+    def __init__(self) -> None:
+        self.active: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self.active.append(ws)
+
+    def disconnect(self, ws: WebSocket) -> None:
+        if ws in self.active:
+            self.active.remove(ws)
+
+    async def broadcast(self, data: dict) -> None:
+        for ws in list(self.active):
+            try:
+                await ws.send_json(data)
+            except Exception:
+                if ws in self.active:
+                    self.active.remove(ws)
+
+
+ws_manager = ConnectionManager()
+
 
 # ── ROS2 Node ────────────────────────────────────────────────────
 class GatewayNode(Node):
-    def __init__(self):
+    def __init__(self, loop: asyncio.AbstractEventLoop):
         super().__init__("studio_gateway_node")
+        self._loop = loop
+        self._last_face_broadcast = 0.0
+
+        # Publisher — speech intent (browser → ROS2)
         self.speech_pub = self.create_publisher(
             String, "/event/speech_intent_recognized", QOS_EVENT
         )
-        self.get_logger().info("Studio Gateway ROS2 node ready")
+
+        # Subscribers — ROS2 → browser
+        for topic, source in TOPIC_MAP.items():
+            self.create_subscription(
+                String, topic,
+                lambda msg, s=source: self._on_ros2_msg(s, msg),
+                QOS_EVENT,
+            )
+
+        self.get_logger().info(
+            f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} topics"
+        )
 
     def publish_speech_event(self, payload: dict) -> None:
         msg = String()
@@ -64,6 +116,55 @@ class GatewayNode(Node):
         self.get_logger().info(
             f"Published speech event: intent={payload.get('intent')} "
             f"text={payload.get('text')!r}"
+        )
+
+    def _on_ros2_msg(self, source: str, msg: String) -> None:
+        """Transform ROS2 JSON → PawAIEvent envelope and broadcast."""
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        # Face throttle: 10Hz → 2Hz
+        if source == "face":
+            now = time.monotonic()
+            if now - self._last_face_broadcast < FACE_THROTTLE_S:
+                return
+            self._last_face_broadcast = now
+
+        data = dict(payload)
+        event_type = data.pop("event_type", f"{source}_update")
+
+        # ── Field transforms for frontend dispatch rules ──
+        # gesture: frontend checks "status" in data
+        if source == "gesture" and "gesture" in data:
+            data.setdefault("current_gesture", data.get("gesture"))
+            data.setdefault("active", True)
+            data.setdefault("status", "active")
+
+        # pose: frontend checks "current_pose" or "status" in data
+        if source == "pose" and "pose" in data:
+            data.setdefault("current_pose", data.get("pose"))
+            data.setdefault("active", True)
+            data.setdefault("status", "active")
+
+        # speech: frontend checks "phase" in data
+        if source == "speech":
+            data.setdefault("phase", "listening")
+
+        # face: pass-through (already has face_count, tracks)
+        # object: pass-through (P1 adds frontend dispatch)
+
+        envelope = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "source": source,
+            "event_type": event_type,
+            "data": data,
+        }
+
+        asyncio.run_coroutine_threadsafe(
+            ws_manager.broadcast(envelope), self._loop
         )
 
 
@@ -85,7 +186,8 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     global node, classifier
     rclpy.init()
-    node = GatewayNode()
+    loop = asyncio.get_running_loop()
+    node = GatewayNode(loop)
     classifier = IntentClassifier()
     spin_thread = threading.Thread(target=_spin_ros2, args=(node,), daemon=True)
     spin_thread.start()
@@ -98,6 +200,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PawAI Studio Gateway", lifespan=lifespan)
 
 
+# ── Static & Health ─────────────────────────────────────────────
+
 @app.get("/speech")
 async def speech_page():
     return FileResponse(STATIC_DIR / "speech.html")
@@ -105,8 +209,28 @@ async def speech_page():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "node": node is not None}
+    return {
+        "status": "ok",
+        "node": node is not None,
+        "ws_clients": len(ws_manager.active),
+        "subscriptions": list(TOPIC_MAP.keys()),
+    }
 
+
+# ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────
+
+@app.websocket("/ws/events")
+async def ws_events(ws: WebSocket):
+    """Broadcast ROS2 perception events to all connected browsers."""
+    await ws_manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()  # keepalive / ping
+    except WebSocketDisconnect:
+        ws_manager.disconnect(ws)
+
+
+# ── WebSocket: Text Input (Browser → ROS2) ─────────────────────
 
 @app.websocket("/ws/text")
 async def ws_text(ws: WebSocket):
@@ -151,12 +275,20 @@ async def ws_text(ws: WebSocket):
         pass
 
 
+# ── WebSocket: Speech Input (Browser → ROS2) ───────────────────
+
 @app.websocket("/ws/speech")
 async def ws_speech(ws: WebSocket):
     await ws.accept()
     try:
         while True:
             audio_bytes = await ws.receive_bytes()
+
+            # Payload cap — reject oversized audio
+            if len(audio_bytes) > MAX_AUDIO_BYTES:
+                await ws.send_json({"error": "audio_too_large", "published": False})
+                continue
+
             session_id = str(uuid.uuid4())[:8]
             started = time.monotonic()
 
@@ -210,7 +342,8 @@ async def ws_speech(ws: WebSocket):
                 })
 
             except Exception as e:
-                await ws.send_json({"error": str(e), "published": False})
+                print(f"[gateway] Speech error: {e}", flush=True)
+                await ws.send_json({"error": "processing_failed", "published": False})
 
     except WebSocketDisconnect:
         pass

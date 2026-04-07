@@ -87,6 +87,7 @@ export function GesturePanel() {
   return (
     <PanelCard
       title="手勢辨識"
+      href="/studio/gesture"
       icon={<Hand className="h-4 w-4" />}
       status={panelStatus}
     >

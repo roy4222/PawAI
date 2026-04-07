@@ -153,6 +153,7 @@ export function SpeechPanel() {
     <PanelCard
       title={titleMap[viewMode]}
       icon={iconMap[viewMode]}
+      href="/studio/speech"
       status={panelStatus}
     >
       {viewMode === 'history' && (

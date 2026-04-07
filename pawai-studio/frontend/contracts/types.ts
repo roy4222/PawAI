@@ -134,6 +134,31 @@ export interface PoseState {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// Object
+// ══════════════════════════════════════════════════════════════════
+
+export interface ObjectDetection {
+  class_name: string;
+  confidence: number;
+  bbox: [number, number, number, number];
+}
+
+export interface ObjectEvent extends PawAIEvent {
+  source: "object";
+  event_type: "object_detected";
+  data: {
+    objects: ObjectDetection[];
+  };
+}
+
+export interface ObjectState {
+  stamp: number;
+  active: boolean;
+  detected_objects: ObjectDetection[];
+  status: "active" | "inactive" | "loading";
+}
+
+// ══════════════════════════════════════════════════════════════════
 // Brain
 // ══════════════════════════════════════════════════════════════════
 
@@ -243,6 +268,7 @@ export type PanelId =
   | "health"
   | "skills"
   | "gesture"
-  | "pose";
+  | "pose"
+  | "object";
 
 export type PanelPosition = "main" | "sidebar" | "bottom" | "overlay";
