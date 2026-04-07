@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-07（Sprint Day 12 — Studio 即時觀測台 + Mission Control UI + Object panel）
+**最後更新**：2026-04-07（Sprint Day 12 — Live View 實機通過 + Gateway video streaming + 五功能 Demo 錄製）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -14,7 +14,7 @@
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
-| Studio (pawai-studio) | **即時觀測台 + Mission Control UI** | 4/7 | Gateway 訂閱 5 ROS2 topics → `/ws/events` 廣播；前端 Mission Control 首頁（模組狀態列+HUD）；Object panel 新建；Panel 可折疊+sidebar 可拖寬；face 節流 2Hz；ws/wss 自動選；15 tests PASS |
+| Studio (pawai-studio) | **Live View 實機通過 + Mission Control UI** | 4/7 | **Live View 三欄影像實機 Demo 通過**（face/vision/object）；Gateway video streaming 3 路 WS binary；gateway-url.ts 統一連線；start-live.sh 正式站腳本；28 tests PASS（15+13 video） |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
@@ -103,6 +103,39 @@
 #### Codex Review（2 輪）
 - 第 1 輪：object normalize、object auto-show、speech payload cap、ws/wss fallback
 - 第 2 輪：useAudioRecorder cleanup、mic isProcessing disabled、voiceError 顯示、mock payload cap
+
+### Live View 三欄即時影像（下午）
+
+**目標**：`/studio/live` 取代 Foxglove，三欄即時影像展示牆。
+
+#### Gateway Video Streaming
+- `video_bridge.py`：JPEG encode（q70）+ FrameThrottle（5fps）+ VideoClients（threading.Lock）
+- `studio_gateway.py`：3 路 `WS /ws/video/{face,vision,object}` binary endpoint
+- cv2 lazy import — 開發機無 cv2 不影響既有 speech/events 功能
+- cv_bridge 不可用時 video endpoint disabled（NO SIGNAL），不做手寫 Image decode
+- 13 video bridge tests + Codex review P2 修復
+
+#### Live View 前端
+- `useVideoStream` hook：WS binary → createObjectURL，revokeObjectURL 防 leak，FPS 計算，10s NO SIGNAL
+- `LiveFeedCard`：監控鏡頭風格（topic 名 + FPS badge + status overlay）
+- `EventTicker`：底部事件滾動條（standalone component）
+- `/studio/live` 三欄頁面：Face / Vision / Object overlay + status bar + Jetson 溫度
+- Topbar 加 LIVE 入口按鈕
+
+#### 連線統一 + 正式站腳本
+- `gateway-url.ts`：統一 `NEXT_PUBLIC_GATEWAY_HOST/URL`，所有 WS/HTTP 走同一出口
+- `start-live.sh`：正式站啟動腳本（直連 Jetson Gateway，不啟 mock）
+- `.env.development` 指向 Jetson Tailscale IP
+
+#### 實機 Demo 驗證
+- `start_full_demo_tmux.sh` 加入 object_perception window（五功能 Demo）
+- **Demo 錄製通過**：
+  - face greeting（grama 2 次 + roy 3 次）✅
+  - thumbs_up → TTS「謝謝!」✅
+  - stop 手勢 → api_id=1003 ✅
+  - TTS USB 喇叭 5/5 播放 ✅
+  - Live View 三欄影像即時串流 ✅
+- **已知問題**：精準度不足（face 重複 greet、object 偵測率低）、Jetson 斷電（XL4015）
 
 ---
 

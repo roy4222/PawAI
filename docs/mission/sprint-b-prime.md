@@ -425,6 +425,15 @@
 - [x] Codex review 第 2 輪 → cleanup/disabled/error display/payload cap 修復
 - [x] Panel 內容可捲動 + key 衝突修復
 
+**下午（續）— Live View + 實機串接：**
+- [x] Gateway video streaming（video_bridge.py + 3 路 /ws/video/{source}）
+- [x] Live View 三欄即時影像頁（/studio/live）+ useVideoStream hook + LiveFeedCard + EventTicker
+- [x] gateway-url.ts 統一連線 + start-live.sh 正式站腳本
+- [x] start_full_demo_tmux.sh 加 object_perception window（五功能 Demo）
+- [x] Codex review → cv2 lazy import 修復
+- [x] **實機 Demo 錄製通過**（face greeting + thumbs_up + stop + TTS + Live View 三欄）
+- [x] 28 gateway tests PASS + frontend build PASS
+
 **傍晚：**
 - [x] 文件更新（project-status / sprint / Pawai-studio README）
 - [ ] 分工清單（UI 整理 / 文書 / 說明頁可分出去）
