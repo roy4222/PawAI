@@ -87,9 +87,22 @@
 - #16 人臉辨識前端（Yamiko）— face panel vanishing track + loading 狀態
 - #5 手勢 panel 重寫（syu）— emoji + event history + 三態
 
-#### Mock Server 修復
+#### 語音錄音整合
+- 新建 `useAudioRecorder` hook（MediaRecorder + `/ws/speech` WebSocket + cleanup useEffect）
+- Chat composer 加 mic 按鈕（錄音→ASR→語音訊息 bubble，不二次 publish）
+- Speech panel 加 VoiceRecorderSection（錄音按鈕 + ASR 結果顯示）
+
+#### Mock Server 補全
 - FaceTrack import 缺失 → 修復（之前 face 事件 crash 導致背景任務死亡）
 - periodic_mock_push 加 try/except
+- 新增 `/ws/speech`、`/ws/text` mock 端點（開發機可測語音）
+- 新增 `mock_object_event` generator（Object panel 可收到事件）
+- payload 10MB cap
+- `start.sh` 改 port 8080 + `--ws wsproto`
+
+#### Codex Review（2 輪）
+- 第 1 輪：object normalize、object auto-show、speech payload cap、ws/wss fallback
+- 第 2 輪：useAudioRecorder cleanup、mic isProcessing disabled、voiceError 顯示、mock payload cap
 
 ---
 

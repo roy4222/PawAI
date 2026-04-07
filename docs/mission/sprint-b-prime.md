@@ -419,8 +419,11 @@
 - [x] Codex code review → 4 項修復完成
 
 **下午：**
-- [ ] Speech bridge push-to-talk 併入 Studio（chat 或 speech panel）
-- [ ] Studio 同時能「看」（感知面板）和「說」（語音輸入）
+- [x] Speech bridge push-to-talk 併入 Studio（useAudioRecorder hook + composer mic + speech panel 錄音）
+- [x] Studio 同時能「看」（感知面板）和「說」（語音輸入）
+- [x] Mock server 全端點補全（/ws/speech、/ws/text、object generator）
+- [x] Codex review 第 2 輪 → cleanup/disabled/error display/payload cap 修復
+- [x] Panel 內容可捲動 + key 衝突修復
 
 **傍晚：**
 - [x] 文件更新（project-status / sprint / Pawai-studio README）
