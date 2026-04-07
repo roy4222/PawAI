@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { getGatewayWsUrl } from "@/lib/gateway-url";
 
 type VideoSource = "face" | "vision" | "object";
 type StreamStatus = "connected" | "no_signal" | "disconnected";
@@ -22,11 +23,7 @@ interface UseVideoStreamResult {
 }
 
 function getWsUrl(source: VideoSource): string {
-  if (typeof window !== "undefined") {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${window.location.hostname}:8080/ws/video/${source}`;
-  }
-  return `ws://localhost:8080/ws/video/${source}`;
+  return getGatewayWsUrl(`/ws/video/${source}`);
 }
 
 export function useVideoStream({

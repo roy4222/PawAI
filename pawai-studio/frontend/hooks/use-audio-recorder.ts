@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { getGatewayWsUrl } from "@/lib/gateway-url";
 
 interface AsrResult {
   asr: string;
@@ -20,9 +21,7 @@ interface UseAudioRecorderResult {
 }
 
 function getSpeechWsUrl(): string {
-  if (typeof window === "undefined") return "ws://localhost:8080/ws/speech";
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${proto}://${window.location.hostname}:8080/ws/speech`;
+  return getGatewayWsUrl("/ws/speech");
 }
 
 // Prefer opus codec for best compression

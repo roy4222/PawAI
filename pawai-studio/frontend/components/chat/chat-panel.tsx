@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { getGatewayHttpUrl } from "@/lib/gateway-url"
 
 interface UserMessage {
   id: string
@@ -122,8 +123,7 @@ export function ChatPanel() {
     }
 
     try {
-      const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL
-        ?? (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8080` : "http://localhost:8080")
+      const gatewayUrl = getGatewayHttpUrl()
       const res = await fetch(`${gatewayUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

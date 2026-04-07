@@ -1,6 +1,6 @@
 #!/bin/bash
 # scripts/start_full_demo_tmux.sh
-# 四功能整合 Demo 一鍵啟動：face + vision + speech + Go2
+# 五功能整合 Demo 一鍵啟動：face + vision + object + speech + Go2
 # 用途：展示用全功能 session
 #
 # Environment overrides (same as start_llm_e2e_tmux.sh):
@@ -52,8 +52,8 @@ LOCAL_PLAYBACK="${LOCAL_PLAYBACK:-true}"
 LOCAL_OUTPUT_DEVICE="${LOCAL_OUTPUT_DEVICE:-plughw:CD002AUDIO,0}"
 
 echo "============================================================"
-echo "  PawAI 四功能 Demo"
-echo "  face + gesture + pose + speech + Go2"
+echo "  PawAI 五功能 Demo"
+echo "  face + gesture + pose + object + speech + Go2"
 echo "============================================================"
 
 # --- Preflight ---
@@ -64,6 +64,7 @@ pkill -f vision_status_display 2>/dev/null || true
 pkill -f interaction_router 2>/dev/null || true
 pkill -f event_action_bridge 2>/dev/null || true
 pkill -f interaction_executive 2>/dev/null || true
+pkill -f object_perception 2>/dev/null || true
 pkill -f stt_intent_node 2>/dev/null || true
 pkill -f tts_node 2>/dev/null || true
 pkill -f llm_bridge_node 2>/dev/null || true
@@ -201,8 +202,15 @@ tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
   "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p best_effort_qos_topic_whitelist:='[\"/(point_cloud2|scan|camera/.*/image_raw)\"]'" Enter
 
-# --- Window 9: Studio Gateway (speech bridge, port 8080) ---
-echo "[11/11] Starting Studio Gateway (speech bridge, port 8080)..."
+# --- Window 9: Object Perception ---
+echo "[11/12] Starting object_perception_node (YOLO26n)..."
+tmux new-window -t "$SESSION" -n object
+tmux send-keys -t "$SESSION:object" \
+  "$ROS_SETUP && ros2 launch object_perception object_perception.launch.py" Enter
+sleep 3
+
+# --- Window 10: Studio Gateway (speech bridge, port 8080) ---
+echo "[12/12] Starting Studio Gateway (speech bridge, port 8080)..."
 tmux new-window -t "$SESSION" -n gateway
 tmux send-keys -t "$SESSION:gateway" \
   "$ROS_SETUP && python3 $WORKDIR/pawai-studio/gateway/studio_gateway.py" Enter
@@ -224,6 +232,7 @@ echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
 echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
 echo "  camtf     — Static TF: base_link → camera_link (D435)"
+echo "  object    — Object Perception (YOLO26n)"
 echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765, best_effort QoS)"
 echo "  gateway   — Studio Gateway (http://$(hostname -I | awk '{print $1}'):8080/speech)"
 echo ""

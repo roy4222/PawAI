@@ -2,15 +2,12 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { PawAIEvent } from "@/contracts/types";
+import { getGatewayWsUrl } from "@/lib/gateway-url";
 
 // Runtime fallback: env → same-origin hostname:8080 → localhost:8080
 // Auto-select ws/wss based on page protocol
 function getDefaultWsUrl(): string {
-  if (typeof window !== "undefined") {
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${window.location.hostname}:8080/ws/events`;
-  }
-  return "ws://localhost:8080/ws/events";
+  return getGatewayWsUrl("/ws/events");
 }
 const DEFAULT_WS_URL = getDefaultWsUrl();
 const RECONNECT_DELAY_MS = 3000;
