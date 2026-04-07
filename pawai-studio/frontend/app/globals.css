@@ -146,3 +146,13 @@
 .hud-pulse {
   animation: hud-pulse 2.5s ease-in-out infinite;
 }
+
+/* ── Utility: hide scrollbar ───────────────────────────────── */
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

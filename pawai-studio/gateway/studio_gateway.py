@@ -32,6 +32,14 @@ from std_msgs.msg import String
 
 from asr_client import resample_to_wav16k, transcribe
 
+# Lazy video imports — only needed on Jetson with cv2/cv_bridge
+try:
+    from video_bridge import encode_jpeg, FrameThrottle, VideoClients, VIDEO_TOPIC_MAP
+    _VIDEO_AVAILABLE = True
+except ImportError:
+    _VIDEO_AVAILABLE = False
+    VIDEO_TOPIC_MAP = {}  # type: ignore[assignment]
+
 # Intent classifier — reuse from speech_processor (pure Python, no ROS2 dep)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".." / "speech_processor" / "speech_processor"))
 from intent_classifier import IntentClassifier
@@ -83,6 +91,7 @@ class ConnectionManager:
 
 
 ws_manager = ConnectionManager()
+video_clients = VideoClients() if _VIDEO_AVAILABLE else None
 
 
 # ── ROS2 Node ────────────────────────────────────────────────────
@@ -108,6 +117,43 @@ class GatewayNode(Node):
         self.get_logger().info(
             f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} topics"
         )
+
+        # ── Video subscribers — ROS2 Image → JPEG → WebSocket binary ──
+        self._video_throttles: dict = {}
+        self._cv_bridge_ok = False
+
+        if not _VIDEO_AVAILABLE:
+            self.get_logger().info("video_bridge not available (cv2 missing) — video endpoints disabled")
+            return
+
+        self._cv_bridge_ok = True
+        try:
+            from cv_bridge import CvBridge
+            self._cv_bridge = CvBridge()
+        except ImportError:
+            self._cv_bridge = None
+            self._cv_bridge_ok = False
+            self.get_logger().warn(
+                "cv_bridge not available — video endpoints will show NO SIGNAL"
+            )
+
+        if self._cv_bridge_ok:
+            from sensor_msgs.msg import Image as RosImage
+            video_qos = QoSProfile(
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+                durability=DurabilityPolicy.VOLATILE,
+                depth=1,
+            )
+            for source, topic in VIDEO_TOPIC_MAP.items():
+                self._video_throttles[source] = FrameThrottle()
+                self.create_subscription(
+                    RosImage, topic,
+                    lambda msg, s=source: self._on_video_frame(s, msg),
+                    video_qos,
+                )
+            self.get_logger().info(
+                f"Video bridge ready — subscribed to {len(VIDEO_TOPIC_MAP)} image topics"
+            )
 
     def publish_speech_event(self, payload: dict) -> None:
         msg = String()
@@ -165,6 +211,32 @@ class GatewayNode(Node):
 
         asyncio.run_coroutine_threadsafe(
             ws_manager.broadcast(envelope), self._loop
+        )
+
+    def _on_video_frame(self, source: str, msg) -> None:
+        """ROS2 Image callback → JPEG encode → broadcast to video clients."""
+        if video_clients is None:
+            return
+
+        throttle = self._video_throttles.get(source)
+        if throttle and not throttle.should_send():
+            return
+
+        if not video_clients.get(source):
+            return
+
+        try:
+            frame = self._cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+        except Exception as e:
+            self.get_logger().warn(f"cv_bridge convert failed for {source}: {e}")
+            return
+
+        jpeg = encode_jpeg(frame)
+        if jpeg is None:
+            return
+
+        asyncio.run_coroutine_threadsafe(
+            video_clients.broadcast_bytes(source, jpeg), self._loop
         )
 
 
@@ -228,6 +300,26 @@ async def ws_events(ws: WebSocket):
             await ws.receive_text()  # keepalive / ping
     except WebSocketDisconnect:
         ws_manager.disconnect(ws)
+
+
+# ── WebSocket: Video Streams (ROS2 Image → Browser) ──────────
+
+@app.websocket("/ws/video/{source}")
+async def ws_video(ws: WebSocket, source: str):
+    """Stream JPEG frames for a specific video source."""
+    if not _VIDEO_AVAILABLE or video_clients is None:
+        await ws.close(code=4003, reason="Video streaming not available")
+        return
+    if source not in VIDEO_TOPIC_MAP:
+        await ws.close(code=4004, reason=f"Unknown source: {source}")
+        return
+    await ws.accept()
+    video_clients.add(source, ws)
+    try:
+        while True:
+            await ws.receive_text()  # keepalive / ping
+    except WebSocketDisconnect:
+        video_clients.remove(source, ws)
 
 
 # ── WebSocket: Text Input (Browser → ROS2) ─────────────────────

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { PawPrint } from "lucide-react"
+import { PawPrint, Monitor } from "lucide-react"
 import { LiveIndicator } from "@/components/shared/live-indicator"
 
 interface TopbarProps {
@@ -21,6 +21,13 @@ export function Topbar({ isConnected }: TopbarProps) {
         </span>
       </Link>
       <div className="flex items-center gap-2">
+        <Link
+          href="/studio/live"
+          className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800/50 transition-colors"
+        >
+          <Monitor className="h-3 w-3" />
+          LIVE
+        </Link>
         <LiveIndicator active={isConnected} />
         <span className="text-xs text-muted-foreground">
           {isConnected ? "已連線" : "未連線"}
