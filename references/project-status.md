@@ -677,7 +677,7 @@
 - Demo A 30 輪持續監控
 - Studio 後端開發（FastAPI + WebSocket bridge）
 - Starlight 文件站 + 展示站
-- 文件繳交 Ch1-5（4/13 硬底線）
+- 文件繳交 Ch1-5（4/13 硬底線）— **114-thesis.md + .docx 初稿已產出（4/7 晚）**
 - Flake8 改 blocking
 - Jetson 硬編碼路徑清理
 
