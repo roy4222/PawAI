@@ -436,8 +436,9 @@
 
 **傍晚：**
 - [x] 文件更新（project-status / sprint / Pawai-studio README）
-- [ ] 分工清單（UI 整理 / 文書 / 說明頁可分出去）
-- [ ] 收工歸檔 + push
+- [x] 分工清單（`pawai-studio/docs/assignments/` 四人各自開發文件 + Mock Server 完整 API 說明）
+- [x] **專題文件初稿**（`docs/thesis/114-thesis.md` + `.docx`，Ch1-4 完整，106 SA 範本格式，14 個開發問題）
+- [x] 收工歸檔（thesis + assignments + project-status 已 commit）
 
 ---
 
