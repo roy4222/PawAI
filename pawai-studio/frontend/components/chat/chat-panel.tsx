@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Camera, User, Hand, Brain } from "lucide-react"
+import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Square, Camera, User, Hand, Brain } from "lucide-react"
 import { useStateStore } from "@/stores/state-store"
+import { useAudioRecorder } from "@/hooks/use-audio-recorder"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
@@ -21,7 +23,16 @@ interface AIMessage {
   timestamp: string
 }
 
-type ChatMessage = UserMessage | AIMessage
+interface VoiceMessage {
+  id: string
+  type: "voice"
+  text: string
+  intent: string
+  confidence: number
+  timestamp: string
+}
+
+type ChatMessage = UserMessage | AIMessage | VoiceMessage
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
@@ -52,8 +63,10 @@ export function ChatPanel() {
   const poseState = useStateStore((s) => s.poseState)
   const brainState = useStateStore((s) => s.brainState)
   const stateMap = { faceState, speechState, gestureState, poseState, brainState }
+  const { isRecording, isProcessing, lastResult: voiceResult, error: voiceError, startRecording, stopRecording } = useAudioRecorder()
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const prevVoiceResultRef = useRef(voiceResult)
 
   const hasMessages = messages.length > 0
 
@@ -61,6 +74,22 @@ export function ChatPanel() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isThinking])
+
+  // Voice result → add as voice message
+  useEffect(() => {
+    if (voiceResult && voiceResult !== prevVoiceResultRef.current) {
+      prevVoiceResultRef.current = voiceResult
+      const voiceMsg: VoiceMessage = {
+        id: `voice-${Date.now()}`,
+        type: "voice",
+        text: voiceResult.asr,
+        intent: voiceResult.intent,
+        confidence: voiceResult.confidence,
+        timestamp: formatTime(new Date()),
+      }
+      setMessages((prev) => [...prev, voiceMsg])
+    }
+  }, [voiceResult])
 
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -136,8 +165,10 @@ export function ChatPanel() {
   // ── Composer input ──
   const composerInput = (
     <div className={cn(
-      "relative rounded-2xl border border-border/60 bg-surface transition-all duration-200",
-      "focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(124,107,255,0.15)]",
+      "relative rounded-2xl border transition-all duration-200",
+      isRecording
+        ? "border-red-500/40 shadow-[0_0_0_1px_rgba(239,68,68,0.15)] bg-surface"
+        : "border-border/60 bg-surface focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(124,107,255,0.15)]",
       hasMessages ? "mx-4 mb-4" : "w-full"
     )}>
       <Textarea
@@ -145,29 +176,54 @@ export function ChatPanel() {
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="傳送訊息給 PawAI…"
-        disabled={isThinking}
+        placeholder={isRecording ? "錄音中..." : "傳送訊息給 PawAI…"}
+        disabled={isThinking || isRecording}
         rows={1}
         className={cn(
-          "min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-14",
+          "min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-24",
           "text-foreground placeholder:text-muted-foreground/50",
           "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent",
           "px-4 py-3 text-[15px] leading-relaxed"
         )}
       />
+      {/* Mic button */}
+      <Button
+        onClick={() => isRecording ? stopRecording() : startRecording()}
+        disabled={isThinking || isProcessing}
+        size="icon"
+        className={cn(
+          "absolute right-12 bottom-2.5 h-8 w-8 rounded-lg transition-all duration-200",
+          isRecording
+            ? "bg-red-500 hover:bg-red-600 text-white shadow-sm animate-pulse"
+            : isProcessing
+              ? "bg-amber-500 text-white cursor-wait"
+              : "bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+        )}
+        title={isRecording ? "停止錄音" : isProcessing ? "辨識中..." : "語音輸入"}
+      >
+        {isRecording ? <Square className="h-3.5 w-3.5" /> : <Mic className="h-4 w-4" />}
+      </Button>
+      {/* Send button */}
       <Button
         onClick={handleSend}
-        disabled={isThinking || !inputText.trim()}
+        disabled={isThinking || isRecording || !inputText.trim()}
         size="icon"
         className={cn(
           "absolute right-2.5 bottom-2.5 h-8 w-8 rounded-lg transition-all duration-200",
-          inputText.trim()
+          inputText.trim() && !isRecording
             ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
             : "bg-muted text-muted-foreground cursor-not-allowed"
         )}
       >
         <ArrowUp className="h-4 w-4" />
       </Button>
+      {voiceError && (
+        <div className="absolute -top-7 left-0 right-0 text-center">
+          <span className="text-[11px] text-destructive bg-background/90 px-2 py-0.5 rounded">
+            {voiceError}
+          </span>
+        </div>
+      )}
     </div>
   )
 
@@ -268,6 +324,30 @@ export function ChatPanel() {
                   <div className="max-w-[80%]">
                     <div className="rounded-2xl rounded-br-md bg-primary/10 px-4 py-2.5 text-[15px] text-foreground leading-relaxed">
                       {msg.text}
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
+            if (msg.type === "voice") {
+              return (
+                <div key={msg.id} className="flex justify-end">
+                  <div className="max-w-[80%]">
+                    <div className="rounded-2xl rounded-br-md bg-sky-500/10 border border-sky-400/20 px-4 py-2.5 text-[15px] text-foreground leading-relaxed">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Mic className="h-3 w-3 text-sky-400" />
+                        <span className="text-[10px] text-sky-400 font-mono">語音輸入</span>
+                        <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-500/10 text-emerald-400 border-transparent font-normal">
+                          已發佈
+                        </Badge>
+                      </div>
+                      {msg.text}
+                      {msg.intent && (
+                        <div className="mt-1.5 text-[10px] text-muted-foreground font-mono">
+                          intent: {msg.intent} · {Math.round(msg.confidence * 100)}%
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Mic, History, ArrowLeft, FileText, Clock, Tag, Zap, Bot, Home } from 'lucide-react'
+import { Mic, Square, History, ArrowLeft, FileText, Clock, Tag, Zap, Bot, Home } from 'lucide-react'
+import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { PanelCard } from '@/components/shared/panel-card'
 import { EventItem } from '@/components/shared/event-item'
 import { Button } from '@/components/ui/button'
@@ -10,6 +11,61 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { SpeechState } from '@/contracts/types'
 import { useStateStore } from '@/stores/state-store'
 import { useEventStore } from '@/stores/event-store'
+
+import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+
+function VoiceRecorderSection() {
+  const { isRecording, isProcessing, lastResult, error, startRecording, stopRecording } = useAudioRecorder()
+
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/30 bg-surface/30">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-medium">語音輸入</span>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => isRecording ? stopRecording() : startRecording()}
+          disabled={isProcessing}
+          className={cn(
+            "h-7 text-xs gap-1.5 cursor-pointer",
+            isRecording
+              ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+              : isProcessing
+                ? "bg-amber-500 text-white cursor-wait"
+                : "bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-400/20"
+          )}
+        >
+          {isRecording ? (
+            <><Square className="h-3 w-3" /> 停止</>
+          ) : isProcessing ? (
+            <>辨識中...</>
+          ) : (
+            <><Mic className="h-3 w-3" /> 錄音</>
+          )}
+        </Button>
+      </div>
+
+      {error && (
+        <span className="text-xs text-destructive">{error}</span>
+      )}
+
+      {lastResult && (
+        <div className="flex flex-col gap-1 p-2 rounded-md bg-surface/50 border border-border/20">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-foreground">{lastResult.asr}</span>
+            <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-500/10 text-emerald-400 border-transparent font-normal ml-auto">
+              已發佈
+            </Badge>
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">
+            intent: {lastResult.intent} · {Math.round(lastResult.confidence * 100)}% · {Math.round(lastResult.latency_ms)}ms
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const MOCK_SPEECH_STATE: SpeechState = {
   stamp: 1773561602.123,
@@ -305,6 +361,9 @@ export function SpeechPanel() {
               </div>
             </>
           )}
+
+          {/* Voice recorder */}
+          <VoiceRecorderSection />
 
           <div className="flex flex-col gap-2 mt-2">
             <div className="grid grid-cols-2 gap-2">

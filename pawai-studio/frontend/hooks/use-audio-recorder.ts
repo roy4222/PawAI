@@ -1,0 +1,174 @@
+"use client";
+
+import { useState, useRef, useCallback, useEffect } from "react";
+
+interface AsrResult {
+  asr: string;
+  intent: string;
+  confidence: number;
+  latency_ms: number;
+  published: boolean;
+}
+
+interface UseAudioRecorderResult {
+  isRecording: boolean;
+  isProcessing: boolean;
+  lastResult: AsrResult | null;
+  error: string | null;
+  startRecording: () => Promise<void>;
+  stopRecording: () => void;
+}
+
+function getSpeechWsUrl(): string {
+  if (typeof window === "undefined") return "ws://localhost:8080/ws/speech";
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${window.location.hostname}:8080/ws/speech`;
+}
+
+// Prefer opus codec for best compression
+function getPreferredMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+  ];
+  for (const t of types) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
+const MIN_RECORD_MS = 500;
+
+export function useAudioRecorder(): UseAudioRecorderResult {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [lastResult, setLastResult] = useState<AsrResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const startTimeRef = useRef<number>(0);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Cleanup on unmount — stop mic, close socket
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      wsRef.current?.close();
+    };
+  }, []);
+
+  const sendAudio = useCallback((blob: Blob) => {
+    setIsProcessing(true);
+    setError(null);
+
+    const ws = new WebSocket(getSpeechWsUrl());
+    wsRef.current = ws;
+
+    ws.onopen = async () => {
+      const buffer = await blob.arrayBuffer();
+      ws.send(buffer);
+    };
+
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data as string) as Record<string, unknown>;
+        if (data.error) {
+          setError(data.error as string);
+        } else {
+          setLastResult({
+            asr: (data.asr as string) ?? "",
+            intent: (data.intent as string) ?? "",
+            confidence: (data.confidence as number) ?? 0,
+            latency_ms: (data.latency_ms as number) ?? 0,
+            published: (data.published as boolean) ?? false,
+          });
+        }
+      } catch {
+        setError("回應格式錯誤");
+      }
+      setIsProcessing(false);
+      ws.close();
+    };
+
+    ws.onerror = () => {
+      setError("語音連線失敗");
+      setIsProcessing(false);
+    };
+
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setError(null);
+    setLastResult(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeType = getPreferredMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        // Stop all tracks
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+
+        // Check minimum duration
+        const elapsed = Date.now() - startTimeRef.current;
+        if (elapsed < MIN_RECORD_MS) {
+          setError("錄音太短，請至少說 0.5 秒");
+          return;
+        }
+
+        const blob = new Blob(chunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        chunksRef.current = [];
+
+        if (blob.size === 0) {
+          setError("錄音為空");
+          return;
+        }
+
+        sendAudio(blob);
+      };
+
+      startTimeRef.current = Date.now();
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+    } catch (err) {
+      setError("無法存取麥克風");
+      console.error("getUserMedia error:", err);
+    }
+  }, [sendAudio]);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+  }, []);
+
+  return { isRecording, isProcessing, lastResult, error, startRecording, stopRecording };
+}

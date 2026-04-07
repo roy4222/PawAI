@@ -137,11 +137,42 @@ def mock_pose_event() -> dict:
         ).model_dump(),
     ).model_dump()
 
+def mock_object_event() -> dict:
+    objects_pool = [
+        ("cup", 41), ("bottle", 39), ("chair", 56),
+        ("person", 0), ("dog", 16), ("book", 73),
+    ]
+    n = random.randint(1, 2)
+    picks = random.sample(objects_pool, min(n, len(objects_pool)))
+    objects = [
+        {
+            "class_name": name,
+            "class_id": cid,
+            "confidence": round(random.uniform(0.5, 0.95), 3),
+            "bbox": [random.randint(50, 200), random.randint(50, 200),
+                     random.randint(300, 500), random.randint(300, 500)],
+        }
+        for name, cid in picks
+    ]
+    return PawAIEvent(
+        id=_uid(), timestamp=_ts(), source="object",
+        event_type="object_detected",
+        data={
+            "stamp": time.time(),
+            "objects": objects,
+            "detected_objects": objects,
+            "active": True,
+            "status": "active",
+        },
+    ).model_dump()
+
+
 MOCK_GENERATORS = {
     "face": mock_face_event,
     "speech": mock_speech_event,
     "gesture": mock_gesture_event,
     "pose": mock_pose_event,
+    "object": mock_object_event,
 }
 
 # ── 背景推送任務 ────────────────────────────────────────────────────
@@ -224,6 +255,65 @@ async def ws_events(ws: WebSocket):
             await ws.receive_text()  # keep alive
     except WebSocketDisconnect:
         manager.disconnect(ws)
+
+
+# Mock ASR responses for dev testing
+MOCK_ASR_RESPONSES = [
+    ("你好", "greet", 0.95),
+    ("停止", "stop", 0.92),
+    ("過來", "come_here", 0.88),
+    ("你好嗎", "greet", 0.90),
+    ("坐下", "sit", 0.85),
+]
+
+
+MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10MB cap
+
+
+@app.websocket("/ws/speech")
+async def ws_speech(ws: WebSocket):
+    """Mock speech endpoint — accepts audio, returns fake ASR result."""
+    await ws.accept()
+    try:
+        while True:
+            audio_bytes = await ws.receive_bytes()
+            if len(audio_bytes) > MAX_AUDIO_BYTES:
+                await ws.send_json({"error": "audio_too_large", "published": False})
+                continue
+            # Simulate ASR processing delay
+            await asyncio.sleep(0.5)
+            text, intent, conf = random.choice(MOCK_ASR_RESPONSES)
+            await ws.send_json({
+                "asr": text,
+                "intent": intent,
+                "confidence": conf,
+                "latency_ms": round(random.uniform(300, 800), 1),
+                "published": True,
+            })
+    except WebSocketDisconnect:
+        pass
+
+
+@app.websocket("/ws/text")
+async def ws_text(ws: WebSocket):
+    """Mock text endpoint — accepts text, returns fake intent result."""
+    await ws.accept()
+    try:
+        while True:
+            text = await ws.receive_text()
+            text = text.strip()
+            if not text:
+                await ws.send_json({"error": "empty_text", "published": False})
+                continue
+            await ws.send_json({
+                "asr": text,
+                "intent": "chat",
+                "confidence": 0.8,
+                "latency_ms": round(random.uniform(50, 200), 1),
+                "published": True,
+            })
+    except WebSocketDisconnect:
+        pass
 
 # ── REST: Gateway 端點 ──────────────────────────────────────────────
 
