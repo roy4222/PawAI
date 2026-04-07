@@ -14,7 +14,7 @@
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
-| Studio (pawai-studio) | **Live View 實機通過 + Mission Control UI** | 4/7 | **Live View 三欄影像實機 Demo 通過**（face/vision/object）；Gateway video streaming 3 路 WS binary；gateway-url.ts 統一連線；start-live.sh 正式站腳本；28 tests PASS（15+13 video） |
+| Studio (pawai-studio) | **Chat ROS2 閉環 + Live View 實機通過** | 4/7 | Chat 走 ROS2 pipeline 閉環（文字/語音→LLM→/tts→AI bubble）；錄音音量動畫（AnalyserNode 7 bars）；Live View 三欄影像；gateway-url 統一；start-live.sh 正式站；mock TTS event 修復；31 tests PASS |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
