@@ -402,21 +402,28 @@
 **主線**：讓 Studio 從 mock 數據升級為真實 ROS2 感知數據。
 
 **上午：**
-- [ ] Gateway 加 ROS2 subscriptions（face / gesture / pose / object / executive status）
-- [ ] 新增 `/ws/events` WebSocket broadcast endpoint
-- [ ] 用 wscat 驗證事件流
-
-**中午前：**
-- [ ] Studio 前端 WebSocket URL 改指向 Gateway（Jetson:8080）
-- [ ] 4 個 panel（face / speech / gesture / pose）接上真實數據
-- [ ] 驗證：打開 Studio 看到即時感知狀態
+- [x] Gateway 加 ROS2 subscriptions（face / gesture / pose / object / speech）
+- [x] 新增 `/ws/events` WebSocket broadcast endpoint
+- [x] Face 節流 10Hz→2Hz + gesture/pose 欄位轉換
+- [x] Speech payload 5MB cap + 錯誤不洩漏
+- [x] Studio 前端 WebSocket URL 改指向 Gateway（port 8080）+ ws/wss 自動選
+- [x] 5 個 panel（face / speech / gesture / pose / object）接上數據
+- [x] Mission Control 首頁（HUD logo + 模組狀態列 + lucide 按鈕）
+- [x] Object panel 新建（COCO 中文標籤 + 三態）
+- [x] Panel 可折疊 + sidebar 可拖寬（280-600px）
+- [x] Panel header 連結詳細頁 + topbar 連結回首頁
+- [x] 移除事件洗版 + face key 衝突修復
+- [x] PR #16（人臉前端）+ #5（手勢 panel）合併
+- [x] Mock server FaceTrack import 修復
+- [x] 15/15 gateway tests PASS + frontend build PASS
+- [x] Codex code review → 4 項修復完成
 
 **下午：**
 - [ ] Speech bridge push-to-talk 併入 Studio（chat 或 speech panel）
 - [ ] Studio 同時能「看」（感知面板）和「說」（語音輸入）
 
 **傍晚：**
-- [ ] 文件更新（project-status / demo-scope / Pawai-studio README）
+- [x] 文件更新（project-status / sprint / Pawai-studio README）
 - [ ] 分工清單（UI 整理 / 文書 / 說明頁可分出去）
 - [ ] 收工歸檔 + push
 

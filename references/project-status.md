@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-06（Sprint Day 11 — 混合模式策略轉向 + Studio Gateway E2E 通過）
+**最後更新**：2026-04-07（Sprint Day 12 — Studio 即時觀測台 + Mission Control UI + Object panel）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -14,7 +14,7 @@
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
-| Studio (pawai-studio) | **Gateway 錄音+文字 E2E 通過** | 4/6 | Gateway（FastAPI+rclpy on Jetson:8080）；push-to-talk 錄音 E2E ~2s；文字輸入也通；前端 Next.js 不動 |
+| Studio (pawai-studio) | **即時觀測台 + Mission Control UI** | 4/7 | Gateway 訂閱 5 ROS2 topics → `/ws/events` 廣播；前端 Mission Control 首頁（模組狀態列+HUD）；Object panel 新建；Panel 可折疊+sidebar 可拖寬；face 節流 2Hz；ws/wss 自動選；15 tests PASS |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
@@ -48,6 +48,48 @@
 - #6 跨執行緒 DC.send() → 修復（移除不安全 fallback）
 - #7 執行緒無限增長 → 修復（ThreadPoolExecutor 取代 per-event Thread）
 - #18 模型版本不一致 → 修復（script yunet_legacy → 2023mar）
+
+---
+
+## Sprint Day 12（4/7）
+
+### Studio 即時觀測台
+
+**目標**：Studio 取代 Foxglove 成為 Demo 觀測台 + 語音入口。
+
+#### Gateway ROS2 Bridge
+- 訂閱 5 個 ROS2 topic：face state / gesture event / pose event / speech intent / object detected
+- `/ws/events` WebSocket 廣播，ConnectionManager 多 client
+- Face 節流 10Hz → 2Hz，gesture/pose 補齊前端 dispatch 欄位
+- Speech payload 5MB cap + 錯誤回傳不洩漏內部路徑
+- 15/15 tests PASS（含 8 個新 transform 測試）
+
+#### Mission Control 首頁
+- 控制室風格：grid 背景 + HUD logo + 青綠色調
+- 模組狀態列：5 模組即時連線狀態（綠/灰）
+- 快捷按鈕升級：lucide icon + accent bar
+- Topbar accent line + 點擊回首頁
+
+#### Object Panel
+- 新建 `object-panel.tsx` + `/studio/object` 頁面
+- COCO 常用 class 中文對照（cup→杯子、dog→狗）
+- types / state store / event dispatch 完整串接
+- 預設折疊（Demo 不是主力展示）
+
+#### Panel 佈局改善
+- PanelCard 可折疊（click header toggle，ChevronDown/Right 指示）
+- Sidebar 可拖寬（280-600px，左邊緣拖拉條）
+- Panel header 連結到詳細頁（↗ icon）
+- 移除事件洗版（感知事件不再灌入 chat）
+- ws/wss 自動選擇 + runtime URL fallback
+
+#### PR 合併
+- #16 人臉辨識前端（Yamiko）— face panel vanishing track + loading 狀態
+- #5 手勢 panel 重寫（syu）— emoji + event history + 三態
+
+#### Mock Server 修復
+- FaceTrack import 缺失 → 修復（之前 face 事件 crash 導致背景任務死亡）
+- periodic_mock_push 加 try/except
 
 ---
 
