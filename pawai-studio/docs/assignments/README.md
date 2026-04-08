@@ -151,12 +151,27 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 ## 分工總覽
 
+### Studio 前端頁面（原有）
+
 | 負責人 | 頁面 | 開發文件 |
 |--------|------|----------|
 | 鄔雨彤 | `/studio/face` | [face-assignment.md](face-assignment.md) |
 | 黃旭 | `/studio/gesture` | [gesture-assignment.md](gesture-assignment.md) |
 | 陳如恩 | `/studio/pose` | [pose-assignment.md](pose-assignment.md) |
 | 楊沛蓁 | `/studio/object` | [object-assignment.md](object-assignment.md) |
+
+### 互動設計（4/9 新增）— Go2 動作 + TTS 回應
+
+> **每個人要決定「偵測到之後 → Go2 做什麼動作 + 說什麼話」**
+
+| 負責人 | 功能 | 要做的事 |
+|--------|------|---------|
+| 黃旭 | 手勢辨識 | 填手勢→動作映射表（7+ 種手勢） |
+| 陳若恩 | 語音功能 | LLM 智慧化 + Plan B 固定台詞 15 組 |
+| 陳若恩/待定 | 姿勢辨識 | 填姿勢→動作映射表 |
+| 待分配 | 物體辨識 | 決定偵測哪些物品 + TTS 回應 |
+
+👉 **[互動設計分工文件（Go2 API + 映射表）](interaction-design.md)**
 
 ## Git 規範
 
