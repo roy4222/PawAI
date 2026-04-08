@@ -151,27 +151,26 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 ## 分工總覽
 
-### Studio 前端頁面（原有）
+### Studio 前端頁面
 
-| 負責人 | 頁面 | 開發文件 |
-|--------|------|----------|
-| 鄔雨彤 | `/studio/face` | [face-assignment.md](face-assignment.md) |
-| 黃旭 | `/studio/gesture` | [gesture-assignment.md](gesture-assignment.md) |
-| 陳如恩 | `/studio/pose` | [pose-assignment.md](pose-assignment.md) |
-| 楊沛蓁 | `/studio/object` | [object-assignment.md](object-assignment.md) |
+| 負責人 | 頁面 | 前端開發文件 |
+|--------|------|------------|
+| 鄔雨彤 | `/studio/gesture` | [gesture-assignment.md](gesture-assignment.md) |
+| 楊沛蓁 | `/studio/pose` | [pose-assignment.md](pose-assignment.md) |
+| 黃旭 | `/studio/object` | [object-assignment.md](object-assignment.md) |
 
-### 互動設計（4/9 新增）— Go2 動作 + TTS 回應
+> 人臉頁面 (`/studio/face`) 由 Roy 處理：[face-assignment.md](face-assignment.md)
 
-> **每個人要決定「偵測到之後 → Go2 做什麼動作 + 說什麼話」**
+### Go2 互動設計（4/9 新增）— 偵測到之後做什麼動作 + 說什麼話
 
-| 負責人 | 功能 | 要做的事 |
-|--------|------|---------|
-| 黃旭 | 手勢辨識 | 填手勢→動作映射表（7+ 種手勢） |
-| 陳若恩 | 語音功能 | LLM 智慧化 + Plan B 固定台詞 15 組 |
-| 陳若恩/待定 | 姿勢辨識 | 填姿勢→動作映射表 |
-| 待分配 | 物體辨識 | 決定偵測哪些物品 + TTS 回應 |
+| 負責人 | 功能 | 詳細文件（含模型 + 本機復現步驟） |
+|--------|------|-------------------------------|
+| **鄔雨彤** | 手勢辨識 | [gesture-wu.md](../go2-jetson/gesture-wu.md) |
+| **楊沛蓁** | 姿勢辨識 | [pose-yang.md](../go2-jetson/pose-yang.md) |
+| **陳若恩** | 語音功能 | [speech-chen.md](../go2-jetson/speech-chen.md) |
+| **黃旭** | 物體辨識 | [object-huang.md](../go2-jetson/object-huang.md) |
 
-👉 **[互動設計分工文件（Go2 API + 映射表）](interaction-design.md)**
+👉 **[互動設計總覽（Go2 API 參考 + 映射表）](../go2-jetson/interaction-design.md)**
 
 ## Git 規範
 

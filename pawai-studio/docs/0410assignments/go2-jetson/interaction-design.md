@@ -2,14 +2,28 @@
 
 > **目標**：六核心功能到齊了，但互動深度淺——每個功能只有一層反應，沒有複合場景或連續對話。這份文件定義「偵測到之後 → Go2 做什麼」的擴充方向。
 
+## 四人分工
+
+| 負責人 | 功能 | 詳細文件 | Studio 頁面 |
+|--------|------|---------|------------|
+| **鄔雨彤** | 手勢辨識 | [gesture-wu.md](gesture-wu.md) | [Studio 分工](../pawai-studio/gesture-assignment.md) |
+| **楊沛蓁** | 姿勢辨識 | [pose-yang.md](pose-yang.md) | [Studio 分工](../pawai-studio/pose-assignment.md) |
+| **陳若恩** | 語音功能 | [speech-chen.md](speech-chen.md) | — |
+| **黃旭** | 物體辨識 | [object-huang.md](object-huang.md) | [Studio 分工](../pawai-studio/object-assignment.md) |
+
+**每個人要做兩件事**：
+1. **Go2 互動設計**：決定偵測到之後做什麼動作+說什麼話（填映射表），發 PR 給 Roy
+2. **Studio 前端頁面**：把你的模組頁面做完整，發 PR 給 Roy
+
 ## 你不需要的東西
 
 你**不需要** Jetson、Go2、Intel RealSense D435 深度攝影機。
 
 所有開發都可以在你自己的電腦上完成：
-- **前端 UI**：Mock Server 模擬所有後端資料（見 [README.md](README.md)）
-- **互動規則**：寫 JSON/YAML 設定檔，Roy 整合到 Jetson
-- **測試手勢/姿勢**：用你自己的鏡頭，高度 ~30cm 模擬 Go2 視角
+- **前端 UI**：Mock Server 模擬所有後端資料（見 [Studio README](../pawai-studio/README.md)）
+- **互動規則**：填好映射表，Roy 整合到 Jetson
+- **測試手勢/姿勢/物體**：用你自己的鏡頭，高度 ~30cm 模擬 Go2 視角
+- **語音**：SSH tunnel 連 GPU server，本機測試 LLM + TTS
 
 ---
 
