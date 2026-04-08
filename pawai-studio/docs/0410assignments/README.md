@@ -20,7 +20,7 @@
 | **陳若恩** | 語音功能 | LLM prompt 調整 + Plan B 固定台詞 15 組 | — |
 | **黃旭** | 物體辨識 | 選白名單物品 + 每個物品 TTS 回應 | `/studio/object` |
 
-> 人臉辨識 + 導航避障：Roy 負責
+> 人臉辨識 + 導航避障 + PAI Docs 網站 + 文件修訂 + 全功能整合：[Roy 路線圖](go2-jetson/roy-roadmap.md)
 
 ---
 
