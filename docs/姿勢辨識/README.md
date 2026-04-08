@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | fallen 修復驗證通過 |
+| 狀態 | **上機驗收 4/4 PASS**，fallen 可關閉 |
 | 版本/決策 | MediaPipe Pose (CPU 18.5 FPS) |
 | 完成度 | 95% |
-| 最後驗證 | 2026-04-03 |
+| 最後驗證 | 2026-04-04（standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS） |
 | 入口檔案 | `vision_perception/vision_perception/pose_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
 
@@ -54,7 +54,9 @@ interaction_executive_node → fallen = EMERGENCY
 - RTMPose balanced mode GPU 91-99%（備援方案，主線用 MediaPipe CPU 0%）
 - ~~正面站姿被誤判為 fallen~~ — **已修復（4/3）**：新增 `vertical_ratio` guard，用 shoulder-hip 垂直差 / torso 長度作為相對尺度（閾值 0.4），不受距離影響
 - 跌倒偵測可能誤報（椅子上趴下）
-- 幽靈跌倒偵測：投票 buffer（20 幀多數決）已大幅降低誤報，但未完全消除
+- 幽靈跌倒偵測：投票 buffer（20 幀多數決）已大幅降低誤報，但未完全消除。**4/8 會議確認幻覺仍頻繁**（無人時鎖定衣架等物體判為 fallen）
+- **`enable_fallen` 已參數化**（4/6）：Demo 可關閉跌倒偵測避免誤報
+- 因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
 - 側面坐姿 hip_angle 和 trunk_angle 計算偏差，Demo 時建議正面面向攝影機
 
 ## Event Schema（v2.0 凍結）

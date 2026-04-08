@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | Demo ready |
-| 版本/決策 | SenseVoice cloud + SenseVoice local (sherpa-onnx int8) + Whisper fallback + edge-tts + Cloud Qwen2.5-7B |
-| 完成度 | 85% |
-| 最後驗證 | 2026-03-29 |
+| 狀態 | **Chat 閉環 12 句通過** |
+| 版本/決策 | SenseVoice cloud + edge-tts + Cloud Qwen2.5-7B（全雲端主線）；本地 ASR/LLM 不可用 |
+| 完成度 | 90% |
+| 最後驗證 | 2026-04-08（Studio Chat 閉環 12 句，E2E ~2s） |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
 | 測試 | `python3 -m pytest speech_processor/test/ -v` |
 
@@ -28,8 +28,9 @@ TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 ## 核心流程
 
 ```
-USB 麥克風 (UACDemoV1.0, 48kHz mono)
-    |
+筆電麥克風 via PawAI Studio（Demo 主線）
+    |  ← USB 麥克風已廢棄（Go2 風扇噪音導致 ~20% 辨識率）
+    |  Studio WebSocket → Gateway(Jetson:8080) → ROS2
 stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
     |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
@@ -114,16 +115,28 @@ sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx in
 
 ## 已知問題
 
-- USB 麥克風收音弱，需靠近（< 80cm）+ mic_gain 8.0
+- **Go2 機身 USB 麥克風已廢棄**（4/8 決定）：Go2 風扇噪音極大，辨識率 ~20%。Demo 改用筆電麥克風 via Studio
 - USB device index 重開機後漂移 → 用 `source scripts/device_detect.sh`
 - MeloTTS 和 ElevenLabs 已棄用（3/26 決議）
 - SenseVoice 對「現在請停止動作」辨識不穩（stop intent 約 60% 正確）
+- **本地 ASR 不可用**：Whisper 上機後噪音干擾嚴重，長句辨識失敗
+- **本地 LLM 不可用**：Qwen2.5-0.8B 智商極低，胡言亂語（4/8 會議確認）
+- **LLM 回覆品質待改善**：max_tokens=120/25 字限制，回答過短、無個性、無多輪 memory
+- **GPU 雲端不穩**：昨天斷線 2 次，Plan B 固定台詞為必備
+
+## Plan B 固定台詞模式（4/8 會議新增）
+
+GPU 斷線時的備案。ASR 判斷意圖後直接匹配固定回答，回應速度 ~0.x 秒。
+- 需設計兩版 Demo 對話腳本：Plan A（雲端 AI）+ Plan B（固定台詞）
+- Studio 顯示連線狀態燈號，團隊即時判斷是否切換
+- 必要時出示錄影作為 AI 對話功能佐證
+- **負責人**：陳若恩（見分工文件）
 
 ## 下一步
 
-- Sprint Day 3-4：硬體上機
-- Sprint Day 5-6：整合進 executive v0
-- system prompt 調整（intent 映射偏差）
+- [ ] LLM prompt 智慧化：放寬字數 12→50+、加入 PawAI 個性、自我介紹（陳若恩）
+- [ ] Plan B 固定台詞設計：至少 15 組問答（陳若恩）
+- [ ] 多輪對話 memory（conversation history）
 
 ## 子資料夾
 

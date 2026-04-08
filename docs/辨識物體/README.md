@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Phase C 完成**，Jetson 單獨跑 10+ 分鐘穩定 |
+| 狀態 | **Executive 整合完成**，cup 觸發 TTS 通過 |
 | 版本/決策 | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16（不裝 ultralytics） |
-| 完成度 | 50%（ROS2 node 可用 + contract 已登記，尚未整合 executive/demo 腳本） |
-| 最後驗證 | 2026-04-05（Jetson 5 分鐘穩定性測試 PASS） |
+| 完成度 | 70%（Executive 整合完成，Demo 腳本已加入，待擴充白名單+TTS） |
+| 最後驗證 | 2026-04-06（cup → TTS「你要喝水嗎？」✅，bottle ❌） |
 | 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（9.5MB） |
 | TRT Cache | `/home/jetson/trt_cache/`（首次啟動 3-10 分鐘，之後秒起） |
 | Package | `object_perception/`（ROS2 Python，entry: `object_perception_node`） |
@@ -142,18 +142,29 @@ ros2 launch object_perception object_perception.launch.py
 - Priority 5（低於 face / speech / gesture / obstacle / fall）
 - 未來擴展新 class：修改 `interaction_executive/state_machine.py` 的 `OBJECT_TTS_MAP`
 
+## 實測結果（4/6 上機驗證）
+
+| 物品 | 結果 | 備註 |
+|------|:----:|------|
+| cup 杯子 | ✅ | threshold 0.5，觸發 TTS「你要喝水嗎？」 |
+| cell phone 手機 | ✅ | 適當光線下可辨識 |
+| book 書本 | ⚠️ | 平放時困難，翻開展示可辨識（threshold 0.3 下偶爾偵測） |
+| bottle 水瓶 | ❌ | 未偵測到，Demo 不展示 |
+
 ## 已知問題
 
-- Jetson 實機驗證順延 Day 11（sync commit 4694fb9 + 真機拿 cup 測試）
-- 沒整合進 `start_full_demo_tmux.sh`（等穩定後再加）
+- **光線不足時小物體幾乎無法辨識** — Demo 必須開燈
+- 物體需在一定高度且正對攝影機角度才能偵測到
+- YOLO26n 是 Nano 版（9.5MB），小物件偵測率低
+- 平放的扁平物體辨識困難（書本、手機平放）
+- **Jetson 供電不穩**：累積斷電 8+ 次
 - 追蹤、3D depth、target selection 未做
-- **Jetson 供電不穩**：累積斷電 5 次，Demo 前必須解決
 
 ## 下一步
 
-- Executive 整合（訂閱 `/event/object_detected` → TTS 回報）
-- `start_full_demo_tmux.sh` 加 object window
-- 加入 4 核心整合場景驗收
+- [ ] 決定白名單物品（室內 COCO 篩選）+ 每個物品 TTS 回應（黃旭，4/9 分工）
+- [ ] yolo26s 升級評估（mAP +6.3%，~20MB，改善小物件）
+- 見分工文件：`pawai-studio/docs/0410assignments/go2-jetson/object-huang.md`
 
 ## 子資料夾
 

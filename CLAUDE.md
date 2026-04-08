@@ -28,7 +28,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **專題名稱：老人與狗 / PawAI**
 **硬底線：2026/4/13 文件繳交，五月展示／驗收**
-**當前日期：2026-03-27（Sprint B-prime 規劃完成，3/28 啟動 11 天衝刺）**
+**當前日期：2026-04-08（4/8 教授會議後，四人互動設計分工啟動）**
 
 以 Unitree Go2 Pro 為載體的 **embodied AI 互動陪伴平台**。核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
 
@@ -345,7 +345,9 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 - **Windows/Mac（開發機）**：VS Code SSH → Jetson，程式碼編輯、文件撰寫
 - **Jetson Orin Nano（邊緣端）**：ROS2 runtime、模型推理、Go2 連線
 - **Go2 Pro**：192.168.12.1（Wi-Fi AP）或 192.168.123.161（Ethernet）
-- **計畫採購**：USB 麥克風 + USB 喇叭（接 Jetson，繞開 Go2 內建音訊路徑）
+- **所有設備已上機**（4/8 確認）：Jetson + D435 + 外接喇叭 + XL4015 降壓板
+- ⚠️ **供電不穩**：XL4015 在 Go2 運行中反覆斷電（8+ 次），20V 已是安全極限
+- **機身 USB 麥克風已廢棄**：Go2 風扇噪音導致 ~20% 辨識率，Demo 改用筆電 Studio 收音
 
 ### Jetson 操作要點
 
@@ -384,7 +386,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 
 ### Go2 LiDAR 頻率過低（<2Hz）
 
-導航避障技術上不可行（需 ≥10Hz），因此列為 P2。定位（AMCL）可用。
+Go2 內建 LiDAR 導航不可行（覆蓋率 18%），D435 避障因鏡頭角度限制上機全失敗（4/3 停用）。外接 RPLIDAR A2M12 評估中（4/14 定案），可行性研究結論：RAM 安全、CPU 風險需管理。
 
 ### Go2 DataChannel Megaphone API 格式（v1.1.7 已驗證）
 

@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 整合測試通過 |
+| 狀態 | **greeting 可靠化** |
 | 版本/決策 | YuNet 2023mar (CPU 71.3 FPS) + SFace 2021dec |
 | 完成度 | 95% |
-| 最後驗證 | 2026-03-25 |
+| 最後驗證 | 2026-04-06（sim_threshold 調降，identity_stable 21 次/2min） |
 | 入口檔案 | `face_perception/face_perception/face_identity_node.py` |
 | 測試 | `python3 -m pytest face_perception/test/ -v` |
 
@@ -61,8 +61,13 @@ interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 
 ## 已知問題
 
+- **重複觸發打招呼**（4/8 會議確認）：同一人短時間內重複觸發 greeting，尚未設定冷卻時間
+- **光線不足誤判**：低光環境偶爾出現錯誤人名
+- **無人幻覺**：無人時偶爾誤判有人臉存在
+- **多人骨架亂跳**：多人同時出現時追蹤混亂，無法正確區分
+- track 抖動仍在（45 tracks/2min，目標 ≤5），根因是 YuNet 偵測不穩定
 - 模型路徑硬編碼 `/home/jetson/face_models/`
-- face_db 只有 2 人，Demo 可能需擴充
+- face_db 只有 2 人（roy, grama），Demo 可能需擴充
 - OpenCV 版本限制（Jetson 4.5.4）
 
 ## 下一步

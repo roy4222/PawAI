@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-07（Sprint Day 12 — Live View 實機通過 + Gateway video streaming + 五功能 Demo 錄製）
+**最後更新**：2026-04-08（Sprint Day 13 — 4/8 教授會議 + mission v2.3 + 外接 LiDAR 研究 + 四人分工）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -18,7 +18,41 @@
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
-| 導航避障 | **停用 + 文件化** | 4/4 | demo-scope.md 新建、contract/mission/導航避障 README 已更新、demo 腳本移除 obstacle windows |
+| 導航避障 | **外接 LiDAR 評估中** | 4/8 | D435 停用(4/3)；外接 RPLIDAR A2M12 可行性研究完成：RAM 安全、CPU 風險需管理；4/14 定案 |
+
+## 4/8 教授會議決策
+
+### 關鍵決定
+- **硬體全上機確認**：Jetson + D435 + 外接喇叭 + XL4015 已安裝至 Go2 機體
+- **機身麥克風廢棄**：Go2 風扇噪音導致 ASR ~20%，改用筆電 Studio 收音
+- **導航避障可能復活**：老師同意嘗試外接 LiDAR，4/14 前定案是否採購 RPLIDAR A2M12
+- **文件先賭有 LiDAR**：4/13 繳交後不可修改，文件中先寫入導航功能
+- **本地 ASR/LLM 正式確認不可用**：Whisper 噪音干擾嚴重、Qwen 0.8B 智商極低
+- **Plan B 固定台詞**：GPU 斷線備案，需設計兩版 Demo 對話腳本
+- **專題文件 46 頁**：歷屆 80-90 頁，需補強到 60+ 頁
+
+### 四人互動設計分工（4/9 會議正式宣布）
+| 負責人 | 功能 | 任務 |
+|--------|------|------|
+| 鄔雨彤 | 手勢辨識 | 7 種手勢→動作映射表 + Studio 頁面 |
+| 楊沛蓁 | 姿勢辨識 | 5 種姿勢→動作映射表 + Studio 頁面 |
+| 陳若恩 | 語音功能 | LLM prompt 調整 + Plan B 固定台詞 15 組 |
+| 黃旭 | 物體辨識 | COCO 白名單篩選 + TTS 回應 + Studio 頁面 |
+
+### 外接 LiDAR 可行性研究結論
+- **RAM**：安全（SLAM+Nav2 新增 ~1GB，總計 ~4.7/8 GB）
+- **CPU**：風險點（slam_toolbox ~70%，導航時建議關手勢）
+- **推薦**：RPLIDAR A2M12（$7,530，16000/s，ROS 生態最豐富）
+- **最大風險**：供電（LiDAR 馬達 +2-5W，XL4015 已 8+ 次斷電）
+- 詳見 `docs/導航避障/research/2026-04-08-external-lidar-feasibility.md`
+
+### 文件更新
+- `docs/mission/README.md` v2.3 完成
+- 四人分工文件完成（`pawai-studio/docs/0410assignments/`）
+- 外接 LiDAR 可行性研究完成
+- 各模組 README 同步更新
+
+---
 
 ## 3/26 會議決策
 

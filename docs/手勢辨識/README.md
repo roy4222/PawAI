@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | 整合測試通過 |
+| 狀態 | **上機驗收 5/5 PASS** |
 | 版本/決策 | MediaPipe Gesture Recognizer (CPU 7.2 FPS) |
 | 完成度 | 90% |
-| 最後驗證 | 2026-03-25 |
+| 最後驗證 | 2026-04-04（stop/thumbs_up/非白名單/距離/dedup 全 PASS） |
 | 入口檔案 | `vision_perception/vision_perception/gesture_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_gesture_classifier.py -v` |
 
@@ -49,7 +49,7 @@ interaction_executive_node → Go2 動作
 
 ## 操作限制與已知問題
 
-- **有效範圍**：D435 前方約 **3m** 以內
+- **有效範圍**：D435 前方約 **2m** 以內（4/8 會議確認，距離過遠不精準）
 - **僅支援單人操作**：多人同時出現時可能混淆
 - point 手勢不穩定（MediaPipe backend）
 - 時序分析幀數 buffer 未參數化
@@ -78,8 +78,10 @@ interaction_executive_node → Go2 動作
 
 ## 下一步
 
-- Sprint Day 1-3：上機驗證
-- Sprint Day 4-5：整合進 executive v0
+- [ ] 擴充手勢種類與對應互動行為（鄔雨彤，4/9 分工）
+- [ ] MediaPipe 內建 7 種手勢全部測試辨識率
+- [ ] 每個手勢→Go2 動作 + TTS 映射表
+- 見分工文件：`pawai-studio/docs/0410assignments/go2-jetson/gesture-wu.md`
 
 ## 子資料夾
 
