@@ -3,9 +3,9 @@
 > Status: current
 
 **專案名稱**：老人與狗 (Elder and Dog) / PawAI
-**文件版本**：v2.2
+**文件版本**：v2.3
 **定案日期**：2026-03-07
-**最後更新**：2026-03-26
+**最後更新**：2026-04-08
 **交付期限**：2026/4/13 文件繳交、5/16 省夜 Demo、5/18 正式展示、6 月口頭報告
 
 > **v2.0 更新**：全面更新功能閉環設計、本地/雲端拆分策略、PawAI Studio 定位、團隊分工方向
@@ -36,13 +36,13 @@
 
 ## 2. 專案一句話定位
 
-> 以 Unitree Go2 Pro 為載體，建立一套「以人機互動為主、導航避障為輔」的 embodied AI 機器狗系統。
+> 以 Unitree Go2 Pro 為載體，結合大語言模型與多模態 AI 辨識能力，實現互動交流與日常提醒功能的 embodied AI 機器狗系統。
 >
-> 核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
+> 核心是「人臉辨識 + 中文語音互動 + AI 大腦決策 + 手勢/姿勢/物體感知」。若確認外接 LiDAR 可行，將加入「執行簡單移動任務」。
 
-**PawAI Studio** 是整個系統的統一入口：
+**PawAI Studio** 是整個系統的統一入口與 Demo 觀測台：
 
-> 一個以 chat 為主入口、可動態展開 Foxglove 式觀測與控制面板的 embodied AI studio。
+> 取代 Foxglove，集 chat 語音入口、即時影像串流、感知面板於一身的 embodied AI studio。Demo 時筆電端開啟 Studio，作為語音收音 + 系統監控的唯一介面。
 
 ---
 
@@ -62,15 +62,20 @@
 
 ### 3.2 交付目標 (4/13 硬底線)
 
-| 里程碑 | 日期 | 交付內容 |
-|--------|------|----------|
-| 功能閉環凍結 | 3/12 | 8 個功能的本地/雲端拆分確認（本文件） |
-| 攻守交換 | 3/16 | Roy 交出架構核心，其他成員接手前端與文件 |
-| 前端網站截止 | 3/26 | 前端頁面完成，Roy 審查後告知修改項目 |
-| 四功能整合測試 | 3/26 – 4/2 | 人臉 + 語音 + 手勢 + 姿勢整合驗證 |
-| P0 穩定化 | 4/6 | Demo A/C 成功率 >= 90% |
-| **文件繳交** | **4/13** | **七大功能完成 + 專題文件繳交** |
-| **展示／驗收** | **五月** | **完整系統展示與發表** |
+| 里程碑 | 日期 | 交付內容 | 狀態 |
+|--------|------|----------|:----:|
+| 功能閉環凍結 | 3/12 | 8 個功能的本地/雲端拆分確認（本文件） | ✅ |
+| 攻守交換 | 3/16 | Roy 交出架構核心，其他成員接手前端與文件 | ✅ |
+| 前端網站截止 | 3/26 | 前端頁面完成，Roy 審查後告知修改項目 | ✅ |
+| 四功能整合測試 | 3/26 – 4/2 | 人臉 + 語音 + 手勢 + 姿勢整合驗證 | ✅ |
+| 五功能整合 + Studio | 4/7 | 物體辨識 + Studio Chat 閉環 + Live View | ✅ |
+| P0 穩定化 | 4/6 | Demo 主線成功率 >= 90% | ✅ |
+| 外接 LiDAR 定案 | **4/14** | 確認是否採購 + 型號（學校借用 or 新購） | 🔄 |
+| **文件繳交** | **4/13** | **專題文件繳交（目標 60+ 頁，目前 46 頁）** | 🔄 |
+| PAI Docs 網站骨架 | 4/12 | Astro + Starlight 框架 + 基本內容 | 🔄 |
+| **省夜 Demo** | **5/16** | **完整系統展示（省級評審）** | |
+| **正式展示** | **5/18** | **最終發表** | |
+| 口頭報告 | 6 月 | 口頭報告答辯 | |
 
 ---
 
@@ -78,13 +83,23 @@
 
 ### 4.1 硬體配置總覽
 
-| 層級 | 設備 | 規格 | 用途 |
-|------|------|------|------|
-| **機器人載體** | Unitree Go2 Pro | 12 關節四足、內建 LiDAR/IMU | 運動執行、環境感知 |
-| **邊緣運算** | NVIDIA Jetson Orin Nano SUPER | 8GB 統一記憶體 | 即時感知、本地推理、ROS2 runtime |
-| **視覺感測** | Intel RealSense D435 | RGB-D 深度攝影機 | 人臉偵測、深度估計 |
-| **音訊輸入** | USB 麥克風 (HyperX SoloCast) | 外接式 | 中文語音輸入（D435 無內建麥克風） |
-| **遠端算力** | 5× NVIDIA Quadro RTX 8000 | 每張 48GB VRAM，總 240GB | LLM 推理、雲端增強 |
+| 層級 | 設備 | 規格 | 用途 | 狀態 |
+|------|------|------|------|:----:|
+| **機器人載體** | Unitree Go2 Pro | 12 關節四足、內建 LiDAR/IMU | 運動執行、環境感知 | ✅ |
+| **邊緣運算** | NVIDIA Jetson Orin Nano SUPER | 8GB 統一記憶體、67 TOPS | 即時感知、本地推理、ROS2 runtime | ✅ 已上機 |
+| **視覺感測** | Intel RealSense D435 | RGB-D 深度攝影機 | 人臉偵測、手勢/姿勢/物體辨識 | ✅ 已上機 |
+| **音訊輸出** | USB 外接喇叭 (CD002-AUDIO) | USB DAC | TTS 語音播放（效果良好） | ✅ 已上機 |
+| **音訊輸入（Demo）** | 筆電內建麥克風 | via PawAI Studio 網頁 | Demo 語音收音主線（最乾淨） | ✅ 主線 |
+| ~~音訊輸入（機身）~~ | ~~USB 麥克風 (UACDemoV1.0)~~ | ~~mono, 48kHz~~ | ~~Go2 機身收音~~ | ❌ 廢棄 |
+| **供電** | XL4015 降壓模組 | Go2 電池 → 20V → Jetson | Jetson 供電 | ⚠️ 不穩 |
+| **外接 LiDAR（評估中）** | RPLIDAR A2M12 | 12m / 16000次/秒 / 360° | SLAM 建圖 + 導航避障 | 🔄 4/14 定案 |
+| **遠端算力** | 5× NVIDIA Quadro RTX 8000 | 每張 48GB VRAM，總 240GB | LLM 推理、ASR、雲端增強 | ✅ |
+
+> **4/8 確認**：Jetson、D435、外接喇叭、XL4015 已全部正式安裝至 Go2 機體。
+>
+> **⚠️ 供電風險**：XL4015 降壓板在 Go2 運行中反覆斷電（累計 8+ 次），電壓已調至 20V（Jetson 安全極限 9-20V），同時運行多項功能時耗電增加導致電壓下降觸發強制關機。Demo 時有斷電風險。
+>
+> **麥克風決策（4/8 會議）**：Go2 風扇噪音極大，機身 USB 麥克風幾乎無法使用（實測需講 5 次才可能聽到 1 次）。Demo 改用筆電端麥克風，透過 PawAI Studio 網頁 WebSocket → Gateway → ROS2 pipeline 收音，效果最乾淨。
 
 **遠端伺服器詳細規格**：
 - CPU：2× Intel Xeon Gold 6248R（96 threads）
@@ -135,9 +150,23 @@
 | faster-whisper Tiny/Small | 0.4-1.0 GB | 觸發式（喚醒後載入） |
 | Piper TTS | 0.3-0.5 GB | 觸發式（喚醒後載入） |
 | Qwen2.5-0.8B INT4 | ~1.0 GB | 僅斷網降級時載入 |
+| 外接 LiDAR driver (rplidar_ros2) | ~0.05 GB | 常駐（若採購） |
+| slam_toolbox (online_async) | ~0.3 GB | 常駐（若啟用 SLAM） |
+| Nav2 (AMCL + controller, composed) | ~0.5-0.8 GB | 常駐（若啟用導航） |
 | 安全餘量 | >= 0.8 GB | 必須保留 |
 
-**省電門禁策略**：喚醒詞觸發前，ASR/LLM/TTS 不載入記憶體。
+> **SLAM/Nav2 資源評估（4/8 調查結果）**：
+>
+> | 指標 | 數據 | 判定 |
+> |------|------|:----:|
+> | RAM（SLAM+Nav2 新增） | ~0.85-1.15 GB | ✅ 安全（總計 ~3.5-4.7 GB / 8 GB，剩 3.3-4.5 GB） |
+> | CPU（slam_toolbox async） | ~70%（x86 基準，ARM 更高） | ⚠️ 風險點 |
+> | GPU | 0%（slam_toolbox 純 CPU） | ✅ 無衝突 |
+> | LiDAR 頻率需求 | 5-10 Hz（RPLIDAR A2 原生 10Hz，充足） | ✅ |
+>
+> **結論**：RAM 安全，CPU 是唯一風險。建議 Demo 導航場景時暫時關閉 Gesture Recognizer（省 CPU），因導航不需手勢。
+> 配置建議：`online_async` mode + `resolution: 0.15` + `minimum_travel_distance: 0.5` + Nav2 node composition + swap 4-8 GB。
+> 參考：Waveshare UGV Beast 已有 Jetson Orin Nano + RPLIDAR + SLAM + Nav2 完整教學，證明硬體層面可行。
 
 ---
 
@@ -147,36 +176,40 @@
 
 | # | 功能 | 優先級 | 本地/雲端 | 狀態 |
 |---|------|:------:|:---------:|:----:|
-| 1 | 語音功能 | **P0** | 本地保底 + 雲端增強 | ✅ E2E 已驗證 |
-| 2 | 人臉辨識 | **P0** | 純本地 | ✅ ROS2 package 完成 |
-| 3 | 手勢辨識 | **P1** | 本地 | ✅ MediaPipe Gesture Recognizer（CPU 7.2 FPS），RTMPose 備援 |
-| 4 | 姿勢辨識 | **P1** | 本地 | ✅ MediaPipe Pose（CPU 18.5 FPS），RTMPose 備援 |
-| 5 | AI 大腦 (PawAI Studio) | **P0** | 雲端為主 | ✅ 閉環確認 |
-| 6 | 辨識物體 | **P1** | 本地（YOLO） | 核心五功能之一，4/13 前需完成 |
-| 7 | 導航避障 | P2 | 待定 | **Demo 停用**（D435 鏡頭角度限制，詳見 [demo-scope.md](demo-scope.md)） |
-| 8 | 文件網站 | **P0** | N/A | ✅ 閉環確認 |
+| 1 | 語音功能 | **P0** | 雲端主線 + 本地 fallback | ✅ Chat 閉環 12 句通過（4/8），E2E ~2s |
+| 2 | 人臉辨識 | **P0** | 純本地 | ✅ greeting 可靠化（4/6），identity_stable 21 次/2min |
+| 3 | 手勢辨識 | **P1** | 本地 | ✅ 上機驗收 5/5 PASS（4/4） |
+| 4 | 姿勢辨識 | **P1** | 本地 | ✅ 上機驗收 4/4 PASS（4/4），fallen 可關閉 |
+| 5 | AI 大腦 (PawAI Studio) | **P0** | 雲端為主 | ✅ Chat ROS2 閉環 + Live View 實機通過（4/7） |
+| 6 | 辨識物體 | **P1** | 本地（YOLO26n） | ✅ Executive 整合完成（4/6），cup ✅ bottle ❌ |
+| 7 | 導航避障 | P2 → **評估中** | 外接 LiDAR + 本地 | 🔄 D435 方案停用，外接 LiDAR 評估中（4/14 前定案） |
+| 8 | 文件網站 | **P0** | N/A | 🔄 Astro 骨架本週末建立 |
 
 ### 5.2 功能 1：語音功能
 
-#### 本地保底鏈路（Jetson 8GB）
+#### Demo 主線鏈路（4/8 會議定案：全雲端 + Studio 語音入口）
+
+```
+筆電麥克風（via PawAI Studio 網頁）
+  → WebSocket → Gateway (Jetson:8080) → ROS2 /asr_result
+  → SenseVoice Cloud ASR（RTX 8000，~430ms）
+  → Intent 分類（高信心 ≥ 0.8 → fast path 跳過 LLM）
+  → Cloud Qwen2.5-7B-Instruct（vLLM，~1.5s）
+  → edge-tts 雲端合成（P50 0.72s）
+  → USB 外接喇叭 local playback
+  → Studio Chat AI bubble 同步顯示
+E2E 延遲：~2s（比機身 5-14s 大幅改善）
+```
+
+> **機身 ASR 已廢棄**：Go2 風扇噪音導致機身 USB 麥克風辨識率 ~20%，改走 Studio 網頁收音。
+
+#### 本地保底鏈路（Jetson 8GB，斷網用）
 
 ```
 Energy VAD 持續監聽（always-on，無喚醒詞）
-  → 語音偵測
   → Whisper Small (faster-whisper CUDA float16, ~12s warmup)
-  → Intent 分類（高信心 ≥ 0.8 → fast path 跳過 LLM）
-  → 雲端 LLM（Cloud Qwen2.5-7B）或本地 LLM（Ollama 1.5B）或 RuleBrain fallback
-  → edge-tts 雲端合成（P50 0.72s）或 Piper 本地 fallback
-  → USB 外接喇叭（主線）或 Go2 Megaphone DataChannel
-```
-
-#### 雲端增強模式（RTX 8000）
-
-```
-本地 ASR 完成 → 文字送雲端 LLM (Qwen2.5-7B-Instruct)
-  → 雲端做深度理解 / 記憶 / 情感 / 長上下文
-  → 回覆文字送回本地 → 本地 TTS 合成播放
-  → 若雲端超時 (2-4s) → fallback 到本地
+  → Intent 分類 → RuleBrain 模板回覆
+  → Piper 本地 TTS → USB 外接喇叭
 ```
 
 #### 四級降級策略
@@ -187,6 +220,9 @@ Energy VAD 持續監聽（always-on，無喚醒詞）
 | 1 | 雲端 LLM 斷線 | 自動切換 Ollama qwen2.5:1.5b 基本對話 + edge-tts |
 | 2 | 雲端全斷（LLM+TTS） | RuleBrain 模板回覆 + Piper 本地 TTS |
 | 3 | 最小保底 | ASR + Intent fast path + RuleBrain + Piper（停止/掰掰/打招呼） |
+| **B** | **Demo 緊急（Plan B）** | **固定台詞腳本模式（~0.x 秒回應）**：預設問答如「你好」「你叫什麼名字」「你有什麼功能」等，ASR 判斷意圖後直接匹配固定回答。Studio 顯示連線狀態燈號，團隊即時判斷是否切換。 |
+
+> **Plan B 設計（4/8 會議決定）**：需準備兩版 Demo 對話腳本——Plan A（雲端 AI 正常對話）和 Plan B（本地固定台詞）。GPU 雲端曾意外斷線兩次，Plan B 為必備保險。必要時出示錄影作為 AI 對話功能佐證。
 
 #### 語音狀態機
 
@@ -204,10 +240,14 @@ idle_listening (Energy VAD 持續監聽)
 | 模組 | 選型 | 說明 |
 |------|------|------|
 | 喚醒詞 | 未實作（always-on listening） | Sherpa-onnx KWS 評估後暫緩，目前用 Energy VAD 持續監聽 |
-| ASR | Whisper Small (faster-whisper CUDA float16) | 本地離線，RTF 0.13，有幻覺問題（過濾規則已建） |
-| 本地 LLM | Ollama qwen2.5:1.5b | 雲端斷線 fallback，JSON 穩定，中文可用 |
+| ASR（雲端主線） | SenseVoice Cloud (FunASR, RTX 8000) | ~430ms，三級 fallback：cloud → SenseVoice local → Whisper |
+| ASR（本地 fallback） | Whisper Small (faster-whisper CUDA float16) | 本地離線，RTF 0.13，有幻覺問題（過濾規則已建）。**上機後表現極差，長句辨識失敗，噪音干擾嚴重** |
+| 本地 LLM | Ollama qwen2.5:1.5b | 雲端斷線 fallback。**4/8 會議確認：智商極低，胡言亂語，完全不靠譜** |
 | 雲端 LLM | Qwen2.5-7B-Instruct (vLLM) | 系統中樞大腦，Prefix Cache 後延遲 ~1.5s |
-| TTS | edge-tts（雲端主線）+ Piper（本地 fallback） | edge-tts P50 0.72s vs Piper 2.0s，MeloTTS 已淘汰 |
+| TTS（雲端主線） | edge-tts（微軟） | P50 0.72s，速度極快（~1 秒內完成合成） |
+| TTS（本地 fallback） | Piper huayan | 速度尚可，比雲端稍慢（~2.0s）。**可作為斷網備案** |
+
+> **本地方案總結（4/8 會議確認）**：Whisper 本地 ❌、Qwen 0.8B 本地 ❌、Piper 本地 ⚠️ 僅備案。語音全鏈路依賴雲端，因此 Plan B 固定台詞腳本為必備保險。
 
 #### 核心檔案
 
@@ -220,18 +260,23 @@ idle_listening (Energy VAD 持續監聽)
 
 #### 定位
 
-**純本地主線，不上雲。** YuNet + SFace + IOU 追蹤已覆蓋 4/13 Demo 核心需求。
+**純本地主線，不上雲。** YuNet + SFace + IOU 追蹤，greeting 可靠化完成（4/6）。
 
-#### 核心檔案
+#### 核心能力
 
-**`scripts/face_identity_infer_cv.py`** — 這是 4/13 展示主線，已包含：
-
-- YuNet 偵測（多人，det_score_threshold=0.90）
-- SFace 識別（cosine similarity，centroid + sample matching）
-- IOU 追蹤（multi-face tracking，track_max_misses=10）
-- Hysteresis 穩定化（sim_threshold_upper=0.35 / lower=0.25，stable_hits=3）
+- YuNet 2023mar 偵測（CPU 71.3 FPS）+ SFace 2021dec 識別
+- IOU 追蹤（multi-face tracking）
+- Hysteresis 穩定化（sim_threshold_upper=**0.30** / lower=**0.22**，stable_hits=**2**）
 - 深度距離估計（D435 aligned depth，median filtering）
-- Debug 影像 + 比對影像發布
+- 2 分鐘 smoke test：`identity_stable: roy` 21 次（調前 1-3 次），零誤認
+
+#### 已知問題（4/8 會議確認）
+
+- **重複觸發打招呼**：同一人短時間內重複觸發，尚未設定冷卻時間（待 Roy 修）
+- **光線不足誤判**：低光環境偶爾出現誤判（如顯示錯誤人名）
+- **無人幻覺**：無人時偶爾誤判有人臉存在
+- **多人骨架亂跳**：多人同時出現時追蹤混亂，無法正確區分
+- track 抖動仍在（45 tracks/2min，目標 ≤5），根因是 YuNet 偵測不穩定
 
 #### 4/13 前改動
 
@@ -261,12 +306,14 @@ idle_listening (Energy VAD 持續監聽)
 
 **主線：MediaPipe Gesture Recognizer**（CPU 7.2 FPS，0.10.18 aarch64 wheel）。
 
-> 3/21 benchmark 後選定。MediaPipe 0.10.18 提供 aarch64 wheel（之後版本移除），CPU-only 但 FPS 足夠。Google 明確不支援 Jetson GPU 加速。
+> 3/21 benchmark 後選定。CPU-only 但 FPS 足夠。上機驗收 5/5 PASS（4/4）。
 
-- **主線**：MediaPipe Gesture Recognizer（stop / point / thumbs_up / ok）
+- **主線**：MediaPipe Gesture Recognizer（stop / thumbs_up / ok / fist / wave / point）
 - **備援**：RTMPose wholebody（rtmlib + onnxruntime-gpu）
-- 目標成功率 ≥ 70%
-- Phase 1 完成（23 unit tests pass），Jetson 場景驗證通過
+- **有效距離**：約 **2m**（距離過遠不精準）
+- **限制**：僅支援單人偵測，多人時會混亂
+- **待擴充（4/8 會議）**：組員各自開發新增手勢種類與對應互動行為
+- 上機驗收通過：stop/thumbs_up/非白名單/距離/dedup 全 PASS
 
 > 詳見 [`docs/手勢辨識/README.md`](../手勢辨識/README.md)
 
@@ -274,12 +321,14 @@ idle_listening (Energy VAD 持續監聽)
 
 **主線：MediaPipe Pose**（CPU 18.5 FPS，17 keypoints COCO format）。
 
-> 3/21 benchmark 選定。CPU 模式效能足夠且不佔 GPU（留給 Whisper CUDA）。
+> 3/21 benchmark 選定。上機驗收 4/4 PASS（4/4）。
 
 - **主線**：MediaPipe Pose（standing / sitting / crouching / fallen / bending）
 - **備援**：RTMPose lightweight（GPU，與 Whisper 共存需注意 VRAM）
-- 跌倒偵測為安全功能，持續 2s 觸發語音警報
-- Phase 1 完成，Jetson 場景驗證通過，L3 壓測 60s 通過（RAM 1.2GB, 52°C, GPU 0%）
+- **跌倒偵測**：`enable_fallen` 已參數化（4/6），Demo 可關閉避免誤報
+- **限制**：僅支援單人追蹤，多人時只追蹤一人
+- **已知問題（4/8 會議確認）**：跌倒幻覺仍頻繁（無人時誤判有人跌倒，鎖定衣架等物體）。因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
+- L3 壓測 60s 通過（RAM 1.2GB, 52°C, GPU 0%）
 
 > 詳見 [`docs/姿勢辨識/README.md`](../姿勢辨識/README.md)
 
@@ -334,24 +383,78 @@ Qwen2.5-7B-Instruct 提建議
 
 ### 5.7 功能 6：辨識物體 (P1 — 核心五功能)
 
-**教授定案為核心功能之一**（2026-03-18 會議）。核心五功能：人臉辨識、語音互動、手勢辨識、姿勢辨識、物體辨識。
+**核心五功能之一**（3/18 會議定案）。Executive 整合完成（4/6）。
 
-**策略調整（3/26 會議）**：改為**預設目標**辨識（指定日常物品如水杯、藥罐等），非自由搜尋。參考 AI Expo 業界做法 — 展場約 1/4 廠商做辨識類應用，多數採「預設目標物」模式。
+**模型**：YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16，Jetson 上 15 FPS 穩定。
 
-候選方向：YOLO26n（專為邊緣裝置設計），保底方案為 Go2 SDK 自帶 COCO + MobileNet。4/2 後啟動開發。
+**策略**：預設目標辨識（指定日常物品），非自由搜尋。COCO 80 class 全開，白名單篩選。
 
-### 5.8 功能 7：導航避障 (P2 / Demo 停用)
+**實測結果（4/6 上機驗證）**：
 
-**Demo 停用**（2026-04-03 決定）。程式碼保留但不啟用。
+| 物品 | 結果 | 備註 |
+|------|:----:|------|
+| 杯子 (cup) | ✅ | threshold 0.5，觸發 TTS「你要喝水嗎？」 |
+| 手機 | ✅ | 適當光線下可辨識 |
+| 行李箱 | ✅ | 較大物體偵測良好 |
+| 書本 (book) | ⚠️ | 平放時困難，翻開展示可辨識（threshold 0.3 下偶爾偵測） |
+| 水瓶 (bottle) | ❌ | 未偵測到，Demo 不展示 |
 
-**停用原因**：D435 鏡頭裝在 Go2 頭上偏上方，低於鏡頭高度的障礙物只有在 ~0.4m 才進入 FOV，煞車距離不足（延遲鏈 ~1-1.5s）反覆撞上。3 輪 come_here 防撞測試（threshold 1.2→1.5→2.0m）全部失敗，屬硬體鏡頭角度問題，軟體無法克服。
+**已知限制**：
+- **光線不足時小物體幾乎無法辨識**
+- 物體需在一定高度且正對攝影機角度才能偵測到
+- YOLO26n 小物件偵測率低，yolo26s 升級為後續改善方向
+- **待決定**：組員篩選適合室內場景的 COCO 類別
 
-**歷史**：LiDAR 正式放棄（3/26）→ D435 反應式避障實作 + 桌測通過（4/1）→ Go2 上機測試全失敗（4/3）→ 停用。
+### 5.8 功能 7：導航避障 (P2 → 外接 LiDAR 評估中)
 
-**已完成的工作**（保留作為未來改善基礎）：
+#### 現況
+
+**D435 方案停用**（4/3）— 鏡頭角度限制，軟體無法克服。
+**外接 LiDAR 方案評估中**（4/8 會議）— 老師同意嘗試，4/14 前定案。
+
+#### D435 方案失敗歷史
+
+LiDAR 正式放棄（3/26）→ D435 反應式避障實作 + 桌測通過（4/1）→ Go2 上機 3 輪防撞測試全失敗（4/3）→ 停用。根因：鏡頭裝太高，低處障礙物只有 ~0.4m 才進 FOV + 延遲鏈 ~1-1.5s。
+
+#### 外接 LiDAR 方案（4/8 會議新增）
+
+**背景**：Go2 Pro 內建 LiDAR 覆蓋率僅 18%（22/120 有效點），全網確認沒有人使用 Go2 Pro 成功開發導航功能。外接 LiDAR 直連 Jetson USB，完全繞過 Go2 WebRTC + voxel 解碼瓶頸。
+
+**候選產品**：Slamtec RPLIDAR A2M12（$7,530，12m，16000次/秒，360°）
+
+**評估時程**：
+1. 4/9：老師確認學校（黃老師實驗室）是否有舊 LiDAR 可借
+2. 若無 → 4/14 前確定採購型號與預算（一萬以下較容易核銷）
+3. 到貨後：安裝 + rplidar_ros2 driver + SLAM 建圖 + Nav2 調參
+
+**技術評估（4/8 調查完成）**：
+- **RAM：安全** — SLAM + Nav2 新增 ~0.85-1.15 GB，總計 ~3.5-4.7 GB / 8 GB
+- **CPU：風險點** — slam_toolbox ~70% CPU（x86 基準），Demo 導航時建議暫關 Gesture Recognizer
+- **GPU：無衝突** — slam_toolbox 純 CPU，不搶 GPU
+- **LiDAR 頻率：充足** — RPLIDAR A2 原生 10Hz，slam_toolbox 需 5-10Hz
+- **供電風險** — LiDAR 馬達加 ~2-5W 可能加劇 XL4015 斷電問題
+- **參考案例** — Waveshare UGV Beast 已有 Jetson Orin Nano + RPLIDAR + SLAM + Nav2 完整教學
+- 詳見 §4.3 記憶體預算
+
+**移動方案討論（4/8 會議）**：
+
+| 方案 | 可行性 | 說明 |
+|------|:------:|------|
+| 完全不移動 | 安全但尷尬 | 機器狗不能走路會被質疑 |
+| **直線短距移動** | **最小可行** | 辨識到人後直線走 2-3 步，不做左右轉 |
+| 辨識後走向人 | 有互動感 | 需控制距離與角度 |
+| 尋物（走到物品旁） | 風險高 | 容易被追問「為什麼不能繞過去」 |
+
+> **老師建議**：設計最小移動場景——機器人辨識到使用者後直線走過來互動，展現「主動靠近」。
+
+**文件策略**：4/13 專題文件繳交後不可修改（交檔案非連結），**先賭有 LiDAR，文件中寫入導航功能**。
+
+#### 已完成的工作（保留作為基礎）
+
 - D435 obstacle_avoidance_node（7 tests）+ LiDAR lidar_obstacle_node（13 tests）
 - 雙層安全架構 + safety guard heartbeat
 - Foxglove 3D dashboard 可視化
+- SLAM/Nav2 Gate A-D 驗證框架（見 `docs/archive/refactor/slam-nav2.md`）
 - 詳見 [導航避障/README.md](../導航避障/README.md)
 
 ### 5.9 功能 8：文件網站
@@ -380,6 +483,13 @@ Qwen2.5-7B-Instruct 提建議
 - 安裝部署教學
 - 開發紀錄與踩坑整理
 - 架構演進（舊 → 新對比）
+
+#### 時程與部署（4/8 會議更新）
+- **網域**：掛在 Roy 個人網域下（如 `docs.xxx.xxx` 或 `pai.xxx.xxx`）
+- **部署**：GitHub Pages，僅靜態文件
+- **骨架**：Roy 本週末（4/12 前）完成 Astro + Starlight 框架
+- **內容**：開好空白結構後，組員透過 PR 補充內容；使用 Claude Code 讀取 GitHub 上的專案資料先生成基本內容
+- **參考**：黃旭之前整理的 Notion 作為內容來源
 
 #### 標竿參考
 - 展示風格：[Odin Navigation Stack](https://manifoldtechltd.github.io/Odin-Nav-Stack-Webpage/)
@@ -425,7 +535,7 @@ Qwen2.5-7B-Instruct 提建議
 │  Layer 1: Device / Runtime Layer                              │
 │  ├─ Go2 Driver (go2_robot_sdk, WebRTC DataChannel)           │
 │  ├─ RealSense D435 (realsense2_camera)                       │
-│  ├─ 音訊裝置 (ALSA, USB 麥克風)                               │
+│  ├─ 音訊裝置 (USB 外接喇叭; 筆電麥克風 via Studio)             │
 │  ├─ ROS2 Humble                                              │
 │  └─ 邊緣模型執行 (ONNX Runtime / CTranslate2 CUDA)           │
 │  部署：Jetson Orin Nano + Go2 Pro                             │
@@ -459,49 +569,62 @@ Qwen2.5-7B-Instruct 提建議
 
 ---
 
-## 7. 團隊分工（3/18 會議更新）
+## 7. 團隊分工（4/8 會議更新）
 
 ### 7.1 團隊成員
 
 | 成員 | 角色 |
 |------|------|
-| Roy | 專案負責人 / System Architect / Integration Owner |
+| Roy（盧柏宇） | 專案負責人 / System Architect / Integration Owner |
 | 魏宇同 | 前端開發 |
 | 黃旭 | 手勢/姿勢研究 → 前端 → 文件 |
-| 陳若恩 | 手勢/姿勢研究 → 前端 → 文件 |
-| 董為鳳 | 聯絡人 |
+| 陳若恩 | 手勢/姿勢研究 → 語音 → 文件 |
+| 董威鋒 | 指導老師 / 聯絡人 |
 
 ### 7.2 核心分工策略
 
-**關鍵原則**：讓遠端沒有機器狗和設備的人也能進行分工。
+**關鍵原則**：
+- 讓遠端沒有機器狗和設備的人也能開發（用自己的鏡頭，高度 ~30cm 模擬 Go2 視角）
+- 語音模組最適合外包：全走雲端 GPU，不需要 Go2 本體
+- 開發完成後由 Roy 整合搬移到 Jetson
 
-### 7.3 各角色職責與時程
+### 7.3 各角色職責（4/8 會議版）
 
 #### Roy — System Architect / Integration Owner
 
-| 時段 | 任務 |
+| 項目 | 說明 |
 |------|------|
-| 本週（3/18–3/26） | 手勢/姿勢框架測試（Jetson GPU 模型） |
-| 3/23 | 審查前端網站成果 |
-| 3/26 後 | 接手前端修改、四功能整合（人臉+語音+手勢+姿勢） |
-| 4/2 後 | 加入導航避障等額外功能；穩定度優化、文件整理 |
+| 人臉辨識 | 處理冷卻時間、多人問題、精準度調整 |
+| 導航避障 | 若有 LiDAR 則全力衝刺（SLAM + 基礎移動） |
+| PAI Docs 網站骨架 | 本週末完成 Astro 框架 |
+| 專題文件補強 | 背景知識、系統限制擴寫（Claude Code 輔助） |
+| 動作觸發整合 | 組員決定手勢/姿勢對應動作後，由 Roy 接上 Go2 |
 
-#### 魏宇同 — 前端開發
+#### 陳若恩 — 語音互動強化
 
-| 時段 | 任務 |
+| 項目 | 說明 |
 |------|------|
-| 至 3/26 | 前端網站頁面開發 |
-| 4/2 後 | 文件網站 + 物體辨識研究 |
+| 語音互動 | 連接 GPU 雲端，改善對話品質、增加回答長度與智慧度 |
+| Plan B 腳本 | 設計固定台詞問答 |
 
-#### 黃旭、陳若恩 — 研究 → 前端 → 文件
+#### 組員（待 4/9 會議正式分配）
 
-| 時段 | 任務 |
+| 項目 | 說明 |
 |------|------|
-| 3/19 | 報告手勢/姿勢辨識研究成果（MediaPipe 結論 + 測試結果） |
-| 至 3/26 | 完成各自前端頁面 |
-| 4/2 後 | 文件網站 + 專題報告 |
+| 手勢辨識擴充 | 各自用鏡頭開發新手勢種類與對應互動行為 |
+| 姿勢辨識擴充 | 決定偵測哪些姿勢及對應行為 |
+| 物體辨識篩選 | 確定要偵測哪些物品類別（室內場景 COCO 篩選） |
+| Web UI 改善 | Studio 狀態欄美化、功能頁面充實 |
+| 專題文件 | 各自負責模組的 User Story、技術說明 |
 
-#### 文件章節分工（3/26 會議定案，4/13 前繳交 Ch1-5）
+#### 黃旭
+
+| 項目 | 說明 |
+|------|------|
+| 介紹網站前端 | 4/9 由 Roy 確認進度 |
+| 文件撰寫 | 各自負責章節 |
+
+### 7.4 文件章節分工（3/26 會議定案，4/13 前繳交 Ch1-5）
 
 | 章節 | 內容 | 負責人 |
 |------|------|--------|
@@ -511,31 +634,58 @@ Qwen2.5-7B-Instruct 提建議
 | Ch4 | 問題與缺點、未來展望 | 簡單撰寫 |
 | Ch5 | 分工貢獻表、個人心得 | 各自撰寫 |
 
-> 文件撰寫原則：不花太多時間，重心放功能實作與介紹網站。Go2 動作尚未實作完成的部分先模糊帶過。
+### 7.5 分工時程
+
+- **4/9（週四）中午 12:15**：Teams 會議正式宣布分工，向 Patrick（董老師）展示目前成果
+- **4/13 前**：各自完成文件負責章節
+- **4/13 後 – 5/18**：功能開發衝刺（手勢/姿勢/物體/語音/LiDAR）
 
 ---
 
 ## 8. Demo 與驗收
 
-### 8.1 Demo 策略（3/18 會議定案）
+### 8.1 Demo 策略（4/8 會議更新）
 
-**展示策略**：預設腳本為主、自由對話為輔（自由對話標註「效果不保證」）。
+**展示策略**：視覺互動為主 + 網頁語音輔助。語音入口從 Go2 麥克風移到筆電/Studio。
 
 | Demo | 名稱 | 內容 | 成功率 |
 |:----:|------|------|:------:|
-| A | 主線閉環 | 人出現→辨識→對話→回應→Studio 同步 | >= 90% |
-| B | 視覺互動 | 手勢/姿勢 + 動作 (P1) | >= 70% |
-| C | Studio 展示 | 一鍵 Demo + 面板 + 事件流 | >= 90% |
+| A | 主線閉環 | 人出現→辨識→打招呼→語音對話→Studio 同步 | >= 90% |
+| B | 視覺互動 | 手勢/姿勢/物體 + 動作 | >= 70% |
+| C | Studio 展示 | 一鍵 Demo + Chat + Live View + 面板 | >= 90% |
+| D | 移動展示（若有 LiDAR） | 辨識到人後直線走向互動 | 待驗證 |
 
-### 8.2 Demo A 流程
+### 8.2 Demo 流程（4/8 版）
 
-1. 使用者走近 → YuNet 偵測人臉
-2. SFace 辨識身份 → `/event/face_identity` (identity_stable)
-3. 使用者說喚醒詞 → Sherpa-onnx 觸發
-4. Go2 播「我在」→ 載入 ASR/TTS
-5. 使用者說話 → ASR 轉文字 → 雲端 LLM 理解
-6. LLM 生成回覆 → 本地 TTS → Go2 播放
-7. PawAI Studio 同步顯示事件流與系統狀態
+1. 機器人開機，攝影機啟動
+2. 辨識到測試者人臉 → 打招呼（語音 + 動作）
+3. （若有 LiDAR）機器人直線走向測試者
+4. 進行語音對話（筆電 Studio 收音）：自我介紹、回答功能相關問題
+5. 測試手勢互動：比 thumbs up → 機器人回應開心動作
+6. 物體辨識展示：展示杯子等物品，機器人說出物品名稱
+7. 結束互動：說「再見」→ 機器人揮手告別
+
+### 8.3 Demo 環境要求（4/8 會議）
+
+- **光線充足**（開燈），否則物體辨識失效
+- **背景乾淨**，減少雜物造成幻覺誤判
+- 攝影機視野內**僅保持一人**，避免多人追蹤混亂
+- 報告者與測試者**分開站位**（報告者面對觀眾，機器人面對測試者）
+- 建議 **Demo 前一週到教室實地測試**
+
+### 8.4 Demo 設備清單
+
+- Go2 Pro 機器人（含全部上機設備）
+- 筆電（運行 PawAI Studio + 麥克風收音）
+- 穩定網路連線（GPU 雲端）
+- 備用：Plan B 腳本、錄影佐證、GPU 日誌
+
+### 8.5 Plan B 策略（GPU 雲端斷線應對）
+
+- 切換固定台詞腳本模式繼續 Demo
+- 出示錄影作為 AI 對話功能佐證
+- 必要時展示 GPU 日誌證明確實是雲端問題而非造假
+- Studio 顯示連線狀態燈號，團隊即時判斷
 
 ---
 
@@ -550,11 +700,20 @@ Qwen2.5-7B-Instruct 提建議
 | 2 | 規則模式 | Jetson 記憶體不足 | Rule Intent + 模板回覆 + 狀態顯示 |
 | 3 | 最小保底 | 系統壓力極大 | 喚醒 + ASR + 固定指令 |
 
-### 9.2 人臉辨識降級
+### 9.2 硬體風險（4/8 新增）
+
+| 風險 | 嚴重度 | 說明 | 應對 |
+|------|:------:|------|------|
+| **Jetson 供電斷電** | 🔴 | XL4015 降壓板在 Go2 運行中反覆斷電（8+ 次） | 運氣成分，Demo 時盡量減少同時運行功能 |
+| **GPU 雲端斷線** | 🔴 | 語音全鏈路依賴雲端，昨天斷線 2 次 | Plan B 固定台詞 + 錄影佐證 |
+| **Go2 風扇噪音** | 🟡 | 機身麥克風 ~20% 辨識率 | 已解決：改用 Studio 筆電收音 |
+| **Go2 行走摔倒** | 🟡 | 開啟導航後曾多次摔倒 | 最小移動場景（直線短距） |
+
+### 9.3 人臉辨識降級
 
 人臉辨識為純本地，無雲端依賴。唯一風險是 Jetson 記憶體不足時降低偵測頻率。
 
-### 9.3 安全規則
+### 9.4 安全規則
 
 - `stop` 命令最高優先級，可打斷任何 skill
 - AI 大腦不能直接控制 Go2 低階運動
@@ -735,27 +894,59 @@ Architect: spec → 拆 N 子模組 → Dispatch N Builder（worktree）
 
 ---
 
-## 附錄：關鍵決策摘要 (v2.0)
+## 附錄：關鍵決策摘要 (v2.3)
 
 | 決策項目 | 選定方案 | 決策理由 |
 |----------|----------|----------|
-| 主線方向 | 多模態人機互動 | 核心是人臉+語音+AI 大腦，不是導航 |
-| 語音架構 | 本地保底 + 雲端增強 | ASR/TTS 本地低延遲，LLM 雲端高品質 |
-| 喚醒詞 | Sherpa-onnx KWS | 中文原生、離線、Apache 2.0、省電門禁 |
+| 主線方向 | 多模態人機互動 + 日常提醒 | 結合 LLM + AI 辨識，互動交流為核心 |
+| 語音架構 | **全雲端主線** + 本地最小保底 | 本地 ASR/LLM 品質不可用（4/8 確認） |
+| 語音入口 | **Studio 筆電麥克風** | Go2 風扇噪音導致機身 ASR 不可用 |
+| ASR | SenseVoice Cloud（主線）→ Whisper（fallback） | SenseVoice ~430ms，Whisper 上機後表現差 |
+| Demo 備案 | **Plan B 固定台詞腳本** | GPU 雲端不穩，需 0.x 秒回應備案 |
 | 人臉方案 | 純本地 YuNet + SFace | 已覆蓋 Demo 需求，不上雲 |
 | AI 大腦定位 | 系統中樞大腦 | 事件理解 + 技能調度 + panel orchestration |
-| 雲端主腦 | Qwen2.5-7B-Instruct (vLLM) | Qwen3.5-9B 不可用（多模態，啟動過慢） |
-| 本地 fallback | Qwen2.5-0.8B INT4 | 雲端斷線備援（智商待測） |
-| 降級策略 | 四級降級 | 雲端 → 0.8B → Rule → 最小保底 |
-| TTS | edge-tts（雲端主線）+ Piper（本地 fallback） | edge-tts 速度快音質佳；MeloTTS/ElevenLabs 已淘汰 |
-| 網站策略 | 雙站（Studio + Docs） | 同 repo、分開部署，各司其職 |
-| Studio 技術棧 | React-based（暫定 Next.js） | 待正式確認 |
-| Docs 技術棧 | Astro + Starlight | 效能高、現代、適合文件 |
+| 雲端主腦 | Qwen2.5-7B-Instruct (vLLM) | Qwen3/3.5 棄用（太聰明不受控） |
+| 本地 fallback | Qwen2.5-0.8B INT4 | **智商極低，完全不靠譜**（4/8 確認） |
+| 降級策略 | 四級降級 + Plan B | 雲端 → 0.8B → Rule → 最小保底 → Plan B 固定台詞 |
+| TTS | edge-tts（雲端，~1s）+ Piper（備案） | MeloTTS/ElevenLabs 已淘汰 |
+| 物體辨識 | YOLO26n + TensorRT FP16 | Executive 整合完成，cup ✅ bottle ❌ |
+| **導航避障** | **外接 LiDAR 評估中** | D435 方案停用，RPLIDAR A2M12 候選，4/14 定案 |
+| **移動策略** | **直線短距（最小可行）** | 辨識到人後直線走過來，不做複雜路徑 |
+| 網站策略 | 雙站（Studio + Docs） | 同 repo、分開部署 |
+| Studio 技術棧 | Next.js 16 + FastAPI Gateway | 已實機驗證（4/7） |
+| Docs 技術棧 | Astro + Starlight | Roy 本週末建骨架 |
 | 動作範圍 | P0-safe 優先 | 以「穩」為準，不是「酷」 |
-| 分工策略 | Roy 做地基，其他人做應用 | 讓遠端無設備的人也能分工 |
+| 分工策略 | Roy 整合 + 組員各自鏡頭開發 | 高度 30cm 模擬 Go2 視角 |
 
 ---
 
-*最後更新：2026-03-26*
+## 12. 專題文件補強計畫（4/8 新增）
+
+### 12.1 現況
+
+- 目前文件約 **46 頁**，歷屆平均 **80-90 頁**，明顯偏少
+- 大部分由 Roy 撰寫（Claude Code 輔助），其他組員貢獻部分有錯誤待修正
+- 許多功能尚未確定具體內容，User Story 等章節過於籠統
+
+### 12.2 補強方向
+
+| 項目 | 預估可增加頁數 | 說明 |
+|------|:------------:|------|
+| 背景知識擴寫 | 10-15 頁 | MediaPipe、YuNet/SFace、YOLO、Qwen、ROS2 等技術詳細介紹 |
+| 系統限制說明 | 5-10 頁 | Go2 Pro 硬體限制、LiDAR 問題、開發困難、供電問題 |
+| 先前失敗嘗試 | 5 頁 | YOLOWorld、MeloTTS、本地 Whisper、D435 避障等被棄用方案 |
+| 功能細節 | 依分工 | 手勢、姿勢、物體、語音各模組的具體設計（組員各自補充） |
+| 導航避障（若有 LiDAR） | 5-10 頁 | 新增技術方案與實作說明 |
+| **目標** | **60-70+ 頁** | 縮小與其他組的落差 |
+
+### 12.3 撰寫方式
+
+- **Claude Code 輔助擴寫**：讀取 GitHub 上的 PAI 專案文件，自動生成詳細版內容
+- 各組員補充各自負責模組的文件
+- **4/13（週日）繳交**：交檔案非連結，繳交後無法修改
+
+---
+
+*最後更新：2026-04-08*
 *維護者：System Architect*
-*狀態：v2.3（+3/26 會議更新：時程至 6 月、文件分工、物體辨識策略、LiDAR 放棄）*
+*狀態：v2.3（+4/8 會議更新：硬體全上機、語音轉 Studio、導航 LiDAR 評估、分工大改、文件補強）*
