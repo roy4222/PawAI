@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-08（Sprint Day 13 — 4/8 教授會議 + mission v2.3 + 外接 LiDAR 研究 + 四人分工）
+**最後更新**：2026-04-09（4/9 外部會議 + 核心方向 brainstorm + 大腦/導航升級方案研究）
 **硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -18,7 +18,59 @@
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
-| 導航避障 | **外接 LiDAR 評估中** | 4/8 | D435 停用(4/3)；外接 RPLIDAR A2M12 可行性研究完成：RAM 安全、CPU 風險需管理；4/14 定案 |
+| 導航避障 | **外接 LiDAR 評估中 + dimOS 發現** | 4/9 | D435 停用(4/3)；RPLIDAR A2M12 可行性：RAM 安全、CPU 風險需管理；**新發現**：dimOS 框架已有人用 Go2 Pro 成功自主巡邏（D435 VoxelGrid costmap）；RPLIDAR 傾向購買（最壞情況 360° 避障仍值得）；**最大新風險**：Go2 四足 odom 漂移可能導致 SLAM 失敗；4/14 定案 |
+
+## 4/9 外部會議 + 核心方向 Brainstorm
+
+### 與會者
+盧柏宇（Roy）、董偉峰老師、Perry 老師、王瑞（矽谷創業經驗）、安卓、陳若恩、黃旭、楊培生
+
+### 外部建議重點（Perry 老師）
+- **缺核心主軸**：功能多但沒有一個故事串起來，評審會問「為什麼用機器狗不用攝影機」
+- **看門狗方向**：人臉辨識→陌生人警報，不需複雜導航
+- **R2-D2 互動**：用動作+聲音表達情緒，避免 LLM bias
+- **跟隨功能**：YOLO 追蹤人體背面，不需正面人臉
+- **推播通知**：跌倒→通知晚輩（類 Apple Watch）
+- **長照審查嚴格**：面對弱勢族群評審角度完全不同
+
+### 外部建議重點（王瑞）
+- **Cerebras / Groq**：超快 LLM 推理，免費額度，值得評估
+- **RAG 記憶**：記錄對話→產生報告給家屬
+- **目標消費者**：青壯年買給長輩，不是長者自己買
+
+### 方向 Brainstorm 結論（尚未定案，4/10 繼續）
+
+**收斂方向**：
+> 「PawAI — 會主動接近並理解人的居家互動守護犬」
+> Demo 核心句：「它不是看著你，而是會認出你、走向你、回應你，並在異常時替家人留意。」
+
+**敘事定位**：從「長照」退到「居家互動守護」，避免弱勢族群審查強度
+
+**Roy 負責兩軸**：
+1. **大腦升級**：Groq 免費 API（延遲 ~1.5s→<0.5s）+ function calling Skills 架構 + Mem0 記憶
+2. **導航避障**：傾向購買 RPLIDAR A2M12，最壞情況 360° 避障仍值得；Day 1 驗證 odom 品質
+
+**大腦升級工具評估**：
+- **Groq API**：免費、30 RPM/1000 req/day、Llama 3.3 70B function calling ✅
+- **Pydantic AI**：最適合的輕量框架，但先用零框架 function calling
+- **Mem0**：per-person 長期記憶，跑在 RTX 8000 上
+- **nav2_collision_monitor**：輕量避障（不需 SLAM），apt install 即用
+- **ElevenLabs**：正式排除（第二次棄用）
+
+**RPLIDAR 可行性更新**：
+- 技術可行（RAM 安全、CPU 帳面可行）
+- **新風險**：Go2 四足 odom 漂移（SLAM 核心依賴），Day 1 必做 bag 錄製驗證
+- **最壞也值得**：即使 SLAM 失敗，360° 反應式避障比 22 點 LiDAR + D435 好太多
+- **dimOS 發現**：有人用 Go2 Pro + D435 VoxelGrid 成功自主巡邏，但框架 v0.0.11 beta 不能直接整合
+
+**待決事項（4/10 繼續）**：
+1. RPLIDAR 買不買（傾向買）
+2. Skills 架構做多深
+3. 記憶方案選型
+4. Demo 場地協調
+5. 正式寫 spec
+
+---
 
 ## 4/8 教授會議決策
 
