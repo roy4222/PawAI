@@ -28,11 +28,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **專題名稱：老人與狗 / PawAI**
 **硬底線：2026/4/13 文件繳交，五月展示／驗收**
-**當前日期：2026-04-08（4/8 教授會議後，四人互動設計分工啟動）**
+**當前日期：2026-04-10（居家守護犬方向定案，Guardian Brain 架構確立）**
 
-以 Unitree Go2 Pro 為載體的 **embodied AI 互動陪伴平台**。核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
+以 Unitree Go2 Pro 為載體的**居家守護犬系統**。核心是 Guardian Brain（三層決策引擎：Safety → Policy → Expression）+ 多模態感知（人臉/語音/手勢/姿勢/物體）+ 可降級互動。所有功能服務於五個守護場景（熟人回家、使用者召喚、陌生人警戒、異常偵測、日常待命）。
 
-> 完整專案定位、P0/P1/P2、硬體配置見 [`docs/mission/README.md`](docs/mission/README.md)
+> 完整專案定位見 [`docs/mission/README.md`](docs/mission/README.md)
+> 系統設計規格見 [`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](docs/superpowers/specs/2026-04-10-guardian-dog-design.md)
 
 ---
 

@@ -36,13 +36,21 @@
 
 ## 2. 專案一句話定位
 
-> 以 Unitree Go2 Pro 為載體，結合大語言模型與多模態 AI 辨識能力，實現互動交流與日常提醒功能的 embodied AI 機器狗系統。
->
-> 核心是「人臉辨識 + 中文語音互動 + AI 大腦決策 + 手勢/姿勢/物體感知」。若確認外接 LiDAR 可行，將加入「執行簡單移動任務」。
+> **PawAI 是一隻能在家中主動感知、主動回應，並在需要時主動靠近人的居家守護犬。**
 
-**PawAI Studio** 是整個系統的統一入口與 Demo 觀測台：
+它不是一台會聊天的機器狗，也不是固定監視器，而是一個有在場感的家庭守護實體。平常安靜待命；看見家人時主動辨識與互動；看見陌生人、異常情況或收到召喚時，用聲音、動作、警示與靠近行為做出回應。
 
-> 取代 Foxglove，集 chat 語音入口、即時影像串流、感知面板於一身的 embodied AI studio。Demo 時筆電端開啟 Studio，作為語音收音 + 系統監控的唯一介面。
+**為什麼非 Go2 不可**：如果只想做辨識和通知，用攝影機就夠了。但 PawAI 要做的是一個會認人、會回應、必要時會靠近人的守護實體——embodied presence + active response + physical approach，這需要實體機器狗。
+
+**雙版架構**：
+- **主案（無雷達）**：定點守護犬 — 熟人辨識、陌生人警戒、語音/手勢互動、異常警示、Studio 遠端觀測
+- **升級案（有雷達）**：短距主動守護犬 — 在主案基礎上增加短距安全靠近、預設短路線、到點查看
+
+> 完整設計規格見 [`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](../superpowers/specs/2026-04-10-guardian-dog-design.md)
+
+**PawAI Studio** 是守護犬的控制台與 Demo 觀測入口：
+
+> 集 chat 語音入口、即時影像串流、感知面板、guardian mode 顯示於一身。Demo 時筆電端開啟 Studio，作為語音收音 + 系統監控的唯一介面。
 
 ---
 
@@ -50,15 +58,16 @@
 
 ### 3.1 專案起源
 
-本專案旨在打造一套以 Unitree Go2 Pro 為載體的 embodied AI 機器狗平台，整合多模態感知、語音互動、AI 大腦與基礎移動能力，並透過模組化架構支援多人分工、快速整合與實際展示。
+本專案以 Unitree Go2 Pro 為載體，打造面向家庭場景的居家守護犬原型。核心不是「更會聊天」，而是「能把家庭情境轉成守護行為」的 embodied guardian agent。
 
 **核心價值**：
-- 多模態互動（人臉 + 語音 + 手勢 + 姿勢）
-- AI 大腦與展示中樞（PawAI Studio）
-- 模組化整合（Clean Architecture + 標準介面）
-- 可分工、可展示（遠端無設備也能開發）
+- **Guardian Brain**：三層決策架構（Safety → Policy → Expression），harness-oriented design
+- **多模態感知**：人臉 + 語音 + 手勢 + 姿勢 + 物體，服務五個守護場景
+- **PawAI Studio**：守護犬控制台，即時影像 + guardian mode + 事件推播
+- **可降級、可觀測**：四級語音 fallback、skill contract、pre-action validation
+- 模組化整合（Clean Architecture + 標準介面），可分工、可遠端開發
 
-**可應用場景**：居家陪伴、長者互動、教育展示等。
+**目標場景**：居家守護（熟人辨識、陌生人警戒、召喚回應、異常警示、日常陪伴）。
 
 ### 3.2 交付目標 (4/13 硬底線)
 
@@ -170,20 +179,46 @@
 
 ---
 
-## 5. 八大功能閉環設計 (v1 決策版)
+## 5. 八大功能閉環設計 (v2.3 — 居家守護犬版)
 
-### 5.1 功能總覽與優先序
+### 5.1 功能總覽與守護犬角色
 
-| # | 功能 | 優先級 | 本地/雲端 | 狀態 |
-|---|------|:------:|:---------:|:----:|
-| 1 | 語音功能 | **P0** | 雲端主線 + 本地 fallback | ✅ Chat 閉環 12 句通過（4/8），E2E ~2s |
-| 2 | 人臉辨識 | **P0** | 純本地 | ✅ greeting 可靠化（4/6），identity_stable 21 次/2min |
-| 3 | 手勢辨識 | **P1** | 本地 | ✅ 上機驗收 5/5 PASS（4/4） |
-| 4 | 姿勢辨識 | **P1** | 本地 | ✅ 上機驗收 4/4 PASS（4/4），fallen 可關閉 |
-| 5 | AI 大腦 (PawAI Studio) | **P0** | 雲端為主 | ✅ Chat ROS2 閉環 + Live View 實機通過（4/7） |
-| 6 | 辨識物體 | **P1** | 本地（YOLO26n） | ✅ Executive 整合完成（4/6），cup ✅ bottle ❌ |
-| 7 | 導航避障 | P2 → **評估中** | 外接 LiDAR + 本地 | 🔄 D435 方案停用，外接 LiDAR 評估中（4/14 前定案） |
-| 8 | 文件網站 | **P0** | N/A | 🔄 Astro 骨架本週末建立 |
+> **設計原則**：所有功能服務於五個守護場景（熟人回家、使用者召喚、陌生人警戒、異常偵測、日常待命），不是功能拼盤。
+
+| # | 功能 | 守護犬角色 | 本地/雲端 | 狀態 |
+|---|------|-----------|:---------:|:----:|
+| 1 | 語音功能 | 輔助互動層：問候、簡答、警示 | 雲端主線 + 本地 fallback | ✅ Chat 閉環 12 句通過（4/8），E2E ~2s |
+| 2 | 人臉辨識 | **核心支柱**：熟人/陌生人區分 | 純本地 | ✅ greeting 可靠化（4/6），缺陌生人警戒邏輯 |
+| 3 | 手勢辨識 | 互動控制層：wave=過來、stop=停 | 本地 | ✅ 上機 5/5 PASS（4/4），缺 wave/point 映射 |
+| 4 | 姿勢辨識 | 狀態感知層：次要警示 | 本地 | ✅ 上機 4/4 PASS（4/4），跌倒幻覺高、不押主賣點 |
+| 5 | AI 大腦 (Guardian Brain) | **系統核心**：三層決策引擎 | 雲端為主 | 🔄 從規則機升級中 |
+| 6 | 辨識物體 | 場景強化器：少量白名單提醒 | 本地（YOLO26n） | ✅ Executive 整合完成（4/6），cup ✅ bottle ❌ |
+| 7 | 導航避障 | 候選升級能力：短距安全移動 | 外接 LiDAR + 本地 | 🔄 D435 停用，RPLIDAR 評估中（4/14 定案） |
+| 8 | PawAI Studio | 守護犬控制台：遠端觀測+互動 | N/A | ✅ Chat + Live View 閉環通過（4/7） |
+
+### 5.1.1 Guardian Brain 架構（4/10 新增）
+
+```
+Guardian Brain（高階決策）→ Executive（唯一動作出口）→ Go2
+Brain 不直接執行，Executive 才執行。
+```
+
+三層：
+- **Layer A Safety**（Executive 內）：stop / obstacle / emergency / banned_api / pre-action validation — 永遠 deterministic，不經 LLM
+- **Layer B Policy**（Brain）：guardian context → 意圖判斷 → skill selection → tool selection — 規則 + 記憶 + function calling
+- **Layer C Expression**（Brain）：reply_text / tone / wording / Studio trace — LLM 語言能力
+
+降級：LLM 掛 → 固定台詞 / Groq 掛 → RuleBrain / 全掛 → Safety Layer 仍跑
+
+### 5.1.2 Demo P0 場景（5/16 省夜 Demo，3 分鐘）
+
+| 時間 | 場景 | 演出重點 |
+|------|------|---------|
+| 0:00-0:20 | 日常待命（開場帶過） | 安靜待命，Studio 顯示 guardian idle |
+| 0:20-1:00 | **熟人回家** | 辨識→個人化問候→動作，回答「不是攝影機」 |
+| 1:00-1:45 | **使用者召喚** | 語音/手勢→回應→互動，回答「不是聊天 bot」 |
+| 1:45-2:30 | **陌生人警戒** | 未註冊→警戒→Studio 推播，回答「為什麼是守護犬」 |
+| 2:30-3:00 | 收尾 | 口頭補異常偵測+雷達升級 |
 
 ### 5.2 功能 1：語音功能
 
