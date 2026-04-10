@@ -1,7 +1,31 @@
 # 專案狀態
 
-**最後更新**：2026-04-09（4/9 外部會議 + 核心方向 brainstorm + 大腦/導航升級方案研究）
-**硬底線**：2026/4/13 文件繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
+**最後更新**：2026-04-11（互動主軸收斂 + PawAI Brain 命名定案 + 4/11 小組會議分工調整）
+**硬底線**：2026/4/13 週日晚間初版、4/14 週一繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
+
+---
+
+## 4/11 重大方向更新
+
+**產品定位**：居家守護犬 → **居家互動機器狗（兼具守護能力）**
+**互動 / 守護比例**：互動 70% / 守護 30%
+**系統核心命名**：Guardian Brain → **PawAI Brain**（守護術語保留在子域）
+**Demo 結構**：開場 self_introduce Wow Moment + 互動主秀 + 陌生人警告 + 收尾
+
+**分工調整**：
+- **黃旭 ↔ 鄔雨彤 交換**：黃旭做手勢、鄔雨彤做物體
+- **楊沛蓁**：專注姿勢擴充（久坐提醒邏輯）
+- **陳如恩**：新增雲端 API fallback 測試（Groq / Gemini）+ 記憶功能
+
+**守護能力收斂**：
+- 陌生人警告（Demo 實演，附 anti-false-positive policy）
+- 巡邏（雷達到貨後實演 or 錄影）
+- 跟隨（不做實作，只寫進文件 future work）
+
+**雷達狀態**：**確定採購**，老師跑國科會流程中，到貨時程未定
+
+**新 spec（current）**：[`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`](../docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md)
+**舊 spec（superseded）**：[`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](../docs/superpowers/specs/2026-04-10-guardian-dog-design.md)
 
 ---
 

@@ -27,13 +27,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 專案概述
 
 **專題名稱：老人與狗 / PawAI**
-**硬底線：2026/4/13 文件繳交，五月展示／驗收**
-**當前日期：2026-04-10（居家守護犬方向定案，Guardian Brain 架構確立）**
+**硬底線：2026/4/13 文件繳交（週日初版、週一繳交），五月展示／驗收**
+**當前日期：2026-04-11（互動主軸定位收斂，PawAI Brain 命名定案）**
 
-以 Unitree Go2 Pro 為載體的**居家守護犬系統**。核心是 Guardian Brain（三層決策引擎：Safety → Policy → Expression）+ 多模態感知（人臉/語音/手勢/姿勢/物體）+ 可降級互動。所有功能服務於五個守護場景（熟人回家、使用者召喚、陌生人警戒、異常偵測、日常待命）。
+以 Unitree Go2 Pro 為載體的**居家互動機器狗（兼具守護能力）**。互動 70% / 守護 30%。
+
+**核心**：PawAI Brain（三層決策引擎：Safety → Policy → Expression）+ 多模態感知（人臉/語音/手勢/姿勢/物體）+ 實體反應。
+
+**互動主軸（70%）**：手勢 / 姿勢 / 語音 / 物體辨識 → 觸發動作 or 移動（細節下週四人回報後定）
+**守護輔助（30%）**：陌生人警告、巡邏（需雷達）、跟隨（文件級 future work）
 
 > 完整專案定位見 [`docs/mission/README.md`](docs/mission/README.md)
-> 系統設計規格見 [`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](docs/superpowers/specs/2026-04-10-guardian-dog-design.md)
+> **系統設計規格（current）**：[`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`](docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md)
+> 4/10 守護犬 spec 已 superseded（保留作歷史）：[`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](docs/superpowers/specs/2026-04-10-guardian-dog-design.md)
 
 ---
 
