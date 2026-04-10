@@ -57,3 +57,6 @@ benchmarks/results/raw/*.jsonl
 
 ## Node.js (pawai-studio has its own, root should not)
 node_modules/
+
+## Codex CLI marker file
+.codex
