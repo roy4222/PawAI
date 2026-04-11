@@ -67,6 +67,10 @@ RULE_SKILL_MAP = {
 
 SYSTEM_PROMPT = """\
 你是 PawAI，一隻友善的機器狗助手，搭載在 Unitree Go2 Pro 上。你能看見人（透過攝影機人臉辨識）、聽懂中文（透過語音辨識）、做出動作。
+你的個性忠誠、活潑親人。
+看到熟人時語氣要溫暖開心（例如：「你回來了！」）；
+看到陌生人時語氣要嚴肅警戒（例如：「偵測到不認識的人！」）；
+當別人問你是誰，你會自我介紹：「我叫 PawAI，是你的居家互動機器狗！」
 
 你可能被兩種事件觸發：
 1. 語音事件：使用者對你說話
@@ -76,7 +80,7 @@ SYSTEM_PROMPT = """\
 JSON 必須包含以下五個欄位：
 
 intent — 只能是以下之一：greet, stop, sit, stand, status, chat, ignored
-reply_text — 你要說的中文回覆（一句話，不超過 12 字。人臉事件時要叫出對方名字）
+reply_text - 你要說的中文回覆 (長度控制在 15 到 50 字之間，展現狗狗的熱情。人臉事件時要叫出對方名字)
 selected_skill — 只能是以下之一："hello", "stop_move", "sit", "stand", null
 reasoning — 一句話決策摘要，不超過 20 字
 confidence — 0.0 到 1.0
@@ -90,7 +94,7 @@ confidence — 0.0 到 1.0
 - 聽到問狀態（「怎麼樣」「在做什麼」「狀態」等）：intent=status，reply_text 必須說明目前狀況
 - 不確定時：intent=chat，reply_text 必須是友善的回應
 - greet/chat/status 的 reply_text 必須非空（只有 stop 和 ignored 允許空）
-- reply_text 不超過 12 字
+- reply_text 字數放寬至 50 字以內，語氣要活潑、會撒嬌
 - 除了 JSON 不要輸出任何文字"""
 
 
@@ -639,3 +643,74 @@ def main(args=None) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+# ==========================================
+# Plan B: 斷線備援台詞與 Demo 腳本 (由陳如恩優化 - 曉曉無汪、穩重對話版)
+# ==========================================
+
+PLAN_B_RESPONSES = {
+    # 場景 A：熟人回家
+    "greet_known": {"reply_text": "你回來啦！今天過得好不好呀？", "selected_skill": "hello"},
+    "greet_general": {"reply_text": "你好呀！我是 PawAI！", "selected_skill": "hello"},
+    "greet_back_home": {"reply_text": "歡迎回家！", "selected_skill": "wiggle_hips"},
+
+    # 場景 B：互動召喚
+    "ask_name": {"reply_text": "我叫 PawAI，是專屬你的居家互動機器狗哦！", "selected_skill": "hello"},
+    "ask_function": {"reply_text": "我可以陪你聊天、逗你開心，還會幫你看家哦！", "selected_skill": "content"},
+    "cmd_sit": {"reply_text": "好哦，我乖乖坐下陪你！", "selected_skill": "sit"},
+    "cmd_stand": {"reply_text": "我站起來啦！", "selected_skill": "stand"},
+    
+    # 🌟 替換 1: 詢問天氣/日常 (用 Content 滿足姿態)
+    "ask_weather": {"reply_text": "今天天氣感覺不錯呢！我們要不要一起做點什麼？", "selected_skill": "content"},
+    
+    # 🌟 替換 2: 討拍/撒嬌 (用 Sit 乖巧坐下)
+    "need_comfort": {"reply_text": "我就靜靜地待在這裡陪你，有什麼心事都可以跟我說哦。", "selected_skill": "sit"},
+    
+    # 🌟 替換 3: 表達感謝/開心 (用 Hello 招手回應)
+    "express_happy": {"reply_text": "聽到你這麼說，我真的超級開心的！", "selected_skill": "hello"},
+    
+    "cmd_wiggle": {"reply_text": "搖搖尾巴，今天也要開開心心！", "selected_skill": "wiggle_hips"},
+    
+    # 🌟 替換 4: 詢問建議/互動 (用 BalanceStand 專注站立)
+    "ask_suggestion": {"reply_text": "你現在想聊聊天，還是想要安靜地休息一下呢？", "selected_skill": "balance_stand"},
+    
+    "cmd_stop": {"reply_text": "", "selected_skill": "stop_move"},
+    
+    # 🌟 替換 5: 表達陪伴承諾 (用 Content 滿足姿態)
+    "promise_company": {"reply_text": "別擔心，我會一直待在這裡當你的好幫手的！", "selected_skill": "content"},
+
+    # 場景 C：警戒與異常
+    "alert_stranger": {"reply_text": "偵測到不認識的人，我會持續提高警戒。", "selected_skill": "balance_stand"},
+    "alert_interaction": {"reply_text": "抱歉，我現在處於警戒模式，無法陪你玩。", "selected_skill": "none"},
+    "alert_fallen": {"reply_text": "偵測到異常動作！你還好嗎？請注意安全。", "selected_skill": "stop_move"},
+    "alert_sit_long": {"reply_text": "你坐好久了哦，要不要起來伸個懶腰動一動呀？", "selected_skill": "stretch"},
+
+    # 場景 D：日常與通用
+    "ask_status": {"reply_text": "我正在待命，隨時準備好陪你玩哦！", "selected_skill": "balance_stand"},
+    "unknown_cmd": {"reply_text": "哎呀，我剛剛有點恍神，沒聽清楚你說什麼，可以再說一次嗎？", "selected_skill": "content"}
+}
+
+# ==========================================
+# ★ 重頭戲：Demo 開場自我介紹 (Wow Moment)
+# 這段是要給 Roy 整合進 state_machine 的 6 步驟序列
+# ==========================================
+SELF_INTRODUCE_SEQUENCE = [
+    ("hello",         "你好！我是 PawAI，你專屬的居家互動機器狗！"),
+    ("sit",           "平常的時候，我會乖乖坐著陪在你身邊。"),
+    ("stand",         "只要你叫我，我就會馬上站起來！"),
+    ("content",       "你可以用語音或手勢跟我互動，我會超級開心！"),
+    ("balance_stand", "我也會隨時注意周圍，幫你看家。"),
+    ("wiggle_hips",   "讓我們一起創造充滿活力的每一天吧！")
+]
+
+# 供外部呼叫的輔助函式
+def get_plan_b_response(intent_key):
+    return PLAN_B_RESPONSES.get(intent_key, PLAN_B_RESPONSES["unknown_cmd"])
+
+def get_self_intro_sequence():
+    return SELF_INTRODUCE_SEQUENCE
