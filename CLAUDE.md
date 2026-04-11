@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - source 時用 `setup.zsh`（不是 `setup.bash`），兩者不可混用
 - tmux 不繼承 `LD_LIBRARY_PATH` — 啟動腳本中必須 export
-- Jetson CUDA int8 支援有限 — Whisper 必須用 `cuda` + `float16`
+- Jetson CUDA int8 支援有限 — 走 CUDA 路徑時 Whisper 必須用 `cuda` + `float16`;CPU 路徑的 int8 量化可用(`speech_processor.yaml` 預設 `device: cpu` + `compute_type: int8`),Demo 啟動腳本 `scripts/start_full_demo_tmux.sh` 會覆寫為 `cuda + float16` 以提升速度
 - bash-specific 腳本用 `bash -c`，不要假設 zsh 相容
 
 ---
@@ -362,7 +362,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 - **主線麥克風**：USB UACDemoV1.0（device 24，mono，48kHz）— `input_device:=24 channels:=1 capture_sample_rate:=48000 mic_gain:=4.0`
 - **主線喇叭**：USB CD002-AUDIO（`plughw:3,0`）— `local_playback:=true local_output_device:=plughw:3,0`
 - **備用麥克風 HyperX SoloCast 是 stereo-only**（硬體 `CHANNELS: 2`），需 `channels:=2` + 手動 downmix
-- **Whisper 在 Jetson 必須用 `cuda` + `float16`**，CPU int8 不支援會 silent fail
+- **Whisper 在 Jetson 走 CUDA 時必須用 `float16`**(`cuda + int8` 不支援會 silent fail);`speech_processor.yaml` 預設為 `cpu + int8` 可用但速度較慢,Demo 啟動腳本覆寫為 `cuda + float16`
 - `LD_LIBRARY_PATH` 必須含 `/home/jetson/.local/ctranslate2-cuda/lib`（啟動腳本已處理）
 - zsh 的 glob 會炸掉陣列參數：用 `'["whisper_local"]'` 加引號，或 `setopt nonomatch`
 - `setup.bash` / `setup.zsh` 不可混用，否則環境不完整

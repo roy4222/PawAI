@@ -19,11 +19,11 @@
 ## 輸入
 
 - `/camera/camera/color/image_raw`（D435 RGB）
-- `/camera/aligned_depth_to_color/image_raw`（D435 Depth，用於距離估計）
+- `/camera/camera/aligned_depth_to_color/image_raw`（D435 Depth，用於距離估計）
 
 ## 依賴
 
-- OpenCV 4.5.4+（YuNet + SFace）
+- OpenCV ≥ 4.8（YuNet + SFace;`face_identity_node.py:142` 於啟動時 require OpenCV 4.8 才提供的 `FaceDetectorYN`/`FaceRecognizerSF` 介面）
 - D435 RealSense + realsense2_camera_node
 - face_db：`/home/jetson/face_db/`
 

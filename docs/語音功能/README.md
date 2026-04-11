@@ -9,7 +9,7 @@
 | 項目 | 值 |
 |------|---|
 | 狀態 | **Chat 閉環 12 句通過** |
-| 版本/決策 | SenseVoice cloud + edge-tts + Cloud Qwen2.5-7B（全雲端主線）；本地 ASR/LLM 不可用 |
+| 版本/決策 | SenseVoice cloud + edge-tts + Cloud Qwen2.5-7B（全雲端主線）；本地 ASR（SenseVoice local / Whisper）作為降級 fallback，本地 LLM（Qwen2.5-1.5B）品質不足僅作形式備援 |
 | 完成度 | 90% |
 | 最後驗證 | 2026-04-08（Studio Chat 閉環 12 句，E2E ~2s） |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |

@@ -1,7 +1,50 @@
 # 專案狀態
 
-**最後更新**：2026-04-11（互動主軸收斂 + PawAI Brain 命名定案 + 4/11 小組會議分工調整）
+**最後更新**：2026-04-12（Ch3-5 文件擴寫完成 + Ch4 背景知識拆 10 獨立檔 + 32 項 code/文件不一致修正）
 **硬底線**：2026/4/13 週日晚間初版、4/14 週一繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
+
+---
+
+## 4/12 今日進度
+
+**專題文件衝刺(迎戰 4/13 繳交 deadline)**:
+
+- **Ch3 系統範圍**擴寫完成(9,112 字),以 MeetSure 格式 3-1~3-10 逐項描述使用者操作情境 + 後端技術,含導航避障 Option C 條件式敘述、守護能力、自主展示
+- **Ch4 背景知識**擴寫完成(13,492 字),並**額外拆為 10 個獨立 md 檔**存於 `docs/thesis/背景知識/` 便於分節驗收:
+  - 4-1 ROS2 / 4-2 Unitree Go2 / 4-3 MediaPipe Gesture / 4-4 MediaPipe Pose / 4-5 YuNet + SFace / 4-6 Speech / 4-7 YOLO26 / 4-8 Navigation / 4-9 Jetson / 4-10 D435
+- **Ch5 系統限制**擴寫完成(9,401 字),13 大類涵蓋硬體 / 運算 / 語音 / 視覺 / 多人權限 / 隱私等
+- **三章合計從 ~6,400 字 → 32,005 字(約 5× 擴寫)**
+
+**32 項 code/文件不一致修正**(經 subagent 交叉比對 + 上網查證):
+
+- 🔴 Go2 Pro LiDAR:Hesai XT16 → **Unitree 自研 4D LiDAR L2(360°×96°)**,Hesai XT16 僅配於 EDU Plus
+- 🔴 Go2 EDU 售價:$3,500-8,500 → **$14,500(EDU)/ $22,500(EDU Plus)**
+- 🔴 Pose 五類:standing/sitting/crouching/**lying**/fallen → standing/sitting/crouching/fallen/**bending**(對齊 `pose_classifier.py:22`)
+- 🔴 Pose 閾值全面訂正:fallen `bbox_ratio > 1.5` → `> 1.0`;standing `knee > 150` → `> 155`;sitting `hip 90-140 / trunk < 30` → `100-150 / < 35`;crouching 條件改為 `hip<145 AND knee<145 AND trunk>10`
+- 🔴 `/state/perception/pose` topic **刪除**(不存在,只有 `/event/pose_detected`)
+- 🔴 stop 手勢「無冷卻」宣稱訂正:仍受 `DEDUP_WINDOW=5.0s` 全域約束(`state_machine.py:60`)
+- 🔴 手勢映射表:刪除 Victory / Pointing_Up 互動(Executive 未處理)
+- 🔴 `gesture_vote_frames` 10 → **5(code default)/ 3(yaml 覆寫)**
+- 🔴 LLM `max_tokens` 120 → **80**(`llm_bridge_node.py:165`),SYSTEM_PROMPT 硬截斷 25 字 → **12 字**
+- 🔴 語音管線改為雙路徑描述:Demo 主線 Studio push-to-talk → Gateway → Cloud SenseVoice(無 VAD);舊本地路徑保留 Energy VAD
+- 🔴 Whisper 敘述澄清三層關係:yaml 預設 `tiny + cpu + int8`;`start_full_demo_tmux.sh:145` 覆寫 `cuda + float16`;Whisper 僅為三級 fallback 最末層
+- 🔴 D435 深度技術:「紅外線結構光」 → **Active IR Stereo(主動紅外線立體視覺)**
+- 🟡 face Hysteresis 敘事澄清 code default vs yaml 覆寫分層
+- 🟡 OpenCV 版本要求:4.5.4+ → **≥ 4.8**(`face_identity_node.py:142` require)
+
+**同步修正的 code/文件不一致**(本次 update-docs 撰寫時一併處理):
+
+- `docs/語音功能/README.md` 狀態卡「本地 ASR/LLM 不可用」與下方三級 fallback 流程矛盾 → 澄清本地 ASR 可作 fallback、本地 LLM 僅形式備援
+- `docs/人臉辨識/AGENT.md` 的 `/camera/aligned_depth_to_color/image_raw` 缺 double namespace、OpenCV 4.5.4+ 過時宣稱 → 訂正為 `/camera/camera/aligned_depth_to_color/image_raw` + OpenCV ≥ 4.8
+- `CLAUDE.md` 行 22、365 的 Whisper 敘述容易誤導 → 澄清 CPU int8(yaml 預設)可用、CUDA int8 不支援、Demo 啟動腳本覆寫為 CUDA float16 三層關係
+
+**產出檔案**:
+
+- `docs/thesis/114-thesis.md`(三章擴寫已合入)
+- `docs/thesis/114-thesis.docx`(pandoc 轉檔完成)
+- `docs/thesis/背景知識/4-*.md`(10 個獨立背景知識檔,待驗收後決定是否整合回 114-thesis.md)
+
+**尚未決定**:背景知識/ 10 份獨立檔是否要整合回主文件 Ch4。等使用者驗收後再決定。
 
 ---
 
@@ -33,7 +76,7 @@
 
 | 模組 | 狀態 | 最後驗證 | 備註 |
 |------|------|----------|------|
-| 語音 (speech_processor) | **Chat 閉環 12 句對話通過** | 4/8 | **Studio Chat 閉環實機驗證通過**：文字+語音→ROS2→LLM→/tts→AI bubble+喇叭；12 句連續對話全部正確回覆；E2E ~2s；**待改善**：LLM 回覆過短（max_tokens=120/25字限制）、無多輪 memory、回覆缺乏個性 |
+| 語音 (speech_processor) | **Chat 閉環 12 句對話通過** | 4/8 | **Studio Chat 閉環實機驗證通過**：文字+語音→ROS2→LLM→/tts→AI bubble+喇叭；12 句連續對話全部正確回覆；E2E ~2s；**待改善**：LLM 回覆過短（`llm_max_tokens=80` + SYSTEM_PROMPT 硬截斷 12 字）、無多輪 memory、回覆缺乏個性 |
 | 人臉 (face_perception) | **greeting 可靠化** | 4/6 | sim_threshold 0.35→0.30，identity_stable 21 次/2min（調前 1-3 次），Executive idle→greeting 確認通；track 抖動仍在（45 tracks/2min），Day 12 修 |
 | 手勢 (vision_perception) | **上機驗收 5/5** | 4/4 | stop/thumbs_up/非白名單/距離/dedup 全 PASS |
 | 姿勢 (vision_perception) | **上機驗收 4/4** | 4/4 | standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS |
