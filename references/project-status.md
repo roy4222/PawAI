@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-12（Ch3-5 文件擴寫完成 + Ch4 背景知識拆 10 獨立檔 + 32 項 code/文件不一致修正）
+**最後更新**：2026-04-12（Ch4 背景知識 9 章 fact-check 二輪修正完成 + Ch5 獨立檔 + 合併版 docx 產出）
 **硬底線**：2026/4/13 週日晚間初版、4/14 週一繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
 
 ---
@@ -45,6 +45,32 @@
 - `docs/thesis/背景知識/4-*.md`(10 個獨立背景知識檔,待驗收後決定是否整合回 114-thesis.md)
 
 **尚未決定**:背景知識/ 10 份獨立檔是否要整合回主文件 Ch4。等使用者驗收後再決定。
+
+**第二輪 fact-check 修正**（使用者抽查 + Claude 復驗交叉比對程式碼）:
+
+9 章中 7 章一次通過,2 章補修:
+- 4-3:Gesture Recognizer 路徑不經 `gesture_classifier.py` 幾何特徵（端到端分類）
+- 4-2:音訊播放主線改為 USB 外接喇叭,Megaphone 降為備援
+
+主要修正項（跨 9 個檔案,+373/-32 行）:
+- **4-1**:Skill Queue/Action 降級為「規劃中,尚未落地」
+- **4-2**:LiDAR Hz 修正（<2Hz → 靜止 7.3Hz/行走 5-6Hz）+ Megaphone 降為備援
+- **4-3**:gesture_backend 區分程式預設 rtmpose vs Demo 覆寫 recognizer；thumbs_up TTS「收到」→「謝謝」；手勢過濾改為 vision_perception 白名單；stop 依契約不受 cooldown
+- **4-4**:pose_classifier 吃 COCO 17 點（經 `_MP_TO_COCO` adapter）；Lite not Full；fallen 幻覺 Demo 用 `enable_fallen:=false` 關閉
+- **4-5**:`/state/perception/face` 非 8Hz（每 tick 發布）；det_score code 0.90/yaml 0.35 雙值
+- **4-6**:Studio 主線 gateway 直打 ASR（不經 stt_intent_node）；Whisper Small→Tiny；event_action_bridge→interaction_executive
+- **4-8**:LiDAR Hz 對齊 4-2
+- **4-9**:資源表補「Demo 部署主線覆寫配置」說明
+- **4-10**:align_depth 改為「相機啟動時啟用,face node 訂閱已對齊 topic」
+
+**Ch5 系統限制獨立檔**（新增）:
+- `docs/thesis/5-系統限制與可行性分析.md`（13 節,含延遲鏈分解、距離對照表、RAM 預算表、Megaphone 逆向工程、ARM 碎片化等技術深度）
+- 使用者抽查後補修 5 處:光線影響降級為定性描述、供電電壓補 19.2V/20V 雙值、odom 0.3m 標示為規劃門檻、測試數量改為不精確描述、最靠近原則補語氣保留
+
+**合併版產出**:
+- `docs/thesis/Ch4-背景知識-合併版.md`（10 章按 4-1→4-10 順序拼接,Python 驗證腳本確認 523 行 0 缺失）
+- `docs/thesis/Ch4-背景知識-合併版.docx`（79KB）
+- `docs/thesis/5-系統限制與可行性分析.docx`（26KB）
 
 ---
 
