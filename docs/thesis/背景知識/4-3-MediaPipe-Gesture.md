@@ -39,17 +39,17 @@ Gesture Recognizer 的兩階段設計具有重要的擴充性優勢:開發者可
 
 ## 本系統的手勢辨識實作
 
-本專題的手勢辨識模組(`vision_perception` ROS2 套件的 `gesture_recognizer_backend.py`)採用 MediaPipe Gesture Recognizer Task API 作為主要後端,並在其輸出之上實作了本系統特定的邏輯層。整體處理流程如下:
+本專題的手勢辨識模組(`vision_perception` ROS2 套件)支援兩種後端:MediaPipe Gesture Recognizer(`gesture_recognizer_backend.py`)與 RTMPose 手部關鍵點分類(`gesture_classifier.py`)。程式碼與 config 的預設值為 `gesture_backend: "rtmpose"`(`vision_perception.yaml:13`、`vision_perception.launch.py:21`),但 **Demo 部署主線**由啟動腳本覆寫為 `gesture_backend:=recognizer`(`start_full_demo_tmux.sh:129`),採用 MediaPipe Gesture Recognizer 作為實際運行後端。以下以 Demo 主線(Gesture Recognizer)為例說明處理流程:
 
 1. **影像擷取**:從 Intel RealSense D435 的 RGB 輸出取得即時影像幀(透過 `/camera/camera/color/image_raw` ROS2 Topic),透過 cv_bridge 轉換為 OpenCV 格式的 NumPy 陣列。
 
 2. **MediaPipe 推論**:將影像傳入 Gesture Recognizer Task,模型回傳當前幀中所有偵測到的手部,每隻手包含:手勢類別與信心度、21 個手部關鍵點座標、左右手判定(Left 或 Right)。
 
-3. **幾何特徵計算**:對於每隻偵測到的手,`gesture_classifier.py` 進一步計算自訂的幾何特徵(如手指伸展比例、手指彎曲角度、拇指相對其他手指的位置等),用於輔助判斷 MediaPipe 未涵蓋的自訂手勢或在 MediaPipe 信心度較低時提供備援判定。
+3. **標籤映射**:Gesture Recognizer 直接輸出手勢類別標籤(如 `Open_Palm`、`Thumb_Up`、`Closed_Fist` 等),由 `gesture_recognizer_backend.py` 的 `_GESTURE_MAP` 映射為系統內部名稱(`stop`、`thumbs_up`、`fist` 等)。此路徑為端到端分類,**不經過 `gesture_classifier.py` 的幾何特徵計算**——幾何特徵分類邏輯(手指伸展比例、彎曲角度等)僅在 RTMPose / MediaPipe Hands 後端路徑下使用,供開發期替換與比較。
 
 4. **時序平滑與投票**:為避免單幀誤判造成手勢結果抖動,系統維持一個滑動視窗並透過多幀多數決得出穩定的手勢標籤。此視窗長度由 `gesture_vote_frames` 參數控制,**程式碼預設值為 5 幀,實際部署於 `vision_perception.yaml` 中覆寫為 3 幀**(依真機測試調整),在實機測試中顯著降低了快速切換手勢時的誤判率。
 
-5. **冷卻期與去重**:系統層級的去重由 `interaction_executive` 中控模組統一處理。Executive 定義了 `DEDUP_WINDOW = 5.0` 秒的全域去重視窗,對同一來源與類型的事件在此視窗內只處理一次。**此去重邏輯在 stop 手勢判斷之前執行**,因此包含 stop 在內的所有手勢事件都受到此 5 秒去重約束,並非如早期設計文件所述的「stop 手勢無冷卻」。
+5. **白名單過濾與去重**:Gesture Recognizer 輸出的 8 類標籤經 `_GESTURE_MAP` 映射為內部名稱(`Open_Palm→stop`、`Thumb_Up→thumbs_up`、`Closed_Fist→fist` 等),再經 `GESTURE_COMPAT_MAP`(`fist→ok`)轉換後,由 `interaction_rules.py` 的 `GESTURE_WHITELIST = {"stop", "thumbs_up", "ok"}` 進行白名單過濾——只有 stop / thumbs_up / ok 三類能進入中控,其餘手勢(Victory、Pointing_Up、Thumb_Down、ILoveYou)在此層即被過濾,不會到達 Executive。系統層級的去重由 `interaction_executive` 中控模組統一處理,定義了 `DEDUP_WINDOW = 5.0` 秒的全域去重視窗。依 ROS2 介面契約(`interaction_contract.md:507`)的設計意圖,**stop 手勢作為安全優先事件不受 cooldown 限制**。
 
 6. **ROS2 事件發布**:辨識結果以 JSON 格式透過 `/event/gesture_detected` ROS2 Topic 發布,訊息內含手勢類別、信心度、左右手判定、時間戳記等欄位。統一中控模組(Interaction Executive)訂閱此 Topic 並根據手勢類型觸發對應的 Go2 機器狗動作與語音回應。
 
@@ -71,13 +71,13 @@ Gesture Recognizer 的兩階段設計具有重要的擴充性優勢:開發者可
 
 | 手勢(MediaPipe 原名) | 中文名稱 | Go2 動作 | 語音回應 | 優先序 |
 |---|---|---|---|:-:|
-| `Open_Palm` | 張開手掌(停止) | `ACTION_STOP`(立即停止移動) | — | 最高 |
-| `Thumb_Up` | 拇指向上(比讚) | `ACTION_CONTENT`(開心動作) | 「收到!」 | 中 |
-| `Closed_Fist` / `ok` | 握拳(確認) | `ACTION_CONTENT`(開心動作) | — | 中 |
+| `Open_Palm` → `stop` | 張開手掌(停止) | `ACTION_STOP`(立即停止移動) | — | 最高 |
+| `Thumb_Up` → `thumbs_up` | 拇指向上(比讚) | `ACTION_CONTENT`(開心動作) | 「謝謝!」 | 中 |
+| `Closed_Fist` → `fist` → `ok` | 握拳(確認) | `ACTION_CONTENT`(開心動作) | — | 中 |
 
-Executive 狀態機目前僅對 `stop`、`thumbs_up`、`ok`(含 `Closed_Fist`)三類手勢做出實質互動回應;其餘 MediaPipe 可辨識的手勢(Pointing_Up、Victory、Thumb_Down、ILoveYou)雖然會被偵測模組辨識並發布事件,但 Executive 會靜默忽略,不觸發動作或語音。這是刻意的保守設計——在專題時程內先確保少數核心手勢穩定可靠,後續有需要再擴充映射表。
+上述三類手勢由 `interaction_rules.py` 的 `GESTURE_WHITELIST` 放行後進入 Executive 狀態機;其餘 MediaPipe 可辨識的手勢(Pointing_Up、Victory、Thumb_Down、ILoveYou)在 vision_perception 端即被白名單過濾,不會到達 Executive。這是刻意的保守設計——在專題時程內先確保少數核心手勢穩定可靠,後續有需要再擴充白名單與映射表。
 
-`Open_Palm`(停止手勢)為中控層級的安全優先事件,Executive 無論當前處於哪個狀態(對話中、執行動作中、自我介紹中)都會切換至 `OBSTACLE_STOP` 或 `IDLE` 並停下機器狗;但此手勢事件本身仍受到前述 `DEDUP_WINDOW = 5.0 秒` 的全域去重視窗約束。
+`Open_Palm`(停止手勢)為中控層級的安全優先事件,Executive 無論當前處於哪個狀態(對話中、執行動作中、自我介紹中)都會切換至 `IDLE` 並停下機器狗。依介面契約設計,stop 手勢作為安全機制不受一般 cooldown 限制。
 
 ## 效能表現與已知限制
 

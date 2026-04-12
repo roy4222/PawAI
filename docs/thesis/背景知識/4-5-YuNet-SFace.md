@@ -14,7 +14,7 @@ YuNet 模型自 **OpenCV 4.8.0** 起正式整合進 OpenCV DNN 模組並提供 `
 
 **OpenCV 版本需求說明**:本系統依賴的 `cv2.FaceDetectorYN` 與 `cv2.FaceRecognizerSF` 介面在 **OpenCV 4.8 以上版本**才提供,`face_perception/face_perception/face_identity_node.py` 於節點啟動時以 `hasattr(cv2, "FaceDetectorYN")` 檢查並要求 OpenCV ≥ 4.8,若環境不符會於 runtime 直接拋出 `RuntimeError`。此為硬性版本依賴,部署時必須確認 JetPack 預裝的 OpenCV 版本符合要求或自行 pip 安裝相容版本。
 
-**偵測參數設定**:本系統對 YuNet 的關鍵參數配置如下,`det_score_threshold=0.35`(信心度閾值,依 yaml 部署覆寫值)、`det_nms_threshold=0.30`(非極大值抑制閾值,用於過濾重疊的偵測框)、`det_top_k=5000`(NMS 前保留的候選框最大數量)。偵測器輸入影像會先縮放至 320 × 320 解析度,實測運行於 Jetson 上的 debug 影像發布頻率約為每秒 6.6 幀(含下游的 SFace 識別與追蹤更新)。
+**偵測參數設定**:本系統對 YuNet 的關鍵參數配置如下——`det_score_threshold` 的程式碼原始預設值為 **0.90**(嚴格閾值,`face_identity_node.py:77`),yaml 部署覆寫為 **0.35**(`face_perception.yaml:11`,實戰寬鬆)、`det_nms_threshold=0.30`(非極大值抑制閾值,用於過濾重疊的偵測框)、`det_top_k=5000`(NMS 前保留的候選框最大數量)。偵測器輸入影像會先縮放至 320 × 320 解析度,實測運行於 Jetson 上的 debug 影像發布頻率約為每秒 6.6 幀(含下游的 SFace 識別與追蹤更新)。
 
 ## SFace 人臉識別模型
 
@@ -56,7 +56,7 @@ Hysteresis 機制的核心概念來自電子電路中的施密特觸發器(Schmi
 
 人臉辨識模組向 ROS2 網路發布兩種訊息:
 
-1. **`/state/perception/face`(持續狀態廣播,約每秒 8 次)**:以 JSON 格式發布當前幀的完整人臉狀態,包含 `face_count`(視野中的人臉數量)與 `tracks` 陣列,每個 track 內含 `track_id`、`stable_name`(經 Hysteresis 穩定化後的身份名稱)、`sim`(當前相似度)、`distance_m`(由 D435 深度資訊估算的距離)、`bbox` 邊界框座標。此 Topic 供 PawAI Studio 的人臉面板進行即時視覺化。
+1. **`/state/perception/face`(持續狀態廣播,每個處理幀發布一次)**:以 JSON 格式發布當前幀的完整人臉狀態。此 Topic 的發布頻率不受 `publish_fps` 參數控制(該參數僅控制 debug 影像的發布節流),而是跟隨 camera callback 的實際處理速率,約為每秒 6 至 10 次(依同時運行的其他模組負載而定),包含 `face_count`(視野中的人臉數量)與 `tracks` 陣列,每個 track 內含 `track_id`、`stable_name`(經 Hysteresis 穩定化後的身份名稱)、`sim`(當前相似度)、`distance_m`(由 D435 深度資訊估算的距離)、`bbox` 邊界框座標。此 Topic 供 PawAI Studio 的人臉面板進行即時視覺化。
 
 2. **`/event/face_identity`(觸發式事件)**:在四種關鍵時刻發布事件——`track_started`(新追蹤對象進入視野)、`identity_stable`(經穩定化機制確認身份)、`identity_changed`(已穩定的身份變更為另一個已知身份)、`track_lost`(追蹤對象離開視野)。統一中控模組訂閱此 Topic,當 `identity_stable` 事件觸發且對應的 `stable_name` 為已註冊身份時,切換至 `GREETING` 狀態並發出個人化問候。
 

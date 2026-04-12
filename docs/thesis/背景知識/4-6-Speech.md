@@ -4,7 +4,7 @@
 
 本系統的語音互動管線並非單一直線流程,而是由兩條並存的輸入路徑組成,以對應「Demo 主線」與「舊本地麥克風路徑」兩種不同的使用情境:
 
-- **Demo 主線(目前實際使用)**:使用者於 PawAI Studio 網頁介面按住說話(push-to-talk),錄音音訊透過 WebSocket 經由 `/ws/speech` 端點上傳至 Jetson 上的 Gateway(`pawai-studio/gateway/studio_gateway.py`),Gateway 直接將完整的錄音檔案送入 ASR 模組進行辨識,**此路徑無前置 VAD**。原因是 Studio push-to-talk 的起訖時間由使用者按鈕動作明確界定,不需要額外的語音活動偵測,省去了 VAD 可能引入的延遲與誤判。
+- **Demo 主線(目前實際使用)**:使用者於 PawAI Studio 網頁介面按住說話(push-to-talk),錄音音訊透過 WebSocket 經由 `/ws/speech` 端點上傳至 Gateway(`pawai-studio/gateway/studio_gateway.py`)。Gateway **在自身行程內完成 ASR 與意圖分類**——直接以 HTTP POST 將音訊送至雲端 SenseVoice server(`http://127.0.0.1:8001/v1/audio/transcriptions`,經 SSH tunnel),取得辨識結果後在 Gateway 端完成意圖分類,再將結果發布至 ROS2 的 `/event/speech_intent_recognized` Topic。**此路徑完全不經過 `stt_intent_node`**,也無前置 VAD——push-to-talk 的起訖時間由使用者按鈕動作明確界定。
 
 - **舊本地麥克風路徑(已廢棄但保留)**:使用者直接對 Go2 機身上的 USB 麥克風說話,由 `stt_intent_node` 連續監聽音訊串流並透過 Energy VAD 自動切分語音段落,再送入 ASR。此路徑保留於 `stt_intent_node.py` 中以備未來使用者改用獨立指向性麥克風時可以快速復用,但目前 Demo 場景已全面改用 Studio push-to-talk。
 
@@ -12,7 +12,7 @@
 
 ## 管線七階段總覽
 
-無論走哪條輸入路徑,音訊進入 ROS2 後的處理都收斂為相同的後續流程,整條管線可分為七個階段:**音訊擷取 → (僅舊路徑) Energy VAD → ASR 語音辨識 → 意圖分類 → LLM 大型語言模型回覆生成 → TTS 語音合成 → 音訊播放**。實測端到端延遲(從使用者停止說話到機器狗開始播放語音回覆)約為 2 秒級,於 2026 年 4 月 8 日的 Studio Chat 閉環實測中完成多句連續對話驗證,整體管線穩定性達到 Demo 可用水準。各階段解耦為獨立 ROS2 節點,以 Topic 作為模組之間的訊息傳遞介面,可獨立替換或除錯。
+兩條路徑在 ASR 之後收斂為相同的後續流程。整條管線可分為七個階段:**音訊擷取 → (僅舊路徑) Energy VAD → ASR 語音辨識 → 意圖分類 → LLM 大型語言模型回覆生成 → TTS 語音合成 → 音訊播放**。其中 Demo 主線的前兩階段(音訊擷取 + ASR)在 Gateway 行程內完成,後續 LLM、TTS、播放仍由獨立 ROS2 節點處理。實測端到端延遲(從使用者停止說話到機器狗開始播放語音回覆)約為 2 秒級,於 2026 年 4 月 8 日的 Studio Chat 閉環實測中完成多句連續對話驗證,整體管線穩定性達到 Demo 可用水準。
 
 ## Energy VAD 語音活動偵測(舊路徑前處理)
 
@@ -28,19 +28,27 @@
 
 ## ASR 三級 Fallback 機制
 
-語音辨識是整條管線中最複雜的環節。本專題的 ASR 層採用**三級自動降級(Graceful Degradation)** 策略,在網路狀況、伺服器可用性、運算資源變化時動態切換後端,確保服務不中斷。三個層級依 `stt_intent_node.py` 中 `provider_order` 參數的順序執行:
+語音辨識是整條管線中最複雜的環節。本系統在 ASR 層存在**兩條獨立路徑**,需分開說明:
 
-**一級(主線):SenseVoice Cloud**。SenseVoice 是阿里巴巴達摩院於 2024 年開源的中文優化語音辨識模型家族,專為亞洲語言(中文、粵語、日文、韓文、英文)設計,相較於 Whisper 對中文短句與方言的辨識率更高,並額外輸出說話者的情緒與音訊事件標籤。本系統採用 SenseVoice Small 版本,透過 **FunASR 框架**(阿里巴巴達摩院維護的端到端語音工具包)部署於遠端 RTX 8000 伺服器上,以 FastAPI 封裝 HTTP 介面(`scripts/sensevoice_server.py`,port 8001)。Jetson 透過 SSH tunnel 與雲端伺服器建立連線,將錄音音訊以二進位格式 POST 至伺服器並接收 JSON 回應。實測延遲約 600 毫秒。Demo 主線中,Studio Gateway 的 `/ws/speech` 入口會優先走此路徑。
+### Demo 主線:Gateway 內直打 SenseVoice Cloud
+
+Demo 主線中,Studio Gateway(`studio_gateway.py`)的 `/ws/speech` WebSocket 端點接收到音訊後,**在 Gateway 行程內直接以 HTTP POST 呼叫 SenseVoice Cloud server**(`http://127.0.0.1:8001/v1/audio/transcriptions`,經 SSH tunnel 連線至遠端 RTX 8000),取得辨識文字後於 Gateway 端執行意圖分類,再將結果發布至 ROS2 的 `/event/speech_intent_recognized` Topic。此路徑是單條直打,**不經過 `stt_intent_node`**,也不存在多級 fallback——若雲端 server 不可用,Gateway 會直接回報錯誤。
+
+### 舊本地麥克風路徑:stt_intent_node 三級 Fallback
+
+舊本地麥克風路徑下,`stt_intent_node` 採用**三級自動降級(Graceful Degradation)** 策略,在網路狀況、伺服器可用性、運算資源變化時動態切換後端,確保服務不中斷。三個層級依 `stt_intent_node.py` 中 `provider_order` 參數的順序執行(注意:程式碼內部一級 provider key 仍為 legacy 名稱 `qwen_cloud`,實際後端已切換為 SenseVoice FunASR server):
+
+**一級:SenseVoice Cloud(provider key: `qwen_cloud`)**。SenseVoice 是阿里巴巴達摩院於 2024 年開源的中文優化語音辨識模型家族,專為亞洲語言(中文、粵語、日文、韓文、英文)設計,相較於 Whisper 對中文短句與方言的辨識率更高,並額外輸出說話者的情緒與音訊事件標籤。本系統採用 SenseVoice Small 版本,透過 **FunASR 框架**(阿里巴巴達摩院維護的端到端語音工具包)部署於遠端 RTX 8000 伺服器上,以 FastAPI 封裝 HTTP 介面(`scripts/sensevoice_server.py`,port 8001)。Jetson 透過 SSH tunnel 與雲端伺服器建立連線,將錄音音訊以二進位格式 POST 至伺服器並接收 JSON 回應。實測延遲約 600 毫秒。
 
 **二級(備援):SenseVoice Local**。當雲端伺服器不可用(SSH tunnel 斷線、伺服器未啟動、網路中斷)時,系統自動切換至 Jetson 本地執行的 SenseVoice 量化版本。此版本透過 **sherpa-onnx**(由 k2-fsa / 新一代 Kaldi 團隊維護的輕量化語音推理框架)執行 int8 量化後的 ONNX 模型(`sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`,檔案大小約 228 MB,執行時佔用約 352 MB RAM)。此版本完全離線、僅使用 CPU,不佔用 Jetson 的 GPU 資源,實測延遲約 400 毫秒(因省去網路往返時間,甚至略快於雲端版本),辨識率維持與雲端相當的水準。
 
-**三級(最終備援):Whisper Small(faster-whisper)**。若 SenseVoice Cloud 與 Local 皆不可用,系統退回至 OpenAI 於 2022 年發布的 Whisper 模型。Whisper 為多語言 Encoder-Decoder Transformer 架構,原生支援 99 種語言,在高品質錄音條件下表現優異。本專題透過 **faster-whisper** 框架(基於 CTranslate2 的 CUDA 加速實作,速度最高可達原生 Whisper 的約 4 倍)於 Jetson 上推理。
+**三級(最終備援):Whisper Tiny(faster-whisper)**。若 SenseVoice Cloud 與 Local 皆不可用,系統退回至 OpenAI 於 2022 年發布的 Whisper 模型。Whisper 為多語言 Encoder-Decoder Transformer 架構,原生支援 99 種語言,在高品質錄音條件下表現優異。本專題透過 **faster-whisper** 框架(基於 CTranslate2 的 CUDA 加速實作,速度最高可達原生 Whisper 的約 4 倍)於 Jetson 上推理。
 
-**關於 Whisper 實際部署配置的澄清**:`speech_processor/config/speech_processor.yaml` 中的**基礎預設值**為 `whisper_local.model_name: "tiny"`、`whisper_local.device: "cpu"`、`whisper_local.compute_type: "int8"`(CPU + tiny + int8 的極省資源配置,用於開發與低功耗場景)。然而 Demo 啟動腳本 `scripts/start_full_demo_tmux.sh` 在啟動 `stt_intent_node` 時**覆寫為 `whisper_local.device:=cuda`、`compute_type:=float16`**,即實際 Demo 跑的是 CUDA + float16 版本。此覆寫之必要性源於 Jetson 的 CUDA 核心不支援 int8 量化(強制指定 int8 會 silent fail 無錯誤訊息),因此 Demo 必須使用 float16 混合精度。實測 RTF(Real-Time Factor,推論時間除以音訊時長)約 0.13,即 3 秒音訊需約 390 毫秒處理,延遲約 3 秒(含模型首次載入)。**再次強調 Whisper 僅為三級 fallback 的最末層,Demo 主線實際上由 SenseVoice Cloud 承擔,Whisper 在正常連線情況下不會被觸發**。
+**關於 Whisper 實際部署配置的澄清**:`speech_processor/config/speech_processor.yaml` 中的**基礎預設值**為 `whisper_local.model_name: "tiny"`、`whisper_local.device: "cpu"`、`whisper_local.compute_type: "int8"`(CPU + tiny + int8 的極省資源配置,用於開發與低功耗場景)。然而 Demo 啟動腳本 `scripts/start_full_demo_tmux.sh` 在啟動 `stt_intent_node` 時**覆寫為 `whisper_local.device:=cuda`、`compute_type:=float16`**,即實際 Demo 跑的是 CUDA + float16 版本。此覆寫之必要性源於 Jetson 的 CUDA 核心不支援 int8 量化(強制指定 int8 會 silent fail 無錯誤訊息),因此 Demo 必須使用 float16 混合精度。實測 RTF(Real-Time Factor,推論時間除以音訊時長)約 0.13,即 3 秒音訊需約 390 毫秒處理,延遲約 3 秒(含模型首次載入)。**Whisper 僅為 `stt_intent_node` 三級 fallback 的最末層;Demo 主線走 Gateway 直打 SenseVoice Cloud,正常連線下 Whisper 不會被觸發**。
 
 **三層 ASR A/B 測試結果**(25 筆,Go2 噪音環境):
 
-| 指標 | SenseVoice Cloud | SenseVoice Local | Whisper Small |
+| 指標 | SenseVoice Cloud | SenseVoice Local | Whisper Tiny |
 |---|:---:|:---:|:---:|
 | 正確 + 部分正確率 | 92% | 92% | 52% |
 | Intent 正確率 | 96% | 92% | 56% |
@@ -103,9 +111,9 @@ ASR 輸出的文字接著進入意圖分類階段。本系統採用**規則式(R
 - **Energy VAD 閾值**:如前述「Energy VAD 語音活動偵測」段落所示,Demo 啟動腳本將 VAD 閾值覆寫為更高的值以避免 Go2 伺服噪音誤觸發。
 - **Whisper 設定**:啟用 `vad_filter`、`no_speech_threshold=0.6`、幻覺黑名單從最初 6 條擴充至 22 條。
 
-實測 Whisper Small 在此 profile 下的 A/B 結果為 64% 正確率,確認為 Whisper 在中文短句 + 機器噪音場景下的瓶頸。此數據後來推動了從 Whisper 到 SenseVoice 的主線切換決策。
+實測 Whisper Tiny(yaml 預設 `model_name: "tiny"`)在此 profile 下的 A/B 結果為 64% 正確率,確認為 Whisper 在中文短句 + 機器噪音場景下的瓶頸。此數據後來推動了從 Whisper 到 SenseVoice 的主線切換決策。
 
-此外,Noisy Profile 亦引入 `ENABLE_ACTIONS` 環境變數作為動作執行的安全門——當設定為 `false` 時,`llm_bridge_node` 與 `event_action_bridge` 都停止發布 `/webrtc_req`,Go2 即使收到錯誤的 ASR 結果或意圖分類錯誤也不會執行危險動作,用於開發與除錯階段。
+此外,Noisy Profile 亦引入 `ENABLE_ACTIONS` 環境變數作為動作執行的安全門——當設定為 `false` 時,`llm_bridge_node` 停止發布 `/webrtc_req`,Go2 即使收到錯誤的 ASR 結果或意圖分類錯誤也不會執行危險動作,用於開發與除錯階段。動作控制的仲裁主線目前由 `interaction_executive`(統一中控狀態機)負責,已取代早期的 `event_action_bridge`。
 
 ## Plan B 固定台詞備案
 
