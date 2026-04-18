@@ -138,9 +138,18 @@ def mock_pose_event() -> dict:
     ).model_dump()
 
 def mock_object_event() -> dict:
+    # ── 只使用前端白名單內的物品 ───────────────────────────────────────
+    # 對應 object-panel.tsx 的 OBJECT_WHITELIST（6 個 class）
+    # bottle(39)/chair(56)/person(0)/dog(16) 已排除：
+    #   bottle: 已驗證偵測率極低；chair: 太常見不觸發；
+    #   person: 由人臉模組處理；dog: 不在白名單
     objects_pool = [
-        ("cup", 41), ("bottle", 39), ("chair", 56),
-        ("person", 0), ("dog", 16), ("book", 73),
+        ("cup", 41),        # ✅ 杯子 — 已驗證穩定
+        ("cell phone", 67), # ✅ 手機 — 已驗證可偵測
+        ("book", 73),       # ⚠️ 書本 — 翻開才偵測得到
+        ("laptop", 63),     # ✅ 筆電
+        ("backpack", 24),   # ✅ 背包
+        ("clock", 74),      # ✅ 時鐘
     ]
     n = random.randint(1, 2)
     picks = random.sample(objects_pool, min(n, len(objects_pool)))
@@ -161,10 +170,11 @@ def mock_object_event() -> dict:
             "stamp": time.time(),
             "objects": objects,
             "detected_objects": objects,
-            "active": True,
-            "status": "active",
+            "active": len(objects) > 0,
+            "status": "active" if len(objects) > 0 else "inactive",
         },
     ).model_dump()
+
 
 
 MOCK_GENERATORS = {

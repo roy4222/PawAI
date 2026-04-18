@@ -1,0 +1,30 @@
+{
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "next": "^16.1.7",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "name": "pawai",
+  "version": "1.0.0",
+  "description": "> 以 Unitree Go2 Pro 為載體的 embodied AI 互動平台。\r > 核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roy4222/PawAI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/roy4222/PawAI/issues"
+  },
+  "homepage": "https://github.com/roy4222/PawAI#readme"
+}
