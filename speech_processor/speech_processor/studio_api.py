@@ -10,6 +10,7 @@ from openai import OpenAI
 
 app = FastAPI()
 
+# 允許跨網域存取，確保前端能正常連線
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,16 +18,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 自動建立語音存儲資料夾
 os.makedirs("static_audio", exist_ok=True)
 app.mount("/audio", StaticFiles(directory="static_audio"), name="audio")
 
+# 初始化 LLM 大腦連線
 client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
 
+# ✨ 對齊 Mission v2.3 規格的專屬 SYSTEM_PROMPT
 SYSTEM_PROMPT = """
-你是 PawAI，一隻友善且忠誠的居家互動機器狗。
-語氣要溫暖、輕鬆且誠懇。絕對禁止使用表情符號。
-當對方問你是誰，請介紹：「我叫 PawAI，是你的居家互動機器狗！」
-你必須以 JSON 格式輸出：{"intent": "...", "reply_text": "...", "confidence": 0.99}
+你是 PawAI，一隻搭載在 Unitree Go2 Pro 上的「居家互動機器狗」。
+你的核心任務是「陪伴家人（互動 70%）」與「幫忙看家（守護 30%）」。
+
+🚨 你的真實能力範圍（請嚴格根據這些設定回答） 🚨
+1. 視覺與安全：能認出熟人打招呼、對陌生人警戒。能偵測「跌倒 (fallen)」並發出緊急警報。
+2. 手勢與姿勢：看懂「比讚 (thumbs up)」並做出開心動作，看懂「手掌 (stop)」立刻停止行動。
+3. 物體情境：看到「杯子 (cup)」會主動問「你要喝水嗎？」。
+4. 聽覺與動作：透過網頁接收語音與你聊天，並做出坐下、站立等動作。
+【警告】導航避障功能已停用！絕對不要承諾你會走路、巡邏、播放音樂或設定鬧鐘！
+
+🚨 個性與語氣設定 🚨
+1. 日常聊天：當被要求講笑話或閒聊時，請發揮幽默感自然對答，逗人開心！
+2. 忠誠陪伴：遇到陌生人保持警戒，對家人語氣要「輕鬆溫暖」。
+
+🚨 【重要】Demo 必考題：自我介紹與功能展示 🚨
+1. 當被問「請自我介紹」或「你是誰」：
+   開頭必須是「我叫 PawAI，是你的專屬居家互動機器狗！」接著請結合你的「真實能力」來介紹。例如提到你會看懂比讚和停止手勢、看到跌倒會發出警報、看到杯子還會提醒喝水，時刻守護家人。字數可放寬至 80 字左右。
+2. 當被問「你有什麼功能」或「你會做什麼」：
+   【絕對不要】重複「我叫 PawAI」。請直接活潑地列舉你的具體能力：「我會認人看家，看懂你比讚或停止的手勢，如果你跌倒了我也會發出緊急警報！對了，如果看到桌上有杯子，我還會提醒你喝水喔！」
+
+🚨 輸出格式與規則 (極度重要) 🚨
+- 一般回答長度請控制在 50 個字左右。
+- 必須全部使用繁體中文。
+- 絕對禁止使用任何表情符號(Emoji)。
+- 你必須精準判斷使用者的意圖，並且【嚴格以 JSON 格式輸出】：
+{
+  "intent": "greet/chat/status/stop/unknown",
+  "reply_text": "你回答的話",
+  "confidence": 0.99
+}
 """
 
 @app.websocket("/ws/speech_interaction")
@@ -35,33 +65,33 @@ async def websocket_endpoint(websocket: WebSocket):
     print("🔌 前端 WebSocket 已連線！")
     try:
         while True:
+            # 接收音訊資料
             audio_bytes = await websocket.receive_bytes()
             print(f"🎙️ 收到語音資料 ({len(audio_bytes)} bytes)")
             
             temp_webm = "static_audio/temp_upload.webm"
             temp_wav = "static_audio/temp_upload.wav"
             
+            # 1. 存檔並同步
             with open(temp_webm, "wb") as f:
                 f.write(audio_bytes)
                 f.flush()
                 os.fsync(f.fileno()) 
             
-            # 💡 終極轉檔指令：解決 Opus Header 報錯
-            # 使用 -f s16le 強制解碼並過濾損壞的 Header
+            # 💡 終極轉檔指令：解決 Opus Header 報錯，確保 ASR 辨識成功
             print("🔄 進行底層格式修正 (webm -> wav)...")
             cmd = f"ffmpeg -y -i {temp_webm} -vn -ar 16000 -ac 1 -c:a pcm_s16le {temp_wav} -loglevel error"
             os.system(cmd)
                 
-            # 2. 呼叫 ASR (使用剛剛抓到的正確門牌)
+            # 2. 呼叫 ASR (使用妳昨天找到的正確 /v1/audio/transcriptions 門牌)
             user_text = ""
-            url = "http://localhost:8001/v1/audio/transcriptions" # ✨ 改成這個正確路徑
+            url = "http://localhost:8001/v1/audio/transcriptions" 
             
             try:
                 with open(temp_wav, "rb") as f:
-                    # ✨ 標籤也要改成 "file"，這樣遠端大腦才收得到
+                    # 檔案標籤使用 "file" 確保 GPU Server 接收
                     asr_resp = requests.post(url, files={"file": ("temp.wav", f, "audio/wav")}, timeout=15)
                 
-                print(f"📡 嘗試網址 {url} - 回應碼: {asr_resp.status_code}")
                 if asr_resp.status_code == 200:
                     user_text = asr_resp.json().get('text', '')
             except Exception as e:
@@ -69,7 +99,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             print(f"🗣️ 辨識結果：[{user_text}]")
 
-            # 3. 邏輯判斷
+            # 3. 邏輯判斷與 LLM 思考
             if not user_text.strip():
                 reply_text = "抱歉，我聽見聲音但沒聽清楚內容，能再靠近一點說嗎？"
                 intent = "unknown"
@@ -84,10 +114,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 reply_text = result_data.get("reply_text", "汪！")
                 intent = result_data.get("intent", "chat")
 
-            # 4. TTS
+            # 4. TTS 語音合成
             tts_filename = f"reply_{int(time.time())}.mp3"
             os.system(f'edge-tts --voice zh-CN-XiaoxiaoNeural --text "{reply_text}" --write-media static_audio/{tts_filename}')
 
+            # 5. 回傳結果給前端
             await websocket.send_json({
                 "asr": user_text,
                 "intent": intent,
