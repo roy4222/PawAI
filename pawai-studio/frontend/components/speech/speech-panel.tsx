@@ -11,25 +11,29 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useStateStore } from '@/stores/state-store'
 
-let globalLastPlayedUrl = "";
-
 // ============================================================================
 // 🐾 1. 首頁專用版面
 // ============================================================================
 function CompactSpeechWidget() {
   const { isRecording, isProcessing, lastResult, startRecording, stopRecording } = useAudioRecorder()
   const speechState = useStateStore((s) => s.speechState)
+  const audioRef = useRef<HTMLAudioElement>(null) // ✨ 實體播放器參考
 
   useEffect(() => {
-    if (lastResult?.audio_url && lastResult.audio_url !== globalLastPlayedUrl) {
-      globalLastPlayedUrl = lastResult.audio_url;
-      const audio = new Audio(lastResult.audio_url);
-      audio.play().catch(e => console.log(e));
+    // ✨ 終極防回音：只有當網址真的改變時，才指派給 audio 標籤並播放
+    if (lastResult?.audio_url && audioRef.current) {
+      if (audioRef.current.src !== lastResult.audio_url) {
+        audioRef.current.src = lastResult.audio_url;
+        audioRef.current.play().catch(e => console.log("播放被攔截:", e));
+      }
     }
   }, [lastResult?.audio_url]);
 
   return (
     <PanelCard title="語音互動" icon={<Mic className="h-4 w-4" />} status={speechState ? "active" : "loading"} href="/studio/speech">
+      {/* ✨ 隱藏的唯一播放器，保證絕對不會有雙重聲音 */}
+      <audio ref={audioRef} className="hidden" />
+      
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5 shadow-md">
           <div className="flex items-center justify-between border-b border-sky-500/20 pb-2">
@@ -70,12 +74,13 @@ function CompactSpeechWidget() {
 }
 
 // ============================================================================
-// 🚀 2. 專屬頁面版面 (加入左移微調)
+// 🚀 2. 專屬頁面版面
 // ============================================================================
 function FullScreenSpeechDashboard() {
   const { isRecording, isProcessing, lastResult, startRecording, stopRecording } = useAudioRecorder()
   const [chatHistory, setChatHistory] = useState<any[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null) // ✨ 實體播放器參考
 
   const isGpuOffline = lastResult?.intent === 'offline_fallback';
 
@@ -93,10 +98,12 @@ function FullScreenSpeechDashboard() {
   }, [lastResult])
 
   useEffect(() => {
-    if (lastResult?.audio_url && lastResult.audio_url !== globalLastPlayedUrl) {
-      globalLastPlayedUrl = lastResult.audio_url;
-      const audio = new Audio(lastResult.audio_url);
-      audio.play().catch(e => console.log(e));
+    // ✨ 終極防回音：只有當網址真的改變時，才指派給 audio 標籤並播放
+    if (lastResult?.audio_url && audioRef.current) {
+      if (audioRef.current.src !== lastResult.audio_url) {
+        audioRef.current.src = lastResult.audio_url;
+        audioRef.current.play().catch(e => console.log("播放被攔截:", e));
+      }
     }
   }, [lastResult?.audio_url]);
 
@@ -105,10 +112,12 @@ function FullScreenSpeechDashboard() {
   }, [chatHistory.length, isProcessing])
 
   return (
-    // ✨ 版面微調：加入了 `relative md:-translate-x-16` 把整個版面往左平移 64px
     <div className="w-[95vw] max-w-[800px] mx-auto h-auto md:h-[60vh] min-h-[500px] flex flex-col md:flex-row gap-4 justify-center relative md:-translate-x-30">
       
-      {/* 👈 左欄：主控台 (寬度 35%) */}
+      {/* ✨ 隱藏的唯一播放器，保證絕對不會有雙重聲音 */}
+      <audio ref={audioRef} className="hidden" />
+
+      {/* 👈 左欄：主控台 */}
       <div className="w-full md:w-[35%] flex flex-col gap-3">
         <div className={cn(
           "flex-1 border rounded-xl p-5 flex flex-col items-center justify-center relative shadow-md overflow-hidden transition-colors duration-500",
@@ -185,7 +194,7 @@ function FullScreenSpeechDashboard() {
         </div>
       </div>
 
-      {/* 👉 右欄：通訊歷史日誌 (寬度 65%) */}
+      {/* 👉 右欄：通訊歷史日誌 */}
       <div className="w-full md:w-[65%] bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-md relative">
         <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-3.5 flex items-center gap-2.5 z-10">
           <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
