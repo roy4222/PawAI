@@ -1,8 +1,14 @@
 # 導航避障
 
-> Status: **D435 停用 / 外接 LiDAR 評估中**（4/14 前定案）
+> Status: **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中**（2026-04-25 更新）
 
-> D435 方案因鏡頭角度限制上機全失敗（4/3 停用）。4/8 會議老師同意嘗試外接 LiDAR（RPLIDAR A2M12），可行性研究已完成。
+> **2026-04-24 LiDAR 到貨並驗證通過**：Jetson 上 /scan 10.57Hz / 1800 點/圈 / 60% valid。
+> P0 設計定稿為「劇本式 A→B + 停障 + 續行」，不承諾一般動態繞障。
+> **Spec**: [`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
+> **Plan**: [`docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md)
+> **硬時程**：5/1 emergency hotkey 硬截止、5/6 家中 KPI 4/5、5/11-5/12 freeze、5/13 學校現場重建地圖
+
+> D435 方案因鏡頭角度限制上機全失敗（4/3 停用），**由外接 LiDAR 360° 取代**。原 D435 避障 code 保留作歷史參考。
 > 詳見 [外接 LiDAR 可行性研究](research/2026-04-08-external-lidar-feasibility.md)
 
 ## 外接 LiDAR 方案（4/8 新增）
@@ -32,22 +38,29 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **D435 停用 / 外接 LiDAR 評估中** |
-| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 評估中(4/8) → 4/14 定案 |
-| 完成度 | D435 實作完成（上機未通過）；外接 LiDAR 可行性研究完成 |
-| 最後驗證 | 2026-04-08（可行性研究） |
-| 入口檔案 | D435: `obstacle_avoidance_node.py` / LiDAR: `lidar_obstacle_node.py` |
-| 測試 | D435: 7 tests / LiDAR: 13 tests（共 20 tests） |
+| 狀態 | **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中** |
+| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 開發中 |
+| 完成度 | Gate P0-A（桌面驗證）✅；Gate P0-B（SLAM 建圖）~ Gate P0-I 進行中 |
+| 最後驗證 | 2026-04-24（Jetson 上 /scan 10.57Hz / 1800 點 / 60% valid） |
+| 入口檔案 | `vision_perception/vision_perception/lidar_obstacle_node.py`（既有） |
+| 相關 driver | `sllidar_ros2`（Slamtec 官方，在 Jetson `~/rplidar_ws/`） |
+| 測試 | LiDAR 13 tests（既有）+ Safety/Patrol/TTS ~14 新 tests（plan Task 5-8） |
+| Spec / Plan | [spec](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
 
 ## 架構決策（2026-04-01 最終判定）
 
-| 路線 | 判定 | 理由 |
-|------|:----:|------|
-| D435 前方防撞 | **主線** | 30fps, USB 直連, 桌測通過 |
-| LiDAR 360° safety | **主線** | 靜止 7.3Hz / 行走 4-6Hz, 無 burst+gap |
-| CycloneDDS | **永久關閉** | Go2 Pro 韌體不支援 |
-| Full SLAM | **永久關閉** | 5Hz 品質差, 業界最低門檻 7Hz |
-| Nav2 global planner | **永久關閉** | controller_freq=3Hz 不實用 |
+> ⚠️ **Supersedes by 2026-04-24 P0 翻案**：本表「Full SLAM / Nav2 永久關閉」的判定**失效**。
+> 原判定基於 Go2 內建 LiDAR 5Hz 品質差（業界 SLAM 門檻 7Hz）。
+> 外接 RPLIDAR A2M12 實測 10.57Hz > 7Hz，**Full SLAM + Nav2 路線復活為 P0 主線**。
+> 以 [`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) 為準。
+
+| 路線 | 舊判定（4/1）| 新判定（4/24）| 理由 |
+|------|:----:|:----:|------|
+| D435 前方防撞 | 主線 | **停用** | 4/3 上機全失敗（鏡頭角度），由 LiDAR 取代 |
+| LiDAR 360° safety | 主線 | **P0 主線** | RPLIDAR A2M12 10.57Hz 穩定 |
+| CycloneDDS | 永久關閉 | 永久關閉 | Go2 Pro 韌體不支援 |
+| Full SLAM | 永久關閉 | **P0 主線** | RPLIDAR 10.5Hz 超過 7Hz 門檻 |
+| Nav2 global planner | 永久關閉 | **P0 主線（DWB，不用 MPPI）**| RPLIDAR 10Hz controller 可跑；MPPI Jetson ARM64 有 SIGILL 不用 |
 
 ## 啟動方式
 
