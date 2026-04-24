@@ -5,6 +5,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { useEventStore } from "@/stores/event-store";
 import { useStateStore } from "@/stores/state-store";
 import { useLayoutManager } from "@/hooks/use-layout-manager";
+import { normalizeObjectState } from "@/lib/object-event";
 import type {
   PawAIEvent,
   FaceState,
@@ -13,7 +14,6 @@ import type {
   PoseState,
   BrainState,
   SystemHealth,
-  ObjectState,
 } from "@/contracts/types";
 
 interface UseEventStreamResult {
@@ -67,16 +67,9 @@ export function useEventStream(): UseEventStreamResult {
           }
           break;
         case "object": {
-          // Normalize: ROS2 sends `objects[]`, frontend state expects `detected_objects`
-          const objData = { ...data } as Record<string, unknown>;
-          if ("objects" in objData && !("detected_objects" in objData)) {
-            objData.detected_objects = objData.objects;
-          }
-          if ("detected_objects" in objData || "objects" in objData) {
-            const arr = (objData.detected_objects ?? objData.objects ?? []) as unknown[];
-            objData.active = arr.length > 0;
-            objData.status = arr.length > 0 ? "active" : "inactive";
-            updateObjectState(objData as unknown as ObjectState);
+          const objectState = normalizeObjectState(data);
+          if (objectState) {
+            updateObjectState(objectState);
           }
           break;
         }

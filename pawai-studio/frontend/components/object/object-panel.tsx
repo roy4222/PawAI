@@ -22,6 +22,7 @@ import { MetricChip } from "@/components/shared/metric-chip"
 import { useStateStore } from "@/stores/state-store"
 import { useEventStore } from "@/stores/event-store"
 import type { ObjectState } from "@/contracts/types"
+import { extractObjectDetections } from "@/lib/object-event"
 import { cn } from "@/lib/utils"
 
 import { isWhitelisted, getObjectEntry, getLabel } from "./object-config"
@@ -132,7 +133,7 @@ function SidebarPanel() {
                 <span className="text-[11px] text-muted-foreground font-medium px-0.5">偵測記錄</span>
                 {objectEvents.map((evt, i) => {
                   const data = evt.data as Record<string, unknown>
-                  const objs = (data.objects ?? data.detected_objects ?? []) as Array<{ class_name: string; confidence: number }>
+                  const objs = extractObjectDetections(data)
                   const wl   = objs.filter((o) => isWhitelisted(o.class_name))
                   if (wl.length === 0) return null
                   const time = new Date(evt.timestamp).toLocaleTimeString("zh-TW", { hour12: false })

@@ -3,6 +3,7 @@
 // object-stats.tsx — 📊 偵測統計長條圖
 import type { PawAIEvent } from "@/contracts/types"
 import { OBJECT_WHITELIST, isWhitelisted, getLabel } from "./object-config"
+import { extractObjectDetections } from "@/lib/object-event"
 import { cn } from "@/lib/utils"
 
 function useObjectStats(events: PawAIEvent[]): Map<string, number> {
@@ -10,7 +11,7 @@ function useObjectStats(events: PawAIEvent[]): Map<string, number> {
   for (const evt of events) {
     if (evt.source !== "object") continue
     const data = evt.data as Record<string, unknown>
-    const objs = (data.objects ?? data.detected_objects ?? []) as Array<{ class_name: string }>
+    const objs = extractObjectDetections(data)
     for (const obj of objs) stats.set(obj.class_name, (stats.get(obj.class_name) ?? 0) + 1)
   }
   return stats

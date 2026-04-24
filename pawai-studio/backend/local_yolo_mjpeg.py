@@ -5,12 +5,17 @@ local_yolo_mjpeg.py — YOLO 測試腳本 (ONNX 模型 + 影像串流版)
 網頁端不用再搶鏡頭，可以直接接收 http://localhost:8081/video_feed 看到畫面。
 
 啟動方式：
-    cd pawai-studio/backend
+    # 若你目前在 PawAI repo 根目錄
+    cd pawai-studio\\backend
+    py local_yolo_mjpeg.py
+    
+    # 若你已在 backend 目錄
     py local_yolo_mjpeg.py
 ════════════════════════════════════════════════════════════════    
 """
 import time
 import json
+import os
 import cv2
 import sys
 import socket
@@ -18,18 +23,11 @@ import threading
 from urllib import request as urllib_request, error as urllib_error
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-MOCK_SERVER  = "http://localhost:8000"
+MOCK_SERVER  = os.getenv("MOCK_SERVER_URL", "http://localhost:8000").rstrip("/")
 CAMERA_ID    = 0
 SEND_FPS     = 5
 CONF_THRESH  = 0.30
 MODEL_NAME   = "yolo26n.onnx"  # 已經換成真正的 ONNX 模型了！
-
-# 加入更多常見物品方便測試 (加入 person, bottle, chair 等)
-WHITELIST_CLASS_IDS = {
-    0: "person", 39: "bottle", 56: "chair", 60: "dining table",
-    41: "cup", 67: "cell phone", 73: "book",
-    63: "laptop", 24: "backpack", 74: "clock",
-}
 
 # 全域變數，存放最新的影像編碼
 latest_jpeg = None
@@ -92,6 +90,8 @@ def main():
 
     send_interval = 1.0 / SEND_FPS
     last_send = 0.0
+    had_send_error = False
+    last_send_error_log_at = 0.0
 
     try:
         while True:
@@ -149,9 +149,17 @@ def main():
                         method="POST",
                     )
                     with urllib_request.urlopen(req, timeout=0.5):
-                        pass
-                except (urllib_error.URLError, socket.timeout, TimeoutError):
-                    pass
+                        if had_send_error:
+                            print(f"[YOLO] ✅ 已恢復與 Mock Server 連線：{MOCK_SERVER}", flush=True)
+                            had_send_error = False
+                except (urllib_error.URLError, socket.timeout, TimeoutError) as e:
+                    if (not had_send_error) or (now - last_send_error_log_at >= 5):
+                        print(
+                            f"[YOLO] ⚠ 無法送出 object event 到 {MOCK_SERVER}/mock/trigger：{e}",
+                            flush=True,
+                        )
+                        last_send_error_log_at = now
+                    had_send_error = True
                 last_send = now
 
     except KeyboardInterrupt:

@@ -3,11 +3,12 @@
 // history-feed.tsx — 📋 偵測記錄 Feed
 import type { PawAIEvent } from "@/contracts/types"
 import { isWhitelisted, getObjectEntry, getLabel } from "./object-config"
+import { extractObjectDetections } from "@/lib/object-event"
 import { cn } from "@/lib/utils"
 
 function FeedRow({ event }: { event: PawAIEvent }) {
   const data = event.data as Record<string, unknown>
-  const raw  = (data.objects ?? data.detected_objects ?? []) as Array<{ class_name: string; confidence: number }>
+  const raw  = extractObjectDetections(data)
   const wl   = raw.filter((o) => isWhitelisted(o.class_name))
   const mute = raw.filter((o) => !isWhitelisted(o.class_name))
   if (raw.length === 0) return null

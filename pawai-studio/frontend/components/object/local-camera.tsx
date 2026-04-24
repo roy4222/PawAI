@@ -19,6 +19,8 @@ export function LocalCameraView() {
   const videoRef     = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const streamRef    = useRef<MediaStream | null>(null)
+  const activationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sourceModeRef = useRef<"hardware" | "stream">("stream")
   const gatewayUrl = getGatewayHttpUrl()
   const yoloStreamUrl = process.env.NEXT_PUBLIC_LOCAL_YOLO_STREAM_URL || "http://127.0.0.1:8081/video_feed"
   
@@ -29,6 +31,17 @@ export function LocalCameraView() {
 
   const objectState = useStateStore((s) => s.objectState) as ObjectState | null
   const boxes: DetectionBox[] = (objectState?.detected_objects ?? []) as DetectionBox[]
+
+  useEffect(() => {
+    sourceModeRef.current = sourceMode
+  }, [sourceMode])
+
+  const clearActivationTimer = useCallback(() => {
+    if (activationTimerRef.current !== null) {
+      clearTimeout(activationTimerRef.current)
+      activationTimerRef.current = null
+    }
+  }, [])
 
   // [硬體模式] 開啟本機鏡頭
   const startHardwareCamera = useCallback(async () => {
@@ -53,7 +66,13 @@ export function LocalCameraView() {
   }, [])
 
   // 關閉所有鏡頭/串流
-  const stopCamera = useCallback(async () => {
+  const stopCamera = useCallback(async (
+    options: { stopRemoteYolo?: boolean; resetState?: boolean } = {}
+  ) => {
+    const { stopRemoteYolo = true, resetState = true } = options
+
+    clearActivationTimer()
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
@@ -61,47 +80,81 @@ export function LocalCameraView() {
     if (videoRef.current) videoRef.current.srcObject = null
     
     // 通知後端關閉 YOLO 串流腳本
-    try {
-      if (sourceMode === "stream") await fetch(`${gatewayUrl}/mock/yolo/stop`, { method: "POST" })
-    } catch (e) { /* ignore */ }
+    if (stopRemoteYolo && sourceModeRef.current === "stream") {
+      try {
+        const response = await fetch(`${gatewayUrl}/mock/yolo/stop`, { method: "POST" })
+        if (!response.ok) {
+          console.warn(`[object] 無法停止 YOLO 串流：HTTP ${response.status}`)
+        }
+      } catch (err) {
+        console.warn("[object] 無法停止 YOLO 串流", err)
+      }
+    }
     
-    setCamState("idle")
-    setError(null)
-  }, [sourceMode, gatewayUrl])
+    if (resetState) {
+      setCamState("idle")
+      setError(null)
+    }
+  }, [clearActivationTimer, gatewayUrl])
 
   // [串流模式] 啟動
   const startStreamMode = useCallback(async () => {
-    stopCamera()
+    await stopCamera({ resetState: false })
     setSourceMode("stream")
+    sourceModeRef.current = "stream"
     setCamState("requesting")
     setError("正在啟動 yolo26n.onnx 串流，請稍候...")
     
     try {
       // 呼叫 API 啟動 Python YOLO 腳本
-      await fetch(`${gatewayUrl}/mock/yolo/start`, { method: "POST" })
+      const response = await fetch(`${gatewayUrl}/mock/yolo/start`, { method: "POST" })
+      const body = await response.json().catch(() => null) as { status?: string; msg?: string; detail?: string } | null
+      if (!response.ok) {
+        throw new Error(body?.detail ?? body?.msg ?? `HTTP ${response.status}`)
+      }
+      if (body?.status && body.status !== "started" && body.status !== "already_running") {
+        throw new Error(body.msg ?? `unexpected status: ${body.status}`)
+      }
+
       // 等待 3 秒鐘讓 Python 載入模型並開啟相機
-      setTimeout(() => {
+      clearActivationTimer()
+      activationTimerRef.current = setTimeout(() => {
         setCamState("active")
         setError(null)
+        activationTimerRef.current = null
       }, 3000)
     } catch (err) {
-      setError("無法呼叫伺服器啟動 YOLO，請確認 Mock Server 已啟動。")
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`無法啟動 YOLO 串流：${msg}`)
       setCamState("denied")
     }
-  }, [stopCamera, gatewayUrl])
+  }, [clearActivationTimer, stopCamera, gatewayUrl])
 
   // 切換模式的按鈕行為
-  const handleHardwareClick = () => {
-    if (sourceMode === "hardware" && camState === "active") stopCamera()
-    else { stopCamera(); setSourceMode("hardware"); startHardwareCamera() }
+  const handleHardwareClick = async () => {
+    if (sourceMode === "hardware" && camState === "active") {
+      await stopCamera()
+      return
+    }
+    await stopCamera()
+    setSourceMode("hardware")
+    sourceModeRef.current = "hardware"
+    await startHardwareCamera()
   }
 
-  const handleStreamClick = () => {
-    if (sourceMode === "stream" && (camState === "active" || camState === "requesting")) stopCamera()
-    else startStreamMode()
+  const handleStreamClick = async () => {
+    if (sourceMode === "stream" && (camState === "active" || camState === "requesting")) {
+      await stopCamera()
+      return
+    }
+    await startStreamMode()
   }
 
-  useEffect(() => () => { stopCamera() }, [stopCamera])
+  useEffect(() => {
+    return () => {
+      void stopCamera({ resetState: false })
+    }
+  }, [stopCamera])
 
   function bboxStyle(bbox: [number, number, number, number]) {
     const el = containerRef.current; if (!el) return {}

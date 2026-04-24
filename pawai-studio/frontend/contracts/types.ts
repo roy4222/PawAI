@@ -139,6 +139,7 @@ export interface PoseState {
 
 export interface ObjectDetection {
   class_name: string;
+  class_id?: number;
   confidence: number;
   bbox: [number, number, number, number];
 }
@@ -147,7 +148,11 @@ export interface ObjectEvent extends PawAIEvent {
   source: "object";
   event_type: "object_detected";
   data: {
-    objects: ObjectDetection[];
+    stamp?: number;
+    active?: boolean;
+    status?: "active" | "inactive" | "loading";
+    objects?: ObjectDetection[];
+    detected_objects?: ObjectDetection[];
   };
 }
 
