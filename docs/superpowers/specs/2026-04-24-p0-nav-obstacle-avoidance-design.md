@@ -482,7 +482,8 @@ t=0s    Executive dispatch patrol_route → Nav2 begins path planning
 t=2s    Go2 走到一半，前方出現人
 t=2.6s  lidar_obstacle_node 偵測 zone=danger（debounce 3 frames ≈ 600ms）
 t=2.6s  Executive Safety Layer 收到 /event/obstacle_detected
-t=2.6s  handler.pause() + twist_mux emergency input publish zero Twist
+t=2.6s  handler.pause() + publish zero Twist to /cmd_vel_obstacle
+        （twist_mux obstacle input, priority 200；**非** emergency input）
 t=2.6s  publish /tts "前方有障礙，請讓路"（safety_tts）
 t=2.6s  /state/pawai_brain safety_flags.obstacle = true
 t=3-8s  人還在，Nav2 持續算 path 但 cmd_vel 被 twist_mux 擋
@@ -509,7 +510,7 @@ t=15s   publish /tts "已到達目的地"（navigation status_tts）
 | map 不存在 | preconditions 擋住 |
 | twist_mux 無 nav2 input subscriber | preconditions 擋住 |
 | goal accepted 但長時間沒 odom progress | Executive 每 5s 檢查 `/odom`，無變化超過 10s abort |
-| Nav2 recovery behaviors 啟動 | **禁用**：`recovery_behaviors: []` in nav2_params.yaml |
+| Nav2 recovery behaviors 啟動 | **禁用（二選一）**：<br>(a) `behavior_server.behavior_plugins: []` 清空 recovery behaviors（主選，最簡）<br>(b) `bt_navigator` 改用不含 `<RecoveryNode>` 的自訂 BT XML（例 `navigate_to_pose_no_recovery.xml`）|
 
 ---
 
@@ -655,8 +656,8 @@ Freeze (bugfix only)                                                ░░░░
 | `interaction_executive/interaction_executive/state_machine.py` | 加 `PATROL_NAVIGATING`, `PATROL_PAUSED`, `EMERGENCY_LATCHED` |
 | `interaction_executive/interaction_executive/interaction_executive_node.py` | 組合 safety_layer + patrol_handler，加 service servers |
 | `go2_robot_sdk/config/twist_mux.yaml` | emergency(255) / obstacle(200) / teleop(100) / nav2(10) |
-| `go2_robot_sdk/config/nav2_params.yaml` | `max_vel_x: 0.2`, `goal_tolerance: 0.3`, `recovery_behaviors: []`, `controller_frequency: 10` |
-| `go2_robot_sdk/launch/robot.launch.py` | Nav2 `/cmd_vel` remap 為 `/cmd_vel_nav` |
+| `go2_robot_sdk/config/nav2_params.yaml` | 改動以下實際參數路徑（原總稱 `goal_tolerance` / `recovery_behaviors` 不存在）：<br>• `controller_server.controller_frequency: 10.0`（原 20.0）<br>• `controller_server.FollowPath.max_vel_x: 0.2`<br>• `controller_server.general_goal_checker.xy_goal_tolerance: 0.30`（原 0.20）<br>• `controller_server.general_goal_checker.yaw_goal_tolerance: 0.30`（原 0.70）<br>• **Recovery 禁用（主選）**：`behavior_server.behavior_plugins: []`<br>• （備選）保留 behavior_server，改 bt_navigator BT XML 為自訂不含 RecoveryNode 版本 |
+| `go2_robot_sdk/launch/robot.launch.py` | Nav2 `/cmd_vel` remap 為 `/cmd_vel_nav`；若採 recovery 禁用備選方案，須將 `default_nav_to_pose_bt_xml` 指向自訂 BT XML |
 | `docs/mission/README.md` | P0 定義更新 |
 | `docs/導航避障/README.md` | 狀態卡更新（D435 停用 → LiDAR 取代；Full SLAM 從永久關閉改為 P0 主線）|
 
