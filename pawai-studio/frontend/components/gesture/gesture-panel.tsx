@@ -94,7 +94,7 @@ const MAX_HISTORY = 10
 // ──────────────────────────────────────────────
 
 function EventHistoryItem({ event }: { event: GestureEvent }) {
-  const d = event.data as any
+  const d = event.data as { gesture?: string; current_gesture?: string; hand?: string; confidence?: number }
   const gestureKey = d.gesture ?? d.current_gesture ?? 'unknown'
   const time = new Date(event.timestamp).toLocaleTimeString('zh-TW', { hour12: false })
   const label = GESTURE_LABELS[gestureKey] ?? gestureKey
@@ -116,7 +116,7 @@ function EventHistoryItem({ event }: { event: GestureEvent }) {
       )}
       <span className="ml-auto tabular-nums">{time}</span>
       <span className="shrink-0 text-[10px]">
-        {d.hand === 'left' ? '左手' : '右手'} · {Math.round(d.confidence * 100)}%
+        {d.hand === 'left' ? '左手' : '右手'} · {Math.round((d.confidence ?? 0) * 100)}%
       </span>
     </div>
   )
