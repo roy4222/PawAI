@@ -40,14 +40,16 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Gate P0-A ✅ / Gate P0-B ✅（cartographer pure scan-matching）/ P0-C 未開工** |
-| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 上機 4/25 → **SLAM 建圖完成 4/25 PM (v3.5 cartographer pure scan-matching, 永久棄 Go2 odom)** |
-| 完成度 | Gate P0-A ✅；Gate P0-B ✅（home_living_room.{pgm,yaml,pbstream} 產出）；Gate P0-C ~ I 未開工 |
-| 最後驗證 | 2026-04-25 17:23（home_living_room.pgm 583×513 cells / 29.15m×25.65m @ 5cm/pixel） |
+| 狀態 | **P0-A ✅ / P0-B ✅ / P0-C ✅（AMCL stack active, initial pose 流程明日固化）/ P0-D 🟡 WIP（Nav2 stack alive，卡 costmap/inflation）** |
+| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 上機 4/25 → **SLAM 建圖完成 4/25 PM (v3.5 cartographer pure scan-matching, 永久棄 Go2 內建雷達)** → **Nav2 + AMCL stack 4/25 21:00 全打通 (v3.7 拆架構：建圖用 cartographer / 定位用 AMCL)** |
+| 完成度 | P0-A ✅；P0-B ✅（pgm/yaml/pbstream 產出）；P0-C ✅ AMCL active；P0-D 🟡 WIP（/plan + /cmd_vel pipeline OK，Go2 實測 cmd_vel 門檻 MIN_X=0.50；卡 inflation lethal space，明早調 inflation_radius 即解）；P0-D.5 ~ P0-I 未開工 |
+| 最後驗證 | 2026-04-25 21:00（Nav2 7 lifecycle nodes 全 active；bt_navigator 印 "Goal succeeded"；cmd_vel calibration MIN_X=0.50 m/s 確認 Go2 sport mode 啟動門檻）|
 | 入口檔案 | `vision_perception/vision_perception/lidar_obstacle_node.py`（既有 P0-E 用）|
-| 相關 driver | `sllidar_ros2`（Slamtec 官方）+ `cartographer_ros`（apt） |
-| 建圖配置 | `go2_robot_sdk/config/cartographer_lidar.lua`（pure scan-matching）|
-| 啟動腳本 | `scripts/start_lidar_slam_tmux.sh`（5-window: tf/sllidar/carto/carto_grid/fox，**無 Go2 driver**）|
+| 相關 driver | `sllidar_ros2`（Slamtec 官方）+ `cartographer_ros`（apt，**只用建圖**）+ `nav2_bringup`（apt，含 amcl + map_server + nav2 navigation）|
+| 建圖配置 | `go2_robot_sdk/config/cartographer_lidar.lua`（pure scan-matching, use_odometry=false）|
+| Nav2 配置 | `go2_robot_sdk/config/nav2_params.yaml`（AMCL: scan_topic=/scan_rplidar, alpha 0.4, OmniMotionModel；DWB: min_vel_x=0.45/max_vel_x=0.70）|
+| 啟動腳本 | 建圖：`scripts/start_lidar_slam_tmux.sh`（5-window）；Demo：`scripts/start_nav2_amcl_demo_tmux.sh`（5-window: tf/sllidar/driver+odom_TF/nav2_bringup/fox）|
+| Driver patch | `ros2_publisher.py` 加 `GO2_PUBLISH_ODOM_TF` env 開關（建圖用 0 / Nav2 用預設 1）|
 | 測試 | LiDAR 13 tests（既有）+ Safety/Patrol/TTS ~14 新 tests（plan Task 5-8） |
 | Spec / Plan | [spec](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
 | 整合紀錄 | [research/2026-04-25-rplidar-a2m12-integration-log.md](research/2026-04-25-rplidar-a2m12-integration-log.md) |

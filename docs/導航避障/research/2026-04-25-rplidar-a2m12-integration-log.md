@@ -378,3 +378,123 @@ ros2 run nav2_map_server map_saver_cli -f /home/jetson/maps/home_living_room --r
 - `~/rplidar_ws/src/rf2o_laser_odometry`（Jetson archive，**不再啟用**）
 - Spec：`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`
 - Plan：`docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`
+
+---
+
+## 4/25 PM 後續：v3.6 cartographer pure-loc 試錯 → v3.7 切 AMCL → Nav2 整段打通
+
+### v3.6 嘗試：cartographer pure-localization mode（17:00-19:00, 失敗）
+
+**動機**：建圖完成後直接做 P0-D Nav2 demo。研究選擇 cartographer pure-localization（載入 .pbstream + `pure_localization_trimmer` + 不啟 amcl/map_server），架構與 mapping mode 95% 一致，Nav2 用 `navigation_launch.py` 純導航。
+
+**已部署**：
+- `go2_robot_sdk/config/cartographer_lidar_localize.lua`（include 既有 mapping lua + 加 trimmer）
+- `scripts/start_nav2_demo_tmux.sh`（v3.6 archive，**不再啟用**）
+- patch `ros2_publisher.py` 加 `GO2_PUBLISH_ODOM_TF` env 開關（v3.6 設 0 讓 cartographer own 整條 TF）
+
+**結果**：Stack 啟動、Nav2 lifecycle 全 active、bt_navigator 接受 goal — 但 cartographer pose tracking **漂移**。19:00 user 觀察到 Go2 在 (0.07, 0.04) 站著沒動，cartographer 報 pose 跳到 (12.30, 4.90)。Nav2 用錯誤起點規劃路徑，goal 失意義。
+
+**根因**：pure-localization 在 nav2 重啟瞬間 cartographer scan-match 重新對齊 .pbstream，過程中 pose 容易跳到地圖中其他相似位置（窗外散射 + 對稱牆面造成 scan match ambiguity）。
+
+### v3.7 架構翻案：拆「建圖 cartographer / 定位 AMCL」（19:30）
+
+**user 決策**：「建圖用 Cartographer pure scan-matching（已成功不變），導航定位改 AMCL + Go2 odom + RPLIDAR map localization」。
+
+**新 TF 架構**：
+| TF | 發布者 |
+|------|--------|
+| `map → odom` | **AMCL** 發 |
+| `odom → base_link` | **Go2 driver** 發（恢復 v3.5 之前棄用的 odom TF）|
+| `base_link → laser` | static_transform_publisher（z=0.10）|
+
+**為什麼 Go2 odom 在 AMCL 下能用、建圖時不能**：建圖時 cartographer 把 odom 進 pose graph optimization，long-horizon noise 累積拉壞地圖；AMCL 用 likelihood field 對齊 RPLIDAR scan，odom 只當「上一幀到這幀的短期位移估計」（200ms 內），長期由 scan match 修正。Quadruped odom cm 級短期漂移在 AMCL 容忍範圍。
+
+### Step 0 重要實機數據：Go2 sport mode cmd_vel MIN_X = 0.50（19:55）
+
+**起因**：v3.6 試 nav2 時發 cmd_vel 0.11 m/s Go2 沒走。Web research 發現 abizovnuralem 自家 issue #36 證實「Go2 doesn't move if velocity < 1.0 (Isaac Sim)」、自己 nav2_params.yaml 把 `max_vel_x` 從 nav2 default 0.26 改到 3.0 標 `#changed`。Quadruped trot gait 需要最小 stride，太低被韌體當「站著踏步」吃掉。
+
+**實機 calibration（user 19:55 在現場）**：
+
+| cmd_vel.x | 持續時間 | Go2 反應 | 結論 |
+|-----------|:------:|---------|------|
+| 0.35 | 2.5s | 移動 ~1cm | 被 sport mode 吃掉，**不動** |
+| **0.50** | 2.5s | **移動 86cm** | **MIN_X = 0.50 m/s 確認** ✅ |
+
+**這是給 PawAI 專案未來所有 Nav2 / cmd_vel 配置的權威基線數據。** 任何 controller / DWB 設定的 `min_vel_x` 必須 ≥ 0.45（含 5% 安全 margin），否則 Go2 拒抬腳。
+
+### v3.7 部署細節（20:00-20:45）
+
+**Stack 結構**（5-window，`scripts/start_nav2_amcl_demo_tmux.sh`）：
+| Window | 用途 |
+|:-:|------|
+| 1 tf | static_transform_publisher base_link → laser z=0.10 |
+| 2 sllidar | sllidar_node Standard mode + remap /scan → /scan_rplidar |
+| 3 driver | Go2 driver minimal（**不設 GO2_PUBLISH_ODOM_TF env**，恢復發 odom TF）|
+| 4 nav2 | `nav2_bringup/bringup_launch.py slam:=False`（自帶 amcl + map_server + navigation 全 stack）|
+| 5 fox | foxglove_bridge port 8765 |
+
+**`nav2_params.yaml` v3.7 關鍵改動**：
+- AMCL: `scan_topic: /scan_rplidar`、`alpha1-4: 0.4`（quadruped slip）、`min/max_particles: 100/500`、`set_initial_pose: false`、`first_map_only: true`、`update_min_d/a: 0.10`
+- DWB: `min_vel_x: 0.45`、`max_vel_x: 0.70`、`max_vel_theta: 1.20`、`acc_lim_x: 1.5`（基於 Step 0 MIN_X=0.50）
+- Costmap obstacle_layer: `topic: /scan_rplidar`（local + global）、`obstacle_max_range: 1.8`、`raytrace_max_range: 2.0`、`inflation_radius: 0.25`
+
+### v3.7 驗證 alive（20:45）
+
+```
+NODES（all active）:
+/amcl ✅ /map_server ✅
+/controller_server ✅ /planner_server ✅ /bt_navigator ✅
+/behavior_server ✅ /smoother_server ✅ /velocity_smoother ✅ /waypoint_follower ✅
+/go2_driver_node ✅ /sllidar_node ✅ /static_transform_publisher_* ✅ /foxglove_bridge ✅
+
+TF chain:
+map → odom → base_link → laser  ✅（雙 publisher 隔離無衝突）
+
+Goal handling:
+[bt_navigator] Begin navigating from (0.13, -0.13) to (0.50, 0.00)
+[controller_server] Reached the goal!
+[bt_navigator] Goal succeeded
+```
+
+**整套 Nav2 pipeline 確認可用**：goal_pose → bt_navigator → controller_server → cmd_vel → Go2 driver → WebRTC api_id 1008 → Go2 sport mode。
+
+### v3.7 卡點：inflation lethal space（21:00 hard stop）
+
+**現象**：發 1.5m goal 後 nav2 報：
+```
+GridBased: failed to create plan, invalid use: Starting point in lethal space!
+Planning algorithm GridBased failed to generate a valid path to (3.00, 0.00)
+Running spin... Turning 1.57 for spin behavior
+spin failed
+```
+
+**真因**：
+1. AMCL 估計 Go2 在 (1.56, -0.16) 附近
+2. costmap 中該位置被 inflated obstacles 包圍（`inflation_radius: 0.25` 把 RPLIDAR 散射 + 窗外點 inflate 包住）
+3. planner 拒絕規劃 → bt_navigator 觸發 spin recovery → spin 也失敗（quadruped 在低 cmd_vel 下無法原地轉）
+
+### 4/26 接力清單（30-60 min 應可解）
+
+1. `inflation_radius: 0.25 → 0.10`（給 Go2 多 free space）
+2. `obstacle_max_range: 1.8 → 1.0`（縮 RPLIDAR 看的距離，避免遠處散射污染）
+3. `xy_goal_tolerance: 0.30 → 0.50`（小空間容忍度）
+4. 啟動後手動清 costmap：`ros2 service call /global_costmap/clear_entirely_global_costmap nav2_msgs/srv/ClearEntireCostmap`
+5. 改用 RViz 設 initial pose（Foxglove Publish 工具不易操作）
+6. 重發 1.5m goal，期望 Go2 物理走過去
+
+**Fallback**（若 nav2 仍卡）：寫 50 行 `reactive_forward.py`，cmd_vel 0.5 + 既有 lidar_obstacle_node 反應式停障，直接展現「RPLIDAR 即時保護 Go2」。
+
+### v3.7 新增/改動檔案
+
+- `go2_robot_sdk/config/nav2_params.yaml`（AMCL + DWB + costmap 全套 v3.7 改動）
+- `go2_robot_sdk/go2_robot_sdk/infrastructure/ros2/ros2_publisher.py` 加 `GO2_PUBLISH_ODOM_TF` env 開關（line 27-29 + line 66-68）
+- `scripts/start_nav2_amcl_demo_tmux.sh`（v3.7 主線 launcher）
+- `scripts/start_nav2_demo_tmux.sh`（v3.6 cartographer pure-loc archive，**不再啟用**）
+- `go2_robot_sdk/config/cartographer_lidar_localize.lua`（v3.6 archive，**不再啟用**）
+
+### Commit 索引
+
+| Commit | 內容 |
+|--------|------|
+| `b27e320` | Gate P0-B SLAM 建圖過關 — cartographer pure scan-matching (v3.5) |
+| `bec13cc` | P0-D WIP — Cartographer + Nav2 + AMCL stack 整段打通（卡 inflation） |
