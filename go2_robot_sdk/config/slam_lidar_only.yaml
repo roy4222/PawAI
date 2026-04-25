@@ -1,0 +1,75 @@
+slam_toolbox:
+  ros__parameters:
+
+    # Plugin params
+    solver_plugin: solver_plugins::CeresSolver
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
+    ceres_preconditioner: SCHUR_JACOBI
+    ceres_trust_strategy: LEVENBERG_MARQUARDT
+    ceres_dogleg_type: TRADITIONAL_DOGLEG
+    ceres_loss_function: None
+
+    # ROS Parameters
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link              # NOTE: 啟動後跑 `ros2 run tf2_tools view_frames` 確認；若 driver 發 base/trunk/base_footprint 須改這裡
+    scan_topic: /scan_rplidar          # 對齊 sllidar remap，避開 Go2 內建 /scan（4/25 §第二輪 卡關真因）
+    use_map_saver: true
+    mode: mapping
+    use_sim_time: false                # 明確指定，避免 sim time 誤抓
+
+    # if you'd like to immediately start continuing a map at a given pose
+    # or at the dock, but they are mutually exclusive, if pose is given
+    # will use pose
+    # map_start_pose: [0.0, 0.0, 0.0]
+    map_start_at_dock: true
+
+    debug_logging: false               # async 已切到 sync mode，crash 解了，關 debug log
+    throttle_scans: 2                  # sync mode 對 1800/720pts 不會 crash，throttle 2 = 5Hz processed
+    transform_publish_period: 0.02     # 預設 50Hz TF publish，避免 message filter queue 累積
+    map_update_interval: 1.0           # 從 2.0 降到 1.0，更頻繁 publish /map 給 Foxglove
+    resolution: 0.05
+    min_laser_range: 0.2               # RPLIDAR A2M12 物理下限
+    max_laser_range: 8.0               # 限縮 mapper grid 範圍
+    minimum_time_interval: 0.2         # 從 1.0 降回 0.2，sync mode 處理快，不需大 interval
+    transform_timeout: 0.3             # 從 1.0 降到 0.3，sync mode TF 應已 ready，timeout 太大反而 drop scan
+    tf_buffer_duration: 30.0
+    stack_size_to_use: 40000000
+    enable_interactive_mode: false
+
+    # General Parameters
+    use_scan_matching: true
+    use_scan_barycenter: true
+    minimum_travel_distance: 0.10      # 短距離客廳實驗，keyframe 多一點。動態調整：若 map 不動可降到 0.05；若噪訊大升到 0.15
+    minimum_travel_heading: 0.1
+    scan_buffer_size: 5
+    scan_buffer_maximum_scan_distance: 10.0
+    link_match_minimum_response_fine: 0.1
+    link_scan_maximum_distance: 1.5
+    loop_search_maximum_distance: 2.0
+    do_loop_closing: true              # 4-6m 客廳繞一圈會回原點，loop closure 收斂佳
+    loop_match_minimum_chain_size: 10
+    loop_match_maximum_variance_coarse: 3.0
+    loop_match_minimum_response_coarse: 0.35
+    loop_match_minimum_response_fine: 0.45
+
+    # Correlation Parameters
+    correlation_search_space_dimension: 0.3
+    correlation_search_space_resolution: 0.02
+    correlation_search_space_smear_deviation: 0.1
+
+    # Correlation Parameters - Loop Closure
+    loop_search_space_dimension: 8.0
+    loop_search_space_resolution: 0.05
+    loop_search_space_smear_deviation: 0.03
+
+    # Scan Matcher Parameters
+    distance_variance_penalty: 0.5
+    angle_variance_penalty: 1.0
+
+    fine_search_angle_offset: 0.00349
+    coarse_search_angle_offset: 0.349
+    coarse_angle_resolution: 0.0349
+    minimum_angle_penalty: 0.9
+    minimum_distance_penalty: 0.5
+    use_response_expansion: true

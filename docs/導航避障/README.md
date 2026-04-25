@@ -1,8 +1,10 @@
 # 導航避障
 
-> Status: **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中**（2026-04-25 更新）
+> Status: **Gate P0-A 通 / Gate P0-B 卡 odom source（rf2o 整合中）**（2026-04-25 更新）
 
 > **2026-04-24 LiDAR 到貨並驗證通過**：Jetson 上 /scan 10.57Hz / 1800 點/圈 / 60% valid。
+> **2026-04-25 上 Go2 機身**：/scan 10.40Hz 同等品質，但 SLAM 建圖卡 odom source。
+>   詳見整合紀錄 [`research/2026-04-25-rplidar-a2m12-integration-log.md`](research/2026-04-25-rplidar-a2m12-integration-log.md)
 > P0 設計定稿為「劇本式 A→B + 停障 + 續行」，不承諾一般動態繞障。
 > **Spec**: [`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
 > **Plan**: [`docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md)
@@ -38,14 +40,17 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中** |
-| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 開發中 |
-| 完成度 | Gate P0-A（桌面驗證）✅；Gate P0-B（SLAM 建圖）~ Gate P0-I 進行中 |
-| 最後驗證 | 2026-04-24（Jetson 上 /scan 10.57Hz / 1800 點 / 60% valid） |
-| 入口檔案 | `vision_perception/vision_perception/lidar_obstacle_node.py`（既有） |
-| 相關 driver | `sllidar_ros2`（Slamtec 官方，在 Jetson `~/rplidar_ws/`） |
+| 狀態 | **Gate P0-A ✅ / Gate P0-B ✅（cartographer pure scan-matching）/ P0-C 未開工** |
+| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 上機 4/25 → **SLAM 建圖完成 4/25 PM (v3.5 cartographer pure scan-matching, 永久棄 Go2 odom)** |
+| 完成度 | Gate P0-A ✅；Gate P0-B ✅（home_living_room.{pgm,yaml,pbstream} 產出）；Gate P0-C ~ I 未開工 |
+| 最後驗證 | 2026-04-25 17:23（home_living_room.pgm 583×513 cells / 29.15m×25.65m @ 5cm/pixel） |
+| 入口檔案 | `vision_perception/vision_perception/lidar_obstacle_node.py`（既有 P0-E 用）|
+| 相關 driver | `sllidar_ros2`（Slamtec 官方）+ `cartographer_ros`（apt） |
+| 建圖配置 | `go2_robot_sdk/config/cartographer_lidar.lua`（pure scan-matching）|
+| 啟動腳本 | `scripts/start_lidar_slam_tmux.sh`（5-window: tf/sllidar/carto/carto_grid/fox，**無 Go2 driver**）|
 | 測試 | LiDAR 13 tests（既有）+ Safety/Patrol/TTS ~14 新 tests（plan Task 5-8） |
 | Spec / Plan | [spec](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
+| 整合紀錄 | [research/2026-04-25-rplidar-a2m12-integration-log.md](research/2026-04-25-rplidar-a2m12-integration-log.md) |
 
 ## 架構決策（2026-04-01 最終判定）
 
@@ -133,9 +138,18 @@ bash scripts/start_full_demo_tmux.sh
 
 ### 硬體
 - Go2 行走時 Jetson 曾斷電一次（供電波動 / USB 拉扯）
-- LiDAR 行走中頻率降 ~35%（7.3→4-6Hz）
-- **LiDAR 覆蓋率僅 18%**（22/120 有效點）— Go2 voxel 編碼硬體限制，不可修
-- LiDAR 定位為「補充感知」，D435 才是前方防撞主力
+- ~~LiDAR 行走中頻率降 ~35%（7.3→4-6Hz）~~ — Go2 內建 LiDAR 已棄用，RPLIDAR 10.4Hz 穩定
+- ~~LiDAR 覆蓋率僅 18%~~（22/120 有效點）— Go2 voxel 編碼硬體限制，**已被外接 RPLIDAR 替代**
+- ~~LiDAR 定位為「補充感知」，D435 才是前方防撞主力~~ — D435 已停用，**RPLIDAR 是 P0 唯一感測**
+- **base_link → laser 物理位置未量測**（4/25 用估測 z=0.10）— 5/13 學校 demo 前必量測
+
+### RPLIDAR A2M12 整合（4/25 進行中）
+- **Go2 driver `/odom` 來源不可用於 Nav2**：driver 抓的是 `rt/utlidar/robot_pose`（Go2 內建 utlidar SLAM，跑在 18% 覆蓋率的內建 LiDAR 上），不是腿編碼器。Unitree SDK 不公開 leg-only odom topic
+- **/scan topic 衝突**：Go2 driver 也發 `/scan`（120 點），會跟 sllidar 1800 點衝突。RPLIDAR 必須 remap 到 `/scan_rplidar`
+- **slam_toolbox 對 LaserScan range count 是 hard constraint**：第一個 scan 註冊 sensor 後，後續不一致 range count 全 reject
+- **rf2o subscription 卡 QoS handshake**：sllidar 發 RELIABLE，rf2o 預設 BEST_EFFORT，DDS 實作 silent fail。已 patch rf2o 源碼為 RELIABLE 重 build，但 4/25 結束時 subscription 仍未通（推測 ros2 daemon stale）。**下次 session 需 daemon restart 後重試**
+
+### 避障邏輯
 
 ### 避障邏輯
 - `pcl2ls_min_height` 必須設為 -0.7（Go2 LiDAR z=-0.575m）
