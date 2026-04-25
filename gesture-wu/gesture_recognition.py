@@ -4,6 +4,12 @@
 import cv2
 import mediapipe as mp
 import math
+import time
+import json
+import urllib.request
+import threading
+import queue
+from websockets.sync.client import connect as ws_connect
 from collections import deque
 
 class GestureDetector:
@@ -226,13 +232,66 @@ class GestureDetector:
 # =========================================================================
 # 測試區：直接在 Mac 上執行
 # =========================================================================
+
+def send_to_mock_server(gesture):
+    """
+    將手勢辨識結果發送到本地的 Mock Server，這樣前端的 GesturePanel 就會更新
+    """
+    url = "http://localhost:8080/mock/trigger"
+    data = {
+        "event_source": "gesture",
+        "event_type": "gesture_detected",
+        "data": {
+            "stamp": time.time(),
+            "active": True,
+            "current_gesture": gesture,
+            "confidence": 0.95,  # 本地測試固定給 0.95
+            "hand": "right",     # 預設右手
+            "status": "active"
+        }
+    }
+    
+    req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=0.05)
+    except Exception:
+        pass
+
+def video_streamer_thread(frame_queue):
+    """
+    背景執行緒：負責將畫好骨架的影像編碼成 JPEG，並透過 WebSocket 傳給 Mock Server
+    """
+    url = "ws://localhost:8080/ws/video_upload/vision"
+    while True:
+        try:
+            with ws_connect(url) as websocket:
+                while True:
+                    frame = frame_queue.get()
+                    if frame is None:
+                        return
+                    # 壓縮成 JPEG 以降低延遲
+                    success, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    if success:
+                        websocket.send(buffer.tobytes())
+        except Exception as e:
+            # 連線失敗或斷線，休息一秒後重試
+            time.sleep(1)
+
 if __name__ == "__main__":
     cap = cv2.VideoCapture(0)
     detector = GestureDetector()
     
+    # 建立影片串流的 Queue 與 Thread
+    frame_queue = queue.Queue(maxsize=2)
+    stream_thread = threading.Thread(target=video_streamer_thread, args=(frame_queue,), daemon=True)
+    stream_thread.start()
+    
     # 防抖動陣列
     gesture_history = deque(maxlen=10)
     mode_history = deque(maxlen=10)
+    
+    last_sent_gesture = None
+    last_sent_time = 0
     
     print("=" * 50)
     print("  手勢辨識系統 v2.0 (靜態 + 動態)")
@@ -269,6 +328,14 @@ if __name__ == "__main__":
         stable_gesture = max(set(gesture_history), key=gesture_history.count)
         stable_mode = max(set(mode_history), key=mode_history.count)
         
+        # --- 發送到 Mock Server 給前端顯示 ---
+        if stable_gesture not in ("Unknown", "None"):
+            # 如果手勢改變，或是超過 1 秒沒發送，就傳送一次
+            if stable_gesture != last_sent_gesture or (time.time() - last_sent_time) > 1.0:
+                send_to_mock_server(stable_gesture)
+                last_sent_gesture = stable_gesture
+                last_sent_time = time.time()
+        
         # --- 畫面顯示 ---
         # 手勢與動作 ID
         cv2.putText(img, f'Gesture: {stable_gesture} (API: {current_api if current_api != 0 else "N/A"})', (10, 40), 
@@ -289,6 +356,10 @@ if __name__ == "__main__":
             
         cv2.putText(img, f'Mode: {stable_mode}', (10, 80), 
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, mode_color, 2)
+                    
+        # 將畫好的影像放入 Queue 準備上傳給網頁
+        if not frame_queue.full():
+            frame_queue.put(img.copy())
                     
         cv2.imshow("Gesture Recognition v2.0", img)
         

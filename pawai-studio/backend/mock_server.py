@@ -55,6 +55,7 @@ class ConnectionManager:
                     self.active.remove(ws)
 
 manager = ConnectionManager()
+video_clients: dict[str, list[WebSocket]] = {}
 
 # ── Mock 資料產生器 ──────────────────────────────────────────────────
 
@@ -321,6 +322,37 @@ async def ws_text(ws: WebSocket):
             ).model_dump()
             await asyncio.sleep(0.5)  # simulate LLM latency
             await manager.broadcast(tts_event)
+    except WebSocketDisconnect:
+        pass
+
+@app.websocket("/ws/video/{source}")
+async def ws_video_stream(ws: WebSocket, source: str):
+    """前端接收影像的端點"""
+    await ws.accept()
+    if source not in video_clients:
+        video_clients[source] = []
+    video_clients[source].append(ws)
+    try:
+        while True:
+            await ws.receive_text()  # Keep alive
+    except WebSocketDisconnect:
+        if ws in video_clients.get(source, []):
+            video_clients[source].remove(ws)
+
+@app.websocket("/ws/video_upload/{source}")
+async def ws_video_upload(ws: WebSocket, source: str):
+    """Python 腳本上傳影像的端點"""
+    await ws.accept()
+    try:
+        while True:
+            frame_bytes = await ws.receive_bytes()
+            # 轉播給所有訂閱這個 source 的前端
+            if source in video_clients:
+                for client in list(video_clients[source]):
+                    try:
+                        await client.send_bytes(frame_bytes)
+                    except Exception:
+                        pass
     except WebSocketDisconnect:
         pass
 

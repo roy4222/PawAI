@@ -94,11 +94,12 @@ const MAX_HISTORY = 10
 // ──────────────────────────────────────────────
 
 function EventHistoryItem({ event }: { event: GestureEvent }) {
-  const d = event.data
+  const d = event.data as any
+  const gestureKey = d.gesture ?? d.current_gesture ?? 'unknown'
   const time = new Date(event.timestamp).toLocaleTimeString('zh-TW', { hour12: false })
-  const label = GESTURE_LABELS[d.gesture] ?? d.gesture
-  const emoji = GESTURE_EMOJI[d.gesture] ?? '🤚'
-  const action = GO2_ACTION[d.gesture]
+  const label = GESTURE_LABELS[gestureKey] ?? gestureKey
+  const emoji = GESTURE_EMOJI[gestureKey] ?? '🤚'
+  const action = GO2_ACTION[gestureKey]
 
   return (
     <div className={cn(
