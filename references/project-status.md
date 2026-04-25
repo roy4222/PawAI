@@ -49,6 +49,37 @@
 
 ---
 
+## 4/25 晚進度同步會議 + PR Review
+
+**4/25 21:00 會議**（教授 + Roy + 佩珍 + 如恩 + 黃旭 + 宇童 + 偉民學長線上）：
+
+- 完整紀錄：[`docs/mission/meetings/2026-04-25.md`](../docs/mission/meetings/2026-04-25.md)
+- 會議性質：週六進度同步 +「禮拜一 (4/27) UIT 訪客交流」前的成果盤點
+- **4/27 19:00 線上交流**：UIT 助理教授（華人 AI 研究），非驗收性質
+- **5 月驗收 + 6 月發表**：黃淮生老師（有 robot 經驗）大概率當校外評審
+- **教授 demo 策略**：正向表列優先、避免跨模組 conflict、加 entertainment 元素（跳舞/伸懶腰）
+- **Roy 明天衝刺**：動態避障「繞開」demo 影片（教授定義為「第二難關」），週一播
+
+**4 個夥伴功能 PR review**（Linus 風格）：
+
+| PR | 作者 | 模組 | 結論 |
+|----|------|------|------|
+| #38 | Yamikowu | 手勢前端 | REQUEST_CHANGES — port 寫 8080 但 server 是 8001 / enum 違反 contract / unbounded fan-out |
+| #40 | Capybara094 (Elio) | 物件辨識 | REQUEST_CHANGES — 32MB 模型 binary 進 git / 用了禁用的 ultralytics / mock_server `/mock/yolo/start` RCE |
+| #41 | GuaGua0216 (瓜瓜) | 姿勢前端 | REQUEST_CHANGES — 空殼 lockfile / useEffect deps race / `test_pose.py` 副作用 |
+| #42 | katiechen128 (如恩) | 語音 | REQUEST_CHANGES — Shell injection / 雙音訊播放 / studio_api.py 繞過 ROS2 contract / CI 兩 job FAIL |
+
+**共通系統性問題**：沒人對齊 `interaction_contract.md`、binary 檔亂入 git、port 全亂（5000/8000/8001/8080）、scope 失控
+
+**各模組功能提取計畫**（明天實作）：
+
+- [`docs/姿勢辨識/research/2026-04-25-pr41-extraction-plan.md`](../docs/姿勢辨識/research/2026-04-25-pr41-extraction-plan.md) — 分類細則 + pose schema
+- [`docs/手勢辨識/research/2026-04-25-pr38-extraction-plan.md`](../docs/手勢辨識/research/2026-04-25-pr38-extraction-plan.md) — `_is_waving()` 算法 + UI panel
+- [`docs/語音功能/research/2026-04-25-pr42-extraction-plan.md`](../docs/語音功能/research/2026-04-25-pr42-extraction-plan.md) — TTS voice + zhconv 簡轉繁 + 去重邏輯
+- [`docs/辨識物體/research/2026-04-25-pr40-extraction-plan.md`](../docs/辨識物體/research/2026-04-25-pr40-extraction-plan.md) — retry 邏輯（重寫去 ultralytics）+ 雙模式 UX
+
+---
+
 ## 4/12 今日進度
 
 **專題文件衝刺(迎戰 4/13 繳交 deadline)**:
