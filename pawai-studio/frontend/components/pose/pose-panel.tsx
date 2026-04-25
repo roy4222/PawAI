@@ -1,195 +1,55 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Activity, History, X } from 'lucide-react'
 import { PanelCard } from '@/components/shared/panel-card'
 import { MetricChip } from '@/components/shared/metric-chip'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
 import { cn } from '@/lib/utils'
-import type { PoseEvent, PoseState } from '@/contracts/types'
-
-const POSE_LABELS: Record<string, string> = {
-  standing: '站立',
-  sitting: '坐著',
-  crouching: '蹲下',
-  bending: '彎腰',
-  'hands on hips': '雙手叉腰',
-  kneeling: '單膝跪地',
-  'kneeling on one knee': '單膝跪地',
-  fallen: '跌倒',
-}
-
-const POSE_EMOJI: Record<string, string> = {
-  standing: '🧍',
-  sitting: '🪑',
-  crouching: '🏋️',
-  bending: '🙇',
-  'hands on hips': '🦸',
-  kneeling: '🧎',
-  'kneeling on one knee': '🧎',
-  fallen: '⚠️',
-}
+import { getPoseEmoji, getPoseLabel, getPoseStyle, isFallenPose, normalizePoseKey } from './pose-mapper'
+import { usePoseStream } from './use-pose-stream'
 
 const PLACEHOLDER_SRC = '/mock/pose-placeholder.svg'
 const MAX_HISTORY = 10
 
-function normalizePoseKey(pose: string | null | undefined): string {
-  return (pose ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-}
-
-function getPoseLabel(pose: string | null | undefined): string {
-  const key = normalizePoseKey(pose)
-  if (!key) return '尚未偵測'
-  const mapped = POSE_LABELS[key]
-  if (mapped) return mapped
-
-  const raw = (pose ?? '').trim()
-  return raw ? `未知姿勢（${raw}）` : '尚未偵測'
-}
-
-function getEventPoseValue(event: PoseEvent): string | null {
-  const data = event.data as unknown as Record<string, unknown>
-  const raw = data.pose ?? data.current_pose ?? data.label ?? data.class_name
-  return typeof raw === 'string' ? raw : null
-}
-
-function getPoseStyle(pose: string | null | undefined): string {
-  const key = normalizePoseKey(pose)
-  if (key === 'fallen') return 'text-red-400'
-  if (key === 'crouching' || key === 'bending' || key === 'kneeling' || key === 'kneeling on one knee') {
-    return 'text-amber-300'
-  }
-  return 'text-emerald-300'
-}
-
 export function PosePanel() {
   const [cameraEnabled, setCameraEnabled] = useState(true)
   const [historyModalOpen, setHistoryModalOpen] = useState(false)
-  const [cameraReady, setCameraReady] = useState(false)
-  const [cameraError, setCameraError] = useState<string | null>(null)
-  const [allPoseHistory, setAllPoseHistory] = useState<PoseEvent[]>([])
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const localStreamRef = useRef<MediaStream | null>(null)
-
-  const poseState = useStateStore((s) => s.poseState) as PoseState | null
-  const allEvents = useEventStore((s) => s.events)
-
-  useEffect(() => {
-    const stopLocalCamera = () => {
-      localStreamRef.current?.getTracks().forEach((track) => track.stop())
-      localStreamRef.current = null
-      if (videoRef.current) {
-        videoRef.current.srcObject = null
-      }
-      setCameraReady(false)
-    }
-
-    if (!cameraEnabled) {
-      setCameraError(null)
-      stopLocalCamera()
-      return
-    }
-
-    let cancelled = false
-
-    const startLocalCamera = async () => {
-      try {
-        setCameraError(null)
-
-        if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-          setCameraError('目前環境不支援相機存取（請使用瀏覽器並確認為 localhost 或 https）')
-          return
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-          },
-          audio: false,
-        })
-
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-
-        localStreamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          const p = videoRef.current.play()
-          if (p) {
-            void p.catch(() => {
-              setCameraError('相機影像播放失敗，請重新啟用相機')
-            })
-          }
-        }
-        setCameraReady(true)
-      } catch (err) {
-        stopLocalCamera()
-        setCameraError(err instanceof Error ? err.message : '無法存取筆電相機，請確認權限設定')
-      }
-    }
-
-    void startLocalCamera()
-
-    return () => {
-      cancelled = true
-      stopLocalCamera()
-    }
-  }, [cameraEnabled])
-
-  const incomingPoseEvents = useMemo(
-    () => allEvents
-      .filter((e): e is PoseEvent => e.source === 'pose' && e.event_type === 'pose_detected'),
-    [allEvents]
-  )
-
-  useEffect(() => {
-    if (incomingPoseEvents.length === 0) return
-
-    setAllPoseHistory((prev) => {
-      const seen = new Set(prev.map((evt) => `${evt.id}-${evt.timestamp}`))
-      const appended: PoseEvent[] = []
-
-      for (const evt of incomingPoseEvents) {
-        const key = `${evt.id}-${evt.timestamp}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          appended.push(evt)
-        }
-      }
-
-      if (appended.length === 0) return prev
-      return [...appended, ...prev]
-    })
-  }, [incomingPoseEvents])
+  const {
+    cameraReady,
+    cameraError,
+    inferenceError,
+    isInferring,
+    annotatedFrameDataUrl,
+    lastResult,
+    history,
+  } = usePoseStream({
+    enabled: cameraEnabled,
+    videoRef,
+    maxHistory: 300,
+  })
 
   const recentPoseEvents = useMemo(
-    () => allPoseHistory.slice(0, MAX_HISTORY),
-    [allPoseHistory]
+    () => history.slice(0, MAX_HISTORY),
+    [history]
   )
 
-  const status = !poseState || poseState.status === 'loading'
+  const status = !lastResult
     ? 'loading' as const
-    : poseState.current_pose === 'fallen'
+    : isFallenPose(lastResult.pose)
       ? 'error' as const
-      : poseState.active
+      : cameraEnabled
         ? 'active' as const
         : 'inactive' as const
 
-  const pose = poseState?.current_pose
+  const pose = lastResult?.pose ?? null
   const poseKey = normalizePoseKey(pose)
   const poseLabel = getPoseLabel(pose)
-  const poseEmoji = pose ? (POSE_EMOJI[poseKey] ?? '🧍') : '🧍'
-  const confidence = Math.max(0, Math.min(100, Math.round((poseState?.confidence ?? 0) * 100)))
+  const poseEmoji = getPoseEmoji(pose)
+  const confidence = Math.max(0, Math.min(100, Math.round((lastResult?.confidence ?? 0) * 100)))
   const poseToneClass = getPoseStyle(pose)
 
   return (
@@ -225,13 +85,22 @@ export function PosePanel() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] md:items-stretch">
           <div className="relative aspect-4/3 overflow-hidden rounded-sm border border-border/30 bg-surface md:aspect-auto md:h-full md:self-stretch">
             {cameraEnabled ? (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="h-full w-full object-cover"
-              />
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="h-full w-full object-cover"
+                />
+                {cameraReady && annotatedFrameDataUrl && (
+                  <img
+                    src={annotatedFrameDataUrl}
+                    alt="pose skeleton overlay"
+                    className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+                  />
+                )}
+              </>
             ) : (
               <img src={PLACEHOLDER_SRC} alt="pose placeholder" className="h-full w-full object-cover opacity-45" />
             )}
@@ -250,11 +119,11 @@ export function PosePanel() {
                     : '啟用中'}
             </div>
             <div className="absolute right-2 top-2 rounded bg-background/70 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-              {cameraEnabled && cameraReady ? 'LIVE' : '--'}
+              {cameraEnabled && cameraReady ? (isInferring ? 'LIVE*' : 'LIVE') : '--'}
             </div>
-            {cameraError && (
+            {(cameraError || inferenceError) && (
               <div className="absolute inset-x-2 bottom-2 rounded bg-red-500/20 px-2 py-1 text-[10px] text-red-200">
-                {cameraError}
+                {cameraError ?? inferenceError}
               </div>
             )}
           </div>
@@ -270,8 +139,8 @@ export function PosePanel() {
                   </span>
                 </div>
               </div>
-              {poseState?.track_id != null && (
-                <span className="mt-2 block text-[11px] text-muted-foreground">Track #{poseState.track_id}</span>
+              {lastResult?.track_id != null && (
+                <span className="mt-2 block text-[11px] text-muted-foreground">Track #{lastResult.track_id}</span>
               )}
             </div>
 
@@ -300,11 +169,9 @@ export function PosePanel() {
               {recentPoseEvents.length > 0 ? (
                 <div className="space-y-1.5">
                   {recentPoseEvents.map((event) => {
-                    const rawEventPose = getEventPoseValue(event)
-                    const eventPose = normalizePoseKey(rawEventPose)
-                    const eventLabel = getPoseLabel(rawEventPose)
-                    const eventEmoji = POSE_EMOJI[eventPose] ?? '🧍'
-                    const eventConfidence = Math.round(event.data.confidence * 100)
+                    const eventPose = normalizePoseKey(event.pose)
+                    const eventLabel = getPoseLabel(event.pose)
+                    const eventEmoji = getPoseEmoji(event.pose)
                     const time = new Date(event.timestamp).toLocaleTimeString('zh-TW', { hour12: false })
 
                     return (
@@ -315,7 +182,7 @@ export function PosePanel() {
                         <span className="text-sm leading-none">{eventEmoji}</span>
                         <span className={cn('shrink-0 text-[11px] font-medium', getPoseStyle(eventPose))}>{eventLabel}</span>
                         <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{time}</span>
-                        <span className="text-[10px] text-muted-foreground">{eventConfidence}%</span>
+                        <span className="text-[10px] text-muted-foreground">{Math.round(event.confidence * 100)}%</span>
                       </div>
                     )
                   })}
@@ -372,14 +239,12 @@ export function PosePanel() {
               </div>
 
               <ScrollArea className="h-[65vh] px-4 py-3">
-                {allPoseHistory.length > 0 ? (
+                {history.length > 0 ? (
                   <div className="space-y-2 pb-2">
-                    {allPoseHistory.map((event) => {
-                      const rawEventPose = getEventPoseValue(event)
-                      const eventPose = normalizePoseKey(rawEventPose)
-                      const eventLabel = getPoseLabel(rawEventPose)
-                      const eventEmoji = POSE_EMOJI[eventPose] ?? '🧍'
-                      const eventConfidence = Math.round(event.data.confidence * 100)
+                    {history.map((event) => {
+                      const eventPose = normalizePoseKey(event.pose)
+                      const eventLabel = getPoseLabel(event.pose)
+                      const eventEmoji = getPoseEmoji(event.pose)
                       const time = new Date(event.timestamp).toLocaleTimeString('zh-TW', { hour12: false })
 
                       return (
@@ -390,7 +255,7 @@ export function PosePanel() {
                           <span className="text-base leading-none">{eventEmoji}</span>
                           <span className={cn('text-xs font-medium', getPoseStyle(eventPose))}>{eventLabel}</span>
                           <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{time}</span>
-                          <span className="text-[10px] text-muted-foreground">{eventConfidence}%</span>
+                          <span className="text-[10px] text-muted-foreground">{Math.round(event.confidence * 100)}%</span>
                         </div>
                       )
                     })}
