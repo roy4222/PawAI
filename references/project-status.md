@@ -1,7 +1,51 @@
 # 專案狀態
 
-**最後更新**：2026-04-12（Ch4 背景知識 9 章 fact-check 二輪修正完成 + Ch5 獨立檔 + 合併版 docx 產出）
-**硬底線**：2026/4/13 週日晚間初版、4/14 週一繳交，5/16 省夜 Demo，5/18 正式展示，6 月口頭報告
+**最後更新**：2026-04-25（RPLIDAR A2M12 到貨驗證 + P0 導航避障 spec/plan 定稿）
+**硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+
+---
+
+## 4/24-4/25 進度
+
+**RPLIDAR A2M12 外接雷達到貨 + 實機驗證通過**：
+
+- Jetson 接上 RPLIDAR（兩條 USB：資料 + 輔助電源），CP2102 drive 正常 enumerate
+- `sllidar_ros2` clone + colcon build + udev rule 設好（`/dev/rplidar` symlink 0777）
+- 實測：`/scan` **10.57 Hz** / **1800 points/scan**（0.2° 解析度，比 datasheet 0.225° 更密）/ 60% valid / 0.20-7.94m range / 中位數 1.08m
+- Foxglove bridge 可視化通過（port 8765）
+
+**舊 LiDAR 問題全部解決**（對照 docs/導航避障/research/）：
+
+| 歷史痛點（Go2 內建 LiDAR） | 現況（RPLIDAR A2M12 外接） |
+|---------------------------|--------------------------|
+| 7.3Hz 靜止 / 4-6Hz 行走 / burst+gap | **10.57Hz 穩定，無 gap** |
+| 18% 覆蓋率（22/120 有效點） | **360° 完整，1600 點/圈** |
+| Python LZ4 decode 單核滿載 | **純 C++ serial driver，CPU 近零** |
+| 7 輪優化才達 5Hz | **開箱即 10Hz** |
+
+**架構決策翻案**（4/1 判定的「Full SLAM 永久關閉」失效）：
+
+- 舊判定基於 Go2 內建 LiDAR 5Hz 品質差，業界 SLAM 門檻 7Hz
+- 新實測 RPLIDAR 10.5Hz 超過門檻 → **Full SLAM / Nav2 路線復活為 P0 主線**
+- `docs/導航避障/README.md` 的「架構決策 2026-04-01」加 Supersedes 註記
+
+**P0 導航避障 spec + plan 定稿**：
+
+- Spec: `docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`（803 行）
+- Plan: `docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
+- P0 承諾：劇本式 A→B + 停障 + 續行（不承諾一般繞障）
+- P1 Stretch：單一靜態障礙繞行（5/6 P0-I KPI 4/5 通過才啟動）
+- 嵌入 PawAI Brain 三層架構：Safety Layer 新增 Emergency latched FSM + Obstacle auto-recovery FSM，Policy Layer 新增 `patrol_route` skill（deterministic，不經 LLM），Expression Layer 新增 `safety_tts` 固定 6 句模板
+- 10 條硬規則：LLM 不進安全鏈、locomotion 不經 LLM、固定模板 TTS、latched emergency、pause>15s abort、5/11-5/12 freeze、recovery 全關、5/13 當天重建地圖、5/1 emergency 硬截止、學校地圖不賭舊版
+
+**關鍵 milestone**：
+
+- **5/1 emergency latch hotkey 硬截止**（Gate P0-F 不過不上 Go2 合體）
+- **5/6 家中排練 KPI**：4/5 成功 GO / 3/5 YELLOW / ≤2/5 NO-GO
+- **5/11-5/12 Freeze 期**：Bugfix only，禁止新功能
+- **5/13 到學校現場重建地圖**（不賭前一天地圖）
+
+**4/25 明日繼續**：Task 1（Gate P0-B — SLAM 建圖）
 
 ---
 
@@ -111,7 +155,7 @@
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
-| 導航避障 | **外接 LiDAR 評估中 + dimOS 發現** | 4/9 | D435 停用(4/3)；RPLIDAR A2M12 可行性：RAM 安全、CPU 風險需管理；**新發現**：dimOS 框架已有人用 Go2 Pro 成功自主巡邏（D435 VoxelGrid costmap）；RPLIDAR 傾向購買（最壞情況 360° 避障仍值得）；**最大新風險**：Go2 四足 odom 漂移可能導致 SLAM 失敗；4/14 定案 |
+| 導航避障 | **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中** | 4/25 | LiDAR 到貨接 Jetson 驗證 /scan 10.57Hz / 1800 點/圈 / 60% valid；Full SLAM/Nav2 從「永久關閉」翻案為 P0 主線（舊判定基於 5Hz 品質差，RPLIDAR 10.5Hz > 7Hz 業界門檻）；spec + 17-task plan 定稿；P0 = 劇本式 A→B + 停障 + 續行，不承諾一般繞障；5/1 emergency hotkey 硬截止、5/6 KPI 4/5、5/11-5/12 freeze、5/13 學校現場重建地圖 |
 
 ## 4/9 外部會議 + 核心方向 Brainstorm
 
