@@ -193,7 +193,7 @@ geometry_msgs/Pose recorded_pose
 |---------|------|------|
 | `/nav/pause` | `std_srvs/Trigger` | **3 件事一起做**：(1) cancel 當前 Nav2 active goal（用 NavigateToPose action client cancel），(2) 記住 `current_waypoint_index`（route 中才有），(3) 由 `reactive_stop_node` 持續 publish `/cmd_vel_obstacle = 0`（priority 200 蓋 Nav2）保證真停。state → `paused`。**不假裝凍結 Nav2 active goal**（避免 BT timeout）。 |
 | `/nav/resume` | `std_srvs/Trigger` | **3 件事一起做**：(1) 用同一個 waypoint 發出**新的** NavigateToPose goal（新 goal、新 BT context），(2) `reactive_stop_node` 停止 publish `/cmd_vel_obstacle`（讓 Nav2 cmd_vel 通過 mux），(3) state → `moving`。 |
-| `/nav/cancel` | `nav_capability/srv/Cancel` (custom: `bool safe_stop`) | 取消當前 action，Nav2 cancel goal，state → `idle`。`safe_stop=true` 平滑減速；`false` 立刻 zero velocity。 |
+| `/nav/cancel` | `go2_interfaces/srv/Cancel` (custom: `bool safe_stop`) | 取消當前 action，Nav2 cancel goal，state → `idle`。`safe_stop=true` 平滑減速；`false` 立刻 zero velocity。所有 cross-package interface schema 統一放 `go2_interfaces`（`nav_capability` 是 `ament_python` pkg，不在內部生 IDL）。|
 
 ### 3.3 1 個 Event Topic
 
