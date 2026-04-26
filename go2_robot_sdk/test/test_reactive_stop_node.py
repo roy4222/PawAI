@@ -191,6 +191,28 @@ class TestReactiveStopNodeSourceContract:
         # Uses param-driven topic
         assert "cmd_vel_topic" in src and "self._cmd_pub" in src
 
+    def test_declares_safety_only_param_default_false(self):
+        """safety_only must default to false (preserves standalone fallback behavior)."""
+        src = self._read_source()
+        assert 'declare_parameter("safety_only", False)' in src
+
+    def test_safety_only_gate_in_tick(self):
+        """_tick must gate slow/clear publish on _safety_only."""
+        src = self._read_source()
+        # Safety-only branch returns without publishing in slow/clear
+        assert "self._safety_only" in src
+        assert "say nothing" in src or "stay silent" in src or "ONLY publish" in src
+
+    def test_emergency_publishes_in_both_modes(self):
+        """Emergency stop on LiDAR timeout must publish 0 even in safety_only."""
+        src = self._read_source()
+        # Look for the emergency block; ensure it publishes BEFORE any safety_only check
+        em_idx = src.find('self._update_zone("emergency")')
+        assert em_idx > 0
+        # The next _publish after that label should be unconditional
+        post = src[em_idx:em_idx + 200]
+        assert "self._publish(0.0)" in post
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -1,10 +1,28 @@
 """Reactive Stop Node — RPLIDAR 反應式停障。
 
-訂閱 /scan_rplidar、發布 /cmd_vel_obstacle (mux priority 200) @ 10Hz。
-前方 ±30° 扇形最小距離 → stop / slow / normal。
-LiDAR 中斷 > 1s 進 emergency stop。
-Phase 7.2 bridge: enable_nav_pause=true 時 zone transitions 觸發 /nav/{pause,resume}.
-Phase 7-bugfix #5: 同時發 /state/reactive_stop/status JSON 給 state_broadcaster 訂閱。
+訂閱 /scan_rplidar、發布 cmd_vel @ 10Hz（topic 由 cmd_vel_topic param 決定）。
+
+Two operating modes:
+
+  Standalone fallback (default; safety_only=false, cmd_vel_topic=/cmd_vel):
+    Drive Go2 directly. Always publish:
+      danger    → 0.0
+      slow      → slow_speed (0.45)
+      normal    → normal_speed (0.60)
+    For demo backup when nav stack is down.
+
+  Safety mode (safety_only=true, cmd_vel_topic=/cmd_vel_obstacle):
+    ONLY publish when actively safety-overriding. Stay silent in slow/clear
+    so mux priority 10 (nav) isn't perpetually shadowed by priority 200
+    (obstacle). Without this, nav never reaches the driver.
+
+      danger    → 0.0   (mux priority 200 hijacks nav)
+      emergency → 0.0   (LiDAR timeout — same)
+      slow      → DON'T PUBLISH (let nav controller handle)
+      clear     → DON'T PUBLISH (let nav controller handle)
+
+Phase 7.2 bridge: enable_nav_pause=true → zone transitions trigger /nav/{pause,resume}.
+Phase 7-bugfix #5: also publish /state/reactive_stop/status JSON for state_broadcaster.
 """
 import json
 import math
@@ -43,6 +61,10 @@ class ReactiveStopNode(Node):
         self.declare_parameter("enable", True)
         self.declare_parameter("cmd_vel_topic", "/cmd_vel_obstacle")
         self.declare_parameter("enable_nav_pause", False)
+        # safety_only=true → only publish on danger/emergency; let nav control normally.
+        # Mandatory when cmd_vel_topic=/cmd_vel_obstacle (mux priority 200) to avoid
+        # perma-shadowing nav (priority 10) with reactive's normal_speed forward command.
+        self.declare_parameter("safety_only", False)
 
         self._danger_m = self.get_parameter("danger_distance_m").value
         self._slow_m = self.get_parameter("slow_distance_m").value
@@ -58,6 +80,7 @@ class ReactiveStopNode(Node):
         scan_topic = self.get_parameter("scan_topic").value
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
         self._enable_nav_pause = self.get_parameter("enable_nav_pause").value
+        self._safety_only = self.get_parameter("safety_only").value
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SCAN)
         self._cmd_pub = self.create_publisher(Twist, cmd_vel_topic, QOS_CMD)
         # Phase 7-bugfix #5: status JSON for state_broadcaster to consume
@@ -82,10 +105,14 @@ class ReactiveStopNode(Node):
         self._last_zone_logged = ""
         self._warmup_sent = False
 
+        mode = "safety_only (publish only on danger/emergency)" if self._safety_only \
+               else "standalone (always publish 0/slow/normal)"
         self.get_logger().info(
-            f"reactive_stop_node started — danger<{self._danger_m}m, slow<{self._slow_m}m, "
+            f"reactive_stop_node started — mode={mode}; "
+            f"danger<{self._danger_m}m, slow<{self._slow_m}m, "
             f"normal={self._normal_speed} slow_speed={self._slow_speed}, "
-            f"front=±{math.degrees(self._front_half_rad):.0f}°, timeout={self._lidar_timeout}s"
+            f"front=±{math.degrees(self._front_half_rad):.0f}°, timeout={self._lidar_timeout}s; "
+            f"publish_topic={cmd_vel_topic}"
         )
 
     def _on_param_change(self, params):
@@ -94,6 +121,11 @@ class ReactiveStopNode(Node):
                 self._enable_nav_pause = bool(p.value)
                 self.get_logger().info(
                     f"enable_nav_pause runtime override -> {self._enable_nav_pause}"
+                )
+            elif p.name == "safety_only":
+                self._safety_only = bool(p.value)
+                self.get_logger().info(
+                    f"safety_only runtime override -> {self._safety_only}"
                 )
         return SetParametersResult(successful=True)
 
@@ -109,16 +141,21 @@ class ReactiveStopNode(Node):
 
     def _tick(self):
         if not self.get_parameter("enable").value:
-            self._publish(0.0)
+            # Disabled — publish 0 in standalone (driver expects regular cmd_vel)
+            # but stay silent in safety_only (don't shadow nav).
+            if not self._safety_only:
+                self._publish(0.0)
             return
 
-        # Warmup: first cmd_vel = 0 to settle Go2 sport mode handshake
-        if not self._warmup_sent:
+        # Warmup applies only to standalone mode (Go2 sport handshake settle).
+        # safety_only: no warmup needed — nav stack handles its own driver handshake.
+        if not self._warmup_sent and not self._safety_only:
             self._publish(0.0)
             self._warmup_sent = True
             return
+        self._warmup_sent = True  # also flip in safety_only so guard is consistent
 
-        # Emergency stop on LiDAR timeout
+        # Emergency stop on LiDAR timeout — publish 0 in BOTH modes (genuine override)
         if self._last_scan_time == 0.0 or (time.monotonic() - self._last_scan_time) > self._lidar_timeout:
             self._update_zone("emergency")
             self._publish(0.0)
@@ -126,7 +163,9 @@ class ReactiveStopNode(Node):
 
         instant = self._classify(self._front_min_dist)
 
-        # Hysteresis: only clear danger after N consecutive non-danger frames
+        # Hysteresis: only clear danger after N consecutive non-danger frames.
+        # During hysteresis countdown we still want to keep stopping in BOTH modes
+        # (we are still effectively in danger).
         if self._zone == "danger" and instant != "danger":
             self._clear_streak += 1
             if self._clear_streak < self._clear_needed:
@@ -137,8 +176,16 @@ class ReactiveStopNode(Node):
             self._clear_streak = 0
 
         self._update_zone(instant)
+
+        # Publish gate by mode:
+        # - standalone: always publish (0 / slow / normal) so driver gets cmd_vel
+        # - safety_only: ONLY publish 0 on danger; stay silent in slow/clear so
+        #                mux timeout (0.5s) lets nav (priority 10) through
         if instant == "danger":
             self._publish(0.0)
+        elif self._safety_only:
+            # slow / clear in safety mode — say nothing
+            return
         elif instant == "slow":
             self._publish(self._slow_speed)
         else:

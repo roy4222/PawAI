@@ -53,10 +53,14 @@ tmux send-keys -t "$SESSION:robot" \
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
-echo "[4/8] reactive_stop_node (publishes /cmd_vel_obstacle)"
+echo "[4/8] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, only 0 on danger)"
+# safety_only=true is REQUIRED when feeding mux (priority 200). Without it,
+# clear/slow zones would publish 0.45/0.60 m/s and shadow nav (priority 10)
+# permanently — Go2 would drive forward at reactive's normal_speed instead of
+# obeying nav.
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
-    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node" Enter
+    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true" Enter
 sleep 3
 
 echo "[5/8] nav_capability.launch.py (4 nodes)"
