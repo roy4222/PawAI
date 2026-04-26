@@ -74,6 +74,10 @@ INTERNAL_TOPICS = {
     "/scan",
     "/tf",
     "/tf_static",
+    # Nav2 / RPLIDAR infrastructure topics（4/26 加入：reactive_stop + send_relative_goal）
+    "/scan_rplidar",
+    "/amcl_pose",
+    "/goal_pose",
     # Camera topics
     "/camera/image_raw",
     "/camera/camera/color/image_raw",

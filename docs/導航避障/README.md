@@ -1,10 +1,12 @@
 # 導航避障
 
-> Status: **Gate P0-A 通 / Gate P0-B 卡 odom source（rf2o 整合中）**（2026-04-25 更新）
+> Status: **P0-A/B/C ✅ / P0-D 0.8m goal 實機通過（v3.7 不改參數）+ reactive_stop fallback 完成**（2026-04-26 更新）
 
-> **2026-04-24 LiDAR 到貨並驗證通過**：Jetson 上 /scan 10.57Hz / 1800 點/圈 / 60% valid。
-> **2026-04-25 上 Go2 機身**：/scan 10.40Hz 同等品質，但 SLAM 建圖卡 odom source。
+> **2026-04-26 Nav2 動態避障實機驗證**：0.8m goal 走 50cm 現場確認；昨天 lethal 是暫態（costmap 髒污 / particle filter）非位置固有問題；v3.7 nav2_params 不需改；用戶判定 map 髒污要重新建圖（已備份舊 map 為 `.bak.20260426-094853`）。
+>   詳見實機 log [`research/2026-04-26-nav2-dynamic-obstacle-log.md`](research/2026-04-26-nav2-dynamic-obstacle-log.md)
+> **2026-04-25 上 Go2 機身**：/scan 10.40Hz；Cartographer pure scan-matching 建圖完成 → Nav2+AMCL stack 全打通；卡 inflation lethal space。
 >   詳見整合紀錄 [`research/2026-04-25-rplidar-a2m12-integration-log.md`](research/2026-04-25-rplidar-a2m12-integration-log.md)
+> **2026-04-24 LiDAR 到貨並驗證通過**：Jetson 上 /scan 10.57Hz / 1800 點/圈 / 60% valid。
 > P0 設計定稿為「劇本式 A→B + 停障 + 續行」，不承諾一般動態繞障。
 > **Spec**: [`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
 > **Plan**: [`docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md)
@@ -40,15 +42,16 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **P0-A ✅ / P0-B ✅ / P0-C ✅（AMCL stack active, initial pose 流程明日固化）/ P0-D 🟡 WIP（Nav2 stack alive，卡 costmap/inflation）** |
-| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 上機 4/25 → **SLAM 建圖完成 4/25 PM (v3.5 cartographer pure scan-matching, 永久棄 Go2 內建雷達)** → **Nav2 + AMCL stack 4/25 21:00 全打通 (v3.7 拆架構：建圖用 cartographer / 定位用 AMCL)** |
-| 完成度 | P0-A ✅；P0-B ✅（pgm/yaml/pbstream 產出）；P0-C ✅ AMCL active；P0-D 🟡 WIP（/plan + /cmd_vel pipeline OK，Go2 實測 cmd_vel 門檻 MIN_X=0.50；卡 inflation lethal space，明早調 inflation_radius 即解）；P0-D.5 ~ P0-I 未開工 |
-| 最後驗證 | 2026-04-25 21:00（Nav2 7 lifecycle nodes 全 active；bt_navigator 印 "Goal succeeded"；cmd_vel calibration MIN_X=0.50 m/s 確認 Go2 sport mode 啟動門檻）|
+| 狀態 | **P0-A ✅ / P0-B ✅ / P0-C ✅ / P0-D ✅ 0.8m goal 自主前進實機通過（v3.7 nav2_params 不需改）/ reactive_stop fallback ✅ 17 tests + dry-run 通過** |
+| 版本/決策 | D435 停用(4/3) → 外接 RPLIDAR A2M12 採購(4/14) → 到貨驗證(4/24) → P0 spec+plan 定稿(4/24) → 上機 4/25 → **SLAM 建圖完成 4/25 PM (v3.5 cartographer pure scan-matching)** → **Nav2 + AMCL stack 4/25 21:00 全打通 (v3.7)** → **4/26 Nav2 動態避障實機通過（昨天 lethal 判定為暫態，非位置固有 / 非 inflation 過大；v3.7 不需修改）+ reactive_stop_node fallback 完成** |
+| 完成度 | P0-A ✅；P0-B ✅；P0-C ✅；P0-D ✅ 0.8m 自主前進現場驗證（amcl 50cm + 用戶現場 50cm 確認）；reactive_stop ✅（17 tests pass + Jetson dry-run /cmd_vel 10Hz）；P0-D.5 ~ P0-I 未開工 |
+| 最後驗證 | 2026-04-26 09:50（A 線 0.8m goal × 2 通過、B 線 reactive_stop dry-run 通過、cartographer 重建圖 stack 已驗 / 待用戶遙控走完 + 三步驟存圖）|
 | 入口檔案 | `vision_perception/vision_perception/lidar_obstacle_node.py`（既有 P0-E 用）|
 | 相關 driver | `sllidar_ros2`（Slamtec 官方）+ `cartographer_ros`（apt，**只用建圖**）+ `nav2_bringup`（apt，含 amcl + map_server + nav2 navigation）|
 | 建圖配置 | `go2_robot_sdk/config/cartographer_lidar.lua`（pure scan-matching, use_odometry=false）|
 | Nav2 配置 | `go2_robot_sdk/config/nav2_params.yaml`（AMCL: scan_topic=/scan_rplidar, alpha 0.4, OmniMotionModel；DWB: min_vel_x=0.45/max_vel_x=0.70）|
-| 啟動腳本 | 建圖：`scripts/start_lidar_slam_tmux.sh`（5-window）；Demo：`scripts/start_nav2_amcl_demo_tmux.sh`（5-window: tf/sllidar/driver+odom_TF/nav2_bringup/fox）|
+| 啟動腳本 | 建圖：`scripts/start_lidar_slam_tmux.sh`（5-window）；Nav2 demo：`scripts/start_nav2_amcl_demo_tmux.sh`（5-window）；reactive fallback：`scripts/start_reactive_stop_tmux.sh`（4-window）|
+| 相對 goal helper | `scripts/send_relative_goal.py`（讀 /amcl_pose 算前方相對 goal，QoS BEST_EFFORT 配 bt_navigator）|
 | Driver patch | `ros2_publisher.py` 加 `GO2_PUBLISH_ODOM_TF` env 開關（建圖用 0 / Nav2 用預設 1）|
 | 測試 | LiDAR 13 tests（既有）+ Safety/Patrol/TTS ~14 新 tests（plan Task 5-8） |
 | Spec / Plan | [spec](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
@@ -72,10 +75,26 @@
 ## 啟動方式
 
 ```bash
-# D435 避障（需 camera node 先跑）
+# === Nav2 自主導航 demo（主線，含 AMCL + map）===
+bash scripts/start_nav2_amcl_demo_tmux.sh
+# 等 ~30s lifecycle active → Foxglove 設 /initialpose → 發 goal：
+python3 scripts/send_relative_goal.py --distance 0.8
+
+# === 反應式停障 fallback（demo 備援，不需 map）===
+# 5/13 demo 當天若 Nav2 失敗的後備。直走 + 遇障停 + 移開續行。
+colcon build --packages-select go2_robot_sdk
+source install/setup.zsh
+bash scripts/start_reactive_stop_tmux.sh
+# 場景驗收：見 docs/導航避障/research/2026-04-26-nav2-dynamic-obstacle-log.md
+
+# === 重新建圖（map 髒污時）===
+bash scripts/build_map.sh home_living_room
+# 用 Unitree 遙控器繞一圈 → 三步驟存圖（finish_trajectory + write_state + map_saver_cli）
+
+# === 舊 D435 避障（停用，保留歷史）===
 ros2 launch vision_perception obstacle_avoidance.launch.py
 
-# LiDAR 避障（需 Go2 driver + LiDAR 先跑）
+# === 舊 LiDAR 避障（vision_perception，4/8 前的舊 node）===
 ros2 run vision_perception lidar_obstacle_node
 # 或用 launch file
 ros2 launch vision_perception lidar_obstacle.launch.py

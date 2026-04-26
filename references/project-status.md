@@ -1,7 +1,56 @@
 # 專案狀態
 
-**最後更新**：2026-04-25（RPLIDAR A2M12 到貨驗證 + P0 導航避障 spec/plan 定稿）
+**最後更新**：2026-04-26（P0-D Nav2 動態避障實機驗證 + reactive_stop_node fallback 完成）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+
+---
+
+## 4/26 進度
+
+**P0-D Nav2 動態避障實機驗證 + reactive_stop_node fallback（雙管齊下）**
+
+### A 線：Nav2 lethal space 翻案
+- 上午 SSH 進 Jetson 跑 A0 診斷流程（不改參數）
+- **0.5m goal**：amcl 14cm 移動，現場確認 ✅
+- **0.8m goal × 2**：amcl 50cm（用戶現場確認 ~50cm 真實移動）✅
+  - 起始位置 (1.19, 0.56) **接近昨天 lethal 區域 (1.56, -0.16)**，今天直接 plan 成功
+- **重大判定**：昨天 lethal 是**暫態**（costmap 髒污 / particle filter 漂移），不是位置固有問題、不是 inflation 過大、不是 footprint padding
+- **v3.7 nav2_params 不需修改**（不執行 plan v2 提的「階梯一」參數調整）
+- 中途 Jetson 跳電一次（XL4015 已知），重啟後流程順利
+
+### A 線發現的兩個 bug
+1. **`/goal_pose` QoS mismatch**：bt_navigator 訂閱用 BEST_EFFORT，但 `send_relative_goal.py` publisher 預設 RELIABLE → 訊息丟失。CLAUDE.md 早警告「不要 `ros2 topic pub --once /goal_pose`」是同一原因。已修：publisher 改 BEST_EFFORT + 加 `_wait_for_subscriber()` 等 DDS discovery
+2. **連發 5 個 goal preemption 太密集**：controller 0.5s 內被打斷 3 次，導致 `Reached the goal!` 在距離 goal 0.5m 時就誤觸發。已修：預設 `--repeat 1 --rate 0.5`
+
+### A 線收尾（待用戶回家繼續）
+- 用戶判定「map 髒污過多太亂」→ 啟 cartographer 重新建圖流程
+- 已備份舊 map 為 `home_living_room.{yaml,pgm,pbstream}.bak.20260426-094853`
+- cartographer 6-window stack 已啟動驗證 OK（scan 11.13Hz、`Inserted submap (0, 1)`），用戶出門前已停 lidar-slam tmux
+- 待續：用戶回家遙控 Go2 繞客廳一圈 → 三步驟存圖 → 重啟 nav2-amcl 用新 map 重跑 0.8m goal
+
+### B 線：reactive_stop_node 開發完成
+- 純 ROS node，訂 `/scan_rplidar` → 發 `/cmd_vel` @ 10Hz
+- 前方 ±30° 扇形：< 0.6m STOP / 0.6-1.0m SLOW(0.45) / ≥ 1.0m NORMAL(0.60)
+- LiDAR 中斷 > 1s emergency stop，含 hysteresis（danger → 非 danger 需連 3 frame）+ warmup 第一筆 cmd_vel = 0
+- **17 case 單元測試全綠**（dev + Jetson 都驗）— front arc filter / wrap-around / range_min skip / classification boundary
+- Jetson dry-run（無 Go2 driver）：cmd_vel 10Hz 穩定、CSV 全 0、zone transition log 正確
+- **未做**：4 場景實機驗收（Go2 + reactive 全 stack）— 用戶判斷今日先做 A 線，B 線實機留 5/13 demo 前
+
+### 新增/修改檔案
+- 新增 `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py`（純 helpers）
+- 新增 `go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py`（≈ 130 行）
+- 新增 `go2_robot_sdk/test/test_reactive_stop_node.py`（17 cases）
+- 新增 `scripts/send_relative_goal.py`（讀 amcl_pose 算前方相對 goal）
+- 新增 `scripts/start_reactive_stop_tmux.sh`（4-window）
+- 新增 `docs/導航避障/research/2026-04-26-nav2-dynamic-obstacle-log.md`（完整實機 log）
+- 修改 `go2_robot_sdk/setup.py`（加 reactive_stop_node entry point）
+
+### 下次 session 接手
+1. 重新建圖（用戶遙控 Go2 繞客廳，慢速 ≤ 0.15 m/s）
+2. 三步驟存圖（`/finish_trajectory` → `/write_state` → `map_saver_cli`）
+3. 用新 map 重跑 0.8m / 1.0m goal 驗證首次 plan 不再失敗
+4. reactive_stop_node 4 場景實機驗收
+5. 動態避障 bonus（人走入路徑看 Nav2 dynamic re-plan）
 
 ---
 
@@ -186,7 +235,7 @@
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
 | interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
-| 導航避障 | **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中** | 4/25 | LiDAR 到貨接 Jetson 驗證 /scan 10.57Hz / 1800 點/圈 / 60% valid；Full SLAM/Nav2 從「永久關閉」翻案為 P0 主線（舊判定基於 5Hz 品質差，RPLIDAR 10.5Hz > 7Hz 業界門檻）；spec + 17-task plan 定稿；P0 = 劇本式 A→B + 停障 + 續行，不承諾一般繞障；5/1 emergency hotkey 硬截止、5/6 KPI 4/5、5/11-5/12 freeze、5/13 學校現場重建地圖 |
+| 導航避障 | **Nav2 0.8m 自主前進實機驗證 + reactive_stop fallback** | 4/26 | 0.8m goal 走 50cm 用戶現場確認；昨天 lethal 判定為暫態（v3.7 nav2_params 不需改）；reactive_stop_node 完成 17 tests pass + Jetson dry-run 通過；發現並修兩 bug（goal_pose BEST_EFFORT QoS、preemption 過密）；待續：重新建圖（用戶判定 map 髒污）+ B 線 4 場景實機驗收 |
 
 ## 4/9 外部會議 + 核心方向 Brainstorm
 

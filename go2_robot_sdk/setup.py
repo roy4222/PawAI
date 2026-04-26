@@ -51,6 +51,7 @@ setup(
             'go2_driver_node = go2_robot_sdk.main:main',
             'snapshot_service = go2_robot_sdk.snapshot_service:main',
             'move_service = go2_robot_sdk.move_service:main',
+            'reactive_stop_node = go2_robot_sdk.reactive_stop_node:main',
         ],
     },
 )
