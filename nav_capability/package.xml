@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>nav_capability</name>
+  <version>0.1.0</version>
+  <description>Nav capability platform: high-level navigation actions, route runner, pose logger.</description>
+  <maintainer email="roy422roy@gmail.com">roy422</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>nav2_simple_commander</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf_transformations</depend>
+  <depend>go2_interfaces</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
