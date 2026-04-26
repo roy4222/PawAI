@@ -78,6 +78,13 @@ INTERNAL_TOPICS = {
     "/scan_rplidar",
     "/amcl_pose",
     "/goal_pose",
+    # nav_capability platform topics（Phase 1 起加入：twist_mux 4-layer routing）
+    "/cmd_vel_nav",
+    "/cmd_vel_obstacle",
+    "/cmd_vel_emergency",
+    "/cmd_vel_joy",
+    "/cmd_vel_unsmoothed",
+    "/lock/emergency",
     # Camera topics
     "/camera/image_raw",
     "/camera/camera/color/image_raw",

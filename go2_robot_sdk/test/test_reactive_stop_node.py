@@ -157,5 +157,40 @@ class TestClassifyZone:
         assert classify_zone(float("inf"), danger_m=0.6, slow_m=1.0) == "clear"
 
 
+# --- Phase 1.3 regression: publisher topic + enable_nav_pause param defaults ---
+
+
+class TestReactiveStopNodeSourceContract:
+    """Source-level regression: 驗 reactive_stop_node.py 宣告了正確的 cmd_vel_topic 預設與 enable_nav_pause 參數。
+
+    不啟動 rclpy（與既有 test 風格一致：純邏輯 + source 驗證，避開 aioice 依賴）。
+    完整 instantiation 測試留 Phase 10 實機驗收。
+    """
+
+    NODE_PATH = os.path.join(
+        os.path.dirname(__file__), "..", "go2_robot_sdk", "reactive_stop_node.py"
+    )
+
+    def _read_source(self):
+        with open(self.NODE_PATH, "r", encoding="utf-8") as f:
+            return f.read()
+
+    def test_declares_cmd_vel_topic_param_default_obstacle(self):
+        src = self._read_source()
+        assert 'declare_parameter("cmd_vel_topic", "/cmd_vel_obstacle")' in src
+
+    def test_declares_enable_nav_pause_param_default_false(self):
+        src = self._read_source()
+        assert 'declare_parameter("enable_nav_pause", False)' in src
+
+    def test_publisher_uses_cmd_vel_topic_param(self):
+        """publisher must read from cmd_vel_topic param, not hardcoded /cmd_vel."""
+        src = self._read_source()
+        # No hardcoded /cmd_vel publisher
+        assert 'self.create_publisher(Twist, "/cmd_vel"' not in src
+        # Uses param-driven topic
+        assert "cmd_vel_topic" in src and "self._cmd_pub" in src
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

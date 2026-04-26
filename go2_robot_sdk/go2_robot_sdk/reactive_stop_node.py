@@ -35,6 +35,8 @@ class ReactiveStopNode(Node):
         self.declare_parameter("clear_debounce_frames", 3)
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("enable", True)
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel_obstacle")
+        self.declare_parameter("enable_nav_pause", False)
 
         self._danger_m = self.get_parameter("danger_distance_m").value
         self._slow_m = self.get_parameter("slow_distance_m").value
@@ -48,8 +50,10 @@ class ReactiveStopNode(Node):
         publish_hz = self.get_parameter("publish_rate_hz").value
 
         scan_topic = self.get_parameter("scan_topic").value
+        cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
+        self._enable_nav_pause = self.get_parameter("enable_nav_pause").value
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SCAN)
-        self._cmd_pub = self.create_publisher(Twist, "/cmd_vel", QOS_CMD)
+        self._cmd_pub = self.create_publisher(Twist, cmd_vel_topic, QOS_CMD)
         self.create_timer(1.0 / publish_hz, self._tick)
 
         self._last_scan_time = 0.0
