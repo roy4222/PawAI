@@ -24,8 +24,8 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            # 全部註解，等對應 node 在 Phase 4-7 寫完再解開
-            # "nav_action_server_node = nav_capability.nav_action_server_node:main",
+            "nav_action_server_node = nav_capability.nav_action_server_node:main",
+            # 後續 Phase 5-7 再解開：
             # "route_runner_node = nav_capability.route_runner_node:main",
             # "log_pose_node = nav_capability.log_pose_node:main",
             # "state_broadcaster_node = nav_capability.state_broadcaster_node:main",
