@@ -522,19 +522,21 @@ class Go2NodeFactory:
                 }.items(),
             ),
             # Nav2 (enabled when nav2=true AND mcp_mode=false)
+            # 使用 nav_capability wrapper：把 final cmd_vel output 從 /cmd_vel 改到 /cmd_vel_nav
+            # (twist_mux priority 10)，讓 reactive_stop /cmd_vel_obstacle (priority 200) 能覆寫。
+            # 詳見 docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md §4
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [
                         os.path.join(
-                            get_package_share_directory("nav2_bringup"),
+                            get_package_share_directory("nav_capability"),
                             "launch",
-                            "navigation_launch.py",
+                            "navigation_remap.launch.py",
                         )
                     ]
                 ),
                 condition=IfCondition(nav2_enabled),
                 launch_arguments={
-                        "map": with_map,
                         "params_file": self.config.config_paths["nav2"],
                         "use_sim_time": use_sim_time,
                         "autostart": with_autostart,
