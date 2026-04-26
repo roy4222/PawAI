@@ -284,7 +284,7 @@ locks:
 
 | 元件 | 改動 |
 |------|------|
-| `robot.launch.py`（Nav2 IncludeLaunchDescription）| 加 `cmd_vel_topic: /cmd_vel_nav` |
+| `robot.launch.py`（Nav2 IncludeLaunchDescription）| 改用 `nav_capability/launch/navigation_remap.launch.py` wrapper（複製 `nav2_bringup/navigation_launch.py` 並改 4 處 remap：controller `cmd_vel→cmd_vel_unsmoothed`；velocity_smoother input `cmd_vel→cmd_vel_unsmoothed`、output `cmd_vel_smoothed→cmd_vel_nav`）。Humble `navigation_launch.py` 沒有 `cmd_vel_topic` launch_arg，且 final output 在 `velocity_smoother` 不在 controller，必須走 wrapper 才能改。詳 plan Phase 1.5。|
 | `reactive_stop_node.py` | publisher 從 `/cmd_vel` 改 `/cmd_vel_obstacle` |
 | Joy node | 確認既有發到 `/cmd_vel_joy`（既有應該已是）|
 | Emergency 觸發源（未實作）| 同時發 `/cmd_vel_emergency = 0` + `/lock/emergency = std_msgs/Bool true` |

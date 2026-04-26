@@ -740,29 +740,39 @@ colcon build --packages-select nav_capability go2_robot_sdk
 source install/setup.zsh
 ```
 
-啟動 Nav2 stack（不接 Go2，dry mode）：
+啟動 Nav2 stack（不接 Go2 / 不需 map / 不需 AMCL）— **smoke 目的只驗 remap，不驗導航功能**：
 
 ```bash
 # 開新 terminal
 ros2 launch nav_capability navigation_remap.launch.py \
   params_file:=$(pwd)/go2_robot_sdk/config/nav2_params.yaml &
 NAV_PID=$!
-sleep 10  # 等 lifecycle active
+sleep 8  # node 起來 publisher 註冊即可，不用等 lifecycle 全 active
+```
 
-# 檢查 final cmd_vel 出口
-ros2 node info /velocity_smoother | grep -i Publishers -A 5
-# Expected: /cmd_vel_nav (被改了的 cmd_vel_smoothed remap 結果)
+> ⚠️ 沒有 map / AMCL / driver 時 **lifecycle 不會全 active 是正常的**（controller_server / smoother 會 unconfigured 或 inactive）。本 step 只驗 publisher topic 命名，**不驗導航 e2e**。
 
-# 確認 controller publish 到 unsmoothed
-ros2 node info /controller_server | grep -i Publishers -A 10
-# Expected: /cmd_vel_unsmoothed
+```bash
+# 驗證 1: 最終 cmd_vel 出口 = /cmd_vel_nav
+ros2 node info /velocity_smoother 2>&1 | grep -A 20 Publishers
+# Expected 包含: /cmd_vel_nav (來自 cmd_vel_smoothed remap)
 
-# 確認 /cmd_vel 不再有 nav publisher
-ros2 topic info /cmd_vel | head -10
-# Expected: 無 nav 相關 publisher（只剩 mux output）
+# 驗證 2: controller 中間 topic = /cmd_vel_unsmoothed
+ros2 node info /controller_server 2>&1 | grep -A 20 Publishers
+# Expected 包含: /cmd_vel_unsmoothed
+
+# 驗證 3: /cmd_vel 沒有 Nav2 publisher（只剩 mux 後續會接的 sub）
+ros2 topic info /cmd_vel -v 2>&1 | head -20
+# Expected: Publisher count == 0（mux 還沒起所以連 mux 也沒有；重點是 nav 不在）
+
+# 驗證 4: /cmd_vel_nav 有 publisher
+ros2 topic info /cmd_vel_nav -v 2>&1 | head -10
+# Expected: Publisher count >= 1 (velocity_smoother)
 
 kill $NAV_PID
 ```
+
+通過標準：4 個驗證符合 expected — **不要求 lifecycle 全 active，不要求 plan/exec 真的 work**。完整 e2e 驗收留 Phase 10。
 
 - [ ] **Step 6: Stage + commit**
 
