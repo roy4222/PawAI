@@ -20,12 +20,19 @@ set -euo pipefail
 SESSION="${SESSION:-nav-cap-demo}"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
 MAP="${MAP:-/home/jetson/maps/home_living_room.yaml}"
+NAV_RUNTIME_DIR="${NAV_RUNTIME_DIR:-$HOME/elder_and_dog/runtime/nav_capability}"
+NAV_NAMED="${NAV_NAMED:-$NAV_RUNTIME_DIR/named_poses/main.json}"
+NAV_ROUTES="${NAV_ROUTES:-$NAV_RUNTIME_DIR/routes}"
 ROS_SETUP='source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh 2>/dev/null && source ~/elder_and_dog/install/setup.zsh'
+
+mkdir -p "$(dirname "$NAV_NAMED")" "$NAV_ROUTES"
 
 echo "=== nav_capability Demo (Phase 10 KPI launcher) ==="
 echo "  ROBOT_IP=$ROBOT_IP"
 echo "  MAP=$MAP"
 echo "  SESSION=$SESSION"
+echo "  NAV_NAMED=$NAV_NAMED"
+echo "  NAV_ROUTES=$NAV_ROUTES"
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 ros2 daemon stop 2>/dev/null || true
@@ -66,7 +73,7 @@ sleep 3
 echo "[5/8] nav_capability.launch.py (4 nodes)"
 tmux new-window -t "$SESSION" -n navcap
 tmux send-keys -t "$SESSION:navcap" \
-    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py" Enter
+    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py named_poses_file:=$NAV_NAMED routes_dir:=$NAV_ROUTES" Enter
 sleep 5
 
 echo "[6/8] enable nav_pause runtime (15s delay)"
