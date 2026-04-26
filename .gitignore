@@ -60,3 +60,13 @@ node_modules/
 
 ## Codex CLI marker file
 .codex
+
+## Agent runtime artefacts（自動產生）
+/.agents/
+
+## 會議錄音 / datasheet PDF（保留在硬碟但不入 repo）
+/*.m4a
+/*.mp3
+/*.wav
+/LD*.pdf
+/LM*.pdf
