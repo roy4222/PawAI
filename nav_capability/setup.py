@@ -27,8 +27,7 @@ setup(
             "nav_action_server_node = nav_capability.nav_action_server_node:main",
             "log_pose_node = nav_capability.log_pose_node:main",
             "state_broadcaster_node = nav_capability.state_broadcaster_node:main",
-            # Phase 7 再解開：
-            # "route_runner_node = nav_capability.route_runner_node:main",
+            "route_runner_node = nav_capability.route_runner_node:main",
         ],
     },
 )

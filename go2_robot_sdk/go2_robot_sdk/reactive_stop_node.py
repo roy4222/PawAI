@@ -12,6 +12,7 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
+from std_srvs.srv import Trigger
 
 from go2_robot_sdk.lidar_geometry import classify_zone, compute_front_min_distance
 
@@ -55,6 +56,12 @@ class ReactiveStopNode(Node):
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SCAN)
         self._cmd_pub = self.create_publisher(Twist, cmd_vel_topic, QOS_CMD)
         self.create_timer(1.0 / publish_hz, self._tick)
+
+        # Phase 7.2 — bridge to /nav/pause /nav/resume when enable_nav_pause=true.
+        # 預設 false → standalone fallback / no nav stack 安全（不會誤觸 service）。
+        self._pause_client = self.create_client(Trigger, "/nav/pause")
+        self._resume_client = self.create_client(Trigger, "/nav/resume")
+        self._nav_paused = False
 
         self._last_scan_time = 0.0
         self._front_min_dist = float("inf")
@@ -123,12 +130,36 @@ class ReactiveStopNode(Node):
         self._cmd_pub.publish(cmd)
 
     def _update_zone(self, zone: str):
+        prev = self._zone
         self._zone = zone
         if zone != self._last_zone_logged:
             d = self._front_min_dist
             d_str = f"{d:.2f}m" if math.isfinite(d) else "inf"
             self.get_logger().info(f"zone: {self._last_zone_logged or 'init'} → {zone} (front_min={d_str})")
             self._last_zone_logged = zone
+        # Phase 7.2: bridge zone transitions to /nav/pause /nav/resume
+        self._maybe_call_nav_pause(prev, zone)
+
+    def _maybe_call_nav_pause(self, prev_zone: str, now_zone: str) -> None:
+        """When enable_nav_pause, call /nav/pause on entering danger and /nav/resume on leaving."""
+        if not self._enable_nav_pause:
+            return
+        # Entering danger from any non-danger zone (init/clear/slow/emergency)
+        if now_zone == "danger" and prev_zone != "danger" and not self._nav_paused:
+            if self._pause_client.service_is_ready():
+                self._pause_client.call_async(Trigger.Request())
+                self._nav_paused = True
+                self.get_logger().info("triggered /nav/pause (obstacle danger)")
+            else:
+                self.get_logger().debug("/nav/pause service not ready; skipping pause call")
+        # Leaving danger after _tick's hysteresis already gated the transition
+        elif prev_zone == "danger" and now_zone != "danger" and self._nav_paused:
+            if self._resume_client.service_is_ready():
+                self._resume_client.call_async(Trigger.Request())
+                self._nav_paused = False
+                self.get_logger().info("triggered /nav/resume (obstacle cleared)")
+            else:
+                self.get_logger().debug("/nav/resume service not ready; skipping resume call")
 
 
 def main(args=None):
