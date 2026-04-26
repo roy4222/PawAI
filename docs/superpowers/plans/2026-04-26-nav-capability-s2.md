@@ -60,15 +60,156 @@
 - `docs/導航避障/README.md` — Status 更新
 
 ### 規約
-- 每個 task 完成跑全部 unit test 通過再 commit
+- 每個 task 完成跑「**該 task 對應的最小驗證**」（不是全部 unit test）
+- 每個 Phase 完成跑「**該 Phase 全部累積測試**」作為 Phase gate
 - commit message 格式：`feat(nav): <task>` / `test(nav): <task>` / `chore(nav): <task>`
-- Phase 1 (5 task) 必須先全部完成才能進 Phase 2
+- Phase 順序硬性：Phase 0 → Phase 1 → Phase 1.5 → Phase 2 → ...（不可跳過）
+- Phase 0 (scaffold) 必須先做，否則 Phase 1 的 emergency_stop.py / mux test 沒地方放
+- Phase 1.5 (Nav2 launch wrapper) 必須在 Phase 1 完成後做，因為 Nav2 cmd_vel 流向是 controller → smoother → /cmd_vel，不能用單純 launch_arg 改
+
+---
+
+## Phase 0 — `nav_capability` minimal scaffold
+
+**Goal**: 在進 Phase 1 之前，先讓 `nav_capability` package 結構存在（package.xml / setup.py / resource / __init__.py），這樣 Phase 1 的 `nav_capability/scripts/emergency_stop.py` 與 `nav_capability/test/integration/test_mux_priority.py` 才有合法歸宿。**不寫任何 node、不解開任何 entry_points。**
+
+### Task 0.1 — 建立 minimal pkg files
+
+**Files:**
+- Create: `nav_capability/package.xml`
+- Create: `nav_capability/setup.py`
+- Create: `nav_capability/setup.cfg`
+- Create: `nav_capability/resource/nav_capability` (empty marker)
+- Create: `nav_capability/nav_capability/__init__.py` (empty)
+- Create: `nav_capability/nav_capability/lib/__init__.py` (empty)
+- Create: `nav_capability/scripts/` (空目錄，等 Phase 1.4 放 emergency_stop.py)
+- Create: `nav_capability/test/__init__.py`
+- Create: `nav_capability/test/integration/__init__.py`
+
+- [ ] **Step 1: 建目錄結構**
+
+```bash
+cd /home/roy422/newLife/elder_and_dog
+mkdir -p nav_capability/nav_capability/lib
+mkdir -p nav_capability/resource nav_capability/launch nav_capability/scripts
+mkdir -p nav_capability/config/named_poses nav_capability/config/routes
+mkdir -p nav_capability/test/integration
+touch nav_capability/resource/nav_capability
+touch nav_capability/nav_capability/__init__.py
+touch nav_capability/nav_capability/lib/__init__.py
+touch nav_capability/test/__init__.py
+touch nav_capability/test/integration/__init__.py
+```
+
+- [ ] **Step 2: 寫 `nav_capability/package.xml`**
+
+```xml
+<?xml version="1.0"?>
+<package format="3">
+  <name>nav_capability</name>
+  <version>0.1.0</version>
+  <description>Nav capability platform: high-level navigation actions, route runner, pose logger.</description>
+  <maintainer email="roy422roy@gmail.com">roy422</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>nav2_simple_commander</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf_transformations</depend>
+  <depend>go2_interfaces</depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
+```
+
+- [ ] **Step 3: 寫 `nav_capability/setup.py`（entry_points 全部註解）**
+
+```python
+from setuptools import setup, find_packages
+import os
+from glob import glob
+
+package_name = "nav_capability"
+
+setup(
+    name=package_name,
+    version="0.1.0",
+    packages=find_packages(exclude=["test"]),
+    data_files=[
+        ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
+        (f"share/{package_name}", ["package.xml"]),
+        (os.path.join("share", package_name, "launch"), glob("launch/*.launch.py")),
+        (os.path.join("share", package_name, "config", "named_poses"), glob("config/named_poses/*.json")),
+        (os.path.join("share", package_name, "config", "routes"), glob("config/routes/*.json")),
+    ],
+    install_requires=["setuptools"],
+    zip_safe=True,
+    maintainer="roy422",
+    maintainer_email="roy422roy@gmail.com",
+    description="Nav capability platform layer.",
+    license="MIT",
+    tests_require=["pytest"],
+    entry_points={
+        "console_scripts": [
+            # 全部註解，等對應 node 在 Phase 4-7 寫完再解開
+            # "nav_action_server_node = nav_capability.nav_action_server_node:main",
+            # "route_runner_node = nav_capability.route_runner_node:main",
+            # "log_pose_node = nav_capability.log_pose_node:main",
+            # "state_broadcaster_node = nav_capability.state_broadcaster_node:main",
+        ],
+    },
+)
+```
+
+- [ ] **Step 4: 寫 `nav_capability/setup.cfg`**
+
+```ini
+[develop]
+script_dir=$base/lib/nav_capability
+[install]
+install_scripts=$base/lib/nav_capability
+```
+
+- [ ] **Step 5: colcon build 確認 pkg 認得**
+
+```bash
+colcon build --packages-select nav_capability 2>&1 | tail -5
+```
+
+Expected: `Finished <<< nav_capability` (no error)。
+
+- [ ] **Step 6: Stage + commit**
+
+Stage: `nav_capability/`
+Commit message: `feat(nav): scaffold nav_capability minimal pkg (Phase 0 — pre Phase 1)`
+
+---
+
+## Phase 0 完成檢查
+
+- [ ] Task 0.1 — minimal scaffold ✅
+
+✅ Phase 0 通過 → 進 Phase 1。
 
 ---
 
 ## Phase 1 — 地基層：cmd_vel 路由（用戶硬性指定順序）
 
-**Goal**: twist_mux 升 4 層 + Nav2/reactive_stop publisher 路徑改完，fake publisher 驗證優先級正確。完成後 reactive_stop 與 Nav2 可同跑。
+**Goal**: twist_mux 升 4 層 + reactive_stop publisher 改 + emergency CLI + mux fake-publisher 驗證。完成後 reactive_stop 跟 Nav2 可同跑（透過 mux）。
+
+> **重要**：Nav2 的 `/cmd_vel` 出口處理留到 **Phase 1.5**（單獨 task）— 因為 Humble navigation_launch.py 沒有 `cmd_vel_topic` launch_arg，且最終出口在 `velocity_smoother` 不是 controller，必須複製 launch wrapper 才能改。
 
 ### Task 1.1 — twist_mux 4 層 yaml 升級
 
@@ -132,76 +273,13 @@ git commit -m "feat(nav): upgrade twist_mux to 4-layer priority (emergency/obsta
 
 ---
 
-### Task 1.2 — Nav2 launch `/cmd_vel` → `/cmd_vel_nav` remap
+### Task 1.2 — Nav2 cmd_vel routing（**移到 Phase 1.5**）
 
-**Files:**
-- Modify: `go2_robot_sdk/launch/robot.launch.py:524-561`（兩個 Nav2 IncludeLaunchDescription：navigation_launch.py + localization_launch.py）
+> **此 task 從 Phase 1 移除**。原本想用 launch_arg 改 Nav2 cmd_vel，但 Humble 的 `navigation_launch.py` **沒有 `cmd_vel_topic` launch_arg**，且最終出口在 `velocity_smoother`（line 182-183）不是 controller。要改 Nav2 final cmd_vel output **必須複製 wrapper launch**，工作量大、風險高，獨立成 Phase 1.5。
+>
+> Phase 1 內 reactive_stop / mux / emergency 仍可獨立完成測試（reactive_stop 的 `/cmd_vel_obstacle` 不受 Nav2 影響）。
 
-- [ ] **Step 1: 確認 nav2_bringup 支援 cmd_vel_topic launch arg**
-
-```bash
-ros2 launch nav2_bringup navigation_launch.py --show-args 2>&1 | grep -i cmd_vel
-```
-
-Expected: 應看到 `'cmd_vel_topic'` 或類似 arg。如果沒有則需要 RewrittenYaml（見 Step 2 alternative）。
-
-- [ ] **Step 2: 修改 robot.launch.py 加 cmd_vel_topic launch_arguments**
-
-修改 `launch_arguments`（`navigation_launch.py` 區塊，line ~536-541）：
-
-```python
-            # Nav2 (enabled when nav2=true AND mcp_mode=false)
-            IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    [
-                        os.path.join(
-                            get_package_share_directory("nav2_bringup"),
-                            "launch",
-                            "navigation_launch.py",
-                        )
-                    ]
-                ),
-                condition=IfCondition(nav2_enabled),
-                launch_arguments={
-                        "map": with_map,
-                        "params_file": self.config.config_paths["nav2"],
-                        "use_sim_time": use_sim_time,
-                        "autostart": with_autostart,
-                        "cmd_vel_topic": "/cmd_vel_nav",  # NEW: 透過 mux 而非直接到 driver
-                    }.items(),
-            ),
-```
-
-對 `localization_launch.py` 區塊不需要改（AMCL 不發 cmd_vel）。
-
-- [ ] **Step 3: 若 nav2_bringup 不支援 cmd_vel_topic arg（fallback）**
-
-若 Step 1 確認無 `cmd_vel_topic` arg：用 RewrittenYaml 改 `nav2_params.yaml` 的 `controller_server.cmd_vel_topic`。
-
-修改 `go2_robot_sdk/config/nav2_params.yaml`，在 `controller_server.ros__parameters` 區塊（既有檔案，~line 100-150 範圍），加：
-
-```yaml
-controller_server:
-  ros__parameters:
-    # ... 既有 ...
-    cmd_vel_topic: /cmd_vel_nav
-```
-
-- [ ] **Step 4: launch syntax check**
-
-```bash
-python3 -c "from go2_robot_sdk.launch.robot import generate_launch_description" 2>&1 || \
-  ros2 launch go2_robot_sdk robot.launch.py --show-args 2>&1 | head -20
-```
-
-Expected: 無 syntax error。
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add go2_robot_sdk/launch/robot.launch.py go2_robot_sdk/config/nav2_params.yaml
-git commit -m "feat(nav): remap Nav2 /cmd_vel to /cmd_vel_nav for twist_mux priority routing"
-```
+跳到 [Task 1.3](#task-13)。
 
 ---
 
@@ -509,11 +587,23 @@ touch nav_capability/test/integration/__init__.py
 
 - [ ] **Step 3: Run test (要求 twist_mux node 已起)**
 
+> ⚠️ `twist_mux_launch.py` 預設：
+> - `cmd_vel_out` = `'twist_mux/cmd_vel'`（**不是 `/cmd_vel`**），需明確覆寫
+> - `config_topics` 與 `config_locks` 是兩個獨立 launch args，必須**都傳同一份 yaml**（我們的 yaml 同時包含 `topics:` 與 `locks:` 兩段）
+> 否則：mux output 不在 `/cmd_vel`、emergency lock 不會生效。
+
 ```bash
-# Terminal A:
-ros2 launch twist_mux twist_mux_launch.py config_topics:=$(pwd)/go2_robot_sdk/config/twist_mux.yaml &
+# Terminal A: 啟動 twist_mux，明確指定 config_topics + config_locks + cmd_vel_out
+ros2 launch twist_mux twist_mux_launch.py \
+  config_topics:=$(pwd)/go2_robot_sdk/config/twist_mux.yaml \
+  config_locks:=$(pwd)/go2_robot_sdk/config/twist_mux.yaml \
+  cmd_vel_out:=/cmd_vel &
 TM_PID=$!
-sleep 2
+sleep 3
+
+# 確認 mux 起來
+ros2 node list | grep twist_mux
+ros2 topic list | grep -E "/cmd_vel$"
 
 # Terminal B:
 python3 -m pytest nav_capability/test/integration/test_mux_priority.py -v
@@ -522,7 +612,7 @@ python3 -m pytest nav_capability/test/integration/test_mux_priority.py -v
 kill $TM_PID
 ```
 
-Expected: 4 cases pass。
+Expected: 4 cases pass，且 `ros2 topic list` 出現 `/cmd_vel`（mux output）。
 
 - [ ] **Step 4: Commit**
 
@@ -536,26 +626,182 @@ git commit -m "test(nav): mux 4-layer priority integration tests (4 cases pass)"
 ## Phase 1 完成檢查
 
 - [ ] Task 1.1 — twist_mux yaml 升級 ✅
-- [ ] Task 1.2 — Nav2 cmd_vel remap ✅
+- [ ] Task 1.2 — Nav2 cmd_vel routing（已移到 Phase 1.5）⏭️
 - [ ] Task 1.3 — reactive_stop publisher 改 + enable_nav_pause param ✅
 - [ ] Task 1.4 — emergency_stop.py CLI ✅
 - [ ] Task 1.5 — mux priority 4 cases pass ✅
 
-✅ Phase 1 通過 → 進 Phase 2。
-❌ 任一 task 失敗 → 修完才能進 Phase 2。
+✅ Phase 1 通過 → 進 Phase 1.5（Nav2 launch wrapper）。
+❌ 任一 task 失敗 → 修完才能繼續。
 
 **Phase 1 對應 KPI**：K8（mux 4 層優先級）部分達成（fake publisher 級）。實機 K7（emergency lock）+ K8 整合留 Phase 10。
 
 ---
 
+## Phase 1.5 — Nav2 launch wrapper（cmd_vel routing 真正落地）
 
-## Phase 2 — nav_capability pkg 骨架 + go2_interfaces schema
+**Goal**: 解決 Phase 1.2 留下的 Nav2 final cmd_vel 出口問題。複製 `navigation_launch.py` 為 `nav_capability/launch/navigation_remap.launch.py`，把 `velocity_smoother` 的 output `cmd_vel_smoothed → cmd_vel` 改成 `cmd_vel_smoothed → cmd_vel_nav`，同時把 controller 內部 publish 改用一個獨立中間 topic 避免衝突。
 
-**Goal**: 建立 `nav_capability` ROS2 ament_python pkg，加 4 action schema + Cancel.srv 到 `go2_interfaces`，可 colcon build 通過。
+### 背景：為何 Phase 1 launch_arg 方案行不通
 
-### Task 2.1 — 建立 `nav_capability` pkg 骨架
+實際讀 `/opt/ros/humble/share/nav2_bringup/launch/navigation_launch.py` 證實：
+
+| Line | 元件 | remap |
+|------|------|-------|
+| 122 | `controller_server` | `('cmd_vel', 'cmd_vel_nav')` — controller publishes 到 `cmd_vel_nav`（中間 topic）|
+| 182-183 | `velocity_smoother` | `('cmd_vel', 'cmd_vel_nav')` 訂閱 + `('cmd_vel_smoothed', 'cmd_vel')` publish — 從 `cmd_vel_nav` 讀進，平滑後 publish 到 `/cmd_vel` |
+| 205 | `controller_server` (composable) | 同 line 122 |
+| 241-242 | `velocity_smoother` (composable) | 同 line 182-183 |
+
+**關鍵事實**：Nav2 final cmd_vel 出口是 **velocity_smoother 的 publish**（`/cmd_vel`），不是 controller_server。也沒有 `cmd_vel_topic` launch_arg。
+
+### Task 1.5.1 — 建立 navigation_remap.launch.py wrapper
 
 **Files:**
+- Create: `nav_capability/launch/navigation_remap.launch.py`
+
+- [ ] **Step 1: 複製 navigation_launch.py**
+
+```bash
+cp /opt/ros/humble/share/nav2_bringup/launch/navigation_launch.py \
+   nav_capability/launch/navigation_remap.launch.py
+```
+
+- [ ] **Step 2: 改 4 處 remap（避開 controller / smoother 中間 topic 名稱衝突）**
+
+打開 `nav_capability/launch/navigation_remap.launch.py`，改下面 4 處：
+
+**修改 1**（line ~122，非 composition controller）:
+
+```python
+# OLD:
+remappings=remappings + [('cmd_vel', 'cmd_vel_nav')]),
+# NEW:
+remappings=remappings + [('cmd_vel', 'cmd_vel_unsmoothed')]),
+```
+
+**修改 2**（line ~182-183，非 composition smoother）:
+
+```python
+# OLD:
+remappings=remappings +
+        [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+# NEW:
+remappings=remappings +
+        [('cmd_vel', 'cmd_vel_unsmoothed'), ('cmd_vel_smoothed', 'cmd_vel_nav')]),
+```
+
+**修改 3**（line ~205，composition controller）：同修改 1。
+
+**修改 4**（line ~241-242，composition smoother）：同修改 2。
+
+效果：
+- `controller_server` publishes 到 `cmd_vel_unsmoothed`（內部中間 topic）
+- `velocity_smoother` 讀 `cmd_vel_unsmoothed`、publishes 到 `cmd_vel_nav`（**最終 Nav2 出口，進 mux**）
+- `cmd_vel_unsmoothed` 與 `cmd_vel_nav` 兩個 topic 不衝突
+- velocity_smoother 功能完整保留（demo 內 acceleration limiting 仍生效）
+
+- [ ] **Step 3: 在 setup.py 註冊 launch 檔**
+
+`nav_capability/setup.py` 的 `data_files` 已有 `glob("launch/*.launch.py")`，無需修改。
+
+- [ ] **Step 4: 修改 `go2_robot_sdk/launch/robot.launch.py` 改用 wrapper**
+
+替換 line 524-542 的 Nav2 IncludeLaunchDescription：
+
+```python
+            # Nav2 (enabled when nav2=true AND mcp_mode=false)
+            # 使用 nav_capability wrapper：把 final cmd_vel output 從 /cmd_vel 改到 /cmd_vel_nav
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    [
+                        os.path.join(
+                            get_package_share_directory("nav_capability"),
+                            "launch",
+                            "navigation_remap.launch.py",
+                        )
+                    ]
+                ),
+                condition=IfCondition(nav2_enabled),
+                launch_arguments={
+                        "params_file": self.config.config_paths["nav2"],
+                        "use_sim_time": use_sim_time,
+                        "autostart": with_autostart,
+                    }.items(),
+            ),
+```
+
+對 `localization_launch.py` 區塊不需改（AMCL 不發 cmd_vel）。
+
+- [ ] **Step 5: build + smoke**
+
+```bash
+colcon build --packages-select nav_capability go2_robot_sdk
+source install/setup.zsh
+```
+
+啟動 Nav2 stack（不接 Go2，dry mode）：
+
+```bash
+# 開新 terminal
+ros2 launch nav_capability navigation_remap.launch.py \
+  params_file:=$(pwd)/go2_robot_sdk/config/nav2_params.yaml &
+NAV_PID=$!
+sleep 10  # 等 lifecycle active
+
+# 檢查 final cmd_vel 出口
+ros2 node info /velocity_smoother | grep -i Publishers -A 5
+# Expected: /cmd_vel_nav (被改了的 cmd_vel_smoothed remap 結果)
+
+# 確認 controller publish 到 unsmoothed
+ros2 node info /controller_server | grep -i Publishers -A 10
+# Expected: /cmd_vel_unsmoothed
+
+# 確認 /cmd_vel 不再有 nav publisher
+ros2 topic info /cmd_vel | head -10
+# Expected: 無 nav 相關 publisher（只剩 mux output）
+
+kill $NAV_PID
+```
+
+- [ ] **Step 6: Stage + commit**
+
+Stage: `nav_capability/launch/navigation_remap.launch.py`、`go2_robot_sdk/launch/robot.launch.py`
+Commit message: `feat(nav): nav_capability wrapper launch — Nav2 final cmd_vel output remapped to /cmd_vel_nav (controller→unsmoothed→smoother→cmd_vel_nav)`
+
+---
+
+## Phase 1.5 完成檢查
+
+- [ ] Task 1.5.1 — navigation_remap.launch.py + robot.launch.py 改用 wrapper ✅
+
+✅ Phase 1.5 通過 → 進 Phase 2。
+
+> 此時 cmd_vel 完整路徑：
+> ```
+> Nav2 controller → /cmd_vel_unsmoothed → velocity_smoother → /cmd_vel_nav
+>                                                                 ↓
+>                                                      twist_mux (priority 10)
+>                                                                 ↓
+>                                                      → /cmd_vel → go2_driver
+> ```
+> reactive_stop 走 `/cmd_vel_obstacle`（priority 200）可隨時覆寫。
+> emergency 走 `/cmd_vel_emergency` + `/lock/emergency`（priority 255）覆寫所有。
+
+---
+
+
+## Phase 2 — `go2_interfaces` schema + sample JSON
+
+**Goal**: 加 4 action schema + Cancel.srv 到 `go2_interfaces`（既有 CMake pkg，rosidl 友善），sample JSON 已有 Phase 0 scaffold 過後的目錄。
+
+> Phase 0 已 scaffold `nav_capability` minimal pkg，本 phase 不再做 pkg scaffold，只做 interface schema 與 sample JSON。原 Task 2.1 (pkg scaffold) 移到 Phase 0。
+
+### Task 2.1 — `nav_capability` pkg 骨架（**已移到 Phase 0**）
+
+> 此 task 已被 Phase 0 Task 0.1 取代。Phase 2 從 Task 2.2（既有編號保留以維持後續引用穩定）開始。直接跳到 [Task 2.2](#task-22-加-4-個-actions--cancelsrv-到-go2_interfaces)。
+
+**Files (already done in Phase 0):**
 - Create: `nav_capability/package.xml`
 - Create: `nav_capability/setup.py`
 - Create: `nav_capability/setup.cfg`
@@ -563,115 +809,7 @@ git commit -m "test(nav): mux 4-layer priority integration tests (4 cases pass)"
 - Create: `nav_capability/nav_capability/__init__.py` (empty)
 - Create: `nav_capability/nav_capability/lib/__init__.py` (empty)
 
-- [ ] **Step 1: 建目錄結構**
-
-```bash
-cd /home/roy422/newLife/elder_and_dog
-mkdir -p nav_capability/nav_capability/lib nav_capability/resource nav_capability/launch
-mkdir -p nav_capability/config/named_poses nav_capability/config/routes
-mkdir -p nav_capability/test/integration
-touch nav_capability/resource/nav_capability
-touch nav_capability/nav_capability/__init__.py
-touch nav_capability/nav_capability/lib/__init__.py
-touch nav_capability/test/__init__.py
-touch nav_capability/test/integration/__init__.py
-```
-
-- [ ] **Step 2: 寫 `nav_capability/package.xml`**
-
-```xml
-<?xml version="1.0"?>
-<package format="3">
-  <name>nav_capability</name>
-  <version>0.1.0</version>
-  <description>Nav capability platform: high-level navigation actions, route runner, pose logger.</description>
-  <maintainer email="roy422roy@gmail.com">roy422</maintainer>
-  <license>MIT</license>
-
-  <depend>rclpy</depend>
-  <depend>geometry_msgs</depend>
-  <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
-  <depend>nav_msgs</depend>
-  <depend>nav2_msgs</depend>
-  <depend>nav2_simple_commander</depend>
-  <depend>tf2_ros</depend>
-  <depend>tf_transformations</depend>
-  <depend>go2_interfaces</depend>
-
-  <test_depend>ament_copyright</test_depend>
-  <test_depend>ament_flake8</test_depend>
-  <test_depend>ament_pep257</test_depend>
-  <test_depend>python3-pytest</test_depend>
-
-  <export>
-    <build_type>ament_python</build_type>
-  </export>
-</package>
-```
-
-- [ ] **Step 3: 寫 `nav_capability/setup.py`**
-
-```python
-from setuptools import setup, find_packages
-import os
-from glob import glob
-
-package_name = "nav_capability"
-
-setup(
-    name=package_name,
-    version="0.1.0",
-    packages=find_packages(exclude=["test"]),
-    data_files=[
-        ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
-        (f"share/{package_name}", ["package.xml"]),
-        (os.path.join("share", package_name, "launch"), glob("launch/*.launch.py")),
-        (os.path.join("share", package_name, "config", "named_poses"), glob("config/named_poses/*.json")),
-        (os.path.join("share", package_name, "config", "routes"), glob("config/routes/*.json")),
-    ],
-    install_requires=["setuptools"],
-    zip_safe=True,
-    maintainer="roy422",
-    maintainer_email="roy422roy@gmail.com",
-    description="Nav capability platform layer.",
-    license="MIT",
-    tests_require=["pytest"],
-    entry_points={
-        "console_scripts": [
-            # 這 4 個 entry 對應 Phase 4-7 的 node，先全部註解，等對應 node 寫完再解開：
-            # "nav_action_server_node = nav_capability.nav_action_server_node:main",
-            # "route_runner_node = nav_capability.route_runner_node:main",
-            # "log_pose_node = nav_capability.log_pose_node:main",
-            # "state_broadcaster_node = nav_capability.state_broadcaster_node:main",
-        ],
-    },
-)
-```
-
-- [ ] **Step 4: 寫 `nav_capability/setup.cfg`**
-
-```ini
-[develop]
-script_dir=$base/lib/nav_capability
-[install]
-install_scripts=$base/lib/nav_capability
-```
-
-- [ ] **Step 5: colcon build**
-
-```bash
-colcon build --packages-select nav_capability 2>&1 | tail -10
-```
-
-Expected: `Finished <<< nav_capability` (no error)。
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add nav_capability/
-git commit -m "feat(nav): scaffold nav_capability ROS2 ament_python package"
-```
+- [x] **Steps 1-6 已在 Phase 0 Task 0.1 完成**（pkg scaffold + colcon build 通過）
 
 ---
 
@@ -912,8 +1050,8 @@ git commit -m "feat(nav): sample named_poses + route JSON for nav_capability con
 
 ## Phase 2 完成檢查
 
-- [ ] Task 2.1 — nav_capability pkg scaffold ✅
-- [ ] Task 2.2 — 4 actions + Cancel.srv ✅
+- [x] Task 2.1 — nav_capability pkg scaffold（已在 Phase 0 完成）⏭️
+- [ ] Task 2.2 — 4 actions + Cancel.srv（schema 統一在 `go2_interfaces`）✅
 - [ ] Task 2.3 — sample JSON ✅
 
 ✅ Phase 2 通過 → 進 Phase 3。
@@ -3610,18 +3748,20 @@ P0 全綠燈 → S2 完工 → 進 5/13 demo 整合測試（buffer 1.5 天）。
 
 ## 全域完成 checklist
 
-- [ ] Phase 1 ✅ 地基層 (twist_mux + cmd_vel routing)
-- [ ] Phase 2 ✅ pkg scaffold + interface schema
-- [ ] Phase 3 ✅ L1 unit tests (38 cases)
-- [ ] Phase 4 ✅ goto_relative action server
-- [ ] Phase 5 ✅ goto_named + log_pose
-- [ ] Phase 6 ✅ state broadcaster + service stubs
-- [ ] Phase 7 ✅ Route Runner + reactive_stop pause/resume
-- [ ] Phase 8 ✅ watchdogs (driver heartbeat + odom)
-- [ ] Phase 9 ✅ launch + tmux + CLI
-- [ ] Phase 10 ✅ 實機 KPI P0 全綠燈
+- [ ] **Phase 0 ✅ nav_capability minimal scaffold**（pkg.xml / setup.py / dirs，0.3 天）
+- [ ] Phase 1 ✅ 地基層 (twist_mux 4 層 + reactive_stop publisher + emergency CLI + mux test)（1 天）
+- [ ] **Phase 1.5 ✅ Nav2 launch wrapper**（navigation_remap.launch.py：controller→unsmoothed→smoother→cmd_vel_nav，0.5 天）
+- [ ] Phase 2 ✅ go2_interfaces 4 actions + Cancel.srv + sample JSON（pkg scaffold 移到 Phase 0）（0.3 天）
+- [ ] Phase 3 ✅ L1 unit tests (38 cases)（1 天）
+- [ ] Phase 4 ✅ goto_relative action server（0.5 天）
+- [ ] Phase 5 ✅ goto_named + log_pose（1 天）
+- [ ] Phase 6 ✅ state broadcaster + service stubs（0.5 天）
+- [ ] Phase 7 ✅ Route Runner + reactive_stop pause/resume（1.5 天）
+- [ ] Phase 8 ✅ watchdogs (driver heartbeat + odom)（0.5 天）
+- [ ] Phase 9 ✅ launch + tmux + CLI（0.5 天）
+- [ ] Phase 10 ✅ 實機 KPI P0 全綠燈（1.5 天）
 
-時程：6.5-7 天淨工作。5/13 前 buffer 留 1.5-2 天給 demo 整合 + 修 bug + 場地建圖。
+時程：~7 天淨工作（多了 Phase 0 + 1.5 共 0.8 天）。5/13 前 buffer 仍留 1-1.5 天給 demo 整合 + 修 bug + 場地建圖。
 
 P1 KPI（K3 / K6 / K11）列為 5/13 後加分項，不阻塞主線。
 
@@ -3638,7 +3778,7 @@ P1 KPI（K3 / K6 / K11）列為 5/13 後加分項，不阻塞主線。
 | §3.2 services | Phase 6.2 + 7.1 | K5 |
 | §3.3 waypoint_reached event | Phase 7.1 | (5/13 後給 interaction_executive 接) |
 | §3.4 state topics | Phase 6.1 | K9 |
-| §4 twist_mux 升級 | Phase 1.1 + 1.2 + 1.5 | K7, K8 |
+| §4 twist_mux 升級 | Phase 1.1 + 1.5 | K7, K8 |
 | §5 Route JSON v2 | Phase 2.3 + 3.3 (validator) | — |
 | §6 Named Poses | Phase 2.3 + 3.4 (store) | — |
 | §7 Data Flow A/B/C | Phase 4 + 7 + 1.4 | K5, K7 |
