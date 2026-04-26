@@ -1,17 +1,22 @@
 """Reactive Stop Node — RPLIDAR 反應式停障。
 
-訂閱 /scan_rplidar、發布 /cmd_vel @ 10Hz。
+訂閱 /scan_rplidar、發布 /cmd_vel_obstacle (mux priority 200) @ 10Hz。
 前方 ±30° 扇形最小距離 → stop / slow / normal。
 LiDAR 中斷 > 1s 進 emergency stop。
+Phase 7.2 bridge: enable_nav_pause=true 時 zone transitions 觸發 /nav/{pause,resume}.
+Phase 7-bugfix #5: 同時發 /state/reactive_stop/status JSON 給 state_broadcaster 訂閱。
 """
+import json
 import math
 import time
 
 import rclpy
 from geometry_msgs.msg import Twist
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from go2_robot_sdk.lidar_geometry import classify_zone, compute_front_min_distance
@@ -55,13 +60,20 @@ class ReactiveStopNode(Node):
         self._enable_nav_pause = self.get_parameter("enable_nav_pause").value
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SCAN)
         self._cmd_pub = self.create_publisher(Twist, cmd_vel_topic, QOS_CMD)
+        # Phase 7-bugfix #5: status JSON for state_broadcaster to consume
+        self._status_pub = self.create_publisher(
+            String, "/state/reactive_stop/status", 10
+        )
         self.create_timer(1.0 / publish_hz, self._tick)
+        self.create_timer(0.1, self._tick_status)  # 10Hz status broadcast
 
         # Phase 7.2 — bridge to /nav/pause /nav/resume when enable_nav_pause=true.
         # 預設 false → standalone fallback / no nav stack 安全（不會誤觸 service）。
         self._pause_client = self.create_client(Trigger, "/nav/pause")
         self._resume_client = self.create_client(Trigger, "/nav/resume")
         self._nav_paused = False
+        # Runtime override: ros2 param set /reactive_stop_node enable_nav_pause true
+        self.add_on_set_parameters_callback(self._on_param_change)
 
         self._last_scan_time = 0.0
         self._front_min_dist = float("inf")
@@ -75,6 +87,15 @@ class ReactiveStopNode(Node):
             f"normal={self._normal_speed} slow_speed={self._slow_speed}, "
             f"front=±{math.degrees(self._front_half_rad):.0f}°, timeout={self._lidar_timeout}s"
         )
+
+    def _on_param_change(self, params):
+        for p in params:
+            if p.name == "enable_nav_pause":
+                self._enable_nav_pause = bool(p.value)
+                self.get_logger().info(
+                    f"enable_nav_pause runtime override -> {self._enable_nav_pause}"
+                )
+        return SetParametersResult(successful=True)
 
     def _on_scan(self, msg: LaserScan):
         self._front_min_dist = compute_front_min_distance(
@@ -129,6 +150,19 @@ class ReactiveStopNode(Node):
         cmd.angular.z = 0.0
         self._cmd_pub.publish(cmd)
 
+    def _tick_status(self):
+        d = self._front_min_dist
+        payload = {
+            "zone": self._zone,
+            "obstacle_distance": float(d) if math.isfinite(d) else None,
+            "reactive_stop_active": self._zone in ("danger", "emergency"),
+            "nav_paused": self._nav_paused,
+            "enable_nav_pause": self._enable_nav_pause,
+        }
+        msg = String()
+        msg.data = json.dumps(payload)
+        self._status_pub.publish(msg)
+
     def _update_zone(self, zone: str):
         prev = self._zone
         self._zone = zone
@@ -152,12 +186,17 @@ class ReactiveStopNode(Node):
                 self.get_logger().info("triggered /nav/pause (obstacle danger)")
             else:
                 self.get_logger().debug("/nav/pause service not ready; skipping pause call")
-        # Leaving danger after _tick's hysteresis already gated the transition
-        elif prev_zone == "danger" and now_zone != "danger" and self._nav_paused:
+        # Leaving danger to a *safe* zone (slow / clear).
+        # Explicitly NOT resuming on emergency or init — emergency means LiDAR is dead,
+        # which is unsafe for nav to continue; init is a startup transient (only seen
+        # before _tick runs).
+        elif prev_zone == "danger" and now_zone in ("slow", "clear") and self._nav_paused:
             if self._resume_client.service_is_ready():
                 self._resume_client.call_async(Trigger.Request())
                 self._nav_paused = False
-                self.get_logger().info("triggered /nav/resume (obstacle cleared)")
+                self.get_logger().info(
+                    f"triggered /nav/resume (obstacle cleared, now_zone={now_zone})"
+                )
             else:
                 self.get_logger().debug("/nav/resume service not ready; skipping resume call")
 

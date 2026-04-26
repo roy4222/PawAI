@@ -118,6 +118,17 @@ class RouteRunnerNode(Node):
 
     # ── Goal callbacks ──
     def _accept_goal(self, _g):
+        # Reject when an active route is still in flight; caller must /nav/cancel first
+        # or wait for SUCCEEDED/FAILED. Prevents two run_route goals racing on the same
+        # FSM / Nav2 client / pause_event.
+        if self._fsm.state not in (
+            RouteState.IDLE, RouteState.SUCCEEDED, RouteState.FAILED,
+        ):
+            self.get_logger().warn(
+                f"rejecting /nav/run_route — existing route still in state "
+                f"{self._fsm.state.name} (call /nav/cancel first or wait)"
+            )
+            return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
     def _cancel_goal(self, _g):

@@ -85,6 +85,19 @@ INTERNAL_TOPICS = {
     "/cmd_vel_joy",
     "/cmd_vel_unsmoothed",
     "/lock/emergency",
+    # Phase 6/7 state + event topics
+    "/state/nav/heartbeat",
+    "/state/nav/status",
+    "/state/nav/safety",
+    "/state/reactive_stop/status",
+    "/event/nav/waypoint_reached",
+    "/event/nav/internal/status",
+    # Phase 7 services (driven by route_runner)
+    "/nav/pause",
+    "/nav/resume",
+    "/nav/cancel",
+    # /navigate_to_pose action infra (Nav2)
+    "/navigate_to_pose",
     # Camera topics
     "/camera/image_raw",
     "/camera/camera/color/image_raw",

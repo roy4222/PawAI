@@ -44,6 +44,10 @@ class StateBroadcasterNode(Node):
         }
         self._latest_amcl_cov: Optional[float] = None
         self._last_scan_ns: int = 0
+        # Phase 7-bugfix #5: cache reactive_stop self-reported status; None until first
+        # /state/reactive_stop/status arrives. Without this, state_broadcaster used to
+        # hardcode reactive_stop_active=false / obstacle_zone=normal even during danger.
+        self._latest_reactive_status: Optional[dict] = None
 
         self.create_subscription(
             PoseWithCovarianceStamped,
@@ -61,6 +65,12 @@ class StateBroadcasterNode(Node):
             String,
             "/event/nav/internal/status",
             self._on_internal_status,
+            10,
+        )
+        self.create_subscription(
+            String,
+            "/state/reactive_stop/status",
+            self._on_reactive_status,
             10,
         )
 
@@ -89,6 +99,12 @@ class StateBroadcasterNode(Node):
         except json.JSONDecodeError:
             self.get_logger().warn(f"bad internal status JSON: {msg.data!r}")
 
+    def _on_reactive_status(self, msg: String) -> None:
+        try:
+            self._latest_reactive_status = json.loads(msg.data)
+        except json.JSONDecodeError:
+            self.get_logger().warn(f"bad reactive_stop status JSON: {msg.data!r}")
+
     def _amcl_health(self) -> str:
         cov = self._latest_amcl_cov
         if cov is None:
@@ -116,13 +132,25 @@ class StateBroadcasterNode(Node):
         s.data = json.dumps(self._status_payload)
         self._status_pub.publish(s)
 
+        # Phase 7-bugfix #5: when reactive_stop status hasn't arrived yet, surface
+        # 'unknown' rather than fake 'normal'/false to avoid lying to UI/diagnostics.
+        if self._latest_reactive_status is None:
+            reactive_active = None  # unknown
+            obstacle_distance = None
+            obstacle_zone = "unknown"
+        else:
+            r = self._latest_reactive_status
+            reactive_active = bool(r.get("reactive_stop_active", False))
+            obstacle_distance = r.get("obstacle_distance")  # may be None when inf
+            obstacle_zone = r.get("zone", "unknown")
+
         safety = {
-            "reactive_stop_active": False,  # filled by reactive_stop's own status feed (future)
-            "obstacle_distance": 0.0,
-            "obstacle_zone": "normal",
+            "reactive_stop_active": reactive_active,
+            "obstacle_distance": obstacle_distance,
+            "obstacle_zone": obstacle_zone,
             "lidar_alive": self._lidar_alive(),
             "amcl_health": self._amcl_health(),
-            "pause_count_recent_10s": 0,
+            "pause_count_recent_10s": 0,  # TODO Phase 8+: track from /nav/pause calls
         }
         sf = String()
         sf.data = json.dumps(safety)

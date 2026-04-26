@@ -44,6 +44,12 @@ class NavActionServerNode(Node):
         super().__init__("nav_action_server_node")
         self._cb_group = ReentrantCallbackGroup()
 
+        # Active-goal guard — only one goto_relative or goto_named at a time.
+        # Without this, two concurrent goals send Nav2 NavigateToPose in parallel; the
+        # second goal preempts the first at the Nav2 layer but the wrapper action of
+        # the first goal keeps awaiting its (now-canceled) result, causing stuck states.
+        self._goto_active = False
+
         # Latest AMCL pose
         self._amcl_pose: Optional[PoseWithCovarianceStamped] = None
         self.create_subscription(
@@ -114,6 +120,11 @@ class NavActionServerNode(Node):
 
     # ── Goal callbacks ──
     def _accept_goal(self, _goal):
+        if self._goto_active:
+            self.get_logger().warn(
+                "rejecting goto_* goal — another goto_relative/goto_named is still active"
+            )
+            return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
     def _cancel_goal(self, _goal):
@@ -138,6 +149,13 @@ class NavActionServerNode(Node):
 
     # ── Action handler ──
     async def _execute_relative(self, goal_handle):
+        self._goto_active = True
+        try:
+            return await self._execute_relative_inner(goal_handle)
+        finally:
+            self._goto_active = False
+
+    async def _execute_relative_inner(self, goal_handle):
         goal = goal_handle.request
         result = GotoRelative.Result()
 
@@ -258,6 +276,13 @@ class NavActionServerNode(Node):
 
     # ── GotoNamed handler (Phase 5.1) ──
     async def _execute_named(self, goal_handle):
+        self._goto_active = True
+        try:
+            return await self._execute_named_inner(goal_handle)
+        finally:
+            self._goto_active = False
+
+    async def _execute_named_inner(self, goal_handle):
         goal = goal_handle.request
         result = GotoNamed.Result()
 
