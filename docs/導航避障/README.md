@@ -1,8 +1,11 @@
 # 導航避障
 
-> Status: **P0-A/B/C ✅ / P0-D 0.8m goal 實機通過（v3.7 不改參數）+ reactive_stop fallback 完成**（2026-04-26 更新）
+> Status: **P0-A/B/C ✅ / P0-D 0.8m goal 實機通過 + reactive_stop fallback 完成 / nav_capability 平台層 ✅ Phase 0-9 / Phase 10 KPI ⏳ 部分驗收**（2026-04-26 evening 更新）
 
-> **2026-04-26 Nav2 動態避障實機驗證**：0.8m goal 走 50cm 現場確認；昨天 lethal 是暫態（costmap 髒污 / particle filter）非位置固有問題；v3.7 nav2_params 不需改；用戶判定 map 髒污要重新建圖（已備份舊 map 為 `.bak.20260426-094853`）。
+> **2026-04-26 evening — nav_capability S2 平台化**：把 P0 reactive 邏輯抽象成「平台層」，提供 4 actions / 3 services / 3 state topics 給 interaction_executive 與 PawAI Brain。WSL 70 tests pass；Jetson Phase 10 KPI 中 K9/K10 ✅，K8 移出實機（fake publisher 撞 driver 事故），K1/K2/K4/K5/K7 推遲。
+>   Spec: [`docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md`](../superpowers/specs/2026-04-26-nav-capability-s2-design.md) / Plan: [`docs/superpowers/plans/2026-04-26-nav-capability-s2.md`](../superpowers/plans/2026-04-26-nav-capability-s2.md)
+
+> **2026-04-26 morning — Nav2 動態避障實機驗證**：0.8m goal 走 50cm 現場確認；昨天 lethal 是暫態（costmap 髒污 / particle filter）非位置固有問題；v3.7 nav2_params 不需改；用戶判定 map 髒污要重新建圖（已備份舊 map 為 `.bak.20260426-094853`）。
 >   詳見實機 log [`research/2026-04-26-nav2-dynamic-obstacle-log.md`](research/2026-04-26-nav2-dynamic-obstacle-log.md)
 > **2026-04-25 上 Go2 機身**：/scan 10.40Hz；Cartographer pure scan-matching 建圖完成 → Nav2+AMCL stack 全打通；卡 inflation lethal space。
 >   詳見整合紀錄 [`research/2026-04-25-rplidar-a2m12-integration-log.md`](research/2026-04-25-rplidar-a2m12-integration-log.md)
@@ -38,7 +41,27 @@
 - Executive 中 come_here 功能暫停
 - 20 個 unit tests（D435 7 + LiDAR 13）保留在 CI，程式碼不刪
 
-## 狀態卡
+## nav_capability 平台層狀態卡（2026-04-26 evening 新增）
+
+| 項目 | 值 |
+|------|---|
+| 狀態 | **Phase 0–9 ✅ / Phase 10 KPI ⏳（K9/K10 ✅，K8 移出實機，K1/K2/K4/K5/K7 推遲）** |
+| Actions | `/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route` / `/log_pose` |
+| Services | `/nav/pause` / `/nav/resume` / `/nav/cancel` |
+| State | `/state/nav/heartbeat` (1Hz) / `/state/nav/status` (10Hz) / `/state/nav/safety` (10Hz) |
+| Event | `/event/nav/waypoint_reached` / `/event/nav/internal/status` / `/state/reactive_stop/status` |
+| twist_mux | 4 層（emergency 255 > obstacle 200 > teleop 100 > nav2 10）+ Bool `/lock/emergency` |
+| 入口 packages | `nav_capability/` (4 nodes + 5 lib modules) / `go2_interfaces/` (4 actions + Cancel.srv) |
+| 啟動腳本 | `scripts/start_nav_capability_demo_tmux.sh`（8-window，含 safety_only=true）|
+| Runtime data | `~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/`（不在 install/share，commit e2b3932 修正）|
+| 測試 | 38 nav unit + 5 tf_pose helper + 23 reactive unit + 4 mux integration = 70 pass（WSL）|
+| Spec / Plan | [spec](../superpowers/specs/2026-04-26-nav-capability-s2-design.md) / [plan](../superpowers/plans/2026-04-26-nav-capability-s2.md) |
+
+**重大陷阱**：
+- `reactive_stop_node` `safety_only=true` **必須**用於 mux 模式（priority 200），不然 clear zone 會以 0.60 m/s 永久 shadow nav。standalone fallback（`start_reactive_stop_tmux.sh`）保持預設 `safety_only=false`。兩腳本互斥。
+- `test_mux_priority.py` 是 active publisher（FakePublisher 真的發 cmd_vel），**不可在 full stack 跑**（會穿透 mux 進 go2_driver）。WSL or isolated mux 環境驗證。
+
+## 狀態卡（4/26 morning P0 reactive 主線）
 
 | 項目 | 值 |
 |------|---|

@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-26（P0-D Nav2 動態避障實機驗證 + reactive_stop_node fallback 完成）
+**最後更新**：2026-04-26 evening（nav_capability S2 Phase 0–9 平台層落地 + Phase 10 KPI 部分驗收：K9/K10 ✅，K8 移出實機）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
 
 ---
@@ -51,6 +51,60 @@
 3. 用新 map 重跑 0.8m / 1.0m goal 驗證首次 plan 不再失敗
 4. reactive_stop_node 4 場景實機驗收
 5. 動態避障 bonus（人走入路徑看 Nav2 dynamic re-plan）
+
+---
+
+## 4/26 晚進度
+
+**nav_capability S2 平台化導航（Phase 0–9 完成 + Phase 10 KPI 部分驗收）**
+
+### Phase 0–9 落地（22+ commits）
+
+把 P0 reactive 邏輯抽象成「平台層」`nav_capability`，把 4 個 action / 3 個 service / 3 個 state topic 介面化，給 interaction_executive 與 PawAI Brain 使用：
+
+- **Actions**：`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route` / `/log_pose`
+- **Services**：`/nav/pause` / `/nav/resume` / `/nav/cancel`
+- **State**：`/state/nav/heartbeat` (1Hz) / `/state/nav/status` (10Hz) / `/state/nav/safety` (10Hz)
+- **Event**：`/event/nav/waypoint_reached` / `/event/nav/internal/status` / `/state/reactive_stop/status`
+- **twist_mux 4 層**：emergency(255) > obstacle(200) > teleop(100) > nav2(10) + Bool `/lock/emergency`
+
+新 nodes：`nav_action_server_node` / `route_runner_node` / `log_pose_node` / `state_broadcaster_node`。共 70 unit/integration tests pass（WSL）。
+
+**Spec / Plan**：[`docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md`](../docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md) / [`docs/superpowers/plans/2026-04-26-nav-capability-s2.md`](../docs/superpowers/plans/2026-04-26-nav-capability-s2.md)
+
+### 兩個重大修法（commit 8ec9a59 + e2b3932）
+
+1. **`reactive_stop_node` safety_only mode** — 原設計是 standalone fallback「永遠驅動前進」，當被 repurpose 接到 mux priority 200 後，clear zone 時 0.60 m/s 永遠 shadow nav。實機 dry-run 抓到 Go2 衝出，新增 `safety_only` param：mux 模式只在 danger / emergency 發 0.0，clear / slow 不發，讓 nav 通過。`scripts/start_nav_capability_demo_tmux.sh` 已加 `-p safety_only:=true`。
+2. **runtime path** — `named_poses_file` / `routes_dir` 預設指 `pkg_share/config/`，會被 colcon build 覆蓋且不在 git 之外。改用 `~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/`，tmux 啟動時 `mkdir -p` 自動建。
+
+### Phase 10 P0 KPI 結果（5/8 驗收，3/8 推遲）
+
+| KPI | 結果 | 備註 |
+|-----|------|------|
+| K8 mux integration | ✅ WSL 4/4 / **移出實機** | FakePublisher `/cmd_vel_nav` = 0.30 透過真實 mux 進 go2_driver → Go2 衝出。永久規則：K8 不在 full stack 跑 |
+| K9 state topic rate | ✅ heartbeat 2.02Hz / status 20.00Hz / safety 20.04Hz | 全 ≥ 門檻；rate 2x 預期（DDS ghost participant 異常，待 root cause） |
+| K10 log_pose | ✅ 3/5（user override 為 3 點） | runtime path 寫入確認；alpha/beta/gamma 都 SUCCEEDED |
+| K1/K2/K4/K5/K7 | ⏳ 推遲 | AMCL covariance 0.53（紅）需先收斂；用戶判定問題太多今日先收 |
+
+### Phase 10 事故記錄
+- 22:30 跑 K8 時 Go2 撞 — fake_nav publishes 0.30 m/s 走 mux→driver→馬達。原因是 plan 把 K8 排在 full stack。修正：K8 移出實機驗收（plan + 此 status 都註記）。
+
+### 下次 session 接手
+1. 重啟 stack `bash scripts/start_nav_capability_demo_tmux.sh`（含 e2b3932 runtime path）
+2. Foxglove 設 initialpose → 等 AMCL covariance 收斂到 yellow（≤0.5）或 green（<0.3）
+3. K1（goto_relative 0.5m × 5）→ K2（0.8m × 5）→ K4（run_route × 3）→ K5⭐（pause/resume × 3）→ K7⭐（emergency × 3）
+4. （可選）量測 base_link → laser z 實際值，更新 `start_nav_capability_demo_tmux.sh` L40 `--z 0.10`
+5. （bonus）K3/K6/K11 P1 KPI；root-cause state_broadcaster 2x rate
+
+### 新增/修改檔案（commit `9ef3875`..`e2b3932`）
+- 新增 `nav_capability/` 全包（4 nodes + 5 lib modules + 38+5 unit tests + 4 mux integration tests）
+- 新增 `go2_interfaces/{action,srv}/`（4 actions + Cancel.srv）
+- 修改 `go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py`（+ safety_only mode + nav pause/resume bridge）
+- 修改 `go2_robot_sdk/config/twist_mux.yaml`（4-layer + Bool lock）
+- 修改 `go2_robot_sdk/launch/robot.launch.py`（改用 nav_capability wrapper）
+- 新增 `nav_capability/scripts/emergency_stop.py`（CLI helper）
+- 新增 `scripts/start_nav_capability_demo_tmux.sh`（Phase 10 demo 8-window）
+- 修改 `scripts/start_nav_capability_demo_tmux.sh`（runtime path env override）
 
 ---
 

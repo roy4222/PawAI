@@ -92,6 +92,24 @@ bash scripts/start_nav2_amcl_demo_tmux.sh
 - **slam_toolbox 在 ARM64 + Humble + RPLIDAR 永久棄用**（Mapper FATAL ERROR known bug）
 - **不要 `ros2 topic pub --once /goal_pose`**：bt_navigator subscriber 是 BEST_EFFORT，會 race 沒收到。改 `-r 2 --times 5` 多次發
 
+### nav_capability 平台層 Demo（4/26 evening 新增）
+
+```bash
+# 8-window tmux: tf + sllidar + robot(含 nav2 + AMCL + mux + reactive_stop) + navcap(4 nodes) + pause-enable + foxglove + monitor
+bash scripts/start_nav_capability_demo_tmux.sh
+# 預設 ROBOT_IP=192.168.123.161 / MAP=/home/jetson/maps/home_living_room.yaml
+# Runtime data 寫到 ~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/
+# 等 ~50s 後 Foxglove 設 /initialpose、發 action：
+#   ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative "{distance: 0.5}"
+#   ros2 action send_goal /nav/run_route go2_interfaces/action/RunRoute "{route_id: 'sample'}"
+#   ros2 action send_goal /log_pose go2_interfaces/action/LogPose "{name: alpha, log_target: named_poses}"
+```
+
+**已知陷阱**：
+- **`reactive_stop_node` `safety_only=true` 必須用於 mux 模式**（priority 200）— 不然 clear zone 0.60 m/s 永久 shadow nav。`start_nav_capability_demo_tmux.sh` 已內建 `-p safety_only:=true`。standalone fallback（`start_reactive_stop_tmux.sh`）保持預設 `false`，兩腳本互斥
+- **`test_mux_priority.py` 不可在 full stack 跑** — FakePublisher 是真實 publisher，會透過 mux 把 0.30 m/s 灌進 go2_driver 讓 Go2 衝出（4/26 22:30 撞過）。只能在 WSL 或 isolated mux 環境跑
+- **Runtime path 用 `~/elder_and_dog/runtime/`，不要寫 install/share** — 預設 `named_poses_file` / `routes_dir` 指 pkg_share 會被 colcon build 覆蓋，且不在 git 之外（commit `e2b3932` 已修，env override `NAV_NAMED` / `NAV_ROUTES`）
+
 ### 語音 MVP 測試（Jetson 上，no-VAD 主線）
 
 ```bash

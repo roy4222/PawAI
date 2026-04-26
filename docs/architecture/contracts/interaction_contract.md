@@ -69,8 +69,18 @@
 | `/event/interaction/gesture_command` | Event | 觸發式 | ~~手勢指令事件（interaction_router）~~ | **deprecated** |
 | `/event/interaction/fall_alert` | Event | 觸發式 | ~~跌倒警報事件（interaction_router）~~ | **deprecated** |
 | `/state/tts_playing` | State | 變更式 | TTS 播放狀態（latched） | active |
+| `/state/nav/heartbeat` | State | 1 Hz | nav_capability 平台層心跳 | **v2.3** active |
+| `/state/nav/status` | State | 10 Hz | nav 任務狀態 + AMCL covariance JSON | **v2.3** active |
+| `/state/nav/safety` | State | 10 Hz | reactive_stop / lidar / driver / amcl health JSON | **v2.3** active |
+| `/state/reactive_stop/status` | State | 10 Hz | reactive_stop_node 內部狀態（state_broadcaster 訂閱用） | **v2.3** active |
+| `/event/nav/waypoint_reached` | Event | 觸發式 | RunRoute 每個 waypoint 抵達事件 | **v2.3** active |
+| `/event/nav/internal/status` | Event | 觸發式 | nav_action_server / route_runner → state_broadcaster 內部 status | **v2.3** active |
 | `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
+
+**Actions（v2.3 新增）**：`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route` / `/log_pose`（型別於 `go2_interfaces/action/`）
+**Services（v2.3 新增）**：`/nav/pause` / `/nav/resume` / `/nav/cancel`（`std_srvs/Trigger` 或 `go2_interfaces/srv/Cancel`）
+**Locks（v2.3 新增）**：`/lock/emergency` (Bool, twist_mux lock — engaged 後阻擋所有低優先級 cmd_vel)
 
 ---
 
