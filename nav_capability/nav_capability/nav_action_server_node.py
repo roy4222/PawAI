@@ -1,13 +1,15 @@
-"""Nav action server: 提供 /nav/goto_relative action（包裝 Nav2 NavigateToPose）。
+"""Nav action server: 提供 /nav/goto_relative + /nav/goto_named action。
 
-Phase 4 implementation of nav_capability spec §3.1 A1.
+Phase 4-5 implementation of nav_capability spec §3.1 A1+A2.
 v1: 一律走 map frame（需要 AMCL 在線）；純 odom path 列入 spec T5。
 """
 import asyncio
 import math
+import os
 from typing import Optional, Tuple
 
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav2_msgs.action import NavigateToPose
@@ -21,8 +23,10 @@ from rclpy.qos import (
     ReliabilityPolicy,
 )
 
-from go2_interfaces.action import GotoRelative
+from go2_interfaces.action import GotoRelative, GotoNamed
+from nav_capability.lib.named_pose_store import NamedPoseNotFound, NamedPoseStore
 from nav_capability.lib.relative_goal_math import compute_relative_goal
+from nav_capability.lib.standoff_math import compute_standoff_goal
 from nav_capability.lib.tf_pose_helper import quat_to_yaw, yaw_to_quat
 
 
@@ -69,7 +73,40 @@ class NavActionServerNode(Node):
             callback_group=self._cb_group,
         )
 
-        self.get_logger().info("nav_action_server_node ready (/nav/goto_relative)")
+        # Named pose store (Phase 5.1) — load from share/nav_capability or override param
+        self.declare_parameter("named_poses_file", "")
+        named_file = self.get_parameter("named_poses_file").value
+        if not named_file:
+            named_file = os.path.join(
+                get_package_share_directory("nav_capability"),
+                "config",
+                "named_poses",
+                "sample.json",
+            )
+        try:
+            self._named_store: Optional[NamedPoseStore] = NamedPoseStore.from_file(named_file)
+            self.get_logger().info(
+                f"named_poses loaded from {named_file}: "
+                f"{sorted(self._named_store.list_names())} (map_id={self._named_store.map_id})"
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            self.get_logger().warn(f"failed to load named_poses ({named_file}): {exc}")
+            self._named_store = None
+
+        # GotoNamed action server (Phase 5.1)
+        self._named_server = ActionServer(
+            self,
+            GotoNamed,
+            "/nav/goto_named",
+            execute_callback=self._execute_named,
+            goal_callback=self._accept_goal,
+            cancel_callback=self._cancel_goal,
+            callback_group=self._cb_group,
+        )
+
+        self.get_logger().info(
+            "nav_action_server_node ready (/nav/goto_relative + /nav/goto_named)"
+        )
 
     # ── Subscriptions ──
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
@@ -209,6 +246,148 @@ class NavActionServerNode(Node):
             goal_handle.succeed()
         elif nav_result.status == GoalStatus.STATUS_CANCELED:
             # Nav2 reported its own goal as cancelled (e.g. preemption).
+            goal_handle.canceled()
+            result.success = False
+            result.message = "cancelled"
+        else:
+            result.success = False
+            result.message = "nav2_failed"
+            goal_handle.abort()
+        return result
+
+
+    # ── GotoNamed handler (Phase 5.1) ──
+    async def _execute_named(self, goal_handle):
+        goal = goal_handle.request
+        result = GotoNamed.Result()
+
+        if self._named_store is None:
+            self.get_logger().warn("named_pose_store not loaded; rejecting goto_named")
+            goal_handle.abort()
+            result.success = False
+            result.message = "named_pose_store_not_loaded"
+            return result
+
+        # Lookup named pose
+        try:
+            named = self._named_store.lookup(goal.name)
+        except NamedPoseNotFound as exc:
+            self.get_logger().warn(str(exc))
+            goal_handle.abort()
+            result.success = False
+            result.message = str(exc)
+            return result
+
+        # max_speed advisory (same v1 caveat as goto_relative)
+        if goal.max_speed > 0.0:
+            self.get_logger().warn(
+                f"goto_named max_speed={goal.max_speed:.2f} ignored in v1 "
+                f"(speed governed by nav2_params controller_server)."
+            )
+
+        # AMCL gating (spec §8 E1: green / yellow / red)
+        cov = self._amcl_covariance_xy()
+        if cov is None or cov > 0.5:
+            self.get_logger().warn(
+                f"amcl covariance unavailable or > 0.5 (got {cov}); rejecting"
+            )
+            goal_handle.abort()
+            result.success = False
+            result.message = "amcl_lost"
+            return result
+
+        # Determine final goal: with optional standoff transform
+        target_x, target_y, target_yaw = named.x, named.y, named.yaw
+        if goal.standoff > 0.0:
+            cur = self._current_map_pose()
+            if cur is None:
+                goal_handle.abort()
+                result.success = False
+                result.message = "amcl_lost"
+                return result
+            rx, ry, _ = cur
+            sgx, sgy, sgyaw_face = compute_standoff_goal(
+                target_x, target_y, rx, ry, goal.standoff
+            )
+            final_yaw = sgyaw_face if goal.align_yaw_to_target else target_yaw
+            final_x, final_y = sgx, sgy
+            self.get_logger().info(
+                f"goto_named '{goal.name}' standoff={goal.standoff:.2f} "
+                f"target=({target_x:.2f},{target_y:.2f}) -> goal=({final_x:.2f},{final_y:.2f},{final_yaw:.2f})"
+            )
+        else:
+            final_x, final_y, final_yaw = target_x, target_y, target_yaw
+            self.get_logger().info(
+                f"goto_named '{goal.name}' direct -> ({final_x:.2f},{final_y:.2f},{final_yaw:.2f})"
+            )
+
+        # Yellow gate: when covariance is borderline, reject long approaches
+        if 0.3 < cov <= 0.5:
+            cur = self._current_map_pose()
+            if cur is not None:
+                rx, ry, _ = cur
+                approach = math.hypot(final_x - rx, final_y - ry)
+                if approach > 0.5:
+                    self.get_logger().warn(
+                        f"amcl covariance_xy={cov:.3f} (yellow); approach {approach:.2f}m > 0.5m allowed; rejecting"
+                    )
+                    goal_handle.abort()
+                    result.success = False
+                    result.message = "amcl_lost"
+                    return result
+
+        # Build Nav2 goal
+        nav_goal = NavigateToPose.Goal()
+        nav_goal.pose.header.frame_id = "map"
+        nav_goal.pose.header.stamp = self.get_clock().now().to_msg()
+        nav_goal.pose.pose.position.x = float(final_x)
+        nav_goal.pose.pose.position.y = float(final_y)
+        qx, qy, qz, qw = yaw_to_quat(final_yaw)
+        nav_goal.pose.pose.orientation.x = qx
+        nav_goal.pose.pose.orientation.y = qy
+        nav_goal.pose.pose.orientation.z = qz
+        nav_goal.pose.pose.orientation.w = qw
+
+        if not self._nav_client.wait_for_server(timeout_sec=5.0):
+            goal_handle.abort()
+            result.success = False
+            result.message = "nav2_unavailable"
+            return result
+
+        nav_handle = await self._nav_client.send_goal_async(nav_goal)
+        if not nav_handle.accepted:
+            goal_handle.abort()
+            result.success = False
+            result.message = "nav2_rejected_goal"
+            return result
+
+        # Cancel propagation (same pattern as goto_relative)
+        nav_result_future = nav_handle.get_result_async()
+        while not nav_result_future.done():
+            if goal_handle.is_cancel_requested:
+                self.get_logger().info("client cancel; cancelling Nav2 goal")
+                await nav_handle.cancel_goal_async()
+                await nav_result_future
+                goal_handle.canceled()
+                result.success = False
+                result.message = "cancelled"
+                return result
+            await asyncio.sleep(0.1)
+
+        nav_result = nav_result_future.result()
+
+        if nav_result.status == GoalStatus.STATUS_SUCCEEDED:
+            result.success = True
+            result.message = "reached"
+            result.final_pose.position.x = float(final_x)
+            result.final_pose.position.y = float(final_y)
+            qx, qy, qz, qw = yaw_to_quat(final_yaw)
+            result.final_pose.orientation.x = qx
+            result.final_pose.orientation.y = qy
+            result.final_pose.orientation.z = qz
+            result.final_pose.orientation.w = qw
+            goal_handle.succeed()
+        elif nav_result.status == GoalStatus.STATUS_CANCELED:
             goal_handle.canceled()
             result.success = False
             result.message = "cancelled"
