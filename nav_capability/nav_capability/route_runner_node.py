@@ -135,6 +135,17 @@ class RouteRunnerNode(Node):
         now_ns = self.get_clock().now().nanoseconds
         return (now_ns - self._last_odom_ns) < 2_000_000_000  # 2s
 
+    async def _wait_for_odom(self, timeout_s: float = 3.0) -> bool:
+        """Phase 9 review #4: warmup wait so just-launched stack doesn't false-reject."""
+        if self._odom_alive():
+            return True
+        deadline_ns = self.get_clock().now().nanoseconds + int(timeout_s * 1e9)
+        while self.get_clock().now().nanoseconds < deadline_ns:
+            await asyncio.sleep(0.1)
+            if self._odom_alive():
+                return True
+        return False
+
     # ── Goal callbacks ──
     def _accept_goal(self, _g):
         # Reject when an active route is still in flight; caller must /nav/cancel first
@@ -214,10 +225,11 @@ class RouteRunnerNode(Node):
         result = RunRoute.Result()
         feedback = RunRoute.Feedback()
 
-        # Phase 8 — driver liveness watchdog
-        if not self._odom_alive():
+        # Phase 8 — driver liveness watchdog with 3s warmup (Phase 9 review #4)
+        if not await self._wait_for_odom(timeout_s=3.0):
             self.get_logger().warn(
-                "rejecting run_route — /odom timeout, driver may be disconnected"
+                "rejecting run_route — /odom not received within 3s warmup; "
+                "driver may be disconnected"
             )
             goal_handle.abort()
             result.success = False

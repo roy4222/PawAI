@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """發 /nav/goto_relative action 給 nav_capability nav_action_server_node。
 
-Phase 9.3 — 從直發 /goal_pose topic 改成 action client，正確等 result + 收 feedback。
+Phase 9.3 — 從直發 /goal_pose topic 改成 action client，等 result。
+v1 注意：server 不發 feedback，CLI 從 send 到 result 之間會靜默（這是預期行為，
+不是卡住）。Result 通常 5-15 秒到達取決於 distance 與 Nav2 plan 速度。
 
 用法:
     python3 scripts/send_relative_goal.py --distance 0.5
@@ -40,12 +42,12 @@ class GotoRelativeClient(Node):
 
         self.get_logger().info(
             f"sending goto_relative distance={distance:.2f} "
-            f"yaw_offset={yaw_offset:.2f} max_speed={max_speed:.2f}"
+            f"yaw_offset={yaw_offset:.2f} max_speed={max_speed:.2f} "
+            f"(note: nav_action_server v1 does not publish feedback; "
+            f"this CLI will appear silent until result arrives)"
         )
 
-        send_future = self._client.send_goal_async(
-            goal, feedback_callback=self._on_feedback
-        )
+        send_future = self._client.send_goal_async(goal)
         rclpy.spin_until_future_complete(self, send_future)
         handle = send_future.result()
         if not handle.accepted:
@@ -61,13 +63,6 @@ class GotoRelativeClient(Node):
             f"actual_distance={result.actual_distance:.3f}"
         )
         return result.success
-
-    def _on_feedback(self, feedback_msg) -> None:
-        fb = feedback_msg.feedback
-        self.get_logger().info(
-            f"feedback: progress={fb.progress:.2f} "
-            f"distance_to_goal={fb.distance_to_goal:.2f}"
-        )
 
 
 def main():

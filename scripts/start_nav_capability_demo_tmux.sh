@@ -20,7 +20,7 @@ set -euo pipefail
 SESSION="${SESSION:-nav-cap-demo}"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
 MAP="${MAP:-/home/jetson/maps/home_living_room.yaml}"
-ROS_SETUP='source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh 2>/dev/null; source ~/elder_and_dog/install/setup.zsh'
+ROS_SETUP='source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh 2>/dev/null && source ~/elder_and_dog/install/setup.zsh'
 
 echo "=== nav_capability Demo (Phase 10 KPI launcher) ==="
 echo "  ROBOT_IP=$ROBOT_IP"
@@ -49,7 +49,7 @@ sleep 4
 echo "[3/8] robot.launch.py (driver + Nav2 wrapper + AMCL + mux + teleop)"
 tmux new-window -t "$SESSION" -n robot
 tmux send-keys -t "$SESSION:robot" \
-    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=true slam:=false map:=$MAP rviz2:=false foxglove:=false enable_tts:=false enable_lidar:=false decode_lidar:=false" Enter
+    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=true slam:=false map:=$MAP rviz2:=false foxglove:=false enable_tts:=false decode_lidar:=false" Enter
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
@@ -70,10 +70,10 @@ tmux new-window -t "$SESSION" -n pause-enable
 tmux send-keys -t "$SESSION:pause-enable" \
     "$ROS_SETUP && sleep 15 && ros2 param set /reactive_stop_node enable_nav_pause true && echo 'enable_nav_pause=true active'" Enter
 
-echo "[7/8] foxglove_bridge (optional)"
+echo "[7/8] foxglove_bridge (optional, uses launch file — known-good path)"
 tmux new-window -t "$SESSION" -n foxglove
 tmux send-keys -t "$SESSION:foxglove" \
-    "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765" Enter
+    "$ROS_SETUP && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765" Enter
 
 echo "[8/8] monitor window (manual ros2 commands)"
 tmux new-window -t "$SESSION" -n monitor

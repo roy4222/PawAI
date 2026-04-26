@@ -141,6 +141,18 @@ class NavActionServerNode(Node):
         now_ns = self.get_clock().now().nanoseconds
         return (now_ns - self._last_odom_ns) < 2_000_000_000  # 2s
 
+    async def _wait_for_odom(self, timeout_s: float = 3.0) -> bool:
+        """Phase 9 review #4: 剛啟 stack 時 /odom 可能還沒 publish；給 timeout warmup
+        而非立刻 reject，避免 K1/K4 假失敗。"""
+        if self._odom_alive():
+            return True
+        deadline_ns = self.get_clock().now().nanoseconds + int(timeout_s * 1e9)
+        while self.get_clock().now().nanoseconds < deadline_ns:
+            await asyncio.sleep(0.1)
+            if self._odom_alive():
+                return True
+        return False
+
     # ── Goal callbacks ──
     def _accept_goal(self, _goal):
         if self._goto_active:
@@ -182,10 +194,11 @@ class NavActionServerNode(Node):
         goal = goal_handle.request
         result = GotoRelative.Result()
 
-        # Phase 8 — driver liveness watchdog (E5).
-        if not self._odom_alive():
+        # Phase 8 — driver liveness watchdog (E5) with 3s warmup (Phase 9 review #4).
+        if not await self._wait_for_odom(timeout_s=3.0):
             self.get_logger().warn(
-                "rejecting goto_relative — /odom timeout, driver may be disconnected"
+                "rejecting goto_relative — /odom not received within 3s warmup; "
+                "driver may be disconnected"
             )
             goal_handle.abort()
             result.success = False
@@ -319,10 +332,11 @@ class NavActionServerNode(Node):
         goal = goal_handle.request
         result = GotoNamed.Result()
 
-        # Phase 8 — driver liveness watchdog (E5).
-        if not self._odom_alive():
+        # Phase 8 — driver liveness watchdog (E5) with 3s warmup (Phase 9 review #4).
+        if not await self._wait_for_odom(timeout_s=3.0):
             self.get_logger().warn(
-                "rejecting goto_named — /odom timeout, driver may be disconnected"
+                "rejecting goto_named — /odom not received within 3s warmup; "
+                "driver may be disconnected"
             )
             goal_handle.abort()
             result.success = False
