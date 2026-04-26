@@ -1,0 +1,13 @@
+# Goal
+float32 distance
+float32 yaw_offset
+float32 max_speed
+---
+# Result
+bool success
+string message
+float32 actual_distance
+---
+# Feedback
+float32 progress
+float32 distance_to_goal

@@ -1,0 +1,14 @@
+# Goal
+string route_id
+bool loop
+---
+# Result
+bool success
+uint32 waypoints_completed
+uint32 waypoints_total
+string message
+---
+# Feedback
+uint32 current_waypoint_index
+string current_waypoint_id
+string current_state

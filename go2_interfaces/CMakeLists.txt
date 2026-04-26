@@ -14,6 +14,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
@@ -57,7 +58,14 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
   # Custom services
   "srv/MoveForDuration.srv"
-  DEPENDENCIES builtin_interfaces geometry_msgs
+  "srv/Cancel.srv"
+
+  # Custom actions (nav_capability platform)
+  "action/GotoRelative.action"
+  "action/GotoNamed.action"
+  "action/RunRoute.action"
+  "action/LogPose.action"
+  DEPENDENCIES builtin_interfaces geometry_msgs action_msgs
 )
 
 

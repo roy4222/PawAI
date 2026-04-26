@@ -1,0 +1,14 @@
+# Goal
+string name
+float32 standoff
+bool align_yaw_to_target
+float32 max_speed
+---
+# Result
+bool success
+string message
+geometry_msgs/Pose final_pose
+---
+# Feedback
+float32 progress
+string current_state
