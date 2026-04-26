@@ -23,6 +23,7 @@ from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav2_msgs.action import NavigateToPose
+from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -66,6 +67,15 @@ class RouteRunnerNode(Node):
             "/amcl_pose",
             self._on_amcl,
             AMCL_QOS,
+            callback_group=self._cb,
+        )
+        # Phase 8 — driver liveness watchdog
+        self._last_odom_ns: int = 0
+        self.create_subscription(
+            Odometry,
+            "/odom",
+            self._on_odom,
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT),
             callback_group=self._cb,
         )
 
@@ -115,6 +125,15 @@ class RouteRunnerNode(Node):
     # ── Subscriptions ──
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
         self._amcl = msg
+
+    def _on_odom(self, _msg: Odometry) -> None:
+        self._last_odom_ns = self.get_clock().now().nanoseconds
+
+    def _odom_alive(self) -> bool:
+        if self._last_odom_ns == 0:
+            return False
+        now_ns = self.get_clock().now().nanoseconds
+        return (now_ns - self._last_odom_ns) < 2_000_000_000  # 2s
 
     # ── Goal callbacks ──
     def _accept_goal(self, _g):
@@ -195,6 +214,16 @@ class RouteRunnerNode(Node):
         result = RunRoute.Result()
         feedback = RunRoute.Feedback()
 
+        # Phase 8 — driver liveness watchdog
+        if not self._odom_alive():
+            self.get_logger().warn(
+                "rejecting run_route — /odom timeout, driver may be disconnected"
+            )
+            goal_handle.abort()
+            result.success = False
+            result.message = "odom_lost_driver_disconnected"
+            return result
+
         # Reset FSM in case prior run left state non-IDLE
         if self._fsm.state != RouteState.IDLE:
             self._reset_fsm()
@@ -244,6 +273,17 @@ class RouteRunnerNode(Node):
 
             # Re-check after wait: caller may have cancelled while paused
             if self._fsm.state == RouteState.FAILED:
+                break
+
+            # Phase 8 — mid-route driver disconnect → cancel
+            if not self._odom_alive():
+                self.get_logger().warn(
+                    "active route aborted — /odom timeout mid-flight"
+                )
+                self._fsm.cancel()
+                if self._current_nav_handle is not None:
+                    await self._current_nav_handle.cancel_goal_async()
+                result.message = "odom_lost_driver_disconnected"
                 break
 
             # External /nav/run_route cancel (vs /nav/cancel service)

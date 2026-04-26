@@ -17,6 +17,7 @@ from typing import Optional
 
 import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import LaserScan
@@ -44,6 +45,7 @@ class StateBroadcasterNode(Node):
         }
         self._latest_amcl_cov: Optional[float] = None
         self._last_scan_ns: int = 0
+        self._last_odom_ns: int = 0  # Phase 8 driver liveness
         # Phase 7-bugfix #5: cache reactive_stop self-reported status; None until first
         # /state/reactive_stop/status arrives. Without this, state_broadcaster used to
         # hardcode reactive_stop_active=false / obstacle_zone=normal even during danger.
@@ -72,6 +74,12 @@ class StateBroadcasterNode(Node):
             "/state/reactive_stop/status",
             self._on_reactive_status,
             10,
+        )
+        self.create_subscription(
+            Odometry,
+            "/odom",
+            self._on_odom,
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT),
         )
 
         self._heartbeat_pub = self.create_publisher(Header, "/state/nav/heartbeat", 10)
@@ -104,6 +112,15 @@ class StateBroadcasterNode(Node):
             self._latest_reactive_status = json.loads(msg.data)
         except json.JSONDecodeError:
             self.get_logger().warn(f"bad reactive_stop status JSON: {msg.data!r}")
+
+    def _on_odom(self, _msg: Odometry) -> None:
+        self._last_odom_ns = self.get_clock().now().nanoseconds
+
+    def _driver_alive(self) -> bool:
+        if self._last_odom_ns == 0:
+            return False
+        now_ns = self.get_clock().now().nanoseconds
+        return (now_ns - self._last_odom_ns) < 2_000_000_000
 
     def _amcl_health(self) -> str:
         cov = self._latest_amcl_cov
@@ -149,8 +166,9 @@ class StateBroadcasterNode(Node):
             "obstacle_distance": obstacle_distance,
             "obstacle_zone": obstacle_zone,
             "lidar_alive": self._lidar_alive(),
+            "driver_alive": self._driver_alive(),  # Phase 8 — /odom watchdog
             "amcl_health": self._amcl_health(),
-            "pause_count_recent_10s": 0,  # TODO Phase 8+: track from /nav/pause calls
+            "pause_count_recent_10s": 0,  # TODO Phase 9+: track from /nav/pause calls
         }
         sf = String()
         sf.data = json.dumps(safety)

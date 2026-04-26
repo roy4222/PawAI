@@ -13,6 +13,7 @@ from ament_index_python.packages import get_package_share_directory
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from nav2_msgs.action import NavigateToPose
+from nav_msgs.msg import Odometry
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -50,6 +51,10 @@ class NavActionServerNode(Node):
         # the first goal keeps awaiting its (now-canceled) result, causing stuck states.
         self._goto_active = False
 
+        # Phase 8 — /odom watchdog as proxy for driver liveness.
+        # If /odom hasn't been heard for >2s, refuse new goto goals (driver disconnected).
+        self._last_odom_ns: int = 0
+
         # Latest AMCL pose
         self._amcl_pose: Optional[PoseWithCovarianceStamped] = None
         self.create_subscription(
@@ -57,6 +62,15 @@ class NavActionServerNode(Node):
             "/amcl_pose",
             self._on_amcl,
             AMCL_QOS,
+            callback_group=self._cb_group,
+        )
+
+        # /odom subscription for driver-liveness watchdog (Phase 8)
+        self.create_subscription(
+            Odometry,
+            "/odom",
+            self._on_odom,
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT),
             callback_group=self._cb_group,
         )
 
@@ -118,6 +132,15 @@ class NavActionServerNode(Node):
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
         self._amcl_pose = msg
 
+    def _on_odom(self, _msg: Odometry) -> None:
+        self._last_odom_ns = self.get_clock().now().nanoseconds
+
+    def _odom_alive(self) -> bool:
+        if self._last_odom_ns == 0:
+            return False
+        now_ns = self.get_clock().now().nanoseconds
+        return (now_ns - self._last_odom_ns) < 2_000_000_000  # 2s
+
     # ── Goal callbacks ──
     def _accept_goal(self, _goal):
         if self._goto_active:
@@ -158,6 +181,16 @@ class NavActionServerNode(Node):
     async def _execute_relative_inner(self, goal_handle):
         goal = goal_handle.request
         result = GotoRelative.Result()
+
+        # Phase 8 — driver liveness watchdog (E5).
+        if not self._odom_alive():
+            self.get_logger().warn(
+                "rejecting goto_relative — /odom timeout, driver may be disconnected"
+            )
+            goal_handle.abort()
+            result.success = False
+            result.message = "odom_lost_driver_disconnected"
+            return result
 
         # max_speed 在 v1 不會 enforce（Nav2 NavigateToPose 沒 per-goal speed override；
         # 速度上限由 nav2_params.yaml controller 設）。明確 warn 告知 caller，避免誤以為已生效。
@@ -285,6 +318,16 @@ class NavActionServerNode(Node):
     async def _execute_named_inner(self, goal_handle):
         goal = goal_handle.request
         result = GotoNamed.Result()
+
+        # Phase 8 — driver liveness watchdog (E5).
+        if not self._odom_alive():
+            self.get_logger().warn(
+                "rejecting goto_named — /odom timeout, driver may be disconnected"
+            )
+            goal_handle.abort()
+            result.success = False
+            result.message = "odom_lost_driver_disconnected"
+            return result
 
         if self._named_store is None:
             self.get_logger().warn("named_pose_store not loaded; rejecting goto_named")
