@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # nav_capability wrapper (Phase 1.5):
-# Copy of nav2_bringup/launch/navigation_launch.py with 4 remap edits so the
+# Copy of nav2_bringup/launch/navigation_launch.py with 6 remap edits so the
 # Nav2 stack's *final* cmd_vel output lands on /cmd_vel_nav (twist_mux input,
 # priority 10), not /cmd_vel directly.
 #
@@ -21,15 +21,19 @@
 #   controller_server  publishes  cmd_vel  → remap to  cmd_vel_nav  (intermediate)
 #   velocity_smoother  subscribes cmd_vel  → remap to  cmd_vel_nav  (read intermediate)
 #   velocity_smoother  publishes  cmd_vel_smoothed  → remap to  cmd_vel  (final)
+#   behavior_server    publishes  cmd_vel  (UNREMAPPED — recovery actions bypass smoother+mux)
 #
-# Wrapper chain:
+# Wrapper chain (controller normal-nav path):
 #   controller_server  publishes  cmd_vel  → remap to  cmd_vel_unsmoothed
+#   behavior_server    publishes  cmd_vel  → remap to  cmd_vel_unsmoothed  (NEW: route recoveries through mux)
 #   velocity_smoother  subscribes cmd_vel  → remap to  cmd_vel_unsmoothed
 #   velocity_smoother  publishes  cmd_vel_smoothed  → remap to  cmd_vel_nav
 #
 # Result: Nav2 final output is /cmd_vel_nav; twist_mux merges with reactive_stop
 # /cmd_vel_obstacle (priority 200), /cmd_vel_joy (100), /cmd_vel_emergency (255)
-# and outputs /cmd_vel to the Go2 driver.
+# and outputs /cmd_vel to the Go2 driver. Recovery behaviors (spin/backup/
+# drive_on_heading/assisted_teleop) all share cmd_vel_unsmoothed; BT enforces
+# normal-nav vs recovery mutual exclusion so publishers never race.
 
 import os
 
@@ -170,7 +174,10 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings),
+                # nav_capability remap (5/6): recovery behaviors (spin/backup/drive_on_heading/
+                # assisted_teleop) 預設直發 cmd_vel；要走 mux 必須 remap 到中間 topic，跟 controller 共用
+                # smoother 路徑（recovery 跟 normal nav 在 BT 層互斥，不會 publish race）。
+                remappings=remappings + [('cmd_vel', 'cmd_vel_unsmoothed')]),
             Node(
                 package='nav2_bt_navigator',
                 executable='bt_navigator',
@@ -246,7 +253,8 @@ def generate_launch_description():
                 plugin='behavior_server::BehaviorServer',
                 name='behavior_server',
                 parameters=[configured_params],
-                remappings=remappings),
+                # nav_capability remap (6/6): composable variant of remap 5/6 above.
+                remappings=remappings + [('cmd_vel', 'cmd_vel_unsmoothed')]),
             ComposableNode(
                 package='nav2_bt_navigator',
                 plugin='nav2_bt_navigator::BtNavigator',
