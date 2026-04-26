@@ -3,6 +3,7 @@
 Phase 4 implementation of nav_capability spec §3.1 A1.
 v1: 一律走 map frame（需要 AMCL 在線）；純 odom path 列入 spec T5。
 """
+import asyncio
 import math
 from typing import Optional, Tuple
 
@@ -103,6 +104,16 @@ class NavActionServerNode(Node):
         goal = goal_handle.request
         result = GotoRelative.Result()
 
+        # max_speed 在 v1 不會 enforce（Nav2 NavigateToPose 沒 per-goal speed override；
+        # 速度上限由 nav2_params.yaml controller 設）。明確 warn 告知 caller，避免誤以為已生效。
+        # 列入 spec §14 T5 範疇之後升級 (動態 set controller param)。
+        if goal.max_speed > 0.0:
+            self.get_logger().warn(
+                f"goto_relative max_speed={goal.max_speed:.2f} ignored in v1 "
+                f"(speed governed by nav2_params controller_server.{{min,max}}_vel_x). "
+                f"Use ros2 param set to override controller speed if needed."
+            )
+
         # AMCL gating (spec §8 E1: green / yellow / red)
         cov = self._amcl_covariance_xy()
         if cov is None:
@@ -170,8 +181,23 @@ class NavActionServerNode(Node):
             result.message = "nav2_rejected_goal"
             return result
 
+        # Poll nav2 result while watching for client cancellation.
+        # 必要的 cancel propagation：caller 取消 /nav/goto_relative 時，
+        # 必須真的把 underlying Nav2 goal 也 cancel 掉，否則 Go2 會繼續走。
         nav_result_future = nav_handle.get_result_async()
-        nav_result = await nav_result_future
+        while not nav_result_future.done():
+            if goal_handle.is_cancel_requested:
+                self.get_logger().info("client cancel requested; cancelling Nav2 goal")
+                await nav_handle.cancel_goal_async()
+                # wait for Nav2 to acknowledge cancel + return final status
+                nav_result = await nav_result_future
+                goal_handle.canceled()
+                result.success = False
+                result.message = "cancelled"
+                return result
+            await asyncio.sleep(0.1)
+
+        nav_result = nav_result_future.result()
 
         if nav_result.status == GoalStatus.STATUS_SUCCEEDED:
             result.success = True
@@ -181,6 +207,11 @@ class NavActionServerNode(Node):
                 ax, ay, _ = cur_after
                 result.actual_distance = float(math.hypot(ax - cx, ay - cy))
             goal_handle.succeed()
+        elif nav_result.status == GoalStatus.STATUS_CANCELED:
+            # Nav2 reported its own goal as cancelled (e.g. preemption).
+            goal_handle.canceled()
+            result.success = False
+            result.message = "cancelled"
         else:
             result.success = False
             result.message = "nav2_failed"

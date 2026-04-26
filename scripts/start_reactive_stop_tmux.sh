@@ -47,9 +47,12 @@ tmux send-keys -t "$SESSION:driver" "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && 
 echo "  Waiting 8s for WebRTC handshake..."
 sleep 8
 
-echo "[4/4] reactive_stop_node"
+echo "[4/4] reactive_stop_node (standalone fallback — publishes /cmd_vel directly, NOT through mux)"
+# 此 script 是 nav2-amcl 失敗時的 standalone fallback，不啟 twist_mux 也不啟 nav_capability。
+# reactive_stop_node 預設 cmd_vel_topic=/cmd_vel_obstacle (跟 nav stack 同跑時用 mux)，
+# 但 standalone 模式下 driver 訂 /cmd_vel，必須覆寫 param 讓 reactive 直發 /cmd_vel。
 tmux new-window -t "$SESSION" -n reactive
-tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node" Enter
+tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=/cmd_vel" Enter
 sleep 2
 
 echo ""

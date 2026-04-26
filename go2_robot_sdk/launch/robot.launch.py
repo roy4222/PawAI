@@ -436,14 +436,18 @@ class Go2NodeFactory:
                 parameters=[self.config.config_paths["joystick"]],
             ),
             # Teleop twist joy node
+            # remap cmd_vel → cmd_vel_joy 讓 teleop 走 mux 而非繞過去直發 driver
             Node(
                 package="teleop_twist_joy",
                 executable="teleop_node",
                 name="go2_teleop_node",
                 condition=IfCondition(with_joystick),
                 parameters=[self.config.config_paths["twist_mux"]],
+                remappings=[("cmd_vel", "cmd_vel_joy")],
             ),
             # Twist multiplexer
+            # twist_mux executable 預設 publish 到 /cmd_vel_out（不是 /cmd_vel），
+            # 必須 remap 才能讓 go2_driver_node 訂的 /cmd_vel 收到 mux 出來的命令
             Node(
                 package="twist_mux",
                 executable="twist_mux",
@@ -453,6 +457,7 @@ class Go2NodeFactory:
                     {"use_sim_time": use_sim_time},
                     self.config.config_paths["twist_mux"],
                 ],
+                remappings=[("/cmd_vel_out", "/cmd_vel")],
             ),
         ]
 
