@@ -138,9 +138,18 @@ def mock_pose_event() -> dict:
     ).model_dump()
 
 def mock_object_event() -> dict:
+    # ── 只使用前端白名單內的物品 ───────────────────────────────────────
+    # 對應 object-panel.tsx 的 OBJECT_WHITELIST（6 個 class）
+    # bottle(39)/chair(56)/person(0)/dog(16) 已排除：
+    #   bottle: 已驗證偵測率極低；chair: 太常見不觸發；
+    #   person: 由人臉模組處理；dog: 不在白名單
     objects_pool = [
-        ("cup", 41), ("bottle", 39), ("chair", 56),
-        ("person", 0), ("dog", 16), ("book", 73),
+        ("cup", 41),        # ✅ 杯子 — 已驗證穩定
+        ("cell phone", 67), # ✅ 手機 — 已驗證可偵測
+        ("book", 73),       # ⚠️ 書本 — 翻開才偵測得到
+        ("laptop", 63),     # ✅ 筆電
+        ("backpack", 24),   # ✅ 背包
+        ("clock", 74),      # ✅ 時鐘
     ]
     n = random.randint(1, 2)
     picks = random.sample(objects_pool, min(n, len(objects_pool)))
@@ -161,10 +170,11 @@ def mock_object_event() -> dict:
             "stamp": time.time(),
             "objects": objects,
             "detected_objects": objects,
-            "active": True,
-            "status": "active",
+            "active": len(objects) > 0,
+            "status": "active" if len(objects) > 0 else "inactive",
         },
     ).model_dump()
+
 
 
 MOCK_GENERATORS = {
@@ -239,7 +249,7 @@ app = FastAPI(title="PawAI Studio Gateway + Mock", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -363,6 +373,7 @@ async def get_health():
 
 @app.post("/mock/trigger")
 async def mock_trigger(trigger: MockTrigger):
+    print(f"DEBUG INCOMING: {trigger.data}")
     event = PawAIEvent(
         id=_uid(), timestamp=_ts(),
         source=trigger.event_source,
@@ -372,7 +383,37 @@ async def mock_trigger(trigger: MockTrigger):
     await manager.broadcast(event)
     return {"status": "ok", "event_id": event["id"]}
 
+import subprocess
+import os
+import sys
+
+yolo_process = None
+
+@app.post("/mock/yolo/start")
+async def start_yolo():
+    """模擬：從網頁端一鍵啟動 YOLO 腳本"""
+    global yolo_process
+    if yolo_process is None or yolo_process.poll() is not None:
+        script_path = os.path.join(os.path.dirname(__file__), "local_yolo_mjpeg.py")
+        yolo_process = subprocess.Popen([sys.executable, script_path])
+        return {"status": "started", "msg": "YOLO 串流已由網頁啟動"}
+    return {"status": "already_running"}
+
+@app.post("/mock/yolo/stop")
+async def stop_yolo():
+    """模擬：從網頁端關閉 YOLO 腳本"""
+    global yolo_process
+    if yolo_process is not None and yolo_process.poll() is None:
+        yolo_process.terminate()
+        yolo_process = None
+        return {"status": "stopped", "msg": "YOLO 串流已關閉"}
+    return {"status": "not_running"}
+
 @app.post("/mock/scenario/demo_a")
 async def mock_demo_a():
     asyncio.create_task(run_demo_a())
     return {"status": "started", "scenario": "demo_a", "steps": len(DEMO_A_SEQUENCE)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("mock_server:app", host="0.0.0.0", port=8000, ws="wsproto", reload=True)
