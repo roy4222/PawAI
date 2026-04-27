@@ -101,14 +101,22 @@ class SkillContract:
     name: str
     steps: list[SkillStep]                  # 永遠 list；primitive 即 [1 step]
     priority_class: PriorityClass
-    safety_requirements: list[str]          # ["not_obstacle","not_emergency","tts_idle","nav_safe"]
+    safety_requirements: list[str] = field(default_factory=list)
     cooldown_s: float = 0
     timeout_s: float = 8.0
     fallback_skill: str | None = None
     description: str = ""                   # 給 Brain reasoning + Studio bubble 顯示
-    enabled: bool = True                    # MVS 用：未就緒 skill 標 false
     args_schema: dict = field(default_factory=dict)
     ui_style: Literal["normal","alert","safety"] = "normal"  # Chat bubble 顏色 hint
+
+    # MVS 用：永久關閉旗標（替代舊 `enabled`，語意更明確）
+    static_enabled: bool = True
+
+    # Phase B（PawClaw evolution）預留 — MVS 階段為空 list，行為等同 always-enabled。
+    # 詳見 docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md
+    enabled_when: list = field(default_factory=list)         # list[CapabilityPredicate] in Phase B
+    requires_confirmation: bool = False                       # 高風險動作需 Studio confirm
+    risk_level: Literal["low","medium","high"] = "low"
 
 @dataclass
 class SkillPlan:
@@ -160,7 +168,7 @@ class SkillResult:
 | `self_introduce` | SEQUENCE | 10 步（5 say + 5 motion 交替，見 §3.5） | 60 (whole) | true | 開場 wow moment |
 | `stranger_alert` | ALERT | `[say{text:"偵測到不認識的人，請注意"}]` | 30 | true | unknown face ≥3s 觸發。**MVS 不做 motion**（Phase 3 視穩定度再加） |
 | `fallen_alert` | ALERT | `[motion{name:"stop_move"}, say{text:"偵測到有人跌倒，請確認是否需要協助"}]` | 15 | true | **stop_move 是「停下機器狗自己」，不是 balance_stand** |
-| `go_to_named_place` | SKILL | `[nav{action:"goto_named", args:{...}}]` | 0 | **false** | nav KPI 未通過，MVS disabled，registry 預留；Studio Skill Button 灰階 |
+| `go_to_named_place` | SKILL | `[nav{action:"goto_named", args:{...}}]` | 0 | **false** | nav KPI 未通過，MVS `static_enabled=True` + `enabled_when=[phase_b_pending(False)]`；Studio Skill Button 灰階，hover 顯示「Phase B 才整合 nav_capability」（為 PawClaw evolution 鋪路） |
 
 > **`chat_reply` vs `say_canned`**：兩者底層都是 say，但 source 不同：
 > - `chat_reply`：source = `"llm_bridge"`，由 llm_bridge 透過 `/brain/chat_candidate` 提供 reply_text

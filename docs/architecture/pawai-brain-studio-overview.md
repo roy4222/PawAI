@@ -3,10 +3,12 @@
 > **Status**: current
 > **Date**: 2026-04-27
 > **Scope**: 把 PawAI Brain（決策引擎）與 PawAI Studio（操作與觀測介面）視為一個整體，說明它們的目標、架構、模組職責、資料流、與 Demo 行為
+> **演進路線**：Phase A（Brain MVS，5/16 demo）→ Phase B（**PawClaw** Embodied Brain V1，5/16 後）
 > **依據文件**：
-> - `docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md`（Brain MVS Spec）
+> - `docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md`（Brain MVS Spec — Phase A）
+> - `docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`（**PawClaw 演進** — Phase B）
 > - `docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`（PawAI 系統設計）
-> - `docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md`（實作計畫）
+> - `docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md`（實作計畫 — Phase A）
 
 ---
 
@@ -15,6 +17,8 @@
 > **PawAI Brain 是會選技能的決策引擎；PawAI Studio 是讓人跟 Brain 對話、操作 Go2、觀測整個系統的 Conversational Brain Console。**
 >
 > 兩者合起來像「**一個懂 Go2 也能操作 Go2 的 ChatGPT**」 — 使用者在 Studio 的 Chat 頁打字、按按鈕或說話，背後是 Brain 在分辨聊天 / 動作 / 警示，安全層全程把關，所有決策過程在 Chat 流裡可視化。
+
+**演進視角（PawClaw）**：本架構長期目標是「PawAI = PawClaw」 — 借鑑 [OpenClaw](https://github.com/openclaw/openclaw) 的 harness engineering pattern，讓 Brain 不只能演 demo 場景，還能「**懂自己身體**」：知道現在能不能走、地圖載入沒、AMCL 收斂沒、為什麼某個指令做不到。Phase A（MVS，5/16 demo 上場）先完成互動 Brain；Phase B（PawClaw V1）加上 **Capability Registry** + **BodyState** + **Nav Skill Pack** + **Workspace files**，演進為「embodied agent」。
 
 ---
 
@@ -457,10 +461,40 @@ Jetson 斷電：
 | 主題 | 文件 |
 |---|---|
 | **本文件**（系統整合總覽） | `docs/architecture/pawai-brain-studio-overview.md` |
-| Brain MVS 設計 spec | `docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md` |
-| Brain MVS 實作 plan | `docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md` |
-| PawAI 系統定位 | `docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md` |
+| **Phase A**：Brain MVS 設計 spec | `docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md` |
+| **Phase A**：Brain MVS 實作 plan（34 tasks） | `docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md` |
+| **Phase B**：PawClaw Embodied Brain V1 演進 spec | `docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md` |
+| PawAI 系統定位（4/11 三層 Brain 概念源） | `docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md` |
 | 專案方向、Demo、分工 | `docs/mission/README.md` |
-| ROS2 介面契約（v2.5 將更新） | `docs/architecture/contracts/interaction_contract.md` |
+| ROS2 介面契約（v2.5 Phase A / v2.6 Phase B 將更新） | `docs/architecture/contracts/interaction_contract.md` |
 | PawAI Studio 設計 | `docs/Pawai-studio/README.md` |
 | 各感知模組 | `docs/{語音功能,人臉辨識,手勢辨識,姿勢辨識,辨識物體}/README.md` |
+
+---
+
+## 15. PawClaw 演進預告（Phase B 摘要）
+
+5/16 demo 後啟動，把 Brain 從「demo script player」升級為「embodied agent」。三個核心新增：
+
+| 新增 | 對應 OpenClaw 概念 | PawAI 落地 |
+|---|---|---|
+| **CapabilityRegistry** — `SkillContract.enabled_when: list[CapabilityPredicate]` | OpenClaw allow/deny + tool registry | 動態 enable/disable per skill；理由人類可讀 |
+| **BodyState** — 擴 WorldState 加 localization / map / battery / nav_ready | OpenClaw context engine | Brain 發 plan 前已知道身體可不可行 |
+| **Nav Skill Pack** — go_to_named_place / go_to_relative / run_patrol_route / pause / resume / cancel | (PawClaw 獨有) | 對接既有 nav_capability 4 actions + 3 services |
+| **Workspace files** — BODY.md / SKILLS.md / SAFETY.md / PLACES.md / DEMO_MODE.md | OpenClaw AGENTS.md / SOUL.md | 系統自描述；Phase C 餵 LLM context |
+
+**Studio 對 PawClaw 的對應升級**：Skill Trace Drawer 加「Capability Status」分頁，列每個 skill 為何可/不可用；Skill Buttons 灰階按鈕 hover 顯示「我為什麼不能做」的人話訊息（不再是「Disabled」單字）。
+
+**Demo 升級對話範例**：
+
+```
+[user]   去廚房看一下
+[brain]  candidate skill: go_to_named_place(place="廚房")
+[capability]  ✗ blocked
+              · AMCL 定位未收斂
+              · 地圖未載入
+[brain]  fallback to chat_reply
+[say]    我現在還不能移動 — 定位還沒收斂、地圖也還沒載入。要先建圖嗎？
+```
+
+詳細設計請見 `docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`。

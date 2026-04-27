@@ -722,9 +722,19 @@ class SkillContract:
     timeout_s: float = 8.0
     fallback_skill: str | None = None
     description: str = ""
-    enabled: bool = True
     args_schema: dict[str, Any] = field(default_factory=dict)
     ui_style: Literal["normal", "alert", "safety"] = "normal"
+
+    # MVS: 永久關閉旗標（取代舊 `enabled`，語意更明確）
+    static_enabled: bool = True
+
+    # Phase B（PawClaw evolution）預留欄位 — MVS 階段為空 list，行為等同 always-enabled。
+    # CapabilityPredicate 是 dataclass(name: str, check: Callable[[BodyState], tuple[bool, str]])
+    # 在 MVS 階段 typing 用 list 即可（避免循環 import）；Phase B 實際塞 predicate instance。
+    # 詳見 docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md §4
+    enabled_when: list = field(default_factory=list)
+    requires_confirmation: bool = False
+    risk_level: Literal["low", "medium", "high"] = "low"
 
 
 @dataclass
@@ -865,8 +875,17 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         name="go_to_named_place",
         steps=[SkillStep(ExecutorKind.NAV, {"action": "goto_named", "args": {}})],
         priority_class=PriorityClass.SKILL,
-        description="Navigate to a named pose. Disabled in MVS (nav KPI pending).",
-        enabled=False,
+        description="Navigate to a named pose. Phase B integration pending.",
+        # Forward-compatible with PawClaw evolution: keep static_enabled=True so the
+        # skill is "registered and known", but block at runtime via enabled_when.
+        # Studio surfaces the human-readable reason instead of just greying out the button.
+        static_enabled=True,
+        # MVS placeholder predicate: pure tuple, no CapabilityPredicate type yet
+        # (Phase B will replace with `CapabilityPredicate("phase_b_pending", ...)`).
+        # is_enabled() helper added in Phase B; in MVS, the registry sentinel is
+        # still consulted by build_plan() — see Step 4 patch below.
+        enabled_when=[("phase_b_pending", "Phase B 才整合 nav_capability")],
+        risk_level="medium",
         args_schema={"place_id": "string"},
     ),
 }
@@ -880,11 +899,22 @@ Append:
 def build_plan(skill_name: str, args: dict[str, Any] | None = None,
                source: str = "rule", reason: str = "",
                session_id: str | None = None) -> SkillPlan:
-    """Resolve template args and instantiate a SkillPlan from SKILL_REGISTRY."""
+    """Resolve template args and instantiate a SkillPlan from SKILL_REGISTRY.
+
+    MVS gate: refuse if static_enabled=False OR if any enabled_when entry
+    is a (name, reason) tuple sentinel (Phase B will replace tuples with
+    proper CapabilityPredicate objects evaluated against BodyState).
+    """
     args = args or {}
     contract = SKILL_REGISTRY[skill_name]
-    if not contract.enabled:
-        raise ValueError(f"Skill {skill_name!r} is disabled")
+    if not contract.static_enabled:
+        raise ValueError(f"Skill {skill_name!r} is statically disabled")
+    # MVS sentinel form: list[tuple[name, reason]] — any entry → blocked
+    sentinel_blocks = [t for t in contract.enabled_when
+                       if isinstance(t, tuple) and len(t) == 2]
+    if sentinel_blocks:
+        reasons = "; ".join(r for _name, r in sentinel_blocks)
+        raise ValueError(f"Skill {skill_name!r} blocked: {reasons}")
     resolved_steps: list[SkillStep] = []
     for step in contract.steps:
         new_args = dict(step.args)
@@ -1000,10 +1030,11 @@ def test_fallen_alert_uses_stop_move_not_balance_stand():
             assert s.args["name"] != "balance_stand"
 
 
-def test_go_to_named_place_disabled():
+def test_go_to_named_place_blocked_until_phase_b():
     contract = SKILL_REGISTRY["go_to_named_place"]
-    assert contract.enabled is False
-    with pytest.raises(ValueError, match="disabled"):
+    assert contract.static_enabled is True       # registered + known
+    assert contract.enabled_when, "should carry phase_b_pending sentinel"
+    with pytest.raises(ValueError, match="blocked|Phase B"):
         build_plan("go_to_named_place")
 
 
@@ -1982,13 +2013,15 @@ Replace `_on_chat_candidate` stub:
             self.get_logger().warn(f"skill_request: unknown skill {skill!r}")
             return
         contract = SKILL_REGISTRY[skill]
-        if not contract.enabled:
-            self.get_logger().warn(f"skill_request: disabled skill {skill!r}")
+        if not contract.static_enabled:
+            self.get_logger().warn(f"skill_request: statically disabled skill {skill!r}")
             return
         if contract.cooldown_s > 0 and self._in_cooldown(skill, contract.cooldown_s):
             self.get_logger().info(f"skill_request: {skill} in cooldown")
             return
         try:
+            # build_plan() also checks enabled_when sentinels (Phase A) /
+            # CapabilityPredicate (Phase B); blocked → ValueError with reason
             plan = build_plan(skill, args=args, source="studio_button",
                               reason=f"studio_request:{skill}")
         except (KeyError, ValueError) as exc:
@@ -2518,7 +2551,9 @@ class InteractionExecutiveNode(Node):
                 self._pub_webrtc.publish(req)
                 return True
             if step.executor == ExecutorKind.NAV:
-                # MVS nav skill is disabled (go_to_named_place enabled=false). Stub.
+                # MVS nav skill is blocked at build_plan() by phase_b_pending sentinel.
+                # If a NAV step ever reaches here in Phase A, it's a Phase A bug —
+                # log loudly. Phase B will replace this stub with real action client.
                 self.get_logger().info(f"NAV step (stub): {step.args}")
                 return True
         except Exception as exc:
