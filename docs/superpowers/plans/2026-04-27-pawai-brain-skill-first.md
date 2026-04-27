@@ -60,27 +60,27 @@
 ### Task 0.1: Add `output_mode` parameter to llm_bridge_node
 
 **Files:**
-- Modify: `speech_processor/speech_processor/llm_bridge_node.py:160-185` (add param)
+- Modify: `speech_processor/speech_processor/llm_bridge_node.py` (param declaration + read; **actual method names**: `_declare_parameters` at line 160, `_read_parameters` at line 185 — NOT `_load_parameters`)
 
 - [ ] **Step 1: Add param declaration**
 
-In `_declare_parameters()` add line after `self.declare_parameter("subscribe_face", True)`:
+In `_declare_parameters()` add line after `self.declare_parameter("subscribe_face", True)` (current last line at ~183):
 
 ```python
         self.declare_parameter("output_mode", "legacy")  # "legacy" | "brain"
         self.declare_parameter("chat_candidate_topic", "/brain/chat_candidate")
 ```
 
-- [ ] **Step 2: Read param in `_load_parameters`**
+- [ ] **Step 2: Read param in `_read_parameters`**
 
-After existing param loads in `_load_parameters` (around line 200) add:
+After `self.subscribe_face = _bool("subscribe_face")` in `_read_parameters` (line 214) add:
 
 ```python
-        self.output_mode = str(self.get_parameter("output_mode").get_parameter_value().string_value).strip().lower()
+        self.output_mode = _str("output_mode").strip().lower()
         if self.output_mode not in ("legacy", "brain"):
             self.get_logger().warn(f"unknown output_mode={self.output_mode!r}, falling back to legacy")
             self.output_mode = "legacy"
-        self.chat_candidate_topic = str(self.get_parameter("chat_candidate_topic").get_parameter_value().string_value)
+        self.chat_candidate_topic = _str("chat_candidate_topic")
         self.get_logger().info(f"llm_bridge output_mode={self.output_mode}")
 ```
 
@@ -90,9 +90,15 @@ After existing param loads in `_load_parameters` (around line 200) add:
 cd /home/roy422/newLife/elder_and_dog
 colcon build --packages-select speech_processor --symlink-install
 source install/setup.zsh
-ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain --help-tree 2>&1 | head -3
-# Expected: node loads without error
+# Sanity: node starts and reads param without error
+ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain &
+PID=$!
+sleep 2
+ros2 param get /llm_bridge_node output_mode
+kill $PID
 ```
+
+Expected: prints `String value is: brain`.
 
 - [ ] **Step 4: Commit**
 
@@ -103,31 +109,224 @@ git commit -m "feat(llm_bridge): add output_mode param (legacy|brain) for Brain 
 
 ---
 
-### Task 0.2: Add `/brain/chat_candidate` publisher and brain-mode branches
+### Task 0.2: Brain-mode output gate — publish ONLY `/brain/chat_candidate`
+
+**Critical**: brain-mode must close BOTH decision sites:
+- `_dispatch` (LLM success path)
+- `_rule_fallback` (fast-path AND LLM-failure-fallback path)
+
+If either path leaks `_send_tts()` or `_send_action()` in brain mode, the safety boundary breaks. We thread `session_id` + `confidence` through the call chain so both decision sites have what they need to emit chat_candidate.
 
 **Files:**
-- Modify: `speech_processor/speech_processor/llm_bridge_node.py` (publishers + dispatch branches)
+- Modify: `speech_processor/speech_processor/llm_bridge_node.py` (publisher, signatures, decision-site gate, helper method)
 
-- [ ] **Step 1: Add chat_candidate publisher**
+- [ ] **Step 1: Add `chat_candidate` publisher in `__init__`**
 
-In `__init__` where existing publishers are created (search for `create_publisher.*tts`), add:
+After the existing publisher block (around line 112, immediately after the `if WebRtcReq is not None ... else: self.action_pub = None` clause), add:
 
 ```python
         # /brain/chat_candidate publisher (always created; only used when output_mode=="brain")
-        self._pub_chat_candidate = self.create_publisher(String, self.chat_candidate_topic, 10)
+        self.chat_candidate_pub = self.create_publisher(
+            String, self.chat_candidate_topic, 10
+        )
 ```
 
-- [ ] **Step 2: Add helper to publish chat_candidate**
+- [ ] **Step 2: Plumb `session_id` through `_call_llm_and_act` signature**
 
-Add new method:
+Find the existing definition (around line 336):
 
 ```python
-    def _publish_chat_candidate(self, session_id: str, reply_text: str,
-                                intent: str, selected_skill: str | None,
-                                confidence: float) -> None:
-        """Brain-mode output: publish reply text as a candidate for Brain to consume.
+    def _call_llm_and_act(
+        self,
+        user_message: str,
+        fallback_intent: str,
+        source: str,
+        face_name: str | None = None,
+        confidence: float = 0.0,
+    ) -> None:
+```
+
+Append `session_id`:
+
+```python
+    def _call_llm_and_act(
+        self,
+        user_message: str,
+        fallback_intent: str,
+        source: str,
+        face_name: str | None = None,
+        confidence: float = 0.0,
+        session_id: str | None = None,
+    ) -> None:
+```
+
+- [ ] **Step 3: Update `_call_llm_and_act` internal calls to pass session_id + confidence + intent**
+
+Inside `_call_llm_and_act`, find the two `self._rule_fallback(...)` calls (fast-path around line 370, fallback around line 390) and the one `self._dispatch(result, source)` call (line 385). Update them:
+
+```python
+            # Fast path: high-confidence known intents skip LLM entirely
+            if (
+                not self.force_fallback
+                and fallback_intent in self.FAST_PATH_INTENTS
+                and confidence >= self.FAST_PATH_MIN_CONFIDENCE
+                and source == "speech"
+            ):
+                self.get_logger().info(
+                    f"Fast path: intent={fallback_intent} conf={confidence:.2f}, skipping LLM"
+                )
+                self._rule_fallback(fallback_intent, source, face_name,
+                                    session_id=session_id, confidence=confidence)
+                return
+```
+
+```python
+            if result is not None:
+                self._dispatch(result, source,
+                               session_id=session_id, confidence=confidence,
+                               fallback_intent=fallback_intent)
+            elif self.enable_fallback:
+                self.get_logger().info(
+                    f"LLM failed, falling back to RuleBrain (intent={fallback_intent})"
+                )
+                self._rule_fallback(fallback_intent, source, face_name,
+                                    session_id=session_id, confidence=confidence)
+```
+
+- [ ] **Step 4: Update `_on_speech_event` call site to pass session_id**
+
+In `_on_speech_event` around line 253, change:
+
+```python
+        self._executor.submit(
+            self._call_llm_and_act, user_message, intent, "speech", None, confidence
+        )
+```
+
+to:
+
+```python
+        self._executor.submit(
+            self._call_llm_and_act, user_message, intent, "speech", None, confidence, session_id
+        )
+```
+
+(Face triggers don't need session_id — they don't emit chat_candidate.)
+
+- [ ] **Step 5: Extend `_dispatch` signature**
+
+Find `_dispatch` (line 472) and change signature:
+
+```python
+    def _dispatch(
+        self,
+        result: dict,
+        source: str,
+        session_id: str | None = None,
+        confidence: float = 0.0,
+        fallback_intent: str = "",
+    ) -> None:
+```
+
+- [ ] **Step 6: Insert brain-mode gate at top of `_dispatch` (after safety filtering)**
+
+Locate the line `self.last_error = ""` (around line 509, end of safety/skill filtering). Insert AFTER it (so banned_api / unknown skill gating still runs, then brain mode short-circuits):
+
+```python
+        self.last_trigger = source
+        self.last_intent = intent
+        self.last_reply = reply_text
+        self.last_skill = selected_skill or ""
+        self.last_error = ""
+
+        self.get_logger().info(
+            f"LLM decision: intent={intent} skill={selected_skill} "
+            f"reply={reply_text!r} reason={reasoning}"
+        )
+
+        # ── Brain-mode output gate ───────────────────────────────────
+        if self.output_mode == "brain":
+            if source == "speech":
+                self._emit_chat_candidate(
+                    session_id=session_id or "",
+                    reply_text=reply_text,
+                    intent=intent,
+                    selected_skill=selected_skill,
+                    confidence=confidence,
+                )
+            # face/state-triggered LLM responses are silently dropped in brain mode;
+            # Brain owns face → greet_known_person via its own face rule.
+            return
+        # ── legacy mode below (unchanged) ────────────────────────────
+```
+
+(Keep the existing `ACTION_ONLY_SKILLS` block + `_send_tts` + `_send_action` calls AFTER this gate; they only run in legacy mode now.)
+
+- [ ] **Step 7: Extend `_rule_fallback` signature**
+
+Find `_rule_fallback` (line 539) and change signature:
+
+```python
+    def _rule_fallback(
+        self,
+        intent: str,
+        source: str,
+        face_name: str | None = None,
+        session_id: str | None = None,
+        confidence: float = 0.0,
+    ) -> None:
+```
+
+- [ ] **Step 8: Insert brain-mode gate in `_rule_fallback` (after computing reply + skill)**
+
+Locate the line `self.last_error = "fallback"` (around line 552, end of state set). Insert AFTER it:
+
+```python
+        self.last_trigger = source
+        self.last_intent = intent
+        self.last_reply = reply
+        self.last_skill = skill or ""
+        self.last_error = "fallback"
+
+        self.get_logger().info(
+            f"RuleBrain fallback: intent={intent} skill={skill} reply={reply!r}"
+        )
+
+        # ── Brain-mode output gate ───────────────────────────────────
+        if self.output_mode == "brain":
+            if source == "speech":
+                self._emit_chat_candidate(
+                    session_id=session_id or "",
+                    reply_text=reply,
+                    intent=intent,
+                    selected_skill=skill,
+                    confidence=confidence,
+                )
+            return
+        # ── legacy mode below (unchanged) ────────────────────────────
+```
+
+(Keep the existing `ACTION_ONLY_INTENTS` block + `_send_tts` + `_send_action` calls AFTER this gate.)
+
+- [ ] **Step 9: Add `_emit_chat_candidate` helper**
+
+Add new method (place near `_send_tts` / `_send_action`, around line 573):
+
+```python
+    # ── Brain mode output ────────────────────────────────────────────
+    def _emit_chat_candidate(
+        self,
+        session_id: str,
+        reply_text: str,
+        intent: str,
+        selected_skill: str | None,
+        confidence: float,
+    ) -> None:
+        """Brain-mode output: publish reply for Brain to consume.
 
         selected_skill is diagnostic only — Brain MVS only uses reply_text.
+        Empty reply_text is allowed; Brain will fall through to its
+        chat_candidate timeout (say_canned).
         """
         payload = {
             "session_id": session_id,
@@ -140,77 +339,116 @@ Add new method:
         }
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
-        self._pub_chat_candidate.publish(msg)
+        self.chat_candidate_pub.publish(msg)
+        self.get_logger().info(
+            f"Published /brain/chat_candidate: session={session_id} reply={reply_text!r}"
+        )
 ```
 
-- [ ] **Step 3: Branch in `_dispatch` (or whichever method publishes /tts and action)**
+- [ ] **Step 10: Update `_publish_state` for observability (optional but recommended)**
 
-Locate where `/tts` and `/webrtc_req` are published after LLM result (search `self._pub_tts.publish`). Wrap that block:
+Find `_publish_state` and add `"output_mode": self.output_mode` to the published JSON.
 
-```python
-        if self.output_mode == "brain":
-            # Brain mode: only emit chat_candidate; do NOT publish /tts or sport /webrtc_req
-            self._publish_chat_candidate(
-                session_id=session_id,
-                reply_text=reply_text,
-                intent=intent,
-                selected_skill=selected_skill,
-                confidence=confidence,
-            )
-            return
-        # legacy mode: existing behavior unchanged
-        # ... existing /tts publish + /webrtc_req publish ...
-```
-
-- [ ] **Step 4: Update state_topic message to include output_mode**
-
-Where `_publish_state` builds payload (search `state_topic` publisher), add field `"output_mode": self.output_mode` to the published JSON for observability.
-
-- [ ] **Step 5: Build & lint**
+- [ ] **Step 11: Build & syntax check**
 
 ```bash
+cd /home/roy422/newLife/elder_and_dog
 colcon build --packages-select speech_processor --symlink-install
 python3 -m py_compile speech_processor/speech_processor/llm_bridge_node.py
 ```
 
-Expected: build success, no syntax errors.
+Expected: build success.
 
-- [ ] **Step 6: Smoke test brain mode**
+- [ ] **Step 12: Negative smoke — brain mode must NOT publish /tts or /webrtc_req**
 
 ```bash
 source install/setup.zsh
-ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain &
+ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain -p force_fallback:=true &
 LLM_PID=$!
 sleep 3
-# Send a fake speech intent
-ros2 topic pub --once /event/speech_intent_recognized std_msgs/String '{data: "{\"intent\":\"chat\",\"transcript\":\"你好\",\"session_id\":\"smoke1\",\"confidence\":0.9,\"timestamp\":1714000000.0}"}'
-# Watch chat_candidate
-ros2 topic echo /brain/chat_candidate --once
-kill $LLM_PID
+
+# Background-watch /tts and /webrtc_req for 5 seconds — both should stay silent
+( timeout 5 ros2 topic echo /tts > /tmp/tts_brain.log 2>&1 ) &
+( timeout 5 ros2 topic echo /webrtc_req > /tmp/webrtc_brain.log 2>&1 ) &
+
+# Trigger fast-path (rule_fallback path)
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"greet\",\"text\":\"你好\",\"session_id\":\"neg1\",\"confidence\":0.95}"}'
+sleep 1
+# Trigger normal LLM path (force_fallback=true → also rule_fallback)
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"chat\",\"text\":\"今天天氣\",\"session_id\":\"neg2\",\"confidence\":0.5}"}'
+sleep 1
+# Trigger ACTION_ONLY (stop) — must also be gated
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"stop\",\"text\":\"停\",\"session_id\":\"neg3\",\"confidence\":0.95}"}'
+
+wait
+kill $LLM_PID 2>/dev/null
+
+echo "=== /tts emissions (must be empty) ==="
+wc -l /tmp/tts_brain.log
+echo "=== /webrtc_req emissions (must be empty) ==="
+wc -l /tmp/webrtc_brain.log
 ```
 
-Expected: chat_candidate JSON appears with reply_text from LLM (or fallback "...") and source="llm_bridge". `/tts` should NOT have any publish (verify: `ros2 topic echo /tts --once` would block).
+Expected: `/tmp/tts_brain.log` and `/tmp/webrtc_brain.log` both 0 bytes (or only contain the "WARNING: New publisher discovered" line ≤ 1 line, no actual data frames).
 
-- [ ] **Step 7: Verify legacy mode still works**
+- [ ] **Step 13: Positive smoke — chat_candidate fired for all three paths**
 
 ```bash
-ros2 run speech_processor llm_bridge_node &
+ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain -p force_fallback:=true &
 LLM_PID=$!
 sleep 3
-ros2 topic pub --once /event/speech_intent_recognized std_msgs/String '{data: "{\"intent\":\"chat\",\"transcript\":\"你好\",\"session_id\":\"smoke2\",\"confidence\":0.9,\"timestamp\":1714000000.0}"}'
-ros2 topic echo /tts --once
-kill $LLM_PID
+( timeout 8 ros2 topic echo /brain/chat_candidate > /tmp/cc.log 2>&1 ) &
+
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"greet\",\"text\":\"你好\",\"session_id\":\"pos1\",\"confidence\":0.95}"}'
+sleep 1
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"chat\",\"text\":\"今天天氣\",\"session_id\":\"pos2\",\"confidence\":0.5}"}'
+sleep 1
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"stop\",\"text\":\"停\",\"session_id\":\"pos3\",\"confidence\":0.95}"}'
+sleep 2
+wait
+kill $LLM_PID 2>/dev/null
+
+echo "=== chat_candidate emissions (expect 3) ==="
+grep -c '"session_id":' /tmp/cc.log
+grep '"session_id":' /tmp/cc.log
 ```
 
-Expected: `/tts` receives reply text (legacy behavior preserved).
+Expected: 3 candidate emissions, with session_ids `pos1` / `pos2` / `pos3`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 14: Verify legacy mode unchanged**
+
+```bash
+ros2 run speech_processor llm_bridge_node --ros-args -p force_fallback:=true &
+LLM_PID=$!
+sleep 3
+( timeout 5 ros2 topic echo /tts > /tmp/tts_legacy.log 2>&1 ) &
+ros2 topic pub --once /event/speech_intent_recognized std_msgs/String \
+  '{data: "{\"intent\":\"greet\",\"text\":\"你好\",\"session_id\":\"leg1\",\"confidence\":0.95}"}'
+wait
+kill $LLM_PID 2>/dev/null
+grep -c "data:" /tmp/tts_legacy.log
+```
+
+Expected: ≥ 1 emission on `/tts` (legacy preserved).
+
+- [ ] **Step 15: Commit**
 
 ```bash
 git add speech_processor/speech_processor/llm_bridge_node.py
-git commit -m "feat(llm_bridge): publish /brain/chat_candidate in brain mode
+git commit -m "feat(llm_bridge): brain mode emits chat_candidate at BOTH decision sites
 
-Brain mode suppresses /tts and sport /webrtc_req; legacy mode unchanged."
+- Plumb session_id + confidence through _call_llm_and_act → _dispatch / _rule_fallback
+- Gate output at end of _dispatch (LLM success) and _rule_fallback (fast-path + LLM-fail)
+- Both gates short-circuit BEFORE _send_tts / _send_action calls
+- Face/state-triggered LLM is silently dropped in brain mode (Brain owns face rule)
+- Empty reply_text is allowed; Brain falls through to say_canned timeout
+- Legacy mode unchanged"
 ```
 
 ---
@@ -336,9 +574,62 @@ git commit -m "feat(vision): add enable_event_action_bridge launch arg for Brain
 
 ---
 
-### Task 0.5: Phase 0 milestone smoke (legacy still works)
+### Task 0.5: Phase 0 milestone smoke + WebRtcReq publisher audit
 
-- [ ] **Step 1: Run existing e2e**
+- [ ] **Step 1: Drop the AST audit script (will also be used in Final Verification)**
+
+Create `scripts/audit_webrtc_publishers.py` with the content given in **Final Verification → Option B** (see end of plan). At Phase 0 the whitelist is the same (interaction_executive_node will be rewritten in Phase 1 but already exists; tts_node is unchanged). Running it now catches any regression from Phase 0 changes:
+
+```bash
+cd /home/roy422/newLife/elder_and_dog
+python3 scripts/audit_webrtc_publishers.py
+```
+
+Expected after Phase 0: `OK · only whitelisted files publish WebRtcReq` — confirms `llm_bridge_node.py` is no longer reachable as a sport publisher in brain mode (the publisher object still exists for legacy mode; this audit is **source-level structural** and at Phase 0 it will still flag llm_bridge as a violation because the `self.action_pub = self.create_publisher(WebRtcReq, ...)` line still exists).
+
+**Phase 0 transitional behaviour**: in legacy mode `action_pub` is needed; in brain mode it's never used. To resolve the audit cleanly at Phase 0, **wrap the publisher creation behind an `output_mode == "legacy"` check**. Update `__init__` block in `llm_bridge_node.py` (around line 107) from:
+
+```python
+        if WebRtcReq is not None and self.enable_actions:
+            self.action_pub = self.create_publisher(
+                WebRtcReq, "/webrtc_req", 10
+            )
+        else:
+            self.action_pub = None
+```
+
+to:
+
+```python
+        if WebRtcReq is not None and self.enable_actions and self.output_mode == "legacy":
+            self.action_pub = self.create_publisher(
+                WebRtcReq, "/webrtc_req", 10
+            )
+        else:
+            self.action_pub = None
+```
+
+Now run audit again with both modes and confirm:
+
+```bash
+# Legacy mode boots → action_pub created → audit flags llm_bridge (expected, legacy)
+# Brain mode boots → action_pub == None → no publisher → AST still sees the line!
+```
+
+Important caveat: AST audit is **static**, it sees the source line regardless of runtime branching. So Phase 0 audit will list `llm_bridge_node.py` as a "potential" publisher. Add `llm_bridge_node.py` to the whitelist with a comment `# legacy mode only; gated by output_mode=="legacy"`, then **remove from whitelist** at end of Phase 1 once Brain MVS is verified working and we flip the default to brain mode (or delete the legacy branch entirely).
+
+Update `audit_webrtc_publishers.py` WHITELIST for Phase 0/1 transition:
+
+```python
+WHITELIST = {
+    "interaction_executive/interaction_executive/interaction_executive_node.py",
+    "speech_processor/speech_processor/tts_node.py",
+    # Phase 0/1 transitional — remove when default flips to brain mode
+    "speech_processor/speech_processor/llm_bridge_node.py",
+}
+```
+
+- [ ] **Step 2: Run existing e2e (legacy mode default unchanged)**
 
 ```bash
 cd /home/roy422/newLife/elder_and_dog
@@ -348,7 +639,14 @@ bash scripts/start_llm_e2e_tmux.sh
 
 Expected: 既有聊天 e2e 仍正常（legacy mode default 沒被破壞）。
 
-- [ ] **Step 2: Tag Phase 0 done**
+- [ ] **Step 3: Commit audit script**
+
+```bash
+git add scripts/audit_webrtc_publishers.py
+git commit -m "chore(audit): AST-based WebRtcReq publisher audit (Brain MVS gate)"
+```
+
+- [ ] **Step 4: Tag Phase 0 done**
 
 ```bash
 git tag pawai-brain-phase0-done
@@ -2040,7 +2338,11 @@ _RELIABLE_20 = QoSProfile(depth=20, reliability=QoSReliabilityPolicy.RELIABLE)
 
 @dataclass
 class _ActiveStep:
-    plan_id: str
+    """Hold a reference to the active plan (not just plan_id) so that when
+    SAFETY/ALERT preempts mid-step, the ABORTED SkillResult carries the OLD
+    plan's selected_skill / priority_class / step_total — not the new plan's.
+    """
+    plan: SkillPlan
     step_index: int
     started_at: float
 
@@ -2116,11 +2418,13 @@ class InteractionExecutiveNode(Node):
                                   step_total=len(pp.plan.steps))
             with self._lock:
                 if self._active is not None:
-                    self._emit_result(self._active.plan_id, self._active.step_index,
-                                      SkillResultStatus.ABORTED, detail="preempted",
-                                      selected_skill=plan.selected_skill,
-                                      priority_class=plan.priority_class,
-                                      step_total=len(plan.steps))
+                    # IMPORTANT: emit ABORTED for the ACTIVE plan (old), not the new preempting plan
+                    active_plan = self._active.plan
+                    self._emit_result(active_plan.plan_id, self._active.step_index,
+                                      SkillResultStatus.ABORTED, detail="preempted_by_higher_priority",
+                                      selected_skill=active_plan.selected_skill,
+                                      priority_class=active_plan.priority_class,
+                                      step_total=len(active_plan.steps))
                     self._active = None
             self._queue.push_front(plan)
         else:
@@ -2138,23 +2442,19 @@ class InteractionExecutiveNode(Node):
                 snap = self._world.snapshot()
                 if snap.tts_playing and age < self.tts_idle_timeout_s:
                     return
-                # Step done — emit success
-                plan = self._queue.peek()
-                if plan is None:
-                    self._active = None
-                    return
-                self._emit_result(self._active.plan_id, self._active.step_index,
+                # Step done — emit success using ACTIVE plan reference (not queue.peek())
+                active_plan = self._active.plan
+                self._emit_result(active_plan.plan_id, self._active.step_index,
                                   SkillResultStatus.STEP_SUCCESS,
-                                  selected_skill=plan.selected_skill,
-                                  priority_class=plan.priority_class,
-                                  step_total=len(plan.steps))
+                                  selected_skill=active_plan.selected_skill,
+                                  priority_class=active_plan.priority_class,
+                                  step_total=len(active_plan.steps))
                 self._active = None
 
             plan = self._queue.peek()
             if plan is None:
                 return
             # determine next step
-            next_idx = 0 if not getattr(plan, "_started", False) else plan._next_index
             if not getattr(plan, "_started", False):
                 self._emit_result(plan.plan_id, None, SkillResultStatus.STARTED,
                                   selected_skill=plan.selected_skill,
@@ -2186,7 +2486,8 @@ class InteractionExecutiveNode(Node):
                                   step_total=len(plan.steps))
                 self._queue.pop()
                 return
-            self._active = _ActiveStep(plan_id=plan.plan_id, step_index=plan._next_index,
+            # Store full plan reference so preemption can correctly attribute ABORTED
+            self._active = _ActiveStep(plan=plan, step_index=plan._next_index,
                                       started_at=time.time())
             plan._next_index += 1
 
@@ -3611,16 +3912,118 @@ python3 -m pytest interaction_executive/test/ speech_processor/test/test_tts_aud
 
 Expected: ~30 tests, 100% PASS.
 
-- [ ] **No new sport /webrtc_req publishers**
+- [ ] **No new sport /webrtc_req publishers (multiline-aware audit)**
 
-```bash
-grep -rn "create_publisher" --include="*.py" /home/roy422/newLife/elder_and_dog/ \
-  | grep "WebRtcReq" \
-  | grep -v "tts_node.py" \
-  | grep -v "interaction_executive_node.py"
+The existing publisher in `llm_bridge_node.py` is split across two lines:
+
+```python
+self.action_pub = self.create_publisher(
+    WebRtcReq, "/webrtc_req", 10
+)
 ```
 
-Expected: empty output.
+A single-line `grep` would miss it and false-pass. Use one of:
+
+**Option A — ripgrep multiline mode** (preferred):
+
+```bash
+cd /home/roy422/newLife/elder_and_dog
+rg -nU --multiline --type py 'create_publisher\([^)]*WebRtcReq' \
+  --glob '!build/**' --glob '!install/**' --glob '!log/**'
+```
+
+Expected files (whitelist): `interaction_executive/.../interaction_executive_node.py` only.
+**Forbidden** to appear: `llm_bridge_node.py`, `event_action_bridge.py`, anything except `tts_node.py` (which uses literal int api_ids 4001-4004 and is covered by `test_tts_audio_api_only.py`).
+
+**Option B — Python AST audit script** (run in CI):
+
+Create `scripts/audit_webrtc_publishers.py`:
+
+```python
+"""Audit script: find every WebRtcReq publisher in the workspace.
+
+Whitelist:
+- interaction_executive/interaction_executive/interaction_executive_node.py
+  (sole sport /webrtc_req publisher)
+- speech_processor/speech_processor/tts_node.py
+  (Megaphone audio publisher; api_ids 4001-4004 enforced by separate test)
+
+Any other file publishing WebRtcReq is a violation of the Brain MVS
+single-outlet contract.
+"""
+from __future__ import annotations
+
+import ast
+import sys
+from pathlib import Path
+
+WHITELIST = {
+    "interaction_executive/interaction_executive/interaction_executive_node.py",
+    "speech_processor/speech_processor/tts_node.py",
+    # Phase 0/1 transitional: llm_bridge keeps a publisher object for legacy mode
+    # but it's gated by `output_mode == "legacy"` in __init__. Remove this entry
+    # when the legacy code path is finally deleted (post-MVS).
+    "speech_processor/speech_processor/llm_bridge_node.py",
+}
+ROOT = Path(__file__).resolve().parents[1]
+EXCLUDED_DIRS = {"build", "install", "log", ".git", "node_modules"}
+
+
+def find_violations(root: Path) -> list[tuple[Path, int]]:
+    violations: list[tuple[Path, int]] = []
+    for py in root.rglob("*.py"):
+        rel = py.relative_to(root).as_posix()
+        if any(part in EXCLUDED_DIRS for part in py.parts):
+            continue
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            # match `self.create_publisher(...)` or `node.create_publisher(...)`
+            if not (isinstance(func, ast.Attribute) and func.attr == "create_publisher"):
+                continue
+            # first positional arg should be the message type
+            if not node.args:
+                continue
+            first = node.args[0]
+            type_name = first.id if isinstance(first, ast.Name) else None
+            if type_name == "WebRtcReq":
+                if rel not in WHITELIST:
+                    violations.append((py, node.lineno))
+    return violations
+
+
+def main() -> int:
+    violations = find_violations(ROOT)
+    if not violations:
+        print("OK · only whitelisted files publish WebRtcReq")
+        return 0
+    print("VIOLATIONS · WebRtcReq publishers outside whitelist:")
+    for path, line in violations:
+        print(f"  {path.relative_to(ROOT)}:{line}")
+    print("\nWhitelist:")
+    for w in sorted(WHITELIST):
+        print(f"  {w}")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+Run:
+
+```bash
+python3 scripts/audit_webrtc_publishers.py
+```
+
+Expected: `OK · only whitelisted files publish WebRtcReq`, exit 0.
+
+(Optional: wire this into `scripts/hooks/git-pre-commit.sh` so it runs on every commit.)
 
 - [ ] **Brain Skill Console end-to-end (real Jetson run)**
 
