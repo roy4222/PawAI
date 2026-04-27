@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-27 evening（Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因）
+**最後更新**：2026-04-27 evening（Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
 
 ---
@@ -76,7 +76,23 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 ### 新增/修改檔案
 
 - 新增 [`docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
+- 新增 [`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
 - 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
+
+### 4/27 晚 Annie 外部諮詢會議（董偉峰指導 + Annie 外部教授 + Roy/若恩/黃旭）
+
+完整紀錄：[`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
+
+**現場展示**（黃旭 Web Dashboard，Go2 不在現場用線上 demo）：
+- 人臉打招呼（認得 Roy）/ 手勢比讚 → happy / 物件辨識 / 姿勢站立蹲下 / 語音對話（天氣 / 笑話 / 自介）
+
+**Annie 提案 4 個方向**（**全部未承諾、不阻塞 5/13 demo 主線**）：
+1. **對話延續性**：強化 ChatGPT 式主動反問 / 引導，由若恩處理
+2. **Affective Computing ⭐**：audio-visual 情緒辨識 → LLM prompt 帶情緒 metadata → emotional support 回應。**未排程，需另開研究 spec**
+3. **TTS 升級**：Gemini 2.5 Flash TTS 評估（語氣自然度顯著高於 edge-tts / Piper）。**5/13 demo 後排程**
+4. **LiDAR 頂部支架**：魔鬼氈不夠穩，需印固定支架。**已併入 4/27 RPLIDAR 物理 mount 調查**（同方向，不重複工作）
+
+**待議**：下次可邀 Annie 介紹同校 affect computing dataset
 
 ---
 
