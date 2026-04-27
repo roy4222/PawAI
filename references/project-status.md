@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-27 night（LiDAR 開發藍圖 v2.2 + 歷史踩坑彙總 / Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
+**最後更新**：2026-04-27 late night（**PawAI Brain Skill-first MVS 三件套 + PawClaw 演進 spec 落地** / LiDAR 開發藍圖 v2.2 + 歷史踩坑彙總 / Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
 
 ---
@@ -121,6 +121,82 @@ Plan 修正歷程 v1 → v2 → v2.1 → v2.2，含**歷史踩坑彙總 9 大類
 4. **LiDAR 頂部支架**：魔鬼氈不夠穩，需印固定支架。**已併入 4/27 RPLIDAR 物理 mount 調查**（同方向，不重複工作）
 
 **待議**：下次可邀 Annie 介紹同校 affect computing dataset
+
+---
+
+## 4/27 late night — PawAI Brain Skill-first MVS 設計收斂 + PawClaw 演進路線
+
+**晚上轉軌：白天 LiDAR 卡關後，把時間投到 Brain 架構，避免兩線同時阻塞。**
+
+### 決策脈絡（brainstorming）
+
+**起點問題**：speech intent 直接進 state_machine、Executive 也直接發 `/cmd_vel`，且 `/webrtc_req` 同時被 `llm_bridge_node` / `interaction_executive_node` / `event_action_bridge` **三個 publisher 競爭**（其中兩個沒 banned_api 守衛）。直接加新 Brain 變第四個寫手，重演導航踩過的「多控制源互搶」事故。
+
+**設計方向 5 次迭代收斂**：
+1. → **Phase 0 refactor**：sport `/webrtc_req` 收成 Executive 單一出口，TTS audio `/webrtc_req`（tts_node Megaphone 4001-4004）保留不動；llm_bridge 加 `output_mode: legacy|brain` feature flag 漸進切換
+2. → **Brain in interaction_executive package**（不開新 package，brain_node + executive_node 雙 entry_point，共用 safety_layer / skill_contract / world_state modules）
+3. → **Brain 純規則 + llm_bridge 改發 /brain/chat_candidate**（LLM 變 proposal source，不直接控狗）
+4. → **Skill-first reframe**：所有能力（聊天 / 動作 / 導航 / 警示）統一 SkillContract；Executive 只認 say/motion/nav 三個 primitive executor
+5. → **Studio Chat = Brain Skill Console**（不是另開 dashboard，Chat 即決策可視化）
+
+7 場景 MVS：你好 / 停 / 介紹自己 / wave / 陌生人 3s / 熟人問候 / 跌倒。Hybrid 路由（Safety 關鍵字硬擋 + 規則 + 1500ms LLM chat_candidate 等待）。
+
+### Linus 風格 review 發現的 4 個 P0/P1 bug（已修）
+
+1. **P0**：plan 只在 `_dispatch()` 加 brain mode 閘門，但 `_rule_fallback()`（fast-path + LLM-fail 都會走）仍會發 `/tts` 和 sport `/webrtc_req` → **兩個決策出口都加閘門 + plumb session_id/confidence 全鏈**
+2. **P0**：plan snippet 用 `_load_parameters` 但實際是 `_read_parameters`；`_dispatch(result, source)` 只有 2 args 卻在 plan 裡塞 session_id → **signature 全部對齊**
+3. **P1**：驗證 grep 是 single-line，會漏掉現有 multi-line publisher → **改用 `rg -U` + Python AST `audit_webrtc_publishers.py` 腳本**
+4. **P1**：Executive 被 SAFETY/ALERT 中斷時，ABORTED 用新 plan 的 metadata 標老 plan → **`_ActiveStep` 改持 SkillPlan 完整參考；worker_tick 也改用 `_active.plan` 避免 post-preempt race**
+
+### PawClaw 演進（5/16 demo 後 Phase B）
+
+借鑑 [openclaw/openclaw](https://github.com/openclaw/openclaw) 的 harness engineering pattern，**派 Explore subagent 深掘** repo + docs 後產出可偷 / 不該偷對照表（4 偷 / 5 簡化 / 7 不偷）。Phase B 三大新增：
+
+- **CapabilityRegistry**（SkillContract 加 `enabled_when: list[CapabilityPredicate]`）— 動態 enable/disable per skill，理由人類可讀
+- **BodyState**（擴 WorldState 加 AMCL covariance / map_loaded / nav_stack_ready / battery / sensor liveness）— Brain 發 plan 前已知道身體可不可行
+- **Nav Skill Pack** 6 條 — 對接 `nav_capability` 既有 4 actions（GotoNamed / GotoRelative / RunRoute / LogPose）+ 3 services（pause/resume/cancel）；NAV step 真正進 Executive dispatch
+
+**MVS 已做 forward-compat patch**（不打斷明天的 Phase A execution）：
+- `SkillContract` 新增 `static_enabled` / `enabled_when` / `requires_confirmation` / `risk_level` 欄位（safe defaults）
+- `go_to_named_place` 從 `enabled=False` 改成 sentinel `enabled_when=[("phase_b_pending", "...")]`
+- `build_plan()` 認得 sentinel 並 raise 帶 reason 的 ValueError → Studio 可顯示「我為什麼不能做」的人話訊息
+
+### 交付物（5 個 commit）
+
+| Commit | 內容 | 行數 |
+|---|---|---|
+| `43aa039` | Spec — Brain MVS Skill-first design | 769 行 |
+| `31febe6` | Plan — MVS 34-task implementation | 3650 行 |
+| `6c8d79d` | Overview — Brain × Studio 整合總覽（對外 / 論文用） | 466 行 |
+| `59921ed` | Plan fix — 4 review corrections（P0×2 + P1×2） | +489/-86 |
+| `07e0287` | PawClaw evolution spec + MVS forward-compat patch | +736 |
+
+合計 **~5400 新行文件、0 程式碼**。明天起進 Phase A execution。
+
+### 明天 Phase A 起手式
+
+```
+Task 0.1: llm_bridge 加 output_mode param
+   ↓
+Task 0.2: 雙閘門 + chat_candidate publisher（10 sub-step + 3 smoke test）
+   ↓
+Task 0.3: tts_node audio-api guard test
+   ↓
+Task 0.4: event_action_bridge launch arg
+   ↓
+Task 0.5: AST audit + 既有 e2e smoke + tag pawai-brain-phase0-done
+   ↓
+Phase 1（5-6 天）: 5 新檔 + 4 unit test + executive rewrite
+   ↓
+Phase 2（3-4 天）: Studio Brain Skill Console 8 components
+```
+
+### 新增/修改檔案
+
+- 新增 [`docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
+- 新增 [`docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/superpowers/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
+- 新增 [`docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
+- 新增 [`docs/architecture/pawai-brain-studio-overview.md`](../docs/architecture/pawai-brain-studio-overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
 
 ---
 
@@ -406,7 +482,7 @@ Plan 修正歷程 v1 → v2 → v2.1 → v2.2，含**歷史踩坑彙總 9 大類
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | **Chat ROS2 閉環 + Live View 實機通過** | 4/7 | Chat 走 ROS2 pipeline 閉環（文字/語音→LLM→/tts→AI bubble）；錄音音量動畫（AnalyserNode 7 bars）；Live View 三欄影像；gateway-url 統一；start-live.sh 正式站；mock TTS event 修復；31 tests PASS |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
+| interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS。**4/27 night**: Brain Skill-first MVS spec + 34-task plan + PawClaw 演進 spec 落地（純文件，0 程式變更），4/28 起進 Phase A execution — brain_node + executive 重寫 + 9-skill registry + Studio Brain Skill Console |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
 | 導航避障 | **Nav2 0.8m 自主前進實機驗證 + reactive_stop fallback** | 4/26 | 0.8m goal 走 50cm 用戶現場確認；昨天 lethal 判定為暫態（v3.7 nav2_params 不需改）；reactive_stop_node 完成 17 tests pass + Jetson dry-run 通過；發現並修兩 bug（goal_pose BEST_EFFORT QoS、preemption 過密）；待續：重新建圖（用戶判定 map 髒污）+ B 線 4 場景實機驗收 |
 
