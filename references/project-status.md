@@ -1,7 +1,82 @@
 # 專案狀態
 
-**最後更新**：2026-04-26 evening（nav_capability S2 Phase 0–9 平台層落地 + Phase 10 KPI 部分驗收：K9/K10 ✅，K8 移出實機）
+**最後更新**：2026-04-27 evening（Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+
+---
+
+## 4/27 進度
+
+**Phase 10 K1 撞牆 → 挖出從 4/25 上機就埋的雷**
+
+### 觸發事件
+
+跑 K1 warmup（`goto_relative 0.3m`）→ nav_action_server 拒收 `amcl_lost`。Go2 完全沒動 AMCL covariance 反而從 σ_y 0.52 漂大到 0.72。`/state/nav/safety` 顯示 `obstacle_distance=0.819m, zone=slow`，user 現場確認 Go2 前方根本沒東西。
+
+### 重大發現（30 樣本 5 秒 angular probe）
+
+Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensity 全部 = 15（max），jitter < 3mm。左側完全空（2-3m）。**完全不對稱、極穩、強反射** → 不是 ghost / 雜訊，是真實物體被 RPLIDAR 看到，最可能是 **Go2 自身揹包 / 拓展模組 / 電池蓋** 或 **mount yaw 偏 ~70°**（文件明寫 mount xyz yaw 從 4/25 起就沒量過）。
+
+完整證據與三假設見 [`docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md)。
+
+### 同步發現的平台 latent bug
+
+`lifecycle_manager_localization` 自動 STARTUP **沒完成** — `map_server` 與 `amcl` 卡在 inactive（process 都活、tmux 8 window 都綠，但靜默失敗）。手動 `ros2 lifecycle set /map_server activate` + `/amcl activate` 兩次 transition 才上來。`lifecycle_manager_navigation` 卻是 active，所以表面看 stack 正常。Root cause 留作 5/13 前 todo。
+
+### 三天 KPI 卡關真因（Linus 風格回顧）
+
+1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。[4/25 log §3](../docs/導航避障/research/2026-04-25-rplidar-a2m12-integration-log.md) 寫「待精確量測」但延宕至今
+2. **4/25 桌上 10.4Hz 通過 → 直接上機，沒做 scan angular audit** — 30 樣本角度分布該是 day-1 sanity，到今天才跑
+3. **4/26 上午判定「lethal 是暫態 / map 髒污」 → 整下午重建地圖** — 但根因是 scan 本身有 phantom，新 map 一樣會被污染
+4. **4/26 下午+晚上做 nav_capability S2 平台抽象（4 actions / 70 unit tests / 22+ commits）** — 抽象層 K9/K10 過了，但 K1 從沒成功一次。底層沒打穩，平台層蓋再多都是空中樓閣
+5. **4/26 晚 covariance 0.53 紅當下沒查根因，推到 4/27** — 今天直接重啟變 0.72，更糟
+
+### 物理 mount 升級調研
+
+- amigo_ros2 README 連結 `pant_tilt_v2-1` 已 link rot（GrabCAD 404）
+- GrabCAD 全平台 0 個 Go2+RPLIDAR mount
+- MakerWorld 找到 8 個 Go2 背架候選，前 3 推薦：「宇树Go2 背部拓展板」/「Unitree GO2 Back Plate」/「Base Unitree Go 2 - T-Track 30」
+- Demo 短期方案：3M VHB 雙面膠 + 手機水平儀（±3°），線材側邊綁出
+
+### Phase 10 KPI 結果（無變化）
+
+| KPI | 結果 | 備註 |
+|-----|------|------|
+| K1/K2/K4/K5/K7 | ⏳ **全部阻塞** | RPLIDAR 物理 mount + scan phantom 未解 → AMCL 無法收斂 |
+| K8 | ✅ WSL 4/4 / 移出實機 | 不變 |
+| K9 | ✅ heartbeat 1.001 / status 9.997 / safety ~10 Hz | 今天 rate 回到正常（4/26 是 2x 異常）— 可能 4/26 DDS ghost 已自然消失 |
+| K10 | ✅ 3/5（user override 為 3 點） | 不變 |
+
+### 工具升級
+
+- 加 `Bash(agent-browser:*)` 到 `.claude/settings.local.json`（permission，個人不入版控）
+- 全域安裝 `agent-browser` v0.26.0 + Chrome for Testing 148（用於需要 JS render 的 web 調研）
+
+### 下次 session 接手
+
+**優先級 P0（必做完才動 KPI）**：
+
+1. user 用搖桿原地左轉 Go2 90°，重抓 30 樣本 angular probe → 判定 H1/H2/H3
+2. 量 RPLIDAR 中心相對 Go2 base_link 實測 xyz（mm 尺）+ 雷達黑色 USB 線朝向（Slamtec 規定朝後 = 0° 朝前）
+3. 判定後修法：
+   - **H1/H3**：reactive_stop_node 加 `blank_angle_ranges_deg` param + `nav2_params.yaml` 改 `laser_min_range: 1.1`
+   - **H2**：移 Go2 到開闊處重點 initialpose
+4. 物理 mount 升級：選一個 MakerWorld 背架印 / 或 3M VHB 暫接
+
+**P0 通過後跑**：
+
+5. K1 warmup `goto_relative 0.3m` → covariance σ < 0.3m
+6. K1（0.5m × 5）→ K2（0.8m × 5）→ K4（route × 3）→ K5⭐ → K7⭐
+
+**Bonus**：
+
+- root-cause `lifecycle_manager_localization` 自動 STARTUP fail
+- 寫 `scripts/scan_health_check.py`（30 樣本 angular probe + intensity 異常標記）
+
+### 新增/修改檔案
+
+- 新增 [`docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
+- 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
 
 ---
 
