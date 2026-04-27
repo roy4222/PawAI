@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-04-27 evening（Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
+**最後更新**：2026-04-27 night（LiDAR 開發藍圖 v2.2 + 歷史踩坑彙總 / Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
 
 ---
@@ -77,7 +77,35 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 
 - 新增 [`docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/導航避障/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
 - 新增 [`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
+- 新增 [`docs/導航避障/lidar開發/2026-04-27-lidar-dev-roadmap.md`](../docs/導航避障/lidar開發/2026-04-27-lidar-dev-roadmap.md) — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
 - 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
+
+### LiDAR 開發藍圖（5/9 起執行）
+
+完整 plan：[`docs/導航避障/lidar開發/2026-04-27-lidar-dev-roadmap.md`](../docs/導航避障/lidar開發/2026-04-27-lidar-dev-roadmap.md)
+
+7 階段路徑（user 已選好 mount STL，等支架印好開工）：
+
+```
+1. Mount 量測 + TF 更新（5 scripts + build_map.sh echo）  ← 30 分鐘（裝完當天必做）
+2. Scan 健康驗證（scan-only stack）         ← 1 小時
+3. SLAM 重建圖                              ← 1.5 小時
+4. AMCL 校正（laser range 先 → beamskip 後） ← 1.5 小時
+5. Nav2 K1/K2                              ← 1 小時
+6. 動態安全 K5/K7（reactive + pause + emergency）← 1.5 小時
+7. 自動巡邏 K4 + Brain                      ← 2-4 小時
+```
+
+**最低限度 demo（5/13）**：1+2+3+4+5；**目標**：再加 6+7；**不做**：「人擋路自動繞」、進階導航。
+
+Plan 修正歷程 v1 → v2 → v2.1 → v2.2，含**歷史踩坑彙總 9 大類 40+ 條**（雷達物理 / RPLIDAR scan 品質 / AMCL Nav2 設定 / Go2 driver / tmux mux 路由 / cartographer / ROS2 工具鏈 / 架構決策 / Linus 反思）。之後開發**先看那節**，避免重蹈覆轍。
+
+### 主時程（2026-04-27 確定）
+
+- **5/8 deadline**：PawAI Brain MVS 必須到 70%（另一份 plan）
+- **5/9-5/12**：LiDAR 7 階段開發（本 plan）
+- **5/11-5/12**：freeze（spec 強制）
+- **5/13**：學校 demo
 
 ### 4/27 晚 Annie 外部諮詢會議（董偉峰指導 + Annie 外部教授 + Roy/若恩/黃旭）
 
