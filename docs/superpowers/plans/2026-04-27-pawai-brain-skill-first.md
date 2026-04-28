@@ -2,6 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **執行狀態（2026-04-28）**：
+> - ✅ **Phase 0** Action Outlet Refactor（5 tasks）— tag `pawai-brain-phase0-done`
+> - ✅ **Phase 1** Brain MVS Backend（13 tasks，A1）— tag `pawai-brain-phase1-done`，77 tests pass
+> - ✅ **Phase 2** Studio Brain Skill Console（16 tasks，A2）— tag `pawai-brain-phase2-done`，mock REST 三條 200
+>
+> 全部 34 tasks 完成、Phase 0/1/2 全綠。Codex 外包 A1 + A2 各一輪成功 merge。任務 checkbox（`- [ ]`）未逐一勾選；以 git tags 為準。
+
 **Goal:** Implement PawAI Brain Skill-first MVS — sport `/webrtc_req` 收成 Executive 單一出口、新增 brain_node 純規則仲裁、Studio Chat 升級為 Brain Skill Console，能 demo 7 場景（你好 / 停 / 介紹自己 / wave / 陌生人 3s / 熟人問候 / 跌倒）。
 
 **Architecture:** 3 primitive executors（say/motion/nav）+ 9 semantic skills；brain_node 以純規則仲裁多源事件、發 `/brain/proposal` 給 executive；executive 是唯一 sport `/webrtc_req` publisher；Studio Chat 訂閱 `/state/pawai_brain` 與 `/brain/skill_result` 渲染 8 種 bubble + Skill Buttons + Trace Drawer。

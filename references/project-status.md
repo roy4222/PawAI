@@ -1,7 +1,63 @@
 # 專案狀態
 
-**最後更新**：2026-04-27 late night（**PawAI Brain Skill-first MVS 三件套 + PawClaw 演進 spec 落地** / LiDAR 開發藍圖 v2.2 + 歷史踩坑彙總 / Phase 10 K1/K2/K4/K5/K7 全部阻塞 — RPLIDAR 物理 mount + scan phantom 才是 3 天卡關真因 / Annie 外部諮詢會議）
+**最後更新**：2026-04-28 night（**PawAI Brain MVS Phase 0+1+2 全綠 + Master Integration Plan + Codex 外包流程驗證** / LiDAR mount STL 印好待測 / OpenRouter 智商升級為下一步）
 **硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+
+---
+
+## 4/28 進度
+
+**PawAI Brain × Studio 從零做到 Phase A 完整骨架（17 commits 一日完成）**
+
+### 完成事項
+
+| Phase | 內容 | 狀態 | tag |
+|-------|------|------|-----|
+| **Phase 0** | Action Outlet Refactor — sport `/webrtc_req` 收成 Executive 單一出口 | ✅ | `pawai-brain-phase0-done` |
+| **Phase 1 (A1)** | Brain MVS 後端 — brain_node + skill_contract + safety_layer + world_state + skill_queue + executive 重寫 | ✅ | `pawai-brain-phase1-done` |
+| **Phase 2 (A2)** | Studio Brain Skill Console — schemas + gateway + mock + 8 React components + chat-panel 整合 | ✅ | `pawai-brain-phase2-done` |
+| **Master Plan** | PawClaw Master Integration Plan v1.0（單一入口、5 條 review 修正併入） | ✅ | — |
+
+### 驗證
+
+- **interaction_executive**：77 tests pass
+- **WebRtcReq audit**：OK（只 executive + tts_node 是合法發送者）
+- **Topic contract v2.5**：5 個新 `/brain/*` + `/state/pawai_brain` 進 §2 表格
+- **Studio mock smoke**：`/api/skill_request` `/api/text_input` `/mock/scenario/self_introduce` 三條全 200
+- **TypeScript / ESLint**：clean（4 個 pre-existing 無關 warning）
+
+### North Star 共識（2026-04-28 釐清）
+
+> **PawAI Brain = 機器狗版 [OpenClaw](https://github.com/openclaw/openclaw)**
+>
+> 自然語言互動 + 居家互動/守護犬 + 所有能力暴露為 SkillContract + 危險動作經 deterministic safety。Phase A 是 OpenClaw-style 框架地基，不是 demo 終點；Phase B 加 Capability/BodyState；Phase C 接 LLM function calling。
+
+### Codex 外包流程（成功 2 次）
+
+兩次 Codex job 都採用「briefing → review feedback → v2 briefing → Codex 實作 → 5 點驗收 → merge + tag」流程，每次都在約 2-4 小時內完成數千行 PR-quality diff：
+
+- A1 Brain backend：3 commits + 77 tests + WebRtcReq audit + 5 個 forward-compat 欄位
+- A2 Studio Console：4 commits + 8 React components + REST 200 + WS envelope 一致
+
+### 唯一文件入口
+
+從今天起：[`docs/superpowers/plans/2026-04-28-pawclaw-master-integration.md`](../docs/superpowers/plans/2026-04-28-pawclaw-master-integration.md)（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
+
+### 下一步（4/29 雙軌開發）
+
+- **軌道 1（主軸）**：LiDAR mount STL 已印好 → 跑 roadmap Phase 1-7（量測 → SLAM → AMCL → K1/K2 → K5/K7）
+- **軌道 2（背景）**：B-1 OpenRouter 接入 — 把 `llm_bridge_node` fallback chain 升級成 4 級（OpenRouter Sonnet 4.6 → 本地 Qwen2.5-7B → Ollama → RuleBrain），讓自由對話智商升級
+
+### 4/30 教授會議後
+
+隊員 push 過來時：宇童手勢 mapping、佩珍跌倒 TTS 文案、黃旭物體擴 whitelist、如恩語音正向表列；都是「加 brain rule + skill_contract 條目 + bubble 文案」，不是大整合。
+
+### 不做（避免 5/16 demo 前 scope 失控）
+
+- ❌ Studio UI 重做 — 留 5/14-5/18（freeze 後）用 ui-ux-pro-max skill 一次重做
+- ❌ Phase B（Capability Validator / BodyState）— 5/19 驗收後啟動
+- ❌ Phase C（LLM function calling）— Phase B 完成後
+- ❌ 抄 4 個 PawAI repo PR — Phase 3 hooks，5/16 後
 
 ---
 

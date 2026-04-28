@@ -35,7 +35,9 @@ stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
     |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
 llm_bridge_node（Cloud Qwen2.5-7B -> Ollama 1.5B -> RuleBrain 三級 fallback）
-    | /tts
+    |   output_mode=legacy → 發 /tts + sport /webrtc_req（既有行為）
+    |   output_mode=brain  → 只發 /brain/chat_candidate（PawAI Brain MVS 模式）
+    | /tts（legacy 模式）or /brain/chat_candidate（brain 模式）
 tts_node（edge-tts 雲端主線 / Piper 本地 fallback）
     |
 USB 喇叭 local playback（Megaphone DataChannel 備用）
@@ -132,8 +134,49 @@ GPU 斷線時的備案。ASR 判斷意圖後直接匹配固定回答，回應速
 - 必要時出示錄影作為 AI 對話功能佐證
 - **負責人**：陳若恩（見分工文件）
 
+## PawAI Brain MVS 整合（2026-04-28 Phase 0+1+2 完成）
+
+### `output_mode` 參數（Phase 0）
+
+`llm_bridge_node` 新增 ROS2 param：
+
+| 模式 | 行為 | 使用時機 |
+|------|------|---------|
+| `legacy`（預設）| 發 `/tts` + sport `/webrtc_req`（直接控狗，既有行為）| 舊 demo / 不啟動 brain_node 時 |
+| `brain` | **只**發 `/brain/chat_candidate`，不發 `/tts`、不發 sport `/webrtc_req` | brain_node 啟動時，由 Executive 唯一控狗 |
+
+`scripts/start_pawai_brain_tmux.sh` 一鍵啟動 brain-mode：
+- `llm_bridge_node` 設 `output_mode:=brain`
+- `event_action_bridge` 設 `enable_event_action_bridge:=false`
+- 不啟動 `vision_perception/interaction_router`
+
+### Source-level guard test
+
+`speech_processor/test/test_tts_audio_api_only.py` — 確保 `tts_node` 只發 audio api_id（4001-4004 Megaphone enter/upload/exit/cleanup），不會誤發 sport 動作 api。
+
+### Brain MVS 後 fallback chain（Phase A）
+
+```
+/event/speech_intent_recognized
+    ↓
+llm_bridge_node（output_mode=brain）
+    ↓
+   /brain/chat_candidate ──→ brain_node（1500ms 等待）
+                                 ├ 命中 → SkillPlan(chat_reply)
+                                 └ 逾時 → SkillPlan(say_canned)
+                             ↓
+                          /brain/proposal
+                             ↓
+                       interaction_executive_node
+                             ↓
+                            /tts → tts_node → Megaphone
+```
+
+詳細 schema 見 [`docs/architecture/contracts/interaction_contract.md`](../architecture/contracts/interaction_contract.md) v2.5。
+
 ## 下一步
 
+- [ ] **OpenRouter 接入**（4/29 軌道 2）：把 `_call_cloud_llm` 升級成 4 級 fallback — OpenRouter Sonnet 4.6 → 本地 Qwen2.5-7B → Ollama → RuleBrain
 - [ ] LLM prompt 智慧化：放寬字數 12→50+、加入 PawAI 個性、自我介紹（陳若恩）
 - [ ] Plan B 固定台詞設計：至少 15 組問答（陳若恩）
 - [ ] 多輪對話 memory（conversation history）
