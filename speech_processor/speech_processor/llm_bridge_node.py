@@ -111,6 +111,11 @@ class LlmBridgeNode(Node):
         else:
             self.action_pub = None
 
+        # /brain/chat_candidate publisher (always created; only used when output_mode=="brain")
+        self.chat_candidate_pub = self.create_publisher(
+            String, self.chat_candidate_topic, 10
+        )
+
         # Subscribers
         self.create_subscription(
             String, self.intent_event_topic, self._on_speech_event, 10
@@ -259,7 +264,7 @@ class LlmBridgeNode(Node):
 
         self.last_source = "speech"
         self._executor.submit(
-            self._call_llm_and_act, user_message, intent, "speech", None, confidence
+            self._call_llm_and_act, user_message, intent, "speech", None, confidence, session_id
         )
 
     # ── Face trigger (spec §2.4 Path B) ─────────────────────────────────
@@ -348,6 +353,7 @@ class LlmBridgeNode(Node):
         source: str,
         face_name: str | None = None,
         confidence: float = 0.0,
+        session_id: str | None = None,
     ) -> None:
         acquired = self._llm_lock.acquire(blocking=False)
         if not acquired:
@@ -375,7 +381,8 @@ class LlmBridgeNode(Node):
                 self.get_logger().info(
                     f"Fast path: intent={fallback_intent} conf={confidence:.2f}, skipping LLM"
                 )
-                self._rule_fallback(fallback_intent, source, face_name)
+                self._rule_fallback(fallback_intent, source, face_name,
+                                    session_id=session_id, confidence=confidence)
                 return
 
             if self.force_fallback:
@@ -390,12 +397,15 @@ class LlmBridgeNode(Node):
                 result = self._call_local_llm(user_message)
 
             if result is not None:
-                self._dispatch(result, source)
+                self._dispatch(result, source,
+                               session_id=session_id, confidence=confidence,
+                               fallback_intent=fallback_intent)
             elif self.enable_fallback:
                 self.get_logger().info(
                     f"LLM failed, falling back to RuleBrain (intent={fallback_intent})"
                 )
-                self._rule_fallback(fallback_intent, source, face_name)
+                self._rule_fallback(fallback_intent, source, face_name,
+                                    session_id=session_id, confidence=confidence)
         finally:
             self._llm_lock.release()
 
@@ -477,7 +487,14 @@ class LlmBridgeNode(Node):
         result["reply_text"] = reply
         return result
 
-    def _dispatch(self, result: dict, source: str) -> None:
+    def _dispatch(
+        self,
+        result: dict,
+        source: str,
+        session_id: str | None = None,
+        confidence: float = 0.0,
+        fallback_intent: str = "",
+    ) -> None:
         intent = str(result.get("intent", "ignored"))
         reply_text = str(result.get("reply_text", ""))
         selected_skill = result.get("selected_skill")  # can be None (JSON null)
@@ -521,6 +538,21 @@ class LlmBridgeNode(Node):
             f"reply={reply_text!r} reason={reasoning}"
         )
 
+        # ── Brain-mode output gate ───────────────────────────────────
+        if self.output_mode == "brain":
+            if source == "speech":
+                self._emit_chat_candidate(
+                    session_id=session_id or "",
+                    reply_text=reply_text,
+                    intent=intent,
+                    selected_skill=selected_skill,
+                    confidence=confidence,
+                )
+            # face/state-triggered LLM responses are silently dropped in brain mode;
+            # Brain owns face → greet_known_person via its own face rule.
+            return
+        # ── legacy mode below (unchanged) ────────────────────────────
+
         # Action-only intents: send action immediately, skip TTS for speed
         ACTION_ONLY_SKILLS = {"stop_move", "sit", "stand"}
         if selected_skill in ACTION_ONLY_SKILLS:
@@ -545,7 +577,12 @@ class LlmBridgeNode(Node):
             self._send_action(selected_skill)
 
     def _rule_fallback(
-        self, intent: str, source: str, face_name: str | None = None
+        self,
+        intent: str,
+        source: str,
+        face_name: str | None = None,
+        session_id: str | None = None,
+        confidence: float = 0.0,
     ) -> None:
         reply = REPLY_TEMPLATES.get(intent, REPLY_TEMPLATES.get("unknown", ""))
         # Face trigger: personalize reply with name
@@ -562,6 +599,19 @@ class LlmBridgeNode(Node):
         self.get_logger().info(
             f"RuleBrain fallback: intent={intent} skill={skill} reply={reply!r}"
         )
+
+        # ── Brain-mode output gate ───────────────────────────────────
+        if self.output_mode == "brain":
+            if source == "speech":
+                self._emit_chat_candidate(
+                    session_id=session_id or "",
+                    reply_text=reply,
+                    intent=intent,
+                    selected_skill=skill,
+                    confidence=confidence,
+                )
+            return
+        # ── legacy mode below (unchanged) ────────────────────────────
 
         # Action-only intents: send action immediately, skip TTS
         ACTION_ONLY_INTENTS = {"stop", "sit", "stand"}
@@ -607,6 +657,37 @@ class LlmBridgeNode(Node):
             f"priority={msg.priority}"
         )
 
+    # ── Brain mode output ────────────────────────────────────────────
+    def _emit_chat_candidate(
+        self,
+        session_id: str,
+        reply_text: str,
+        intent: str,
+        selected_skill: str | None,
+        confidence: float,
+    ) -> None:
+        """Brain-mode output: publish reply for Brain to consume.
+
+        selected_skill is diagnostic only — Brain MVS only uses reply_text.
+        Empty reply_text is allowed; Brain will fall through to its
+        chat_candidate timeout (say_canned).
+        """
+        payload = {
+            "session_id": session_id,
+            "reply_text": reply_text,
+            "intent": intent,
+            "selected_skill": selected_skill,
+            "source": "llm_bridge",
+            "confidence": float(confidence),
+            "created_at": time.time(),
+        }
+        msg = String()
+        msg.data = json.dumps(payload, ensure_ascii=False)
+        self.chat_candidate_pub.publish(msg)
+        self.get_logger().info(
+            f"Published /brain/chat_candidate: session={session_id} reply={reply_text!r}"
+        )
+
     # ── State publish ───────────────────────────────────────────────────
 
     def _publish_state(self) -> None:
@@ -621,6 +702,7 @@ class LlmBridgeNode(Node):
                 "last_skill": self.last_skill,
                 "last_error": self.last_error,
                 "llm_endpoint": self.llm_endpoint,
+                "output_mode": self.output_mode,
                 "timestamp": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
