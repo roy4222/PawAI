@@ -7,6 +7,8 @@ import type {
   GestureState,
   PoseState,
   BrainState,
+  SkillPlan,
+  SkillResult,
   SystemHealth,
   ObjectState,
 } from "@/contracts/types";
@@ -17,6 +19,8 @@ interface StateStore {
   gestureState: GestureState | null;
   poseState: PoseState | null;
   brainState: BrainState | null;
+  brainProposals: SkillPlan[];
+  brainResults: SkillResult[];
   systemHealth: SystemHealth | null;
   objectState: ObjectState | null;
   lastTtsText: string | null;
@@ -27,6 +31,8 @@ interface StateStore {
   updateGestureState: (state: GestureState) => void;
   updatePoseState: (state: PoseState) => void;
   updateBrainState: (state: BrainState) => void;
+  appendBrainProposal: (proposal: SkillPlan) => void;
+  appendBrainResult: (result: SkillResult) => void;
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
   updateTts: (text: string) => void;
@@ -38,6 +44,8 @@ export const useStateStore = create<StateStore>((set) => ({
   gestureState: null,
   poseState: null,
   brainState: null,
+  brainProposals: [],
+  brainResults: [],
   systemHealth: null,
   objectState: null,
   lastTtsText: null,
@@ -48,6 +56,14 @@ export const useStateStore = create<StateStore>((set) => ({
   updateGestureState: (state) => set({ gestureState: state }),
   updatePoseState: (state) => set({ poseState: state }),
   updateBrainState: (state) => set({ brainState: state }),
+  appendBrainProposal: (proposal) =>
+    set((state) => ({
+      brainProposals: [proposal, ...state.brainProposals].slice(0, 50),
+    })),
+  appendBrainResult: (result) =>
+    set((state) => ({
+      brainResults: [result, ...state.brainResults].slice(0, 200),
+    })),
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),
   updateTts: (text) => set({ lastTtsText: text, lastTtsAt: Date.now() }),

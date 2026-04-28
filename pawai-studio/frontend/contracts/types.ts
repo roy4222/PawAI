@@ -177,7 +177,97 @@ export interface BrainEvent extends PawAIEvent {
   };
 }
 
-export interface BrainState {
+export type ExecutorKind = "say" | "motion" | "nav";
+export type PriorityClass = 0 | 1 | 2 | 3 | 4;
+export type SkillResultStatus =
+  | "accepted"
+  | "started"
+  | "step_started"
+  | "step_success"
+  | "step_failed"
+  | "completed"
+  | "aborted"
+  | "blocked_by_safety";
+export type BrainMode = "idle" | "chat" | "skill" | "sequence" | "alert" | "safety_stop";
+
+export interface SkillStep {
+  executor: ExecutorKind;
+  args: Record<string, unknown>;
+}
+
+export interface SkillPlan {
+  plan_id: string;
+  selected_skill: string;
+  steps: SkillStep[];
+  reason: string;
+  source: string;
+  priority_class: PriorityClass;
+  session_id?: string | null;
+  created_at: number;
+}
+
+export interface SkillResult {
+  plan_id: string;
+  step_index: number | null;
+  status: SkillResultStatus;
+  detail: string;
+  selected_skill: string;
+  priority_class: PriorityClass;
+  step_total: number;
+  step_args?: Record<string, unknown>;
+  timestamp: number;
+}
+
+export interface BrainActivePlan {
+  plan_id: string;
+  selected_skill: string;
+  step_index: number;
+  step_total: number | null;
+  started_at: number;
+  priority_class: PriorityClass;
+}
+
+export interface BrainSafetyFlags {
+  obstacle: boolean;
+  emergency: boolean;
+  fallen: boolean;
+  tts_playing: boolean;
+  nav_safe: boolean;
+}
+
+export interface BrainPlanRecord {
+  plan_id: string;
+  selected_skill: string;
+  source: string;
+  priority: number;
+  accepted: boolean;
+  reason: string;
+  created_at: number;
+}
+
+export interface PawAIBrainState {
+  timestamp: number;
+  mode: BrainMode;
+  active_plan: BrainActivePlan | null;
+  active_step: SkillStep | null;
+  fallback_active: boolean;
+  safety_flags: BrainSafetyFlags;
+  cooldowns: Record<string, number>;
+  last_plans: BrainPlanRecord[];
+}
+
+export interface SkillRequestBody {
+  skill: string;
+  args?: Record<string, unknown>;
+  request_id?: string;
+}
+
+export interface TextInputBody {
+  text: string;
+  request_id?: string;
+}
+
+export interface LegacyBrainState {
   stamp: number;
   executive_state: "idle" | "observing" | "deciding" | "executing" | "speaking";
   current_intent: string | null;
@@ -187,6 +277,8 @@ export interface BrainState {
   cloud_connected: boolean;
   last_decision_reason: string;
 }
+
+export type BrainState = PawAIBrainState;
 
 // ══════════════════════════════════════════════════════════════════
 // System
