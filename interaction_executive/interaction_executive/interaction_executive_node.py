@@ -1,269 +1,259 @@
-"""Interaction Executive v0 — ROS2 thin orchestrator node.
+"""interaction_executive_node - Brain-driven single action outlet."""
+from __future__ import annotations
 
-Subscribes to all perception events, routes through state machine,
-publishes actions and status. Day 5 scope: listen-only alongside
-existing bridges. Day 6 will migrate bridges to this node.
-"""
 import json
 import threading
 import time
+from dataclasses import dataclass
+from typing import Any
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from geometry_msgs.msg import Twist
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
-from go2_interfaces.msg import WebRtcReq
 
-from .state_machine import (
-    ExecutiveStateMachine,
-    ExecutiveState,
-    EventType,
-    EventResult,
-)
+try:
+    from go2_interfaces.msg import WebRtcReq
+except ImportError:  # pragma: no cover - local unit environments may lack generated msgs
+    WebRtcReq = None
 
-QOS_EVENT = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
-QOS_STATE = QoSProfile(
-    depth=1,
-    reliability=ReliabilityPolicy.BEST_EFFORT,
-    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+from .safety_layer import SafetyLayer
+from .skill_contract import (
+    BANNED_API_IDS,
+    MOTION_NAME_MAP,
+    ExecutorKind,
+    PriorityClass,
+    SkillPlan,
+    SkillResultStatus,
+    SkillStep,
 )
+from .skill_queue import SkillQueue
+from .world_state import WorldState
+
+
+_RELIABLE_10 = QoSProfile(depth=10, reliability=QoSReliabilityPolicy.RELIABLE)
+_RELIABLE_20 = QoSProfile(depth=20, reliability=QoSReliabilityPolicy.RELIABLE)
+
+
+@dataclass
+class _ActiveStep:
+    plan: SkillPlan
+    step_index: int
+    started_at: float
+    is_tts_step: bool
 
 
 class InteractionExecutiveNode(Node):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__("interaction_executive_node")
+        self.declare_parameter("step_settle_s", 0.4)
+        self.declare_parameter("tts_idle_timeout_s", 6.0)
+        self.step_settle_s = float(self.get_parameter("step_settle_s").value)
+        self.tts_idle_timeout_s = float(self.get_parameter("tts_idle_timeout_s").value)
 
-        self.declare_parameter("enable_fallen", True)
-        enable_fallen = self.get_parameter("enable_fallen").value
-        self._sm = ExecutiveStateMachine(enable_fallen=enable_fallen)
-        if not enable_fallen:
-            self.get_logger().warn("Fallen/EMERGENCY detection DISABLED (demo mode)")
+        self._safety = SafetyLayer()
+        self._world = WorldState(self)
+        self._queue = SkillQueue()
+        self._active: _ActiveStep | None = None
+        self._lock = threading.Lock()
 
-        # --- Publishers ---
         self._pub_tts = self.create_publisher(String, "/tts", 10)
-        self._pub_webrtc = self.create_publisher(WebRtcReq, "/webrtc_req", 10)
-        self._pub_cmd_vel = self.create_publisher(Twist, "/cmd_vel", 10)
-        self._pub_status = self.create_publisher(String, "/executive/status", QOS_STATE)
-
-        # --- Subscribers ---
-        self.create_subscription(
-            String, "/event/face_identity", self._on_face, QOS_EVENT
+        self._pub_webrtc = (
+            self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+            if WebRtcReq is not None
+            else None
         )
-        self.create_subscription(
-            String, "/event/speech_intent_recognized", self._on_speech, QOS_EVENT
-        )
-        self.create_subscription(
-            String, "/event/gesture_detected", self._on_gesture, QOS_EVENT
-        )
-        self.create_subscription(
-            String, "/event/pose_detected", self._on_pose, QOS_EVENT
-        )
-        self.create_subscription(
-            String, "/event/obstacle_detected", self._on_obstacle, QOS_EVENT
-        )
-        self.create_subscription(
-            String, "/state/obstacle/d435_alive", self._on_d435_heartbeat, QOS_EVENT
-        )
-        self.create_subscription(
-            String, "/event/object_detected", self._on_object, QOS_EVENT
+        self._pub_skill_result = self.create_publisher(
+            String, "/brain/skill_result", _RELIABLE_20
         )
 
-        # --- Timers ---
-        self._timeout_timer = self.create_timer(1.0, self._check_timeout)
-        self._status_timer = self.create_timer(0.5, self._publish_status)
-        self._obstacle_clear_timer = self.create_timer(0.5, self._check_obstacle_clear)
+        self.create_subscription(String, "/brain/proposal", self._on_proposal, _RELIABLE_10)
+        self._tick = self.create_timer(0.1, self._worker_tick)
+        self.get_logger().info("interaction_executive_node ready (Brain MVS)")
 
-        self._lock = threading.Lock()  # C1 fix: protect shared state
-        self._last_obstacle_time = 0.0
-        self._last_d435_heartbeat = 0.0  # Sensor guard for forward motion
-        self._forward_cmd = None  # Active forward command {x, y, z} or None
-        self._forward_timer = self.create_timer(0.1, self._send_forward)  # 10Hz cmd_vel
-
-        self.get_logger().info("Executive v0 started — thin orchestrator mode")
-
-    def _on_face(self, msg: String):
+    def _on_proposal(self, msg: String) -> None:
+        data = self._load_json(msg)
+        if data is None:
+            return
         try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
+            plan = self._plan_from_dict(data)
+        except (KeyError, TypeError, ValueError) as exc:
+            self.get_logger().warn(f"invalid SkillPlan payload: {exc}")
             return
-        event_type_str = data.get("event_type", "")
-        if event_type_str == "identity_stable":
-            identity = data.get("stable_name", "unknown")
-            if identity != "unknown":
-                result = self._sm.handle_event(
-                    EventType.FACE_WELCOME, source=identity, data=data
-                )
-                self._execute_result(result)
 
-    def _on_speech(self, msg: String):
-        try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
+        validation = self._safety.validate(plan, self._world.snapshot())
+        if not validation.ok:
+            self._emit_result(
+                plan,
+                None,
+                SkillResultStatus.BLOCKED_BY_SAFETY,
+                detail=validation.reason,
+            )
             return
-        result = self._sm.handle_event(
-            EventType.SPEECH_INTENT, source="mic", data=data
-        )
-        self._execute_result(result)
 
-    def _on_gesture(self, msg: String):
-        try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
-            return
-        gesture = data.get("gesture", "")
-        result = self._sm.handle_event(
-            EventType.GESTURE, source="cam", data={"gesture": gesture}
-        )
-        self._execute_result(result)
-
-    def _on_pose(self, msg: String):
-        try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
-            return
-        pose = data.get("pose", "")
-        if pose == "fallen":
-            result = self._sm.handle_event(EventType.POSE_FALLEN)
-            self._execute_result(result)
-
-    def _on_obstacle(self, msg: String):
-        with self._lock:
-            self._last_obstacle_time = time.monotonic()
-        result = self._sm.handle_event(EventType.OBSTACLE)
-        self._execute_result(result)
-
-    def _on_object(self, msg: String):
-        """Handle /event/object_detected — dispatch first object to state machine.
-
-        Schema: {"stamp": float, "event_type": "object_detected",
-                 "objects": [{"class_name": str, "confidence": float, "bbox": [4]}]}
-        Only the first object in the array is routed (keeps Executive simple).
-        Only P0 classes in OBJECT_TTS_MAP trigger TTS; others silently ignored.
-        """
-        try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
-            return
-        objects = data.get("objects", [])
-        if not objects:
-            return
-        first = objects[0]
-        class_name = first.get("class_name", "")
-        if not class_name:
-            return
-        result = self._sm.handle_event(
-            EventType.OBJECT_DETECTED,
-            source=f"obj:{class_name}",
-            data={"class_name": class_name},
-        )
-        self._execute_result(result)
-
-    def _on_d435_heartbeat(self, msg: String):
-        with self._lock:
-            self._last_d435_heartbeat = time.monotonic()
-
-    def _check_timeout(self):
-        result = self._sm.check_timeout()
-        if result:
-            self._execute_result(result)
-
-    def _check_obstacle_clear(self):
-        if self._sm.state.value == "obstacle_stop":
+        self._emit_result(plan, None, SkillResultStatus.ACCEPTED, detail=plan.selected_skill)
+        if plan.priority_class in (PriorityClass.SAFETY, PriorityClass.ALERT):
+            preempted = self._queue.clear(reason="preempted")
+            for item in preempted:
+                self._emit_result(item.plan, None, SkillResultStatus.ABORTED, detail=item.reason)
             with self._lock:
-                elapsed = time.monotonic() - self._last_obstacle_time
-            if elapsed > 2.0:
-                result = self._sm.try_obstacle_clear()
-                if result:
-                    self._execute_result(result)
-            else:
-                self._sm.reset_obstacle_clear()
+                if self._active is not None:
+                    self._emit_result(
+                        self._active.plan,
+                        self._active.step_index,
+                        SkillResultStatus.ABORTED,
+                        detail="preempted_by_higher_priority",
+                    )
+                    self._active = None
+            self._queue.push_front(plan)
+        else:
+            self._queue.push(plan)
 
-    def _send_forward(self):
-        """10Hz timer — publish cmd_vel while forward command is active."""
+    def _worker_tick(self) -> None:
         with self._lock:
-            if self._forward_cmd is None:
-                return
-
-            # Guard 1: state check
-            state = self._sm.state
-            if state in (ExecutiveState.OBSTACLE_STOP, ExecutiveState.IDLE):
-                self.get_logger().info(
-                    f"Forward stopped — state={state.value}"
+            if self._active is not None:
+                if not self._active_step_done(self._active):
+                    return
+                active = self._active
+                self._emit_result(
+                    active.plan,
+                    active.step_index,
+                    SkillResultStatus.STEP_SUCCESS,
+                    detail=active.plan.steps[active.step_index].executor.value,
+                    step_args=active.plan.steps[active.step_index].args,
                 )
-                self._forward_cmd = None
-                self._pub_cmd_vel.publish(Twist())
+                self._active = None
+
+            plan = self._queue.peek()
+            if plan is None:
+                return
+            if not getattr(plan, "_started", False):
+                self._emit_result(plan, None, SkillResultStatus.STARTED)
+                plan._started = True
+                plan._next_index = 0
+
+            if plan._next_index >= len(plan.steps):
+                self._emit_result(plan, None, SkillResultStatus.COMPLETED)
+                self._queue.pop()
                 return
 
-            # Guard 2: never received D435 heartbeat → refuse forward
-            if self._last_d435_heartbeat == 0.0:
-                self.get_logger().warn(
-                    "D435 obstacle chain not detected — refusing forward"
+            step = plan.steps[plan._next_index]
+            step_index = plan._next_index
+            self._emit_result(
+                plan,
+                step_index,
+                SkillResultStatus.STEP_STARTED,
+                detail=step.executor.value,
+                step_args=step.args,
+            )
+            ok, detail = self._dispatch_step(step)
+            if not ok:
+                self._emit_result(
+                    plan,
+                    step_index,
+                    SkillResultStatus.STEP_FAILED,
+                    detail=detail,
+                    step_args=step.args,
                 )
-                self._forward_cmd = None
-                self._pub_cmd_vel.publish(Twist())
+                self._queue.pop()
                 return
+            self._active = _ActiveStep(
+                plan=plan,
+                step_index=step_index,
+                started_at=time.time(),
+                is_tts_step=step.executor == ExecutorKind.SAY,
+            )
+            plan._next_index += 1
 
-            # Guard 3: D435 heartbeat stale > 1s → emergency stop forward
-            now = time.monotonic()
-            if (now - self._last_d435_heartbeat) > 1.0:
-                self.get_logger().warn(
-                    "D435 obstacle chain stale >1s — stopping forward for safety"
-                )
-                self._forward_cmd = None
-                self._pub_cmd_vel.publish(Twist())
-                return
+    def _active_step_done(self, active: _ActiveStep) -> bool:
+        age = time.time() - active.started_at
+        if age < self.step_settle_s:
+            return False
+        if not active.is_tts_step:
+            return True
+        snap = self._world.snapshot()
+        return not snap.tts_playing or age >= self.tts_idle_timeout_s
 
-            # All guards passed — safe to move
-            twist = Twist()
-            twist.linear.x = self._forward_cmd["x"]
-            twist.linear.y = self._forward_cmd["y"]
-            twist.angular.z = self._forward_cmd["z"]
-            self._pub_cmd_vel.publish(twist)
-
-    def _execute_result(self, result: EventResult):
-        if result.tts:
+    def _dispatch_step(self, step: SkillStep) -> tuple[bool, str]:
+        if step.executor == ExecutorKind.SAY:
+            text = str(step.args.get("text", ""))
+            if not text:
+                return False, "empty_tts_text"
             msg = String()
-            msg.data = result.tts
+            msg.data = text
             self._pub_tts.publish(msg)
-            self.get_logger().info(f"TTS: {result.tts}")
+            return True, "ok"
 
-        if result.action:
-            if result.action.get("cmd_vel"):
-                # Continuous movement command
-                with self._lock:
-                    self._forward_cmd = {
-                        "x": result.action.get("x", 0.0),
-                        "y": result.action.get("y", 0.0),
-                        "z": result.action.get("z", 0.0),
-                    }
-                self.get_logger().info(
-                    f"Forward: x={self._forward_cmd['x']} y={self._forward_cmd['y']}"
-                )
-            else:
-                # One-shot WebRtcReq action
-                # Stop any forward movement when a one-shot action fires
-                with self._lock:
-                    was_forward = self._forward_cmd is not None
-                    self._forward_cmd = None
-                if was_forward:
-                    self._pub_cmd_vel.publish(Twist())
-                req = WebRtcReq()
-                req.id = 0
-                req.topic = result.action.get("topic", "rt/api/sport/request")
-                req.api_id = result.action.get("api_id", 0)
-                req.parameter = result.action.get("parameter", "")
-                req.priority = result.action.get("priority", 0)
-                self._pub_webrtc.publish(req)
-                self.get_logger().info(
-                    f"Action: api_id={req.api_id} priority={req.priority}"
-                )
+        if step.executor == ExecutorKind.MOTION:
+            name = step.args.get("name")
+            api_id = MOTION_NAME_MAP.get(name)
+            if api_id is None:
+                return False, f"unknown_motion:{name!r}"
+            if api_id in BANNED_API_IDS:
+                return False, f"banned_api:{api_id}"
+            if self._pub_webrtc is None or WebRtcReq is None:
+                self.get_logger().warn(f"WebRtcReq unavailable; dry-run motion {name}")
+                return True, "dry_run_webrtc_unavailable"
+            req = WebRtcReq()
+            req.id = 0
+            req.topic = "rt/api/sport/request"
+            req.api_id = int(api_id)
+            req.parameter = str(api_id)
+            req.priority = 0
+            self._pub_webrtc.publish(req)
+            return True, "ok"
 
-    def _publish_status(self):
-        status = self._sm.get_status()
+        if step.executor == ExecutorKind.NAV:
+            self.get_logger().warn(f"NAV executor is not implemented in Phase A: {step.args}")
+            return False, "nav_unimplemented_phase_a"
+
+        return False, f"unknown_executor:{step.executor}"
+
+    def _emit_result(
+        self,
+        plan: SkillPlan,
+        step_index: int | None,
+        status: SkillResultStatus,
+        *,
+        detail: str = "",
+        step_args: dict[str, Any] | None = None,
+    ) -> None:
+        payload = {
+            "plan_id": plan.plan_id,
+            "step_index": step_index,
+            "status": status.value,
+            "detail": detail,
+            "selected_skill": plan.selected_skill,
+            "priority_class": int(plan.priority_class),
+            "step_total": len(plan.steps),
+            "step_args": step_args or {},
+            "timestamp": time.time(),
+        }
         msg = String()
-        msg.data = json.dumps(status)
-        self._pub_status.publish(msg)
+        msg.data = json.dumps(payload, ensure_ascii=False)
+        self._pub_skill_result.publish(msg)
+
+    def _plan_from_dict(self, data: dict[str, Any]) -> SkillPlan:
+        return SkillPlan(
+            plan_id=str(data["plan_id"]),
+            selected_skill=str(data["selected_skill"]),
+            steps=[
+                SkillStep(ExecutorKind(step["executor"]), dict(step.get("args") or {}))
+                for step in data["steps"]
+            ],
+            reason=str(data.get("reason", "")),
+            source=str(data.get("source", "")),
+            priority_class=PriorityClass(int(data["priority_class"])),
+            session_id=data.get("session_id"),
+            created_at=float(data.get("created_at", time.time())),
+        )
+
+    def _load_json(self, msg: String) -> dict[str, Any] | None:
+        try:
+            data = json.loads(msg.data)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        return data if isinstance(data, dict) else None
 
 
 def main(args=None):
