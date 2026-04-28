@@ -260,9 +260,12 @@ Executive：
 
 ## 7. 每模組的 Done Criteria（接進 Brain 的驗收）
 
-每個模組要明確寫「怎樣算接進 Brain」。沒過全部就是「跑得起來但沒整合」。
+模組分兩層驗收。**「整合層」**模組是 Phase A demo 的主角，要過 6 條 full criteria；**「觀測層」**模組在 Phase A 只 mirror 事件給 Studio Trace，不觸發 skill，full criteria 留到 Phase B。
 
-### 通用 6 條（每個模組都要過）
+### 7.1 整合層 — Phase A integrated modules
+
+**對象**：語音 / 人臉 / 手勢 / 姿勢 / Brain×Studio（5 模組）。
+**驗收條件（6 條都要過）**：
 
 | # | 項目 | 驗證方式 |
 |---|------|---------|
@@ -273,17 +276,30 @@ Executive：
 | 5 | 有 fallback / cooldown / dedup 行為定義 | `pytest`（cooldown / dedup / fallback test） |
 | 6 | 有 demo 腳本納入 5/16 Demo 流程 | `bash scripts/start_pawai_brain_tmux.sh` 跑得通 |
 
-### 各模組獨有的 Done Criteria
+### 7.2 觀測層 — Phase A observed-only modules
 
-| 模組 | 獨有條件 | 達成 phase |
-|------|---------|-----------|
-| **語音** | LLM cloud → local → say_canned 三級 fallback；`output_mode=brain` 不發 sport `/webrtc_req` | A（Phase 0 ✅ + Phase 1 整合） |
-| **人臉** | 熟人 cooldown 20s/人；陌生人 ≥3s 才觸發 stranger_alert | A |
-| **手勢** | Phase A：wave / ok / thumbs_up → `acknowledge_gesture`（跟 spec §3.4 一致）；fist→ok 相容 map 不破。**`gesture_stop` 不在 Phase A**（要嘛走 safety hard rule + 獨立 test，要嘛延後到 Phase B；不混進 acknowledge_gesture） | A（wave/ok/thumbs_up） / **B 或新增 safety rule**（gesture_stop） |
-| **姿勢** | fallen ≥2s 才觸發 fallen_alert；emergency 可關閉開關保留 | A |
-| **物體** | per-class cooldown 5s；whitelist 至少 6 class（cup/bottle/person/dog/chair/dining_table） | A（部分） + B（find/bring） |
-| **導航** | nav_capability 4 actions 全部對接；BodyState 知道 nav_ready；Studio 顯示「為什麼不能走」 | **B**（A 只接狀態） |
-| **Brain×Studio** | 7 場景 Demo 通過；Brain Status Strip + 8 bubble + Trace Drawer 全可視；單一出口 audit 過 | A（Phase 1+2） |
+**對象**：物體辨識 / 導航避障（2 模組）。
+**驗收條件**（Phase A 僅這 3 條；full criteria 7.1 延至 Phase B）：
+
+| # | 項目 | 驗證方式 |
+|---|------|---------|
+| 1 | `/event/*` 或 `/state/*` topic 寫入 contract | `python3 scripts/ci/check_topic_contracts.py` |
+| 2 | Gateway 訂閱該 topic 並 broadcast 到 Studio WebSocket | gateway integration test 或 mock_server 模擬 |
+| 3 | Studio 至少有一處可視化（Sidebar dev panel 或 Trace Drawer） | frontend 看到事件流 |
+
+**不要求**：SkillContract / Brain rule / demo skill / cooldown — 這些在 Phase B 才補。
+
+### 7.3 各模組獨有的 Done Criteria
+
+| 模組 | 層 | 獨有條件 | 達成 phase |
+|------|---|---------|-----------|
+| **語音** | 整合 | LLM cloud → local → say_canned 三級 fallback；`output_mode=brain` 不發 sport `/webrtc_req` | A（Phase 0 ✅ + Phase 1 整合） |
+| **人臉** | 整合 | 熟人 cooldown 20s/人；陌生人 ≥3s 才觸發 stranger_alert | A |
+| **手勢** | 整合 | Phase A：wave / ok / thumbs_up → `acknowledge_gesture`（跟 spec §3.4 一致）；fist→ok 相容 map 不破。**`gesture_stop` 不在 Phase A**（要嘛走 safety hard rule + 獨立 test，要嘛延後到 Phase B；不混進 acknowledge_gesture） | A（wave/ok/thumbs_up） / **B 或新增 safety rule**（gesture_stop） |
+| **姿勢** | 整合 | fallen ≥2s 才觸發 fallen_alert；emergency 可關閉開關保留 | A |
+| **Brain×Studio** | 整合 | 7 場景 Demo 通過；Brain Status Strip + 8 bubble + Trace Drawer 全可視；單一出口 audit 過 | A（Phase 1+2） |
+| **物體** | 觀測 | **Phase A**：`/event/object_detected` 進 Gateway/Trace 可視化，不觸發 skill。**Phase B**：`comment_on_object / find_object / bring_object` 才需要 cooldown / whitelist / skill tests | A（observed） + **B（skill 化）** |
+| **導航** | 觀測 | **Phase A**：`/state/nav/{heartbeat,status,safety}` 進 Gateway/Trace；BodyState 預留 schema 但不評估。**Phase B**：nav_capability 4 actions 全部對接；BodyState 真實判定 nav_ready；Studio 顯示「為什麼不能走」 | A（observed） + **B（skill 化）** |
 
 ---
 
