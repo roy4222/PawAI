@@ -22,6 +22,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -62,6 +63,9 @@ TOPIC_MAP: dict[str, str] = {
     "/event/pose_detected":            "pose",
     "/event/speech_intent_recognized": "speech",
     "/event/object_detected":          "object",
+    "/state/pawai_brain":              "brain:state",
+    "/brain/proposal":                 "brain:proposal",
+    "/brain/skill_result":             "brain:skill_result",
 }
 
 FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
@@ -119,6 +123,12 @@ class GatewayNode(Node):
         # Publisher — speech intent (browser → ROS2)
         self.speech_pub = self.create_publisher(
             String, "/event/speech_intent_recognized", QOS_EVENT
+        )
+        self.skill_request_pub = self.create_publisher(
+            String, "/brain/skill_request", QOS_EVENT
+        )
+        self.text_input_pub = self.create_publisher(
+            String, "/brain/text_input", QOS_EVENT
         )
 
         # Subscribers — ROS2 → browser
@@ -199,7 +209,12 @@ class GatewayNode(Node):
             self._last_face_broadcast = now
 
         data = dict(payload)
-        event_type = data.pop("event_type", f"{source}_update")
+        if source.startswith("brain:"):
+            event_source = "brain"
+            event_type = source.split(":", 1)[1]
+        else:
+            event_source = source
+            event_type = data.pop("event_type", f"{source}_update")
 
         # ── Field transforms for frontend dispatch rules ──
         # gesture: frontend checks "status" in data
@@ -224,7 +239,7 @@ class GatewayNode(Node):
         envelope = {
             "id": str(uuid.uuid4()),
             "timestamp": datetime.now().astimezone().isoformat(),
-            "source": source,
+            "source": event_source,
             "event_type": event_type,
             "data": data,
         }
@@ -242,6 +257,16 @@ class GatewayNode(Node):
         asyncio.run_coroutine_threadsafe(
             ws_manager.broadcast(envelope), self._loop
         )
+
+    def publish_skill_request(self, payload: dict) -> None:
+        msg = String()
+        msg.data = json.dumps(payload, ensure_ascii=False)
+        self.skill_request_pub.publish(msg)
+
+    def publish_text_input(self, payload: dict) -> None:
+        msg = String()
+        msg.data = json.dumps(payload, ensure_ascii=False)
+        self.text_input_pub.publish(msg)
 
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
@@ -273,6 +298,17 @@ class GatewayNode(Node):
 # ── FastAPI App ──────────────────────────────────────────────────
 node: GatewayNode | None = None
 classifier: IntentClassifier | None = None
+
+
+class SkillRequestPayload(BaseModel):
+    skill: str
+    args: dict = {}
+    request_id: str | None = None
+
+
+class TextInputPayload(BaseModel):
+    text: str
+    request_id: str | None = None
 
 
 def _spin_ros2(ros_node: Node) -> None:
@@ -317,6 +353,37 @@ async def health():
         "ws_clients": len(ws_manager.active),
         "subscriptions": list(TOPIC_MAP.keys()),
     }
+
+
+@app.post("/api/skill_request")
+async def post_skill_request(payload: SkillRequestPayload):
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    request_id = payload.request_id or f"req-{int(time.time() * 1000)}"
+    msg = {
+        "skill": payload.skill,
+        "args": payload.args or {},
+        "request_id": request_id,
+        "source": "studio_button",
+        "created_at": time.time(),
+    }
+    node.publish_skill_request(msg)
+    return {"ok": True, "request_id": request_id}
+
+
+@app.post("/api/text_input")
+async def post_text_input(payload: TextInputPayload):
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+    msg = {
+        "text": payload.text,
+        "request_id": request_id,
+        "source": "studio_text",
+        "created_at": time.time(),
+    }
+    node.publish_text_input(msg)
+    return {"ok": True, "request_id": request_id}
 
 
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────
