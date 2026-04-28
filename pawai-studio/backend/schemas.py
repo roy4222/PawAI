@@ -121,3 +121,97 @@ class MockTrigger(BaseModel):
     event_source: str
     event_type: str
     data: dict = {}
+
+
+# === Brain MVS ===
+
+ExecutorKindLit = Literal["say", "motion", "nav"]
+PriorityClassLit = Literal[0, 1, 2, 3, 4]
+SkillResultStatusLit = Literal[
+    "accepted",
+    "started",
+    "step_started",
+    "step_success",
+    "step_failed",
+    "completed",
+    "aborted",
+    "blocked_by_safety",
+]
+BrainModeLit = Literal["idle", "chat", "skill", "sequence", "alert", "safety_stop"]
+
+
+class SkillStepModel(BaseModel):
+    executor: ExecutorKindLit
+    args: dict = {}
+
+
+class SkillPlanModel(BaseModel):
+    plan_id: str
+    selected_skill: str
+    steps: list[SkillStepModel]
+    reason: str
+    source: str
+    priority_class: PriorityClassLit
+    session_id: str | None = None
+    created_at: float
+
+
+class SkillResultModel(BaseModel):
+    plan_id: str
+    step_index: int | None = None
+    status: SkillResultStatusLit
+    detail: str = ""
+    selected_skill: str = ""
+    priority_class: PriorityClassLit = 3
+    step_total: int = 0
+    step_args: dict = {}
+    timestamp: float
+
+
+class BrainActivePlan(BaseModel):
+    plan_id: str
+    selected_skill: str
+    step_index: int
+    step_total: int | None = None
+    started_at: float
+    priority_class: PriorityClassLit = 3
+
+
+class BrainSafetyFlags(BaseModel):
+    obstacle: bool = False
+    emergency: bool = False
+    fallen: bool = False
+    tts_playing: bool = False
+    nav_safe: bool = True
+
+
+class BrainPlanRecord(BaseModel):
+    plan_id: str
+    selected_skill: str
+    source: str
+    priority: int
+    accepted: bool
+    reason: str
+    created_at: float
+
+
+class PawAIBrainState(BaseModel):
+    timestamp: float
+    mode: BrainModeLit
+    active_plan: BrainActivePlan | None = None
+    active_step: SkillStepModel | None = None
+    fallback_active: bool = False
+    safety_flags: BrainSafetyFlags
+    cooldowns: dict[str, float] = {}
+    last_plans: list[BrainPlanRecord] = []
+
+
+class SkillRequestPayload(BaseModel):
+    skill: str
+    args: dict = {}
+    request_id: str | None = None
+
+
+class TextInputPayload(BaseModel):
+    text: str
+    request_id: str | None = None
