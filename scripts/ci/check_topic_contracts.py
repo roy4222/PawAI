@@ -162,6 +162,7 @@ def find_node_files():
         os.path.join(REPO_ROOT, "vision_perception", "vision_perception"),
         os.path.join(REPO_ROOT, "object_perception", "object_perception"),
         os.path.join(REPO_ROOT, "coco_detector", "coco_detector"),
+        os.path.join(REPO_ROOT, "interaction_executive", "interaction_executive"),
         os.path.join(REPO_ROOT, "lidar_processor", "lidar_processor"),
         os.path.join(REPO_ROOT, "src", "search_logic", "search_logic"),
         os.path.join(REPO_ROOT, "scripts"),
