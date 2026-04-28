@@ -126,6 +126,8 @@ INTERNAL_TOPICS = {
     # Obstacle sensor heartbeat
     "/state/obstacle/d435_alive",
     "/state/obstacle/lidar_alive",
+    # PawAI Brain MVS (Phase 0+ internal)
+    "/brain/chat_candidate",
     # Test observer internal
     "/speech_test_observer/round_meta_req",
     "/speech_test_observer/round_meta_ack",

@@ -181,6 +181,8 @@ class LlmBridgeNode(Node):
         )
         self.declare_parameter("local_llm_model", "qwen2.5:1.5b")
         self.declare_parameter("subscribe_face", True)
+        self.declare_parameter("output_mode", "legacy")  # "legacy" | "brain"
+        self.declare_parameter("chat_candidate_topic", "/brain/chat_candidate")
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -212,6 +214,12 @@ class LlmBridgeNode(Node):
         self.local_llm_endpoint = _str("local_llm_endpoint")
         self.local_llm_model = _str("local_llm_model")
         self.subscribe_face = _bool("subscribe_face")
+        self.output_mode = _str("output_mode").strip().lower()
+        if self.output_mode not in ("legacy", "brain"):
+            self.get_logger().warn(f"unknown output_mode={self.output_mode!r}, falling back to legacy")
+            self.output_mode = "legacy"
+        self.chat_candidate_topic = _str("chat_candidate_topic")
+        self.get_logger().info(f"llm_bridge output_mode={self.output_mode}")
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
