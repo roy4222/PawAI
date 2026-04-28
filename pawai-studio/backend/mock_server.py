@@ -24,9 +24,12 @@ from schemas import (
     GestureState,
     MockTrigger,
     PawAIEvent,
+    PawAIBrainState,
     PoseData,
     PoseState,
+    SkillRequestPayload,
     SkillCommand,
+    TextInputPayload,
     SpeechIntentData,
     SpeechState,
     SystemHealth,
@@ -227,6 +230,34 @@ async def run_demo_a() -> None:
 
 current_brain_state = BrainState(stamp=time.time(), executive_state="idle")
 
+current_pawai_brain_state = PawAIBrainState(
+    timestamp=time.time(),
+    mode="idle",
+    active_plan=None,
+    active_step=None,
+    fallback_active=False,
+    safety_flags={
+        "obstacle": False,
+        "emergency": False,
+        "fallen": False,
+        "tts_playing": False,
+        "nav_safe": True,
+    },
+    cooldowns={},
+    last_plans=[],
+)
+
+
+async def broadcast_brain_event(event_type: str, data: dict) -> None:
+    event = PawAIEvent(
+        id=_uid(),
+        timestamp=_ts(),
+        source="brain",
+        event_type=event_type,
+        data=data,
+    ).model_dump()
+    await manager.broadcast(event)
+
 # ── App ─────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -342,9 +373,66 @@ async def post_chat(cmd: ChatCommand):
     reply = f"收到你的訊息：「{cmd.text}」（這是 Mock 回覆）"
     return {"status": "ok", "reply": reply, "session_id": cmd.session_id}
 
+@app.post("/api/skill_request")
+async def post_skill_request(payload: SkillRequestPayload):
+    request_id = payload.request_id or f"req-{int(time.time() * 1000)}"
+    skill = payload.skill
+    if skill == "stop_move":
+        await broadcast_brain_event("skill_result", {
+            "plan_id": f"p-stop-{int(time.time() * 1000)}",
+            "step_index": None,
+            "status": "completed",
+            "detail": "studio_button",
+            "selected_skill": "stop_move",
+            "priority_class": 0,
+            "step_total": 1,
+            "step_args": {},
+            "timestamp": time.time(),
+        })
+    elif skill == "go_to_named_place":
+        await broadcast_brain_event("skill_result", {
+            "plan_id": f"p-nav-{int(time.time() * 1000)}",
+            "step_index": None,
+            "status": "blocked_by_safety",
+            "detail": "Phase B 才整合 nav_capability",
+            "selected_skill": "go_to_named_place",
+            "priority_class": 3,
+            "step_total": 1,
+            "step_args": {},
+            "timestamp": time.time(),
+        })
+    return {"ok": True, "mock": True, "request_id": request_id}
+
+@app.post("/api/text_input")
+async def post_text_input(payload: TextInputPayload):
+    request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+    plan_id = f"p-text-{int(time.time() * 1000)}"
+    await broadcast_brain_event("proposal", {
+        "plan_id": plan_id,
+        "selected_skill": "say_canned",
+        "steps": [{"executor": "say", "args": {"text": "我聽不太懂"}}],
+        "reason": "mock_text_input",
+        "source": "mock",
+        "priority_class": 4,
+        "session_id": request_id,
+        "created_at": time.time(),
+    })
+    await broadcast_brain_event("skill_result", {
+        "plan_id": plan_id,
+        "step_index": None,
+        "status": "completed",
+        "detail": "我聽不太懂",
+        "selected_skill": "say_canned",
+        "priority_class": 4,
+        "step_total": 1,
+        "step_args": {},
+        "timestamp": time.time(),
+    })
+    return {"ok": True, "mock": True, "request_id": request_id}
+
 @app.get("/api/brain")
 async def get_brain():
-    return current_brain_state.model_dump()
+    return current_pawai_brain_state.model_dump()
 
 @app.get("/api/health")
 async def get_health():
@@ -376,3 +464,89 @@ async def mock_trigger(trigger: MockTrigger):
 async def mock_demo_a():
     asyncio.create_task(run_demo_a())
     return {"status": "started", "scenario": "demo_a", "steps": len(DEMO_A_SEQUENCE)}
+
+@app.post("/mock/scenario/self_introduce")
+async def mock_scenario_self_introduce():
+    async def run() -> None:
+        plan_id = f"p-mock-{int(time.time() * 1000)}"
+        steps = [
+            ("say", {"text": "我是 PawAI，你的居家互動機器狗"}),
+            ("motion", {"name": "hello"}),
+            ("say", {"text": "平常我會待在你身邊，等你叫我"}),
+            ("motion", {"name": "sit"}),
+            ("say", {"text": "你可以用聲音、手勢，或直接跟我互動"}),
+            ("motion", {"name": "content"}),
+            ("say", {"text": "我也會注意周圍發生的事情"}),
+            ("motion", {"name": "stand"}),
+            ("say", {"text": "如果看到陌生人，我會提醒你提高注意"}),
+            ("motion", {"name": "balance_stand"}),
+        ]
+        await broadcast_brain_event("state", {
+            **current_pawai_brain_state.model_dump(),
+            "timestamp": time.time(),
+            "mode": "sequence",
+            "active_plan": {
+                "plan_id": plan_id,
+                "selected_skill": "self_introduce",
+                "step_index": 0,
+                "step_total": len(steps),
+                "started_at": time.time(),
+                "priority_class": 2,
+            },
+        })
+        await broadcast_brain_event("proposal", {
+            "plan_id": plan_id,
+            "selected_skill": "self_introduce",
+            "steps": [{"executor": executor, "args": args} for executor, args in steps],
+            "reason": "mock_scenario",
+            "source": "mock",
+            "priority_class": 2,
+            "session_id": None,
+            "created_at": time.time(),
+        })
+        for status in ("accepted", "started"):
+            await broadcast_brain_event("skill_result", {
+                "plan_id": plan_id,
+                "step_index": None,
+                "status": status,
+                "detail": "self_introduce",
+                "selected_skill": "self_introduce",
+                "priority_class": 2,
+                "step_total": len(steps),
+                "step_args": {},
+                "timestamp": time.time(),
+            })
+        for idx, (executor, args) in enumerate(steps):
+            await asyncio.sleep(0.15)
+            for status in ("step_started", "step_success"):
+                await broadcast_brain_event("skill_result", {
+                    "plan_id": plan_id,
+                    "step_index": idx,
+                    "status": status,
+                    "detail": executor,
+                    "selected_skill": "self_introduce",
+                    "priority_class": 2,
+                    "step_total": len(steps),
+                    "step_args": args,
+                    "timestamp": time.time(),
+                })
+        await broadcast_brain_event("skill_result", {
+            "plan_id": plan_id,
+            "step_index": None,
+            "status": "completed",
+            "detail": "",
+            "selected_skill": "self_introduce",
+            "priority_class": 2,
+            "step_total": len(steps),
+            "step_args": {},
+            "timestamp": time.time(),
+        })
+        await broadcast_brain_event("state", {
+            **current_pawai_brain_state.model_dump(),
+            "timestamp": time.time(),
+            "mode": "idle",
+            "active_plan": None,
+        })
+
+    asyncio.create_task(run())
+    return {"ok": True, "scenario": "self_introduce"}
