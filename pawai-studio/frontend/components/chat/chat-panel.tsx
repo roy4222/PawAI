@@ -4,11 +4,20 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Square, Camera, User, Hand, Brain } from "lucide-react"
 import { useStateStore } from "@/stores/state-store"
 import { useAudioRecorder } from "@/hooks/use-audio-recorder"
-import { useTextCommand } from "@/hooks/use-text-command"
 import { AudioVisualizer } from "@/components/chat/audio-visualizer"
+import { BrainStatusStrip } from "@/components/chat/brain/brain-status-strip"
+import { BubbleAlert } from "@/components/chat/brain/bubble-alert"
+import { BubbleBrainPlan } from "@/components/chat/brain/bubble-brain-plan"
+import { BubbleSafety } from "@/components/chat/brain/bubble-safety"
+import { BubbleSkillResult } from "@/components/chat/brain/bubble-skill-result"
+import { BubbleSkillStep } from "@/components/chat/brain/bubble-skill-step"
+import { SkillButtons } from "@/components/chat/brain/skill-buttons"
+import { SkillTraceDrawer } from "@/components/chat/brain/skill-trace-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import type { SkillPlan, SkillResult } from "@/contracts/types"
+import { getGatewayHttpUrl } from "@/lib/gateway-url"
 import { cn } from "@/lib/utils"
 
 interface UserMessage {
@@ -36,6 +45,50 @@ interface VoiceMessage {
 
 type ChatMessage = UserMessage | AIMessage | VoiceMessage
 
+interface BrainPlanMessage {
+  id: string
+  type: "brain_plan"
+  plan: SkillPlan
+  timestamp: string
+}
+
+interface SkillStepMessage {
+  id: string
+  type: "skill_step"
+  result: SkillResult
+  timestamp: string
+}
+
+interface SafetyMessage {
+  id: string
+  type: "safety"
+  result: SkillResult
+  timestamp: string
+}
+
+interface AlertMessage {
+  id: string
+  type: "alert"
+  plan: SkillPlan
+  timestamp: string
+}
+
+interface SkillResultMessage {
+  id: string
+  type: "skill_result"
+  result: SkillResult
+  timestamp: string
+}
+
+type BrainChatMessage =
+  | BrainPlanMessage
+  | SkillStepMessage
+  | SafetyMessage
+  | AlertMessage
+  | SkillResultMessage
+
+type ConsoleMessage = ChatMessage | BrainChatMessage
+
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
 }
@@ -56,7 +109,7 @@ const QUICK_ACTIONS = [
 ]
 
 export function ChatPanel() {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ConsoleMessage[]>([])
   const [inputText, setInputText] = useState("")
   const [isThinking, setIsThinking] = useState(false)
   const faceState = useStateStore((s) => s.faceState)
@@ -64,13 +117,16 @@ export function ChatPanel() {
   const gestureState = useStateStore((s) => s.gestureState)
   const poseState = useStateStore((s) => s.poseState)
   const brainState = useStateStore((s) => s.brainState)
+  const brainProposals = useStateStore((s) => s.brainProposals)
+  const brainResults = useStateStore((s) => s.brainResults)
   const stateMap = { faceState, speechState, gestureState, poseState, brainState }
   const { isRecording, isProcessing, audioLevels, lastResult: voiceResult, error: voiceError, startRecording, stopRecording } = useAudioRecorder()
-  const { sendText } = useTextCommand()
   const lastTtsText = useStateStore((s) => s.lastTtsText)
   const lastTtsAt = useStateStore((s) => s.lastTtsAt)
   const pendingRequestIdRef = useRef<string | null>(null)
   const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const seenProposalIdsRef = useRef<Set<string>>(new Set())
+  const seenResultKeysRef = useRef<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevVoiceResultRef = useRef(voiceResult)
@@ -97,7 +153,6 @@ export function ChatPanel() {
         clearTimeout(pendingTimeoutRef.current)
         pendingTimeoutRef.current = null
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external store change
       setIsThinking(false)
 
       const aiMsg: AIMessage = {
@@ -122,7 +177,6 @@ export function ChatPanel() {
         confidence: voiceResult.confidence,
         timestamp: formatTime(new Date()),
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external hook state
       setMessages((prev) => [...prev, voiceMsg])
 
       // Enter pending for TTS reply
@@ -140,6 +194,60 @@ export function ChatPanel() {
     }
   }, [voiceResult])
 
+  useEffect(() => {
+    for (const proposal of [...brainProposals].reverse()) {
+      if (seenProposalIdsRef.current.has(proposal.plan_id)) continue
+      seenProposalIdsRef.current.add(proposal.plan_id)
+      const timestamp = formatTime(new Date())
+      setMessages((prev) => [
+        ...prev,
+        proposal.priority_class === 1
+          ? {
+              id: `alert-${proposal.plan_id}`,
+              type: "alert",
+              plan: proposal,
+              timestamp,
+            }
+          : {
+              id: `plan-${proposal.plan_id}`,
+              type: "brain_plan",
+              plan: proposal,
+              timestamp,
+            },
+      ])
+    }
+  }, [brainProposals])
+
+  useEffect(() => {
+    for (const result of [...brainResults].reverse()) {
+      const key = `${result.plan_id}-${result.step_index ?? "plan"}-${result.status}`
+      if (seenResultKeysRef.current.has(key)) continue
+      seenResultKeysRef.current.add(key)
+
+      const timestamp = formatTime(new Date())
+      if (result.status === "blocked_by_safety" || result.selected_skill === "stop_move") {
+        setMessages((prev) => [
+          ...prev,
+          { id: `safety-${key}`, type: "safety", result, timestamp },
+        ])
+      } else if (
+        result.status === "step_started" ||
+        result.status === "step_success" ||
+        result.status === "step_failed"
+      ) {
+        setMessages((prev) => [
+          ...prev,
+          { id: `step-${key}`, type: "skill_step", result, timestamp },
+        ])
+      } else if (result.status === "completed" || result.status === "aborted") {
+        setMessages((prev) => [
+          ...prev,
+          { id: `result-${key}`, type: "skill_result", result, timestamp },
+        ])
+      }
+    }
+  }, [brainResults])
+
   // Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current
@@ -152,7 +260,7 @@ export function ChatPanel() {
     adjustTextareaHeight()
   }, [inputText, adjustTextareaHeight])
 
-  function handleSend() {
+  async function handleSend() {
     const text = inputText.trim()
     if (!text || isThinking) return
 
@@ -169,13 +277,18 @@ export function ChatPanel() {
       textareaRef.current.style.height = "auto"
     }
 
-    // Send via /ws/text
-    const sent = sendText(text)
-    if (!sent) {
+    try {
+      const response = await fetch(`${getGatewayHttpUrl()}/api/text_input`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, request_id: `txt-${Date.now()}` }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    } catch {
       const errMsg: AIMessage = {
         id: `ai-err-${Date.now()}`,
         type: "ai",
-        text: "文字通道未連線，請確認 Gateway 是否啟動。",
+        text: "Brain 文字通道未連線，請確認 Gateway 是否啟動。",
         timestamp: formatTime(new Date()),
       }
       setMessages((prev) => [...prev, errMsg])
@@ -288,7 +401,9 @@ export function ChatPanel() {
   // ── Welcome view (no messages yet) — Mission Control ──
   if (!hasMessages) {
     return (
-      <div className="relative flex flex-col items-center justify-center h-full px-6 control-grid control-glow">
+      <div className="flex h-full flex-col">
+        <BrainStatusStrip />
+        <div className="relative flex flex-1 flex-col items-center justify-center px-6 control-grid control-glow">
         <div className="flex flex-col items-center gap-8 w-full max-w-2xl -mt-16">
           {/* Hero */}
           <div className="flex flex-col items-center gap-4">
@@ -366,6 +481,7 @@ export function ChatPanel() {
             {composerInput}
           </div>
         </div>
+        </div>
       </div>
     )
   }
@@ -373,6 +489,7 @@ export function ChatPanel() {
   // ── Conversation view ──
   return (
     <div className="flex flex-col h-full">
+      <BrainStatusStrip />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-5">
           {messages.map((msg) => {
@@ -428,6 +545,26 @@ export function ChatPanel() {
                 </div>
               )
             }
+
+            if (msg.type === "brain_plan") {
+              return <BubbleBrainPlan key={msg.id} plan={msg.plan} />
+            }
+
+            if (msg.type === "skill_step") {
+              return <BubbleSkillStep key={msg.id} result={msg.result} />
+            }
+
+            if (msg.type === "safety") {
+              return <BubbleSafety key={msg.id} result={msg.result} />
+            }
+
+            if (msg.type === "alert") {
+              return <BubbleAlert key={msg.id} plan={msg.plan} />
+            }
+
+            if (msg.type === "skill_result") {
+              return <BubbleSkillResult key={msg.id} result={msg.result} />
+            }
           })}
 
           {isThinking && (
@@ -448,6 +585,8 @@ export function ChatPanel() {
         </div>
       </div>
 
+      <SkillTraceDrawer />
+      <SkillButtons />
       <div className="max-w-3xl mx-auto w-full">
         {composerInput}
       </div>
