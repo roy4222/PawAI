@@ -1,6 +1,11 @@
+brain_node:
+  ros__parameters:
+    chat_wait_ms: 1500
+    dedup_window_s: 1.0
+    unknown_face_accumulate_s: 3.0
+    fallen_accumulate_s: 2.0
+
 interaction_executive_node:
   ros__parameters:
-    state_timeout: 30.0
-    dedup_window: 5.0
-    obstacle_debounce: 2.0
-    obstacle_min_duration: 1.0
+    step_settle_s: 0.4
+    tts_idle_timeout_s: 6.0

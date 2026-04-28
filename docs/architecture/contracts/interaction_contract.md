@@ -1,11 +1,16 @@
-# ROS2 介面契約 v2.4
+# ROS2 介面契約 v2.5
 
 **文件定位**：PawAI 系統 ROS2 Topic/Action/Service 介面規格
 **適用範圍**：Layer 1-3 所有模組
-**版本**：v2.4
-**凍結日期**：2026-04-05
+**版本**：v2.5
+**凍結日期**：2026-04-28
 **對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
 
+> **v2.5 變更摘要**：
+> - 新增 PawAI Brain MVS topics：`/brain/text_input`、`/brain/skill_request`、`/brain/proposal`、`/brain/skill_result`
+> - 新增 `/state/pawai_brain`，作為 Brain Skill Console 的狀態觀測來源
+> - Phase A runtime：`brain_node` 負責規則仲裁，`interaction_executive_node` 是 production sport `/webrtc_req` 唯一出口
+>
 > **v2.2 變更摘要**：
 > - 新增 `interaction_executive_node`（取代 `interaction_router` + `event_action_bridge`）
 > - 新增 `/executive/status`（v0 implemented，2 Hz state machine 狀態廣播）
@@ -58,6 +63,7 @@
 | `/state/perception/face` | State | 10 Hz | 人臉追蹤狀態 | active |
 | `/state/interaction/speech` | State | 5 Hz | 語音管線狀態 | active |
 | `/state/executive/brain` | State | 2 Hz | 大腦決策狀態（完整版） | **planned** |
+| `/state/pawai_brain` | State | 2 Hz | PawAI Brain MVS 狀態（active plan / safety flags / trace） | **v2.5** active |
 | `/executive/status` | State | 2 Hz | Executive v0 state machine 狀態 | **v0 implemented** |
 | `/event/face_identity` | Event | 觸發式 | 人臉身份事件 | active |
 | `/event/speech_intent_recognized` | Event | 觸發式 | 語音意圖事件 | active |
@@ -75,6 +81,10 @@
 | `/state/reactive_stop/status` | State | 10 Hz | reactive_stop_node 內部狀態（state_broadcaster 訂閱用） | **v2.3** active |
 | `/event/nav/waypoint_reached` | Event | 觸發式 | RunRoute 每個 waypoint 抵達事件 | **v2.3** active |
 | `/event/nav/internal/status` | Event | 觸發式 | nav_action_server / route_runner → state_broadcaster 內部 status | **v2.3** active |
+| `/brain/text_input` | Command | 觸發式 | Studio → Brain 文字輸入 | **v2.5** active |
+| `/brain/skill_request` | Command | 觸發式 | Studio → Brain skill button request | **v2.5** active |
+| `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
+| `/brain/skill_result` | Event | 觸發式 | Executive → Brain/Studio SkillResult lifecycle | **v2.5** active |
 | `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 
@@ -288,6 +298,71 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "previous_state": "idle",
   "state_duration": 2.3,
   "timestamp": 1773561603.456
+}
+```
+
+### 3.6 `/state/pawai_brain` — v2.5 active
+
+**說明**：PawAI Brain MVS 狀態廣播，供 Studio Brain Skill Console / Trace Drawer 觀測。
+**發布者**：`brain_node`
+**發布頻率**：2 Hz
+**QoS**：Reliable, TransientLocal, depth=1
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**：
+```json
+{
+  "timestamp": { "type": "float", "unit": "seconds (Unix timestamp)" },
+  "mode": { "type": "string", "enum": ["idle", "chat", "skill", "sequence", "alert", "safety_stop"] },
+  "active_plan": {
+    "type": "object | null",
+    "fields": {
+      "plan_id": "string",
+      "selected_skill": "string",
+      "step_index": "int",
+      "step_total": "int",
+      "started_at": "float",
+      "priority_class": "int"
+    }
+  },
+  "active_step": { "type": "object | null", "description": "目前 step executor + args" },
+  "fallback_active": { "type": "bool" },
+  "safety_flags": {
+    "obstacle": "bool",
+    "emergency": "bool",
+    "fallen": "bool",
+    "tts_playing": "bool",
+    "nav_safe": "bool"
+  },
+  "cooldowns": { "type": "object", "description": "cooldown key -> last timestamp" },
+  "last_plans": { "type": "array", "description": "recent SkillPlan summaries, max 5" }
+}
+```
+
+**範例**：
+```json
+{
+  "timestamp": 1777364860.0,
+  "mode": "sequence",
+  "active_plan": {
+    "plan_id": "p-12345678",
+    "selected_skill": "self_introduce",
+    "step_index": 3,
+    "step_total": 10,
+    "started_at": 1777364859.0,
+    "priority_class": 2
+  },
+  "active_step": { "executor": "motion", "args": { "name": "sit" } },
+  "fallback_active": false,
+  "safety_flags": {
+    "obstacle": false,
+    "emergency": false,
+    "fallen": false,
+    "tts_playing": false,
+    "nav_safe": true
+  },
+  "cooldowns": { "self_introduce": 1777364859.0 },
+  "last_plans": []
 }
 ```
 
@@ -641,6 +716,86 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 ---
 
 ## 5. Command Topics
+
+### 5.0 PawAI Brain MVS command/event topics — v2.5 active
+
+#### `/brain/text_input`
+
+**說明**：Studio 文字輸入注入 Brain，等價於 synthetic speech intent。
+**發布者**：`studio_gateway`
+**訂閱者**：`brain_node`
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+```json
+{
+  "request_id": "string",
+  "text": "string",
+  "source": "studio_text",
+  "created_at": "float"
+}
+```
+
+#### `/brain/skill_request`
+
+**說明**：Studio Skill Button request，仍需經 Brain registry 與 safety 驗證。
+**發布者**：`studio_gateway`
+**訂閱者**：`brain_node`
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+```json
+{
+  "request_id": "string",
+  "skill": "string",
+  "args": "object",
+  "source": "studio_button",
+  "created_at": "float"
+}
+```
+
+#### `/brain/proposal`
+
+**說明**：Brain 仲裁後送往 Executive 的 SkillPlan。
+**發布者**：`brain_node`
+**訂閱者**：`interaction_executive_node`、`studio_gateway`（觀測）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+```json
+{
+  "plan_id": "string",
+  "selected_skill": "string",
+  "steps": [{ "executor": "say|motion|nav", "args": "object" }],
+  "reason": "string",
+  "source": "string",
+  "priority_class": "int",
+  "session_id": "string | null",
+  "created_at": "float"
+}
+```
+
+#### `/brain/skill_result`
+
+**說明**：Executive 回報 SkillPlan / SkillStep lifecycle。Brain 訂閱此 topic 以維護 active sequence guard；Studio Gateway 訂閱作 UI trace。
+**發布者**：`interaction_executive_node`
+**訂閱者**：`brain_node`、`studio_gateway`
+**QoS**：Reliable, Volatile, depth=20
+**Message Type**：`std_msgs/String` (JSON)
+
+```json
+{
+  "plan_id": "string",
+  "step_index": "int | null",
+  "status": "accepted|started|step_started|step_success|step_failed|completed|aborted|blocked_by_safety",
+  "detail": "string",
+  "selected_skill": "string",
+  "priority_class": "int",
+  "step_total": "int",
+  "step_args": "object",
+  "timestamp": "float"
+}
+```
 
 ### 5.1 `/webrtc_req`
 
