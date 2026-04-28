@@ -32,54 +32,71 @@
 
 ## 2. 七大模組整合圖
 
+**兩條並行輸入**進 Brain：感知模組獨立 publish ROS2 events；Studio 透過 Gateway 注入 text/skill request。Gateway 同時訂閱 Brain 輸出回傳給 Studio 觀測。
+
 ```
+┌──────────────────────────────┐    ┌──────────────────────────────┐
+│ Layer 2 感知（Jetson 邊緣）   │    │ PawAI Studio（瀏覽器）        │
+│                              │    │                              │
+│ 人臉 │ 語音 │ 手勢 │ 姿勢│物體│    │ Brain Skill Console          │
+│ 95%  │ 90%  │ 90%  │ 95% │70% │    │ · 8 bubble · Skill Buttons   │
+│  ↓     ↓     ↓     ↓    ↓   │    │ · Trace Drawer · Text Input  │
+└──┬──────────────────────────┘    └─────────────┬────────────────┘
+   │ ROS2 publish（獨立，不經 Gateway）           │ WebSocket /ws/events
+   │ /event/face_identity                         │ REST /api/{text_input,
+   │ /event/speech_intent_recognized              │       skill_request}
+   │ /event/gesture_detected                      ▼
+   │ /event/pose_detected               ┌──────────────────────────┐
+   │ /event/object_detected             │ studio_gateway           │
+   │ /state/perception/face             │ (FastAPI + ROS2 bridge)  │
+   │ /state/tts_playing                 │                          │
+   │ /state/nav/{heartbeat,status,      │ REST → publish 到 ROS2： │
+   │            safety}                 │  /brain/text_input       │
+   │                                    │  /brain/skill_request    │
+   │                                    │                          │
+   │                                    │ ROS2 sub → broadcast WS：│
+   │                                    │  /state/pawai_brain      │
+   │                                    │  /brain/proposal         │
+   │                                    │  /brain/skill_result     │
+   │                                    │  /event/* /tts           │
+   │                                    └──────────┬───────────────┘
+   │                                               │
+   │      ┌────────────────────────────────────────┘
+   │      │                  /brain/text_input · /brain/skill_request
+   ▼      ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Layer 2 — 感知（5 模組，全部已上機）                              │
+│ Layer 3 — Brain × Executive（要做的就是這個）                    │
 │                                                                 │
-│  人臉    │ 語音    │ 手勢    │ 姿勢    │ 物體                    │
-│  ────────┼─────────┼─────────┼─────────┼─────────                │
-│  YuNet+  │ Sense-  │ Media-  │ Media-  │ YOLO26n+                │
-│  SFace   │ Voice + │ Pipe    │ Pipe    │ TRT FP16                │
-│          │ Whisper │         │ Pose    │                         │
-│  95% ✅  │ 90% ✅  │ 90% ✅  │ 95% ✅  │ 70% ✅                  │
-│   ↓        ↓        ↓        ↓        ↓                          │
-│ /event/face_identity                                             │
-│ /event/speech_intent_recognized                                  │
-│ /event/gesture_detected                                          │
-│ /event/pose_detected                                             │
-│ /event/object_detected                                           │
-│ /state/perception/face                                           │
-└────────────────────────────┬────────────────────────────────────┘
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Layer 3 — Brain × Executive × Studio（要做的就是這個）          │
-│                                                                 │
-│  ┌───────────────────────────────────────────┐                  │
-│  │ PawAI Brain (brain_node) — Phase A 規則  │                  │
-│  │    Phase B + Capability Validator         │                  │
-│  │    Phase C + LLM Planner（function call）│                  │
-│  └─────────────────────┬─────────────────────┘                  │
-│                        ▼  /brain/proposal (SkillPlan)            │
-│  ┌───────────────────────────────────────────┐                  │
-│  │ Interaction Executive — 唯一動作出口       │                  │
-│  │   SAY / MOTION / NAV 三個 executor         │                  │
-│  └─────────────────────┬─────────────────────┘                  │
-│                        ▼                                        │
-│  ┌───────────────────────────────────────────┐                  │
-│  │ PawAI Studio — Brain Skill Console        │                  │
-│  │   8 種 bubble + Skill Buttons + Trace     │                  │
-│  └───────────────────────────────────────────┘                  │
+│ ┌───────────────────────────────────────────┐                   │
+│ │ PawAI Brain (brain_node)                   │                   │
+│ │   Phase A：純規則仲裁                       │                   │
+│ │   Phase B：+ Capability Validator + Body   │                   │
+│ │   Phase C：+ LLM Planner（function call）  │                   │
+│ └─────────────────────┬─────────────────────┘                   │
+│                       ▼  /brain/proposal (SkillPlan)             │
+│ ┌───────────────────────────────────────────┐                   │
+│ │ Interaction Executive — 唯一動作出口        │                   │
+│ │   SAY → /tts                                │                   │
+│ │   MOTION → /webrtc_req (sport)              │                   │
+│ │   NAV → nav_capability action client        │                   │
+│ │   發 /brain/skill_result + /state/pawai_brain                  │
+│ └─────────────────────┬─────────────────────┘                   │
 └────────────────────────────┬────────────────────────────────────┘
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Layer 1 — 執行（已上機 / 開發中）                                │
 │  Go2 sport API（locomotion）                                    │
-│  Go2 Megaphone audio（4001-4004）                               │
-│  nav_capability platform（4 actions / 3 services / 3 states）   │
-│   ↑                                                              │
-│   └─── 導航避障：硬體 mount blocked，5/9 起執行 7 階段 roadmap   │
+│  Go2 Megaphone audio（4001-4004，由 tts_node 直接發）            │
+│  nav_capability platform layer 已實作（4 actions/3 services/    │
+│   3 state topics）；實機 KPI 仍待 LiDAR mount + AMCL 整合驗收    │
+│   └─── 導航避障：5/9 起執行 7 階段 roadmap                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**重點**：
+- 感知模組 → Brain 是 **ROS2 直接 pub/sub**，**不經過 Gateway**（Gateway 只 mirror 給 Studio 觀測）
+- Studio → Brain 透過 Gateway → ROS2 topic（`/brain/text_input` / `/brain/skill_request`）
+- Brain → Studio 透過 Gateway 訂閱 `/brain/*` + `/event/*` broadcast 到 WebSocket
 
 **整合視角的關鍵 insight**：
 
@@ -106,9 +123,9 @@ Skill = name + args_schema + executor + safety_requirements
 |------|------------------|---------------|----------------|--------------|
 | **語音功能** | `/event/speech_intent_recognized` `/state/interaction/speech` | `chat_reply` `say_canned` `stop_move`（語音「停」） | — | LLM 透過 `/brain/chat_candidate` |
 | **人臉辨識** | `/event/face_identity` `/state/perception/face` | `greet_known_person(name)` `stranger_alert` | + `wait_for_owner` | LLM 用人臉 context 選擇問候語 |
-| **手勢辨識** | `/event/gesture_detected` | `acknowledge_gesture(type)`（wave/ok/thumbs_up） | + `gesture_navigation`（指向哪走過去） | — |
+| **手勢辨識** | `/event/gesture_detected` | `acknowledge_gesture(type)`（**僅** wave/ok/thumbs_up；gesture stop 屬 safety 行為，不混進此 skill） | + `gesture_stop`（safety rule 或獨立 skill）+ `gesture_navigation`（指向哪走過去） | — |
 | **姿勢辨識** | `/event/pose_detected` | `fallen_alert` | + `assist_fallen_person` | — |
-| **物體辨識** | `/event/object_detected` | `comment_on_object(class)`（cup→「要喝水嗎？」） | + `find_object(class)` `bring_object(class)` | LLM 主動使用 |
+| **物體辨識** | `/event/object_detected` | **Phase A 不進 demo skill**（事件僅 mirror 到 Studio Trace / Gateway，不觸發 skill；既有 34-task plan 沒有 object rule / bubble / 驗收） | `comment_on_object(class)` `find_object(class)` `bring_object(class)` | LLM 主動使用 |
 | **導航避障** | `/state/nav/safety` `/state/nav/heartbeat` `/state/nav/status` | `go_to_named_place`（disabled stub） | **6 條 nav skill**：goto_named / goto_relative / run_route / pause / resume / cancel | LLM 規劃複合路徑 |
 | **Brain×Studio** | `/brain/*` `/state/pawai_brain` | 9 條 MVS skill + META_SKILL self_introduce | + Capability Validator + BodyState | LLM function calling |
 
@@ -262,7 +279,7 @@ Executive：
 |------|---------|-----------|
 | **語音** | LLM cloud → local → say_canned 三級 fallback；`output_mode=brain` 不發 sport `/webrtc_req` | A（Phase 0 ✅ + Phase 1 整合） |
 | **人臉** | 熟人 cooldown 20s/人；陌生人 ≥3s 才觸發 stranger_alert | A |
-| **手勢** | wave / ok / thumbs_up / stop 四種對應 skill；fist→ok 相容 map 不破 | A |
+| **手勢** | Phase A：wave / ok / thumbs_up → `acknowledge_gesture`（跟 spec §3.4 一致）；fist→ok 相容 map 不破。**`gesture_stop` 不在 Phase A**（要嘛走 safety hard rule + 獨立 test，要嘛延後到 Phase B；不混進 acknowledge_gesture） | A（wave/ok/thumbs_up） / **B 或新增 safety rule**（gesture_stop） |
 | **姿勢** | fallen ≥2s 才觸發 fallen_alert；emergency 可關閉開關保留 | A |
 | **物體** | per-class cooldown 5s；whitelist 至少 6 class（cup/bottle/person/dog/chair/dining_table） | A（部分） + B（find/bring） |
 | **導航** | nav_capability 4 actions 全部對接；BodyState 知道 nav_ready；Studio 顯示「為什麼不能走」 | **B**（A 只接狀態） |
@@ -377,10 +394,22 @@ Executive：
 |---------|---------------------|
 | `2026-04-27-pawai-brain-skill-first.md`（34 tasks） | **本 master plan §4 引用它**。施工細節不複製，只指向。Phase 1/2 執行仍以該檔為主。 |
 | `2026-04-27-pawclaw-embodied-brain-evolution.md` | **本 master plan §5 引用它**。Phase B 啟動時新建獨立 plan 檔，本文件加連結。 |
-| `2026-04-26-nav-capability-s2.md` | nav_capability platform 已完成，本 master plan §2 / §5 引用為 Phase B 整合對象 |
-| `2026-04-24-p0-nav-obstacle-avoidance.md` | nav 底層執行 plan，與 Phase B 整合 |
+| `2026-04-26-nav-capability-s2.md` | nav_capability **platform layer 實作完成**（4 actions / 3 services / 3 state topics）；**實機 nav KPI、LiDAR mount、AMCL、route 仍待完成**。本 master plan §2 / §5 引用為 Phase B 整合對象。 |
+| `2026-04-24-p0-nav-obstacle-avoidance.md` | P0 nav 底層執行 plan，與 Phase B 整合 |
 
-**衝突處理規則**：
-- 若本文件與既有 spec / plan 衝突 → **本文件勝**（north star 優先）
-- 既有 spec / plan 內部細節衝突 → 以 commit 時間較新者為準
-- 任何重大 scope 變更 → 先改本文件，再改下游 spec / plan
+**衝突處理規則（重要：master 不是萬能裁判）**：
+
+本文件的權威範圍**僅限**：north star、scope、phase ordering、模組整合視角、Done criteria 大綱。
+
+| 衝突類型 | 仲裁來源 |
+|---------|---------|
+| Topic schema / API 介面 | `docs/architecture/contracts/interaction_contract.md`（已凍結契約） |
+| SkillContract / Skill 細節 | `specs/2026-04-27-pawai-brain-skill-first-design.md` |
+| 實作 task steps / file:line / build 指令 | `plans/2026-04-27-pawai-brain-skill-first.md`（或對應 plan 檔） |
+| Phase B Capability / BodyState 設計 | `specs/2026-04-27-pawclaw-embodied-brain-evolution.md` |
+| North star / scope / phase 排序 / 模組是否在 phase 內 | **本文件** |
+
+**衝突處理流程**：
+1. 若本文件與下游 spec/plan 在「north star / scope / phase 排序」衝突 → 先改本文件，再同步更新下游
+2. 若本文件描述的某模組能力與下游 spec/plan 的施工細節對不上 → **以下游 spec/plan 為準**，本文件需更正
+3. 任何 master 修改若會影響 spec/plan 已凍結章節 → 必須在 commit message 列出受影響檔案並同步更新
