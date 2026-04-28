@@ -104,7 +104,7 @@ class LlmBridgeNode(Node):
         # Publishers
         self.tts_pub = self.create_publisher(String, self.tts_topic, 10)
         self.state_pub = self.create_publisher(String, self.state_topic, 10)
-        if WebRtcReq is not None and self.enable_actions:
+        if WebRtcReq is not None and self.enable_actions and self.output_mode == "legacy":
             self.action_pub = self.create_publisher(
                 WebRtcReq, "/webrtc_req", 10
             )
