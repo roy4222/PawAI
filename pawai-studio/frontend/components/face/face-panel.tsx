@@ -54,11 +54,12 @@ export function FacePanel() {
       ? 'active' as const
       : 'inactive' as const
 
-  const tracks = faceState?.tracks ?? []
+  const tracks = faceState?.tracks
   const allTracks = useMemo(() => {
-    const currentIds = new Set(tracks.map(t => t.track_id))
+    const safeTracks = tracks ?? []
+    const currentIds = new Set(safeTracks.map(t => t.track_id))
     const vanishingWithoutCurrent = vanishingTracks.filter(vt => !currentIds.has(vt.track_id))
-    return [...tracks, ...vanishingWithoutCurrent]
+    return [...safeTracks, ...vanishingWithoutCurrent]
   }, [tracks, vanishingTracks])
 
   return (
@@ -73,6 +74,7 @@ export function FacePanel() {
         {/* Placeholder visual — M2 時改 SHOW_PLACEHOLDER = false，換成真實元件 */}
         {SHOW_PLACEHOLDER && (
           <div className="rounded-lg overflow-hidden border border-border/20">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={PLACEHOLDER_SRC} alt="face placeholder" className="w-full h-auto" />
           </div>
         )}
