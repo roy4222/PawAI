@@ -11,7 +11,7 @@
 #
 # 前提：
 #   - Step 0 已確認 cmd_vel MIN_X = 0.50（4/25 19:55 calibration）
-#   - /home/jetson/maps/home_living_room.{yaml,pgm} 存在
+#   - /home/jetson/maps/home_living_room_v5.{yaml,pgm} 存在
 #   - nav2_params.yaml 含 v3.7 改動（AMCL scan_topic /scan_rplidar、alpha 0.4、initial_pose false）
 #
 # 操作流程：
@@ -24,7 +24,7 @@ set -euo pipefail
 SESSION="nav2-amcl"
 ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh && source ~/elder_and_dog/install/setup.zsh"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
-MAP_YAML="/home/jetson/maps/home_living_room.yaml"
+MAP_YAML="/home/jetson/maps/home_living_room_v5.yaml"
 NAV2_PARAMS="$HOME/elder_and_dog/go2_robot_sdk/config/nav2_params.yaml"
 
 echo "=== Nav2 AMCL Demo Session (v3.7) ==="
@@ -47,7 +47,7 @@ fi
 
 echo "[1/5] static TF base_link → laser (z=0.10)"
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0.10 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw 3.1416 --frame-id base_link --child-frame-id laser" Enter
 sleep 3
 
 echo "[2/5] RPLIDAR (Standard mode, /scan_rplidar)"

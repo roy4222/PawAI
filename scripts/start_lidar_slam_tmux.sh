@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # scripts/start_lidar_slam_tmux.sh
-# 一鍵啟動 RPLIDAR + Go2 odom + slam_toolbox 建圖環境（Gate P0-B）
+# 一鍵啟動 RPLIDAR + Cartographer pure scan-matching 建圖環境（Gate P0-B）
 #
 # 拓撲：
-#   Go2 driver minimal → /odom 18.7Hz + odom→base_link TF
-#   sllidar           → /scan_rplidar 10.4Hz（避開 Go2 內建 /scan）
-#   static TF         → base_link → laser (z=0.10 估測，5/13 前需精量)
-#   slam_toolbox      → map→odom 自動修正 + map 累積
-#   foxglove_bridge   → ws://JETSON_IP:8765 可視化
+#   static TF       → base_link → laser (x=-0.035, y=0, z=0.15, yaw=3.1416)
+#   sllidar         → /scan_rplidar 10.4Hz（避開 Go2 內建 /scan）
+#   cartographer    → pure scan-matching，無外部 odom
+#   foxglove_bridge → ws://JETSON_IP:8765 可視化
 #
-# 注意：driver 用 `ros2 run` 直接啟，不走 robot.launch.py（launch 會帶起
-# pointcloud_to_laserscan 發 /scan 干擾 slam_toolbox）。
+# 注意：本建圖 stack 不啟 Go2 driver / Nav2 / reactive / mux。
 set -euo pipefail
 
 SESSION="lidar-slam"
@@ -29,10 +27,10 @@ ros2 daemon start 2>/dev/null || true
 
 trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
 
-echo "[1/5] Publishing static TF base_link -> laser (z=0.10) FIRST..."
+echo "[1/5] Publishing static TF base_link -> laser (x=-0.035, y=0, z=0.15, yaw=3.1416) FIRST..."
 echo "       v3: 不啟 Go2 driver，cartographer pure scan-matching 自己 own odom→base_link TF"
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0.10 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw 3.1416 --frame-id base_link --child-frame-id laser" Enter
 echo "  Waiting 3s for /tf_static TRANSIENT_LOCAL to settle in DDS..."
 sleep 3
 
@@ -63,16 +61,10 @@ JETSON_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "JETSON_IP")
 echo "Foxglove: ws://$JETSON_IP:8765"
 echo ""
 echo "Sanity check (run in another terminal):"
-echo "  ros2 topic hz /odom              # 期望 ≈ 18.7 Hz"
 echo "  ros2 topic hz /scan_rplidar      # 期望 ≈ 10.4 Hz"
 echo "  ros2 topic list | grep scan      # 應只見 /scan_rplidar，無 /scan"
-echo "  ros2 run tf2_tools view_frames   # 確認 driver 實際 base frame name"
-echo "  ros2 run tf2_ros tf2_echo odom base_link"
+echo "  ros2 run tf2_tools view_frames   # 確認 map / odom / base_link / laser TF tree"
 echo "  ros2 run tf2_ros tf2_echo base_link laser"
-echo ""
-echo "30cm odom 差異測試（持續 echo，不要 --once）："
-echo "  ros2 topic echo /odom --field pose.pose.position"
-echo "  → 用 Unitree 遙控器走 30cm，看 x/y 是否即時變化"
 echo ""
 echo "走客廳繞一圈後 save map（cartographer 三步驟，順序很重要）:"
 echo "  # 1. finish trajectory（觸發最終 loop closure）"

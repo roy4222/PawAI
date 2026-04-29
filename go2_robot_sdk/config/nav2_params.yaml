@@ -15,8 +15,12 @@ amcl:
     global_frame_id: "map"
     lambda_short: 0.1
     laser_likelihood_max_dist: 2.0
-    laser_max_range: 100.0
-    laser_min_range: -1.0
+    # P0 Nav v3.8 (4/29): A2M12 過濾雜訊
+    #   laser_min_range 0.20 — 過濾 < 0.20m 的腳邊/Go2 自身雜訊
+    #   laser_max_range 8.0  — indoor practical cap，A2M12 名義 12m，但室內 8m 足夠且濾遠距散射
+    #   laser_model_type 暫不改（Phase 4B 條件式：若 K1 < 4/5 才切 likelihood_field_prob + do_beamskip）
+    laser_max_range: 8.0
+    laser_min_range: 0.20
     laser_model_type: "likelihood_field"
     max_beams: 60
     # P0 Nav v3.7: 小空間用較少 particle（500→100, 2000→500）

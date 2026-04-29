@@ -1,7 +1,71 @@
 # 專案狀態
 
-**最後更新**：2026-04-28 night（**PawAI Brain MVS Phase 0+1+2 全綠 + Master Integration Plan + Codex 外包流程驗證** / LiDAR mount STL 印好待測 / OpenRouter 智商升級為下一步）
-**硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+**最後更新**：2026-04-29 night（**LiDAR Phase 1-3 完成（mount + scan health + map v2-v5）/ yaw 校正未定案（4 次猜測失敗，明天物理錨定）/ 供電升級 XL4015 → 2464 / 4/29 教授會議**）
+**硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 4/29 進度
+
+**LiDAR roadmap Phase 1-3 — 物理層 + 建圖實機驗證 / yaw 仍待定案 / 4/30 教授會議對齊**
+
+### 完成事項
+
+| Phase | 內容 | 狀態 |
+|-------|------|------|
+| **Phase 1** | mount 量測（x=−0.035, y=0, z=0.15）+ TF 6 scripts + build_map.sh echo 同步 | ✅ |
+| **Phase 2** | scan-only stack + `scan_health_check.py`（PHANTOM 4-條件 gate）+ baseline CSV + 旋轉復測 | ✅ |
+| **Phase 3** | Cartographer pure scan-matching 重建 4 張 map（v2 yaw=0 / v3 yaw=−π/2 / v4 yaw=+π/2 / v5 yaw=π）| ⚠️ 全部因 yaw 錯而 deprecated |
+| **AMCL 校正預備** | nav2_params.yaml `laser_min_range: 0.20` / `laser_max_range: 8.0` | ✅ commit ready |
+| **教授會議** | [`docs/mission/meetings/2026-04-29.md`](../docs/mission/meetings/2026-04-29.md) | ✅ 紀錄 |
+
+### Yaw 校正 4 次失敗的教訓
+
+每改 yaw 就重建一張 map → cartographer 用該 yaw 建出**內部一致**的 map → Foxglove 看 scan 跟 map 永遠看起來反，因為比對基準（map）也跟著轉。**用戶 4/29 SSH 實測排除**：
+
+- `/scan_rplidar:angle_increment = +0.008738784` → 標準 CCW，**排除 scan 鏡像 / scan_flipper 路線**
+- `/scan_rplidar` publisher 唯一是 sllidar_node → 排除 topic 混用
+- 雷達 motor 朝下 → 排除物理倒裝
+- initialpose 拖箭頭對齊 Go2 真實前方 → 排除 initialpose 方向錯
+
+**新路徑（user 定）**：物理錨定測試 — 在 Go2 正前方 0.8m 放物體，跑 scan_health_check.py 看物體落在哪個 angle bin，直接判讀 yaw。**完整 plan**：`/home/roy422/.claude/plans/abstract-sleeping-hoare.md`
+
+### 供電升級（demo blocker → 已解）
+
+| 階段 | 狀態 |
+|---|---|
+| XL4015 | 4/29 16:30-17:30 跳電 3 次（10 分鐘內） |
+| **2464 可調自動升降壓恒壓恒流模組** | 35W 自然散熱 + 50W 加強散熱、過流/過壓/過溫多重保護、輸入防反接、輸出防倒灌 |
+| 4/29 19:52 後 | 不再跳電 ✅ |
+
+### 4/30 教授會議對齊（會議 vs 進度差異）
+
+- ✅ 一致：北極星機器狗版 OpenClaw、Brain Phase A 完成、雷達校正本週主軸、OpenRouter 升級
+- ⚠️ 落差：供電 XL4015 → 2464、OpenRouter 候選改 DeepSeek V4 / Gemini 2.5 Flash / Kimi K2、TTS 升級新需求、雷達背板平台新需求
+- ❌ 時程更緊：「真正剩 4/30 那一週」= 4-5 天 code 時間，之後忙簡報 + 搬運 + 整合
+- ✅ Brain 設計：會議列「指令分層架構」為次大難題，**Phase A 已 cover**（safety_layer + skill_contract + executive 單一出口）
+
+### 文件 / 工具新增
+
+- `scripts/scan_health_check.py` — 30 樣本 angular probe + PHANTOM 4-條件 fail gate
+- `scripts/start_scan_only_tmux.sh` — 3-window scan-only（TF + sllidar + monitor）
+- `docs/導航避障/research/2026-04-29-mount-measurement.md` — 量測 + yaw 修正歷史
+- `docs/導航避障/research/baseline-scans/` — baseline / Pose-A / Pose-B-cw30 三 CSV
+- `docs/導航避障/research/maps/` — v2/v3/v4/v5 PNG/yaml/pgm + README
+
+### 明日（4/30）下一步
+
+1. **早上**：物理錨定測試（plan Phase 1）→ yaw 一次定案
+2. **早上**：重掃 v6 map → AMCL 跑 K1 baseline 0.5m × 5（≥ 4/5 即過）
+3. **中午 12:00**：教授會議 + 簡報
+4. **下午**（時間夠）：B-1 OpenRouter（DeepSeek V4 主、Gemini Flash 備）
+
+### 不做（5/19 前 scope 控制）
+
+- ❌ 不寫 scan_flipper_node（H1 排除）
+- ❌ 不再改 yaw 第 5 次靠視覺猜
+- ❌ Brain Phase B / C 留 5/19 後
+- ❌ Studio UI 重做 留 freeze 後
 
 ---
 

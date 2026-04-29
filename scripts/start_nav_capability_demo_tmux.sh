@@ -13,13 +13,13 @@
 #
 # Usage:
 #   bash scripts/start_nav_capability_demo_tmux.sh
-#   ROBOT_IP=192.168.123.161 MAP=/home/jetson/maps/home_living_room.yaml \
+#   ROBOT_IP=192.168.123.161 MAP=/home/jetson/maps/home_living_room_v5.yaml \
 #     bash scripts/start_nav_capability_demo_tmux.sh
 set -euo pipefail
 
 SESSION="${SESSION:-nav-cap-demo}"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
-MAP="${MAP:-/home/jetson/maps/home_living_room.yaml}"
+MAP="${MAP:-/home/jetson/maps/home_living_room_v5.yaml}"
 NAV_RUNTIME_DIR="${NAV_RUNTIME_DIR:-$HOME/elder_and_dog/runtime/nav_capability}"
 NAV_NAMED="${NAV_NAMED:-$NAV_RUNTIME_DIR/named_poses/main.json}"
 NAV_ROUTES="${NAV_ROUTES:-$NAV_RUNTIME_DIR/routes}"
@@ -44,7 +44,7 @@ trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/
 echo "[1/8] static TF base_link -> laser (z=0.10)"
 tmux new-session -d -s "$SESSION" -n tf
 tmux send-keys -t "$SESSION:tf" \
-    "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0.10 --frame-id base_link --child-frame-id laser" Enter
+    "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw 3.1416 --frame-id base_link --child-frame-id laser" Enter
 sleep 2
 
 echo "[2/8] RPLIDAR (Standard mode -> /scan_rplidar)"

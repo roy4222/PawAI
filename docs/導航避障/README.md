@@ -1,6 +1,9 @@
 # 導航避障
 
-> Status: **P0-A/B/C ✅ / P0-D 0.8m goal 實機通過 + reactive_stop fallback 完成 / nav_capability 平台層 ✅ Phase 0-9 / Phase 10 KPI ⏳ 部分驗收**（2026-04-26 evening 更新）
+> Status: **Phase 1-3 ✅ / yaw 4 次猜測失敗（v2-v5 map 全 deprecated）/ 明天物理錨定定案 → v6 → Phase 4 K1 baseline**（2026-04-29 night 更新）
+
+> **2026-04-29 — LiDAR mount 上機 + Phase 1-3**：mount 量測（x=−0.035, y=0, z=0.15）✅；Phase 2 寫了 `scan_health_check.py`（4-條件 PHANTOM gate）+ `start_scan_only_tmux.sh`（3-window）；Phase 3 重建 4 張 map（v2 yaw=0 / v3 −π/2 / v4 +π/2 / v5 π）全因 yaw 錯而 deprecated。**供電升級 XL4015 → 2464 升降壓恒壓恒流模組**（19:52 後不再跳電）。明天用物理錨定（Go2 正前方 0.8m 放物體）一次定案 yaw → v6 → Phase 4 K1。
+>   Plan: `/home/roy422/.claude/plans/abstract-sleeping-hoare.md` / 量測 + 修正歷史: [`research/2026-04-29-mount-measurement.md`](research/2026-04-29-mount-measurement.md) / map QA: [`research/maps/README.md`](research/maps/README.md)
 
 > **2026-04-26 evening — nav_capability S2 平台化**：把 P0 reactive 邏輯抽象成「平台層」，提供 4 actions / 3 services / 3 state topics 給 interaction_executive 與 PawAI Brain。WSL 70 tests pass；Jetson Phase 10 KPI 中 K9/K10 ✅，K8 移出實機（fake publisher 撞 driver 事故），K1/K2/K4/K5/K7 推遲。
 >   Spec: [`docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md`](../superpowers/specs/2026-04-26-nav-capability-s2-design.md) / Plan: [`docs/superpowers/plans/2026-04-26-nav-capability-s2.md`](../superpowers/plans/2026-04-26-nav-capability-s2.md)

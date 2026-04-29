@@ -33,7 +33,7 @@ trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/
 
 echo "[1/4] static TF base_link → laser (z=0.10)"
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0 --y 0 --z 0.10 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw 3.1416 --frame-id base_link --child-frame-id laser" Enter
 sleep 3
 
 echo "[2/4] RPLIDAR (Standard mode, /scan_rplidar)"

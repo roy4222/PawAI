@@ -7,6 +7,8 @@
 - 不要修改 D435 camera launch 參數（那是 face_perception 的領域）
 - 不要動 `nav2_params.yaml` 的 footprint（60×30cm 短於 Go2 真實 70×31cm，但 4/26 實機驗證仍 work；正式校正排到 5/13 demo 後）
 - 不要在 `start_nav2_amcl_demo_tmux.sh` / `start_reactive_stop_tmux.sh` 同時跑（cmd_vel 衝突）— 互斥使用
+- **不要再靠 Foxglove map/scan 視覺猜 yaw**（4/29 試 4 次失敗）— 用 `scan_health_check.py` 物理錨定（Go2 正前方 0.8m 放物體，看 angle bin）
+- **不要每改 yaw 就重建一張 map**（4/29 浪費 4 張）— cartographer 會用任何 yaw 建出內部一致的 map，視覺差異不能當判讀依據
 
 ## 改之前先看
 
@@ -42,9 +44,22 @@
 - **Hysteresis 3 frame 防抖**：danger → 非 danger 需連 3 frame 確認才解除
 
 ### 環境 / 部署
-- **Jetson 跳電（XL4015 已知問題）**：4/26 上午跳電過 1 次，重啟後 SSH ~3 分鐘恢復；建圖過程要避免 Go2 同時驅動高功耗（喇叭/相機等），降低跳電風險
+- **Jetson 供電升級至 2464 升降壓恒壓恒流模組**（4/29 night）— XL4015 在 Go2 運行下 4/29 16:30-17:30 跳電 3 次（10 分鐘內），換 2464 後（35W 自然散熱、過流/過壓/過溫多重保護）穩定。Memory `project_jetson_power_issue.md` 已更新。
 - **ros2 daemon 偶爾 sync 慢**：剛啟動的 publisher，topic hz 第一次抓不到很正常，等 5-10s 重試
-- **重新建圖前先備份**：`cp /home/jetson/maps/home_living_room.{yaml,pgm,pbstream}{,.bak.$(date +%Y%m%d-%H%M%S)}`
+- **重新建圖前先備份（safe loop，避免 brace expansion 缺檔靜默失敗）**：
+  ```bash
+  BACKUP_TS=$(date +%Y%m%d-%H%M%S)
+  for ext in yaml pgm pbstream; do
+    src="/home/jetson/maps/home_living_room.${ext}"
+    [[ -f "$src" ]] && cp "$src" "${src}.bak.${BACKUP_TS}"
+  done
+  ```
+
+### Yaw 校正 / mount TF（4/29 經驗）
+- **base_link → laser yaw 不能用 Foxglove map/scan 視覺猜**：每改 yaw cartographer 會用該 yaw 建出**內部一致**的 map，視覺對比失去意義。4/29 試 0 / ±π/2 / π 全錯
+- **物理錨定才是黃金標準**：用 `scan_health_check.py` 在 Go2 正前方 0.8m 放已知物體 → 看物體距離 ≈ 0.8m 落在哪個 angle bin → 直接判讀 yaw
+- **scan-only stack（不啟 cartographer / nav）**：`bash scripts/start_scan_only_tmux.sh`（3-window：tf + sllidar + monitor）— 純物理層測試用
+- **scan-only stack 沒 Foxglove**：要視覺驗證需在 monitor window 手動 `ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765`
 
 ## 驗證指令
 
