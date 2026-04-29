@@ -97,7 +97,7 @@ export function ChatPanel() {
         clearTimeout(pendingTimeoutRef.current)
         pendingTimeoutRef.current = null
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external store change
+
       setIsThinking(false)
 
       const aiMsg: AIMessage = {
@@ -122,7 +122,7 @@ export function ChatPanel() {
         confidence: voiceResult.confidence,
         timestamp: formatTime(new Date()),
       }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reacting to external hook state
+
       setMessages((prev) => [...prev, voiceMsg])
 
       // Enter pending for TTS reply
