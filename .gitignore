@@ -21,6 +21,8 @@ coverage.xml
 .env.local
 .env.*.local
 .venv*/
+venv/
+.next/
 
 ## ROS2 runtime logs
 .ros_logs/

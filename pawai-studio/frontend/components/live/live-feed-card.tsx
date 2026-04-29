@@ -56,6 +56,7 @@ export function LiveFeedCard({ source, title, topicName, children }: LiveFeedCar
       {/* Video frame */}
       <div className="relative aspect-[4/3] bg-zinc-950 rounded-lg border border-zinc-800 overflow-hidden">
         {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageUrl}
             alt={`${source} feed`}
