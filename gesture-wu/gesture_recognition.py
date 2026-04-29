@@ -34,6 +34,8 @@ class GestureDetector:
         # ==========================================
         # 用 deque 存最近 45 幀的掌心 X 座標（大約 1.5 秒，能抓到較慢的揮手）
         self.palm_x_history = deque(maxlen=45)
+        self.palm_y_history = deque(maxlen=45)
+        self.index_history = deque(maxlen=45)
         # 記錄最近 45 幀的靜態手勢（用來判斷揮手時手是否張開）
         self.fingers_history = deque(maxlen=45)
 
@@ -67,21 +69,40 @@ class GestureDetector:
                 # 1. 取得手指伸直狀態
                 fingers_up = self._get_fingers_up(landmarks)
                 
-                # 2. 記錄掌心 X 座標（用於動態手勢判斷）
+                # 2. 記錄掌心 X/Y 與食指座標（用於動態手勢判斷）
                 palm_x = landmarks[9].x  # 9 號點是中指根部，接近掌心中央
+                palm_y = landmarks[9].y
+                index_x = landmarks[8].x
+                index_y = landmarks[8].y
+                
                 self.palm_x_history.append(palm_x)
+                self.palm_y_history.append(palm_y)
+                self.index_history.append((index_x, index_y))
                 self.fingers_history.append(fingers_up)
                 
                 # 3. 先檢查靜態手勢
                 gesture, mode, api_id = self._recognize_static_gesture(fingers_up, landmarks)
                 
-                # 4. 只有當靜態手勢是 Unknown 或 Palm 時，才檢查動態揮手
-                if gesture in ("Unknown", "Palm") and self._is_waving():
-                    gesture = "Wave"
-                    mode = "Greeting"
-                    api_id = 1016  # Hello
+                # 4. 動態手勢偵測
+                if gesture in ("Unknown", "Palm"):
+                    if self._is_waving():
+                        gesture = "Wave"
+                        mode = "Greeting"
+                        api_id = 1016  # Hello
+                    elif self._is_beckoning():
+                        gesture = "ComeHere"
+                        mode = "Follow"
+                        api_id = 1018  # Follow mode (mock)
+                        
+                elif gesture == "Index":
+                    if self._is_circling():
+                        gesture = "Circle"
+                        mode = "Explore"
+                        api_id = 1029  # Dance / Spin (mock)
         else:
             self.palm_x_history.clear()
+            self.palm_y_history.clear()
+            self.index_history.clear()
             self.fingers_history.clear()
                 
         return frame, gesture, mode, api_id
@@ -228,6 +249,76 @@ class GestureDetector:
         # 至少 3 次轉折 = 完整的「左右左右」才算揮手（更嚴格）
         return direction_changes >= 3
 
+    def _is_beckoning(self):
+        """
+        判斷招手 (Come Here) - 掌心上下擺動
+        """
+        if len(self.palm_y_history) < 20:
+            return False
+            
+        # 手必須大多是張開的
+        open_count = sum(1 for f in self.fingers_history if sum(f) >= 3)
+        if open_count < len(self.fingers_history) * 0.7:
+            return False
+            
+        y_list = list(self.palm_y_history)
+        y_range = max(y_list) - min(y_list)
+        if y_range < 0.08:  # Y 軸移動範圍
+            return False
+            
+        window = 3
+        smoothed = [sum(y_list[i:i+window])/window for i in range(len(y_list)-window+1)]
+        
+        direction_changes = 0
+        last_direction = 0
+        for i in range(1, len(smoothed)):
+            diff = smoothed[i] - smoothed[i-1]
+            if abs(diff) < 0.003: continue
+            current_direction = 1 if diff > 0 else -1
+            if last_direction != 0 and current_direction != last_direction:
+                direction_changes += 1
+            last_direction = current_direction
+            
+        # 上下擺動次數
+        return direction_changes >= 3
+
+    def _is_circling(self):
+        """
+        判斷食指繞圈 (Circle) - 食指 X 與 Y 皆有轉折且範圍夠大
+        """
+        if len(self.index_history) < 20:
+            return False
+            
+        x_list = [p[0] for p in self.index_history]
+        y_list = [p[1] for p in self.index_history]
+        
+        x_range = max(x_list) - min(x_list)
+        y_range = max(y_list) - min(y_list)
+        
+        # 繞圈需要 X 和 Y 都有一定的移動範圍
+        if x_range < 0.05 or y_range < 0.05:
+            return False
+            
+        def count_changes(pts):
+            window = 3
+            smoothed = [sum(pts[i:i+window])/window for i in range(len(pts)-window+1)]
+            changes = 0
+            last_dir = 0
+            for i in range(1, len(smoothed)):
+                diff = smoothed[i] - smoothed[i-1]
+                if abs(diff) < 0.003: continue
+                curr_dir = 1 if diff > 0 else -1
+                if last_dir != 0 and curr_dir != last_dir:
+                    changes += 1
+                last_dir = curr_dir
+            return changes
+            
+        cx = count_changes(x_list)
+        cy = count_changes(y_list)
+        
+        # X 和 Y 都至少有兩次轉折（構成一個圈：左->右->左, 上->下->上）
+        return cx >= 2 and cy >= 2
+
 
 # =========================================================================
 # 測試區：直接在 Mac 上執行
@@ -304,7 +395,9 @@ if __name__ == "__main__":
     print("  👌 OK     → Confirm(確認指令)")
     print("  ✌️ Peace  → Relax  (放鬆模式)")
     print("動態手勢：")
-    print("  👋 Wave   → Greeting (打招呼)")
+    print("  👋 Wave     → Greeting (打招呼)")
+    print("  🫴 ComeHere → Follow   (叫過來)")
+    print("  🔄 Circle   → Explore  (繞圈探索)")
     print("=" * 50)
     print("按 'q' 鍵退出")
     print()

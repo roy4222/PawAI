@@ -23,6 +23,8 @@ const GESTURE_LABELS: Record<string, string> = {
   Peace:   '放鬆模式',
   // 動態手勢
   Wave:    '打招呼',
+  ComeHere:'叫過來',
+  Circle:  '繞圈探索',
   // 後端沿用舊 key 時的 fallback
   wave:    '打招呼',
   stop:    '暫停互動',
@@ -39,6 +41,8 @@ const GESTURE_EMOJI: Record<string, string> = {
   OK:      '👌',
   Peace:   '✌️',
   Wave:    '👋',
+  ComeHere:'🫴',
+  Circle:  '🔄',
   wave:    '👋',
   stop:    '🖐️',
   fist:    '👊',
@@ -54,6 +58,8 @@ const GESTURE_MODE: Record<string, string> = {
   OK:      'Confirm',
   Peace:   'Relax',
   Wave:    'Greeting',
+  ComeHere:'Follow',
+  Circle:  'Explore',
   wave:    'Greeting',
   stop:    'Pause',
   fist:    'Mute',
@@ -69,6 +75,8 @@ const GO2_ACTION: Record<string, { api_id: number; name: string }> = {
   OK:      { api_id: 1020, name: 'Content' },
   Peace:   { api_id: 1017, name: 'Stretch' },
   Wave:    { api_id: 1016, name: 'Hello' },
+  ComeHere:{ api_id: 1018, name: 'Follow' },
+  Circle:  { api_id: 1029, name: 'Dance' },
   wave:    { api_id: 1016, name: 'Hello' },
   stop:    { api_id: 1003, name: 'StopMove' },
   fist:    { api_id: 1009, name: 'Sit' },
@@ -84,6 +92,8 @@ const MODE_COLOR: Record<string, { bg: string; text: string; dot: string }> = {
   Confirm:  { bg: 'bg-amber-500/10',  text: 'text-amber-400',  dot: 'bg-amber-400' },
   Relax:    { bg: 'bg-violet-500/10', text: 'text-violet-400', dot: 'bg-violet-400' },
   Greeting: { bg: 'bg-pink-500/10',   text: 'text-pink-400',   dot: 'bg-pink-400' },
+  Follow:   { bg: 'bg-teal-500/10',   text: 'text-teal-400',   dot: 'bg-teal-400' },
+  Explore:  { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
   Idle:     { bg: 'bg-muted/40',      text: 'text-muted-foreground', dot: 'bg-muted-foreground' },
 }
 
