@@ -1,6 +1,9 @@
 # 導航避障
 
-> Status: **Phase 1-3 ✅ / yaw 4 次猜測失敗（v2-v5 map 全 deprecated）/ 明天物理錨定定案 → v6 → Phase 4 K1 baseline**（2026-04-29 night 更新）
+> Status: **yaw 物理錨定 ✅ −π/2 (v6 定案) / Phase 3 v6 map 重建待供電升級 / Phase 4 K1 baseline 待 map**（2026-04-30 morning 更新）
+
+> **2026-04-30 morning — yaw 物理錨定一次定案**：放棄 Foxglove 視覺猜法（4/29 試 4 次失敗），改用 `scan_health_check.py` 物理錨定。Go2 正前方 0.8m 放物體 → scan 量到在 angle=90° bin → 補正 yaw=−π/2 = −1.5708 rad。7 scripts + mount-measurement.md 一次更新；Foxglove 視覺驗證 base_link +x 對齊 Go2 正前方通過。**今天不重建 map v6**：2464 模組 4/30 早上又跳電（root cause: 輸入上限 30V < Go2 滿電 33.6V），暫退回 XL4015（4-38V/75W）撐到 KREE DL241910 (22-40V→19V/10A/190W) 到貨。Phase 3 等供電穩了再開。
+>   Commit: `560ca79` / 證據: [`research/2026-04-29-mount-measurement.md`](research/2026-04-29-mount-measurement.md) §v6 物理錨定證據
 
 > **2026-04-29 — LiDAR mount 上機 + Phase 1-3**：mount 量測（x=−0.035, y=0, z=0.15）✅；Phase 2 寫了 `scan_health_check.py`（4-條件 PHANTOM gate）+ `start_scan_only_tmux.sh`（3-window）；Phase 3 重建 4 張 map（v2 yaw=0 / v3 −π/2 / v4 +π/2 / v5 π）全因 yaw 錯而 deprecated。**供電升級 XL4015 → 2464 升降壓恒壓恒流模組**（19:52 後不再跳電）。明天用物理錨定（Go2 正前方 0.8m 放物體）一次定案 yaw → v6 → Phase 4 K1。
 >   Plan: `/home/roy422/.claude/plans/abstract-sleeping-hoare.md` / 量測 + 修正歷史: [`research/2026-04-29-mount-measurement.md`](research/2026-04-29-mount-measurement.md) / map QA: [`research/maps/README.md`](research/maps/README.md)

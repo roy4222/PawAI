@@ -1,7 +1,59 @@
 # 專案狀態
 
-**最後更新**：2026-04-29 night（**LiDAR Phase 1-3 完成（mount + scan health + map v2-v5）/ yaw 校正未定案（4 次猜測失敗，明天物理錨定）/ 供電升級 XL4015 → 2464 / 4/29 教授會議**）
+**最後更新**：2026-04-30 morning（**LiDAR yaw 物理錨定 ✅ −π/2 (v6 定案，commit 560ca79) / 2464 模組失敗、暫退 XL4015、訂 KREE 24-40V→19V/10A 補位 / Phase 3 v6 map + Phase 4 K1 待供電穩定**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 4/30 進度
+
+**LiDAR yaw 物理錨定一次定案 + 供電災難 + KREE 補位**
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Phase 1（plan abstract-sleeping-hoare）** | scan-only stack + Go2 正前方 0.8m 放物體 → scan_health_check 量到 90° bin (0.6534m) | ✅ |
+| **Phase 2** | 7 scripts + mount-measurement.md yaw 3.1416 → -1.5708 一次性更新 | ✅ commit `560ca79` |
+| **TF 驗證** | `tf2_echo base_link laser` RPY [0, 0, -90°] | ✅ |
+| **Foxglove 視覺驗證** | base_link +x 軸對齊 Go2 真實正前方、scan 點雲在前方 | ✅（用戶現場確認） |
+
+### 供電災難 + 應對
+
+| 階段 | 狀況 |
+|---|---|
+| 4/29 night | 2464 模組宣稱穩定 |
+| **4/30 ~9:15** | Jetson SSH 連線斷 → 真因：2464 輸入上限 30V < Go2 滿電 33.6V |
+| **4/30 ~10:00** | 重開後 ~10 分鐘再斷一次（過壓保護觸發或元件壓力異常） |
+| **4/30 上午** | 暫退回 XL4015（4-38V/75W）撐到新模組到貨 |
+| **訂購中** | KREE DL241910 (22-40V→19V/10A/190W) 鋁殼 IP68 — Go2 滿電 33.6V 在範圍內、190W 餘裕大 |
+
+### Yaw 物理錨定的關鍵推論
+
+物體實際在 base_link +x（Go2 正前），scan 顯示在 angle=90° bin → laser frame +y 對應 base_link +x → laser 的 0° 物理上指向 Go2 右方 → 補正 yaw = **−π/2**。
+
+| Yaw 試過的值 | 結果 | 棄用原因 |
+|---|---|---|
+| 0 (v2) | ❌ | 視覺猜，map 90° 旋轉 |
+| −π/2 (v3) | ❌ | 視覺猜，map 看起來反 |
+| +π/2 (v4) | ❌ | 視覺猜 |
+| π (v5, 4/29 night) | ❌ | 視覺猜 |
+| **−π/2 (v6, 4/30 物理錨定)** | ✅ | scan_health_check 90° bin + tf2_echo + Foxglove 三重驗證 |
+
+> 教訓：**視覺判讀不可信**（map 由錯誤 yaw 建出時也會「內部一致」）。**只有物理錨定看 raw LaserScan 角度**才是黃金標準。
+
+### 沒做的事（避開風險）
+
+- ❌ 不重建 map v6（XL4015 撐不住 cartographer + Go2 移動）
+- ❌ 不跑 Nav2 demo（Go2 動態移動 → 馬達瞬電流尖峰 → XL4015 跳電風險）
+- ❌ 不寫 scan_flipper（H1 已排除）
+
+### 下一步（等 KREE 到貨）
+
+1. KREE 到貨 → 萬用表驗 19V → 接 Jetson
+2. 重啟 cartographer stack → 遙控 Go2 慢走客廳一圈 → 存 v6 map
+3. AMCL 跑 K1：`send_relative_goal.py --distance 0.5` × 5（≥ 4/5 即過）
+4. v6 過則進 K2/K4/K5/K7 連發
 
 ---
 
