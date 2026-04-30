@@ -23,9 +23,9 @@ ros2 daemon start 2>/dev/null || true
 
 trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
 
-echo "[1/3] static TF base_link -> laser (x=-0.035, y=0, z=0.15, yaw=3.1416)..."
+echo "[1/3] static TF base_link -> laser (x=-0.035, y=0, z=0.15, yaw=-1.5708)..."
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw 3.1416 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw -1.5708 --frame-id base_link --child-frame-id laser" Enter
 sleep 2
 
 echo "[2/3] sllidar (Standard mode, /scan_rplidar)..."

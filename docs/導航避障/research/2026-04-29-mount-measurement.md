@@ -27,7 +27,39 @@ ros2 run tf2_ros static_transform_publisher \
 
 - **v3（4/29 ~16:00）**：yaw=0，假設雷達 0° 對齊 Go2 正前 → 錯誤
 - **v4（4/29 ~17:50）**：發現 Foxglove 中 lidar scan 朝向跟 Go2 真實朝向差 90°，雷達 0° 實際朝 Go2 右側 → 改 yaw=−π/2 = −1.5708 rad
-- 後果：用 v3 yaw 建的 `home_living_room_v2` 整張 map 旋轉 90°，必須重掃 v3 map（`home_living_room_v3`）
+- **v5（4/29 ~19:00）**：靠 Foxglove 視覺再次猜測，改 yaw=π → 仍錯（map 看起來反 180°）
+- **v6（4/30 ~10:00）✅ 物理錨定定案**：放棄視覺猜測，改用 `scan_health_check.py` 物理錨定法
+- 後果：4/29 共試 4 個 yaw 值（0/−π/2/+π/2/π），建 4 張 map（v2-v5）全 deprecated。**4/30 一次定案後不再回頭**
+
+#### v6 物理錨定證據（4/30）
+
+**測試方法**：scan-only stack（TF + sllidar，無 cartographer / AMCL）+ Go2 正前方 0.8m 放物體 → 看 LaserScan 原始 angle bin
+
+**結果**：
+```
+deg    cnt    median    ...
+85.0°  30    0.6540m   ← 物體最近表面
+90.0°  30    0.6534m   ← 最近 bin（即 lidar 0° + 90° CCW）
+95.0°  30    0.6543m
+```
+其他角度 1.0–3.0m（房間結構），物體訊號乾淨。
+
+**判讀**：
+- 物體物理上在 base_link +x（Go2 正前）
+- 在 LaserScan 中於 angle=90° 出現 → laser frame +y = base_link +x
+- 即 lidar 的 0° 軸物理上指向 base_link −y（Go2 右方）
+- 補正：base_link → laser yaw = **−π/2 = −1.5708 rad**
+
+**驗證 TF**：
+```
+$ ros2 run tf2_ros tf2_echo base_link laser
+- Rotation: in RPY (degree) [0.000, 0.000, -90.000]
+```
+✅ 與物理推論一致
+
+**為何此方法可信而視覺不可信**（4/29 教訓）：
+- 視覺判讀依賴 map 對齊 → 但 map 由錯誤 yaw 建出時也會「內部一致」，看起來合理但實際反向
+- 物理錨定只看 raw LaserScan 角度，不依賴 map / AMCL / Foxglove camera convention
 
 `ros2 run tf2_ros static_transform_publisher --help` 確認 Humble 支援 `--yaw` 命名 flag（v2.2 第 15 點要求驗證點）。
 
