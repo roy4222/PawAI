@@ -58,21 +58,24 @@ pip install opencv-python websockets
 
 | 手勢 | 標籤 | 陪伴模式 | Go2 動作 | 功能說明 |
 | :--- | :--- | :--- | :--- | :--- |
-| 🖐️ Palm | `Palm` | `Pause` | 1003 (Stop) | 暫停互動，安靜守候 |
-| 👊 Fist | `Fist` | `Mute` | 1009 (Sit) | 靜音，坐下待命 |
-| 👍 Thumb | `Thumb` | `Happy` | 1033 (Wiggle) | 正面回饋，搖屁股 |
-| ☝️ Index | `Index` | `Listen` | 1004 (Stand) | 開啟聆聽，站起注意 |
-| 👌 OK | `OK` | `Confirm` | 1020 (Content) | 確認指令，滿足姿態 |
-| ✌️ Peace | `Peace` | `Relax` | 1017 (Stretch) | 放鬆模式，伸懶腰 |
+| 🖐️ Palm | `Palm` | `Pause` | 1003 (Stop) | 全面暫停動作 |
+| 👊 Fist | `Fist` | `Mute` | 1009 (Sit) | 純關閉語音模式 |
+| ☝️ Index | `Index` | `Listen` | 1004 (Stand) | 開啟語音模式 |
+| 👌 OK | `OK` | `Confirm` | 1020 (Content) | 確認指令 （所有手勢都要經過這個確認 才動作） |
+---
+### 互動功能
+
+| 👍 Thumb | `Thumb` | `Happy` | 1033 (Wiggle) | 搖屁股 |    
+| ✌️ Peace | `Peace` | `Relax` | 1017 (Stretch) | 伸懶腰 |
 
 ### 動態手勢 (Dynamic Gestures)
 需要一定軌跡的動作才會觸發。
 
 | 手勢 | 標籤 | 模式 | Go2 動作 | 判定方式 |
 | :--- | :--- | :--- | :--- | :--- |
-| 👋 Wave | `Wave` | `Greeting` | 1016 (Hello) | 手掌張開，左右連續擺動 |
-| 🫴 ComeHere| `ComeHere`| `Follow` | 1018 (Follow) | 手掌張開，上下連續擺動 (招手) |
-| 🔄 Circle | `Circle` | `Explore` | 1029 (Dance) | 食指伸出，在空中畫圈圈 |
+| 👋 Wave | `Wave` | `Greeting` | 1016 (Hello) | 你好 |
+| 🫴 ComeHere| `ComeHere`| `Follow` | 1018 (Follow) | 手掌張開，上下連續擺動 (招手) | 走過來 (高難度）
+| 🔄 Circle | `Circle` | `Explore` | 1029 (Dance) | 跳舞 
 
 ---
 
