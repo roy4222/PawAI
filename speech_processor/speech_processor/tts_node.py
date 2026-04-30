@@ -97,7 +97,7 @@ class TTSConfig:
 
     api_key: str
     provider: TTSProvider = TTSProvider.ELEVENLABS
-    voice_name: str = "XrExE9yKIg1WjnnlVkGX"
+    voice_name: str = "zh-CN-XiaoxiaoNeural"
     local_playback: bool = False
     local_output_device: str = ""  # ALSA device, e.g. "plughw:3,0"
     use_cache: bool = True
@@ -521,7 +521,7 @@ class EnhancedTTSNode(Node):
         )
         self.declare_parameter("provider", _env_str("TTS_PROVIDER", "elevenlabs"))
         self.declare_parameter(
-            "voice_name", _env_str("TTS_VOICE_NAME", "XrExE9yKIg1WjnnlVkGX")
+            "voice_name", _env_str("TTS_VOICE_NAME", "zh-CN-XiaoxiaoNeural")
         )
         self.declare_parameter("local_playback", False)
         self.declare_parameter("local_output_device", "")

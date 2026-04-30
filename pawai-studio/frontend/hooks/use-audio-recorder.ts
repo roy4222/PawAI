@@ -9,6 +9,8 @@ interface AsrResult {
   confidence: number;
   latency_ms: number;
   published: boolean;
+  reply_text?: string;
+  audio_url?: string;
 }
 
 interface UseAudioRecorderResult {
@@ -22,7 +24,7 @@ interface UseAudioRecorderResult {
 }
 
 function getSpeechWsUrl(): string {
-  return getGatewayWsUrl("/ws/speech");
+  return "ws://127.0.0.1:5000/ws/speech_interaction";
 }
 
 // Prefer opus codec for best compression
@@ -97,13 +99,24 @@ export function useAudioRecorder(): UseAudioRecorderResult {
         if (data.error) {
           setError(data.error as string);
         } else {
+          const audioUrl = data.audio_url as string; // 提取聲音網址
+            
           setLastResult({
             asr: (data.asr as string) ?? "",
             intent: (data.intent as string) ?? "",
             confidence: (data.confidence as number) ?? 0,
             latency_ms: (data.latency_ms as number) ?? 0,
             published: (data.published as boolean) ?? false,
+            // 👇 新增這兩行把它存起來
+            reply_text: data.reply_text as string,
+            audio_url: audioUrl,
           });
+
+          // ✨ 關鍵魔法：一收到網址，立刻叫瀏覽器播聲音！ ✨
+          if (audioUrl) {
+            const audio = new Audio(audioUrl);
+            audio.play().catch(e => console.error("播放聲音失敗:", e));
+          }
         }
       } catch {
         setError("回應格式錯誤");
