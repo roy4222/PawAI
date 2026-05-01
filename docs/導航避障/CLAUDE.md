@@ -9,6 +9,8 @@
 - 不要在 `start_nav2_amcl_demo_tmux.sh` / `start_reactive_stop_tmux.sh` 同時跑（cmd_vel 衝突）— 互斥使用
 - **不要再靠 Foxglove map/scan 視覺猜 yaw**（4/29 試 4 次失敗）— 用 `scan_health_check.py` 物理錨定（Go2 正前方 0.8m 放物體，看 angle bin）
 - **不要每改 yaw 就重建一張 map**（4/29 浪費 4 張）— cartographer 會用任何 yaw 建出內部一致的 map，視覺差異不能當判讀依據
+- **不要用「物體放置法」做物理錨定**（5/1 v7 偽陽性教訓）— 用戶識別 Go2 鼻尖方向可能錯。用「**用戶站位置法**」：用戶站在 Go2 物理頭前 0.5m，看 lidar 哪個 angle bin 偵測到、無歧義
+- **不要假設 v8 mount yaw=π 只要改 TF scripts** — `reactive_stop_node` 內部 `compute_front_min_distance` 也假設 laser 0° = Go2 前方、必須一起改（5/1 Phase 7.2 Go2 撞紙箱事件、commit `e3270da` 修）
 
 ## 改之前先看
 
@@ -42,6 +44,8 @@
 - **/scan_rplidar QoS 是 BEST_EFFORT**（sllidar publisher）— reactive_stop_node 訂閱端用 BEST_EFFORT
 - **第一筆 cmd_vel = 0 warmup**：避免與 Go2 driver 已啟動的 stand mode 衝突
 - **Hysteresis 3 frame 防抖**：danger → 非 danger 需連 3 frame 確認才解除
+- **v8 mount yaw=π 必須設 `front_offset_rad: 3.14159`**（5/1 撞紙箱事件、commit `e3270da` 修）— `compute_front_min_distance` 寫死「laser 0° = Go2 前方」、yaw=π 後不對、需用 offset 補正。`scripts/start_nav_capability_demo_tmux.sh` 與 `start_reactive_stop_tmux.sh` 已加 `-p front_offset_rad:=3.14159`，自寫 launch 命令也要加
+- **`/nav/pause` 只有 route_runner_node 接、`nav_action_server`（serving `/nav/goto_relative`）沒接**（5/1 發現 BUG #2，待修）— 只有 `/nav/run_route` 才能完整觸發 reactive_stop 的 pause/resume。送 goto_relative 時 reactive_stop 透過 `/cmd_vel_obstacle=0` mux priority 200 強制停車，但 obstacle 移除後不會自動 continue（5/13 demo 前必修）
 
 ### 環境 / 部署
 - **Jetson 供電升級至 2464 升降壓恒壓恒流模組**（4/29 night）— XL4015 在 Go2 運行下 4/29 16:30-17:30 跳電 3 次（10 分鐘內），換 2464 後（35W 自然散熱、過流/過壓/過溫多重保護）穩定。Memory `project_jetson_power_issue.md` 已更新。

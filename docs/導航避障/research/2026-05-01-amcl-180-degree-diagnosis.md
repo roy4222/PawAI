@@ -190,12 +190,78 @@ reactive_stop 還會 publish `/cmd_vel_obstacle=0` 給 mux（priority 200）→ 
 
 對 5/19 demo 來說：**「Go2 遇障礙停下不撞」這個保證足夠（v0 有）；「障礙清除後自動繼續」是加分項**。
 
+## Step 10（15:30-16:30 — Phase 7 layered 揭露 3 個 critical bugs）
+
+K1 5/5 PASS 後依 Plan D Phase 7 換用 `/nav/goto_relative` action 路徑做分層測試（避開 Phase 4 PARTIAL 已知問題）。
+
+### Step 10.1 — `/nav/goto_relative 0.5m` 無障礙基線
+
+第一次嘗試 crash：`nav_action_server_node._execute_relative_inner` 用 `await asyncio.sleep(0.1)`、rclpy action callback 不在 asyncio context、`RuntimeError: no running event loop`。
+
+**Fix (commit `27b33d8`)**：3 處 `asyncio.sleep` → `time.sleep`（MultiThreadedExecutor 在線、blocking 安全）。
+
+colcon build 失敗（setuptools `--editable`/`--uninstall` 不相容、Jetson 環境 issue）。Workaround：`pip install -e .` 把 nav_capability 裝到 `~/.local/`。
+
+修後 0.5m goal SUCCEEDED、Go2 物理移動 0.345m（actual_distance 顯示 0.174 是 race condition bug，不影響結果）。
+
+### Step 10.2 — 0.5m + 紙箱障礙：**Go2 直撞紙箱**
+
+紙箱 30cm 放 Go2 前方 → action 1.7s 內 SUCCEEDED、actual_distance=0、Go2 物理撞紙箱、**reactive_stop 完全沒 fire**。
+
+### Step 10.3 — 深度調查揭露 3 個 critical bugs
+
+#### BUG #1：reactive_stop 看不到 Go2 前方（v8 mount yaw=π 配套不完整）
+
+**根因**：`go2_robot_sdk/lidar_geometry.py:compute_front_min_distance` 寫死「laser frame 0° = Go2 前方」、但 v8 mount yaw=π 後 laser 0° 物理上是 Go2 **後方**。reactive_stop ±30° front arc 監控錯方向、Go2 前方變盲區。
+
+**重新解讀 Phase 4**（早上 4× pause/resume cycle）：reactive_stop 偵測的 0.47-0.73m 不是用戶放的紙箱、是 **Go2 背後**牆/家具。Phase 4 PARTIAL 不是「障礙避障 work」—— 是巧合 reactive_stop 觸發到 Go2 背後 obstacle 而非前方紙箱。
+
+**Fix (commit `e3270da`)**：加 `front_offset_rad` 參數（預設 0 向後相容）：
+- `lidar_geometry.compute_front_min_distance` 加第 8 參數、angle 比較前先減 offset
+- `reactive_stop_node` declare ROS param 並傳遞、startup log 顯示 offset
+- `scripts/start_nav_capability_demo_tmux.sh` + `start_reactive_stop_tmux.sh` 設 `-p front_offset_rad:=3.14159`
+- 加 4 個 unit tests（180° / 0° / 155° / 215°）
+
+**驗收 standalone 4 場景全 PASS**：
+| 場景 | obstacle_distance | zone | active | 結果 |
+|---|---|---|---|---|
+| 紙箱前方 0.4m | 0.413m | danger | true | ✅ |
+| 紙箱前方 0.8m | 0.807m | slow | false | ✅ |
+| 紙箱前方 ≥1m | 1.254m | clear | false | ✅ |
+| 紙箱後方 0.4m | 1.185m | clear | false | ✅（fix 前會誤觸發、修後不會）|
+
+unit test 27/27 PASS（含 4 個新 offset cases + 原 23 cases，向後相容）。
+
+#### BUG #2：nav_action_server 沒 `/nav/pause` handler（待修）
+
+grep 確認 `nav_action_server_node.py` 完全沒 "pause" 字串。`/nav/pause` service **只有 route_runner_node 接**（line 112: `Trigger, "/nav/pause", self._svc_pause"`）。reactive_stop 呼叫 /nav/pause → route_runner 收到（沒在跑 route）→ 沒效用。**`/nav/goto_relative` action 完全 ignore pause 信號**。
+
+5/13 demo 前必修：給 nav_action_server 加 /nav/pause subscription 或 service handler、共享 pause flag with action callback、obstacle 進 danger 時取消當前 NavigateToPose、obstacle 移除後重新 send goal 從 stopped pose。
+
+#### BUG #4：Nav2 BT WP3=start 短路（待修）
+
+K2-lite forward+left+back 設計、最後 WP3=start。Go2 在 WP3 容差內 → BT 立即 SUCCEEDED、Go2 沒動（**fake PASS**）。
+
+5/13 demo 前必修：K2 設計避免 WP_n = start，或加 yaw 變化強迫 controller 動作。
+
+### Step 10.4 — 三層 safety 真實層級（更新）
+
+| 層 | 機制 | Phase 7.2 真實表現 |
+|---|---|---|
+| 1. DWB BaseObstacle critic | 透過 TF 看到紙箱在 costmap | 可能有 reaction、但 nav_action_server SUCCEEDED 太快沒給時間 |
+| 2. Costmap inflation_layer (0.25m) | 紙箱應該 mark 為 lethal | 同上 |
+| 3. **reactive_stop_node priority 200** | 4× pause/resume in Phase 4（看到後方 obstacle）、Phase 7.2 完全沒 fire（看不到前方紙箱） | **BUG #1 修了之後才能正常工作** |
+
+修完 BUG #1 + #2 後 Phase 6 K5 完整測試才有意義。
+
 ## 關鍵 commits
 
 - `fa0fa54` fix(nav): LiDAR mount v8 — yaw 0 → π
 - `5d938d6` feat(nav): home_living_room_v8 map — TF yaw=π 修正後重建
 - `59024ef` fix(nav): xy_goal_tolerance 0.30 → 0.15
 - `42cc478` docs(nav): K1 baseline 5/5 PASS — A 主鏈正式驗收成立
+- `27b33d8` fix(nav_capability): asyncio.sleep → time.sleep
+- `e3270da` fix(reactive_stop): front_offset_rad — v8 mount yaw=π blind front bug
 
 ## 相關檔案
 

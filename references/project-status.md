@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-05-01 afternoon（**K1 baseline 5/5 PASS ✅（spec ≥ 4/5、實測滿分）/ xy_goal_tolerance 0.30→0.15 修正 / Go2 跑 1.81m 全 PASS、err 0.10-0.18m / 下一步動態避障 v0**）
+**最後更新**：2026-05-01 evening（**K1 5/5 PASS / 動態避障 v0 撞擊事件揭露 BUG #1 reactive_stop blind front / Fix front_offset_rad=π standalone 4 場景全 PASS / BUG #2 (goto_relative pause) + #4 (BT 短路) 待修**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
 
 ---
@@ -60,15 +60,60 @@ slow → clear (1.02m) ← obstacle 移除
 
 `/navigate_through_poses` 3 個 waypoint（forward 0.3m → left 0.3m → back to start）。Action 回 SUCCEEDED 但 Go2 物理沒動。**Fake PASS / 實 FAIL**：WP3 = start，Nav2 BT 看到 Go2 已在 WP3 容差內 → 短路返回。
 
-### 下一步（plan D Phase 7 layered）
+### Phase 7 layered 測試（15:30-16:30）
 
-- ~~7.0 checkpoint commit~~ ← 進行中
-- 7.1 `/nav/goto_relative 0.5m` 無障礙基線
-- 7.2 0.5m + 紙箱障礙、看 obstacle 移除後是否自動 resume
-- 7.3 0.7m + 紙箱
-- 7.4 1.0m + 紙箱
-- 7.5 人進場測試（最後）
-- 不開 B（D435）、不開 C（goto_object）
+#### 7.1 `/nav/goto_relative 0.5m` 無障礙基線
+
+第一次嘗試：crash with `RuntimeError: no running event loop` — `nav_action_server_node._execute_relative_inner` 用 `await asyncio.sleep(0.1)`、rclpy action callback 不在 asyncio context。
+
+**Fix（commit `27b33d8`）**：3 處 `asyncio.sleep` → `time.sleep`（MultiThreadedExecutor 在線、blocking 安全）。重 install via `pip install -e .`（colcon build 因 setuptools `--editable`/`--uninstall` 不相容失敗）。
+
+修後 0.5m goal：Action SUCCEEDED、Go2 物理移動 0.345m（actual_distance race 條件 bug 顯示 0.174m，不影響）。
+
+#### 7.2 0.5m + 紙箱障礙（**Go2 直撞紙箱**！）
+
+放紙箱 30cm 在 Go2 前方 → action 1.7s 內 SUCCEEDED + actual_distance=0、**Go2 直接撞紙箱**。reactive_stop 沒 fire 任何 pause cycle。
+
+**根因深度調查**揭露 **3 個 critical bugs**：
+
+##### BUG #1（已修 commit `e3270da`）：reactive_stop 看不到 Go2 前方
+
+`go2_robot_sdk/lidar_geometry.py:compute_front_min_distance` 寫死「laser frame 0° = Go2 前方」、但 v8 mount yaw=π 後 laser 0° 物理上是 Go2 **後方**。reactive_stop ±30° front arc 監控錯方向、Go2 前方變盲區。
+
+**Fix**：加 `front_offset_rad` 參數（預設 0 向後相容）、`reactive_stop_node` ROS param、scripts 設 π。
+
+驗收 standalone 4 場景全 PASS：
+| 場景 | obstacle_distance | zone | 預期 | 結果 |
+|---|---|---|---|---|
+| 紙箱前方 0.4m | 0.413m | danger / active=true | ✅ | ✅ |
+| 紙箱前方 0.8m | 0.807m | slow / active=false | ✅ | ✅ |
+| 紙箱前方 ≥1m | 1.254m | clear | ✅ | ✅ |
+| 紙箱後方 0.4m | 1.185m（Go2 前方仍空）| clear（不誤觸）| ✅ | ✅ |
+
+unit test 27/27 PASS（含 4 個新 offset cases）。
+
+##### BUG #2（待修）：nav_action_server 沒 `/nav/pause` handler
+
+`/nav/pause` service **只有 route_runner_node 接**（grep 確認 nav_action_server_node.py 無 "pause" 字串）。reactive_stop 觸發 /nav/pause → route_runner 收到（沒在跑 route）→ 沒效用。**`/nav/goto_relative` action 完全 ignore reactive_stop 的 pause 信號**。
+
+##### BUG #4（待修）：Nav2 BT WP3=start 短路
+
+K2-lite WP3 = start → Nav2 BT 看到 Go2 在 WP3 容差內 → action 立即 SUCCEEDED but Go2 沒動。K2 設計需避免 WP_n = start 或加 yaw 變化強迫 controller 動作。
+
+#### 7.3-7.5（暫停）
+
+依 Plan D Phase 5 stop condition「Go2 撞 → 立即停動態測試」。改純 code 工作（已修 BUG #1）。
+
+### 下一步
+
+- BUG #2 fix（給 nav_action_server 加 /nav/pause handler、共享 pause flag）→ 配合 #1 完整解 K5
+- BUG #4 fix（K2 設計避免 WP_n = start）→ 解 K2
+- 等 KREE 到貨
+- BUG #2 修完後跑完整 stack 整合測試（紙箱 + Go2 動 + reactive 三層 fire）
+
+### 不開 B / C
+
+D435 local costmap、goto_object 視覺尋物 — 留 5/13 後
 
 ---
 
