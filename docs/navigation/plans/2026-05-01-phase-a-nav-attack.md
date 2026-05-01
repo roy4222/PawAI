@@ -321,7 +321,18 @@ Expected: `AssertionError: '/state/nav/paused' not in ...` 或 `AttributeError: 
 
 - [ ] **Step 7: nav_action_server 加 subscriber + cache active goal handle(對齊既有 async/await flow)**
 
-> **重要**:既有 `_execute_relative` / `_execute_named` 是 **async** action handlers,內部用 `nav_handle = await self._nav2_client.send_goal_async(...)` 等待 accept。**不要改成 callback 型 `add_done_callback`** — 會破壞既有 await 結果鏈與 result 回傳。改成在現有 await 後 cache handle,在 finally 清掉。
+> **實際既有結構**(grep 過 `nav_action_server_node.py` 確認):
+> - **action client 屬性是 `self._nav_client`**(line 79),不是 `_nav2_client`
+> - 真正執行的 inner 函式是 `_execute_relative_inner`(line 194)與 `_execute_named_inner`(line 332);outer `_execute_relative`/`_execute_named` 只是 try/except wrapper
+> - send goal pattern(line 278-280):
+>   ```python
+>   send_future = self._nav_client.send_goal_async(nav_goal)
+>   nav_handle = await send_future
+>   if not nav_handle.accepted: ... return
+>   ```
+> - 既有 cancel 機制:`while not nav_result_future.done()` 內檢查 `goal_handle.is_cancel_requested`,call `await nav_handle.cancel_goal_async()`(line ~290)
+>
+> **修法**:**不要改成 `add_done_callback`** — 既有 async/await + 輪詢已經有 cancel 支援。只要在 await accept 後 cache handle,讓 `_on_nav_paused` callback 也能 call `cancel_goal_async()`,並在 inner 函式末端 try/finally 清空 cache。
 
 ```python
 # nav_capability/nav_capability/nav_action_server_node.py
@@ -330,42 +341,58 @@ Expected: `AssertionError: '/state/nav/paused' not in ...` 或 `AttributeError: 
 from std_msgs.msg import Bool
 from rclpy.qos import QoSProfile, DurabilityPolicy
 
-# 在 NavActionServerNode.__init__(class 在 line 42)加:
+# 在 NavActionServerNode.__init__(class line 42)加:
 _LATCHED_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-self._active_nav2_goal_handle = None  # 由 _execute_relative / _execute_named cache;finally 清空
+self._active_nav2_goal_handle = None  # 由 _execute_*_inner cache;finally 清空
 self.create_subscription(
     Bool, "/state/nav/paused", self._on_nav_paused, _LATCHED_QOS,
 )
 
-# 既有 _execute_relative 結構(對齊 line ~200-300):
-#   async def _execute_relative(self, goal_handle):
-#       ...
-#       nav_handle = await self._nav2_client.send_goal_async(nav_goal)
-#       if not nav_handle.accepted: ...
-#       result = await nav_handle.get_result_async()
-#       ...
+# 修改 _execute_relative_inner(line 194):
+#   既有 line 278-280:
+#     send_future = self._nav_client.send_goal_async(nav_goal)
+#     nav_handle = await send_future
+#     if not nav_handle.accepted: ...
 #
-# 修改:在 await send_goal_async 之後 cache handle,進入 await get_result_async 用 try/finally 包,確保 SUCCEEDED/CANCELED/ABORTED 都清掉。
+#   改成:在 accepted 檢查後 cache handle,把後續輪詢/result 處理整段包進 try/finally。
 
-async def _execute_relative(self, goal_handle):  # 既有簽名
-    # ... 既有 setup / pose 計算 / nav_goal 建立 ...
-    nav_handle = await self._nav2_client.send_goal_async(nav_goal)
+async def _execute_relative_inner(self, goal_handle):
+    # ... 既有 setup / pose 計算 / nav_goal 建立(line 194-271)...
+
+    if not self._nav_client.wait_for_server(timeout_sec=5.0):
+        goal_handle.abort()
+        result.success = False
+        result.message = "nav2_unavailable"
+        return result
+
+    send_future = self._nav_client.send_goal_async(nav_goal)
+    nav_handle = await send_future
     if not nav_handle.accepted:
-        # ... 既有 reject 處理 ...
-        return result_msg
+        goal_handle.abort()
+        result.success = False
+        result.message = "nav2_rejected_goal"
+        return result
 
-    # NEW: cache accepted handle — /state/nav/paused 收到 true 時 _on_nav_paused 會 cancel 它
+    # NEW: cache accepted handle 讓 _on_nav_paused 可 cancel(障礙觸發 reactive_stop)
     self._active_nav2_goal_handle = nav_handle
     try:
-        nav_result = await nav_handle.get_result_async()
-        # ... 既有 result 處理 / feedback / fill action result ...
-        return result_msg
+        # 既有輪詢 + cancel propagation(line ~289-end of inner)整段保留不動:
+        nav_result_future = nav_handle.get_result_async()
+        while not nav_result_future.done():
+            if goal_handle.is_cancel_requested:
+                self.get_logger().info("client cancel requested; cancelling Nav2 goal")
+                await nav_handle.cancel_goal_async()
+                nav_result = await nav_result_future
+                # ... 既有 cancel 處理 ...
+            # ... 既有輪詢 sleep / feedback ...
+        # ... 既有 result 處理 / fill action result ...
+        return result
     finally:
-        # 清掉 cache(SUCCEEDED / CANCELED / ABORTED 都會走到這)
+        # 清掉 cache(SUCCEEDED / CANCELED / ABORTED / exception 都會走到這)
         self._active_nav2_goal_handle = None
-
-# 同樣 pattern 套到 _execute_named handler(line ~400-500)
 ```
+
+**同樣 pattern 套到 `_execute_named_inner`(line 332)** — 既有 line 440 已是 `nav_handle = await self._nav_client.send_goal_async(nav_goal)`,只要在 accepted 檢查後加 cache + 用 try/finally 包後續輪詢/result 處理。
 
 加 `_on_nav_paused` callback(class method):
 
@@ -373,8 +400,8 @@ async def _execute_relative(self, goal_handle):  # 既有簽名
 def _on_nav_paused(self, msg: Bool) -> None:
     """obstacle pause → cancel cached Nav2 goal handle;resume → no-op(caller 重發)。
 
-    `cancel_goal_async()` 會讓正在 await 的 `get_result_async()` 結束(status=CANCELED),
-    finally block 自動清空 `_active_nav2_goal_handle`。"""
+    `cancel_goal_async()` 會讓 await 中的 `nav_result_future` 結束(status=CANCELED),
+    inner 函式的 finally 自動清空 `_active_nav2_goal_handle`。"""
     if msg.data and self._active_nav2_goal_handle is not None:
         self.get_logger().info("/state/nav/paused=true → cancel active Nav2 goal")
         self._active_nav2_goal_handle.cancel_goal_async()
