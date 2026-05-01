@@ -3,7 +3,7 @@
 # 一鍵啟動 RPLIDAR + Cartographer pure scan-matching 建圖環境（Gate P0-B）
 #
 # 拓撲：
-#   static TF       → base_link → laser (x=-0.035, y=0, z=0.15, yaw=-1.5708)
+#   static TF       → base_link → laser (x=0.175, y=0, z=0.18, yaw=0)
 #   sllidar         → /scan_rplidar 10.4Hz（避開 Go2 內建 /scan）
 #   cartographer    → pure scan-matching，無外部 odom
 #   foxglove_bridge → ws://JETSON_IP:8765 可視化
@@ -27,10 +27,10 @@ ros2 daemon start 2>/dev/null || true
 
 trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
 
-echo "[1/5] Publishing static TF base_link -> laser (x=-0.035, y=0, z=0.15, yaw=-1.5708) FIRST..."
+echo "[1/5] Publishing static TF base_link -> laser (x=0.175, y=0, z=0.18, yaw=0) FIRST..."
 echo "       v3: 不啟 Go2 driver，cartographer pure scan-matching 自己 own odom→base_link TF"
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x -0.035 --y 0 --z 0.15 --yaw -1.5708 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0.175 --y 0 --z 0.18 --yaw 0 --frame-id base_link --child-frame-id laser" Enter
 echo "  Waiting 3s for /tf_static TRANSIENT_LOCAL to settle in DDS..."
 sleep 3
 

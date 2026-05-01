@@ -1,26 +1,59 @@
-# RPLIDAR Mount 量測（v3 — 4/29 印件支架）
+# RPLIDAR Mount 量測（v7 — 4/30 evening 脖子前方背板平台）
 
 依 [`2026-04-27-lidar-dev-roadmap.md`](../lidar開發/2026-04-27-lidar-dev-roadmap.md) Phase 1。
-取代 4/24 上機的估測值（z=0.10、其他全 0）。
+v3-v6（4/24-4/30 上午）皆為背部安裝，v7 起改為**脖子前方 3D 列印背板平台**。
 
-## 量測值
+## v7 量測值（4/30 evening）
+
+| 量 | 值 | 量法 |
+|----|----:|------|
+| **x** | **+0.175 m** | 雷達中心在 Go2 機身正中線上往前 17.5cm；量法：機身全長 75cm（前緣 20cm + 後緣 55cm 從雷達中心起算）→ base_link 在幾何中心（前緣後方 37.5cm）→ 雷達中心 = +37.5−20 = +17.5cm |
+| **y** | **0.0 m** | 左右各 20cm 對稱，雷達在中軸上 |
+| **z** | **+0.18 m** | 雷達離地 0.50m − Go2 base_link 站立離地 ~0.32m ≈ 0.18m |
+| **yaw** | **0 rad** | 雷達 motor 已調整為跟 Go2 正前同向，4/30 evening `scan_health_check.py` 物理驗證通過（物體 0.8m 在 angle=0° 偵測到 0.83m）|
+| **pitch / roll** | **±0°（待確認）** | 平面背板水平，建議水平儀復測 |
+
+### v7 物理錨定證據（4/30 evening）
+
+**測試方法**：scan-only stack（TF + sllidar，無 cartographer / AMCL）+ Go2 正前方 0.8m 放物體。
+
+**結果**（`scan_health_check.py --duration 5`，30 樣本/角度）：
+```
+deg     cnt     median
+355.0°  30     0.8278m   ← 物體左邊緣
+350.0°  30     0.8305m
+345.0°  30     0.8408m
+340.0°  30     0.8567m
+ 10.0°  30     0.8352m
+ 15.0°  30     0.8516m   ← 物體右邊緣
+其餘: 1.0-5.3m（房間結構/牆）
+```
+
+**判讀**：物體訊號集中在 angle=0° 兩側 ±15° → laser frame 0° 物理上對齊 base_link +x → yaw=0 正確。PHANTOM PASS、scan 10.45 Hz、TF tf2_echo 顯示 RPY [0,0,0]。
+
+## v6 量測值（4/30 上午，背部安裝，已 superseded）
 
 | 量 | 值 | 量法 |
 |----|----:|------|
 | **x** | **−0.035 m** | RPLIDAR 中心相對 Go2 質心後方 3.5cm（前緣 33cm + 後緣 26cm，body 中心在 29.5cm，雷達在 26cm 處 → 中心後 3.5cm） |
 | **y** | **0.0 m** | 左右各 15cm 對稱，雷達在中軸上 |
-| **z** | **0.15 m** | base_link 上方 15cm |
+| **z** | **0.15 m** | base_link 上方 15cm（用戶 4/30 evening 釐清此值是「背上高度」非離地高度，舊值不精確） |
 | **yaw** | **−1.5708 rad（−π/2，−90°）** | 雷達 0° 朝向 Go2 **右方**（−y），需軟體補正 90° |
 | **pitch / roll** | **±0°** | 手機水平儀確認（user 4/29 確認「水平了 0度」）|
 
 水平儀照片：_TODO 補貼_（user 之後補進本檔案 `images/2026-04-29-level-photo.jpg`）
 
-## TF 命令（Humble）
+## TF 命令（Humble，v7）
 
 ```bash
 ros2 run tf2_ros static_transform_publisher \
-  --x -0.035 --y 0 --z 0.15 --yaw -1.5708 \
+  --x 0.175 --y 0 --z 0.18 --yaw 0 \
   --frame-id base_link --child-frame-id laser
+```
+
+v6 命令（已 superseded）：
+```bash
+# x -0.035 y 0 z 0.15 yaw -1.5708
 ```
 
 ### Yaw 修正歷史
