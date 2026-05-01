@@ -6,7 +6,7 @@
 
 **Architecture:** 既有 `nav_capability` (goto_relative/goto_named action server + reactive_stop)+ `interaction_executive` (Brain MVS + SafetyLayer + SkillRegistry) 上加兩個 capability publisher node 與三段 Pre-action Validate;Brain 規則表加兩條新 skill trigger;Studio Trace Drawer 加兩個 Bool LED。**單一動作出口** — 所有 sport `/webrtc_req` 仍只能由 `interaction_executive_node` publish。
 
-**Tech Stack:** ROS2 Humble + rclpy + Python 3.10 / pytest TDD / nav2 BT + AMCL + cartographer / RealSense D435 + rplidar_ros2 / Brain MVS dataclasses(SkillContract / SkillPlan / SkillStep / WorldState)。
+**Tech Stack:** ROS2 Humble + rclpy + Python 3.10 / pytest TDD / **Nav2 BT + AMCL + map_server**(runtime stack — map 由 cartographer 離線建立並存 pbstream/yaml,**slam_toolbox 在本硬體永久棄用**;5/12 demo 不跑 SLAM,只跑 AMCL 載入既有 map)/ RealSense D435 + rplidar_ros2 / Brain MVS dataclasses(SkillContract / SkillPlan / SkillStep / WorldState)。
 
 **Spec:** `docs/superpowers/specs/2026-05-01-pawai-11day-sprint-design.md` §6 (Safety Gate) + §7 (Phase A) + §12 (Stop-loss).
 
@@ -16,7 +16,7 @@
 
 ### 新建檔案
 - `nav_capability/nav_capability/capability_publisher_node.py` — 聚合 Nav2 lifecycle + AMCL covariance + costmap target safety,publish `/capability/nav_ready` (Bool)
-- `go2_robot_sdk/go2_robot_sdk/depth_safety_node.py` — 訂 D435 `/camera/aligned_depth_to_color/image_raw`,計算 ROI 前方 1m 內最近障礙,publish `/capability/depth_clear` (Bool)
+- `go2_robot_sdk/go2_robot_sdk/depth_safety_node.py` — 訂 D435 `/camera/camera/aligned_depth_to_color/image_raw`(專案 double namespace 慣例;ROS parameter `depth_topic` 可覆寫),計算 ROI 前方 1m 內最近障礙,publish `/capability/depth_clear` (Bool)
 - `nav_capability/test/test_capability_publisher_node.py` — TDD 測試
 - `go2_robot_sdk/test/test_depth_safety_node.py` — TDD 測試
 - `interaction_executive/test/test_safety_gate_three_tier.py` — 三段 Pre-action Validate 測試
@@ -69,61 +69,75 @@ grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capabi
 ```bash
 ros2 topic list 2>/dev/null | grep -i depth || grep -rn "aligned_depth\|depth_to_color" go2_robot_sdk/ | head -10
 ```
-記錄正確 topic name(會用在 Task 5),預期是 `/camera/aligned_depth_to_color/image_raw` 或類似
+記錄正確 topic name(會用在 Task 6),專案標準是 `/camera/camera/aligned_depth_to_color/image_raw`(double namespace,per `docs/architecture/contracts/interaction_contract.md:895` + `docs/thesis/背景知識/4-10-D435.md:55`)
 
 - [ ] **Step 5: 不 commit,純 reconnaissance**
 
 ---
 
-## Task 2: BUG #2 — goto_relative 加 /nav/pause subscriber + pause/resume(TDD)
+## Task 2: BUG #2 — nav_action_server 響應 /nav/pause via 共享 state topic(TDD)
+
+**問題澄清**:
+- `/nav/pause` 與 `/nav/resume` 是 `std_srvs/Trigger` **service**(不是 topic),已在 `route_runner_node.py:111-117` 註冊
+- `reactive_stop_node.py:99-100` 偵測障礙時 call 這兩個 service
+- service handler 只 cancel `route_runner` 自己的 Nav2 goal,**不會通知 `nav_action_server`**
+- `nav_action_server_node.py` 走 Nav2 `NavigateToPose` action client,**不直接 publish `/cmd_vel`**(Nav2 自己控速),所以「gate cmd_vel」approach 無效
+
+**修法**(共用 cancel/resume pattern):
+1. `route_runner_node` 的 `_svc_pause` / `_svc_resume` 處理器**額外 publish `/state/nav/paused` (std_msgs/Bool, latched TRANSIENT_LOCAL)** 通知系統
+2. `nav_action_server_node` **訂 `/state/nav/paused`**;paused=true 時 **cancel 自己 cache 的 Nav2 NavigateToPose goal handle**;paused=false 不自動 re-send(讓 caller 重發,v0 簡化)
 
 **Files:**
-- Modify: `nav_capability/nav_capability/nav_action_server_node.py:200-300` (goto_relative handler region)
-- Test: `nav_capability/test/test_goto_relative_pause.py` (NEW)
+- Modify: `nav_capability/nav_capability/route_runner_node.py:111-117 + _svc_pause / _svc_resume handler`
+- Modify: `nav_capability/nav_capability/nav_action_server_node.py:42-90 (init) + send_goal 後加 active goal handle cache + on_paused callback`
+- Test: `nav_capability/test/test_nav_pause_state_topic.py` (NEW)
+- Test: `nav_capability/test/test_nav_action_server_pause_response.py` (NEW)
 
-- [ ] **Step 1: 寫失敗測試**
+- [ ] **Step 1: 寫 route_runner state-publish 失敗測試**
 
 ```python
-# nav_capability/test/test_goto_relative_pause.py
-"""BUG #2: goto_relative action 必須訂 /nav/pause,收到 pause=true 時暫停 cmd_vel 發送,
-pause=false 時恢復。reactive_stop_node 會發 /nav/pause。"""
+# nav_capability/test/test_nav_pause_state_topic.py
+"""route_runner 的 /nav/pause + /nav/resume service 必須額外 publish
+/state/nav/paused (std_msgs/Bool, latched) 讓其他 nav node 共享 pause state。"""
 import pytest
 import rclpy
 from std_msgs.msg import Bool
-from nav_capability.nav_action_server_node import NavActionServer
+from std_srvs.srv import Trigger
+from nav_capability.route_runner_node import RouteRunnerNode
 
-def test_goto_relative_subscribes_to_nav_pause():
+
+@pytest.fixture
+def rclpy_ctx():
     rclpy.init()
-    node = NavActionServer()
-    sub_topics = [s.topic_name for s in node.subscriptions]
-    assert "/nav/pause" in sub_topics, "goto_relative must subscribe to /nav/pause"
-    node.destroy_node()
+    yield
     rclpy.shutdown()
 
-def test_pause_flag_blocks_cmd_vel_publish():
-    """pause=true 時 _publish_cmd_vel 應該不送 cmd_vel"""
-    rclpy.init()
-    node = NavActionServer()
-    node._nav_paused = True
-    sent = []
-    node.cmd_vel_pub.publish = lambda msg: sent.append(msg)
-    node._publish_cmd_vel(linear_x=0.5, angular_z=0.0)
-    assert len(sent) == 0, "should not publish cmd_vel when paused"
-    node.destroy_node()
-    rclpy.shutdown()
 
-def test_pause_resume_flow():
-    """pause=true → cmd_vel block;pause=false → resume"""
-    rclpy.init()
-    node = NavActionServer()
-    msg_pause = Bool(); msg_pause.data = True
-    node._on_nav_pause(msg_pause)
-    assert node._nav_paused is True
-    msg_resume = Bool(); msg_resume.data = False
-    node._on_nav_pause(msg_resume)
-    assert node._nav_paused is False
-    node.destroy_node()
-    rclpy.shutdown()
+def test_state_topic_published_on_pause(rclpy_ctx):
+    rr = RouteRunnerNode()
+    received: list[bool] = []
+    rr.create_subscription(Bool, "/state/nav/paused",
+                            lambda m: received.append(m.data), 10)
+    # 觸發 pause service
+    rr._svc_pause(Trigger.Request(), Trigger.Response())
+    # spin 收 latched
+    end = rclpy.get_default_context().now() if False else None
+    for _ in range(10):
+        rclpy.spin_once(rr, timeout_sec=0.05)
+    assert True in received, "expected paused=true on /state/nav/paused"
+    rr.destroy_node()
+
+
+def test_state_topic_published_on_resume(rclpy_ctx):
+    rr = RouteRunnerNode()
+    received: list[bool] = []
+    rr.create_subscription(Bool, "/state/nav/paused",
+                            lambda m: received.append(m.data), 10)
+    rr._svc_resume(Trigger.Request(), Trigger.Response())
+    for _ in range(10):
+        rclpy.spin_once(rr, timeout_sec=0.05)
+    assert False in received, "expected paused=false on /state/nav/paused"
+    rr.destroy_node()
 ```
 
 - [ ] **Step 2: 跑測試確認 fail**
@@ -131,73 +145,170 @@ def test_pause_resume_flow():
 ```bash
 cd /home/roy422/newLife/elder_and_dog
 source /opt/ros/humble/setup.zsh && source install/setup.zsh
-pytest nav_capability/test/test_goto_relative_pause.py -v
+pytest nav_capability/test/test_nav_pause_state_topic.py -v
 ```
-Expected:`AttributeError: 'NavActionServer' object has no attribute '_nav_paused'`
+Expected: `assert True/False in []` 因為 publisher 未實作
 
-- [ ] **Step 3: 實作 pause subscriber + flag**
-
-在 `NavActionServer.__init__` 加(對齊 Step 1 grep 找到的 line ~85 附近):
+- [ ] **Step 3: route_runner 加 latched state publisher**
 
 ```python
-# BUG #2 fix — 訂 /nav/pause 由 reactive_stop_node 發,goto_relative 必須能 pause/resume
-self._nav_paused = False
-self.create_subscription(
-    Bool, "/nav/pause", self._on_nav_pause, 10,
+# nav_capability/nav_capability/route_runner_node.py
+# 在 imports 段(~line 33 附近):
+from rclpy.qos import QoSProfile, DurabilityPolicy
+
+# 在 RouteRunnerNode.__init__ 內(/nav/pause service create 之前):
+_LATCHED_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+self._paused_state_pub = self.create_publisher(
+    Bool, "/state/nav/paused", _LATCHED_QOS,
 )
+# 啟動時 publish 初始 false,新 subscriber 接得到 latched
+init_msg = Bool(); init_msg.data = False
+self._paused_state_pub.publish(init_msg)
+
+# 在 _svc_pause 末尾(現有 logic 之後)加:
+msg = Bool(); msg.data = True
+self._paused_state_pub.publish(msg)
+
+# 在 _svc_resume 末尾加:
+msg = Bool(); msg.data = False
+self._paused_state_pub.publish(msg)
 ```
-
-加 callback method:
-
-```python
-def _on_nav_pause(self, msg: Bool) -> None:
-    """reactive_stop_node 發 pause=true 表示前方有障礙,暫停 cmd_vel;false 恢復。"""
-    new_state = bool(msg.data)
-    if new_state != self._nav_paused:
-        self.get_logger().info(
-            f"goto_relative {'PAUSED' if new_state else 'RESUMED'} (from /nav/pause)"
-        )
-    self._nav_paused = new_state
-```
-
-修改既有的 cmd_vel publish 邏輯(找 `cmd_vel_pub.publish` 的所有點,包到 `_publish_cmd_vel` helper):
-
-```python
-def _publish_cmd_vel(self, linear_x: float, angular_z: float) -> None:
-    if self._nav_paused:
-        return  # paused — drop publish
-    msg = Twist()
-    msg.linear.x = linear_x
-    msg.angular.z = angular_z
-    self.cmd_vel_pub.publish(msg)
-```
-
-把既有 `cmd_vel_pub.publish(msg)` 全改成 `self._publish_cmd_vel(...)`。
 
 - [ ] **Step 4: 跑測試 pass**
 
 ```bash
-pytest nav_capability/test/test_goto_relative_pause.py -v
+colcon build --packages-select nav_capability && source install/setup.zsh
+pytest nav_capability/test/test_nav_pause_state_topic.py -v
 ```
-Expected:3 PASS
+Expected:2 PASS
 
-- [ ] **Step 5: colcon build + 上機冒煙**
+- [ ] **Step 5: 寫 nav_action_server pause 響應失敗測試**
+
+```python
+# nav_capability/test/test_nav_action_server_pause_response.py
+"""nav_action_server 訂 /state/nav/paused;paused=true 時 cancel cached Nav2 goal handle。"""
+from unittest.mock import MagicMock
+import pytest
+import rclpy
+from std_msgs.msg import Bool
+from nav_capability.nav_action_server_node import NavActionServerNode
+
+
+@pytest.fixture
+def rclpy_ctx():
+    rclpy.init()
+    yield
+    rclpy.shutdown()
+
+
+def test_subscribes_to_nav_paused_state(rclpy_ctx):
+    node = NavActionServerNode()
+    topics = [s.topic_name for s in node.subscriptions]
+    assert "/state/nav/paused" in topics
+    node.destroy_node()
+
+
+def test_pause_cancels_active_nav2_goal_handle(rclpy_ctx):
+    node = NavActionServerNode()
+    fake_handle = MagicMock()
+    fake_handle.cancel_goal_async = MagicMock(return_value=MagicMock())
+    node._active_nav2_goal_handle = fake_handle
+    msg = Bool(); msg.data = True
+    node._on_nav_paused(msg)
+    fake_handle.cancel_goal_async.assert_called_once()
+    node.destroy_node()
+
+
+def test_resume_does_not_call_cancel(rclpy_ctx):
+    node = NavActionServerNode()
+    fake_handle = MagicMock()
+    fake_handle.cancel_goal_async = MagicMock()
+    node._active_nav2_goal_handle = fake_handle
+    msg = Bool(); msg.data = False
+    node._on_nav_paused(msg)
+    fake_handle.cancel_goal_async.assert_not_called()
+    node.destroy_node()
+```
+
+- [ ] **Step 6: 跑測試確認 fail**
+
+```bash
+pytest nav_capability/test/test_nav_action_server_pause_response.py -v
+```
+Expected: `AssertionError: '/state/nav/paused' not in ...` 或 `AttributeError: _on_nav_paused`
+
+- [ ] **Step 7: nav_action_server 加 subscriber + cache active goal handle**
+
+```python
+# nav_capability/nav_capability/nav_action_server_node.py
+
+# imports 段(~line 16 附近):
+from std_msgs.msg import Bool
+from rclpy.qos import QoSProfile, DurabilityPolicy
+
+# 在 NavActionServerNode.__init__(class 在 line 42)加:
+_LATCHED_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+self._active_nav2_goal_handle = None  # 由 NavigateToPose accept callback 設定
+self.create_subscription(
+    Bool, "/state/nav/paused", self._on_nav_paused, _LATCHED_QOS,
+)
+
+# 找既有 send_goal_async 呼叫(line ~261-280 + ~423),改成 cache handle:
+# Before:
+#   self._nav2_client.send_goal_async(nav_goal).add_done_callback(self._goal_response_cb)
+# After:
+goal_future = self._nav2_client.send_goal_async(nav_goal)
+goal_future.add_done_callback(self._on_nav2_goal_response)
+
+# 加新 callback:
+def _on_nav2_goal_response(self, future) -> None:
+    """Cache accepted goal handle so /state/nav/paused 可以 cancel。"""
+    try:
+        handle = future.result()
+        if handle is not None and getattr(handle, "accepted", False):
+            self._active_nav2_goal_handle = handle
+            handle.get_result_async().add_done_callback(self._on_nav2_goal_done)
+    except Exception as exc:  # noqa: BLE001
+        self.get_logger().warn(f"nav2 goal response failed: {exc}")
+
+def _on_nav2_goal_done(self, _future) -> None:
+    """Goal completed/cancelled — clear cache。"""
+    self._active_nav2_goal_handle = None
+
+def _on_nav_paused(self, msg: Bool) -> None:
+    """obstacle pause → cancel Nav2 goal;resume → no-op(caller 重發)。"""
+    if msg.data and self._active_nav2_goal_handle is not None:
+        self.get_logger().info("/state/nav/paused=true → cancel active Nav2 goal")
+        self._active_nav2_goal_handle.cancel_goal_async()
+    elif not msg.data:
+        self.get_logger().debug("/state/nav/paused=false (resume signal received)")
+```
+
+- [ ] **Step 8: 跑測試 pass**
 
 ```bash
 colcon build --packages-select nav_capability && source install/setup.zsh
-# 跑 minimal nav stack,發 pause/resume 看 cmd_vel 是否真的停
-ros2 run nav_capability nav_action_server_node &
-ros2 topic pub --once /nav/pause std_msgs/msg/Bool "data: true"
-ros2 topic echo /cmd_vel  # 應該無輸出
-ros2 topic pub --once /nav/pause std_msgs/msg/Bool "data: false"
+pytest nav_capability/test/ -v
 ```
-Expected:pause=true 時 /cmd_vel 無輸出;pause=false 後恢復
+Expected:全 PASS(含既有 nav test)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: 上機冒煙 + Commit**
 
 ```bash
-git add nav_capability/nav_capability/nav_action_server_node.py nav_capability/test/test_goto_relative_pause.py
-git commit -m "fix(nav): BUG #2 — goto_relative subscribe /nav/pause and gate cmd_vel"
+ros2 run nav_capability route_runner_node &
+ros2 run nav_capability nav_action_server_node &
+ros2 service call /nav/pause std_srvs/srv/Trigger
+ros2 topic echo /state/nav/paused --once  # 應 data: true
+ros2 service call /nav/resume std_srvs/srv/Trigger
+ros2 topic echo /state/nav/paused --once  # 應 data: false
+```
+
+```bash
+git add nav_capability/nav_capability/route_runner_node.py \
+        nav_capability/nav_capability/nav_action_server_node.py \
+        nav_capability/test/test_nav_pause_state_topic.py \
+        nav_capability/test/test_nav_action_server_pause_response.py
+git commit -m "fix(nav): BUG #2 — share /nav/pause via /state/nav/paused topic so nav_action_server cancels Nav2 goal on obstacle"
 ```
 
 ---
@@ -371,28 +482,34 @@ git commit -m "test(nav): add K1 baseline 5/5 regression script"
 
 ## Task 5: capability_publisher_node — Nav Gate(TDD)
 
+**Scope 澄清(Phase A v0)**:
+Nav Gate publisher 是「**通用 health gate**」,不知道任何特定 goal/target 的存在。三個 sub-condition:
+1. **Nav2 lifecycle = active**(BT navigator 啟動)
+2. **AMCL covariance < 0.20**(定位收斂)
+3. **Local costmap healthy**(`/local_costmap/costmap` 在最近 N 秒內有 update)
+
+**「目標 cell cost < threshold」這條件不在 Nav Gate publisher 裡** — 因為通用 publisher 沒有當前 goal 的概念。target-cell 驗證應該在 **skill dispatch 時**(`approach_person` / `nav_demo_point` 算出 goal pose 後)直接查 costmap。Phase A 先把這個延後,5/12 dry run 若沒問題就保留;若有 false-positive,Phase B 補。
+
 **Files:**
 - Create: `nav_capability/nav_capability/capability_publisher_node.py`
 - Create: `nav_capability/test/test_capability_publisher_node.py`
 - Modify: `nav_capability/setup.py` (entry_point)
-- Modify: `nav_capability/launch/nav_capability.launch.py`(若已存在)or 在 `interaction_executive/launch/interaction_executive.launch.py` include
+- Modify: `scripts/start_nav_capability_demo_tmux.sh`(Task 11)include 此 node
 
 - [ ] **Step 1: 寫失敗測試**
 
 ```python
 # nav_capability/test/test_capability_publisher_node.py
-"""Nav Gate publisher 把 Nav2 lifecycle + AMCL covariance + costmap target safety
-聚合成單一 /capability/nav_ready (Bool)。各 sub-condition 用 helper 函式測。"""
+"""Nav Gate publisher 聚合 Nav2 lifecycle + AMCL covariance + local costmap health
+成 /capability/nav_ready (Bool)。target-cell cost 不在此 gate(由 skill dispatch 時驗)。"""
 import pytest
 from nav_capability.capability_publisher_node import (
-    is_nav2_active, amcl_converged, costmap_target_safe, NavGate,
+    is_nav2_active, amcl_converged, costmap_recent, NavGate,
 )
 
 def test_amcl_converged_low_cov():
     cov = [0.0]*36
-    cov[0] = 0.05  # x var
-    cov[7] = 0.05  # y var
-    cov[35] = 0.05  # yaw var
+    cov[0] = 0.05; cov[7] = 0.05; cov[35] = 0.05
     assert amcl_converged(cov, threshold=0.20) is True
 
 def test_amcl_not_converged_high_cov():
@@ -400,25 +517,43 @@ def test_amcl_not_converged_high_cov():
     cov[0] = 0.30
     assert amcl_converged(cov, threshold=0.20) is False
 
-def test_costmap_target_safe_below_threshold():
-    assert costmap_target_safe(target_cost=30, threshold=50) is True
+def test_costmap_recent_within_window():
+    """costmap last_seen 在 2 秒內 → healthy"""
+    assert costmap_recent(seconds_since_last=1.0, max_staleness_sec=2.0) is True
 
-def test_costmap_target_unsafe_above_threshold():
-    assert costmap_target_safe(target_cost=80, threshold=50) is False
+def test_costmap_stale_beyond_window():
+    assert costmap_recent(seconds_since_last=5.0, max_staleness_sec=2.0) is False
 
-def test_nav_gate_aggregate_all_true():
+def test_costmap_never_received():
+    assert costmap_recent(seconds_since_last=None, max_staleness_sec=2.0) is False
+
+def test_is_nav2_active_state_3():
+    assert is_nav2_active(3) is True  # lifecycle ACTIVE
+
+def test_is_nav2_inactive_other_states():
+    assert is_nav2_active(2) is False  # INACTIVE
+    assert is_nav2_active(0) is False  # UNKNOWN
+
+def test_nav_gate_all_true():
     gate = NavGate()
     gate.nav2_active = True
     gate.amcl_cov_max = 0.10
-    gate.costmap_target_cost = 20
-    assert gate.compute(amcl_threshold=0.20, costmap_threshold=50) is True
+    gate.costmap_seconds_since_last = 0.5
+    assert gate.compute() is True
 
-def test_nav_gate_aggregate_amcl_fail():
+def test_nav_gate_amcl_fail():
     gate = NavGate()
     gate.nav2_active = True
     gate.amcl_cov_max = 0.50
-    gate.costmap_target_cost = 20
-    assert gate.compute(amcl_threshold=0.20, costmap_threshold=50) is False
+    gate.costmap_seconds_since_last = 0.5
+    assert gate.compute() is False
+
+def test_nav_gate_costmap_stale():
+    gate = NavGate()
+    gate.nav2_active = True
+    gate.amcl_cov_max = 0.10
+    gate.costmap_seconds_since_last = 10.0
+    assert gate.compute() is False
 ```
 
 - [ ] **Step 2: 跑測試確認 fail**
@@ -434,11 +569,16 @@ Expected:ImportError(module 不存在)
 # nav_capability/nav_capability/capability_publisher_node.py
 """Nav Gate publisher — 對應 spec §6.1 Nav Gate。
 
-聚合 Nav2 lifecycle + AMCL covariance + costmap 目標 cell cost,
+聚合 Nav2 lifecycle + AMCL covariance + local costmap health,
 publish /capability/nav_ready (std_msgs/Bool, 5 Hz)。
-Executive 只看這個 Bool,不關心三個子 condition 細節。"""
+
+Note: target-cell cost 驗證不在這個通用 publisher 裡 — 通用 gate 不知道
+specific goal pose。Skill dispatch 時(approach_person / nav_demo_point 算出
+goal pose 後)直接查 costmap 算 target-cell cost,作為 per-goal validation。
+"""
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Optional
 
 import rclpy
 from rclpy.node import Node
@@ -449,19 +589,22 @@ from nav_msgs.msg import OccupancyGrid
 
 
 def amcl_converged(cov: list[float], threshold: float = 0.20) -> bool:
-    """AMCL covariance 6x6 (x,y,_,_,_,yaw)。x/y/yaw 對角元 < threshold 算收斂。"""
+    """AMCL pose covariance 6x6 (x,y,_,_,_,yaw)。x/y/yaw 對角元 < threshold 算收斂。"""
     if len(cov) < 36:
         return False
     return cov[0] < threshold and cov[7] < threshold and cov[35] < threshold
 
 
-def costmap_target_safe(target_cost: int, threshold: int = 50) -> bool:
-    """Target cell cost(0=free, 100=occupied)< threshold 算安全。"""
-    return target_cost < threshold
+def costmap_recent(seconds_since_last: Optional[float],
+                    max_staleness_sec: float = 2.0) -> bool:
+    """Local costmap 在 max_staleness_sec 秒內有 update 算 healthy。None = 從未收到。"""
+    if seconds_since_last is None:
+        return False
+    return seconds_since_last <= max_staleness_sec
 
 
 def is_nav2_active(state: int) -> bool:
-    """Nav2 lifecycle state 3 = ACTIVE(per lifecycle_msgs/msg/State)。"""
+    """Nav2 lifecycle state 3 = ACTIVE (per lifecycle_msgs/msg/State)。"""
     return state == 3
 
 
@@ -469,60 +612,73 @@ def is_nav2_active(state: int) -> bool:
 class NavGate:
     nav2_active: bool = False
     amcl_cov_max: float = 999.0
-    costmap_target_cost: int = 100
+    costmap_seconds_since_last: Optional[float] = None
 
-    def compute(self, amcl_threshold: float = 0.20, costmap_threshold: int = 50) -> bool:
+    def compute(self, amcl_threshold: float = 0.20,
+                costmap_max_staleness_sec: float = 2.0) -> bool:
         return (
             self.nav2_active
             and self.amcl_cov_max < amcl_threshold
-            and self.costmap_target_cost < costmap_threshold
+            and costmap_recent(self.costmap_seconds_since_last,
+                                costmap_max_staleness_sec)
         )
 
 
 class CapabilityPublisherNode(Node):
     def __init__(self):
         super().__init__("capability_publisher_node")
+        self.declare_parameter("amcl_pose_topic", "/amcl_pose")
+        self.declare_parameter("costmap_topic", "/local_costmap/costmap")
+        self.declare_parameter("lifecycle_service", "/bt_navigator/get_state")
+        self.declare_parameter("amcl_threshold", 0.20)
+        self.declare_parameter("costmap_max_staleness_sec", 2.0)
+
         self._gate = NavGate()
+        self._last_costmap_stamp: Optional[float] = None
         self._pub = self.create_publisher(Bool, "/capability/nav_ready", 10)
 
-        # AMCL pose covariance subscriber
         self.create_subscription(
-            PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl_pose, 10,
+            PoseWithCovarianceStamped,
+            self.get_parameter("amcl_pose_topic").value,
+            self._on_amcl_pose, 10,
+        )
+        self.create_subscription(
+            OccupancyGrid,
+            self.get_parameter("costmap_topic").value,
+            self._on_costmap, 10,
         )
 
-        # Costmap subscriber — 簡化:取 robot 周圍 10x10 cells 最大 cost
-        self.create_subscription(
-            OccupancyGrid, "/local_costmap/costmap", self._on_costmap, 10,
+        self._lifecycle_client = self.create_client(
+            GetState, self.get_parameter("lifecycle_service").value,
         )
-
-        # Nav2 lifecycle 用 service polling(timer 1Hz)
-        self._lifecycle_client = self.create_client(GetState, "/bt_navigator/get_state")
         self.create_timer(1.0, self._poll_nav2_lifecycle)
-
-        # Publish gate at 5 Hz
         self.create_timer(0.2, self._publish_gate)
 
         self.get_logger().info("capability_publisher_node ready (/capability/nav_ready 5Hz)")
 
     def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
         cov = list(msg.pose.covariance)
-        # 取 x/y/yaw 對角元最大值作為摘要
         x_var = cov[0] if len(cov) > 0 else 999.0
         y_var = cov[7] if len(cov) > 7 else 999.0
         yaw_var = cov[35] if len(cov) > 35 else 999.0
         self._gate.amcl_cov_max = max(x_var, y_var, yaw_var)
 
-    def _on_costmap(self, msg: OccupancyGrid) -> None:
-        # 簡化:取整張 costmap 最大 cost(實機可改成 robot 周圍 ROI)
-        if msg.data:
-            self._gate.costmap_target_cost = max(msg.data)
+    def _on_costmap(self, _msg: OccupancyGrid) -> None:
+        # 只用收到時間判斷 health,不檢查 cell cost
+        self._last_costmap_stamp = self.get_clock().now().nanoseconds * 1e-9
+
+    def _refresh_costmap_age(self) -> None:
+        if self._last_costmap_stamp is None:
+            self._gate.costmap_seconds_since_last = None
+            return
+        now = self.get_clock().now().nanoseconds * 1e-9
+        self._gate.costmap_seconds_since_last = now - self._last_costmap_stamp
 
     def _poll_nav2_lifecycle(self) -> None:
         if not self._lifecycle_client.service_is_ready():
             self._gate.nav2_active = False
             return
-        req = GetState.Request()
-        future = self._lifecycle_client.call_async(req)
+        future = self._lifecycle_client.call_async(GetState.Request())
         future.add_done_callback(self._on_lifecycle_response)
 
     def _on_lifecycle_response(self, future) -> None:
@@ -534,8 +690,11 @@ class CapabilityPublisherNode(Node):
             self._gate.nav2_active = False
 
     def _publish_gate(self) -> None:
+        self._refresh_costmap_age()
+        amcl_th = self.get_parameter("amcl_threshold").value
+        cm_max = self.get_parameter("costmap_max_staleness_sec").value
         msg = Bool()
-        msg.data = self._gate.compute()
+        msg.data = self._gate.compute(amcl_th, cm_max)
         self._pub.publish(msg)
 
 
@@ -566,7 +725,7 @@ if __name__ == "__main__":
 colcon build --packages-select nav_capability && source install/setup.zsh
 pytest nav_capability/test/test_capability_publisher_node.py -v
 ```
-Expected:6 PASS
+Expected:9 PASS
 
 - [ ] **Step 6: 上機冒煙**
 
@@ -692,11 +851,13 @@ class DepthSafetyNode(Node):
         # ROI (640x480 image, 中央前方 1/2 寬 × 上下 1/2)
         self._roi = (160, 160, 480, 320)
 
-        # D435 aligned depth(per Task 1 Step 4 grep 結果調整 topic name)
-        self.create_subscription(
-            Image, "/camera/aligned_depth_to_color/image_raw",
-            self._on_depth, 10,
+        # D435 aligned depth — 專案慣例 double namespace `/camera/camera/...`
+        # (per docs/architecture/contracts/interaction_contract.md:895)
+        self.declare_parameter(
+            "depth_topic", "/camera/camera/aligned_depth_to_color/image_raw",
         )
+        depth_topic = self.get_parameter("depth_topic").value
+        self.create_subscription(Image, depth_topic, self._on_depth, 10)
 
         self._pub = self.create_publisher(Bool, "/capability/depth_clear", 10)
 
@@ -785,30 +946,51 @@ git commit -m "feat(safety): add depth_safety_node — /capability/depth_clear D
 ```python
 # interaction_executive/test/test_world_state_capabilities.py
 """WorldState 必須訂 /capability/nav_ready + /capability/depth_clear,
-snapshot() 回傳的 dataclass 含 nav_ready: bool + depth_clear: bool。"""
-import pytest
+snapshot() 回傳的 dataclass 含 nav_ready: bool + depth_clear: bool。
+
+Note: 現有 WorldState.__init__ 直接 node.create_subscription(),不支援 None。
+測試用 unittest.mock.Mock() 取代 node,驗 init 行為與 callback 行為。"""
+from unittest.mock import MagicMock
 from std_msgs.msg import Bool
 from interaction_executive.world_state import WorldState
 
+
+def _fresh_ws_with_mock_node():
+    fake_node = MagicMock()
+    fake_node.create_subscription = MagicMock()
+    return WorldState(node=fake_node), fake_node
+
+
 def test_snapshot_default_nav_ready_false():
-    ws = WorldState(node=None)  # node=None for unit test
+    ws, _ = _fresh_ws_with_mock_node()
     snap = ws.snapshot()
     assert snap.nav_ready is False
 
+
 def test_snapshot_default_depth_clear_true():
     """depth_clear 預設 true(無讀值不擋)"""
-    ws = WorldState(node=None)
+    ws, _ = _fresh_ws_with_mock_node()
     snap = ws.snapshot()
     assert snap.depth_clear is True
 
+
+def test_subscriptions_registered():
+    """確認 init 真的呼叫了 node.create_subscription 兩次給 nav_ready / depth_clear"""
+    _, fake = _fresh_ws_with_mock_node()
+    topics = [call.args[1] for call in fake.create_subscription.call_args_list]
+    assert "/capability/nav_ready" in topics
+    assert "/capability/depth_clear" in topics
+
+
 def test_on_nav_ready_callback():
-    ws = WorldState(node=None)
+    ws, _ = _fresh_ws_with_mock_node()
     msg = Bool(); msg.data = True
     ws._on_nav_ready(msg)
     assert ws.snapshot().nav_ready is True
 
+
 def test_on_depth_clear_callback():
-    ws = WorldState(node=None)
+    ws, _ = _fresh_ws_with_mock_node()
     msg = Bool(); msg.data = False
     ws._on_depth_clear(msg)
     assert ws.snapshot().depth_clear is False
@@ -868,7 +1050,7 @@ class WorldState:
 colcon build --packages-select interaction_executive && source install/setup.zsh
 pytest interaction_executive/test/test_world_state_capabilities.py -v
 ```
-Expected:4 PASS。**現有 WorldState 既有 test 也要全 pass**(跑 `pytest interaction_executive/test/ -v`)
+Expected:5 PASS。**現有 WorldState 既有 test 也要全 pass**(跑 `pytest interaction_executive/test/ -v`)
 
 - [ ] **Step 5: Commit**
 
