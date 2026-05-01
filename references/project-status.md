@@ -1,13 +1,63 @@
 # 專案狀態
 
-**最後更新**：2026-05-01 morning（**LiDAR mount v7 完成 ✅（脖子前方背板平台、yaw=0 物理錨定 commit `fabbf06`）/ home_living_room_v7 map 建成（XL4015 撐住未跳電）/ Phase 4 K1 仍待 KREE 到貨**）
+**最後更新**：2026-05-01 noon（**v7 yaw=0 偽陽性 → 修為 v8 yaw=π / home_living_room_v8 map 建成 / AMCL 完美收斂 σ²_x 0.033 / K1 軟通過 3/5（Go2 跑 1.28m XL4015 沒跳電）**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
 
 ---
 
-## 5/1 進度
+## 5/1 進度（noon update）
+
+**v7 偽陽性發現 → yaw=π 修正 → v8 map → K1 主線跑通**
+
+### 重大發現（推翻 v7 morning 結論）
+
+**早上 v7 物理錨定通過是偽陽性**：用戶 11:30 觀察 Foxglove 時發現 lidar 跟 map 方向 180° 相反 + costmap 出現假障礙物。深度診斷發現：
+
+- `scan_health_check.py` 早上驗 yaw=0 時，用戶把物體放在「以為的 Go2 正前方」（實際是 Go2 屁股方向）→ 物體在 angle=0° → 誤判 yaw=0 通過
+- 真實情況：lidar 物理 0° 朝向 Go2 **背後**（不是頭）
+- 證據：用戶站在 Go2 物理頭前 0.5m 時，scan 返回出現在 angle=±180°（laser -X），不是 0°
+- 其他證據：用戶推 Go2 物理前進 1.7m，map 上 Go2 icon 反方向移動 + AMCL yaw 從 178° 跳到 -17.7° 嘗試自我修正
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **TF 修正 v7→v8** | `base_link → laser` yaw 0 → π（3.14159）；7 scripts 同步 | ✅ commit `fa0fa54` |
+| **v8 map 建立** | 用正確 TF 重建：10.25×4.90m / 205×98 cells，origin [-2.41, -2.81]；跟 v7 是鏡像（必然結果）| ✅ commit `5d938d6` |
+| **Default map v7→v8** | `start_nav2_amcl_demo_tmux.sh` + `start_nav_capability_demo_tmux.sh` | ✅ |
+| **AMCL 完美收斂** | initialpose 設好後 `map → base_link` yaw=-1.57°、σ²_x 0.175 → **0.033**（σ_x 0.42m → 0.18m）| ✅ |
+| **K1 軟通過 3/5** | Go2 cmd_vel 動態跑 1.28m（從 0.015 → 1.269）、3 個 goal 移動 0.28-0.33m、4-5 卡住 yaw drift +30° | ⚠️ 部分通過 |
+| **供電 第二次 surprise** | XL4015 連續第二次（建圖 + Nav2 動態）全程穩定 | ✅ |
+
+### Map v7 vs v8 處理
+
+- v7 (`home_living_room_v7.*`) 留在 repo 作歷史對照（用錯誤 TF 建的，**不可用**）
+- v8 (`home_living_room_v8.*`) 為 default map
+- mount-measurement.md 加 v8 段、v7 標 superseded
+
+### K1 軟通過分析
+
+3/5 goal 移動失敗的根因（5/13 demo 前要修）：
+1. **xy_goal_tolerance 0.30 太鬆** → Go2 走 0.3m 就被 nav2 視作 reached、沒走滿 0.5m。建議降到 0.15
+2. **Goal 4-5 卡住** → Go2 累積 yaw drift 30°，可能 plan 失敗或 controller wobble
+3. **Go2 sport mode min_vel_x 0.50 vs DWB min_vel_x 0.45** 邊界 → 中間 cmd_vel 可能被 sport filter 吃掉
+
+K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實際 navigate 1.28m，是重大進展。
+
+### 下一步
+
+1. 調 `nav2_params.yaml`：xy_goal_tolerance 0.30 → 0.15、檢查 goal 4-5 卡住的 plan log
+2. 重跑 K1，目標 ≥ 4/5
+3. K1 通過後進 K2/K4/K5/K7
+4. 等 KREE DL241910 到貨（雖然 XL4015 連續兩次都沒跳電，但 KREE 仍是 demo 主力電源）
+
+---
+
+## 5/1 進度（morning，已 superseded by noon update）
 
 **LiDAR mount v7 完成 + v7 map 建成 — XL4015 撐住沒跳電**
+
+> ⚠️ **Morning 結論被 noon 推翻**：v7 yaw=0 物理錨定是偽陽性（用戶把物體放在 Go2 屁股方向）。真實 yaw=π。v7 map 因此 unusable，noon 重建 v8。下面 morning 段保留作偵錯歷史。
 
 ### 完成事項
 

@@ -1,9 +1,73 @@
-# RPLIDAR Mount 量測（v7 — 4/30 evening 脖子前方背板平台）
+# RPLIDAR Mount 量測（v8 — 5/1 noon yaw 修正版）
 
 依 [`2026-04-27-lidar-dev-roadmap.md`](../lidar開發/2026-04-27-lidar-dev-roadmap.md) Phase 1。
-v3-v6（4/24-4/30 上午）皆為背部安裝，v7 起改為**脖子前方 3D 列印背板平台**。
+v3-v6（4/24-4/30 上午）皆為背部安裝，v7 起改為**脖子前方 3D 列印背板平台**，v8 為 v7 的 yaw 修正版（mount 物理位置不變、僅軟體 TF 修正）。
 
-## v7 量測值（4/30 evening）
+## v8 量測值（5/1 noon，**current**）
+
+| 量 | 值 | 量法 |
+|----|----:|------|
+| **x** | **+0.175 m** | 同 v7（mount 物理位置不變）|
+| **y** | **0.0 m** | 同 v7 |
+| **z** | **+0.18 m** | 同 v7 |
+| **yaw** | **3.14159 rad（π，180°）** | 修正 v7 偽陽性：lidar 物理 0° 實際指向 Go2 **背後**（不是頭），需 180° 補正；用戶站 Go2 物理頭前 0.5m 時 scan 落在 angle=±180° 確認 |
+| **pitch / roll** | **±0°** | 同 v7 |
+
+## v7 為何錯（偽陽性復盤）
+
+5/1 早上 `scan_health_check.py` 報 v7 PASS：物體 0.8m 在 Go2「正前方」 → angle=0° 偵測到 0.83m → 結論 yaw=0。
+
+**實際是用戶 mis-identified Go2 nose 方向**：把物體放在「以為的正前方」（其實是 Go2 屁股方向）。物體確實在 angle=0°，但那個方向是 Go2 背後不是頭。物理錨定法假設用戶能正確識別 Go2 朝向，但這次失敗。
+
+**5/1 noon 復查方法（不依賴用戶判斷 Go2 朝向）**：用戶站在 Go2 物理頭前 0.5m（看 Go2 的眼睛/感測器），scan 返回應在 angle 0° 附近。實測返回出現在 angle=±180°（laser -X 方向），證明 lidar 物理朝向跟 Go2 nose **相反**。
+
+教訓加進 SOP（[`docs/導航避障/CLAUDE.md`](../CLAUDE.md) 待補）：物理錨定測試**用戶站位置法 > 物體放置法**，因為前者用戶可以直接看 Go2 的「臉」識別頭尾，後者依賴用戶腦中的 Go2 朝向認知。
+
+## v8 TF 命令
+
+```bash
+ros2 run tf2_ros static_transform_publisher \
+  --x 0.175 --y 0 --z 0.18 --yaw 3.14159 \
+  --frame-id base_link --child-frame-id laser
+```
+
+`tf2_echo base_link laser` 預期顯示 RPY (degree) `[0, 0, 180]`。
+
+## Phase 3 v8 — SLAM 重建圖（5/1 noon）
+
+v7 map 是用錯誤 TF (yaw=0) 建的，雖然內部一致但 map +X 軸對應 Go2 物理 BACK 方向。修正 TF 為 yaw=π 後重建 v8。
+
+| 項目 | 值 |
+|---|---|
+| Map ID | `home_living_room_v8` |
+| 路徑 | `/home/jetson/maps/home_living_room_v8.{pbstream,pgm,yaml}` |
+| 物理尺寸 | 10.25 m × 4.90 m（205 × 98 cells @ 0.05 m/pix）|
+| origin | `[-2.41, -2.81, 0]`（跟 v7 [-7.79, -2.46] 完全不同，是 TF 翻 180° 後 cartographer 重新選的起點 frame）|
+| 模式 | Cartographer pure scan-matching（同 v2/v7 設定） |
+| 走法 | ≤ 0.05 m/s，跟 v7 同起點同朝向、客廳核心 4×4m 慢繞 30-60s |
+| 供電 | XL4015（KREE 未到貨）— **連續第二次未跳電**（v7 + v8 兩次建圖 + K1 動態都穩定）|
+| 倉內備份 | `docs/導航避障/research/maps/home_living_room_v8.{pgm,yaml,png}` |
+
+### v8 vs v7 視覺差異
+
+v8 map 跟 v7 map 是**鏡像關係**（TF 翻 180° 必然結果），不是同一個 map 的旋轉。視覺上：v7 客廳區在 PNG 右側、v8 客廳區在 PNG 左側。但兩張 map 對應的是**同一個物理客廳**。
+
+v7 map 因為 TF 錯誤已 unusable，不可作為 AMCL 載入對象（會 180° 錯位）。
+
+### Map QA（v8）
+
+- ✅ 客廳核心區：牆面單線、loop closure 不裂、AMCL 5/1 noon 收斂到 σ²_x = 0.033（σ_x = 0.18m）
+- ⚠️ 走廊端 yaw drift：仍存在（與 v2/v7 同症狀）
+- ❌ 嚴禁發 goal 到走廊
+- ✅ K1 baseline 5/1 noon 軟通過 3/5（cmd_vel 動態 1.28m、Go2 沒撞牆 / 沒跳電）
+
+### Default map 已切換 v7 → v8
+
+- `scripts/start_nav2_amcl_demo_tmux.sh:27` `MAP_YAML` → v8
+- `scripts/start_nav_capability_demo_tmux.sh:22` `MAP` → v8
+- v7 yaml/pgm/pbstream 留在 `/home/jetson/maps/` 不刪（歷史對照）
+
+## v7 量測值（4/30 evening，已 superseded by v8 — 偽陽性）
 
 | 量 | 值 | 量法 |
 |----|----:|------|
