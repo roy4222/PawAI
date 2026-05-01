@@ -226,7 +226,7 @@ Executive Pre-action Validate(三段判斷):
 
 > **最小版 = 50 prompt × 3 LLM × 4 軸 → JSON 輸出。不做漂亮 dashboard,Studio Eval Summary 頁 = optional**
 
-- [ ] 50 prompt 中文測試集(對齊 Active Set 16 skill 的 trigger;5 桶:chat 15 / action-in-registry 15 / action-out-of-registry 10 / alert 5 / multi-turn 5)
+- [ ] 50 prompt 中文測試集(eval 主測 Active Set 16 skill 的 trigger,fallen_alert 可控測;5 桶:chat 15 / action-in-registry 15 / action-out-of-registry 10 / alert 5 / multi-turn 5)
 - [ ] Persona system prompt(對齊 mission/README §2 定位:居家互動 + 守護 + 多模態 + **不列拒絕清單**,用「我學學看!」「我幫你...」這種主動正向語氣)
 - [ ] eval script(Python ~150 行,OpenRouter API caller)
 - [ ] 跑 3 LLM × 50 prompt:Gemini 3 Flash Preview ($0.50/$3) / DeepSeek V4 Flash ($0.14/$0.28) / Qwen3.6 Plus ($0.325/$1.95)
@@ -463,7 +463,7 @@ B6 PR port ──> 並行 with B5(優先級 < B5)
 2. **Capability Predicate Pattern** — Nav Gate + Depth Gate 兩層 Bool;Executive 不變感測器垃圾桶,降級 NAV → SAY 時給人話訊息
 3. **Skill Registry × OK 三層原則** — Safety immediate / low-risk social direct / 高風險需 OK,證明 PawAI 既順暢又安全
 4. **D435 + RPLIDAR 分層整合** — 不做硬性 3D fusion,RGB 語意 / Depth 安全 / LiDAR 導航各司其職
-5. **4 級降級鏈 + Plan A/B 切換** — Cloud LLM → Local Ollama → RuleBrain → Plan B 固定台詞;主動切換 < 2 秒
+5. **5 級降級鏈 + Plan A/B 切換** — OpenRouter 主線 → OpenRouter 雲端 fallback → Local Ollama → RuleBrain → Plan B 固定台詞;主動切換 < 2 秒(對齊 §8 B1)
 
 ---
 
