@@ -36,12 +36,38 @@
 2. **TF lookup 在 rclpy 時間語意有坑**：`rclpy.time.Time()` 不等於「latest available」、會給 epoch 0 → 退回 buffer 找不到。改用 topic 訂閱 `/amcl_pose` 完美解
 3. **連續 K1 goals 累積 yaw drift**：Goal 1 yaw +0.4° → Goal 4 yaw -25.6° → Goal 5 yaw -6.8°，DWB controller 跨多個 goal 會偏轉 30° 內，仍能達成 PASS criteria
 
-### 下一步（plan D）
+### Phase 4 動態避障 v0（14:23）
 
-- ~~Phase 1 鎖住 K1 5/5（commit + push）~~ ← 進行中
-- Phase 2 切 nav_capability stack 拿 reactive_stop safety net
-- Phase 3 K2-lite（連續 3 waypoint，0.3m step）
-- Phase 4 動態避障 v0（人/紙箱進 Go2 路徑、看 Nav2 reactive 行為）
+切到 nav_capability stack（含 reactive_stop_node priority 200 safety_only mode）後跑 1m forward goal、用戶放紙箱。
+
+**reactive_stop 完美 fire**（log 11s 內 4× pause/resume cycle）：
+```
+slow → danger (0.47m) → /nav/pause
+danger → slow (0.62m) → /nav/resume
+... × 4 cycles ...
+slow → clear (1.02m) ← obstacle 移除
+```
+
+**Verdict: PARTIAL PASS**
+- ✅ Go2 沒撞（核心 safety net 成立）
+- ✅ Obstacle 進入 danger zone 自動 pause
+- ✅ Slow zone 自動 resume
+- ⚠️ Obstacle 完全移除後 Go2 沒自動 continue（卡在 0.78m，距 1.0m goal 短 0.45m）
+
+**根因**：發 /goal_pose 走 bt_navigator 的 navigate_to_pose action，但 reactive_stop 的 /nav/pause + /nav/resume service 由 nav_capability 自定 nav_action_server 提供，**兩條路徑沒完整 wire**。要解：用 `/nav/goto_relative` action（plan D Phase 7 layered 測試）。
+
+### Phase 3 K2-lite（14:11）
+
+`/navigate_through_poses` 3 個 waypoint（forward 0.3m → left 0.3m → back to start）。Action 回 SUCCEEDED 但 Go2 物理沒動。**Fake PASS / 實 FAIL**：WP3 = start，Nav2 BT 看到 Go2 已在 WP3 容差內 → 短路返回。
+
+### 下一步（plan D Phase 7 layered）
+
+- ~~7.0 checkpoint commit~~ ← 進行中
+- 7.1 `/nav/goto_relative 0.5m` 無障礙基線
+- 7.2 0.5m + 紙箱障礙、看 obstacle 移除後是否自動 resume
+- 7.3 0.7m + 紙箱
+- 7.4 1.0m + 紙箱
+- 7.5 人進場測試（最後）
 - 不開 B（D435）、不開 C（goto_object）
 
 ---

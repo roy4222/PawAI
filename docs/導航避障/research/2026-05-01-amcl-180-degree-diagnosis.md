@@ -148,11 +148,54 @@ self.create_subscription(PoseWithCovarianceStamped, '/amcl_pose', cb, amcl_qos)
 - script 修正讓 Goals 1-2 也成功送出（之前 TF buffer 沒 ready 直接 fail）
 - Go2 累積 yaw drift -25° 內，DWB 仍能驅動到 goal 範圍
 
+## Step 9（14:23 — 動態避障 v0 PARTIAL PASS）
+
+K1 5/5 後切到 `start_nav_capability_demo_tmux.sh`（8 windows，含 reactive_stop_node safety_only=true priority 200）。發 `/goal_pose` 1m forward goal、用戶放紙箱在前方 30cm。
+
+**reactive_stop_node 行為（log 18197-18273，11s 視窗 4× cycle）**：
+```
+18197.9 slow → danger (front 0.47m) → /nav/pause
+18198.8 danger → slow (0.62m) → /nav/resume
+18203.2 slow → danger (0.60m) → /nav/pause
+18203.9 danger → slow (0.73m) → /nav/resume
+18206.2 slow → danger (0.59m) → /nav/pause
+18207.5 danger → slow (0.61m) → /nav/resume
+18207.8 slow → danger (0.60m) → /nav/pause
+18208.7 danger → slow (0.62m) → /nav/resume
+... idle 65s ...
+18273.4 slow → clear (1.02m)  ← 紙箱移除
+```
+
+**Verdict: PARTIAL PASS**
+- ✅ Go2 沒撞（核心 safety net 成立）
+- ✅ Danger zone (<0.5m) auto-pause 工作正常
+- ✅ Slow zone resume 工作正常（4× cycle 證明 oscillation handling）
+- ⚠️ 紙箱完全移除後 Go2 沒自動 continue（停在 0.78m, 距 1m goal 短 0.45m）
+
+### 根因分析
+
+| 路徑 | 狀態 |
+|---|---|
+| `/goal_pose` → bt_navigator 的 navigate_to_pose action | 我們用的這條 |
+| reactive_stop 的 `/nav/pause` + `/nav/resume` service | 由 nav_capability 自定的 nav_action_server / route_runner_node 提供 |
+| **兩條路徑連接** | **沒完整 wire**（`/state/nav/status` 顯示 `state=idle, active_goal=null` 表示 nav_capability tracker 看不到 bt_navigator 的 goal）|
+
+reactive_stop 還會 publish `/cmd_vel_obstacle=0` 給 mux（priority 200）→ Go2 stops。但這只強制停車、沒「保留 goal」。4× pause/resume 期間 cmd_vel oscillation 可能讓 bt_navigator BT 進 recovery 或 abort 狀態（audio spam 蓋掉 nav2 log 無法確認）。
+
+### 5/13 demo 前 fix 路線
+
+1. **改用 `/nav/goto_relative` action**（nav_capability 原生）— pause/resume 邏輯完整適用 → plan D Phase 7 驗證
+2. OR 在 reactive_stop_node 加邏輯：obstacle 清除後 republish 原 goal
+3. OR 接受 v0「停了就停」、demo 設計避開連續導航需求
+
+對 5/19 demo 來說：**「Go2 遇障礙停下不撞」這個保證足夠（v0 有）；「障礙清除後自動繼續」是加分項**。
+
 ## 關鍵 commits
 
 - `fa0fa54` fix(nav): LiDAR mount v8 — yaw 0 → π
 - `5d938d6` feat(nav): home_living_room_v8 map — TF yaw=π 修正後重建
 - `59024ef` fix(nav): xy_goal_tolerance 0.30 → 0.15
+- `42cc478` docs(nav): K1 baseline 5/5 PASS — A 主鏈正式驗收成立
 
 ## 相關檔案
 
