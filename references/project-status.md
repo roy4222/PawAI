@@ -1,11 +1,52 @@
 # 專案狀態
 
-**最後更新**：2026-05-01 noon（**v7 yaw=0 偽陽性 → 修為 v8 yaw=π / home_living_room_v8 map 建成 / AMCL 完美收斂 σ²_x 0.033 / K1 軟通過 3/5（Go2 跑 1.28m XL4015 沒跳電）**）
+**最後更新**：2026-05-01 afternoon（**K1 baseline 5/5 PASS ✅（spec ≥ 4/5、實測滿分）/ xy_goal_tolerance 0.30→0.15 修正 / Go2 跑 1.81m 全 PASS、err 0.10-0.18m / 下一步動態避障 v0**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
 
 ---
 
-## 5/1 進度（noon update）
+## 5/1 進度（afternoon update）
+
+**K1 baseline 5/5 PASS ✅ — A 方案主鏈正式驗收成立**
+
+### afternoon 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **xy_goal_tolerance 修正** | nav2_params.yaml general_goal_checker 0.30→0.15、FollowPath 0.25→0.15（K1 軟通過 3/5 後發現 0.30 對 0.5m goal 太鬆，Go2 走 0.3m 就被誤判 reached）| ✅ commit `59024ef` |
+| **K1 script bug 修正** | K1 v3 改用 `/amcl_pose` subscription（TRANSIENT_LOCAL）取代 TF `lookup_transform`（TF 時間語意 bug：`rclpy.time.Time()` 給 epoch 0、buffer purge 太快）| ✅ |
+| **K1 baseline 5/5 PASS** | 從 (-0.238, -0.717) yaw -0.7° 出發，5 個 0.5m forward goal 全 PASS、總移動 1.81m | ✅✅✅ |
+| **XL4015 撐住第三次** | 連續 3 次動態測試（建圖 + Nav2 K1 軟 + Nav2 K1 5/5）全程沒跳電（中午一次 idle reboot 後散熱穩定）| ✅ |
+
+### K1 5/5 詳細數據
+
+| Goal | Start | End | Travel | Err | 判定 |
+|---|---|---|---|---|---|
+| 1 | (-0.238, -0.717) yaw +0.4° | (+0.086, -0.760) yaw -8.6° | **0.326m** | 0.183m | **PASS** |
+| 2 | (+0.086, -0.760) yaw -8.6° | (+0.455, -0.805) yaw -15.4° | **0.372m** | 0.129m | **PASS** |
+| 3 | (+0.455, -0.805) yaw -15.4° | (+0.838, -0.927) yaw -25.6° | **0.402m** | 0.100m | **PASS** |
+| 4 | (+0.838, -0.927) yaw -25.6° | (+1.189, -1.041) yaw -19.2° | **0.369m** | 0.143m | **PASS** |
+| 5 | (+1.189, -1.041) yaw -19.2° | (+1.531, -1.081) yaw -6.8° | **0.345m** | 0.179m | **PASS** |
+
+判定 criteria：travel ≥ 0.30m AND err < 0.25m。實測 5 個 goal 都符合。
+
+### 學到的 K1 design 教訓
+
+1. **xy_goal_tolerance 要 < goal_distance/3**：0.30 對 0.5m goal 等於只走 0.20m 強制完成，必須降到 0.15 才能驗 0.5m 移動能力
+2. **TF lookup 在 rclpy 時間語意有坑**：`rclpy.time.Time()` 不等於「latest available」、會給 epoch 0 → 退回 buffer 找不到。改用 topic 訂閱 `/amcl_pose` 完美解
+3. **連續 K1 goals 累積 yaw drift**：Goal 1 yaw +0.4° → Goal 4 yaw -25.6° → Goal 5 yaw -6.8°，DWB controller 跨多個 goal 會偏轉 30° 內，仍能達成 PASS criteria
+
+### 下一步（plan D）
+
+- ~~Phase 1 鎖住 K1 5/5（commit + push）~~ ← 進行中
+- Phase 2 切 nav_capability stack 拿 reactive_stop safety net
+- Phase 3 K2-lite（連續 3 waypoint，0.3m step）
+- Phase 4 動態避障 v0（人/紙箱進 Go2 路徑、看 Nav2 reactive 行為）
+- 不開 B（D435）、不開 C（goto_object）
+
+---
+
+## 5/1 進度（noon update，supersedes morning）
 
 **v7 偽陽性發現 → yaw=π 修正 → v8 map → K1 主線跑通**
 
