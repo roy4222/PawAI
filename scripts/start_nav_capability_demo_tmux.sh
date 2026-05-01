@@ -13,13 +13,13 @@
 #
 # Usage:
 #   bash scripts/start_nav_capability_demo_tmux.sh
-#   ROBOT_IP=192.168.123.161 MAP=/home/jetson/maps/home_living_room_v5.yaml \
+#   ROBOT_IP=192.168.123.161 MAP=/home/jetson/maps/home_living_room_v7.yaml \
 #     bash scripts/start_nav_capability_demo_tmux.sh
 set -euo pipefail
 
 SESSION="${SESSION:-nav-cap-demo}"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
-MAP="${MAP:-/home/jetson/maps/home_living_room_v5.yaml}"
+MAP="${MAP:-/home/jetson/maps/home_living_room_v7.yaml}"
 NAV_RUNTIME_DIR="${NAV_RUNTIME_DIR:-$HOME/elder_and_dog/runtime/nav_capability}"
 NAV_NAMED="${NAV_NAMED:-$NAV_RUNTIME_DIR/named_poses/main.json}"
 NAV_ROUTES="${NAV_ROUTES:-$NAV_RUNTIME_DIR/routes}"

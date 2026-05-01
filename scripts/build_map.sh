@@ -3,7 +3,7 @@
 # Usage: bash scripts/build_map.sh [map_name]
 # Example: bash scripts/build_map.sh home_living_room
 #
-# 拓撲（v3 — 4/29 修正）：
+# 拓撲（v7 — 4/30 脖子前方背板平台）：
 #   Cartographer pure scan-matching（**不啟 Go2 driver、無外部 odom**）
 #   + RPLIDAR (/scan_rplidar) + base_link→laser static TF + foxglove_bridge
 # 詳見 scripts/start_lidar_slam_tmux.sh

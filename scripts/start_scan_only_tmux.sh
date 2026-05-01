@@ -3,7 +3,7 @@
 # Phase 2 — Scan-only stack（只 TF + sllidar + monitor）
 #
 # 拓撲：
-#   static TF       → base_link → laser（mount 量值 v7（4/30 evening）：x=0.175, y=0, z=0.18, yaw=0；雷達移到脖子前方平台，0° 對齊 Go2 正前（PENDING scan_health_check 物理驗證））
+#   static TF       → base_link → laser（mount 量值 v7（4/30 evening）：x=0.175, y=0, z=0.18, yaw=0；雷達移到脖子前方平台，scan_health_check 物理驗證通過）
 #   sllidar         → /scan_rplidar 10.4Hz
 #   monitor         → 手動跑 scan_health_check.py / topic hz / topic echo
 #

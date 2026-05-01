@@ -1,7 +1,36 @@
 # 專案狀態
 
-**最後更新**：2026-04-30 morning（**LiDAR yaw 物理錨定 ✅ −π/2 (v6 定案，commit 560ca79) / 2464 模組失敗、暫退 XL4015、訂 KREE 24-40V→19V/10A 補位 / Phase 3 v6 map + Phase 4 K1 待供電穩定**）
+**最後更新**：2026-05-01 morning（**LiDAR mount v7 完成 ✅（脖子前方背板平台、yaw=0 物理錨定 commit `fabbf06`）/ home_living_room_v7 map 建成（XL4015 撐住未跳電）/ Phase 4 K1 仍待 KREE 到貨**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/1 進度
+
+**LiDAR mount v7 完成 + v7 map 建成 — XL4015 撐住沒跳電**
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **硬體變動** | LiDAR 從背部移到脖子前方 3D 列印背板平台（更大、更穩） | ✅ |
+| **Mount 量測 v7** | x=+0.175 / y=0 / z=+0.18 / yaw=0；7 scripts + mount-measurement.md 同步 | ✅ commit `fabbf06` |
+| **物理錨定驗證** | scan_health_check.py：物體 0.8m 在 angle=0° ±15° 偵測到 0.83m，PHANTOM PASS、scan 10.45 Hz | ✅ |
+| **v7 map 建立** | `home_living_room_v7.{pbstream,pgm,yaml}` 客廳核心 4×4m 慢走 30-60s，10.35×4.90m / 207×98 cells | ✅ |
+| **Default map 切換** | `start_nav2_amcl_demo_tmux.sh` + `start_nav_capability_demo_tmux.sh` → v7 | ✅ |
+| **供電 surprise** | 整段建圖 + scan_only XL4015 全程穩定，Jetson 47°C 沒跳電 | ✅（與 4/29 紀錄不同）|
+
+### Map QA（v7）
+
+- ✅ 客廳區（東側 ~4×4m 正方形）：牆面單線、角落直角、loop closure 不裂 → AMCL K1 可用
+- ⚠️ 西側延伸走廊：可見輕微 yaw drift（與 v2 同症狀）→ 嚴禁發 goal 到走廊
+- ❌ 不擴掃走廊（pure scan-matching 在走廊 yaw drift 5-10°）
+
+### 下一步
+
+1. **等 KREE DL241910 到貨** — XL4015 建圖撐住，但 Nav2 動態 cmd_vel 風險級別更高
+2. KREE 上機後跑 K1：`send_relative_goal.py --distance 0.5` × 5（≥ 4/5 即過）
+3. K1 過則進 K2/K4/K5/K7
 
 ---
 

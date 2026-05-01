@@ -143,7 +143,7 @@ CSV：
 
 舊提示寫「6-window + go2drv + /odom」，但 `start_lidar_slam_tmux.sh` 實際是 5-window pure scan-matching，無 Go2 driver。已修正 `build_map.sh` 第 21-50 行：window 數、無 odom 操作步驟、Foxglove 訂閱清單。
 
-## Phase 3 — SLAM 重建圖（4/29 16:39 完成）
+## Phase 3 v2 — SLAM 重建圖（4/29 16:39，已 superseded by v7，僅留歷史）
 
 | 項目 | 值 |
 |---|---|
@@ -168,14 +168,42 @@ CSV：
 
 **5/13 demo 前必處理**：Jetson 改吃 wall adapter / 加電容 / 換 DC-DC 模組。否則 K1/K2 跑到一半跳電會把問題偽裝成 Nav2 fail。
 
+## Phase 3 v7 — SLAM 重建圖（4/30 evening 完成）
+
+LiDAR mount 從背部移到脖子前方（v7）後，所有舊 map 都因為 yaw 換邊（−π/2 → 0、x: −0.035 → +0.175）失效，必須重建。
+
+| 項目 | 值 |
+|---|---|
+| Map ID | `home_living_room_v7` |
+| 路徑 | `/home/jetson/maps/home_living_room_v7.{pbstream,pgm,yaml}` |
+| 物理尺寸 | 10.35 m × 4.90 m（207 × 98 cells @ 0.05 m/pix）|
+| origin | `[-7.79, -2.46, 0]` |
+| 模式 | Cartographer pure scan-matching（與 v2 相同設定） |
+| 走法 | ≤ 0.05 m/s，客廳核心 4×4m 慢繞一圈、loop closure 回起點，30-60s |
+| 供電 | XL4015（KREE 未到貨）— **未跳電**（建圖過程 Jetson 47°C 全程穩定）|
+| 倉內備份 | `docs/導航避障/research/maps/home_living_room_v7.{pgm,yaml,png}` |
+
+### Map QA（v7）
+
+- ✅ **客廳區（東側 ~4×4m 正方形區）**：牆面單線、角落直角、loop closure 不裂 → AMCL K1 baseline 可用
+- ⚠️ **西側延伸走廊**：可見輕微 yaw drift（牆面收斂，與 v2 相同症狀）
+- ❌ **不作走廊 demo 驗收**：所有 K1/K2/Patrol goal 限定客廳核心區
+
+### Default map 已切換
+
+- `scripts/start_nav2_amcl_demo_tmux.sh:27` `MAP_YAML` → v7
+- `scripts/start_nav_capability_demo_tmux.sh:22` `MAP` → v7
+- v5 / v2 同名 backup 留在 `/home/jetson/maps/*.bak.*`
+
 ## 下一步
 
-進 Phase 4 — AMCL 校正（已執行步驟 A）：
+進 Phase 4 — AMCL 校正（K1 baseline）：
 
-- [x] `nav2_params.yaml` AMCL `laser_min_range: 0.20` / `laser_max_range: 8.0`（v3.8 commit）
-- [x] `start_nav_capability_demo_tmux.sh` + `start_nav2_amcl_demo_tmux.sh` 預設 map 改 `home_living_room_v2.yaml`
+- [x] `nav2_params.yaml` AMCL `laser_min_range: 0.20` / `laser_max_range: 8.0`
+- [x] Default map 已切到 v7
+- [ ] **等 KREE DL241910 到貨**（XL4015 在 cmd_vel 動態下風險過大）
 - [ ] 啟 AMCL stack，Foxglove 設 initialpose 在客廳區
 - [ ] 觀察 covariance σ_x σ_y < 0.3m
 - [ ] 跑 K1（goto_relative 0.5m × 5），≥ 4/5 通過則跳過 Phase 4B（beamskip）
 
-**走廊區嚴禁發 goal**。所有 K1/K2 點都在客廳區範圍。
+**走廊區嚴禁發 goal**。所有 K1/K2 點都在客廳核心區範圍。

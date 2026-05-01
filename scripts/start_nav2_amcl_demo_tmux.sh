@@ -11,7 +11,7 @@
 #
 # 前提：
 #   - Step 0 已確認 cmd_vel MIN_X = 0.50（4/25 19:55 calibration）
-#   - /home/jetson/maps/home_living_room_v5.{yaml,pgm} 存在
+#   - /home/jetson/maps/home_living_room_v7.{yaml,pgm} 存在
 #   - nav2_params.yaml 含 v3.7 改動（AMCL scan_topic /scan_rplidar、alpha 0.4、initial_pose false）
 #
 # 操作流程：
@@ -24,7 +24,7 @@ set -euo pipefail
 SESSION="nav2-amcl"
 ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh && source ~/elder_and_dog/install/setup.zsh"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
-MAP_YAML="/home/jetson/maps/home_living_room_v5.yaml"
+MAP_YAML="/home/jetson/maps/home_living_room_v7.yaml"
 NAV2_PARAMS="$HOME/elder_and_dog/go2_robot_sdk/config/nav2_params.yaml"
 
 echo "=== Nav2 AMCL Demo Session (v3.7) ==="
