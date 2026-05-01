@@ -3,7 +3,7 @@
 # Phase 2 — Scan-only stack（只 TF + sllidar + monitor）
 #
 # 拓撲：
-#   static TF       → base_link → laser（mount 量值 v7（4/30 evening）：x=0.175, y=0, z=0.18, yaw=0；雷達移到脖子前方平台，scan_health_check 物理驗證通過）
+#   static TF       → base_link → laser（mount 量值 v7（4/30 evening）：x=0.175, y=0, z=0.18, yaw=3.14159；雷達移到脖子前方平台，scan_health_check 物理驗證通過）
 #   sllidar         → /scan_rplidar 10.4Hz
 #   monitor         → 手動跑 scan_health_check.py / topic hz / topic echo
 #
@@ -23,9 +23,9 @@ ros2 daemon start 2>/dev/null || true
 
 trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
 
-echo "[1/3] static TF base_link -> laser (x=0.175, y=0, z=0.18, yaw=0)..."
+echo "[1/3] static TF base_link -> laser (x=0.175, y=0, z=0.18, yaw=3.14159)..."
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0.175 --y 0 --z 0.18 --yaw 0 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0.175 --y 0 --z 0.18 --yaw 3.14159 --frame-id base_link --child-frame-id laser" Enter
 sleep 2
 
 echo "[2/3] sllidar (Standard mode, /scan_rplidar)..."

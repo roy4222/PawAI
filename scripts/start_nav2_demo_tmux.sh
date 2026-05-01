@@ -47,9 +47,9 @@ if [ ! -f "$NAV2_PARAMS" ]; then
   exit 1
 fi
 
-echo "[1/7] static TF base_link → laser (x=0.175, y=0, z=0.18, yaw=0)"
+echo "[1/7] static TF base_link → laser (x=0.175, y=0, z=0.18, yaw=3.14159)"
 tmux new-session -d -s "$SESSION" -n tf
-tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0.175 --y 0 --z 0.18 --yaw 0 --frame-id base_link --child-frame-id laser" Enter
+tmux send-keys -t "$SESSION:tf" "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher --x 0.175 --y 0 --z 0.18 --yaw 3.14159 --frame-id base_link --child-frame-id laser" Enter
 sleep 3
 
 echo "[2/7] RPLIDAR (Standard mode, remap /scan_rplidar)"
