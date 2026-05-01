@@ -52,7 +52,7 @@ echo "[4/4] reactive_stop_node (standalone fallback — publishes /cmd_vel direc
 # reactive_stop_node 預設 cmd_vel_topic=/cmd_vel_obstacle (跟 nav stack 同跑時用 mux)，
 # 但 standalone 模式下 driver 訂 /cmd_vel，必須覆寫 param 讓 reactive 直發 /cmd_vel。
 tmux new-window -t "$SESSION" -n reactive
-tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=/cmd_vel" Enter
+tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=/cmd_vel -p front_offset_rad:=3.14159" Enter
 sleep 2
 
 echo ""

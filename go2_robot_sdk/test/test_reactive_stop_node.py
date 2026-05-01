@@ -133,6 +133,48 @@ class TestFrontMinDistance:
         )
         assert d == 0.4
 
+    # --- v8 mount yaw=π：front_offset_rad 參數測試 ---
+
+    def test_offset_pi_obstacle_at_180deg_visible(self):
+        """v8 mount: Go2 物理前方 = laser 180°. front_offset_rad=π 應 detect 180°."""
+        ranges = make_ranges()
+        ranges[deg_index(180)] = 0.5
+        d = compute_front_min_distance(
+            ranges, ANGLE_MIN, ANGLE_INC, FRONT_HALF_RAD, RANGE_MIN, RANGE_MAX,
+            math.pi,
+        )
+        assert d == 0.5
+
+    def test_offset_pi_obstacle_at_0deg_ignored(self):
+        """v8 mount: laser 0° = Go2 後方. front_offset_rad=π 應忽略 0°."""
+        ranges = make_ranges()
+        ranges[deg_index(0)] = 0.3
+        d = compute_front_min_distance(
+            ranges, ANGLE_MIN, ANGLE_INC, FRONT_HALF_RAD, RANGE_MIN, RANGE_MAX,
+            math.pi,
+        )
+        assert d == 5.0
+
+    def test_offset_pi_obstacle_at_155deg_inside_arc(self):
+        """v8 mount + offset=π: Go2 前方 ±30° = laser [150°, 210°]. 155° 落在內。"""
+        ranges = make_ranges()
+        ranges[deg_index(155)] = 0.4
+        d = compute_front_min_distance(
+            ranges, ANGLE_MIN, ANGLE_INC, FRONT_HALF_RAD, RANGE_MIN, RANGE_MAX,
+            math.pi,
+        )
+        assert d == 0.4
+
+    def test_offset_pi_obstacle_at_215deg_outside_arc(self):
+        """v8 mount + offset=π: 215° 距 Go2 前方 35°、超 ±30° 弧外，忽略。"""
+        ranges = make_ranges()
+        ranges[deg_index(215)] = 0.4
+        d = compute_front_min_distance(
+            ranges, ANGLE_MIN, ANGLE_INC, FRONT_HALF_RAD, RANGE_MIN, RANGE_MAX,
+            math.pi,
+        )
+        assert d == 5.0
+
 
 # --- classify_zone ---
 

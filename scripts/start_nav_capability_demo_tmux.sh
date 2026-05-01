@@ -67,7 +67,7 @@ echo "[4/8] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, only 0 o
 # obeying nav.
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
-    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true" Enter
+    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true -p front_offset_rad:=3.14159" Enter
 sleep 3
 
 echo "[5/8] nav_capability.launch.py (4 nodes)"

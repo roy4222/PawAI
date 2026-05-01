@@ -53,6 +53,9 @@ class ReactiveStopNode(Node):
         self.declare_parameter("slow_speed", 0.45)
         self.declare_parameter("normal_speed", 0.60)
         self.declare_parameter("front_arc_deg", 30.0)
+        # v8 mount yaw=π → laser frame 0° = Go2 後方；要 detect Go2 前方需設 π。
+        # 預設 0（傳統 mount：laser 0° = Go2 前方）。向後相容。
+        self.declare_parameter("front_offset_rad", 0.0)
         self.declare_parameter("range_min_m", 0.10)
         self.declare_parameter("range_max_m", 8.0)
         self.declare_parameter("lidar_timeout_s", 1.0)
@@ -71,6 +74,7 @@ class ReactiveStopNode(Node):
         self._slow_speed = self.get_parameter("slow_speed").value
         self._normal_speed = self.get_parameter("normal_speed").value
         self._front_half_rad = math.radians(self.get_parameter("front_arc_deg").value)
+        self._front_offset = self.get_parameter("front_offset_rad").value
         self._range_min = self.get_parameter("range_min_m").value
         self._range_max = self.get_parameter("range_max_m").value
         self._lidar_timeout = self.get_parameter("lidar_timeout_s").value
@@ -111,7 +115,7 @@ class ReactiveStopNode(Node):
             f"reactive_stop_node started — mode={mode}; "
             f"danger<{self._danger_m}m, slow<{self._slow_m}m, "
             f"normal={self._normal_speed} slow_speed={self._slow_speed}, "
-            f"front=±{math.degrees(self._front_half_rad):.0f}°, timeout={self._lidar_timeout}s; "
+            f"front=±{math.degrees(self._front_half_rad):.0f}° (offset={math.degrees(self._front_offset):+.0f}°), timeout={self._lidar_timeout}s; "
             f"publish_topic={cmd_vel_topic}"
         )
 
@@ -133,6 +137,7 @@ class ReactiveStopNode(Node):
         self._front_min_dist = compute_front_min_distance(
             list(msg.ranges), msg.angle_min, msg.angle_increment,
             self._front_half_rad, self._range_min, self._range_max,
+            self._front_offset,
         )
         self._last_scan_time = time.monotonic()
 
