@@ -12,10 +12,49 @@
 
 ---
 
+## Execution Environment(WSL ↔ Jetson 邊界)
+
+> **WSL = source of truth for code edits + 純 Python unit test(用 Mock 不啟 rclpy)。**
+> **Jetson(`jetson-nano` Tailscale 100.83.109.89,repo path `~/elder_and_dog`)= ROS2 runtime + colcon build + 上機 validation 唯一執行端。**
+
+### 工作流程(每個 task 通用)
+
+1. **WSL 端**:編輯 source(`/home/roy422/newLife/elder_and_dog`)+ 跑純 Python unit test(`pytest -v` for tests using `unittest.mock` only;不需 `rclpy.init()`)
+2. **Sync to Jetson**:`bash scripts/sync_to_jetson.sh`(或 rsync,**注意 `--exclude build/install/log`**;一次同步 = `~/sync once`)
+3. **Jetson 端**(透過 ssh):
+   - 任何 `colcon build` / `ros2 run` / `ros2 topic` / `ros2 action` / `ros2 service` / `ros2 launch` 指令
+   - 任何 spin-based pytest(用 rclpy spin、需 ROS2 daemon)
+   - 上機 smoke test 與 5/5 PASS 驗收
+
+### 範例指令樣板
+
+```bash
+# 純 unit test(WSL OK)
+pytest interaction_executive/test/test_world_state_capabilities.py -v
+
+# colcon build(必須在 Jetson)
+ssh jetson-nano "cd ~/elder_and_dog && \
+    source /opt/ros/humble/setup.zsh && \
+    colcon build --packages-select nav_capability && \
+    source install/setup.zsh"
+
+# 上機 ROS2 cmd(必須在 Jetson)
+ssh jetson-nano "cd ~/elder_and_dog && \
+    source /opt/ros/humble/setup.zsh && source install/setup.zsh && \
+    ros2 topic echo /capability/nav_ready --once"
+
+# tmux demo stack(必須在 Jetson)
+ssh -t jetson-nano "cd ~/elder_and_dog && bash scripts/start_nav_capability_demo_tmux.sh"
+```
+
+> **規則**:每個 task 的 build / colcon / ros2 / spin-test step,前綴 `ssh jetson-nano "cd ~/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ..."`,以下 task 為精簡省略此 prefix,實作時必須加。
+
+---
+
 ## File Structure
 
 ### 新建檔案
-- `nav_capability/nav_capability/capability_publisher_node.py` — 聚合 Nav2 lifecycle + AMCL covariance + costmap target safety,publish `/capability/nav_ready` (Bool)
+- `nav_capability/nav_capability/capability_publisher_node.py` — 聚合 Nav2 lifecycle + AMCL covariance + local costmap **health(last_seen ≤ 2s)**,publish `/capability/nav_ready` (Bool);**target-cell cost 不在此 gate**(skill dispatch 時驗)
 - `go2_robot_sdk/go2_robot_sdk/depth_safety_node.py` — 訂 D435 `/camera/camera/aligned_depth_to_color/image_raw`(專案 double namespace 慣例;ROS parameter `depth_topic` 可覆寫),計算 ROI 前方 1m 內最近障礙,publish `/capability/depth_clear` (Bool)
 - `nav_capability/test/test_capability_publisher_node.py` — TDD 測試
 - `go2_robot_sdk/test/test_depth_safety_node.py` — TDD 測試
@@ -25,8 +64,9 @@
 - `scripts/k1_regression.sh` — BUG #1 K1 baseline 5/5 重跑 wrapper
 
 ### 修改檔案
-- `nav_capability/nav_capability/nav_action_server_node.py` — `goto_relative` action 加 `/nav/pause` subscriber 與 pause/resume 邏輯(BUG #2)
-- `nav_capability/nav_capability/route_runner_node.py` 或相關 — K2-lite WP_n=start 短路修(BUG #4,先 investigate 找 root cause)
+- `nav_capability/nav_capability/nav_action_server_node.py` — **訂 `/state/nav/paused` (latched Bool) 並 cancel cached Nav2 NavigateToPose goal handle**(BUG #2 修法,不直接 gate cmd_vel)
+- `nav_capability/nav_capability/route_runner_node.py` — `_svc_pause` / `_svc_resume` **無條件 publish `/state/nav/paused`**(global pause state,不依賴 route FSM 是否能 cancel;BUG #2 修法核心)
+- `nav_capability/nav_capability/route_runner_node.py`(或相關)— K2-lite WP_n=start 短路修(BUG #4,先 investigate 找 root cause)
 - `interaction_executive/interaction_executive/skill_contract.py` — 新增 `nav_demo_point` + `approach_person` SkillContract
 - `interaction_executive/interaction_executive/brain_node.py` — 新增兩條 rule:`speech_nav_demo` + `face_wave_approach`
 - `interaction_executive/interaction_executive/safety_layer.py` — `validate()` 擴三段(NAV / high-risk MOTION / low-risk social MOTION)
@@ -149,14 +189,16 @@ pytest nav_capability/test/test_nav_pause_state_topic.py -v
 ```
 Expected: `assert True/False in []` 因為 publisher 未實作
 
-- [ ] **Step 3: route_runner 加 latched state publisher**
+- [ ] **Step 3: route_runner 加 latched state publisher(無條件 publish,不依賴 FSM)**
+
+> **關鍵修法**:`/state/nav/paused` 是 **global pause state**,**必須在 service handler 第一行就 publish**,不能等 route FSM cancel 成功才發。否則 goto_relative 跑而 route_runner idle 時,reactive_stop call /nav/pause → route_runner 內部 `cannot_pause` → state topic 永遠不發,nav_action_server 收不到 → goto_relative 不會取消。
 
 ```python
 # nav_capability/nav_capability/route_runner_node.py
 # 在 imports 段(~line 33 附近):
 from rclpy.qos import QoSProfile, DurabilityPolicy
 
-# 在 RouteRunnerNode.__init__ 內(/nav/pause service create 之前):
+# 在 RouteRunnerNode.__init__ 內(在 services 註冊之前):
 _LATCHED_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 self._paused_state_pub = self.create_publisher(
     Bool, "/state/nav/paused", _LATCHED_QOS,
@@ -165,13 +207,33 @@ self._paused_state_pub = self.create_publisher(
 init_msg = Bool(); init_msg.data = False
 self._paused_state_pub.publish(init_msg)
 
-# 在 _svc_pause 末尾(現有 logic 之後)加:
-msg = Bool(); msg.data = True
-self._paused_state_pub.publish(msg)
+# 修改 _svc_pause:**第一行就 publish state**,然後才嘗試 route 內部 cancel
+def _svc_pause(self, req, resp):
+    # ① Global pause state 永遠 publish(這是給 nav_action_server 等其他訂閱者用的)
+    state_msg = Bool(); state_msg.data = True
+    self._paused_state_pub.publish(state_msg)
+    # ② 試著 cancel route_runner 自己的 nav goal(可能因 FSM idle 而 no-op,沒關係)
+    try:
+        # ... 既有 route FSM cancel logic ...
+        resp.success = True
+        resp.message = "paused"
+    except Exception as exc:  # noqa: BLE001
+        resp.success = True  # global pause 已生效,即使 route FSM 沒事可做
+        resp.message = f"global pause published; route idle ({exc})"
+    return resp
 
-# 在 _svc_resume 末尾加:
-msg = Bool(); msg.data = False
-self._paused_state_pub.publish(msg)
+# 同理 _svc_resume:
+def _svc_resume(self, req, resp):
+    state_msg = Bool(); state_msg.data = False
+    self._paused_state_pub.publish(state_msg)
+    try:
+        # ... 既有 route FSM resume logic ...
+        resp.success = True
+        resp.message = "resumed"
+    except Exception as exc:  # noqa: BLE001
+        resp.success = True
+        resp.message = f"global resume published; route idle ({exc})"
+    return resp
 ```
 
 - [ ] **Step 4: 跑測試 pass**
@@ -184,12 +246,15 @@ Expected:2 PASS
 
 - [ ] **Step 5: 寫 nav_action_server pause 響應失敗測試**
 
+> **Note**:`node.subscriptions` 不是 rclpy 公開 stable API,測 init 是否註冊訂閱用 `unittest.mock.patch.object(Node, 'create_subscription')` 攔截 + 檢查 args 比較可靠。`_on_nav_paused` callback 行為直接 invoke 測。
+
 ```python
 # nav_capability/test/test_nav_action_server_pause_response.py
 """nav_action_server 訂 /state/nav/paused;paused=true 時 cancel cached Nav2 goal handle。"""
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 import pytest
 import rclpy
+from rclpy.node import Node
 from std_msgs.msg import Bool
 from nav_capability.nav_action_server_node import NavActionServerNode
 
@@ -202,9 +267,17 @@ def rclpy_ctx():
 
 
 def test_subscribes_to_nav_paused_state(rclpy_ctx):
-    node = NavActionServerNode()
-    topics = [s.topic_name for s in node.subscriptions]
-    assert "/state/nav/paused" in topics
+    """攔截 Node.create_subscription,確認 init 期間 /state/nav/paused 有被 subscribe"""
+    original = Node.create_subscription
+    captured: list[str] = []
+
+    def spy(self, msg_type, topic, callback, qos, **kwargs):
+        captured.append(topic)
+        return original(self, msg_type, topic, callback, qos, **kwargs)
+
+    with patch.object(Node, "create_subscription", spy):
+        node = NavActionServerNode()
+    assert "/state/nav/paused" in captured
     node.destroy_node()
 
 
@@ -853,11 +926,16 @@ class DepthSafetyNode(Node):
 
         # D435 aligned depth — 專案慣例 double namespace `/camera/camera/...`
         # (per docs/architecture/contracts/interaction_contract.md:895)
+        # **必須用 SensorDataQoS (BEST_EFFORT)** — RealSense image/depth publisher
+        # 預設是 BEST_EFFORT,reliable QoS subscriber 會收不到任何 frame。
+        from rclpy.qos import qos_profile_sensor_data
         self.declare_parameter(
             "depth_topic", "/camera/camera/aligned_depth_to_color/image_raw",
         )
         depth_topic = self.get_parameter("depth_topic").value
-        self.create_subscription(Image, depth_topic, self._on_depth, 10)
+        self.create_subscription(
+            Image, depth_topic, self._on_depth, qos_profile_sensor_data,
+        )
 
         self._pub = self.create_publisher(Bool, "/capability/depth_clear", 10)
 
