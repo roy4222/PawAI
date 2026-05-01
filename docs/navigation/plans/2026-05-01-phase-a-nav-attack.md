@@ -47,7 +47,13 @@ ssh jetson-nano "cd ~/elder_and_dog && \
 ssh -t jetson-nano "cd ~/elder_and_dog && bash scripts/start_nav_capability_demo_tmux.sh"
 ```
 
-> **規則**:每個 task 的 build / colcon / ros2 / spin-test step,前綴 `ssh jetson-nano "cd ~/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ..."`,以下 task 為精簡省略此 prefix,實作時必須加。
+> **全域規則**:本 plan 後續**所有 bash code blocks 預設在 Jetson 跑**(透過上述 ssh prefix)。**例外用 `# [WSL OK]` 標於 block 第一行**,通常是:
+> - 純檔案操作(grep / ls / find / cat / git)
+> - 純 mock-based pytest(test 檔內 import `unittest.mock`、不 `rclpy.init()`)
+>
+> 沒有 `[WSL OK]` 標的 bash block 一律視為 **`[JETSON ONLY]`**:`colcon` / `ros2 run|topic|action|service|launch` / 含 `rclpy.init()` 的 pytest / `bash scripts/start_*_tmux.sh`(tmux launchers 啟 ROS2 stack)。
+>
+> Worker copy-paste 時:`[JETSON ONLY]` block 改成 `ssh jetson-nano "cd ~/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && <command>"`。
 
 ---
 
@@ -86,6 +92,7 @@ ssh -t jetson-nano "cd ~/elder_and_dog && bash scripts/start_nav_capability_demo
 - [ ] **Step 1: 確認 Brain MVS topic 與 dataclass 名稱**
 
 ```bash
+# [WSL OK] 純檔案 grep
 grep -n "SafetyValidationResult\|class WorldState\|snapshot()" interaction_executive/interaction_executive/safety_layer.py interaction_executive/interaction_executive/world_state.py
 ```
 Expected:看到 `WorldState.snapshot()` 回傳的 dataclass 欄位名(會用在 Task 7)
@@ -93,6 +100,7 @@ Expected:看到 `WorldState.snapshot()` 回傳的 dataclass 欄位名(會用在 
 - [ ] **Step 2: 確認 nav action server 現有結構**
 
 ```bash
+# [WSL OK] 純檔案 grep
 grep -n "ActionServer\|create_subscription\|self\." nav_capability/nav_capability/nav_action_server_node.py | head -40
 ```
 Expected:看到 `goto_relative` action handler 的進入點,大致 line ~200 左右
@@ -100,6 +108,7 @@ Expected:看到 `goto_relative` action handler 的進入點,大致 line ~200 左
 - [ ] **Step 3: 確認 K2-lite WP_n=start 在哪邊判定**
 
 ```bash
+# [WSL OK] 純檔案 grep
 grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capability/ go2_robot_sdk/config/nav2_params.yaml docs/導航避障/ | head -20
 ```
 記錄 BUG #4 root cause 候選位置給 Task 3 使用
@@ -310,7 +319,9 @@ pytest nav_capability/test/test_nav_action_server_pause_response.py -v
 ```
 Expected: `AssertionError: '/state/nav/paused' not in ...` 或 `AttributeError: _on_nav_paused`
 
-- [ ] **Step 7: nav_action_server 加 subscriber + cache active goal handle**
+- [ ] **Step 7: nav_action_server 加 subscriber + cache active goal handle(對齊既有 async/await flow)**
+
+> **重要**:既有 `_execute_relative` / `_execute_named` 是 **async** action handlers,內部用 `nav_handle = await self._nav2_client.send_goal_async(...)` 等待 accept。**不要改成 callback 型 `add_done_callback`** — 會破壞既有 await 結果鏈與 result 回傳。改成在現有 await 後 cache handle,在 finally 清掉。
 
 ```python
 # nav_capability/nav_capability/nav_action_server_node.py
@@ -321,35 +332,49 @@ from rclpy.qos import QoSProfile, DurabilityPolicy
 
 # 在 NavActionServerNode.__init__(class 在 line 42)加:
 _LATCHED_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-self._active_nav2_goal_handle = None  # 由 NavigateToPose accept callback 設定
+self._active_nav2_goal_handle = None  # 由 _execute_relative / _execute_named cache;finally 清空
 self.create_subscription(
     Bool, "/state/nav/paused", self._on_nav_paused, _LATCHED_QOS,
 )
 
-# 找既有 send_goal_async 呼叫(line ~261-280 + ~423),改成 cache handle:
-# Before:
-#   self._nav2_client.send_goal_async(nav_goal).add_done_callback(self._goal_response_cb)
-# After:
-goal_future = self._nav2_client.send_goal_async(nav_goal)
-goal_future.add_done_callback(self._on_nav2_goal_response)
+# 既有 _execute_relative 結構(對齊 line ~200-300):
+#   async def _execute_relative(self, goal_handle):
+#       ...
+#       nav_handle = await self._nav2_client.send_goal_async(nav_goal)
+#       if not nav_handle.accepted: ...
+#       result = await nav_handle.get_result_async()
+#       ...
+#
+# 修改:在 await send_goal_async 之後 cache handle,進入 await get_result_async 用 try/finally 包,確保 SUCCEEDED/CANCELED/ABORTED 都清掉。
 
-# 加新 callback:
-def _on_nav2_goal_response(self, future) -> None:
-    """Cache accepted goal handle so /state/nav/paused 可以 cancel。"""
+async def _execute_relative(self, goal_handle):  # 既有簽名
+    # ... 既有 setup / pose 計算 / nav_goal 建立 ...
+    nav_handle = await self._nav2_client.send_goal_async(nav_goal)
+    if not nav_handle.accepted:
+        # ... 既有 reject 處理 ...
+        return result_msg
+
+    # NEW: cache accepted handle — /state/nav/paused 收到 true 時 _on_nav_paused 會 cancel 它
+    self._active_nav2_goal_handle = nav_handle
     try:
-        handle = future.result()
-        if handle is not None and getattr(handle, "accepted", False):
-            self._active_nav2_goal_handle = handle
-            handle.get_result_async().add_done_callback(self._on_nav2_goal_done)
-    except Exception as exc:  # noqa: BLE001
-        self.get_logger().warn(f"nav2 goal response failed: {exc}")
+        nav_result = await nav_handle.get_result_async()
+        # ... 既有 result 處理 / feedback / fill action result ...
+        return result_msg
+    finally:
+        # 清掉 cache(SUCCEEDED / CANCELED / ABORTED 都會走到這)
+        self._active_nav2_goal_handle = None
 
-def _on_nav2_goal_done(self, _future) -> None:
-    """Goal completed/cancelled — clear cache。"""
-    self._active_nav2_goal_handle = None
+# 同樣 pattern 套到 _execute_named handler(line ~400-500)
+```
 
+加 `_on_nav_paused` callback(class method):
+
+```python
 def _on_nav_paused(self, msg: Bool) -> None:
-    """obstacle pause → cancel Nav2 goal;resume → no-op(caller 重發)。"""
+    """obstacle pause → cancel cached Nav2 goal handle;resume → no-op(caller 重發)。
+
+    `cancel_goal_async()` 會讓正在 await 的 `get_result_async()` 結束(status=CANCELED),
+    finally block 自動清空 `_active_nav2_goal_handle`。"""
     if msg.data and self._active_nav2_goal_handle is not None:
         self.get_logger().info("/state/nav/paused=true → cancel active Nav2 goal")
         self._active_nav2_goal_handle.cancel_goal_async()
@@ -396,6 +421,7 @@ git commit -m "fix(nav): BUG #2 — share /nav/pause via /state/nav/paused topic
 - [ ] **Step 1: 找 root cause**
 
 ```bash
+# [WSL OK] 純檔案 grep
 grep -rn "xy_goal_tolerance\|goal_pose\|current_pose\|distance.*tolerance\|reach.*goal" nav_capability/ | head -30
 grep -rn "compute_path\|set_goal\|nav_to_pose" nav_capability/ | head -30
 ```
@@ -1125,10 +1151,13 @@ class WorldState:
 - [ ] **Step 4: 跑測試 pass**
 
 ```bash
+# [JETSON ONLY] colcon build + 含 ROS2 import 的 pytest run
 colcon build --packages-select interaction_executive && source install/setup.zsh
 pytest interaction_executive/test/test_world_state_capabilities.py -v
 ```
 Expected:5 PASS。**現有 WorldState 既有 test 也要全 pass**(跑 `pytest interaction_executive/test/ -v`)
+
+> Note:Task 7 測試本身用 `unittest.mock.MagicMock()` 替 node,**不會 `rclpy.init()`**;但 import `from interaction_executive.world_state import WorldState` 需 package 已 colcon build,所以 colcon + pytest 仍走 Jetson。若 WSL 端有同步好 build artifact 也可在 WSL 跑此測試。
 
 - [ ] **Step 5: Commit**
 
@@ -1309,12 +1338,15 @@ def test_nav_demo_point_registered():
     assert any(s.kind == ExecutorKind.NAV for s in skill.steps)
 
 def test_approach_person_registered():
+    """Registry metadata check only。NAV/SAY steps 由 build_plan 動態產生(因為要算 face centroid),
+    SkillContract.steps 預期為空 list,**不要在這測 NAV/SAY step**(放到 build_plan 測)。"""
     assert "approach_person" in SKILL_REGISTRY
     skill = SKILL_REGISTRY["approach_person"]
-    # NAV step 後跟 SAY step
-    kinds = [s.kind for s in skill.steps]
-    assert ExecutorKind.NAV in kinds
-    assert ExecutorKind.SAY in kinds
+    assert skill.priority_class == PriorityClass.SKILL
+    assert "nav_ready" in skill.safety_requirements
+    assert "depth_clear" in skill.safety_requirements
+    assert skill.fallback_skill == "say_canned"
+    # steps 預期為 [](由 build_plan 動態填),這裡不檢查內容
 
 def test_nav_demo_point_build_plan():
     plan = build_plan("nav_demo_point", args={"distance": 1.0})
@@ -1327,9 +1359,13 @@ def test_approach_person_build_plan_with_face_centroid():
                       args={"face_centroid_dx": 1.5, "face_centroid_dy": 0.2,
                             "stop_at": 1.0})
     assert plan.skill_id == "approach_person"
+    # NAV step 檢查(動態產生)
     nav_step = next(s for s in plan.steps if s.kind == ExecutorKind.NAV)
-    # 計算後 distance ≈ √(1.5² + 0.2²) - 1.0 ≈ 0.51
+    # 計算後 distance ≈ √(1.5² + 0.2²) - 1.0 ≈ 0.513
     assert nav_step.payload["distance"] == pytest.approx(0.513, abs=0.05)
+    # SAY step 檢查(也由 build_plan 產生)
+    say_step = next(s for s in plan.steps if s.kind == ExecutorKind.SAY)
+    assert "text_template" in say_step.payload
 ```
 
 - [ ] **Step 2: 跑測試確認 fail**
