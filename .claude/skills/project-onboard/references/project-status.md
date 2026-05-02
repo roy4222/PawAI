@@ -86,7 +86,7 @@
 - **升級選項**：DWPose wholebody（精度略優，但 Jetson 上零成功記錄）
 - **備援**：hand-only + body-only 雙模型（wholebody 不達標時啟用）
 - MediaPipe 僅作 x86 概念驗證，不上 Jetson
-- 詳見 `docs/手勢辨識/README.md`、`docs/姿勢辨識/README.md`、`docs/superpowers/specs/2026-03-18-vision-perception-skeleton-design.md`
+- 詳見 `docs/pawai-brain/perception/gesture/README.md`、`docs/pawai-brain/perception/pose/README.md`、`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-18-vision-perception-skeleton-design.md`
 
 ### vision_perception 架構（3/18 新增）
 

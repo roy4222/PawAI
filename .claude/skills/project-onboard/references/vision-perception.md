@@ -38,10 +38,10 @@ ros2 launch vision_perception mock_publisher.launch.py
 
 | 文件 | 用途 |
 |------|------|
-| `docs/手勢辨識/README.md` | 手勢辨識技術選型、方案比較、分類邏輯、ROS2 整合 |
-| `docs/姿勢辨識/README.md` | 姿勢辨識技術選型、角度法/高度比法、跌倒偵測、Node 架構 |
-| `docs/architecture/contracts/interaction_contract.md` §4.3-4.7 | ROS2 event schema（v2.1，含 interaction_router topics） |
-| `docs/Pawai-studio/event-schema.md` §1.4-1.5, §2.5-2.6 | Studio 前端 event/state schema |
+| `docs/pawai-brain/perception/gesture/README.md` | 手勢辨識技術選型、方案比較、分類邏輯、ROS2 整合 |
+| `docs/pawai-brain/perception/pose/README.md` | 姿勢辨識技術選型、角度法/高度比法、跌倒偵測、Node 架構 |
+| `docs/contracts/interaction_contract.md` §4.3-4.7 | ROS2 event schema（v2.1，含 interaction_router topics） |
+| `docs/pawai-brain/studio/event-schema.md` §1.4-1.5, §2.5-2.6 | Studio 前端 event/state schema |
 
 ## 技術選型結論
 

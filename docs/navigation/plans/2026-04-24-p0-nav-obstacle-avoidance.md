@@ -2032,7 +2032,7 @@ git commit -m "feat(studio): Emergency Button + /safety/{trigger,reset} endpoint
 - 障礙移開 3 秒續行
 - 到達 B 播「已到達目的地」
 
-詳細設計見 [P0 Nav Obstacle Avoidance Design](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
+詳細設計見 [P0 Nav Obstacle Avoidance Design](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
 ```
 
 - [ ] **Step 3: Commit**

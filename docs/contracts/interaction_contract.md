@@ -4,7 +4,7 @@
 **適用範圍**：Layer 1-3 所有模組
 **版本**：v2.5
 **凍結日期**：2026-04-28
-**對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../Pawai-studio/specs/event-schema.md) v1.0
+**對齊來源**：[mission/README.md](../../mission/README.md) v2.0、[event-schema.md](../../pawai-brain/studio/specs/event-schema.md) v1.0
 
 > **v2.5 變更摘要**：
 > - 新增 PawAI Brain MVS topics：`/brain/text_input`、`/brain/skill_request`、`/brain/proposal`、`/brain/skill_result`
@@ -1033,8 +1033,8 @@ if not required.issubset(payload.keys()):
 ## 11. 相關文件
 
 - [mission/README.md](../../mission/README.md) — 專案總覽與功能閉環設計
-- [Pawai-studio/specs/event-schema.md](../../Pawai-studio/specs/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
-- [Pawai-studio/specs/brain-adapter.md](../../Pawai-studio/specs/brain-adapter.md) — Brain Adapter 介面與四級降級
+- [Pawai-studio/specs/event-schema.md](../../pawai-brain/studio/specs/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
+- [Pawai-studio/specs/brain-adapter.md](../../pawai-brain/studio/specs/brain-adapter.md) — Brain Adapter 介面與四級降級
 
 ---
 

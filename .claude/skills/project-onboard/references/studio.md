@@ -11,10 +11,10 @@ PawAI Studio 是整個系統的**統一操作與展示入口**。
 
 | 文件 | 用途 |
 |------|------|
-| `docs/Pawai-studio/README.md` | 規格總綱 |
-| `docs/Pawai-studio/event-schema.md` | Event/State/Command JSON schema |
-| `docs/Pawai-studio/system-architecture.md` | Gateway、Mock Server、快慢系統 |
-| `docs/Pawai-studio/ui-orchestration.md` | Layout preset + 切換規則 |
+| `docs/pawai-brain/studio/README.md` | 規格總綱 |
+| `docs/pawai-brain/studio/event-schema.md` | Event/State/Command JSON schema |
+| `docs/pawai-brain/studio/system-architecture.md` | Gateway、Mock Server、快慢系統 |
+| `docs/pawai-brain/studio/ui-orchestration.md` | Layout preset + 切換規則 |
 | `pawai-studio/docs/design-tokens.md` | 色彩、字體、spacing |
 | `pawai-studio/docs/{face,speech,gesture,pose}-panel-spec.md` | 各 panel 視覺與互動規範 |
 

@@ -5,7 +5,7 @@
 **文件版本**：v1.0
 **建立日期**：2026-03-13
 **交付期限**：2026-03-16（週一）
-**對齊來源**：[mission/README.md](./README.md) v2.0、[interaction_contract.md](../architecture/interaction_contract.md) v2.0
+**對齊來源**：[mission/README.md](./README.md) v2.0、[interaction_contract.md](../archive/2026-05-docs-reorg/architecture-misc/interaction_contract.md) v2.0
 
 > 3/16 是攻守交換日。Roy 交出架構核心與 Mock 環境，讓所有人在上面開發。
 > 3/16 後 Roy 轉做整合（Brain + 手勢姿勢部署 + Demo pipeline），其他人接手前端與文件。

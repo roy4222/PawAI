@@ -7,7 +7,7 @@
 >
 > **與既有 4 份文件的關係**：
 > - 本文件 = 唯一入口（從這裡開始讀）
-> - [`docs/pawai-brain/architecture/overview.md`](../../architecture/pawai-brain-studio-overview.md) = 對外總覽（教授 / 答辯讀物）
+> - [`docs/pawai-brain/architecture/overview.md`](../../pawai-brain/architecture/overview.md) = 對外總覽（教授 / 答辯讀物）
 > - [`specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md) = Phase A 設計藍圖
 > - [`plans/2026-04-27-pawai-brain-skill-first.md`](2026-04-27-pawai-brain-skill-first.md) = Phase A 實作 plan（34 task，已執行 Phase 0）
 > - [`specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../specs/2026-04-27-pawclaw-embodied-brain-evolution.md) = Phase B 演進 spec
@@ -161,7 +161,7 @@ Skill = name + args_schema + executor + safety_requirements
 | **Phase 1**（13 tasks） | Brain MVS 後端 — skill_contract / safety_layer / world_state / skill_queue / brain_node + executive 重寫 | ⏳ 下一步 |
 | **Phase 2**（16 tasks） | Studio Brain Skill Console — schemas / gateway / mock + 8 React components + chat-panel 重寫 | ⏳ Phase 1 後 |
 
-**5/16 Demo 腳本**：見 [overview §9](../../architecture/pawai-brain-studio-overview.md#9-demo-流程516-省夜3-分鐘)（3 分鐘流程）。
+**5/16 Demo 腳本**：見 [overview §9](../../pawai-brain/architecture/overview.md#9-demo-流程516-省夜3-分鐘)（3 分鐘流程）。
 
 ---
 
@@ -372,12 +372,12 @@ Executive：
 | 文件 | 角色 | 何時讀 |
 |------|------|--------|
 | **本文件** | 唯一入口 + 整合視角 + Phase 排序 + Done criteria | **每次都先讀** |
-| [`pawai-brain-studio-overview.md`](../../architecture/pawai-brain-studio-overview.md) | 對外總覽（教授 / 答辯） | 解釋系統給外人 |
+| [`pawai-brain-studio-overview.md`](../../pawai-brain/architecture/overview.md) | 對外總覽（教授 / 答辯） | 解釋系統給外人 |
 | [`specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md) | Phase A 設計藍圖（schema / 規則 / topic 契約） | 寫 code 前查 schema |
 | [`plans/2026-04-27-pawai-brain-skill-first.md`](2026-04-27-pawai-brain-skill-first.md) | Phase A 施工圖（34 tasks） | 執行 Phase 1/2 |
 | [`specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../specs/2026-04-27-pawclaw-embodied-brain-evolution.md) | Phase B 演進 spec | 5/19 後 |
 | [`specs/2026-04-11-pawai-home-interaction-design.md`](../specs/2026-04-11-pawai-home-interaction-design.md) | PawAI 系統定位（4/11 三層 Brain 概念源） | 答辯論述補強 |
-| [`docs/contracts/interaction_contract.md`](../../architecture/contracts/interaction_contract.md) | ROS2 介面契約（v2.4 → v2.5 Phase A → v2.6 Phase B） | 任何新 topic |
+| [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) | ROS2 介面契約（v2.4 → v2.5 Phase A → v2.6 Phase B） | 任何新 topic |
 | [`docs/mission/README.md`](../../mission/README.md) | 專案方向、時程、分工 | 接手 / 解釋大方向 |
 | 7 模組各自 README | 模組真相來源 | 改該模組時 |
 

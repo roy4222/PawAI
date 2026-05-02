@@ -11,10 +11,10 @@ LLM 只提建議，Interaction Executive 做最終決策。
 
 | 文件 | 用途 |
 |------|------|
-| `docs/Pawai-studio/brain-adapter.md` | 四級降級、Brain 介面設計 |
-| `docs/Pawai-studio/system-architecture.md` | Gateway、快慢系統 |
-| `docs/architecture/contracts/interaction_contract.md` | `/state/executive/brain` schema |
-| `docs/superpowers/specs/2026-03-16-llm-integration-mini-spec.md` | LLM 整合完整規格 |
+| `docs/pawai-brain/studio/brain-adapter.md` | 四級降級、Brain 介面設計 |
+| `docs/pawai-brain/studio/system-architecture.md` | Gateway、快慢系統 |
+| `docs/contracts/interaction_contract.md` | `/state/executive/brain` schema |
+| `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-llm-integration-mini-spec.md` | LLM 整合完整規格 |
 
 ## 技術棧
 

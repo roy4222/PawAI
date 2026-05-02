@@ -9,7 +9,7 @@
 >   Plan: `/home/roy422/.claude/plans/abstract-sleeping-hoare.md` / 量測 + 修正歷史: [`research/2026-04-29-mount-measurement.md`](research/2026-04-29-mount-measurement.md) / map QA: [`research/maps/README.md`](research/maps/README.md)
 
 > **2026-04-26 evening — nav_capability S2 平台化**：把 P0 reactive 邏輯抽象成「平台層」，提供 4 actions / 3 services / 3 state topics 給 interaction_executive 與 PawAI Brain。WSL 70 tests pass；Jetson Phase 10 KPI 中 K9/K10 ✅，K8 移出實機（fake publisher 撞 driver 事故），K1/K2/K4/K5/K7 推遲。
->   Spec: [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../superpowers/specs/2026-04-26-nav-capability-s2-design.md) / Plan: [`docs/navigation/plans/2026-04-26-nav-capability-s2.md`](../superpowers/plans/2026-04-26-nav-capability-s2.md)
+>   Spec: [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / Plan: [`docs/navigation/plans/2026-04-26-nav-capability-s2.md`](../archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-04-26-nav-capability-s2.md)
 
 > **2026-04-26 morning — Nav2 動態避障實機驗證**：0.8m goal 走 50cm 現場確認；昨天 lethal 是暫態（costmap 髒污 / particle filter）非位置固有問題；v3.7 nav2_params 不需改；用戶判定 map 髒污要重新建圖（已備份舊 map 為 `.bak.20260426-094853`）。
 >   詳見實機 log [`research/2026-04-26-nav2-dynamic-obstacle-log.md`](research/2026-04-26-nav2-dynamic-obstacle-log.md)
@@ -17,8 +17,8 @@
 >   詳見整合紀錄 [`research/2026-04-25-rplidar-a2m12-integration-log.md`](research/2026-04-25-rplidar-a2m12-integration-log.md)
 > **2026-04-24 LiDAR 到貨並驗證通過**：Jetson 上 /scan 10.57Hz / 1800 點/圈 / 60% valid。
 > P0 設計定稿為「劇本式 A→B + 停障 + 續行」，不承諾一般動態繞障。
-> **Spec**: [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
-> **Plan**: [`docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md)
+> **Spec**: [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
+> **Plan**: [`docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`](../archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md)
 > **硬時程**：5/1 emergency hotkey 硬截止、5/6 家中 KPI 4/5、5/11-5/12 freeze、5/13 學校現場重建地圖
 
 > D435 方案因鏡頭角度限制上機全失敗（4/3 停用），**由外接 LiDAR 360° 取代**。原 D435 避障 code 保留作歷史參考。
@@ -61,7 +61,7 @@
 | 啟動腳本 | `scripts/start_nav_capability_demo_tmux.sh`（8-window，含 safety_only=true）|
 | Runtime data | `~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/`（不在 install/share，commit e2b3932 修正）|
 | 測試 | 38 nav unit + 5 tf_pose helper + 23 reactive unit + 4 mux integration = 70 pass（WSL）|
-| Spec / Plan | [spec](../superpowers/specs/2026-04-26-nav-capability-s2-design.md) / [plan](../superpowers/plans/2026-04-26-nav-capability-s2.md) |
+| Spec / Plan | [spec](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / [plan](../archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-04-26-nav-capability-s2.md) |
 
 **重大陷阱**：
 - `reactive_stop_node` `safety_only=true` **必須**用於 mux 模式（priority 200），不然 clear zone 會以 0.60 m/s 永久 shadow nav。standalone fallback（`start_reactive_stop_tmux.sh`）保持預設 `safety_only=false`。兩腳本互斥。
@@ -83,7 +83,7 @@
 | 相對 goal helper | `scripts/send_relative_goal.py`（讀 /amcl_pose 算前方相對 goal，QoS BEST_EFFORT 配 bt_navigator）|
 | Driver patch | `ros2_publisher.py` 加 `GO2_PUBLISH_ODOM_TF` env 開關（建圖用 0 / Nav2 用預設 1）|
 | 測試 | LiDAR 13 tests（既有）+ Safety/Patrol/TTS ~14 新 tests（plan Task 5-8） |
-| Spec / Plan | [spec](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
+| Spec / Plan | [spec](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) / [plan](../archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md) |
 | 整合紀錄 | [research/2026-04-25-rplidar-a2m12-integration-log.md](research/2026-04-25-rplidar-a2m12-integration-log.md) |
 
 ## 架構決策（2026-04-01 最終判定）
@@ -91,7 +91,7 @@
 > ⚠️ **Supersedes by 2026-04-24 P0 翻案**：本表「Full SLAM / Nav2 永久關閉」的判定**失效**。
 > 原判定基於 Go2 內建 LiDAR 5Hz 品質差（業界 SLAM 門檻 7Hz）。
 > 外接 RPLIDAR A2M12 實測 10.57Hz > 7Hz，**Full SLAM + Nav2 路線復活為 P0 主線**。
-> 以 [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) 為準。
+> 以 [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md) 為準。
 
 | 路線 | 舊判定（4/1）| 新判定（4/24）| 理由 |
 |------|:----:|:----:|------|

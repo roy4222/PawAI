@@ -172,7 +172,7 @@ llm_bridge_node（output_mode=brain）
                             /tts → tts_node → Megaphone
 ```
 
-詳細 schema 見 [`docs/contracts/interaction_contract.md`](../architecture/contracts/interaction_contract.md) v2.5。
+詳細 schema 見 [`docs/contracts/interaction_contract.md`](../contracts/interaction_contract.md) v2.5。
 
 ## 下一步
 

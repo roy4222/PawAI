@@ -9,10 +9,10 @@
 
 ## 權威文件
 
-- `docs/語音功能/README.md` — 模組完整設計、選型比較、架構分層
-- `docs/語音功能/jetson-MVP測試.md` — Jetson 上的實測紀錄與除錯歷程
-- `docs/architecture/contracts/interaction_contract.md` §3.2, §4.2 — `/state/interaction/speech` 和 `/event/speech_intent_recognized` schema
-- `docs/superpowers/specs/2026-03-14-speech-30round-validation-design.md` — 30 輪驗收框架設計
+- `docs/pawai-brain/speech/README.md` — 模組完整設計、選型比較、架構分層
+- `docs/pawai-brain/speech/jetson-MVP測試.md` — Jetson 上的實測紀錄與除錯歷程
+- `docs/contracts/interaction_contract.md` §3.2, §4.2 — `/state/interaction/speech` 和 `/event/speech_intent_recognized` schema
+- `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-14-speech-30round-validation-design.md` — 30 輪驗收框架設計
 
 ## 核心程式檔案
 

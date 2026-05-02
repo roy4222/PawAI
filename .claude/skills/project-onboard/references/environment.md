@@ -9,10 +9,10 @@
 
 ## 權威文件
 
-- `docs/setup/README.md` — 環境建置總覽
-- `docs/setup/hardware/` — 硬體設置指南（Jetson、GPU server）
-- `docs/setup/software/基礎動作操作說明.md` — Go2 基礎操作
-- `docs/setup/network/網路排查.md` — 網路問題排查
+- `docs/runbook/README.md` — 環境建置總覽
+- `docs/archive/2026-05-docs-reorg/setup-misc/hardware/` — 硬體設置指南（Jetson、GPU server）
+- `docs/runbook/go2-operation.md` — Go2 基礎操作
+- `docs/runbook/network.md` — 網路問題排查
 - `AGENTS.md` — 跨機器開發架構、SSH 指令、auto-sync 流程
 
 ## 雙平台架構
@@ -86,7 +86,7 @@ source install/setup.zsh                 # build 後必須重新 source
 
 ## 開發入口
 
-- **第一次建置**：讀 `docs/setup/README.md`，照步驟設定 WSL + Jetson
+- **第一次建置**：讀 `docs/runbook/README.md`，照步驟設定 WSL + Jetson
 - **Go2 連線除錯**：`ros2 topic list` 確認 driver 輸出，`ros2 topic info /webrtc_req -v` 確認訂閱者
 - **新增 ROS2 節點**：建檔 → 更新 `setup.py` entry_points → `colcon build` → `source install/setup.zsh` → `ros2 run`
 

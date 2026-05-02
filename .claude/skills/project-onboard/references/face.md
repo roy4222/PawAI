@@ -11,9 +11,9 @@
 
 | 文件 | 用途 |
 |------|------|
-| `docs/人臉辨識/README.md` | 故障排除與啟動指南 |
-| `docs/architecture/contracts/interaction_contract.md` §3.1, §4.1-4.2 | ROS2 topic schema（v2.1） |
-| `docs/Pawai-studio/event-schema.md` §1.2, §2.1 | Studio 前端 event/state schema |
+| `docs/pawai-brain/perception/face/README.md` | 故障排除與啟動指南 |
+| `docs/contracts/interaction_contract.md` §3.1, §4.1-4.2 | ROS2 topic schema（v2.1） |
+| `docs/pawai-brain/studio/event-schema.md` §1.2, §2.1 | Studio 前端 event/state schema |
 
 ## 技術棧
 

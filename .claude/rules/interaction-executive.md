@@ -8,8 +8,8 @@ paths:
 ## 現況
 - **狀態**：空殼，Sprint B-prime Day 4-5 實作
 - **設計**：thin orchestrator / demo controller，不是 AI brain
-- **Spec**：`docs/superpowers/specs/2026-03-27-operation-b-prime-sprint-design.md`
-- **Plan**：`docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 3-5
+- **Spec**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-27-operation-b-prime-sprint-design.md`
+- **Plan**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-03-27-operation-b-prime.md` Task 3-5
 
 ## 設計要點
 - 純 Python state machine（`state_machine.py`，無 ROS2 依賴，100% testable）

@@ -1,11 +1,11 @@
 ---
 paths:
   - "speech_processor/**"
-  - "docs/語音功能/**"
+  - "docs/pawai-brain/speech/**"
   - "docs/modules/speech/**"
 ---
 # speech_processor 規則
-詳見 `docs/語音功能/CLAUDE.md`（模組內規則真相來源）
+詳見 `docs/pawai-brain/speech/CLAUDE.md`（模組內規則真相來源）
 ## 快速提醒
 - Whisper 在 Jetson 必須 `cuda` + `float16`，CPU int8 不支援會 silent fail
 - echo gate：TTS 播放時 ASR 靜音，early return 必須拉回 `tts_playing=False`
