@@ -1,7 +1,7 @@
 /**
  * PawAI Studio TypeScript Contracts
  *
- * 真相來源：docs/Pawai-studio/specs/event-schema.md
+ * 真相來源：docs/pawai-brain/studio/specs/event-schema.md
  * 本檔案是 event-schema.md 的 TypeScript 鏡像，若有衝突以 event-schema.md 為準。
  */
 

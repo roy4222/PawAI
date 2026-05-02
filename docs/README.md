@@ -1,70 +1,52 @@
-# PawAI 文件中心
+# PawAI 文件入口
 
 **專案**：老人與狗 (Elder and Dog) / PawAI
+**5/12 學校 Demo 倒數中** — 主線文件均在以下 7 條路線下。
 
-> 新成員先看 mission，再看 architecture，再看 Pawai-studio。
-
----
-
-## 主幹文件
-
-| 文件 | 說明 |
-|------|------|
-| [mission/README.md](./mission/README.md) | **專案真相來源** — 功能閉環、P0/P1/P2、Demo、分工、降級策略 |
-| [mission/handoff_316.md](./mission/handoff_316.md) | **3/16 分工交付清單** — 誰做什麼、驗收標準、攻守交換 |
-| [architecture/interaction_contract.md](./architecture/interaction_contract.md) | **技術契約** — ROS2 Topic schema、節點參數、QoS |
-| [architecture/README.md](./architecture/README.md) | 架構文件導航 |
-| [Pawai-studio/README.md](./Pawai-studio/README.md) | **PawAI Studio** — system-architecture / event-schema / ui-orchestration / brain-adapter |
+> **30 秒原則**：找不到資訊 30 秒之內 → 走 `pawai-brain/` 或 `navigation/`，再不行去 `archive/`。
 
 ---
 
-## 功能模組
+## 主線文件 (active)
 
-| 模組 | 文件 | 優先級 |
-|------|------|:------:|
-| 人臉辨識 | [人臉辨識/README.md](./人臉辨識/README.md) | P0 |
-| 語音功能 | [語音功能/README.md](./語音功能/README.md)、[jetson-MVP測試.md](./語音功能/jetson-MVP測試.md) | P0 |
-| 手勢辨識 | [手勢辨識/README.md](./手勢辨識/README.md) | P1 |
-| 辨識物體 | [辨識物體/README.md](./辨識物體/README.md) | P2 |
-| 導航避障 | [導航避障/README.MD](./導航避障/README.MD) | P2 |
+| # | 路線 | 入口 | 內容 |
+|:-:|------|------|------|
+| 1 | **Brain** | [pawai-brain/README.md](pawai-brain/README.md) | 互動主線：感知 / 語音 / Studio / Brain 決策層 |
+| 2 | **Navigation** | [navigation/README.md](navigation/README.md) | 移動主線：LiDAR / Nav2 / AMCL / D435 depth / 避障 |
+| 3 | **Contracts** | [contracts/README.md](contracts/README.md) | 跨主線 ROS2 介面契約 + 設計總則 |
+| 4 | **Runbook** | [runbook/README.md](runbook/README.md) | Demo 救火 SOP（Jetson / Network / GPU server / Go2 操作） |
+| 5 | **Mission** | [mission/README.md](mission/README.md) | 專案定位 / Demo 劇本 / 八大功能 SoT |
+| 6 | **Deliverables** | [deliverables/](deliverables/) | 學期繳交素材（thesis） |
 
----
+## 歷史
 
-## 環境與部署
-
-| 文件 | 說明 |
-|------|------|
-| [setup/README.md](./setup/README.md) | 環境建置總覽 |
-| [setup/hardware/](./setup/hardware/) | Jetson 設定、GPU 連接 |
-| [setup/software/](./setup/software/) | 基礎操作說明 |
+| # | 路線 | 入口 | 內容 |
+|:-:|------|------|------|
+| 7 | **Archive** | [archive/](archive/) | 5/02 reorg 前歷史 + 2026-02-11 restructure |
 
 ---
 
-## 文件治理規則
+## 衝突仲裁（誰是真相來源）
 
-### 目標目錄結構
-
-```
-docs/
-├── mission/          # 專案方向、決策、分工
-├── architecture/     # 技術契約、資料流、分層原則
-├── Pawai-studio/     # Studio / Gateway / Brain / Frontend
-├── modules/          # 功能模組文件（規劃中）
-├── setup/            # 環境、部署、操作手冊
-├── archive/          # 歸檔區（不列入主導航）
-└── assets/           # 文件媒體資產
-```
-
-### 衝突仲裁
-
-- 專案方向、P0/P1/P2、分工、Demo → 以 `mission/` 為準
-- ROS2 介面、schema、QoS、跨模組契約 → 以 `architecture/` 為準
-- Studio / Gateway / Brain / Frontend → 以 `Pawai-studio/` 為準
-- 模組內部設計 → 以各模組 README 為準
-- 安裝、部署、操作步驟 → 以 `setup/` 為準
-
-完整治理規則見 [設計規格](./superpowers/specs/2026-03-13-docs-restructure-design.md)。
+- **程式碼** → 永遠是最終真相
+- **介面契約**（ROS2 topic / action / service schema）→ [contracts/interaction_contract.md](contracts/interaction_contract.md)
+- **Brain 決策邏輯 / 感知模組設計** → `pawai-brain/{specs,plans,perception/*,speech,studio}/`
+- **導航避障設計與實作** → `navigation/{plans,research,setup}/`
+- **專案方向 / Demo 劇本 / 八大功能** → `mission/README.md`
+- **環境建置與救火 SOP** → `runbook/`
+- **Claude Code 工作規則** → 模組 `CLAUDE.md`（散在各主線資料夾）
 
 ---
 
-*維護者：System Architect*
+## 文件治理
+
+- **不主動重寫沒碰到的文件** — 改了程式碼才同步對應 `README.md`
+- **新增 / 移除 ROS2 topic** → 同步 `contracts/interaction_contract.md`
+- **每日收工** → 更新 `references/project-status.md`（在 repo 根目錄 `references/`，不在 `docs/`）
+- **命名約定**：`YYYY-MM-DD-description.md`（plan / spec / research）
+
+詳見本檔 commit 紀錄與 [`archive/2026-05-docs-reorg/README.md`](archive/2026-05-docs-reorg/README.md)（本次重組來源）。
+
+---
+
+*Last reorg: 2026-05-02（推翻 5/13 pre-demo policy 提前執行；18 top-level → 7 active + archive）*

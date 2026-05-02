@@ -43,21 +43,21 @@
 | 檔案 / 路徑 | 內容 |
 |---|---|
 | **入口頁(本檔)** | `docs/pawai-brain/README.md` |
-| **架構總覽**(既有,未來搬入本目錄) | `docs/architecture/pawai-brain-studio-overview.md` |
-| **Phase A Brain MVS spec** | `docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md` |
-| **PawClaw evolution spec** | `docs/superpowers/specs/2026-04-27-pawclaw-embodied-brain-evolution.md` |
-| **5/12 Sprint design**(主線作戰地圖) | `docs/superpowers/specs/2026-05-01-pawai-11day-sprint-design.md` |
+| **架構總覽**(既有,未來搬入本目錄) | `docs/pawai-brain/architecture/overview.md` |
+| **Phase A Brain MVS spec** | `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md` |
+| **PawClaw evolution spec** | `docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md` |
+| **5/12 Sprint design**(主線作戰地圖) | `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` |
 | **Phase B Implementation Plan**(brain × studio 整合,5/4-5/8 任務) | `docs/pawai-brain/plans/2026-05-XX-phase-b-brain-studio.md`(尚未寫) |
-| **介面契約** | `docs/architecture/contracts/interaction_contract.md` |
-| **PawAI Studio 設計** | `docs/Pawai-studio/README.md` |
+| **介面契約** | `docs/contracts/interaction_contract.md` |
+| **PawAI Studio 設計** | `docs/pawai-brain/studio/README.md` |
 
 ---
 
 ## Legacy / Archive
 
 舊版研究、歷史決策、各模組 README 仍在以下原位:
-- `docs/superpowers/specs/` — 設計 spec 歷史(4/10 守護犬 / 4/11 home interaction / 4/27 brain MVS / pawclaw evolution / 5/01 sprint)
-- `docs/語音功能/` `docs/人臉辨識/` `docs/手勢辨識/` `docs/姿勢辨識/` `docs/辨識物體/` — 各感知模組權威文件
-- `docs/Pawai-studio/` — Studio 既有設計
+- `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/` — 設計 spec 歷史(4/10 守護犬 / 4/11 home interaction / 4/27 brain MVS / pawclaw evolution / 5/01 sprint)
+- `docs/pawai-brain/speech/` `docs/pawai-brain/perception/face/` `docs/pawai-brain/perception/gesture/` `docs/pawai-brain/perception/pose/` `docs/pawai-brain/perception/object/` — 各感知模組權威文件
+- `docs/pawai-brain/studio/` — Studio 既有設計
 
 本資料夾**只**維護 5/12 Demo 衝刺期 + 之後的主線版本;舊文件保留作歷史與引用,不重複維護。

@@ -6,9 +6,9 @@ Jetson Orin Nano 開發環境、colcon build、部署流程、網路配置。
 
 ## 權威文件
 
-- **環境建置**：`docs/setup/README.md`
-- **硬體配置**：`docs/setup/hardware/`
-- **網路排查**：`docs/setup/network/`
+- **環境建置**：`docs/runbook/README.md`
+- **硬體配置**：`docs/archive/2026-05-docs-reorg/setup-misc/hardware/`
+- **網路排查**：`docs/archive/2026-05-docs-reorg/setup-misc/network/`
 
 ## 雙平台架構
 

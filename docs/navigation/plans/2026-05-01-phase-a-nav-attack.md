@@ -8,7 +8,7 @@
 
 **Tech Stack:** ROS2 Humble + rclpy + Python 3.10 / pytest TDD / **Nav2 BT + AMCL + map_server**(runtime stack — map 由 cartographer 離線建立並存 pbstream/yaml,**slam_toolbox 在本硬體永久棄用**;5/12 demo 不跑 SLAM,只跑 AMCL 載入既有 map)/ RealSense D435 + rplidar_ros2 / Brain MVS dataclasses(SkillContract / SkillPlan / SkillStep / WorldState)。
 
-**Spec:** `docs/superpowers/specs/2026-05-01-pawai-11day-sprint-design.md` §6 (Safety Gate) + §7 (Phase A) + §12 (Stop-loss).
+**Spec:** `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` §6 (Safety Gate) + §7 (Phase A) + §12 (Stop-loss).
 
 ---
 
@@ -109,7 +109,7 @@ Expected:看到 `goto_relative` action handler 的進入點,大致 line ~200 左
 
 ```bash
 # [WSL OK] 純檔案 grep
-grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capability/ go2_robot_sdk/config/nav2_params.yaml docs/導航避障/ | head -20
+grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capability/ go2_robot_sdk/config/nav2_params.yaml docs/navigation/ | head -20
 ```
 記錄 BUG #4 root cause 候選位置給 Task 3 使用
 
@@ -118,7 +118,7 @@ grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capabi
 ```bash
 ros2 topic list 2>/dev/null | grep -i depth || grep -rn "aligned_depth\|depth_to_color" go2_robot_sdk/ | head -10
 ```
-記錄正確 topic name(會用在 Task 6),專案標準是 `/camera/camera/aligned_depth_to_color/image_raw`(double namespace,per `docs/architecture/contracts/interaction_contract.md:895` + `docs/thesis/背景知識/4-10-D435.md:55`)
+記錄正確 topic name(會用在 Task 6),專案標準是 `/camera/camera/aligned_depth_to_color/image_raw`(double namespace,per `docs/contracts/interaction_contract.md:895` + `docs/deliverables/thesis/背景知識/4-10-D435.md:55`)
 
 - [ ] **Step 5: 不 commit,純 reconnaissance**
 
@@ -554,7 +554,7 @@ git commit -m "fix(nav): BUG #4 — skip too-close-and-same-yaw waypoints to pre
 
 ```bash
 ls scripts/start_nav_capability_demo_tmux.sh scripts/start_reactive_stop_tmux.sh 2>&1
-cat docs/導航避障/research/2026-04-30* 2>/dev/null | head -30 || ls docs/導航避障/research/ | tail -10
+cat docs/navigation/research/2026-04-30* 2>/dev/null | head -30 || ls docs/navigation/research/ | tail -10
 ```
 參考最近的 K1 PASS 紀錄(commit `42cc478` `docs(nav): K1 baseline 5/5 PASS`)
 
@@ -978,7 +978,7 @@ class DepthSafetyNode(Node):
         self._roi = (160, 160, 480, 320)
 
         # D435 aligned depth — 專案慣例 double namespace `/camera/camera/...`
-        # (per docs/architecture/contracts/interaction_contract.md:895)
+        # (per docs/contracts/interaction_contract.md:895)
         # **必須用 SensorDataQoS (BEST_EFFORT)** — RealSense image/depth publisher
         # 預設是 BEST_EFFORT,reliable QoS subscriber 會收不到任何 frame。
         from rclpy.qos import qos_profile_sensor_data
@@ -1743,7 +1743,7 @@ for i in 1 2 3 4 5; do
     sleep 8
 done
 ```
-記錄結果到 `docs/導航避障/research/2026-05-02-nav-demo-point-validation.md`
+記錄結果到 `docs/navigation/research/2026-05-02-nav-demo-point-validation.md`
 
 Expected:**5/5 PASS** — Go2 走完 1m 並 SAY 「我成功走到了!」
 
@@ -1758,7 +1758,7 @@ Expected:**5/5 PASS** — Go2 走完 1m 並 SAY 「我成功走到了!」
 - [ ] **Step 4: Commit 驗證紀錄**
 
 ```bash
-git add docs/導航避障/research/2026-05-02-nav-demo-point-validation.md
+git add docs/navigation/research/2026-05-02-nav-demo-point-validation.md
 git commit -m "docs(nav): nav_demo_point 5/5 PASS validation log"
 ```
 
@@ -1796,7 +1796,7 @@ Expected:Go2 走過來停在 ~1m 處,SAY「我來啦!」
 - [ ] **Step 4: 紀錄到 daily log + Commit**
 
 ```bash
-git add docs/導航避障/research/2026-05-03-approach-person-validation.md
+git add docs/navigation/research/2026-05-03-approach-person-validation.md
 git commit -m "docs(nav): approach_person 1 PASS validation log"
 ```
 
@@ -1805,7 +1805,7 @@ git commit -m "docs(nav): approach_person 1 PASS validation log"
 ## Task 15: 30 分鐘供電連續測試
 
 **Files:**
-- Create: `docs/導航避障/research/2026-05-03-power-30min-test.md`
+- Create: `docs/navigation/research/2026-05-03-power-30min-test.md`
 
 - [ ] **Step 1: 全 stack 同時跑**
 
@@ -1836,7 +1836,7 @@ done
 
 - [ ] **Step 3: 紀錄結果**
 
-寫 `docs/導航避障/research/2026-05-03-power-30min-test.md`,包含:
+寫 `docs/navigation/research/2026-05-03-power-30min-test.md`,包含:
 - 是否斷電?(若有,在第幾分鐘?)
 - Jetson 電壓最低值
 - Jetson 溫度最高值
@@ -1847,7 +1847,7 @@ Expected:0 次斷電(若有 → Phase A 不能結束,要等 KREE DL241910 到貨
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docs/導航避障/research/2026-05-03-power-30min-test.md
+git add docs/navigation/research/2026-05-03-power-30min-test.md
 git commit -m "docs(power): 30-min continuous power test result"
 ```
 

@@ -7,7 +7,7 @@ CI 自動測試 + Jetson 上機驗收 + 30 輪語音測試。
 ## 權威文件
 
 - **CI 配置**：`.github/workflows/ros_build.yaml`
-- **審查報告**：`docs/audit/2026-03-23-full-audit.md`
+- **審查報告**：`docs/archive/2026-05-docs-reorg/audit/2026-03-23-full-audit.md`
 - **30 輪測試定義**：`test_scripts/speech_30round.yaml`
 
 ## CI 架構（3/23 更新）

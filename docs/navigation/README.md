@@ -43,26 +43,26 @@
 |---|---|
 | **入口頁(本檔)** | `docs/navigation/README.md` |
 | **Phase A Implementation Plan**(5/2-5/3 attack) | `docs/navigation/plans/2026-05-01-phase-a-nav-attack.md` |
-| **Sprint design 主線**(包含 §5 D435+RPLIDAR 整合 / §6 兩層 Capability Gate / §7 Phase A) | `docs/superpowers/specs/2026-05-01-pawai-11day-sprint-design.md` |
-| **既有設計 specs** | `docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`<br/>`docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md` |
-| **介面契約**(nav 相關 topic + action) | `docs/architecture/contracts/interaction_contract.md` |
-| **Nav 既有權威 README** | `docs/導航避障/README.md` |
-| **Nav CLAUDE.md**(模組工作規則) | `docs/導航避障/CLAUDE.md` |
+| **Sprint design 主線**(包含 §5 D435+RPLIDAR 整合 / §6 兩層 Capability Gate / §7 Phase A) | `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` |
+| **既有設計 specs** | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`<br/>`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` |
+| **介面契約**(nav 相關 topic + action) | `docs/contracts/interaction_contract.md` |
+| **Nav 既有權威 README** | `docs/navigation/legacy-readme-from-導航避障.md` |
+| **Nav CLAUDE.md**(模組工作規則) | `docs/navigation/CLAUDE.md` |
 
 ---
 
 ## Legacy / Archive
 
 歷史紀錄 / 研究 / 5/1 之前的 daily log 仍在原位:
-- `docs/導航避障/research/` — 4/27-5/1 LiDAR mount yaw / AMCL 180° / K1 baseline / Phase 4-7 critical bugs
-- `docs/導航避障/lidar開發/` — 4/27 lidar dev roadmap
-- `docs/superpowers/specs/2026-04-{24,26}-*.md` — Phase 1-4 設計
+- `docs/navigation/research/` — 4/27-5/1 LiDAR mount yaw / AMCL 180° / K1 baseline / Phase 4-7 critical bugs
+- `docs/navigation/research/lidar-dev/` — 4/27 lidar dev roadmap
+- `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-{24,26}-*.md` — Phase 1-4 設計
 
 本資料夾**只**維護 5/12 Demo 衝刺期 + 之後的主線版本;舊文件保留作歷史與引用,不重複維護。
 
 ---
 
-## 已知陷阱(摘要,完整見 `docs/導航避障/CLAUDE.md`)
+## 已知陷阱(摘要,完整見 `docs/navigation/CLAUDE.md`)
 
 - **Go2 sport mode `cmd_vel` 門檻 MIN_X = 0.50 m/s** — DWB `min_vel_x` 必須 ≥ 0.45,否則 Go2 拒抬腳
 - **slam_toolbox 在 ARM64 + Humble + RPLIDAR 永久棄用**(Mapper FATAL ERROR known bug)

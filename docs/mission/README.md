@@ -50,8 +50,8 @@
 - **主案（無雷達）**：定點互動 — 多模態觸發、熟人個人化問候、陌生人警告、Studio 遠端觀測
 - **升級案（有雷達）**：增加巡邏 + 短距靠近能力（雷達確定採購，時程待老師跑國科會流程）
 
-> **系統設計規格（current）**：[`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`](../superpowers/specs/2026-04-11-pawai-home-interaction-design.md)
-> 4/10 守護犬 spec 已 superseded：[`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](../superpowers/specs/2026-04-10-guardian-dog-design.md)
+> **系統設計規格（current）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../superpowers/specs/2026-04-11-pawai-home-interaction-design.md)
+> 4/10 守護犬 spec 已 superseded：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`](../superpowers/specs/2026-04-10-guardian-dog-design.md)
 
 **PawAI Studio** 是系統的控制台與 Demo 觀測入口：
 
@@ -229,7 +229,7 @@ Brain 不直接執行，Executive 才執行。
 | 0:45-2:30 | **互動主秀（TBD 4/15）** | 手勢模式切換 + 語音對話 + 物體情境 + 熟人問候 + 姿勢感知 |
 | 2:30-3:00 | 陌生人警告 + 收尾 | 未註冊進場 → 警戒 + Studio 推播 + 口頭補巡邏/跟隨 |
 
-> 互動主秀細節由下週會議（4/15）四人設計回報後補齊。完整劇本見 [`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`](../superpowers/specs/2026-04-11-pawai-home-interaction-design.md) §7。
+> 互動主秀細節由下週會議（4/15）四人設計回報後補齊。完整劇本見 [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../superpowers/specs/2026-04-11-pawai-home-interaction-design.md) §7。
 
 ### 5.2 功能 1：語音功能
 
@@ -361,7 +361,7 @@ idle_listening (Energy VAD 持續監聽)
 - **待擴充（4/8 會議）**：組員各自開發新增手勢種類與對應互動行為
 - 上機驗收通過：stop/thumbs_up/非白名單/距離/dedup 全 PASS
 
-> 詳見 [`docs/手勢辨識/README.md`](../手勢辨識/README.md)
+> 詳見 [`docs/pawai-brain/perception/gesture/README.md`](../手勢辨識/README.md)
 
 ### 5.5 功能 4：姿勢辨識 🔄
 
@@ -376,7 +376,7 @@ idle_listening (Energy VAD 持續監聽)
 - **已知問題（4/8 會議確認）**：跌倒幻覺仍頻繁（無人時誤判有人跌倒，鎖定衣架等物體）。因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
 - L3 壓測 60s 通過（RAM 1.2GB, 52°C, GPU 0%）
 
-> 詳見 [`docs/姿勢辨識/README.md`](../姿勢辨識/README.md)
+> 詳見 [`docs/pawai-brain/perception/pose/README.md`](../姿勢辨識/README.md)
 
 ### 5.6 功能 5：AI 大腦 (PawAI Studio)
 
@@ -831,7 +831,7 @@ docs/
 
 > **來源**：2026-03-15 語音模組 30 輪驗收，踩了 36 個坑（30 個在驗收工具，6 個在語音主線）。本 SOP 將教訓制度化，適用於所有模組。
 >
-> **完整設計文件**：[`docs/superpowers/specs/2026-03-15-module-dev-sop-design.md`](../superpowers/specs/2026-03-15-module-dev-sop-design.md)
+> **完整設計文件**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-15-module-dev-sop-design.md`](../superpowers/specs/2026-03-15-module-dev-sop-design.md)
 
 ### 11.1 環境同步規範
 

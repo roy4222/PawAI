@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """scan_health_check.py — RPLIDAR /scan_rplidar 健康度驗證
 
-依據 docs/導航避障/lidar開發/2026-04-27-lidar-dev-roadmap.md Phase 2.2 規格：
+依據 docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md Phase 2.2 規格：
 
 PHANTOM ALERT (fail gate) — 必須四項全中才 FAIL:
   a. 連續 ≥ 10° 範圍角度

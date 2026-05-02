@@ -1,6 +1,6 @@
 """Skill-first PawAI Brain core types.
 
-Spec: docs/superpowers/specs/2026-04-27-pawai-brain-skill-first-design.md section 3
+Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md section 3
 """
 from __future__ import annotations
 

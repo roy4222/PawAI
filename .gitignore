@@ -70,3 +70,4 @@ node_modules/
 /*.wav
 /LD*.pdf
 /LM*.pdf
+*.py[cod]

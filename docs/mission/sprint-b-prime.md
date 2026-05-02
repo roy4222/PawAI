@@ -164,7 +164,7 @@
 規則：一次一個事件，fallback LLM timeout > 2s → RuleBrain
 ```
 
-**實作細節：** `docs/superpowers/plans/2026-03-27-operation-b-prime.md` Task 3-4
+**實作細節：** `docs/archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-03-27-operation-b-prime.md` Task 3-4
 
 ---
 
@@ -437,7 +437,7 @@
 **傍晚：**
 - [x] 文件更新（project-status / sprint / Pawai-studio README）
 - [x] 分工清單（`pawai-studio/docs/assignments/` 四人各自開發文件 + Mock Server 完整 API 說明）
-- [x] **專題文件初稿**（`docs/thesis/114-thesis.md` + `.docx`，Ch1-4 完整，106 SA 範本格式，14 個開發問題）
+- [x] **專題文件初稿**（`docs/deliverables/thesis/114-thesis.md` + `.docx`，Ch1-4 完整，106 SA 範本格式，14 個開發問題）
 - [x] 收工歸檔（thesis + assignments + project-status 已 commit）
 
 ---
@@ -483,7 +483,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `docs/superpowers/specs/2026-03-27-operation-b-prime-sprint-design.md` | 完整設計規格（風險矩陣、成功定義、每日紀律） |
-| `docs/superpowers/plans/2026-03-27-operation-b-prime.md` | 實作計畫（每步驟的程式碼、命令、測試） |
+| `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-27-operation-b-prime-sprint-design.md` | 完整設計規格（風險矩陣、成功定義、每日紀律） |
+| `docs/archive/2026-05-docs-reorg/superpowers-legacy/plans/2026-03-27-operation-b-prime.md` | 實作計畫（每步驟的程式碼、命令、測試） |
 | `references/project-status.md` | 每日更新的系統狀態 |
-| `docs/operations/baseline-contract.md` | Day 1 產出的基線契約（啟動順序、QoS、SOP） |
+| `docs/archive/2026-05-docs-reorg/operations/baseline-contract.md` | Day 1 產出的基線契約（啟動順序、QoS、SOP） |

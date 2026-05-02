@@ -7,9 +7,9 @@ llm_bridge_node 是語音+人臉觸發 → LLM → TTS+動作的中樞。
 
 ## 權威文件
 
-- **語音模組設計**（含 LLM 段）：`docs/語音功能/README.md`
-- **LLM 整合規格**：`docs/superpowers/specs/2026-03-16-llm-integration-mini-spec.md`
-- **Benchmark 研究**：`docs/research/llm_local.md`
+- **語音模組設計**（含 LLM 段）：`docs/pawai-brain/speech/README.md`
+- **LLM 整合規格**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-llm-integration-mini-spec.md`
+- **Benchmark 研究**：`docs/archive/2026-05-docs-reorg/research-misc/llm_local.md`
 
 ## 核心程式
 

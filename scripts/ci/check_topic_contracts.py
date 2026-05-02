@@ -3,7 +3,7 @@
 
 Statically scans node source files for create_publisher / create_subscription
 calls and cross-references them against the v2.1 frozen topic list from
-docs/architecture/contracts/interaction_contract.md §2.
+docs/contracts/interaction_contract.md §2.
 
 Exit code is always 0 (report-only).  Warnings are printed to stderr.
 """
@@ -15,7 +15,7 @@ import sys
 # ── Parse contract topics from interaction_contract.md §2 ────────────────
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CONTRACT_MD = os.path.join(REPO_ROOT, "docs", "architecture", "contracts", "interaction_contract.md")
+CONTRACT_MD = os.path.join(REPO_ROOT, "docs", "contracts", "interaction_contract.md")
 
 # Matches table rows like: | `/state/perception/face` | State | 10 Hz | ... |
 _CONTRACT_TABLE_RE = re.compile(r'^\|\s*`(/[^`]+)`\s*\|', re.MULTILINE)

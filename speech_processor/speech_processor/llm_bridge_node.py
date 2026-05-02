@@ -9,7 +9,7 @@ Subscribes to speech intent events and face identity events,
 calls Cloud LLM (OpenAI-compatible API), and publishes TTS text
 and Go2 action commands.
 
-Spec: docs/superpowers/specs/2026-03-16-llm-integration-mini-spec.md v2.0
+Spec: docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-llm-integration-mini-spec.md v2.0
 """
 
 import json

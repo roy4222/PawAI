@@ -529,7 +529,7 @@ class Go2NodeFactory:
             # Nav2 (enabled when nav2=true AND mcp_mode=false)
             # 使用 nav_capability wrapper：把 final cmd_vel output 從 /cmd_vel 改到 /cmd_vel_nav
             # (twist_mux priority 10)，讓 reactive_stop /cmd_vel_obstacle (priority 200) 能覆寫。
-            # 詳見 docs/superpowers/specs/2026-04-26-nav-capability-s2-design.md §4
+            # 詳見 docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md §4
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [
