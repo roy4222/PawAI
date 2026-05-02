@@ -30,6 +30,15 @@ class WorldStateSnapshot:
     fallen: bool = False
     tts_playing: bool = False
     nav_safe: bool = True
+    # Phase A capability gates (5/2). Fail-closed defaults: if the capability
+    # publisher is silent (node not yet up, crashed, etc.), assume *not* ready.
+    # Existing behaviour for legacy fields above is preserved.
+    nav_ready: bool = False
+    depth_clear: bool = False
+    # nav_paused is the only one that defaults False meaning "not paused" — that
+    # is the safe default because route_runner publishes False on startup, and a
+    # missing publisher should not gratuitously block all motion.
+    nav_paused: bool = False
     last_update: float = field(default_factory=time.time)
 
 
@@ -44,6 +53,17 @@ class WorldState:
             String, "/state/reactive_stop/status", self._on_reactive_stop, _BEST_EFFORT
         )
         node.create_subscription(String, "/state/nav/safety", self._on_nav_safety, _BEST_EFFORT)
+        # Phase A capability subscriptions — all latched (TRANSIENT_LOCAL)
+        # to match capability_publisher_node / depth_safety_node / route_runner.
+        node.create_subscription(
+            Bool, "/capability/nav_ready", self._on_nav_ready, _TRANSIENT_LOCAL
+        )
+        node.create_subscription(
+            Bool, "/capability/depth_clear", self._on_depth_clear, _TRANSIENT_LOCAL
+        )
+        node.create_subscription(
+            Bool, "/state/nav/paused", self._on_nav_paused, _TRANSIENT_LOCAL
+        )
 
     def snapshot(self) -> WorldStateSnapshot:
         with self._lock:
@@ -53,6 +73,9 @@ class WorldState:
                 fallen=self._snap.fallen,
                 tts_playing=self._snap.tts_playing,
                 nav_safe=self._snap.nav_safe,
+                nav_ready=self._snap.nav_ready,
+                depth_clear=self._snap.depth_clear,
+                nav_paused=self._snap.nav_paused,
                 last_update=self._snap.last_update,
             )
 
@@ -83,4 +106,19 @@ class WorldState:
             return
         with self._lock:
             self._snap.nav_safe = not bool(data.get("unsafe", False))
+            self._snap.last_update = time.time()
+
+    def _on_nav_ready(self, msg: Bool) -> None:
+        with self._lock:
+            self._snap.nav_ready = bool(msg.data)
+            self._snap.last_update = time.time()
+
+    def _on_depth_clear(self, msg: Bool) -> None:
+        with self._lock:
+            self._snap.depth_clear = bool(msg.data)
+            self._snap.last_update = time.time()
+
+    def _on_nav_paused(self, msg: Bool) -> None:
+        with self._lock:
+            self._snap.nav_paused = bool(msg.data)
             self._snap.last_update = time.time()

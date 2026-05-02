@@ -2,6 +2,14 @@
 
 > 這是模組內的工作規則真相來源。`.claude/rules/` 中的對應檔案只是薄橋接。
 
+## Phase A capability gates (5/2 加入,Executive 已接)
+
+- **`/capability/depth_clear`** (Bool, latched, fail-closed):D435 ROI 前方 1m 內 < 0.4m 障礙 → false。**沒收到 frame / stale > 1s / compute error → false**(由 `depth_safety_node` 保證)
+- **`/capability/nav_ready`** (Bool, latched, **v0.5 basic**):AMCL 收到 pose + covariance < threshold(預設 0.20,實機 v8 map 需 `--ros-args -p covariance_threshold:=0.40` override)。**day 2 升級** = lifecycle service + TF `map → base_link` 可查 + costmap healthy
+- **`/state/nav/paused`** (Bool, latched):全域 pause 狀態,由 `route_runner` 的 `/nav/pause`/`/nav/resume` service **無條件** publish。`nav_action_server` 訂這個做 cancel + re-send(BUG #2 5/2 已修,commit `a3bdd2e`)
+- **D435 是 safety gate,不接進 Nav2 local costmap**(明確不做)— 障礙偵測由 reactive_stop_node + LiDAR + D435 ROI 三條獨立鏈路覆蓋
+- **Foxglove 看 D435 點雲** 需要靜態 TF `base_link → camera_depth_optical_frame`(Go2 URDF 沒含 D435 mount;5/2 用 `static_transform_publisher --x 0.30 --y 0 --z 0.20` 暫時頂著,正式 mount 校正排到 5/13 後)
+
 ## 不能做
 
 - 不要修改 D435 camera launch 參數（那是 face_perception 的領域）

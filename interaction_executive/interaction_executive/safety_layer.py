@@ -68,4 +68,30 @@ class SafetyLayer:
             if has_nav:
                 return ValidationResult(False, "nav_unsafe")
 
+        # ── Phase A capability gates (5/2) ──
+        # SAFETY priority already returned above; CHAT / TTS / non-NAV-non-MOTION
+        # steps fall through these gates unaffected.
+
+        # /state/nav/paused (latched): global pause — block NAV and MOTION steps.
+        if world.nav_paused:
+            has_nav_or_motion = any(
+                step.executor in (ExecutorKind.NAV, ExecutorKind.MOTION)
+                for step in plan.steps
+            )
+            if has_nav_or_motion:
+                return ValidationResult(False, "nav_paused")
+
+        has_nav = any(step.executor == ExecutorKind.NAV for step in plan.steps)
+        if has_nav:
+            if not world.nav_ready:
+                return ValidationResult(False, "nav_not_ready")
+            if not world.depth_clear:
+                return ValidationResult(False, "depth_not_clear")
+
+        # High-risk MOTION (anything not already caught by motion whitelist):
+        # require depth_clear=True so we don't move forward into a 0.3m obstacle.
+        has_motion = any(step.executor == ExecutorKind.MOTION for step in plan.steps)
+        if has_motion and not world.depth_clear:
+            return ValidationResult(False, "depth_not_clear_for_motion")
+
         return ValidationResult(True)

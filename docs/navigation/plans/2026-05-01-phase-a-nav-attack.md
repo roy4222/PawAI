@@ -126,6 +126,8 @@ ros2 topic list 2>/dev/null | grep -i depth || grep -rn "aligned_depth\|depth_to
 
 ## Task 2: BUG #2 — nav_action_server 響應 /nav/pause via 共享 state topic(TDD)
 
+> **[DONE 2026-05-02 commit `a3bdd2e`]** nav_action_server 現訂 `/state/nav/paused` (latched Bool from route_runner),pause→cancel Nav2 goal,resume→re-send;另加 10s pose-progress timeout 安全網。實機 K1 3/3 + K-pause 驗收通過。實作對應 `nav_capability/lib/progress_check.py`(pure helper,11 cases TDD)+ `_execute_nav_goal_with_pause_aware()`(共用 helper,goto_relative 與 goto_named 都走它)。
+
 **問題澄清**:
 - `/nav/pause` 與 `/nav/resume` 是 `std_srvs/Trigger` **service**(不是 topic),已在 `route_runner_node.py:111-117` 註冊
 - `reactive_stop_node.py:99-100` 偵測障礙時 call 這兩個 service
@@ -608,6 +610,9 @@ git commit -m "test(nav): add K1 baseline 5/5 regression script"
 
 ## Task 5: capability_publisher_node — Nav Gate(TDD)
 
+> **[DONE 5/2 v0.5 commit `a3bdd2e`]** Basic 版上線:`/capability/nav_ready` = AMCL 收到 pose AND covariance < threshold。預設 threshold=0.20 是理想線、實機 v8 map 需 `--ros-args -p covariance_threshold:=0.40` override。**lifecycle service / TF / costmap healthy 三個 day 2 升級**(留給明天)。helper `nav_capability/lib/nav_ready_check.py`(13 cases TDD)。
+
+
 **Scope 澄清(Phase A v0)**:
 Nav Gate publisher 是「**通用 health gate**」,不知道任何特定 goal/target 的存在。三個 sub-condition:
 1. **Nav2 lifecycle = active**(BT navigator 啟動)
@@ -874,6 +879,9 @@ git commit -m "feat(nav): add capability_publisher_node — /capability/nav_read
 
 ## Task 6: depth_safety_node — Depth Gate(TDD)
 
+> **[DONE 5/2 commit `a3bdd2e`,fail-closed]** `/capability/depth_clear` 上線。中央 ROI(50%×50%)、min_valid 0.15m 過濾噪點、danger_pixel_ratio 0.05 觸發 false。**fail-closed**:沒收到 frame / stale > 1s / compute error → false。實機殺 D435 1.03s 內翻 false 驗收通過。helper `go2_robot_sdk/depth_geometry.py`(10 cases TDD)。新建在 `go2_robot_sdk` 不在 `nav_capability`(D435 屬 driver 領域)。
+
+
 **Files:**
 - Create: `go2_robot_sdk/go2_robot_sdk/depth_safety_node.py`
 - Create: `go2_robot_sdk/test/test_depth_safety_node.py`
@@ -1067,6 +1075,8 @@ git commit -m "feat(safety): add depth_safety_node — /capability/depth_clear D
 ---
 
 ## Task 7: WorldState 訂兩個 Capability Bool(TDD)
+
+> **[DONE 5/2,擴成訂三個 Bool]** WorldState 已接 `/capability/nav_ready` + `/capability/depth_clear` + `/state/nav/paused`,**全部 fail-closed defaults**(`nav_ready=False / depth_clear=False`,`nav_paused=False` 是 safe-default 因為「未暫停」才是預設行為)。test 寫在 `interaction_executive/test/test_world_state.py`(5 cases),不是 `test_world_state_capabilities.py`。SafetyLayer P1 三段 gate 同步上線(test_safety_layer.py 加 10 cases),總 27 cases 全綠 + 92/92 全套 regression 過。
 
 **Files:**
 - Modify: `interaction_executive/interaction_executive/world_state.py`

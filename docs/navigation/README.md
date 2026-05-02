@@ -12,6 +12,12 @@
 
 ---
 
+## 5/2 進度更新
+
+Phase A Step 1+2+3 完成(commit `a3bdd2e`):BUG #2 已修(`nav_action_server` 訂 `/state/nav/paused` + 10s pose-progress timeout、K1 3/3 + K-pause 實機過)、`/capability/depth_clear` fail-closed 上線、`/capability/nav_ready` v0.5 basic 上線。
+Phase A Step 4(Executive 接線)同日完成:WorldState 訂三個 capability(fail-closed)+ SafetyLayer 加 nav_paused / NAV / MOTION 三段 gate(27 cases 過 + 92/92 regression)。
+**day 2 待做**:接 launch / Brain rules / Studio LED / `nav_ready` 升級 lifecycle+TF+costmap。
+
 ## 目前主線(5/12 衝刺週)
 
 - **建圖層**:cartographer(離線,已產出 `home_living_room_v8.pbstream + .yaml`;slam_toolbox 在本硬體永久棄用)
