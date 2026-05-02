@@ -188,16 +188,18 @@ MOCK_GENERATORS = {
 # ── 背景推送任務 ────────────────────────────────────────────────────
 
 async def periodic_mock_push() -> None:
-    """每 2 秒推送一個隨機事件"""
+    """每 2 秒推送一個隨機事件（禁用，避免干擾真實 YOLO 偵測）"""
+    # TODO: 僅在 demo mode 啟用，不應在生產環境自動推送
     while True:
         await asyncio.sleep(2)
-        if manager.active:
-            try:
-                source = random.choice(list(MOCK_GENERATORS.keys()))
-                event = MOCK_GENERATORS[source]()
-                await manager.broadcast(event)
-            except Exception as e:
-                print(f"[mock] Error generating {source} event: {e}", flush=True)
+        # DISABLED: 避免虛假物體框干擾真實 YOLO 輸出
+        # if manager.active:
+        #     try:
+        #         source = random.choice(list(MOCK_GENERATORS.keys()))
+        #         event = MOCK_GENERATORS[source]()
+        #         await manager.broadcast(event)
+        #     except Exception as e:
+        #         print(f"[mock] Error generating {source} event: {e}", flush=True)
 
 # ── Demo A 場景 ─────────────────────────────────────────────────────
 

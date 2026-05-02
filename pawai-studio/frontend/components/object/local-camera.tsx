@@ -13,6 +13,7 @@ interface DetectionBox {
   class_name: string
   confidence: number
   bbox: [number, number, number, number]
+  color?: string
 }
 
 export function LocalCameraView() {
@@ -103,7 +104,7 @@ export function LocalCameraView() {
     setSourceMode("stream")
     sourceModeRef.current = "stream"
     setCamState("requesting")
-    setError("正在啟動 yolo26n.onnx 串流，請稍候...")
+    setError("正在啟動 yolov8n-seg 串流，請稍候...")
     
     try {
       // 呼叫 API 啟動 Python YOLO 腳本
@@ -255,7 +256,7 @@ export function LocalCameraView() {
               <div className={cn("absolute inset-0 rounded border-2", inWL ? "border-amber-400" : "border-zinc-500")} />
               <div className={cn("absolute -top-5 left-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap", inWL ? "bg-amber-400 text-black" : "bg-zinc-700 text-zinc-200")}>
                 <span>{entry?.emoji ?? "📦"}</span>
-                <span>{getLabel(box.class_name)}</span>
+                <span>{box.color && box.color !== "Unknown" ? `${box.color} ` : ""}{getLabel(box.class_name)}</span>
                 <span className="opacity-70">{Math.round(box.confidence * 100)}%</span>
               </div>
             </div>
@@ -266,7 +267,7 @@ export function LocalCameraView() {
         {camState === "active" && (
           <div className="absolute top-2 left-2 flex flex-col gap-1">
             <span className="text-[9px] font-mono text-amber-400/70 bg-black/50 border border-amber-400/20 px-1.5 py-0.5 rounded">
-              {sourceMode === "stream" ? "SOURCE: yolo26n.onnx" : "SOURCE: HARDWARE CAM"}
+              {sourceMode === "stream" ? "SOURCE: yolov8n-seg.pt" : "SOURCE: HARDWARE CAM"}
             </span>
             <span className="text-[9px] font-mono text-zinc-400/70 bg-black/50 border border-border/20 px-1.5 py-0.5 rounded">
               BBOX: WEBSOCKET ({boxes.length} obj)
@@ -277,7 +278,7 @@ export function LocalCameraView() {
 
       <div className="rounded-lg bg-surface/40 border border-border/20 px-3 py-2.5 text-[11px] text-muted-foreground leading-relaxed">
         <p className="font-medium text-amber-400 mb-1">📌 如何測試模型？</p>
-        <p>直接點選「Python YOLO 串流」，網頁會自動啟動背景的 <code>local_yolo_mjpeg.py</code> 與 <code>yolo26n.onnx</code> 進行偵測，不需手動開 Terminal 囉！</p>
+        <p>直接點選「Python YOLO 串流」，網頁會自動啟動背景的 <code>local_yolo.py</code> 與 <code>yolov8n-seg.pt</code> 進行物體偵測和顏色分析，不需手動開 Terminal 囉！</p>
       </div>
     </div>
   )

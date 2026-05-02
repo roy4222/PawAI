@@ -142,6 +142,7 @@ export interface ObjectDetection {
   class_id?: number;
   confidence: number;
   bbox: [number, number, number, number];
+  color?: string;
 }
 
 export interface ObjectEvent extends PawAIEvent {

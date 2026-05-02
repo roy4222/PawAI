@@ -18,7 +18,7 @@ function ConfidenceBar({ value }: { value: number }) {
   )
 }
 
-function ObjectCard({ obj, idx }: { obj: { class_name: string; confidence: number }; idx: number }) {
+function ObjectCard({ obj, idx }: { obj: { class_name: string; confidence: number; color?: string }; idx: number }) {
   const entry = getObjectEntry(obj.class_name)
   const inWL  = isWhitelisted(obj.class_name)
   return (
@@ -35,7 +35,9 @@ function ObjectCard({ obj, idx }: { obj: { class_name: string; confidence: numbe
         <div className="flex items-center gap-2.5">
           <span className="text-2xl select-none leading-none">{entry?.emoji ?? "📦"}</span>
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-semibold text-foreground leading-tight">{getLabel(obj.class_name)}</span>
+            <span className="text-sm font-semibold text-foreground leading-tight">
+              {obj.color && obj.color !== "Unknown" ? `${obj.color} ` : ""}{getLabel(obj.class_name)}
+            </span>
             <span className="text-[10px] text-muted-foreground font-mono">{obj.class_name}</span>
           </div>
         </div>
@@ -58,7 +60,7 @@ function ObjectCard({ obj, idx }: { obj: { class_name: string; confidence: numbe
 }
 
 export function LiveDetectionSection({ objects, isActive }: {
-  objects: { class_name: string; confidence: number }[]
+  objects: { class_name: string; confidence: number; color?: string }[]
   isActive: boolean
 }) {
   if (!isActive || objects.length === 0) {

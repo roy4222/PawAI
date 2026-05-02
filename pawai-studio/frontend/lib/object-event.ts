@@ -17,12 +17,14 @@ function toObjectDetection(value: unknown): ObjectDetection | null {
   if (!bbox.every((coord) => typeof coord === "number")) return null;
 
   const classId = typeof value.class_id === "number" ? value.class_id : undefined;
+  const color = typeof value.color === "string" ? value.color : undefined;
 
   return {
     class_name: className,
     class_id: classId,
     confidence,
     bbox: [bbox[0], bbox[1], bbox[2], bbox[3]],
+    color,
   };
 }
 
