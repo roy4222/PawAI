@@ -29,7 +29,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 
 from go2_interfaces.action import RunRoute
@@ -40,6 +40,14 @@ from nav_capability.lib.tf_pose_helper import yaw_to_quat
 
 AMCL_QOS = QoSProfile(
     depth=10,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+)
+
+# Latched semantics for /state/nav/paused so late subscribers (e.g.
+# nav_action_server starting after route_runner) still see the last known state.
+PAUSED_QOS = QoSProfile(
+    depth=1,
     reliability=ReliabilityPolicy.RELIABLE,
     durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
 )
@@ -95,6 +103,11 @@ class RouteRunnerNode(Node):
         self._internal_status_pub = self.create_publisher(
             String, "/event/nav/internal/status", 10
         )
+        # /state/nav/paused (BUG #2 fix): latched Bool consumed by nav_action_server.
+        # Published from _svc_pause/_svc_resume/_svc_cancel/_reset_fsm so that goto_relative
+        # and goto_named also honour pause, not just /nav/run_route.
+        self._paused_pub = self.create_publisher(Bool, "/state/nav/paused", PAUSED_QOS)
+        self._publish_paused(False)  # initial latched state = not paused
 
         # RunRoute action server
         self._run_server = ActionServer(
@@ -174,6 +187,11 @@ class RouteRunnerNode(Node):
         m.data = json.dumps(payload)
         self._internal_status_pub.publish(m)
 
+    def _publish_paused(self, paused: bool) -> None:
+        msg = Bool()
+        msg.data = bool(paused)
+        self._paused_pub.publish(msg)
+
     def _emit_waypoint_reached(self, route_id: str, wp: dict) -> None:
         payload = {
             "route_id": route_id,
@@ -219,6 +237,7 @@ class RouteRunnerNode(Node):
         self._current_nav_handle = None
         self._pause_event = asyncio.Event()
         self._pause_event.set()
+        self._publish_paused(False)
 
     # ── Action handler ──
     async def _execute_run_route(self, goal_handle):
@@ -444,35 +463,56 @@ class RouteRunnerNode(Node):
 
     # ── Services ──
     def _svc_pause(self, _req, resp):
-        try:
-            self._fsm.pause()
-        except IllegalTransition as exc:
-            resp.success = False
-            resp.message = f"cannot_pause: {exc}"
-            return resp
-        # Cancel the in-flight Nav2 goal so DWB releases /cmd_vel_nav.
-        # Subsequent main-loop iteration will re-plan from current_waypoint_index on resume.
+        # /state/nav/paused is a GLOBAL pause state (BUG #2 fix). Publish unconditionally
+        # so goto_relative / goto_named also halt — they don't have their own FSM and
+        # rely solely on the latched Bool. Then attempt route-FSM pause; if no route is
+        # active that's fine, the goto_* paths still get paused via the topic.
+        self._publish_paused(True)
+        # Cancel any in-flight Nav2 goal owned by route_runner. (goto_relative cancels
+        # its own Nav2 handle when it observes /state/nav/paused -> True.)
         if self._current_nav_handle is not None:
             self._current_nav_handle.cancel_goal_async()
-        self._pause_event.clear()
+        fsm_paused = False
+        try:
+            self._fsm.pause()
+            self._pause_event.clear()
+            fsm_paused = True
+        except IllegalTransition:
+            pass  # no active route — that's OK, /state/nav/paused still True for goto_*
         self._publish_internal_status()
-        self.get_logger().info("paused at waypoint %d" % self._fsm.current_waypoint_index)
+        if fsm_paused:
+            self.get_logger().info(
+                "paused (route at waypoint %d + global paused=true)"
+                % self._fsm.current_waypoint_index
+            )
+            resp.message = "paused"
+        else:
+            self.get_logger().info(
+                "global paused=true (no active route; goto_relative/named will halt)"
+            )
+            resp.message = "paused_no_route"
         resp.success = True
-        resp.message = "paused"
         return resp
 
     def _svc_resume(self, _req, resp):
+        # Mirror of _svc_pause: clear /state/nav/paused unconditionally so goto_* can
+        # re-send their cached goal. Route-FSM resume is best-effort.
+        self._publish_paused(False)
+        fsm_resumed = False
         try:
             self._fsm.resume()
-        except IllegalTransition as exc:
-            resp.success = False
-            resp.message = f"cannot_resume: {exc}"
-            return resp
-        self._pause_event.set()
+            self._pause_event.set()
+            fsm_resumed = True
+        except IllegalTransition:
+            pass
         self._publish_internal_status()
-        self.get_logger().info("resumed; will re-send current waypoint")
+        if fsm_resumed:
+            self.get_logger().info("resumed (route + global paused=false)")
+            resp.message = "resumed"
+        else:
+            self.get_logger().info("global paused=false (no route to resume)")
+            resp.message = "resumed_no_route"
         resp.success = True
-        resp.message = "resumed"
         return resp
 
     def _svc_cancel(self, _req, resp):
@@ -483,6 +523,7 @@ class RouteRunnerNode(Node):
         if self._current_nav_handle is not None:
             self._current_nav_handle.cancel_goal_async()
         self._pause_event.set()  # unblock the loop so it can exit
+        self._publish_paused(False)
         self._publish_internal_status()
         self.get_logger().info("route cancelled by /nav/cancel service")
         resp.success = True

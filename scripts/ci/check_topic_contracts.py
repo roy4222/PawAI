@@ -96,6 +96,10 @@ INTERNAL_TOPICS = {
     "/nav/pause",
     "/nav/resume",
     "/nav/cancel",
+    # Phase A 5/2 — capability gates + global pause state
+    "/capability/nav_ready",
+    "/capability/depth_clear",
+    "/state/nav/paused",
     # /navigate_to_pose action infra (Nav2)
     "/navigate_to_pose",
     # Camera topics

@@ -52,6 +52,7 @@ setup(
             'snapshot_service = go2_robot_sdk.snapshot_service:main',
             'move_service = go2_robot_sdk.move_service:main',
             'reactive_stop_node = go2_robot_sdk.reactive_stop_node:main',
+            'depth_safety_node = go2_robot_sdk.depth_safety_node:main',
         ],
     },
 )

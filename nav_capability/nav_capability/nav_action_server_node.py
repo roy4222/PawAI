@@ -24,9 +24,15 @@ from rclpy.qos import (
     QoSProfile,
     ReliabilityPolicy,
 )
+from std_msgs.msg import Bool
 
 from go2_interfaces.action import GotoRelative, GotoNamed
 from nav_capability.lib.named_pose_store import NamedPoseNotFound, NamedPoseStore
+from nav_capability.lib.progress_check import (
+    PROGRESS_THRESHOLD_M,
+    PROGRESS_TIMEOUT_S,
+    has_progress,
+)
 from nav_capability.lib.relative_goal_math import compute_relative_goal
 from nav_capability.lib.standoff_math import compute_standoff_goal
 from nav_capability.lib.tf_pose_helper import quat_to_yaw, yaw_to_quat
@@ -34,6 +40,12 @@ from nav_capability.lib.tf_pose_helper import quat_to_yaw, yaw_to_quat
 
 AMCL_QOS = QoSProfile(
     depth=10,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+)
+
+PAUSED_QOS = QoSProfile(
+    depth=1,
     reliability=ReliabilityPolicy.RELIABLE,
     durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
 )
@@ -63,6 +75,18 @@ class NavActionServerNode(Node):
             "/amcl_pose",
             self._on_amcl,
             AMCL_QOS,
+            callback_group=self._cb_group,
+        )
+
+        # /state/nav/paused subscription (BUG #2 fix). When True, in-flight Nav2 goal
+        # is cancelled and re-sent on resume. Latched (TRANSIENT_LOCAL) so a late
+        # subscriber still gets the last known state from route_runner.
+        self._paused: bool = False
+        self.create_subscription(
+            Bool,
+            "/state/nav/paused",
+            self._on_paused,
+            PAUSED_QOS,
             callback_group=self._cb_group,
         )
 
@@ -133,6 +157,12 @@ class NavActionServerNode(Node):
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
         self._amcl_pose = msg
 
+    def _on_paused(self, msg: Bool) -> None:
+        new_state = bool(msg.data)
+        if new_state != self._paused:
+            self.get_logger().info(f"/state/nav/paused -> {new_state}")
+        self._paused = new_state
+
     def _on_odom(self, _msg: Odometry) -> None:
         self._last_odom_ns = self.get_clock().now().nanoseconds
 
@@ -182,6 +212,85 @@ class NavActionServerNode(Node):
             p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w
         )
         return p.position.x, p.position.y, yaw
+
+    def _current_xy(self) -> Optional[Tuple[float, float]]:
+        if self._amcl_pose is None:
+            return None
+        p = self._amcl_pose.pose.pose.position
+        return (p.x, p.y)
+
+    # ── Pause/Progress-aware Nav2 goal execution ──
+    async def _execute_nav_goal_with_pause_aware(self, goal_handle, nav_goal):
+        """Send nav_goal to Nav2; handle pause→cancel→re-send + progress-timeout + client cancel.
+
+        Returns (success: bool, message: str). Does NOT call goal_handle.succeed/abort/canceled —
+        caller is responsible for that based on the returned tuple.
+
+        Behaviour:
+          * /state/nav/paused goes True → cancel current Nav2 goal, wait for paused→False,
+            then re-send the same nav_goal. Caller's max_speed / target unchanged.
+          * AMCL pose hasn't moved >= PROGRESS_THRESHOLD_M for PROGRESS_TIMEOUT_S → fail.
+          * goal_handle.is_cancel_requested → propagate cancel to Nav2, return cancelled.
+        """
+        while True:  # outer loop = pause/resume cycle
+            # If paused at entry, wait until resumed (or client cancel)
+            while self._paused:
+                if goal_handle.is_cancel_requested:
+                    return (False, "cancelled")
+                time.sleep(0.1)
+
+            send_future = self._nav_client.send_goal_async(nav_goal)
+            nav_handle = await send_future
+            if not nav_handle.accepted:
+                return (False, "nav2_rejected_goal")
+
+            nav_result_future = nav_handle.get_result_async()
+            last_progress_ns = self.get_clock().now().nanoseconds
+            prev_xy = self._current_xy()
+            paused_during_run = False
+
+            while not nav_result_future.done():
+                if goal_handle.is_cancel_requested:
+                    self.get_logger().info("client cancel requested; cancelling Nav2 goal")
+                    await nav_handle.cancel_goal_async()
+                    await nav_result_future
+                    return (False, "cancelled")
+
+                if self._paused:
+                    self.get_logger().info(
+                        "paused detected; cancelling Nav2 goal, will re-send on resume"
+                    )
+                    paused_during_run = True
+                    await nav_handle.cancel_goal_async()
+                    await nav_result_future
+                    break  # exit inner while → outer loop will wait for resume + re-send
+
+                # Progress check via /amcl_pose
+                curr_xy = self._current_xy()
+                if has_progress(prev_xy, curr_xy, PROGRESS_THRESHOLD_M):
+                    last_progress_ns = self.get_clock().now().nanoseconds
+                    prev_xy = curr_xy
+                else:
+                    elapsed_ns = self.get_clock().now().nanoseconds - last_progress_ns
+                    if elapsed_ns > int(PROGRESS_TIMEOUT_S * 1e9):
+                        self.get_logger().warn(
+                            f"no progress in {PROGRESS_TIMEOUT_S:.1f}s "
+                            f"(threshold={PROGRESS_THRESHOLD_M:.2f}m); aborting"
+                        )
+                        await nav_handle.cancel_goal_async()
+                        await nav_result_future
+                        return (False, "no_progress_timeout")
+
+                time.sleep(0.1)  # rclpy action callback not in asyncio loop; OK with MultiThreadedExecutor
+
+            if not paused_during_run:
+                nav_result = nav_result_future.result()
+                if nav_result.status == GoalStatus.STATUS_SUCCEEDED:
+                    return (True, "reached")
+                if nav_result.status == GoalStatus.STATUS_CANCELED:
+                    return (False, "cancelled")
+                return (False, "nav2_failed")
+            # else: paused_during_run → outer loop iterates → wait for paused=False → re-send
 
     # ── Action handler ──
     async def _execute_relative(self, goal_handle):
@@ -275,48 +384,22 @@ class NavActionServerNode(Node):
             result.message = "nav2_unavailable"
             return result
 
-        send_future = self._nav_client.send_goal_async(nav_goal)
-        nav_handle = await send_future
-        if not nav_handle.accepted:
-            goal_handle.abort()
-            result.success = False
-            result.message = "nav2_rejected_goal"
-            return result
-
-        # Poll nav2 result while watching for client cancellation.
-        # 必要的 cancel propagation：caller 取消 /nav/goto_relative 時，
-        # 必須真的把 underlying Nav2 goal 也 cancel 掉，否則 Go2 會繼續走。
-        nav_result_future = nav_handle.get_result_async()
-        while not nav_result_future.done():
-            if goal_handle.is_cancel_requested:
-                self.get_logger().info("client cancel requested; cancelling Nav2 goal")
-                await nav_handle.cancel_goal_async()
-                # wait for Nav2 to acknowledge cancel + return final status
-                nav_result = await nav_result_future
-                goal_handle.canceled()
-                result.success = False
-                result.message = "cancelled"
-                return result
-            time.sleep(0.1)  # rclpy action callback not in asyncio loop; blocking sleep OK with MultiThreadedExecutor
-
-        nav_result = nav_result_future.result()
-
-        if nav_result.status == GoalStatus.STATUS_SUCCEEDED:
+        success, msg = await self._execute_nav_goal_with_pause_aware(goal_handle, nav_goal)
+        if success:
             result.success = True
-            result.message = "reached"
+            result.message = msg
             cur_after = self._current_map_pose()
             if cur_after is not None:
                 ax, ay, _ = cur_after
                 result.actual_distance = float(math.hypot(ax - cx, ay - cy))
             goal_handle.succeed()
-        elif nav_result.status == GoalStatus.STATUS_CANCELED:
-            # Nav2 reported its own goal as cancelled (e.g. preemption).
-            goal_handle.canceled()
+        elif msg == "cancelled":
             result.success = False
-            result.message = "cancelled"
+            result.message = msg
+            goal_handle.canceled()
         else:
             result.success = False
-            result.message = "nav2_failed"
+            result.message = msg
             goal_handle.abort()
         return result
 
@@ -437,31 +520,10 @@ class NavActionServerNode(Node):
             result.message = "nav2_unavailable"
             return result
 
-        nav_handle = await self._nav_client.send_goal_async(nav_goal)
-        if not nav_handle.accepted:
-            goal_handle.abort()
-            result.success = False
-            result.message = "nav2_rejected_goal"
-            return result
-
-        # Cancel propagation (same pattern as goto_relative)
-        nav_result_future = nav_handle.get_result_async()
-        while not nav_result_future.done():
-            if goal_handle.is_cancel_requested:
-                self.get_logger().info("client cancel; cancelling Nav2 goal")
-                await nav_handle.cancel_goal_async()
-                await nav_result_future
-                goal_handle.canceled()
-                result.success = False
-                result.message = "cancelled"
-                return result
-            time.sleep(0.1)  # rclpy action callback not in asyncio loop; blocking sleep OK with MultiThreadedExecutor
-
-        nav_result = nav_result_future.result()
-
-        if nav_result.status == GoalStatus.STATUS_SUCCEEDED:
+        success, msg = await self._execute_nav_goal_with_pause_aware(goal_handle, nav_goal)
+        if success:
             result.success = True
-            result.message = "reached"
+            result.message = msg
             result.final_pose.position.x = float(final_x)
             result.final_pose.position.y = float(final_y)
             qx, qy, qz, qw = yaw_to_quat(final_yaw)
@@ -470,13 +532,13 @@ class NavActionServerNode(Node):
             result.final_pose.orientation.z = qz
             result.final_pose.orientation.w = qw
             goal_handle.succeed()
-        elif nav_result.status == GoalStatus.STATUS_CANCELED:
-            goal_handle.canceled()
+        elif msg == "cancelled":
             result.success = False
-            result.message = "cancelled"
+            result.message = msg
+            goal_handle.canceled()
         else:
             result.success = False
-            result.message = "nav2_failed"
+            result.message = msg
             goal_handle.abort()
         return result
 

@@ -28,6 +28,7 @@ setup(
             "log_pose_node = nav_capability.log_pose_node:main",
             "state_broadcaster_node = nav_capability.state_broadcaster_node:main",
             "route_runner_node = nav_capability.route_runner_node:main",
+            "capability_publisher_node = nav_capability.capability_publisher_node:main",
         ],
     },
 )
