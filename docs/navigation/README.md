@@ -51,6 +51,11 @@
 
 ---
 
+## 5/2 外部 Stack 研究(8 份)
+
+對 8 個開源專案(Odin / OM1 / NavDP / visualnav-transformer / amigo_ros2 / DimOS + 1 篇論文)做了可吸收性分析。
+**總彙整與優先序**:`research/2026-05-02-research-synthesis.md` — 列出 Phase A 立即可吸收 4 項(A1-A4)、5/12 後 P2 七項、6 月後 P3 六項、明確不做的事。
+
 ## Legacy / Archive
 
 歷史紀錄 / 研究 / 5/1 之前的 daily log 仍在原位:
