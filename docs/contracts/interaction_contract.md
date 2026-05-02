@@ -81,6 +81,9 @@
 | `/state/reactive_stop/status` | State | 10 Hz | reactive_stop_node 內部狀態（state_broadcaster 訂閱用） | **v2.3** active |
 | `/event/nav/waypoint_reached` | Event | 觸發式 | RunRoute 每個 waypoint 抵達事件 | **v2.3** active |
 | `/event/nav/internal/status` | Event | 觸發式 | nav_action_server / route_runner → state_broadcaster 內部 status | **v2.3** active |
+| `/state/nav/paused` | State | 變更式 | 全域 pause(latched Bool;route_runner /nav/{pause,resume} 無條件 publish;nav_action_server 訂閱做 cancel + re-send) | **v2.6** active |
+| `/capability/nav_ready` | State | 1 Hz | 導航就緒(latched Bool;v0.5 = AMCL freshness + covariance;day 2 升級 lifecycle + costmap healthy) | **v2.6** active |
+| `/capability/depth_clear` | State | 5 Hz | D435 ROI 前方無近距離障礙(latched Bool;**fail-closed**:沒 frame / stale > 1s / compute 失敗 → false) | **v2.6** active |
 | `/brain/text_input` | Command | 觸發式 | Studio → Brain 文字輸入 | **v2.5** active |
 | `/brain/skill_request` | Command | 觸發式 | Studio → Brain skill button request | **v2.5** active |
 | `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
@@ -959,6 +962,9 @@ self.publisher.publish(msg)
 | `/state/executive/brain` | Reliable | Volatile | 10 | 2 Hz | planned |
 | `/executive/status` | BestEffort | TransientLocal | 1 | 2 Hz | v0 |
 | `/state/tts_playing` | Reliable | TransientLocal | 1 | 變更式 | active |
+| `/state/nav/paused` | Reliable | TransientLocal | 1 | 變更式 | v2.6 active |
+| `/capability/nav_ready` | Reliable | TransientLocal | 1 | 1 Hz | v2.6 active |
+| `/capability/depth_clear` | Reliable | TransientLocal | 1 | 5 Hz | v2.6 active |
 
 ### 8.2 Event Topics
 
