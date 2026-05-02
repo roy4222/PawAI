@@ -182,8 +182,8 @@ controller_server:
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.40
-      PathAlign.scale: 16.0
+      BaseObstacle.scale: 0.80   # 5/2 v0 動態避障保守第一刀：0.40 → 0.80（讓障礙真的有成本，但不爆衝逃離）
+      PathAlign.scale: 12.0      # 5/2 v0 動態避障保守第一刀：16.0 → 12.0（給 DWB 偏離原路徑 25% 的空間）
       PathAlign.forward_point_distance: 0.2
       GoalAlign.scale: 10.0
       GoalAlign.forward_point_distance: 0.2
@@ -233,7 +233,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.0
-        inflation_radius: 0.25   # P0 Nav: 從 0.35 降到 0.25，給 Go2 更多 free space
+        inflation_radius: 0.30   # 5/2 v0 動態避障保守第一刀：0.25 → 0.30（多 5cm 緩衝，避免大甩）
 
 global_costmap:
   global_costmap:

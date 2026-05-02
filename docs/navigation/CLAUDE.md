@@ -12,6 +12,8 @@
 
 ## 不能做
 
+- **不要對移動中的 Go2 送 `Damp` (api_id=1001)**（5/2 摔倒事件）— Damp 是馬達軟鬆弛、僅限 idle 站穩後使用。移動中的 emergency stop 必須用 `emergency_stop.py engage`（mux pri 255 + lock）+ `StopMove` (api_id=1003, **topic 必填 `rt/api/sport/request`**)。詳 [`docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md`](plans/2026-05-02-dynamic-obstacle-demo.md)
+- **不要 hand-write 不完整 `WebRtcReq`**（5/2 教訓）— `api_id=1003` 在 `rt/api/sport/request` 是 StopMove，在 `rt/api/obstacles_avoid/request` 是 obstacle Move（不是停車！）。publish 時 5 個欄位都要寫
 - 不要修改 D435 camera launch 參數（那是 face_perception 的領域）
 - 不要動 `nav2_params.yaml` 的 footprint（60×30cm 短於 Go2 真實 70×31cm，但 4/26 實機驗證仍 work；正式校正排到 5/13 demo 後）
 - 不要在 `start_nav2_amcl_demo_tmux.sh` / `start_reactive_stop_tmux.sh` 同時跑（cmd_vel 衝突）— 互斥使用

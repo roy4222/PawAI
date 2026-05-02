@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Phase 10 demo launcher — full nav_capability stack on Jetson.
 #
-# Stack (8 windows):
+# Stack (9 windows):
 #   tf            base_link → laser static TF
 #   sllidar       RPLIDAR /scan_rplidar
+#   d435          RealSense D435 (RGB + aligned depth, source for /capability/depth_clear)
 #   robot         go2_robot_sdk robot.launch.py (driver + Nav2 wrapper + AMCL + mux + teleop)
 #   reactive      reactive_stop_node → /cmd_vel_obstacle (mux priority 200)
-#   navcap        nav_capability.launch.py (4 nodes)
+#   navcap        nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)
 #   pause-enable  enables enable_nav_pause runtime param after stack stabilizes
 #   foxglove      foxglove_bridge for visualization (optional)
 #   monitor       leave open for manual ros2 topic / ros2 action commands
@@ -53,14 +54,20 @@ tmux send-keys -t "$SESSION:sllidar" \
     "$ROS_SETUP && ros2 run sllidar_ros2 sllidar_node --ros-args -p serial_port:=/dev/rplidar -p serial_baudrate:=256000 -p frame_id:=laser -p angle_compensate:=true -p scan_mode:=Standard -r /scan:=/scan_rplidar" Enter
 sleep 4
 
-echo "[3/8] robot.launch.py (driver + Nav2 wrapper + AMCL + mux + teleop)"
+echo "[3/9] D435 RealSense (aligned depth → /camera/camera/aligned_depth_to_color/image_raw)"
+tmux new-window -t "$SESSION" -n d435
+tmux send-keys -t "$SESSION:d435" \
+    "$ROS_SETUP && ros2 launch realsense2_camera rs_launch.py align_depth.enable:=true enable_depth:=true enable_color:=true pointcloud.enable:=false" Enter
+sleep 4
+
+echo "[4/9] robot.launch.py (driver + Nav2 wrapper + AMCL + mux + teleop)"
 tmux new-window -t "$SESSION" -n robot
 tmux send-keys -t "$SESSION:robot" \
     "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=true slam:=false map:=$MAP rviz2:=false foxglove:=false enable_tts:=false decode_lidar:=false" Enter
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
-echo "[4/8] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, only 0 on danger)"
+echo "[5/9] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, only 0 on danger)"
 # safety_only=true is REQUIRED when feeding mux (priority 200). Without it,
 # clear/slow zones would publish 0.45/0.60 m/s and shadow nav (priority 10)
 # permanently — Go2 would drive forward at reactive's normal_speed instead of
@@ -70,23 +77,23 @@ tmux send-keys -t "$SESSION:reactive" \
     "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true -p front_offset_rad:=3.14159" Enter
 sleep 3
 
-echo "[5/8] nav_capability.launch.py (4 nodes)"
+echo "[6/9] nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)"
 tmux new-window -t "$SESSION" -n navcap
 tmux send-keys -t "$SESSION:navcap" \
-    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py named_poses_file:=$NAV_NAMED routes_dir:=$NAV_ROUTES" Enter
+    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py named_poses_file:=$NAV_NAMED routes_dir:=$NAV_ROUTES covariance_threshold:=0.40" Enter
 sleep 5
 
-echo "[6/8] enable nav_pause runtime (15s delay)"
+echo "[7/9] enable nav_pause runtime (15s delay)"
 tmux new-window -t "$SESSION" -n pause-enable
 tmux send-keys -t "$SESSION:pause-enable" \
     "$ROS_SETUP && sleep 15 && ros2 param set /reactive_stop_node enable_nav_pause true && echo 'enable_nav_pause=true active'" Enter
 
-echo "[7/8] foxglove_bridge (optional, uses launch file — known-good path)"
+echo "[8/9] foxglove_bridge (optional, uses launch file — known-good path)"
 tmux new-window -t "$SESSION" -n foxglove
 tmux send-keys -t "$SESSION:foxglove" \
     "$ROS_SETUP && ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765" Enter
 
-echo "[8/8] monitor window (manual ros2 commands)"
+echo "[9/9] monitor window (manual ros2 commands)"
 tmux new-window -t "$SESSION" -n monitor
 tmux send-keys -t "$SESSION:monitor" "$ROS_SETUP" Enter
 
@@ -102,6 +109,18 @@ echo "  ros2 topic hz /state/nav/safety         # 10 Hz"
 echo "  ros2 topic echo /state/nav/safety       # check driver_alive/lidar_alive/amcl_health"
 echo "  ros2 action list | grep nav             # 4 actions"
 echo "  ros2 service list | grep nav            # 3 services"
+echo ""
+echo "Capability gates smoke (after /initialpose set):"
+echo "  ros2 topic echo /capability/nav_ready  --once   # expect data: true"
+echo "  ros2 topic echo /capability/depth_clear --once  # true (clear) / false (obstacle / no D435)"
+echo "  ros2 topic echo /state/nav/paused      --once   # data: false on idle"
+echo "  ros2 topic hz   /capability/nav_ready           # ~1 Hz"
+echo "  ros2 topic hz   /capability/depth_clear         # ~5 Hz"
+echo ""
+echo "Dynamic obstacle stop test (K-DYN-STOP / K-DYN-RECOVER):"
+echo "  python3 scripts/send_relative_goal.py --distance 1.0"
+echo "  → step 0.3-0.4m in front of D435; expect depth_clear=false within 1s, Go2 stops"
+echo "  → step away;                       expect depth_clear=true  within 3s, resume/re-send goal"
 echo ""
 echo "Phase 10 KPI verification:"
 echo "  K1+K2  python3 scripts/send_relative_goal.py --distance 0.5  (x5 then 0.8 x5)"

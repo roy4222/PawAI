@@ -1,16 +1,21 @@
-"""一鍵啟 nav_capability 4 個 node。
+"""一鍵啟 nav_capability 6 個 node（含 capability gates）。
 
 啟動：
   ros2 launch nav_capability nav_capability.launch.py
   ros2 launch nav_capability nav_capability.launch.py map_id:=classroom_5_13
+  ros2 launch nav_capability nav_capability.launch.py covariance_threshold:=0.40
 
 Node 列表:
-  nav_action_server_node — /nav/goto_relative + /nav/goto_named + /odom watchdog
-  route_runner_node      — /nav/run_route + /nav/{pause,resume,cancel}
-  log_pose_node          — /log_pose (write to named_poses or routes JSON)
-  state_broadcaster_node — heartbeat + status + safety JSON @ 10Hz
+  nav_action_server_node    — /nav/goto_relative + /nav/goto_named + /odom watchdog
+  route_runner_node         — /nav/run_route + /nav/{pause,resume,cancel}
+  log_pose_node             — /log_pose (write to named_poses or routes JSON)
+  state_broadcaster_node    — heartbeat + status + safety JSON @ 10Hz
+  capability_publisher_node — /capability/nav_ready (latched, AMCL freshness + cov)
+  depth_safety_node         — /capability/depth_clear (fail-closed, D435 ROI gate)
 
-註：本 launch 不啟 Nav2 / AMCL / map_server / driver / mux / reactive_stop。
+註：本 launch 不啟 Nav2 / AMCL / map_server / driver / mux / reactive_stop / D435 camera。
+   depth_safety_node 訂閱 /camera/camera/aligned_depth_to_color/image_raw；
+   若 camera 沒起，depth_clear 1s 內進 fail-closed (false)。
    實機驗收用 scripts/start_nav_capability_demo_tmux.sh 把所有層一起起。
 """
 import os
@@ -41,6 +46,16 @@ def generate_launch_description():
         "map_id",
         default_value="unknown_map",
         description="Map ID stamp written by log_pose when creating new JSONs",
+    )
+    cov_thr_arg = DeclareLaunchArgument(
+        "covariance_threshold",
+        default_value="0.40",
+        description="capability_publisher_node σ²x+σ²y threshold (0.40 lab default; 0.20 spec target)",
+    )
+    depth_topic_arg = DeclareLaunchArgument(
+        "depth_topic",
+        default_value="/camera/camera/aligned_depth_to_color/image_raw",
+        description="depth_safety_node input depth image topic (RealSense aligned depth)",
     )
 
     nav_action = Node(
@@ -78,8 +93,27 @@ def generate_launch_description():
         name="state_broadcaster_node",
         output="screen",
     )
+    capability_pub = Node(
+        package="nav_capability",
+        executable="capability_publisher_node",
+        name="capability_publisher_node",
+        output="screen",
+        parameters=[{
+            "covariance_threshold": LaunchConfiguration("covariance_threshold"),
+        }],
+    )
+    depth_safety = Node(
+        package="go2_robot_sdk",
+        executable="depth_safety_node",
+        name="depth_safety_node",
+        output="screen",
+        parameters=[{
+            "depth_topic": LaunchConfiguration("depth_topic"),
+        }],
+    )
 
     return LaunchDescription([
-        named_arg, routes_arg, map_id_arg,
+        named_arg, routes_arg, map_id_arg, cov_thr_arg, depth_topic_arg,
         nav_action, route_runner, log_pose, state_bcast,
+        capability_pub, depth_safety,
     ])

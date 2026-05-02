@@ -1,6 +1,6 @@
 # 專案進度快照
 
-> 最後更新：2026-03-20
+> 最後更新：2026-05-02 (Phase A 導航底座日)
 
 ## 當前階段
 
@@ -37,8 +37,37 @@
 | LLM Brain | [STABLE] | Qwen2.5-7B-Instruct on RTX 8000，max_tokens 120，RuleBrain fallback 5/5 |
 | Benchmark 框架 | [STABLE] | L1 全模型完成（face/pose/gesture/stt），L2 共存矩陣完成。3/25 決策數據齊全 |
 | 文件網站 | [PENDING] | 黃/陳負責，Astro + Starlight |
+| nav_capability | [USABLE] | 5/2:`nav_action_server` 支援 `/state/nav/paused` + 10s pose-progress timeout(BUG #2 修)、`capability_publisher_node` v0.5(AMCL freshness + covariance,實機需 `-p covariance_threshold:=0.40` override)。K1 3/3 + K-pause 實機過。Day 2 升級 lifecycle service + costmap healthy |
+| D435 safety gate | [USABLE] | 5/2:`depth_safety_node` (go2_robot_sdk),fail-closed(沒 frame / stale > 1s → false),手擋實機 1.03s 內翻轉。**只當 safety gate,不接 Nav2 costmap** |
+| Executive safety wiring | [USABLE] | 5/2:WorldState 訂三個 capability (nav_ready/depth_clear/nav_paused fail-closed)、SafetyLayer 加 NAV/MOTION/nav_paused 三段 gate。92/92 unit tests 過,未接 launch |
+| Capability launch wiring | [USABLE] | 5/2 晚:`nav_capability.launch.py` 加 `capability_publisher_node` + `depth_safety_node`(從 go2_robot_sdk),tmux demo script 補 D435 window + smoke checklist。Jetson 上機 K-COSTMAP ✅ 過 |
+| 動態避障 v0 | [PARTIAL] | 5/2 深夜:DWB 調 3 行(PathAlign 16→12、BaseObstacle 0.40→0.80、inflation 0.25→0.30)。R1 試繞→停 box 前 0.49m(不撞不摔);R2 planner 早早放棄。**不可重現**,需 R3 + 場景校準。詳 [docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md](../../../docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md) |
 
-## 近期焦點（3/21 更新）
+## 近期焦點(2026-05-02 更新)
+
+**Phase A 導航底座日完成**(commits `a3bdd2e` / `9fe6046` / `e413406`):
+1. ✅ `/state/nav/paused` latched topic + nav_action_server pause/resume + cancel/re-send (BUG #2)
+2. ✅ `/capability/depth_clear` fail-closed(D435 ROI gate)
+3. ✅ `/capability/nav_ready` v0.5(AMCL freshness + covariance)
+4. ✅ WorldState 接三個 capability + SafetyLayer 三段 gate(NAV / MOTION / nav_paused)
+5. ✅ 9 份外部 stack research(Odin / OM1 / NavDP / visualnav / amigo_ros2 / DimOS + 2 papers)+ synthesis 排好 P0/P2/P3 優先序
+6. 🟡 Foxglove D435 點雲 TF (static_transform_publisher) 暫時頂著,正式 D435 mount 校正排到 5/13 後
+
+**5/2 深夜試跑教訓**(動態避障 v0):
+- ⚠️ **Damp (api_id=1001) 不能當移動中 emergency stop** — 馬達軟鬆弛 → Go2 摔倒。改用 `emergency_stop.py engage` (mux pri 255 + lock) + StopMove (1003,**必填 topic=rt/api/sport/request**)
+- ⚠️ **detour fail 條件 ≤ 1s** — 不是等 5-6s。reactive 進 danger zone 即代表 DWB 沒在 0.6m 之外繞掉,本輪已失敗
+- ⚠️ **velocity_smoother 不解此 bug** — mux pri 200 切換 bypass smoother;v1 才考慮 reactive 漸進 ramp
+- ⚠️ **WebRtcReq 必填 topic** — `api_id=1003` 在不同 topic 下意義不同(sport=StopMove vs obstacles_avoid=Move)
+
+**day 2 P0**(明天必做):
+1. 場景校準 + R3:標 box 位置 / Go2 起點 / 左右淨空,跑第三輪驗證 R1 行為是否可重現
+2. 第二階段 K-LOW-OBSTACLE-DETECT/GATE:D435 對低矮物 ≤1s 翻 depth_clear=false
+3. 接 `interaction_executive.launch.py` — 把 capability_publisher / depth_safety / executive 串起
+4. Brain rules `speech_nav_demo` + `face_wave_approach`
+5. `/capability/nav_ready` 升級 v1 — lifecycle service + TF map→base_link + costmap healthy(取代 pose age)
+6. Studio Trace Drawer LED 顯示 3 個 capability bool
+
+## 近期焦點(3/21 更新)
 
 **已完成（3/18-3/21）**：
 1. ✅ Benchmark 框架 Batch 0+1（core + 6 adapters: YuNet/SCRFD/RTMPose/MediaPipe/Whisper）
