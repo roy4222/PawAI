@@ -1,7 +1,61 @@
 # 專案狀態
 
-**最後更新**：2026-05-01 evening（**K1 5/5 PASS / 動態避障 v0 撞擊事件揭露 BUG #1 reactive_stop blind front / Fix front_offset_rad=π standalone 4 場景全 PASS / BUG #2 (goto_relative pause) + #4 (BT 短路) 待修**）
+**最後更新**：2026-05-03 evening（**Stage 1 K-STATIC-AVOID-CONTROLLED PASS / Demo A「停 → 拿走 → 繼續」可錄 / Stage 2 detour 仍 fail / nav_round_reset.sh + Jetson deployment 修補完整**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/3 進度（evening summary）
+
+**Stage 1（遇障停車）PASS / Stage 2（自動繞行）仍 fail / Demo A 1.5m goal 流程跑通**
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **nav_round_reset.sh 寫完並 sync Jetson** | 8 步檢查（emergency release / nav resume / costmap clear / 3 capability snapshot / cmd_vel quiet）+ READY/NOT-READY summary | ✅ commit 待 |
+| **Jetson deployment 修補** | `~/.local/.../entry_points.txt` 缺 3 個 entry 手補（reactive_stop_node + capability_publisher_node + depth_safety_node）→ 7 nav nodes 都活 | ✅ |
+| **rsync 災難復原** | 第一次誤用 `--delete` + trailing slash 把 nav_capability/go2_robot_sdk/scripts 內容展平到頂層、孤兒檔清掉、正確 rsync 復原 | ✅ |
+| **Stage 1 R3 R1 PASS（K-STATIC-AVOID-CONTROLLED）** | box 1.5m / goal 1.8m → Go2 走 0.85m / drift 0.19m / 停在 box 0.54m → reactive_stop + D435 depth_clear + auto-pause 三鏈同步觸發 → 不撞不摔 | ✅ |
+| **Demo A 1.5m goal R1 success reached** | 1.5m goal、actual_distance=1.401m（box 沒在路上 → 後續放對位置才有完整 demo）| ✅ |
+| **參數調整 commit 待** | xy_goal_tolerance 0.15 → 0.10（兩處）、covariance_threshold launch default 0.40 → 0.45 | ✅ 改完 |
+
+### 5/3 卡頓的 5 大根因（未解，留待後續）
+
+1. **AMCL covariance 卡 0.30-0.42 plateau** — 沒動就不收斂，初始 initialpose 後 60s 進 GREEN 偶爾，多數時候卡 YELLOW
+2. **No-progress timeout 10s（DWB 真沒動，跟 paused 無關）** — 確認 `nav_action_server_node.py:259-266` paused 會 break inner loop，timeout 不是 paused 引起
+3. **xy_goal_tolerance 0.15m 太鬆** — Go2 走 0.4m 撞 box 停就被判 reached → 沒 active goal 可 resume（**今日已修 0.10**）
+4. **Reactive_stop danger 0.6m 對 detour 太保守** — DWB 沒空間繞行
+5. **DWB 成本 + 場景太緊** — 5/3 場景左右 1.2m 對 footprint+inflation 規劃失敗（log 出 `No valid trajectory`）
+
+### Demo B 嘗試 + 失敗（detour）
+
+- 多輪嘗試 box 0.7-2.0m / goal 0.5-2.5m / 各種 cov 狀態，DWB 都沒繞
+- 最常見失敗：`no_progress_timeout actual_distance=0.000`（DWB 接受 goal 但找不到 valid trajectory）
+- log 確認：`DWBLocalPlanner: No valid trajectory` + BaseObstacle critic 把所有 sampled paths 全判 in-collision
+- 結論：當前 DWB profile 是「保守安全停」設計，不是「積極繞行」設計
+
+### TTS 計畫（user 提）
+
+- 想在 Go2 停車時喊「前方有障礙物」、繼續時喊「障礙物已移除」
+- 現狀：speech stack 不在 nav demo session 內、tts_node 沒跑
+- 待做：寫 bridge node 訂閱 `/capability/depth_clear` 翻轉 → publish to `/tts`（5 min 工作量）
+
+### 學到的 5/3 教訓
+
+1. **Demo cov 必須 GREEN 才能送 ≥0.5m goal** — capability_publisher 0.45 threshold 跟 nav_action_server YELLOW 0.5 對齊還是不夠，YELLOW 區只允許 ≤0.5m
+2. **Forward warmup 是雙刃刀** — 收斂 AMCL 但破壞場景，要用就送 0.3m 不要 0.5m
+3. **Box 距離 sweet spot**：0.7-1.7m 之間，太近 DWB 規劃失敗、太遠 reactive 不觸發、剛好可控停 + 留 resume 空間
+4. **`robot.launch.py` line 77 nav2 yaml 寫死** — 不支援 nav_params_file override（Demo B detour profile 前置要修）
+5. **rsync 多 source 帶 trailing slash + `--delete` 是災難** — 內容會展平、孤兒會被刪。永遠不帶 trailing slash + 不要 delete
+
+### 下一步（5/4-5/12）
+
+1. **Demo A 連 3 take 錄影**（上面流程確認可重現後）
+2. **Demo B Path B1 嘗試** — 修 `robot.launch.py` 加 nav_params_file arg + 寫 `nav2_params_detour.yaml`（PathAlign 12→10、forward_point_distance 0.2→0.5、GoalAlign 10→6、BaseObstacle 0.80→0.40、inflation 0.30→0.35）
+3. **Demo B Path B2 fallback** — `scripts/demo_waypoint_detour.sh`（兩段 waypoint 預設繞行，**話術不能叫「自動繞開」**）
+4. **TTS bridge node**（user 要求） — `/capability/depth_clear` 翻轉 → `/tts`
+5. **5/12 demo 話術定稿** — Demo A 用「自主導航 + 偵測障礙物自動停車 + 障礙移除後自動繼續」、Demo B 視 B1/B2 結果
 
 ---
 

@@ -80,7 +80,7 @@ sleep 3
 echo "[6/9] nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)"
 tmux new-window -t "$SESSION" -n navcap
 tmux send-keys -t "$SESSION:navcap" \
-    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py named_poses_file:=$NAV_NAMED routes_dir:=$NAV_ROUTES covariance_threshold:=0.40" Enter
+    "$ROS_SETUP && ros2 launch nav_capability nav_capability.launch.py named_poses_file:=$NAV_NAMED routes_dir:=$NAV_ROUTES covariance_threshold:=0.45" Enter
 sleep 5
 
 echo "[7/9] enable nav_pause runtime (15s delay)"

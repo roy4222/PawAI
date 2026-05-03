@@ -145,9 +145,10 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      # P0 Nav v3.9 (5/1 noon): 0.30 → 0.15 — K1 軟通過 3/5 後發現 0.30 對 0.5m goal 太鬆，
-      # Go2 走 0.3m 就被誤判 reached、實際移動量 ≈ goal_distance - xy_tol
-      xy_goal_tolerance: 0.15
+      # P0 Nav v3.9 (5/1 noon): 0.30 → 0.15 — K1 軟通過 3/5 後發現 0.30 對 0.5m goal 太鬆
+      # 5/3 evening Demo A 修：0.15 → 0.10 — 0.5m demo goal Go2 走 0.4m 被 reactive 停就被判 reached、
+      # 拿走 box 後沒 active goal 可 resume；0.10 仍 > AMCL drift 不會害到達失敗
+      xy_goal_tolerance: 0.10
       yaw_goal_tolerance: 0.70
     # DWB parameters
     FollowPath:
@@ -177,7 +178,7 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.15      # P0 Nav v3.9 (5/1 noon): 0.25 → 0.15 與 general_goal_checker 一致
+      xy_goal_tolerance: 0.10      # 5/3 Demo A: 0.15 → 0.10 與 general_goal_checker 對齊
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: True
       stateful: True

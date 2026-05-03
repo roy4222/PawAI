@@ -184,3 +184,67 @@ R1 / R2 行為差太多，先排除場地變因：
 - BT XML 客製 spin/backup velocity
 - max_vel_y 開啟（已知四足狗在小空間風險高）
 - AMCL initial_cov 重設
+
+---
+
+## 5/3 R3 R1 結果（接 5/2 R1/R2 後續）
+
+**結果：K-STATIC-AVOID-CONTROLLED PASS** ✅
+
+### 5/3 場景 vs 5/2
+
+| 維度 | 5/2 R1 | 5/3 R3 R1 |
+|---|---|---|
+| Box 距離 | 1.0-1.2m | 1.5m |
+| Goal | 從 1.5m 開始試 | 1.8m |
+| 左/右淨空 | 0.7m | 1.46m / 1.62m |
+| AMCL cov | YELLOW 0.341 | GREEN 0.231（後 plateau 0.30+）|
+
+### 5/3 R3 R1 watchdog 數據
+
+| 指標 | 值 | 判定 |
+|---|---|---|
+| Go2 起點 → 終點 | (0.17, 0.06) → (1.02, 0.27) | **真實前進 0.85m** |
+| Side drift | 0.19m | < 0.40m, DWB 試左偏 |
+| 前方距離 | 全程 0.54-1.00m 跳（box edge）| 沒進 0.40m 危險區 |
+| cmd_vel.x | 停止後全程 0.00 | 可控停 |
+| 撞 / 摔 / 大甩 | 無 | ✅ |
+| Watchdog auto-abort | 未觸發 | ✅ |
+
+### 自動觸發的鏈路（5/2 缺 D435 補齊版）
+
+```
+goal 1.8m 接受 → DWB 試走 → 約 0.85m 接近 box (0.54m)
+→ reactive_stop danger zone → cmd_vel 鎖 0
+→ D435 看到 box → depth_clear=false
+→ /state/nav/paused=true
+→ nav_action_server: "paused detected; cancelling Nav2 goal,
+  WILL RE-SEND ON RESUME"
+```
+
+### 5/3 對比 5/2 結論
+
+| 項目 | 5/2 R1 PARTIAL | 5/3 R3 R1 PASS |
+|---|---|---|
+| 走了多少 | 0.67m | **0.85m** |
+| Side drift | 0.18m | 0.19m |
+| reactive_stop 接管 | ✅ | ✅ |
+| **D435 depth_clear gate** | ❌ 沒接 | **✅ 同步觸發** |
+| **自動 pause + goal cancel** | ❌ 沒接 | **✅ 自動** |
+| 摔倒 | 1 次（Damp 用錯） | **0** |
+
+### 第二階段 Detour 嘗試（FAIL）
+
+5/3 多輪試 box 0.7-2.0m / goal 0.5-2.5m 各種組合，DWB 都沒繞：
+
+- 失敗 mode A：`amcl_lost`（cov YELLOW > 0.5m goal 被拒）
+- 失敗 mode B：`no_progress_timeout actual_distance=0.000`（DWB 接受 goal 但找不到 valid trajectory）
+- log 確認：`DWBLocalPlanner: No valid trajectory` + BaseObstacle critic 全判 in-collision
+- BT spin recovery → spin 也 collision → fail
+
+**結論**：當前 yaml 是「保守安全停」profile，要 detour 需要：
+1. 修 `robot.launch.py:77` 加 `nav_params_file` launch arg（目前寫死）
+2. 寫 `nav2_params_detour.yaml`（PathAlign 12→10、forward_point_distance 0.2→0.5、GoalAlign 10→6、BaseObstacle 0.80→0.40、inflation 0.30→0.35）
+3. 寬場景：box 1.8-2.0m / goal 2.5-3.0m / 左右 ≥ 1.5m
+
+詳見 [`docs/navigation/plans/2026-05-03-stage1-and-recovery.md`](2026-05-03-stage1-and-recovery.md)。

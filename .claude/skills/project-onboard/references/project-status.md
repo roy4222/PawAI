@@ -1,6 +1,6 @@
 # 專案進度快照
 
-> 最後更新：2026-05-02 (Phase A 導航底座日)
+> 最後更新：2026-05-03 evening (Stage 1 K-STATIC-AVOID-CONTROLLED PASS / Demo A 流程跑通 / Stage 2 detour 仍 fail)
 
 ## 當前階段
 
@@ -37,11 +37,13 @@
 | LLM Brain | [STABLE] | Qwen2.5-7B-Instruct on RTX 8000，max_tokens 120，RuleBrain fallback 5/5 |
 | Benchmark 框架 | [STABLE] | L1 全模型完成（face/pose/gesture/stt），L2 共存矩陣完成。3/25 決策數據齊全 |
 | 文件網站 | [PENDING] | 黃/陳負責，Astro + Starlight |
-| nav_capability | [USABLE] | 5/2:`nav_action_server` 支援 `/state/nav/paused` + 10s pose-progress timeout(BUG #2 修)、`capability_publisher_node` v0.5(AMCL freshness + covariance,實機需 `-p covariance_threshold:=0.40` override)。K1 3/3 + K-pause 實機過。Day 2 升級 lifecycle service + costmap healthy |
-| D435 safety gate | [USABLE] | 5/2:`depth_safety_node` (go2_robot_sdk),fail-closed(沒 frame / stale > 1s → false),手擋實機 1.03s 內翻轉。**只當 safety gate,不接 Nav2 costmap** |
-| Executive safety wiring | [USABLE] | 5/2:WorldState 訂三個 capability (nav_ready/depth_clear/nav_paused fail-closed)、SafetyLayer 加 NAV/MOTION/nav_paused 三段 gate。92/92 unit tests 過,未接 launch |
-| Capability launch wiring | [USABLE] | 5/2 晚:`nav_capability.launch.py` 加 `capability_publisher_node` + `depth_safety_node`(從 go2_robot_sdk),tmux demo script 補 D435 window + smoke checklist。Jetson 上機 K-COSTMAP ✅ 過 |
-| 動態避障 v0 | [PARTIAL] | 5/2 深夜:DWB 調 3 行(PathAlign 16→12、BaseObstacle 0.40→0.80、inflation 0.25→0.30)。R1 試繞→停 box 前 0.49m(不撞不摔);R2 planner 早早放棄。**不可重現**,需 R3 + 場景校準。詳 [docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md](../../../docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md) |
+| nav_capability | [USABLE] | 5/3:capability_publisher launch default 0.40→**0.45**(對齊 nav_action_server YELLOW upper 0.50)、xy_goal_tolerance 0.15→**0.10**。Demo A 1.5m goal 流程跑通。Jetson `~/.local/.../entry_points.txt` 缺 3 個 entry 已手補 |
+| D435 safety gate | [USABLE] | 5/2:`depth_safety_node` (go2_robot_sdk),fail-closed,手擋 1.03s 翻轉。5/3 demo 中觀察到 box ≤0.4m 即 depth_clear→false 觸發 auto-pause |
+| Executive safety wiring | [USABLE] | 5/2:WorldState 訂三個 capability、SafetyLayer 三段 gate。92/92 unit tests 過,未接 launch |
+| Capability launch wiring | [USABLE] | 5/3:8 windows + 7 nav nodes 全活、`nav_round_reset.sh` READY 流程驗證。已知坑：colcon build setuptools 不相容 → editable install 直接 source rsync 生效 |
+| **Stage 1 遇障停車** | **[PASS]** | 5/3 R3 R1：box 1.5m / goal 1.8m → Go2 走 0.85m / drift 0.19m / 停 box 前 0.54m。reactive_stop + D435 + auto-pause 三鏈同步。**K-STATIC-AVOID-CONTROLLED PASS** |
+| **Stage 2 自動繞行** | **[FAIL]** | 5/3 多輪嘗試（box 0.7-2.0m / goal 0.5-2.5m）DWB 都沒繞、`No valid trajectory` + BT spin recovery 失敗。當前 yaml 是「保守安全停」profile，要 detour 需獨立 profile + `robot.launch.py` 加 nav_params_file launch arg（line 77 寫死）|
+| nav_round_reset.sh | [STABLE] | 5/3 新工具：emergency release / nav resume / costmap clear / 3 capability snapshot / cmd_vel quiet → READY/NOT-READY summary |
 
 ## 近期焦點(2026-05-02 更新)
 

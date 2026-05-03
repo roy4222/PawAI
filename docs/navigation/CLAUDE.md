@@ -2,10 +2,10 @@
 
 > 這是模組內的工作規則真相來源。`.claude/rules/` 中的對應檔案只是薄橋接。
 
-## Phase A capability gates (5/2 加入,Executive 已接)
+## Phase A capability gates (5/2 加入,Executive 已接;5/3 調 threshold)
 
 - **`/capability/depth_clear`** (Bool, latched, fail-closed):D435 ROI 前方 1m 內 < 0.4m 障礙 → false。**沒收到 frame / stale > 1s / compute error → false**(由 `depth_safety_node` 保證)
-- **`/capability/nav_ready`** (Bool, latched, **v0.5 basic**):AMCL 收到 pose + covariance < threshold(預設 0.20,實機 v8 map 需 `--ros-args -p covariance_threshold:=0.40` override)。**day 2 升級** = lifecycle service + TF `map → base_link` 可查 + costmap healthy
+- **`/capability/nav_ready`** (Bool, latched, **v0.5 basic**):AMCL 收到 pose + covariance < threshold(`nav_capability.launch.py` default **5/3 改 0.45**, demo tmux script 也改 0.45,對齊 nav_action_server YELLOW upper 0.50)。**day 2 升級** = lifecycle service + TF `map → base_link` 可查 + costmap healthy
 - **`/state/nav/paused`** (Bool, latched):全域 pause 狀態,由 `route_runner` 的 `/nav/pause`/`/nav/resume` service **無條件** publish。`nav_action_server` 訂這個做 cancel + re-send(BUG #2 5/2 已修,commit `a3bdd2e`)
 - **D435 是 safety gate,不接進 Nav2 local costmap**(明確不做)— 障礙偵測由 reactive_stop_node + LiDAR + D435 ROI 三條獨立鏈路覆蓋
 - **Foxglove 看 D435 點雲** 需要靜態 TF `base_link → camera_depth_optical_frame`(Go2 URDF 沒含 D435 mount;5/2 用 `static_transform_publisher --x 0.30 --y 0 --z 0.20` 暫時頂著,正式 mount 校正排到 5/13 後)
@@ -21,6 +21,17 @@
 - **不要每改 yaw 就重建一張 map**（4/29 浪費 4 張）— cartographer 會用任何 yaw 建出內部一致的 map，視覺差異不能當判讀依據
 - **不要用「物體放置法」做物理錨定**（5/1 v7 偽陽性教訓）— 用戶識別 Go2 鼻尖方向可能錯。用「**用戶站位置法**」：用戶站在 Go2 物理頭前 0.5m，看 lidar 哪個 angle bin 偵測到、無歧義
 - **不要假設 v8 mount yaw=π 只要改 TF scripts** — `reactive_stop_node` 內部 `compute_front_min_distance` 也假設 laser 0° = Go2 前方、必須一起改（5/1 Phase 7.2 Go2 撞紙箱事件、commit `e3270da` 修）
+- **不要 rsync 帶 `--delete` + trailing slash 多 source 到 Jetson**（5/3 災難）— `rsync nav_capability/ go2_robot_sdk/ scripts/ jetson:dest/` 會 flatten contents 合併到 dest + delete source 沒有的檔案 → `scripts/` 內檔案被刪光、頂層出現孤兒目錄。正確：**source 不帶 trailing slash + 不 `--delete`**
+- **不要在 Jetson 跑 `colcon build`** — setuptools `--editable`/`--uninstall` 不相容，會 fail。改靠 editable install + source rsync（python source 改動立刻生效，launch.py / yaml 要手動 cp 到 `install/.../share/`）
+- **不要假設 `~/.local/lib/python3.10/site-packages/{nav_capability,go2_robot_sdk}-*.dist-info/entry_points.txt` 永遠完整**（5/3 教訓）— `colcon build` fail 時新增的 console_scripts 不會進 metadata，`load_entry_point` 拿 StopIteration → launch 起不來。手動 echo append 那 .txt 即可（`cp .bak.<ts>` 自動備份）
+
+## 5/3 demo 教訓（K-STATIC-AVOID-CONTROLLED PASS / detour FAIL）
+
+- **AMCL covariance 卡 0.30-0.42 plateau** 是常態:沒動就不收斂,初始 initialpose 後 60s 進 GREEN 偶爾,多數時候卡 YELLOW。建議:重設 initialpose + 等 60-90s,或物理推 Go2 0.3m 配合
+- **Forward warmup 是雙刃刀** — 收斂 cov 但破壞場景(推 Go2 進 box 0.3-0.5m)。用 0.3m 不要 0.5m,且每次 warmup 後重量 front
+- **Box 距離 sweet spot:1.0-1.5m**(對 1.5m demo goal):太近(< 1.0m)DWB「No valid trajectory」+ BT spin recovery collision、太遠(> 1.7m)reactive 不觸發
+- **xy_goal_tolerance 5/3 改 0.10**(從 0.15) — 但仍會出現「Go2 走 0.4m 撞 box stop → tolerance 內判 reached」情況,demo 變成兩個 0.5m goal 接龍最穩
+- **DWB 不會自動繞行** — 當前 yaml 是「保守安全停」profile,要 detour 必須改 `robot.launch.py:77` 加 `nav_params_file` arg + 寫 `nav2_params_detour.yaml`(PathAlign 12→10、forward_point_distance 0.2→0.5、GoalAlign 10→6、BaseObstacle 0.80→0.40、inflation 0.30→0.35)+ 寬場景
 
 ## 改之前先看
 

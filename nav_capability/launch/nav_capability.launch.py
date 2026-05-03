@@ -49,8 +49,8 @@ def generate_launch_description():
     )
     cov_thr_arg = DeclareLaunchArgument(
         "covariance_threshold",
-        default_value="0.40",
-        description="capability_publisher_node σ²x+σ²y threshold (0.40 lab default; 0.20 spec target)",
+        default_value="0.45",
+        description="capability_publisher_node σ²x+σ²y threshold (5/3 Demo: 0.45 對齊 nav_action_server YELLOW upper 0.50; 0.20 spec target)",
     )
     depth_topic_arg = DeclareLaunchArgument(
         "depth_topic",
