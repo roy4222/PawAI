@@ -51,11 +51,56 @@
 
 ### 下一步（5/4-5/12）
 
-1. **Demo A 連 3 take 錄影**（上面流程確認可重現後）
-2. **Demo B Path B1 嘗試** — 修 `robot.launch.py` 加 nav_params_file arg + 寫 `nav2_params_detour.yaml`（PathAlign 12→10、forward_point_distance 0.2→0.5、GoalAlign 10→6、BaseObstacle 0.80→0.40、inflation 0.30→0.35）
-3. **Demo B Path B2 fallback** — `scripts/demo_waypoint_detour.sh`（兩段 waypoint 預設繞行，**話術不能叫「自動繞開」**）
-4. **TTS bridge node**（user 要求） — `/capability/depth_clear` 翻轉 → `/tts`
-5. **5/12 demo 話術定稿** — Demo A 用「自主導航 + 偵測障礙物自動停車 + 障礙移除後自動繼續」、Demo B 視 B1/B2 結果
+5/3 evening 第二段已執行（D435 + RPLIDAR 融合到 detour profile）— 見下面「5/3 late-night 補充」。
+
+明天 5/4 = Phase B Day 1，主菜 **B1 LLM eval + TTS 換血**（spec `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` §8）。Nav debt 排到 demo 後修。
+
+---
+
+## 5/3 late-night 補充（D435 + RPLIDAR fusion 已完成）
+
+**3-phase 漸進結果**：
+
+| Phase | 內容 | 結果 |
+|---|---|---|
+| Phase 1 | D435 → /scan_d435 + Foxglove 對齊 | ✅ PASS |
+| Phase 2 | D435 進 local_costmap（不進 global、DWB 不動） | ✅ PASS — `obstacle_layer.observation_sources = "scan d435_scan"` 雙 source 融合 |
+| Phase 3 | DWB detour profile + 短 goal 試自動繞開 | ❌ L3 FAIL（不是 DWB 不會繞，是 nav_action_server bug 串連讓 Go2 永遠進不到測試起點）|
+
+**新增 / 修改檔案**：
+- `go2_robot_sdk/launch/robot.launch.py`：加 `nav_params_file` LaunchArgument（不傳 arg 時 Demo A 行為 100% 不變）
+- `go2_robot_sdk/config/nav2_params_detour.yaml`：新檔（detour profile，加 d435_scan source / inflation 0.30→0.20 / DWB critic 全降）
+- `scripts/start_nav_capability_demo_tmux_detour.sh`：新檔（含 d435-tf + d435-scan window，reactive 帶 -p danger:=0.40）
+- `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`：spec
+- `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md`：plan + result
+
+**Demo B 話術降階**（誠實版）：
+> 「Go2 結合 RPLIDAR 主動避障 + D435 深度感測融合進入 Nav2 local costmap，可即時感知障礙物並自動安全停車」
+
+不能宣稱「自動繞開」（L3 沒過）。
+
+**5/3 evening 確認的 nav debt（明天不修，排 demo 後）**：
+
+| Bug ID | 內容 | 估工 |
+|---|---|---|
+| B1 | `nav_action_server` v1 不 enforce max_speed → 短 goal 走 2x | 1 天 |
+| B2 | AMCL covariance 卡 0.30-0.45 plateau（靜止不收斂） | 0.5 天 |
+| B3 | `capability_publisher` 沒 parameter callback | 30 min |
+| B4 | nav_action_server YELLOW gate threshold 寫死 | 1 hr |
+| B5 | `actual_distance` 計算用 send-time pose 不準 | 30 min |
+
+完整清單在 `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md` 末段。
+
+**明天 5/4 進 Phase B**（不再做 nav）：
+
+1. B1 LLM eval（50 prompt × 3 LLM × 4 軸）
+2. B1 TTS Gemini 3.1 換血 + USB 喇叭 + Megaphone 兩條路徑
+3. B1 LLMProvider / TTSProvider adapter 化
+4. B1 provider chain（OpenRouter → fallback → Ollama → RuleBrain）
+
+詳見 spec §8 B1。
+
+---
 
 ---
 
