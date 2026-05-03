@@ -438,3 +438,24 @@ Phase 1 PASS 後等 user 給 Phase 2 plan 寫作授權，**不要 auto chain 進
 
 ### 結論
 - [x] **Phase 1 PASS（操作驗證 OK，視覺對齊 user 確認 OK，未做 6/Task7 詳細 in/out 因時間壓力）** — 進 Phase 2
+
+---
+
+## Phase 2 + Phase 3 Result（同日晚跑完，2026-05-03 22:15）
+
+### Phase 2 PASS ✅
+- detour profile yaml + launcher 寫完並啟動 nav-cap-detour stack（11 windows）
+- `ros2 param get /local_costmap/local_costmap obstacle_layer.observation_sources` = `"scan d435_scan"` ✅
+- `obstacle_layer.d435_scan.*` 11+ params 全載入（clearing / marking / data_type=LaserScan / range / etc）
+- inflation_radius detour profile 0.20m 已套用
+- D435 + RPLIDAR 雙 source 已成功融合進 local_costmap
+
+### Phase 3 L3 FAIL ❌
+- 連兩輪 1.6m goal: `no_progress_timeout actual_distance=0.000`
+- 根因：Go2 warmup 走過頭 (0.5m → 1.4m)，box 從 1.56m 變 0.79m，太近 DWB footprint+inflation 規劃不出來
+- 即使 detour profile (inflation 0.20 + DWB critic 全降) + cov GREEN 0.092 也救不了
+
+### 整體判斷
+- L1+L2 達成 = 「D435 + RPLIDAR 融合進入 Nav2 local costmap」可宣稱
+- L3 不達成 = **不能說 Go2 自動繞開**
+- Demo B 話術降為：「**Go2 結合 RPLIDAR + D435 深度感測融合進入 Nav2 local costmap，可即時感知障礙物並安全停車**」
