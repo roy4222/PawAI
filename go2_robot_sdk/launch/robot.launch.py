@@ -96,6 +96,11 @@ class Go2NodeFactory:
                 "nav2", default_value="true", description="Launch Nav2"
             ),
             DeclareLaunchArgument(
+                "nav_params_file",
+                default_value=self.config.config_paths["nav2"],
+                description="Nav2 params yaml path (default = main nav2_params.yaml; pass detour profile for D435 fusion)",
+            ),
+            DeclareLaunchArgument(
                 "slam", default_value="true", description="Launch SLAM"
             ),
             DeclareLaunchArgument(
@@ -542,7 +547,7 @@ class Go2NodeFactory:
                 ),
                 condition=IfCondition(nav2_enabled),
                 launch_arguments={
-                        "params_file": self.config.config_paths["nav2"],
+                        "params_file": LaunchConfiguration("nav_params_file"),
                         "use_sim_time": use_sim_time,
                         "autostart": with_autostart,
                     }.items(),
@@ -561,7 +566,7 @@ class Go2NodeFactory:
                 condition=IfCondition(nav2_localization_enabled),
                 launch_arguments={
                         "map": with_map,
-                        "params_file": self.config.config_paths["nav2"],
+                        "params_file": LaunchConfiguration("nav_params_file"),
                         "use_sim_time": use_sim_time,
                         "autostart": with_autostart,
                     }.items(),

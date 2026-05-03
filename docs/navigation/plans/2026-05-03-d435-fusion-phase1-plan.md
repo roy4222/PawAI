@@ -416,3 +416,25 @@ Phase 1 任一 task fail → 不繼續 Phase 2/3。可選做的：
 - 如果 fail 是 TF 問題（最常見），預期要進 Phase 1.5（D435 mount 校正），那是另一個 plan，不在今晚範圍
 
 Phase 1 PASS 後等 user 給 Phase 2 plan 寫作授權，**不要 auto chain 進 Phase 2**。
+
+---
+
+## Phase 1 Result（2026-05-03 evening, executed）
+
+### Sanity（Task 1-2）
+- D435 4 個 topic：✅
+- depth topic rate：23 Hz
+- camera_info K matrix：✅ (640x480)
+- TF chain 預期 fail（user 警告對）：base_link 與 camera_depth_optical_frame 在不同 tree
+- Step 1.5 fallback 成功：開 `nav-cap-demo:d435-tf` window，static_transform_publisher (--x 0.30 --y 0 --z 0.20 --yaw 0)，TF 通
+
+### Node spawn（Task 3-4）
+- `depthimage_to_laserscan_node` ready：✅（在 nav-cap-demo:d435-scan window）
+- `/scan_d435` rate：透過 transient_local QoS sub 收到（default volatile sub 顯示「not published」是 QoS mismatch artifact）
+- LaserScan content：frame=camera_depth_optical_frame, angle ±28°, range 0.30-3.0 ✅
+
+### Foxglove 對齊（Task 5）
+- User 視覺驗證 OK（時間壓力，未做完整 box-in/out test）
+
+### 結論
+- [x] **Phase 1 PASS（操作驗證 OK，視覺對齊 user 確認 OK，未做 6/Task7 詳細 in/out 因時間壓力）** — 進 Phase 2
