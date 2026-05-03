@@ -459,3 +459,26 @@ Phase 1 PASS 後等 user 給 Phase 2 plan 寫作授權，**不要 auto chain 進
 - L1+L2 達成 = 「D435 + RPLIDAR 融合進入 Nav2 local costmap」可宣稱
 - L3 不達成 = **不能說 Go2 自動繞開**
 - Demo B 話術降為：「**Go2 結合 RPLIDAR + D435 深度感測融合進入 Nav2 local costmap，可即時感知障礙物並安全停車**」
+
+---
+
+## Last Shot 22:35（plan v5）— 仍 L3 FAIL，根因確認
+
+3 個 explore agent 並行研究後，套用最後 5 處 DWB 改：
+- vx_samples 20→30, vtheta_samples 20→30
+- sim_time 1.0→1.5
+- short_circuit_trajectory_evaluation True→False
+- critics 移除 Oscillation
+- AMCL global re-init service 嘗試
+
+**仍 FAIL**。實測連鎖 bug：
+1. **AMCL plateau**: cov 卡 0.40-0.45，static 不收斂
+2. **必須 forward warmup 才能跨 plateau**（AMCL global re-init 把 cov 推到 10、需重設 initialpose）
+3. **Warmup overshoot 2x**: 0.5m goal 實際走 1.04m（nav_action_server v1 max_speed 不 enforce + DWB max_vel_x=0.70 加速）
+4. **Go2 走太遠進 reactive danger zone** → DWB 拒規劃 → no_progress
+
+**今晚最終結論**：
+- L1 PASS / L2 PASS / **L3 FAIL（物理 + bug 疊加極限）**
+- Demo B 話術：「D435 + RPLIDAR 融合進入 Nav2 local costmap」
+- 明天接：先修 nav_action_server max_speed enforce + AMCL plateau 解決，再試 detour
+- 5/12 demo 倒數 9 天

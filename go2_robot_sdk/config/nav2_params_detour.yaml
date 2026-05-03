@@ -171,18 +171,18 @@ controller_server:
       decel_lim_x: -1.5
       decel_lim_y: -2.5
       decel_lim_theta: -2.0
-      vx_samples: 20
-      vy_samples: 5         # 修改：降低取樣負荷
-      vtheta_samples: 20
-      sim_time: 1.0
+      vx_samples: 30        # 5/3 detour last-shot: 20 → 30（窄場景探索更細）
+      vy_samples: 5
+      vtheta_samples: 30    # 5/3 detour last-shot: 20 → 30
+      sim_time: 1.5         # 5/3 detour last-shot: 1.0 → 1.5（給 min_vel_x 0.45 更長軌跡顯現）
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.10      # 5/3 Demo A: 0.15 → 0.10 與 general_goal_checker 對齊
+      xy_goal_tolerance: 0.10
       trans_stopped_velocity: 0.05
-      short_circuit_trajectory_evaluation: True
+      short_circuit_trajectory_evaluation: False  # 5/3 detour last-shot: True → False（強制評全軌跡找最佳）
       stateful: True
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      critics: ["RotateToGoal", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # 5/3 detour last-shot: 移除 Oscillation
       BaseObstacle.scale: 0.40   # 5/3 detour: 0.80 → 0.40（降障礙成本，配合 inflation 升敢繞）
       PathAlign.scale: 10.0      # 5/3 detour: 12.0 → 10.0（再降 path 黏著）
       PathAlign.forward_point_distance: 0.5  # 5/3 detour: 0.2 → 0.5（拉長 lookahead）
