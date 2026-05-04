@@ -91,6 +91,7 @@ class TTSProvider(Enum):
     AMAZON = "amazon"
     OPENAI = "openai"
     EDGE_TTS = "edge_tts"
+    OPENROUTER_GEMINI = "openrouter_gemini"
 
 
 @dataclass
@@ -133,6 +134,14 @@ class TTSConfig:
 
     # edge-tts specific settings
     edge_tts_voice: str = "zh-CN-XiaoxiaoNeural"
+
+    # OpenRouter Gemini TTS settings (Stage 3 of B1 Plan D)
+    # Voice "Despina" selected after Stage 1 listening test on Jetson 5/4.
+    # Model is preview-stage; latency baseline 3.6-5.1s avg ~4.6s on Jetson
+    # (timeout 6.0s = baseline + ~30% headroom).
+    openrouter_gemini_voice: str = "Despina"
+    openrouter_gemini_model: str = "google/gemini-3.1-flash-tts-preview"
+    openrouter_gemini_timeout_s: float = 6.0
 
 
 class AudioCache:
@@ -453,6 +462,95 @@ class TTSProvider_EdgeTTS:
             return None
 
 
+class TTSProvider_OpenRouterGemini:
+    """Gemini 3.1 Flash TTS Preview via OpenRouter `/api/v1/audio/speech`.
+
+    Stage 1 listening test on Jetson 5/4: voice "Despina" selected by user.
+    Native audio tag support — passes `[excited]` `[laughs]` etc. through
+    to Gemini which renders them as emotion/SFX (verified by ear). Hence
+    `supports_audio_tags=True` (gates strip in tts_node.tts_callback).
+
+    Output: OpenRouter returns raw PCM (audio/pcm;rate=24000;channels=1)
+    when response_format=pcm. We wrap a WAV header (24kHz/16-bit/mono) in
+    Python so downstream cache + pydub treat the result like any other WAV.
+
+    Auth: reads `OPENROUTER_KEY` from env at call time. Not stored in
+    TTSConfig.api_key (already used by ElevenLabs). Tracked in `.env` only.
+    """
+
+    # TTSProviderBase protocol attributes
+    name: str = "openrouter_gemini"
+    sample_rate: int = 24000
+    supports_audio_tags: bool = True
+
+    OPENROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
+
+    def __init__(self, config: TTSConfig):
+        self.voice = config.openrouter_gemini_voice
+        self.model = config.openrouter_gemini_model
+        self.timeout = float(config.openrouter_gemini_timeout_s)
+        self._api_key = os.getenv("OPENROUTER_KEY", "") or os.getenv(
+            "OPENROUTER_API_KEY", ""
+        )
+        if not self._api_key:
+            _logger.warning(
+                "OPENROUTER_KEY not set — TTSProvider_OpenRouterGemini will "
+                "fail every synthesize() call until env is configured"
+            )
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        if not self._api_key:
+            return None
+        try:
+            response = requests.post(
+                self.OPENROUTER_TTS_URL,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "input": text,
+                    "voice": self.voice,
+                    "response_format": "pcm",
+                },
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout:
+            _logger.warning(
+                "openrouter_gemini timeout (%.1fs) for text=%r",
+                self.timeout,
+                text[:40],
+            )
+            return None
+        except requests.exceptions.RequestException as exc:
+            _logger.warning("openrouter_gemini request error: %s", exc)
+            return None
+
+        if response.status_code != 200:
+            _logger.warning(
+                "openrouter_gemini HTTP %s: %s",
+                response.status_code,
+                response.text[:200],
+            )
+            return None
+
+        pcm = response.content
+        if not pcm or pcm.startswith(b"{"):
+            # Defensive: 200 with JSON body would mean upstream contract drift.
+            _logger.warning("openrouter_gemini empty or JSON body, len=%d", len(pcm))
+            return None
+
+        # Wrap raw PCM (24kHz / 16-bit / mono) in a WAV container.
+        wav_io = io.BytesIO()
+        with wave.open(wav_io, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(pcm)
+        return wav_io.getvalue()
+
+
 class AudioProcessor:
     """Audio processing utilities"""
 
@@ -577,6 +675,20 @@ class EnhancedTTSNode(Node):
         self.declare_parameter(
             "edge_tts_voice", _env_str("EDGE_TTS_VOICE", "zh-CN-XiaoxiaoNeural")
         )
+        self.declare_parameter(
+            "openrouter_gemini_voice",
+            _env_str("OPENROUTER_GEMINI_VOICE", "Despina"),
+        )
+        self.declare_parameter(
+            "openrouter_gemini_model",
+            _env_str(
+                "OPENROUTER_GEMINI_MODEL", "google/gemini-3.1-flash-tts-preview"
+            ),
+        )
+        self.declare_parameter(
+            "openrouter_gemini_timeout_s",
+            _env_float("OPENROUTER_GEMINI_TIMEOUT_S", 6.0),
+        )
 
     def _load_configuration(self) -> TTSConfig:
         """Load configuration from parameters"""
@@ -664,6 +776,17 @@ class EnhancedTTSNode(Node):
             edge_tts_voice=self.get_parameter("edge_tts_voice")
             .get_parameter_value()
             .string_value,
+            openrouter_gemini_voice=self.get_parameter("openrouter_gemini_voice")
+            .get_parameter_value()
+            .string_value,
+            openrouter_gemini_model=self.get_parameter("openrouter_gemini_model")
+            .get_parameter_value()
+            .string_value,
+            openrouter_gemini_timeout_s=self.get_parameter(
+                "openrouter_gemini_timeout_s"
+            )
+            .get_parameter_value()
+            .double_value,
         )
 
     def _create_tts_provider(self):
@@ -679,6 +802,8 @@ class EnhancedTTSNode(Node):
             return TTSProvider_Piper(self.config)
         elif self.config.provider == TTSProvider.EDGE_TTS:
             return TTSProvider_EdgeTTS(self.config)
+        elif self.config.provider == TTSProvider.OPENROUTER_GEMINI:
+            return TTSProvider_OpenRouterGemini(self.config)
         else:
             self.get_logger().error(f"Unsupported TTS provider: {self.config.provider}")
             return None
