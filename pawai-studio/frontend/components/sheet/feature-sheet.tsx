@@ -8,30 +8,13 @@ import { SpeechPanel } from "@/components/speech/speech-panel";
 import { GesturePanel } from "@/components/gesture/gesture-panel";
 import { PosePanel } from "@/components/pose/pose-panel";
 import { ObjectPanel } from "@/components/object/object-panel";
+import { NavigationPanel } from "@/components/navigation/navigation-panel";
+import { DevPanel } from "@/components/sheet/dev-panel";
 import { FEATURES } from "@/components/layout/feature-nav";
 
 // nav-menu is the mobile hamburger variant — rendered inline below, NOT in
 // the PANELS map (it isn't a feature panel).
 type FeaturePanelKey = Exclude<SheetName, null | "nav-menu">;
-
-// Step F placeholders — the real NavigationPanel and DevPanel land in step H.
-function NavigationPanelPlaceholder() {
-  return (
-    <div className="p-6 text-sm text-muted-foreground">
-      導航避障面板 — 將在 step H 接上 Nav Gate / Depth Gate / Plan A&nbsp;/&nbsp;B
-      切換。
-    </div>
-  );
-}
-
-function DevPanelPlaceholder() {
-  return (
-    <div className="p-6 text-sm text-muted-foreground">
-      Dev panel placeholder — step H 會接 SkillButtons + SkillTraceContent。
-      目前可改用 <code className="font-mono">/studio/dev</code> 直連。
-    </div>
-  );
-}
 
 const PANELS: Record<FeaturePanelKey, ComponentType> = {
   face: FacePanel,
@@ -39,8 +22,8 @@ const PANELS: Record<FeaturePanelKey, ComponentType> = {
   gesture: GesturePanel,
   pose: PosePanel,
   object: ObjectPanel,
-  navigation: NavigationPanelPlaceholder,
-  dev: DevPanelPlaceholder,
+  navigation: NavigationPanel,
+  dev: DevPanel,
 };
 
 const SHEET_TITLES: Record<FeaturePanelKey | "nav-menu", string> = {

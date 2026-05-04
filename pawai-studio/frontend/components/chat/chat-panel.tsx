@@ -6,6 +6,7 @@ import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { AudioVisualizer } from "@/components/chat/audio-visualizer";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
+import { DevButton } from "@/components/chat/brain/dev-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -286,6 +287,7 @@ export function ChatPanel() {
     return (
       <div className="flex h-full flex-col">
         <BrainStatusPill />
+        <DevButton />
         <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
           <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
             <div className="flex flex-col items-center gap-3 -mt-16">
@@ -310,6 +312,7 @@ export function ChatPanel() {
   return (
     <div className="flex h-full flex-col">
       <BrainStatusPill />
+      <DevButton />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
