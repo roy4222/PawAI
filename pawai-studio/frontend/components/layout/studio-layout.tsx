@@ -2,6 +2,7 @@
 
 import { NavTabbar } from "./nav-tabbar";
 import { FeatureSheet } from "@/components/sheet/feature-sheet";
+import { DevButton } from "@/components/chat/brain/dev-button";
 
 interface StudioLayoutProps {
   mainPanel: React.ReactNode;
@@ -14,6 +15,10 @@ interface StudioLayoutProps {
  * Replaces the prior sidebar-driven layout. All feature panels are now
  * Sheet-based (slide in from right on desktop, bottom on mobile) and share
  * a single <FeatureSheet /> mount point at the layout root.
+ *
+ * DevButton is also mounted here (single instance) so `?dev=1` works on
+ * any /studio/* route, not just the chat panel. The button itself
+ * self-guards against `/studio/dev` (avoids redundant entry).
  */
 export function StudioLayout({ mainPanel, isConnected }: StudioLayoutProps) {
   return (
@@ -23,6 +28,7 @@ export function StudioLayout({ mainPanel, isConnected }: StudioLayoutProps) {
         {mainPanel}
       </main>
       <FeatureSheet />
+      <DevButton />
     </div>
   );
 }

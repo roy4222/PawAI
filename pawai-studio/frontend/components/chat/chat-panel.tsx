@@ -6,7 +6,6 @@ import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { AudioVisualizer } from "@/components/chat/audio-visualizer";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
-import { DevButton } from "@/components/chat/brain/dev-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -255,12 +254,12 @@ export function ChatPanel() {
         disabled={isThinking || isProcessing}
         size={isRecording && audioLevels.length > 0 ? "default" : "icon"}
         className={cn(
-          "absolute bottom-2.5 transition-all duration-200",
+          "absolute bottom-2 transition-all duration-200",
           isRecording
-            ? "right-12 h-8 px-3 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm flex items-center gap-2"
+            ? "right-12 h-9 px-3 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm flex items-center gap-2"
             : isProcessing
-              ? "right-12 h-8 w-8 rounded-lg bg-amber-500 text-white cursor-wait"
-              : "right-12 h-8 w-8 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground",
+              ? "right-12 h-9 w-9 rounded-lg bg-amber-500 text-white cursor-wait"
+              : "right-12 h-9 w-9 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground",
         )}
         title={isRecording ? "停止錄音" : isProcessing ? "辨識中..." : "語音輸入"}
       >
@@ -278,8 +277,10 @@ export function ChatPanel() {
         onClick={handleSend}
         disabled={isThinking || isRecording || !inputText.trim()}
         size="icon"
+        title="傳送"
+        aria-label="傳送訊息"
         className={cn(
-          "absolute right-2.5 bottom-2.5 h-8 w-8 rounded-lg transition-all duration-200",
+          "absolute right-2 bottom-2 h-9 w-9 rounded-lg transition-all duration-200",
           inputText.trim() && !isRecording
             ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
             : "bg-muted text-muted-foreground cursor-not-allowed",
@@ -302,7 +303,6 @@ export function ChatPanel() {
     return (
       <div className="flex h-full flex-col">
         <BrainStatusPill />
-        <DevButton />
         <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
           <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
             <div className="flex flex-col items-center gap-3 -mt-16">
@@ -327,7 +327,6 @@ export function ChatPanel() {
   return (
     <div className="flex h-full flex-col">
       <BrainStatusPill />
-      <DevButton />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
@@ -401,13 +400,14 @@ export function ChatPanel() {
             );
           })}
           {isThinking && (
-            <div className="flex gap-3">
-              <div className="flex shrink-0 items-start pt-0.5">
+            <div className="flex gap-3" role="status" aria-live="polite">
+              <span className="sr-only">PawAI 正在思考</span>
+              <div className="flex shrink-0 items-start pt-0.5" aria-hidden="true">
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
                 </div>
               </div>
-              <div className="flex items-center gap-1 py-2">
+              <div className="flex items-center gap-1 py-2" aria-hidden="true">
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:0ms]" />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:150ms]" />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:300ms]" />

@@ -41,24 +41,28 @@ export function FeatureNav() {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Mobile hamburger — visible < md */}
+      {/* Mobile hamburger — visible < md. 44×44 touch target (B1, mobile critical). */}
       <button
         type="button"
         onClick={() => openSheet("nav-menu")}
         title="功能選單"
         aria-label="Open feature menu"
         className={cn(
-          "md:hidden inline-flex h-8 w-8 items-center justify-center rounded-md",
+          "md:hidden inline-flex h-11 w-11 items-center justify-center rounded-md",
           "text-[var(--nav-icon-fg)] hover:text-[var(--nav-icon-hover-fg)]",
           "hover:bg-[var(--nav-icon-hover-bg)]",
           "transition-colors",
+          // B3: visible focus ring for keyboard nav.
+          "focus-visible:outline-none focus-visible:ring-2",
+          "focus-visible:ring-[var(--nav-icon-active-fg)] focus-visible:ring-offset-2",
+          "focus-visible:ring-offset-[var(--background)]",
         )}
         style={{ transitionDuration: "var(--anim-bubble-hover)" }}
       >
-        <Menu className="h-4 w-4" />
+        <Menu className="h-5 w-5" />
       </button>
 
-      {/* Desktop icon row — visible ≥ md */}
+      {/* Desktop icon row — visible ≥ md. 36×36 touch target (B2). */}
       <div className="hidden md:flex items-center gap-1">
         {FEATURES.map(({ id, icon: Icon, label }) => {
           const active = open === id;
@@ -70,12 +74,16 @@ export function FeatureNav() {
               title={label}
               aria-label={label}
               className={cn(
-                "inline-flex h-8 w-8 items-center justify-center rounded-md",
+                "inline-flex h-9 w-9 items-center justify-center rounded-md",
                 "transition-colors",
                 "hover:bg-[var(--nav-icon-hover-bg)]",
                 active
                   ? "text-[var(--nav-icon-active-fg)]"
                   : "text-[var(--nav-icon-fg)] hover:text-[var(--nav-icon-hover-fg)]",
+                // B3: visible focus ring for keyboard nav.
+                "focus-visible:outline-none focus-visible:ring-2",
+                "focus-visible:ring-[var(--nav-icon-active-fg)] focus-visible:ring-offset-2",
+                "focus-visible:ring-offset-[var(--background)]",
               )}
               style={{ transitionDuration: "var(--anim-bubble-hover)" }}
             >

@@ -78,7 +78,7 @@ export function Sheet({
           <header className="flex items-start justify-between gap-2 px-4 py-3 border-b border-[var(--sheet-border)]">
             <div className="flex flex-col gap-0.5 min-w-0">
               {title && (
-                <Dialog.Title className="text-sm font-semibold truncate">
+                <Dialog.Title className="text-base font-semibold truncate">
                   {title}
                 </Dialog.Title>
               )}

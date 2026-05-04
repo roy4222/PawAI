@@ -44,7 +44,12 @@ export function NavTabbar({ isConnected }: NavTabbarProps) {
       <div className="flex items-center gap-2 shrink-0">
         <Link
           href="/studio/live"
-          className="hidden sm:flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800/50 transition-colors"
+          className={
+            "hidden sm:flex items-center gap-1 px-2 py-1 rounded " +
+            "text-[10px] font-mono text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800/50 transition-colors " +
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 " +
+            "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+          }
           aria-label="Live camera view"
         >
           <Monitor className="h-3 w-3" />

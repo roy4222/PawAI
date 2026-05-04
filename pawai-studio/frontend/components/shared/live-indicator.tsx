@@ -9,6 +9,8 @@ interface LiveIndicatorProps {
 export function LiveIndicator({ active }: LiveIndicatorProps) {
   return (
     <span
+      role="status"
+      aria-label={active ? "已連線" : "未連線"}
       className={cn(
         "inline-block w-1.5 h-1.5 rounded-full",
         active
