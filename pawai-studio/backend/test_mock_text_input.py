@@ -115,6 +115,28 @@ class TestOptInWithKey(unittest.TestCase):
         self.assertFalse(body["openrouter"])
         self.assertEqual(body["openrouter_error"], "timeout")
 
+    @patch.dict(
+        "os.environ",
+        {"MOCK_OPENROUTER": "1", "OPENROUTER_KEY": "sk-test"},
+        clear=True,
+    )
+    def test_text_input_falls_back_when_helper_raises(self):
+        from fastapi.testclient import TestClient
+
+        ms = _reload_mock_server()
+        with patch("mock_server._openrouter_chat") as mock_chat:
+            mock_chat.side_effect = RuntimeError("boom")
+            client = TestClient(ms.app)
+            resp = client.post(
+                "/api/text_input",
+                json={"text": "你好", "request_id": "t-exc"},
+            )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["ok"])
+        self.assertFalse(body["openrouter"])
+        self.assertEqual(body["openrouter_error"], "exception")
+
 
 class TestOptInNoKey(unittest.TestCase):
     """MOCK_OPENROUTER=1 but no key → log warn, fall back to canned."""

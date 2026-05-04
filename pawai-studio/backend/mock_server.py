@@ -526,7 +526,14 @@ async def post_text_input(payload: TextInputPayload):
     if _MOCK_OPENROUTER_ENABLED and _openrouter_chat is not None and text:
         # Run the blocking requests.post in a worker thread so the FastAPI
         # event loop stays responsive for /ws/events listeners.
-        result = await asyncio.to_thread(_openrouter_chat, text)
+        try:
+            result = await asyncio.to_thread(_openrouter_chat, text)
+        except Exception as exc:  # Defensive: mock mode must never 500 on chat.
+            result = {
+                "ok": False,
+                "error_kind": "exception",
+                "error": str(exc),
+            }
         if result.get("ok"):
             await _emit_text_reply(
                 request_id,

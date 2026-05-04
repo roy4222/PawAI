@@ -96,6 +96,33 @@ class TestSuccessPaths(unittest.TestCase):
         call_kwargs = mock_post.call_args
         self.assertIn("Bearer sk-explicit", call_kwargs.kwargs["headers"]["Authorization"])
 
+    @patch.dict("os.environ", {"OPENROUTER_KEY": "sk-test"}, clear=True)
+    @patch("openrouter_chat.requests.post")
+    def test_legacy_schema_bad_confidence_does_not_crash(self, mock_post):
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "intent": "chat",
+                                "reply_text": "嗨",
+                                "selected_skill": None,
+                                "reasoning": "test",
+                                "confidence": "high",
+                            }
+                        )
+                    }
+                }
+            ]
+        }
+        mock_post.return_value = resp
+        result = chat("hi")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["confidence"], 0.8)
+
 
 class TestErrorPaths(unittest.TestCase):
     @patch.dict("os.environ", {"OPENROUTER_KEY": "sk-test"}, clear=True)

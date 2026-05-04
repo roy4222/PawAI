@@ -122,12 +122,16 @@ def _adapt_to_bridge_schema(parsed: dict) -> dict:
     """
     # Already legacy schema?
     if "reply_text" in parsed and "selected_skill" in parsed:
+        try:
+            confidence = float(parsed.get("confidence", 0.8))
+        except (TypeError, ValueError):
+            confidence = 0.8
         return {
             "intent": str(parsed.get("intent") or "chat"),
             "reply_text": str(parsed.get("reply_text") or "").strip(),
             "selected_skill": parsed.get("selected_skill"),
             "reasoning": str(parsed.get("reasoning") or "openrouter"),
-            "confidence": float(parsed.get("confidence", 0.8)),
+            "confidence": confidence,
         }
 
     # Eval schema → bridge schema.
