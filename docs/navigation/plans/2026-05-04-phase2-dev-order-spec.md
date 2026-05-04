@@ -137,7 +137,9 @@ ros2 bag record -o "$OUT_DIR" "${TOPICS[@]}"
 
 **用法**:`bash scripts/record_nav_baseline.sh 1`(在第二個 tmux window 跑)→ Ctrl-C 結束 → bag 落地
 
-**parser 延後**:等先有 2-3 包真 bag,再決定欄位 schema(parser 寫進 PR 8 或 future work)
+**parser 延後但場景化補強**:bag 已 record `/amcl_pose`,所以 covariance trend 可從同一份 bag 抽。等先有 2-3 包真 bag 再寫 `scripts/extract_amcl_cov.py`(rosbag2_py → CSV: `t, cov_xx, cov_yy, cov_xy`),Baseline A/B 與 PR 2 驗收都用同一套抽取邏輯,parser 統一寫一次。
+
+PR 2 驗收方法 B(`extract_amcl_cov.py`)即覆蓋此需求,**不再額外建 trend log 工具**。對應 demo 主導文件「16 項清單 #15 covariance trend log」。
 
 **驗收**:
 - Preflight 跑出 4 行輸出,可以看到 cov / age / level
@@ -292,16 +294,30 @@ bt_xml_path = PythonExpression([
 - 如果 Studio panel 要顯示 `nav_ready level + reasons`(P1 加分),就做
 - 如果只用 simple bool(主線 demo 不展示 panel),就**跳過**
 
-**最小改動**(若做):
-- `nav_capability/nav_capability/nav_ready_check.py`
-- 只加 2 項 reason(不加 lifecycle / TF):
-  - `scan_age=X.XXs`(從 `/scan_rplidar` last msg)
-  - `covariance_xy=X.XXX (level=YELLOW)`(從 amcl_pose,沿用現有)
-- 輸出格式改成 JSON list of strings
+**最小改動**(若做)— **nav_ready 5-check minimum**:
+- `nav_capability/nav_capability/nav_ready_check.py` 加 5 項 check + reasons:
+  1. lifecycle: `map_server` active
+  2. lifecycle: `amcl` active
+  3. TF: `map → base_link` 可查 + age < 1s
+  4. `/scan_rplidar` last msg age < 1s
+  5. `/amcl_pose` last msg age < 5s + covariance_xy 分級
 
-**Out**:lifecycle check / TF check 都跳過 — 理由:**PR 4-lite 只服務 Studio panel 顯示,不承諾完整 nav_ready 升級**。lifecycle 用人工 `lifecycle set ... activate` workaround,TF / 完整 reasons 留 5/13 後 PR 4-full
+reasons 輸出格式(JSON list of strings,給 Studio panel):
+```json
+[
+  "lifecycle_map_server=active",
+  "lifecycle_amcl=active",
+  "tf_map_base_link=ok (age=0.05s)",
+  "scan_age=0.12s",
+  "amcl_pose_age=0.30s, covariance_xy=0.388 (level=YELLOW)"
+]
+```
 
-**估工**:1 hr(若做)
+**明確不放 `/capability/depth_clear` 在 nav_ready 裡** — depth_clear 是獨立 capability,Executive WorldState 已平行訂兩者並 fail-closed。把 depth_clear 塞進 nav_ready 會混淆責任邊界(一個關於「導航 stack 自身健康」、一個關於「前方安全」)。
+
+**Out**(留 5/13 後 PR 4-full):`planner_server` / `controller_server` / `bt_navigator` lifecycle、local/global costmap stale、driver process 等 — 理由:check 越多 false negative 越多,demo 當天反而被自己擋死。
+
+**估工**:2 hr(若做)— 多 3 個 check + lifecycle service client wiring
 
 ---
 
@@ -349,6 +365,8 @@ ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative "{di
 
 baseline 結果寫進:`docs/navigation/research/2026-05-XX-baseline-runs.md`(每天 append)
 
+> **Capability 命名約定**(本 spec 全篇沿用):`nav_ready` 與 `depth_clear` 是**平行 capability**,Executive WorldState 兩者都 fail-closed 訂。`nav_ready` 答覆「導航 stack 自身能不能用」、`depth_clear` 答覆「前方安全」,**不互相依賴**。任何把 `depth_clear` 結果塞進 `nav_ready` 邏輯的設計都拒絕(混淆責任邊界)。
+
 ---
 
 ## 凍結 / 不能做(沿用 5/4 scope freeze)
@@ -371,13 +389,13 @@ baseline 結果寫進:`docs/navigation/research/2026-05-XX-baseline-runs.md`(每
 | PR 5(Go2-safe BT with flag) | 3 hr |
 | Baseline A 回歸 5× | 1.5 hr |
 | Baseline B 2-3×實機 | 1.5 hr |
-| PR 4-lite(若做) | 1 hr |
+| PR 4-lite(若做,5-check minimum) | 2 hr |
 | PR 7(grep + 註解) | 30 min |
 | 30 min 供電連測 | 30 min(背景) |
 | approach_person(P1) | 2 hr |
 | 5/11 dry run + 小修 | 4 hr |
-| **小計 P0 必做** | **~14 hr / 2 天**(不含實機 debugging buffer) |
-| **連同回歸 + 加分 + dry run** | **~22 hr / 3 天**(不含實機 debugging buffer) |
+| **小計 P0 必做** | **~15 hr / 2 天**(不含實機 debugging buffer) |
+| **連同回歸 + 加分 + dry run** | **~23 hr / 3 天**(不含實機 debugging buffer) |
 | **時間 buffer** | **5 天**(8 天 - 3 天 = 5 天緩衝;debugging / 場景重設 / 供電意外都吃這個 buffer) |
 
 > ⚠️ 工時是「程式碼撰寫 + 規畫驗收」的時間,**不含**:Jetson rsync / colcon build fail / 場景重置 / Go2 OTA / 供電斷電復原 / 5/3 那種「兩個 bug 串連找半天」的 debugging。實機週經驗值是 1.5–2× 的乘數,buffer 5 天是這個乘數內。
