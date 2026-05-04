@@ -138,6 +138,74 @@ class TestOptInWithKey(unittest.TestCase):
         self.assertEqual(body["openrouter_error"], "exception")
 
 
+class TestTtsEventEmission(unittest.TestCase):
+    """ChatPanel 監聽 lastTtsText 來渲染 AI bubble — /api/text_input 必須在
+    proposal/result 之外也廣播 tts:tts_speaking 事件，否則 chat 永遠看不到回覆。
+    """
+
+    @patch.dict(
+        "os.environ",
+        {"MOCK_OPENROUTER": "1", "OPENROUTER_KEY": "sk-test"},
+        clear=True,
+    )
+    def test_tts_event_broadcast_when_openrouter_succeeds(self):
+        from fastapi.testclient import TestClient
+
+        ms = _reload_mock_server()
+
+        broadcasts = []
+
+        async def fake_broadcast(payload):
+            broadcasts.append(payload)
+
+        with (
+            patch("openrouter_chat.requests.post") as mock_post,
+            patch.object(ms.manager, "broadcast", side_effect=fake_broadcast),
+        ):
+            mock_post.return_value = _good_openrouter_response(
+                skill="wave_hello", reply="[excited] 嗨！"
+            )
+            client = TestClient(ms.app)
+            client.post(
+                "/api/text_input",
+                json={"text": "你好啊", "request_id": "t-tts-ok"},
+            )
+
+        # Must broadcast a tts:tts_speaking event with the reply text
+        # in addition to brain:proposal + brain:skill_result.
+        tts_events = [e for e in broadcasts if e.get("source") == "tts"]
+        self.assertEqual(
+            len(tts_events), 1, f"expected 1 tts event, got {len(tts_events)}: {broadcasts}"
+        )
+        self.assertEqual(tts_events[0]["event_type"], "tts_speaking")
+        self.assertIn("[excited]", tts_events[0]["data"]["text"])
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_tts_event_broadcast_in_default_canned_path(self):
+        """Canned fallback path also emits tts so ChatPanel still shows the
+        (mock) reply rather than appearing frozen."""
+        from fastapi.testclient import TestClient
+
+        ms = _reload_mock_server()
+
+        broadcasts = []
+
+        async def fake_broadcast(payload):
+            broadcasts.append(payload)
+
+        with patch.object(ms.manager, "broadcast", side_effect=fake_broadcast):
+            client = TestClient(ms.app)
+            client.post(
+                "/api/text_input",
+                json={"text": "你好", "request_id": "t-tts-canned"},
+            )
+
+        tts_events = [e for e in broadcasts if e.get("source") == "tts"]
+        self.assertEqual(len(tts_events), 1)
+        # Canned reply should include the (mock) marker for clarity.
+        self.assertIn("(mock)", tts_events[0]["data"]["text"])
+
+
 class TestOptInNoKey(unittest.TestCase):
     """MOCK_OPENROUTER=1 but no key → log warn, fall back to canned."""
 

@@ -508,6 +508,23 @@ async def _emit_text_reply(
         "timestamp": time.time(),
     })
 
+    # Mirror the real Jetson pipeline: executive node publishes /tts when
+    # executing a SAY step → gateway forwards as a `tts:tts_speaking` event.
+    # ChatPanel watches lastTtsText/lastTtsAt and renders the AI bubble only
+    # when this event arrives. Without this broadcast the chat looks frozen
+    # ("回應逾時") even though the proposal/result events succeeded.
+    await manager.broadcast({
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "tts",
+        "event_type": "tts_speaking",
+        "data": {
+            "text": decorated,
+            "phase": "speaking",
+            "origin": source,
+        },
+    })
+
 
 @app.post("/api/text_input")
 async def post_text_input(payload: TextInputPayload):

@@ -133,22 +133,32 @@ else
 fi
 
 cd "$FRONTEND_DIR"
-NEXT_PUBLIC_GATEWAY_URL="$TARGET" npm run dev &
+# Capture next dev output so we can detect the actual port (Next falls back
+# to 3001 / 3002 when 3000 is occupied — banner must reflect reality).
+FRONTEND_LOG="$(mktemp -t pawai-studio-frontend.XXXXXX.log)"
+NEXT_PUBLIC_GATEWAY_URL="$TARGET" npm run dev >"$FRONTEND_LOG" 2>&1 &
 FRONT_PID=$!
 sleep 5
 
 if ! kill -0 $FRONT_PID 2>/dev/null; then
   echo "❌ Frontend 啟動失敗"
+  [ -f "$FRONTEND_LOG" ] && cat "$FRONTEND_LOG"
   [ -n "$BACK_PID" ] && kill $BACK_PID 2>/dev/null
   exit 1
 fi
+
+# Detect actual port (default 3000; Next falls back to next free).
+FRONT_PORT=$(grep -oE 'http://localhost:[0-9]+' "$FRONTEND_LOG" | head -1 | grep -oE '[0-9]+$' || echo "3000")
+FRONT_URL="http://localhost:${FRONT_PORT}"
+# Mirror frontend output to terminal so user still sees Next logs.
+( tail -F -n +1 "$FRONTEND_LOG" 2>/dev/null & echo $! ) >/tmp/pawai-studio-tail.pid
 
 echo
 echo "════════════════════════════════════════════════"
 echo "  PawAI Studio ($MODE)"
 echo
-echo "  🌐 Studio:     http://localhost:3000/studio"
-echo "  📺 Live View:  http://localhost:3000/studio/live"
+echo "  🌐 Studio:     ${FRONT_URL}/studio"
+echo "  📺 Live View:  ${FRONT_URL}/studio/live"
 echo "  🔧 Backend:    $TARGET"
 echo "  📡 Events WS:  ${TARGET/http/ws}/ws/events"
 if [ "$MODE" = "mock" ]; then
@@ -173,6 +183,11 @@ cleanup() {
   echo "Stopping..."
   [ -n "$BACK_PID" ] && kill $BACK_PID 2>/dev/null
   kill $FRONT_PID 2>/dev/null
+  if [ -f /tmp/pawai-studio-tail.pid ]; then
+    kill "$(cat /tmp/pawai-studio-tail.pid)" 2>/dev/null
+    rm -f /tmp/pawai-studio-tail.pid
+  fi
+  [ -n "${FRONTEND_LOG:-}" ] && [ -f "$FRONTEND_LOG" ] && rm -f "$FRONTEND_LOG"
   exit 0
 }
 trap cleanup INT TERM
