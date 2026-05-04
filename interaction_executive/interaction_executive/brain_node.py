@@ -13,6 +13,11 @@ from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
 from std_msgs.msg import String
 
+from .pending_confirm import (
+    ConfirmOutcomeKind,
+    ConfirmState,
+    PendingConfirm,
+)
 from .safety_layer import SafetyLayer
 from .skill_contract import (
     SKILL_REGISTRY,
@@ -43,6 +48,8 @@ class BufferedSpeech:
 class BrainInternalState:
     unknown_face_first_seen: float | None = None
     fallen_first_seen: float | None = None
+    sitting_first_seen: float | None = None
+    bending_first_seen: float | None = None
     last_alert_ts: dict[str, float] = field(default_factory=dict)
     chat_buffer: dict[str, BufferedSpeech] = field(default_factory=dict)
     dedup_cache: dict[tuple[str, str, int], float] = field(default_factory=dict)
@@ -50,6 +57,9 @@ class BrainInternalState:
     active_plan: dict[str, Any] | None = None
     active_step: dict[str, Any] | None = None
     fallback_active: bool = False
+    # PendingConfirm gesture tracker (gesture is "live" for 0.5s after seen)
+    current_gesture: str | None = None
+    current_gesture_ts: float = 0.0
 
 
 class BrainNode(Node):
@@ -62,6 +72,8 @@ class BrainNode(Node):
         self._safety = SafetyLayer()
         self._world = WorldState(self)
         self._chat_timeouts: dict[str, rclpy.timer.Timer] = {}
+        self._pending_confirm = PendingConfirm(timeout_s=5.0, stable_s=0.5)
+        self._gesture_live_window_s = 0.5
 
         self._pub_proposal = self.create_publisher(String, "/brain/proposal", _RELIABLE_10)
         self._pub_brain_state = self.create_publisher(
@@ -87,6 +99,7 @@ class BrainNode(Node):
 
         self._brain_state_timer = self.create_timer(0.5, self._publish_brain_state)
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
+        self._confirm_tick_timer = self.create_timer(0.1, self._tick_pending_confirm)  # 10Hz
         self.get_logger().info(
             f"brain_node ready skills={len(SKILL_REGISTRY)} "
             f"chat_wait={self.chat_wait_ms}ms dedup={self.dedup_window_s}s"
@@ -258,6 +271,15 @@ class BrainNode(Node):
             )
         )
 
+    # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2):
+    #   wave         → wave_hello       (low-risk, direct)
+    #   palm         → system_pause     (safety-immediate, direct)
+    #   thumbs_up    → wiggle           (high-risk, request OK confirm)
+    #   peace        → stretch          (high-risk, request OK confirm)
+    #   ok           → consumed by PendingConfirm.tick (no direct skill fire)
+    _GESTURE_DIRECT = {"wave": "wave_hello", "palm": "system_pause"}
+    _GESTURE_CONFIRM = {"thumbs_up": "wiggle", "peace": "stretch"}
+
     def _on_gesture(self, msg: String) -> None:
         payload = self._load_json(msg)
         if payload is None:
@@ -265,23 +287,104 @@ class BrainNode(Node):
         gesture = str(
             payload.get("gesture") or payload.get("type") or payload.get("label") or ""
         ).strip().lower()
-        if gesture not in {"wave", "ok", "thumbs_up"}:
+        if not gesture:
             return
+
+        # Update gesture tracker so PendingConfirm tick can see it.
+        with self._lock:
+            self._state.current_gesture = gesture
+            self._state.current_gesture_ts = time.time()
+
+        # If a confirm is already in flight, gestures only feed the state machine
+        # via the periodic tick — don't fire new skills.
+        if self._pending_confirm.state == ConfirmState.PENDING:
+            return
+
         if self._has_active_sequence():
             return
         if self._check_dedup("gesture", gesture):
             return
-        if self._in_cooldown("acknowledge_gesture", 3.0):
-            return
-        self._mark_cooldown("acknowledge_gesture")
-        self._emit(
-            build_plan(
-                "acknowledge_gesture",
-                args={"gesture": gesture},
-                source="rule:gesture_ack",
+
+        if gesture in self._GESTURE_DIRECT:
+            skill = self._GESTURE_DIRECT[gesture]
+            self._emit_with_cooldown(
+                skill,
+                source="rule:gesture",
                 reason=f"gesture:{gesture}",
             )
-        )
+            return
+
+        if gesture in self._GESTURE_CONFIRM:
+            skill = self._GESTURE_CONFIRM[gesture]
+            cd = SKILL_REGISTRY[skill].cooldown_s
+            if self._in_cooldown(skill, cd):
+                return
+            self._pending_confirm.request_confirm(skill, {}, time.time())
+            self.get_logger().info(f"PendingConfirm requested skill={skill} via gesture={gesture}")
+            # Voice hint asking for OK (uses say_canned, has audio tag stripped).
+            self._emit(
+                build_plan(
+                    "say_canned",
+                    args={"text": f"[curious] 比 OK 我就做 {skill}"},
+                    source="rule:confirm_request",
+                    reason=f"awaiting_ok:{skill}",
+                )
+            )
+
+    def _tick_pending_confirm(self) -> None:
+        """10Hz tick — feed live gesture into PendingConfirm and act on outcome."""
+        if self._pending_confirm.state == ConfirmState.IDLE:
+            return
+        now = time.time()
+        with self._lock:
+            gesture = self._state.current_gesture
+            ts = self._state.current_gesture_ts
+        if gesture and (now - ts) > self._gesture_live_window_s:
+            gesture = None  # stale — treat as no gesture
+        outcome = self._pending_confirm.tick(now, gesture)
+        if outcome.kind == ConfirmOutcomeKind.CONFIRMED:
+            skill = outcome.skill
+            assert skill is not None
+            self._mark_cooldown(skill)
+            self._emit(
+                build_plan(
+                    skill,
+                    args=outcome.args,
+                    source="rule:confirmed",
+                    reason=f"confirmed_via_ok:{skill}",
+                )
+            )
+        elif outcome.kind == ConfirmOutcomeKind.CANCELLED:
+            self.get_logger().info(f"PendingConfirm CANCELLED reason={outcome.reason}")
+
+    def _emit_with_cooldown(
+        self,
+        skill: str,
+        args: dict[str, Any] | None = None,
+        source: str = "rule",
+        reason: str = "",
+        session_id: str | None = None,
+    ) -> bool:
+        """Build + emit a plan if skill is not in cooldown. Returns True if emitted."""
+        contract = SKILL_REGISTRY[skill]
+        cd = contract.cooldown_s
+        if cd > 0 and self._in_cooldown(skill, cd):
+            return False
+        try:
+            plan = build_plan(
+                skill,
+                args=args or {},
+                source=source,
+                reason=reason or f"emit:{skill}",
+                session_id=session_id,
+            )
+        except (KeyError, ValueError) as exc:
+            self.get_logger().warn(f"emit_with_cooldown blocked skill={skill!r}: {exc}")
+            return False
+        if cd > 0:
+            self._mark_cooldown(skill)
+        self._emit(plan)
+        return True
 
     def _on_face(self, msg: String) -> None:
         payload = self._load_json(msg)
@@ -340,28 +443,80 @@ class BrainNode(Node):
         if payload is None:
             return
         pose = str(payload.get("pose") or payload.get("posture") or "").strip().lower()
-        if pose != "fallen":
-            self._state.fallen_first_seen = None
-            self._world.set_fallen(False)
-            return
         now = time.time()
-        if self._state.fallen_first_seen is None:
-            self._state.fallen_first_seen = now
-        elif (now - self._state.fallen_first_seen) >= self.fallen_accumulate_s:
-            if not self._in_cooldown("fallen_alert", 15.0):
-                self._mark_cooldown("fallen_alert")
-                self._world.set_fallen(True)
-                self._emit(
-                    build_plan(
-                        "fallen_alert",
-                        source="rule:pose_fallen_2s",
-                        reason="pose_fallen_stable_2s",
+
+        # ---- fallen (highest priority among poses) ----
+        if pose == "fallen":
+            if self._state.fallen_first_seen is None:
+                self._state.fallen_first_seen = now
+            elif (now - self._state.fallen_first_seen) >= self.fallen_accumulate_s:
+                if not self._in_cooldown("fallen_alert", 15.0):
+                    self._mark_cooldown("fallen_alert")
+                    self._world.set_fallen(True)
+                    name = str(payload.get("name") or payload.get("identity") or "有人").strip()
+                    self._emit(
+                        build_plan(
+                            "fallen_alert",
+                            args={"name": name},
+                            source="rule:pose_fallen_2s",
+                            reason="pose_fallen_stable_2s",
+                        )
                     )
+                    self._state.fallen_first_seen = None
+            self._state.sitting_first_seen = None
+            self._state.bending_first_seen = None
+            return
+
+        self._state.fallen_first_seen = None
+        self._world.set_fallen(False)
+
+        # ---- sitting → sit_along (low-risk social) ----
+        if pose == "sitting":
+            if self._state.sitting_first_seen is None:
+                self._state.sitting_first_seen = now
+            elif (now - self._state.sitting_first_seen) >= 1.0:
+                self._emit_with_cooldown(
+                    "sit_along", source="rule:pose_sitting", reason="pose_sitting_stable_1s"
                 )
-                self._state.fallen_first_seen = None
+                self._state.sitting_first_seen = None
+            self._state.bending_first_seen = None
+            return
+
+        # ---- bending → careful_remind (low-risk social) ----
+        if pose == "bending":
+            if self._state.bending_first_seen is None:
+                self._state.bending_first_seen = now
+            elif (now - self._state.bending_first_seen) >= 1.0:
+                self._emit_with_cooldown(
+                    "careful_remind",
+                    source="rule:pose_bending",
+                    reason="pose_bending_stable_1s",
+                )
+                self._state.bending_first_seen = None
+            self._state.sitting_first_seen = None
+            return
+
+        # other / standing / unknown — clear timers
+        self._state.sitting_first_seen = None
+        self._state.bending_first_seen = None
 
     def _on_object(self, msg: String) -> None:
-        del msg
+        # Phase B v1 minimal stub. B4 will wire HSV color enrichment.
+        payload = self._load_json(msg)
+        if payload is None:
+            return
+        label = str(payload.get("label") or payload.get("class") or "").strip()
+        color = str(payload.get("color") or "").strip()
+        if not label:
+            return
+        if self._has_active_sequence():
+            return
+        self._emit_with_cooldown(
+            "object_remark",
+            args={"label": label, "color": color},
+            source="rule:object_detected",
+            reason=f"object:{color}{label}",
+        )
 
     def _on_text_input(self, msg: String) -> None:
         payload = self._load_json(msg)
@@ -383,6 +538,12 @@ class BrainNode(Node):
         )
         self._on_speech_intent(synthetic)
 
+    # Per spec §4.2 / impl notes 2026-05-04 §2: only nav_demo_point may bypass
+    # PendingConfirm via Studio button (the button itself is the confirmation).
+    # All other requires_confirmation skills must go through OK confirm even
+    # when launched from Studio.
+    _STUDIO_BUTTON_BYPASS_CONFIRM = frozenset({"nav_demo_point"})
+
     def _on_skill_request(self, msg: String) -> None:
         payload = self._load_json(msg)
         if payload is None:
@@ -393,13 +554,38 @@ class BrainNode(Node):
             self.get_logger().warn(f"unknown skill_request skill={skill!r}")
             return
         contract = SKILL_REGISTRY[skill]
+        source = str(payload.get("source") or "studio_button")
+        is_studio_button = source == "studio_button"
+
+        # High-risk skills require OK confirm. Studio button only bypasses for
+        # explicitly-allowlisted skills (nav_demo_point).
+        if contract.requires_confirmation and not (
+            is_studio_button and skill in self._STUDIO_BUTTON_BYPASS_CONFIRM
+        ):
+            cd = contract.cooldown_s
+            if cd > 0 and self._in_cooldown(skill, cd):
+                return
+            self._pending_confirm.request_confirm(skill, args, time.time())
+            self.get_logger().info(
+                f"PendingConfirm requested via skill_request skill={skill} source={source}"
+            )
+            self._emit(
+                build_plan(
+                    "say_canned",
+                    args={"text": f"[curious] 比 OK 我就做 {skill}"},
+                    source="rule:confirm_request",
+                    reason=f"awaiting_ok:{skill}",
+                )
+            )
+            return
+
         if contract.cooldown_s > 0 and self._in_cooldown(skill, contract.cooldown_s):
             return
         try:
             plan = build_plan(
                 skill,
                 args=args,
-                source=str(payload.get("source") or "studio_button"),
+                source=source,
                 reason=f"studio_request:{skill}",
                 session_id=payload.get("request_id"),
             )

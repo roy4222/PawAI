@@ -280,6 +280,46 @@ export interface LegacyBrainState {
 
 export type BrainState = PawAIBrainState;
 
+// ── Phase B B5b: Skill registry / Capability gates / Plan mode ─────
+
+export type SkillBucket = "active" | "hidden" | "disabled" | "retired";
+
+export interface SkillRegistryEntry {
+  name: string;
+  bucket: SkillBucket;
+  static_enabled: boolean;
+  enabled_when_blocked: boolean;
+  priority_class: PriorityClass;
+  cooldown_s: number;
+  timeout_s: number;
+  safety_requirements: string[];
+  fallback_skill: string | null;
+  requires_confirmation: boolean;
+  risk_level: "low" | "medium" | "high";
+  ui_style: "normal" | "alert" | "safety";
+  description: string;
+  args_schema: Record<string, unknown>;
+  step_count: number;
+}
+
+export interface SkillRegistryResponse {
+  ok: boolean;
+  total: number;
+  by_bucket: Record<SkillBucket, number>;
+  skills: SkillRegistryEntry[];
+}
+
+// Tri-state — "true" / "false" = explicit Bool received; "unknown" = no
+// /capability/* message has arrived yet.
+export type CapabilityTriState = "true" | "false" | "unknown";
+
+export interface CapabilityState {
+  nav_ready: CapabilityTriState;
+  depth_clear: CapabilityTriState;
+}
+
+export type PlanMode = "A" | "B";
+
 // ══════════════════════════════════════════════════════════════════
 // System
 // ══════════════════════════════════════════════════════════════════

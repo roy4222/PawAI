@@ -35,6 +35,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
+  const updateCapability = useStateStore((s) => s.updateCapability);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -96,6 +97,14 @@ export function useEventStream(): UseEventStreamResult {
             updateTts(data.text as string);
           }
           break;
+        case "capability":
+          // Tri-state capability gate (Phase B B5b).
+          if ("name" in data && "tri_state" in data) {
+            const name = data.name as "nav_ready" | "depth_clear";
+            const tri = data.tri_state as "true" | "false" | "unknown";
+            updateCapability(name, tri);
+          }
+          break;
         case "system":
           if ("jetson" in data) {
             updateSystemHealth(data as unknown as SystemHealth);
@@ -120,6 +129,7 @@ export function useEventStream(): UseEventStreamResult {
       updateSystemHealth,
       updateObjectState,
       updateTts,
+      updateCapability,
       evaluateEvent,
     ]
   );

@@ -61,7 +61,7 @@ def test_speech_self_introduce(brain):
     brain._on_speech_intent(_msg({"transcript": "介紹你自己", "session_id": "s-intro"}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "self_introduce"
-    assert len(plan["steps"]) == 10
+    assert len(plan["steps"]) == 6  # 6-step meta sequence (impl notes 2026-05-04)
 
 
 def test_chat_candidate_matches_buffered_speech(brain):
@@ -83,7 +83,7 @@ def test_chat_candidate_timeout_falls_back_to_say_canned(brain):
 def test_gesture_wave_acknowledges(brain):
     brain._on_gesture(_msg({"gesture": "wave"}))
     plan = _latest(brain)
-    assert plan["selected_skill"] == "acknowledge_gesture"
+    assert plan["selected_skill"] == "wave_hello"
 
 
 def test_known_face_greets_stable_identity(brain):
@@ -155,4 +155,131 @@ def test_active_sequence_blocks_general_skill_but_not_safety(brain):
         )
     )
     brain._on_gesture(_msg({"gesture": "wave"}))
-    assert _latest(brain)["selected_skill"] == "acknowledge_gesture"
+    assert _latest(brain)["selected_skill"] == "wave_hello"
+
+
+# ---------------------------------------------------------------------------
+# B3b — Phase B v1 new rules (impl notes 2026-05-04 §2)
+# ---------------------------------------------------------------------------
+
+
+def test_gesture_palm_triggers_system_pause(brain):
+    brain._on_gesture(_msg({"gesture": "palm"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "system_pause"
+
+
+def test_gesture_thumbs_up_requests_confirm_not_immediate_wiggle(brain):
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    # Should emit a "say_canned" hint asking for OK, NOT wiggle directly.
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "say_canned"
+    assert "OK" in plan["steps"][0]["args"]["text"]
+    assert brain._pending_confirm.pending_skill == "wiggle"
+
+
+def test_gesture_peace_requests_confirm_for_stretch(brain):
+    brain._on_gesture(_msg({"gesture": "peace"}))
+    assert brain._pending_confirm.pending_skill == "stretch"
+
+
+def test_gesture_ok_alone_does_not_fire_skill(brain):
+    # No prior confirm request — OK gesture is just consumed by the tick.
+    brain._on_gesture(_msg({"gesture": "ok"}))
+    assert not brain._captured_proposals
+
+
+def test_pose_sitting_stable_triggers_sit_along(brain):
+    brain._on_pose(_msg({"pose": "sitting"}))
+    brain._state.sitting_first_seen -= 1.1  # simulate 1.1s elapsed
+    brain._on_pose(_msg({"pose": "sitting"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "sit_along"
+
+
+def test_pose_bending_stable_triggers_careful_remind(brain):
+    brain._on_pose(_msg({"pose": "bending"}))
+    brain._state.bending_first_seen -= 1.1
+    brain._on_pose(_msg({"pose": "bending"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "careful_remind"
+
+
+def test_pose_fallen_uses_name_when_available(brain):
+    brain._on_pose(_msg({"pose": "fallen", "name": "Roy"}))
+    brain._state.fallen_first_seen -= 0.06
+    brain._on_pose(_msg({"pose": "fallen", "name": "Roy"}))
+    plan = _latest(brain)
+    say_steps = [s for s in plan["steps"] if s["executor"] == "say"]
+    assert "Roy" in say_steps[0]["args"]["text"]
+
+
+def test_object_detected_triggers_object_remark(brain):
+    brain._on_object(_msg({"label": "cup", "color": "red"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "object_remark"
+    assert plan["steps"][0]["args"]["text"] == "我看到一個red cup"
+
+
+def test_object_without_label_ignored(brain):
+    brain._on_object(_msg({"color": "red"}))
+    assert not brain._captured_proposals
+
+
+# ---------------------------------------------------------------------------
+# Bug fixes from 2026-05-04 review
+# ---------------------------------------------------------------------------
+
+
+def test_studio_button_high_risk_skill_must_go_through_confirm(brain):
+    """Bug 2: wiggle/stretch/approach_person must NOT bypass OK confirm even via Studio button."""
+    brain._on_skill_request(
+        _msg({"skill": "wiggle", "args": {}, "request_id": "btn-x", "source": "studio_button"})
+    )
+    # Should emit a "say_canned" hint asking for OK, NOT wiggle directly.
+    assert brain._captured_proposals
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "say_canned"
+    assert "OK" in plan["steps"][0]["args"]["text"]
+    assert brain._pending_confirm.pending_skill == "wiggle"
+
+
+def test_studio_button_nav_demo_point_bypasses_confirm(brain):
+    """Bug 2: nav_demo_point is the explicit allowlist for Studio button bypass."""
+    brain._on_skill_request(
+        _msg(
+            {
+                "skill": "nav_demo_point",
+                "args": {},
+                "request_id": "btn-nav",
+                "source": "studio_button",
+            }
+        )
+    )
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "nav_demo_point"
+    # PendingConfirm should remain idle for the bypass case.
+    assert brain._pending_confirm.pending_skill is None
+
+
+def test_studio_button_low_risk_skill_runs_directly(brain):
+    """Studio button: low-risk skills (no requires_confirmation) still run immediately."""
+    brain._on_skill_request(
+        _msg({"skill": "wave_hello", "args": {}, "request_id": "btn-lr", "source": "studio_button"})
+    )
+    assert _latest(brain)["selected_skill"] == "wave_hello"
+
+
+def test_system_pause_stops_motion_before_speaking(brain):
+    """Bug 3: system_pause must include MOTION stop_move step."""
+    brain._on_gesture(_msg({"gesture": "palm"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "system_pause"
+    executors = [s["executor"] for s in plan["steps"]]
+    assert "motion" in executors, f"system_pause missing motion step: {executors}"
+    # MOTION must come BEFORE SAY (stop first, then speak).
+    assert executors.index("motion") < executors.index("say"), (
+        f"MOTION must precede SAY in system_pause: {executors}"
+    )
+    motion_step = next(s for s in plan["steps"] if s["executor"] == "motion")
+    assert motion_step["args"]["name"] == "stop_move"

@@ -1,6 +1,15 @@
 """Skill-first PawAI Brain core types.
 
-Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md section 3
+Spec:
+  - docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §3
+  - docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md §4 (Skill Inventory v1)
+  - docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md (bucket semantics)
+
+Bucket vs static_enabled vs enabled_when:
+  - bucket: 產品/展示分類，Studio 讀（active=enabled、hidden=grayed、disabled=hidden-or-灰、retired=不顯示）
+  - static_enabled: 全局開關，Brain 讀（False → build_plan 直接拒）
+  - enabled_when: runtime 條件 sentinel，Brain 讀（如 Nav Gate / Depth Gate / robot_stable）
+  三者不互相覆蓋。
 """
 from __future__ import annotations
 
@@ -36,6 +45,9 @@ class SkillResultStatus(str, Enum):
     BLOCKED_BY_SAFETY = "blocked_by_safety"
 
 
+SkillBucket = Literal["active", "hidden", "disabled", "retired"]
+
+
 @dataclass
 class SkillStep:
     executor: ExecutorKind
@@ -58,6 +70,7 @@ class SkillContract:
     enabled_when: list = field(default_factory=list)
     requires_confirmation: bool = False
     risk_level: Literal["low", "medium", "high"] = "low"
+    bucket: SkillBucket = "active"
 
 
 @dataclass
@@ -92,18 +105,70 @@ MOTION_NAME_MAP: dict[str, int] = {
     "stand": 1004,
     "content": 1020,
     "balance_stand": 1002,
+    "stretch": 1017,
+    "wiggle_hip": 1029,
+    "scrape": 1029,
 }
 
 BANNED_API_IDS: set[int] = {1030, 1031, 1301}
 
 
+# ---------------------------------------------------------------------------
+# SKILL_REGISTRY — Phase B v1（spec §4.1）
+#
+# Active   (17): stop_move, system_pause, show_status, chat_reply, say_canned,
+#                self_introduce, wave_hello, wiggle, stretch, sit_along,
+#                careful_remind, greet_known_person, stranger_alert,
+#                object_remark, nav_demo_point, approach_person, fallen_alert
+# Hidden   (5):  enter_mute_mode, enter_listen_mode, akimbo_react,
+#                knee_kneel_react, patrol_route
+# Disabled (4):  follow_me, follow_person, dance, go_to_named_place
+# Retired  (1):  acknowledge_gesture
+# Total: 27 entries (spec §4.1 表格寫 26 為 typo，採實際列出的 27)
+#
+# audio tag 預埋（spec §4.3）：21 條非動態 say_template 預埋
+# 不預埋（5 LLM-動態）：chat_reply, greet_known_person, object_remark,
+#                       stranger_alert, fallen_alert
+# ---------------------------------------------------------------------------
+
 SKILL_REGISTRY: dict[str, SkillContract] = {
+    # ---- Safety ----
+    "stop_move": SkillContract(
+        name="stop_move",
+        steps=[SkillStep(ExecutorKind.MOTION, {"name": "stop_move"})],
+        priority_class=PriorityClass.SAFETY,
+        description="Emergency stop. Safety hard-rule path.",
+        ui_style="safety",
+        bucket="active",
+    ),
+    "system_pause": SkillContract(
+        name="system_pause",
+        steps=[
+            SkillStep(ExecutorKind.MOTION, {"name": "stop_move"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[whispers] 我先安靜一下"}),
+        ],
+        priority_class=PriorityClass.SAFETY,
+        description="System pause: stop motion first, then silence + ignore non-safety triggers.",
+        ui_style="safety",
+        bucket="active",
+    ),
+    "show_status": SkillContract(
+        name="show_status",
+        steps=[SkillStep(ExecutorKind.SAY, {"text": "[playful] 系統狀態正常喔"})],
+        priority_class=PriorityClass.CHAT,
+        cooldown_s=2.0,
+        description="Status read-out (Studio button).",
+        bucket="active",
+    ),
+
+    # ---- Chat (LLM-driven, dynamic text) ----
     "chat_reply": SkillContract(
         name="chat_reply",
         steps=[SkillStep(ExecutorKind.SAY, {"text": ""})],
         priority_class=PriorityClass.CHAT,
         description="LLM-sourced free-form chat reply.",
         args_schema={"text": "string"},
+        bucket="active",
     ),
     "say_canned": SkillContract(
         name="say_canned",
@@ -111,25 +176,92 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         priority_class=PriorityClass.CHAT,
         description="Brain rule fallback canned line.",
         args_schema={"text": "string"},
+        bucket="active",
     ),
-    "stop_move": SkillContract(
-        name="stop_move",
-        steps=[SkillStep(ExecutorKind.MOTION, {"name": "stop_move"})],
-        priority_class=PriorityClass.SAFETY,
-        description="Emergency stop. Safety hard-rule path.",
-        ui_style="safety",
-    ),
-    "acknowledge_gesture": SkillContract(
-        name="acknowledge_gesture",
+
+    # ---- Sequence (meta) ----
+    "self_introduce": SkillContract(
+        name="self_introduce",
         steps=[
-            SkillStep(ExecutorKind.MOTION, {"name": "content"}),
-            SkillStep(ExecutorKind.SAY, {"text": "收到"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[excited] 大家好，我是 PawAI！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 我會看臉、聽聲音、認手勢"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "sit"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[playful] 隨時跟我互動！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "balance_stand"}),
+        ],
+        priority_class=PriorityClass.SEQUENCE,
+        cooldown_s=60.0,
+        timeout_s=60.0,
+        description="Self-introduction 6-step meta sequence.",
+        bucket="active",
+    ),
+
+    # ---- Social motion (low-risk) ----
+    "wave_hello": SkillContract(
+        name="wave_hello",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[excited] 嗨！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
         ],
         priority_class=PriorityClass.SKILL,
-        cooldown_s=3.0,
-        description="Generic gesture acknowledgement.",
-        args_schema={"gesture": "string"},
+        cooldown_s=5.0,
+        description="Wave back when user waves.",
+        bucket="active",
     ),
+    "sit_along": SkillContract(
+        name="sit_along",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[playful] 我也坐下陪你"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "sit"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=15.0,
+        description="Sit when user sits.",
+        bucket="active",
+    ),
+    "careful_remind": SkillContract(
+        name="careful_remind",
+        steps=[SkillStep(ExecutorKind.SAY, {"text": "[worried] 小心一點喔"})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=10.0,
+        description="Remind user to be careful (bending detected).",
+        bucket="active",
+    ),
+
+    # ---- Social motion (high-risk, requires OK confirm) ----
+    "wiggle": SkillContract(
+        name="wiggle",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[playful] 看我扭一下！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "wiggle_hip"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=10.0,
+        safety_requirements=["depth_clear", "robot_stable"],
+        requires_confirmation=True,
+        risk_level="high",
+        fallback_skill="say_canned",
+        description="Hip wiggle. High-risk motion, requires OK confirm.",
+        bucket="active",
+    ),
+    "stretch": SkillContract(
+        name="stretch",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[sighs] 伸個懶腰～"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "stretch"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=15.0,
+        safety_requirements=["depth_clear", "robot_stable"],
+        requires_confirmation=True,
+        risk_level="high",
+        fallback_skill="say_canned",
+        description="Body stretch. High-risk motion, requires OK confirm.",
+        bucket="active",
+    ),
+
+    # ---- Face-driven ----
     "greet_known_person": SkillContract(
         name="greet_known_person",
         steps=[
@@ -140,44 +272,157 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=20.0,
         description="Personalised greeting for a registered face.",
         args_schema={"name": "string"},
-    ),
-    "self_introduce": SkillContract(
-        name="self_introduce",
-        steps=[
-            SkillStep(ExecutorKind.SAY, {"text": "我是 PawAI，你的居家互動機器狗"}),
-            SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
-            SkillStep(ExecutorKind.SAY, {"text": "平常我會待在你身邊，等你叫我"}),
-            SkillStep(ExecutorKind.MOTION, {"name": "sit"}),
-            SkillStep(ExecutorKind.SAY, {"text": "你可以用聲音、手勢，或直接跟我互動"}),
-            SkillStep(ExecutorKind.MOTION, {"name": "content"}),
-            SkillStep(ExecutorKind.SAY, {"text": "我也會注意周圍發生的事情"}),
-            SkillStep(ExecutorKind.MOTION, {"name": "stand"}),
-            SkillStep(ExecutorKind.SAY, {"text": "如果看到陌生人，我會提醒你提高注意"}),
-            SkillStep(ExecutorKind.MOTION, {"name": "balance_stand"}),
-        ],
-        priority_class=PriorityClass.SEQUENCE,
-        cooldown_s=60.0,
-        timeout_s=60.0,
-        description="Self-introduction sequence.",
+        bucket="active",
     ),
     "stranger_alert": SkillContract(
         name="stranger_alert",
         steps=[SkillStep(ExecutorKind.SAY, {"text": "偵測到不認識的人，請注意"})],
         priority_class=PriorityClass.ALERT,
         cooldown_s=30.0,
-        description="Unknown face stable for 3 seconds. MVS: say only.",
+        description="Unknown face stable for 3 seconds.",
         ui_style="alert",
+        bucket="active",
     ),
     "fallen_alert": SkillContract(
         name="fallen_alert",
         steps=[
             SkillStep(ExecutorKind.MOTION, {"name": "stop_move"}),
-            SkillStep(ExecutorKind.SAY, {"text": "偵測到有人跌倒，請確認是否需要協助"}),
+            SkillStep(
+                ExecutorKind.SAY,
+                {"text_template": "偵測到 {name} 跌倒，請確認是否需要協助"},
+            ),
         ],
         priority_class=PriorityClass.ALERT,
         cooldown_s=15.0,
-        description="Human fallen detected. Stop the dog itself, then say alert.",
+        description="Human fallen detected. Stop dog, then alert with name.",
         ui_style="alert",
+        args_schema={"name": "string"},
+        bucket="active",
+    ),
+
+    # ---- Object ----
+    "object_remark": SkillContract(
+        name="object_remark",
+        steps=[SkillStep(ExecutorKind.SAY, {"text_template": "我看到一個{color} {label}"})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=5.0,
+        description="Comment on a salient detected object (LLM may override text).",
+        args_schema={"label": "string", "color": "string"},
+        bucket="active",
+    ),
+
+    # ---- Navigation (high-risk) ----
+    "nav_demo_point": SkillContract(
+        name="nav_demo_point",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "goto_relative", "distance": 1.2})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=8.0,
+        timeout_s=20.0,
+        safety_requirements=["nav_ready", "depth_clear"],
+        requires_confirmation=True,  # Studio button trigger 由 brain bypass
+        risk_level="high",
+        fallback_skill="say_canned",
+        description="Short relative goto (Scene 2 保底). Studio button bypass confirm.",
+        bucket="active",
+    ),
+    "approach_person": SkillContract(
+        name="approach_person",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "goto_face", "stop_distance": 1.0})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=15.0,
+        timeout_s=25.0,
+        safety_requirements=["nav_ready", "depth_clear", "robot_stable"],
+        requires_confirmation=True,
+        risk_level="high",
+        fallback_skill="wave_hello",
+        description="Approach person to 1m (Scene 7 Wow C).",
+        args_schema={"name": "string"},
+        bucket="active",
+    ),
+
+    # ---- Hidden (registry 內、Studio grayed-out) ----
+    "enter_mute_mode": SkillContract(
+        name="enter_mute_mode",
+        steps=[SkillStep(ExecutorKind.SAY, {"text": "[whispers] 進入靜音模式"})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=5.0,
+        requires_confirmation=True,
+        risk_level="medium",
+        description="Mute TTS until next un-mute. Hidden in Phase B Demo.",
+        bucket="hidden",
+    ),
+    "enter_listen_mode": SkillContract(
+        name="enter_listen_mode",
+        steps=[SkillStep(ExecutorKind.SAY, {"text": "[curious] 我在聽"})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=3.0,
+        description="Force-open ASR window. Hidden in Phase B Demo.",
+        bucket="hidden",
+    ),
+    "akimbo_react": SkillContract(
+        name="akimbo_react",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[playful] 喔～你叉腰啦！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "balance_stand"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=10.0,
+        description="React to akimbo pose. Hidden in Phase B Demo.",
+        bucket="hidden",
+    ),
+    "knee_kneel_react": SkillContract(
+        name="knee_kneel_react",
+        steps=[
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 你跪下做什麼？"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "sit"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=10.0,
+        description="React to single-knee kneel. Hidden in Phase B Demo.",
+        bucket="hidden",
+    ),
+    "patrol_route": SkillContract(
+        name="patrol_route",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "patrol", "route_id": ""})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=30.0,
+        timeout_s=60.0,
+        safety_requirements=["nav_ready", "depth_clear"],
+        requires_confirmation=True,
+        risk_level="high",
+        description="Run a saved route. Hidden in Phase B Demo (optional surface).",
+        args_schema={"route_id": "string"},
+        bucket="hidden",
+    ),
+
+    # ---- Disabled / Future ----
+    "follow_me": SkillContract(
+        name="follow_me",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "follow_user"})],
+        priority_class=PriorityClass.SKILL,
+        static_enabled=False,
+        risk_level="high",
+        description="Follow the user. Disabled in 5/12 Demo (Future Work).",
+        bucket="disabled",
+    ),
+    "follow_person": SkillContract(
+        name="follow_person",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "follow_face"})],
+        priority_class=PriorityClass.SKILL,
+        static_enabled=False,
+        risk_level="high",
+        description="Follow a specific named person. Disabled (Future).",
+        args_schema={"name": "string"},
+        bucket="disabled",
+    ),
+    "dance": SkillContract(
+        name="dance",
+        steps=[SkillStep(ExecutorKind.MOTION, {"name": "wiggle_hip"})],
+        priority_class=PriorityClass.SKILL,
+        static_enabled=False,
+        risk_level="high",
+        description="Choreographed dance. Disabled (Future).",
+        bucket="disabled",
     ),
     "go_to_named_place": SkillContract(
         name="go_to_named_place",
@@ -188,8 +433,35 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         enabled_when=[("phase_b_pending", "Phase B 才整合 nav_capability")],
         risk_level="medium",
         args_schema={"place_id": "string"},
+        bucket="disabled",
+    ),
+
+    # ---- Retired (registry 保留、Studio 不顯示、brain 不選) ----
+    "acknowledge_gesture": SkillContract(
+        name="acknowledge_gesture",
+        steps=[
+            SkillStep(ExecutorKind.MOTION, {"name": "content"}),
+            SkillStep(ExecutorKind.SAY, {"text": "收到"}),
+        ],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=3.0,
+        static_enabled=False,
+        description="Generic gesture ack. Retired — split into wave_hello / wiggle / stretch.",
+        args_schema={"gesture": "string"},
+        bucket="retired",
     ),
 }
+
+
+# Convenience views for Brain / Studio consumers.
+META_SKILLS: dict[str, list[SkillStep]] = {
+    "self_introduce": SKILL_REGISTRY["self_introduce"].steps,
+}
+
+
+def skills_by_bucket(bucket: SkillBucket) -> list[SkillContract]:
+    """Return all contracts in a given bucket (deterministic order)."""
+    return [c for c in SKILL_REGISTRY.values() if c.bucket == bucket]
 
 
 def _phase_a_enabled_when_blocks(contract: SkillContract) -> list[str]:

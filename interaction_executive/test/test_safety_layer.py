@@ -83,7 +83,7 @@ def test_validate_pass_when_clean(safety):
     # Phase A: a "clean" world for a MOTION skill must explicitly set
     # depth_clear=True (and nav_ready=True if NAV is involved). Defaults are
     # fail-closed by design.
-    plan = build_plan("acknowledge_gesture", args={"gesture": "wave"})
+    plan = build_plan("wave_hello")  # post-Phase-B retire of acknowledge_gesture
     result = safety.validate(plan, WorldStateSnapshot(depth_clear=True))
     assert result.ok
 
@@ -113,8 +113,8 @@ def _nav_plan():
 
 
 def _motion_plan():
-    """Build a MOTION-step plan via existing acknowledge_gesture contract."""
-    return build_plan("acknowledge_gesture", args={"gesture": "wave"})
+    """Build a SAY+MOTION plan via wave_hello (spec §4.1 Active)."""
+    return build_plan("wave_hello")
 
 
 def _chat_plan():

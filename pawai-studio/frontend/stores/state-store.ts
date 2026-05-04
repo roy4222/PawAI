@@ -11,6 +11,9 @@ import type {
   SkillResult,
   SystemHealth,
   ObjectState,
+  CapabilityState,
+  CapabilityTriState,
+  PlanMode,
 } from "@/contracts/types";
 
 interface StateStore {
@@ -25,6 +28,8 @@ interface StateStore {
   objectState: ObjectState | null;
   lastTtsText: string | null;
   lastTtsAt: number | null;
+  capability: CapabilityState;
+  planMode: PlanMode;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -36,6 +41,8 @@ interface StateStore {
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
   updateTts: (text: string) => void;
+  updateCapability: (name: keyof CapabilityState, value: CapabilityTriState) => void;
+  setPlanMode: (mode: PlanMode) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -50,6 +57,8 @@ export const useStateStore = create<StateStore>((set) => ({
   objectState: null,
   lastTtsText: null,
   lastTtsAt: null,
+  capability: { nav_ready: "unknown", depth_clear: "unknown" },
+  planMode: "A",
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -67,4 +76,7 @@ export const useStateStore = create<StateStore>((set) => ({
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),
   updateTts: (text) => set({ lastTtsText: text, lastTtsAt: Date.now() }),
+  updateCapability: (name, value) =>
+    set((state) => ({ capability: { ...state.capability, [name]: value } })),
+  setPlanMode: (mode) => set({ planMode: mode }),
 }));

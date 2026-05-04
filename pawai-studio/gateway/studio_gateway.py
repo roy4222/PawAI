@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from asr_client import resample_to_wav16k, transcribe
 
@@ -119,6 +119,13 @@ class GatewayNode(Node):
         super().__init__("studio_gateway_node")
         self._loop = loop
         self._last_face_broadcast = 0.0
+        # Capability gate state — tri-state (true / false / unknown).
+        # `None` = no message ever received (unknown). Once a Bool arrives we
+        # store True / False and surface it via /api/capability + /ws/events.
+        self._cap_state: dict[str, bool | None] = {
+            "nav_ready": None,
+            "depth_clear": None,
+        }
 
         # Publisher — speech intent (browser → ROS2)
         self.speech_pub = self.create_publisher(
@@ -144,8 +151,16 @@ class GatewayNode(Node):
             String, "/tts", self._on_tts_msg, QOS_EVENT
         )
 
-        self.get_logger().info(
-            f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} topics + /tts"
+        # Capability Bool subscribers (Phase B — Trace Drawer Nav/Depth Gate).
+        self.create_subscription(
+            Bool, "/capability/nav_ready",
+            lambda msg: self._on_capability_msg("nav_ready", msg),
+            QOS_EVENT,
+        )
+        self.create_subscription(
+            Bool, "/capability/depth_clear",
+            lambda msg: self._on_capability_msg("depth_clear", msg),
+            QOS_EVENT,
         )
 
         # ── Video subscribers — ROS2 Image → JPEG → WebSocket binary ──
@@ -153,37 +168,66 @@ class GatewayNode(Node):
         self._cv_bridge_ok = False
 
         if not _VIDEO_AVAILABLE:
-            self.get_logger().info("video_bridge not available (cv2 missing) — video endpoints disabled")
-            return
-
-        self._cv_bridge_ok = True
-        try:
-            from cv_bridge import CvBridge
-            self._cv_bridge = CvBridge()
-        except ImportError:
-            self._cv_bridge = None
-            self._cv_bridge_ok = False
-            self.get_logger().warn(
-                "cv_bridge not available — video endpoints will show NO SIGNAL"
-            )
-
-        if self._cv_bridge_ok:
-            from sensor_msgs.msg import Image as RosImage
-            video_qos = QoSProfile(
-                reliability=ReliabilityPolicy.BEST_EFFORT,
-                durability=DurabilityPolicy.VOLATILE,
-                depth=1,
-            )
-            for source, topic in VIDEO_TOPIC_MAP.items():
-                self._video_throttles[source] = FrameThrottle()
-                self.create_subscription(
-                    RosImage, topic,
-                    lambda msg, s=source: self._on_video_frame(s, msg),
-                    video_qos,
-                )
             self.get_logger().info(
-                f"Video bridge ready — subscribed to {len(VIDEO_TOPIC_MAP)} image topics"
+                "video_bridge not available (cv2 missing) — video endpoints disabled"
             )
+        else:
+            self._cv_bridge_ok = True
+            try:
+                from cv_bridge import CvBridge
+                self._cv_bridge = CvBridge()
+            except ImportError:
+                self._cv_bridge = None
+                self._cv_bridge_ok = False
+                self.get_logger().warn(
+                    "cv_bridge not available — video endpoints will show NO SIGNAL"
+                )
+
+            if self._cv_bridge_ok:
+                from sensor_msgs.msg import Image as RosImage
+                video_qos = QoSProfile(
+                    reliability=ReliabilityPolicy.BEST_EFFORT,
+                    durability=DurabilityPolicy.VOLATILE,
+                    depth=1,
+                )
+                for source, topic in VIDEO_TOPIC_MAP.items():
+                    self._video_throttles[source] = FrameThrottle()
+                    self.create_subscription(
+                        RosImage, topic,
+                        lambda msg, s=source: self._on_video_frame(s, msg),
+                        video_qos,
+                    )
+                self.get_logger().info(
+                    f"Video bridge ready — subscribed to {len(VIDEO_TOPIC_MAP)} image topics"
+                )
+
+        self.get_logger().info(
+            f"Studio Gateway ROS2 node ready — subscribed to {len(TOPIC_MAP)} String topics "
+            "+ /tts + 2 capability Bool topics"
+        )
+
+    def _on_capability_msg(self, name: str, msg: Bool) -> None:
+        value = bool(msg.data)
+        self._cap_state[name] = value
+        # Push to browser via /ws/events as a synthetic event.
+        envelope = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "source": "capability",
+            "event_type": f"capability_{name}",
+            "data": {"name": name, "value": value, "tri_state": "true" if value else "false"},
+        }
+        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(envelope), self._loop)
+
+    def capability_snapshot(self) -> dict[str, str]:
+        """Return tri-state snapshot of all capabilities for /api/capability."""
+        out: dict[str, str] = {}
+        for name, val in self._cap_state.items():
+            if val is None:
+                out[name] = "unknown"
+            else:
+                out[name] = "true" if val else "false"
+        return out
 
     def publish_speech_event(self, payload: dict) -> None:
         msg = String()
@@ -369,6 +413,82 @@ async def post_skill_request(payload: SkillRequestPayload):
     }
     node.publish_skill_request(msg)
     return {"ok": True, "request_id": request_id}
+
+
+# ── Skill Registry / Capability / Plan Mode (Phase B B5a) ──────
+
+# In-memory plan mode flag. "A" = full skill stack, "B" = canned-script Demo.
+# Studio toggles this; brain_node reads via REST or future ROS topic.
+_PLAN_MODE: dict[str, str] = {"mode": "A"}
+
+
+def _serialize_skill_registry() -> dict:
+    """Read SKILL_REGISTRY from interaction_executive package and return JSON.
+
+    Imported lazily so the gateway still boots if the ROS package is not on
+    PYTHONPATH (e.g. during pytest of the gateway in isolation).
+    """
+    try:
+        from interaction_executive.skill_contract import SKILL_REGISTRY
+    except ImportError as exc:
+        return {"ok": False, "error": f"interaction_executive import failed: {exc}"}
+
+    skills = []
+    for name, c in SKILL_REGISTRY.items():
+        skills.append(
+            {
+                "name": name,
+                "bucket": c.bucket,
+                "static_enabled": c.static_enabled,
+                "enabled_when_blocked": bool(c.enabled_when),
+                "priority_class": int(c.priority_class),
+                "cooldown_s": c.cooldown_s,
+                "timeout_s": c.timeout_s,
+                "safety_requirements": list(c.safety_requirements),
+                "fallback_skill": c.fallback_skill,
+                "requires_confirmation": c.requires_confirmation,
+                "risk_level": c.risk_level,
+                "ui_style": c.ui_style,
+                "description": c.description,
+                "args_schema": c.args_schema,
+                "step_count": len(c.steps),
+            }
+        )
+    by_bucket = {"active": 0, "hidden": 0, "disabled": 0, "retired": 0}
+    for s in skills:
+        by_bucket[s["bucket"]] = by_bucket.get(s["bucket"], 0) + 1
+    return {"ok": True, "total": len(skills), "by_bucket": by_bucket, "skills": skills}
+
+
+@app.get("/api/skill_registry")
+async def get_skill_registry():
+    return _serialize_skill_registry()
+
+
+@app.get("/api/capability")
+async def get_capability():
+    """Return tri-state snapshot of capability gates (Nav / Depth)."""
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return {"ok": True, "capabilities": node.capability_snapshot()}
+
+
+class PlanModePayload(BaseModel):
+    mode: str  # "A" or "B"
+
+
+@app.get("/api/plan_mode")
+async def get_plan_mode():
+    return {"ok": True, "mode": _PLAN_MODE["mode"]}
+
+
+@app.post("/api/plan_mode")
+async def post_plan_mode(payload: PlanModePayload):
+    mode = payload.mode.strip().upper()
+    if mode not in {"A", "B"}:
+        return {"ok": False, "error": "mode must be 'A' or 'B'"}
+    _PLAN_MODE["mode"] = mode
+    return {"ok": True, "mode": mode}
 
 
 @app.post("/api/text_input")
