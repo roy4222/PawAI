@@ -616,12 +616,15 @@ class EnhancedTTSNode(Node):
         self.cache = AudioCache(self.config.cache_dir, self.config.use_cache)
         self.audio_processor = AudioProcessor()
 
-        # Initialize TTS provider
+        # Initialize TTS provider + fallback chain (Stage 4 of B1 Plan D)
         self.tts_provider = self._create_tts_provider()
+        self._fallback_chain: List = []
 
         if not self.tts_provider:
             self.get_logger().error("Failed to initialize TTS provider!")
             return
+
+        self._fallback_chain = self._build_fallback_chain()
 
         # Setup subscriptions and publishers
         self._setup_communication()
@@ -808,6 +811,48 @@ class EnhancedTTSNode(Node):
             self.get_logger().error(f"Unsupported TTS provider: {self.config.provider}")
             return None
 
+    def _build_fallback_chain(self) -> List:
+        """Build provider fallback chain based on main provider.
+
+        Stage 4 of B1 Plan D: keeps demo audible when the cloud TTS path
+        fails (timeout / 4xx / network). edge-tts is a quick cloud second;
+        Piper is the offline last-line. Audio tag handling is per-provider
+        — when a fallback runs, tts_callback strips tags first because
+        edge-tts and Piper don't render them.
+
+        Returns list of fallback provider instances (excluding the main
+        one). Failures during instantiation are warned and skipped, not
+        fatal — a chain with one fallback is still better than zero.
+        """
+        chain: List = []
+        if self.config.provider == TTSProvider.OPENROUTER_GEMINI:
+            for cls in (TTSProvider_EdgeTTS, TTSProvider_Piper):
+                try:
+                    chain.append(cls(self.config))
+                except Exception as exc:
+                    self.get_logger().warning(
+                        f"Skipping fallback {cls.__name__}: {exc}"
+                    )
+        elif self.config.provider == TTSProvider.EDGE_TTS:
+            try:
+                chain.append(TTSProvider_Piper(self.config))
+            except Exception as exc:
+                self.get_logger().warning(f"Skipping Piper fallback: {exc}")
+        return chain
+
+    def _cache_voice_for(self, provider_name: str) -> str:
+        """Resolve the voice identifier used in cache keys per provider.
+
+        Each provider has its own voice space (Gemini "Despina" vs
+        edge-tts "zh-CN-XiaoxiaoNeural" vs ElevenLabs voice ID), so cache
+        keys must match the provider that produced the audio.
+        """
+        if provider_name == "edge_tts":
+            return self.config.edge_tts_voice
+        if provider_name == "openrouter_gemini":
+            return self.config.openrouter_gemini_voice
+        return self.config.voice_name
+
     def _setup_communication(self) -> None:
         """Setup ROS2 communication"""
         self.subscription = self.create_subscription(
@@ -829,99 +874,103 @@ class EnhancedTTSNode(Node):
         # )
 
     def tts_callback(self, msg: String) -> None:
-        """Handle incoming TTS requests"""
+        """Handle incoming TTS requests via main+fallback provider chain.
+
+        Stage 4 of B1 Plan D: replaces the inline edge_tts→Piper fallback
+        with a uniform chain iteration. Each provider in the chain:
+        - resolves its own text (strip audio tags if !supports_audio_tags)
+        - looks up its own provider-specific cache slot
+        - synthesizes; on failure (None) we move to the next provider.
+        """
         try:
             raw_text = msg.data.strip()
             if not raw_text:
                 self.get_logger().warn("Received empty TTS request")
                 return
 
-            # Strip emotion/audio tags before synthesis ONLY when the active
-            # provider does not natively render them. edge-tts / Piper /
-            # ElevenLabs / MeloTTS all read `[excited]` literally → strip.
-            # Gemini 3.1 Flash TTS renders tags as emotion → pass through.
-            # Per-provider behavior is declared via supports_audio_tags
-            # (TTSProviderBase protocol — see tts_provider.py).
-            supports_tags = bool(
-                getattr(self.tts_provider, "supports_audio_tags", False)
-            )
-            if supports_tags:
-                text = raw_text
-            else:
-                text = strip_audio_tags(raw_text)
-                if not text:
-                    self.get_logger().warn(
-                        f"TTS request became empty after tag strip: {raw_text!r}"
-                    )
-                    return
+            if self.tts_provider is None:
+                self.get_logger().error("❌ TTS provider is not initialized")
+                return
 
-            if text != raw_text:
-                self.get_logger().info(
-                    f'🎤 TTS Request: "{raw_text}" → stripped "{text}" '
-                    f"(voice: {self.config.voice_name})"
-                )
-            else:
-                self.get_logger().info(
-                    f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})'
-                )
-
-            # Activate echo gate IMMEDIATELY — before synthesis, not after.
-            # Without this, ASR records during the entire TTS synthesis + LLM
-            # processing window (~8s), picking up Go2's playback as input.
+            # Activate echo gate IMMEDIATELY — before any synthesis attempt.
+            # ASR otherwise records during the entire synth + playback window
+            # (~8s), capturing Go2's own playback as input.
             self._publish_tts_playing(True)
 
-            # Resolve cache voice identity (edge-tts uses its own voice param)
-            cache_voice = (
-                self.config.edge_tts_voice
-                if self.config.provider == TTSProvider.EDGE_TTS
-                else self.config.voice_name
-            )
-
-            # Check cache first
+            chain = [self.tts_provider] + list(self._fallback_chain)
+            audio_data = None
             cache_hit = False
-            audio_data = self.cache.get(
-                text, cache_voice, self.config.provider.value
-            )
+            served_by = ""
 
-            if audio_data:
-                self.get_logger().info("💾 Cache hit - using cached audio")
-                cache_hit = True
-            else:
-                if self.tts_provider is None:
-                    self.get_logger().error("❌ TTS provider is not initialized")
-                    self._publish_tts_playing(False)
-                    return
-
-                # Generate new speech
-                self.get_logger().info("🔊 Generating new speech...")
-                audio_data = self.tts_provider.synthesize(text)
-
-                # Piper fallback if edge-tts fails
-                if audio_data is None and self.config.provider == TTSProvider.EDGE_TTS:
-                    self.get_logger().warn("edge-tts failed, falling back to Piper")
-                    try:
-                        piper_fb = TTSProvider_Piper(self.config)
-                        audio_data = piper_fb.synthesize(text)
-                        if audio_data:
-                            # Cache under piper key, not edge_tts
-                            self.cache.put(text, cache_voice, "piper", audio_data)
-                            self.get_logger().info("Piper fallback cached")
-                    except Exception as e:
-                        self.get_logger().warning(f"Piper fallback also failed: {e}")
-
-                if audio_data:
-                    # Cache the result
-                    if self.cache.put(
-                        text,
-                        cache_voice,
-                        self.config.provider.value,
-                        audio_data,
-                    ):
-                        self.get_logger().info("💾 Audio cached successfully")
+            for prov in chain:
+                pname = getattr(prov, "name", prov.__class__.__name__)
+                # Per-provider tag handling. Provider's supports_audio_tags
+                # flag (see tts_provider.py TTSProviderBase) gates the strip:
+                #   True  → pass tags through (Gemini renders [excited])
+                #   False → strip tags (edge-tts/Piper read them literally)
+                supports_tags = bool(getattr(prov, "supports_audio_tags", False))
+                if supports_tags:
+                    text = raw_text
                 else:
-                    self.get_logger().error("❌ Failed to generate speech")
-                    self._publish_tts_playing(False)
-                    return
+                    text = strip_audio_tags(raw_text)
+                    if not text:
+                        self.get_logger().warn(
+                            f"[{pname}] empty after tag strip: {raw_text!r}, "
+                            f"trying next provider"
+                        )
+                        continue
+
+                cache_voice = self._cache_voice_for(pname)
+
+                # Per-provider log header (replaces the legacy single-line log
+                # that always showed config.voice_name regardless of active
+                # provider — cosmetic fix bundled with chain refactor)
+                if text != raw_text:
+                    self.get_logger().info(
+                        f'🎤 [{pname}] "{raw_text}" → stripped "{text}" '
+                        f"(voice: {cache_voice})"
+                    )
+                else:
+                    self.get_logger().info(
+                        f'🎤 [{pname}] "{text}" (voice: {cache_voice})'
+                    )
+
+                # Cache lookup (per-provider key)
+                hit = self.cache.get(text, cache_voice, pname)
+                if hit:
+                    self.get_logger().info(f"💾 Cache hit [{pname}]")
+                    audio_data = hit
+                    cache_hit = True
+                    served_by = pname
+                    break
+
+                # Synthesize
+                self.get_logger().info(f"🔊 Generating [{pname}]...")
+                try:
+                    fresh = prov.synthesize(text)
+                except Exception as exc:
+                    self.get_logger().warning(
+                        f"[{pname}] synthesize raised: {exc}, trying next"
+                    )
+                    continue
+
+                if fresh:
+                    if self.cache.put(text, cache_voice, pname, fresh):
+                        self.get_logger().info(f"💾 Cached [{pname}]")
+                    audio_data = fresh
+                    served_by = pname
+                    break
+                else:
+                    self.get_logger().warn(
+                        f"[{pname}] returned no audio, trying next provider"
+                    )
+
+            if audio_data is None:
+                self.get_logger().error(
+                    "❌ Failed to generate speech (all providers exhausted)"
+                )
+                self._publish_tts_playing(False)
+                return
 
             # Process and play audio
             if self.config.local_playback:
@@ -931,7 +980,9 @@ class EnhancedTTSNode(Node):
 
             # Log success
             status = "cached" if cache_hit else "generated"
-            self.get_logger().info(f"✅ TTS completed successfully ({status})")
+            self.get_logger().info(
+                f"✅ TTS completed [{served_by}] ({status})"
+            )
 
         except Exception as e:
             self.get_logger().error(f"❌ TTS processing error: {str(e)}")
