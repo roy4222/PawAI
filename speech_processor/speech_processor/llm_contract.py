@@ -61,3 +61,89 @@ def parse_llm_response(raw: str):
     if not LLM_REQUIRED_FIELDS.issubset(result.keys()):
         return None
     return result
+
+
+# ── Eval-schema adapter (Phase B B1, 2026-05-04) ────────────────────────
+#
+# tools/llm_eval/persona.txt drives Gemini/DeepSeek with a *different* JSON
+# schema than the legacy llm_bridge contract:
+#
+#   eval persona output:  {"reply": "...", "skill": "...", "args": {...}}
+#   bridge contract:      {"intent": "...", "reply_text": "...",
+#                          "selected_skill": "...", "reasoning": "...",
+#                          "confidence": ...}
+#
+# adapt_eval_schema() converts the former into the latter so existing
+# llm_bridge code paths (parse_llm_response, _enforce_reply_text_limit,
+# _emit_chat_candidate, etc.) keep working unchanged.
+#
+# selected_skill: only kept if it's in the legacy bridge SKILL_TO_CMD set.
+# The eval persona has 17 active skills; legacy bridge maps only 4 P0 skills
+# to Go2 commands. Brain MVS skill arbitration is handled by Brain rules
+# (deterministic), not by LLM — so dropping unmapped skills is safe.
+
+# Heuristic intent inference from skill: keep small + obvious only.
+_SKILL_TO_INTENT = {
+    "stop_move": "stop",
+    "sit": "sit",
+    "sit_along": "sit",
+    "stand": "stand",
+    "wave_hello": "greet",
+    "greet_known_person": "greet",
+    "show_status": "status",
+    "self_introduce": "greet",
+    "stranger_alert": "stranger",
+    "fallen_alert": "fallen",
+    # everything else falls to default fallback intent
+}
+
+
+def adapt_eval_schema(eval_obj: dict, fallback_intent: str = "chat") -> dict:
+    """Convert eval persona output → legacy bridge schema.
+
+    Args:
+        eval_obj: dict with optional keys {reply, skill, args, intent, confidence}.
+        fallback_intent: intent to use when not derivable from skill.
+
+    Returns:
+        dict with all keys in LLM_REQUIRED_FIELDS, ready for the existing
+        llm_bridge pipeline (parse_llm_response will accept it as-is).
+    """
+    if not isinstance(eval_obj, dict):
+        eval_obj = {}
+
+    reply_text = str(eval_obj.get("reply") or eval_obj.get("reply_text") or "").strip()
+
+    raw_skill = eval_obj.get("skill") or eval_obj.get("selected_skill")
+    selected_skill = None
+    if isinstance(raw_skill, str):
+        s = raw_skill.strip()
+        # legacy bridge only knows the 4 P0 skills — strip everything else.
+        if s in SKILL_TO_CMD:
+            selected_skill = s
+
+    # intent: prefer explicit, else derive from raw skill name, else fallback.
+    intent = eval_obj.get("intent")
+    if not isinstance(intent, str) or not intent.strip():
+        if isinstance(raw_skill, str) and raw_skill.strip() in _SKILL_TO_INTENT:
+            intent = _SKILL_TO_INTENT[raw_skill.strip()]
+        else:
+            intent = fallback_intent
+    else:
+        intent = intent.strip()
+
+    # confidence: clamp to [0, 1]; default 0.8 (came from a real LLM).
+    raw_conf = eval_obj.get("confidence", 0.8)
+    try:
+        confidence = float(raw_conf)
+    except (TypeError, ValueError):
+        confidence = 0.8
+    confidence = max(0.0, min(1.0, confidence))
+
+    return {
+        "intent": intent,
+        "reply_text": reply_text,
+        "selected_skill": selected_skill,
+        "reasoning": "openrouter:eval_schema",
+        "confidence": confidence,
+    }

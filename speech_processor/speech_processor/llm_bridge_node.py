@@ -13,10 +13,12 @@ Spec: docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-llm-in
 """
 
 import json
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
@@ -38,6 +40,7 @@ from .llm_contract import (
     LLM_REQUIRED_FIELDS,
     P0_SKILLS,
     SKILL_TO_CMD,
+    adapt_eval_schema,
     parse_llm_response,
     strip_markdown_fences,
 )
@@ -148,6 +151,20 @@ class LlmBridgeNode(Node):
         self.last_error = ""
         self.last_source = ""
 
+        # OpenRouter setup (Phase B B1).
+        self._openrouter_key = (
+            os.environ.get("OPENROUTER_KEY")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or ""
+        ).strip()
+        self._openrouter_active = bool(self.enable_openrouter and self._openrouter_key)
+        if self.enable_openrouter and not self._openrouter_key:
+            self.get_logger().warn(
+                "OPENROUTER_KEY not set — Gemini/DeepSeek disabled, "
+                "falling through to existing vLLM chain"
+            )
+        self._system_prompt = self._load_system_prompt()
+
         # Bounded thread pool to prevent per-event thread explosion
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="llm")
 
@@ -188,6 +205,25 @@ class LlmBridgeNode(Node):
         self.declare_parameter("subscribe_face", True)
         self.declare_parameter("output_mode", "legacy")  # "legacy" | "brain"
         self.declare_parameter("chat_candidate_topic", "/brain/chat_candidate")
+        # ── OpenRouter (Phase B B1, 2026-05-04) ────────────────────────
+        # Primary: Gemini 3 Flash; conditional fallback: DeepSeek V4 Flash.
+        # Key from env (OPENROUTER_KEY or OPENROUTER_API_KEY); never a ROS param.
+        self.declare_parameter("enable_openrouter", True)
+        self.declare_parameter(
+            "openrouter_base_url",
+            "https://openrouter.ai/api/v1/chat/completions",
+        )
+        self.declare_parameter(
+            "openrouter_gemini_model", "google/gemini-3-flash-preview"
+        )
+        self.declare_parameter(
+            "openrouter_deepseek_model", "deepseek/deepseek-v4-flash"
+        )
+        self.declare_parameter("openrouter_request_timeout_s", 2.0)
+        self.declare_parameter("openrouter_overall_budget_s", 2.2)
+        # llm_persona_file: optional path to a system prompt file (e.g.
+        # tools/llm_eval/persona.txt). Empty → use legacy SYSTEM_PROMPT inline.
+        self.declare_parameter("llm_persona_file", "")
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -225,6 +261,15 @@ class LlmBridgeNode(Node):
             self.output_mode = "legacy"
         self.chat_candidate_topic = _str("chat_candidate_topic")
         self.get_logger().info(f"llm_bridge output_mode={self.output_mode}")
+
+        # OpenRouter
+        self.enable_openrouter = _bool("enable_openrouter")
+        self.openrouter_base_url = _str("openrouter_base_url")
+        self.openrouter_gemini_model = _str("openrouter_gemini_model")
+        self.openrouter_deepseek_model = _str("openrouter_deepseek_model")
+        self.openrouter_request_timeout_s = _float("openrouter_request_timeout_s")
+        self.openrouter_overall_budget_s = _float("openrouter_overall_budget_s")
+        self.llm_persona_file = _str("llm_persona_file")
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
@@ -389,7 +434,11 @@ class LlmBridgeNode(Node):
                 self.get_logger().info("force_fallback=True, skipping LLM")
                 result = None
             else:
-                result = self._call_cloud_llm(user_message)
+                # Phase B B1: try OpenRouter Gemini → conditional DeepSeek first.
+                # Falls through to existing vLLM cloud on timeout/disable.
+                result = self._try_openrouter_chain(user_message, fallback_intent)
+                if result is None:
+                    result = self._call_cloud_llm(user_message)
 
             # Cloud failed → try local Ollama before RuleBrain
             if result is None and self.enable_local_llm:
@@ -408,6 +457,187 @@ class LlmBridgeNode(Node):
                                     session_id=session_id, confidence=confidence)
         finally:
             self._llm_lock.release()
+
+    # ── Persona loader (Phase B B1) ─────────────────────────────────────
+
+    def _load_system_prompt(self) -> str:
+        """Load system prompt from llm_persona_file if set; else legacy inline.
+
+        Failures (file not found / read error) log a warning and fall back to
+        the legacy SYSTEM_PROMPT — never raise. Brain MVS must boot.
+        """
+        path_str = (self.llm_persona_file or "").strip()
+        if not path_str:
+            return SYSTEM_PROMPT
+        path = Path(path_str).expanduser()
+        if not path.is_absolute():
+            # Resolve relative to current working directory (launch context).
+            path = Path.cwd() / path
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self.get_logger().warn(
+                f"llm_persona_file load failed ({path}): {exc} — using inline SYSTEM_PROMPT"
+            )
+            return SYSTEM_PROMPT
+        if not content.strip():
+            self.get_logger().warn(
+                f"llm_persona_file is empty ({path}) — using inline SYSTEM_PROMPT"
+            )
+            return SYSTEM_PROMPT
+        self.get_logger().info(
+            f"Loaded persona from {path} ({len(content)} bytes)"
+        )
+        return content
+
+    # ── OpenRouter chain (Phase B B1) ────────────────────────────────────
+    #
+    # Two helpers:
+    #   _call_openrouter() — single-shot call to one OpenRouter model
+    #   _try_openrouter_chain() — orchestrates Gemini primary → conditional
+    #                             DeepSeek fallback under an overall budget
+    #
+    # Conditional fallback rules (D4 of plan):
+    #   Gemini timeout       → return None (do NOT try DeepSeek; not enough budget)
+    #   Gemini HTTP 4xx/5xx  → try DeepSeek if budget remains (fast-fail case)
+    #   Gemini parse fail    → try DeepSeek if budget remains
+    #   Gemini ConnectionErr → try DeepSeek if budget remains (immediate fail)
+
+    def _call_openrouter(
+        self, model_slug: str, user_message: str, timeout_s: float
+    ) -> dict:
+        """Single OpenRouter call. Returns dict with one of:
+          {"ok": True, "result": <bridge-schema dict>}
+          {"ok": False, "error_kind": "timeout" | "http" | "connection" | "parse"}
+        Never raises.
+        """
+        if requests is None:
+            return {"ok": False, "error_kind": "no_requests"}
+        if not self._openrouter_key:
+            return {"ok": False, "error_kind": "no_key"}
+
+        body = {
+            "model": model_slug,
+            "messages": [
+                {"role": "system", "content": self._system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            "temperature": self.llm_temperature,
+            # Eval used 500 to give reasoning models room. Brain MVS line is
+            # 12-char reply_text, so 500 is plenty for {reply, skill, args}.
+            "max_tokens": 500,
+        }
+        headers = {
+            "Authorization": f"Bearer {self._openrouter_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/roy422/elder_and_dog",
+            "X-Title": "PawAI Brain",
+        }
+
+        try:
+            resp = requests.post(
+                self.openrouter_base_url,
+                json=body,
+                headers=headers,
+                timeout=timeout_s,
+            )
+        except requests.exceptions.Timeout:
+            self.last_error = f"LLM[openrouter:{model_slug}] timeout ({timeout_s:.1f}s)"
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "timeout"}
+        except requests.exceptions.ConnectionError:
+            self.last_error = f"LLM[openrouter:{model_slug}] connection refused"
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "connection"}
+        except requests.exceptions.RequestException as exc:
+            self.last_error = f"LLM[openrouter:{model_slug}] request error: {exc}"
+            self.get_logger().error(self.last_error)
+            return {"ok": False, "error_kind": "http"}
+
+        if resp.status_code != 200:
+            self.last_error = (
+                f"LLM[openrouter:{model_slug}] HTTP {resp.status_code}: "
+                f"{resp.text[:200]}"
+            )
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "http"}
+
+        try:
+            data = resp.json()
+            raw_content = data["choices"][0]["message"].get("content")
+        except (KeyError, IndexError, ValueError) as exc:
+            self.last_error = f"LLM[openrouter:{model_slug}] response structure: {exc}"
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "parse"}
+
+        if not isinstance(raw_content, str) or not raw_content.strip():
+            self.last_error = f"LLM[openrouter:{model_slug}] empty content"
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "parse"}
+
+        # Try parse as eval schema first; if that yields nothing useful, also
+        # try legacy parse_llm_response (in case persona was kept inline).
+        try:
+            parsed = json.loads(strip_markdown_fences(raw_content))
+        except (ValueError, TypeError):
+            self.last_error = (
+                f"LLM[openrouter:{model_slug}] JSON parse failed: {raw_content[:200]}"
+            )
+            self.get_logger().warn(self.last_error)
+            return {"ok": False, "error_kind": "parse"}
+        if not isinstance(parsed, dict):
+            return {"ok": False, "error_kind": "parse"}
+
+        # Eval schema or legacy schema?
+        if "reply_text" in parsed and LLM_REQUIRED_FIELDS.issubset(parsed.keys()):
+            bridge_dict = parsed  # legacy persona — already correct schema
+        else:
+            bridge_dict = adapt_eval_schema(parsed)
+
+        return {"ok": True, "result": self._post_process_reply(bridge_dict)}
+
+    def _try_openrouter_chain(
+        self, user_message: str, fallback_intent: str = "chat"
+    ) -> dict | None:
+        """Try OpenRouter Gemini → conditional DeepSeek under overall budget.
+
+        Returns the bridge-schema dict on success, None to fall through to the
+        existing vLLM → Ollama → RuleBrain chain.
+        """
+        del fallback_intent  # currently unused; reserved for future hinting
+        if not self._openrouter_active:
+            return None
+
+        deadline = time.monotonic() + self.openrouter_overall_budget_s
+
+        # 1. Gemini (primary)
+        gemini_timeout = min(
+            self.openrouter_request_timeout_s, self.openrouter_overall_budget_s
+        )
+        first = self._call_openrouter(
+            self.openrouter_gemini_model, user_message, gemini_timeout
+        )
+        if first.get("ok"):
+            return first["result"]
+
+        # 2. Conditional DeepSeek fallback. Skip on timeout (no budget left for
+        #    a 4.82s-avg model). Try on HTTP/connection/parse failures (fast).
+        if first.get("error_kind") == "timeout":
+            return None
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.3:
+            # Less than 300ms left — DeepSeek p90 is 7.94s, no point trying.
+            return None
+
+        deepseek_timeout = min(remaining, self.openrouter_request_timeout_s)
+        second = self._call_openrouter(
+            self.openrouter_deepseek_model, user_message, deepseek_timeout
+        )
+        if second.get("ok"):
+            return second["result"]
+
+        return None
 
     def _call_cloud_llm(self, user_message: str) -> dict | None:
         return self._call_llm(
