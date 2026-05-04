@@ -156,3 +156,79 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ──────────────────────────────────────────────────────────────
+ * Chat-first redesign tokens (2026-05-04, Phase B step 1)
+ * Spec: docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md
+ *
+ * NEW tokens — do NOT replace existing --primary / --background
+ * etc. Existing components (button / badge / card) keep using
+ * the global purple-accent dark theme. These chat tokens are
+ * scoped to chat / nav / sheet / dev mode.
+ * ──────────────────────────────────────────────────────────── */
+:root {
+  /* Bubbles (reference mock: cyan user, transparent AI + outline) */
+  --bubble-user-bg: #0EA5E9;
+  --bubble-user-fg: #031019;
+  --bubble-ai-bg: transparent;
+  --bubble-ai-border: rgba(255, 255, 255, 0.08);
+  --bubble-ai-fg: var(--foreground);
+
+  /* Status pill (centre-top "Brain 已就緒 obs:ok ...") */
+  --pill-bg: rgba(255, 255, 255, 0.04);
+  --pill-border: rgba(255, 255, 255, 0.08);
+  --pill-fg: var(--muted-foreground);
+  --pill-fg-emphasis: var(--foreground);
+
+  /* Navbar (icon-only buttons + LIVE link) */
+  --nav-border: rgba(255, 255, 255, 0.06);
+  --nav-icon-fg: var(--muted-foreground);
+  --nav-icon-hover-fg: var(--foreground);
+  --nav-icon-active-fg: #0EA5E9;
+  --nav-icon-hover-bg: rgba(255, 255, 255, 0.04);
+
+  /* Sheet (right-side slide panel; bottom sheet on < md) */
+  --sheet-bg: var(--surface);
+  --sheet-border: var(--border);
+  --sheet-backdrop: rgba(0, 0, 0, 0.45);
+
+  /* Dev mode (only visible with ?dev=1) */
+  --dev-button-bg: rgba(124, 107, 255, 0.15);
+  --dev-button-hover-bg: rgba(124, 107, 255, 0.25);
+  --dev-badge-bg: #F59E0B;
+  --dev-badge-fg: #0B0700;
+
+  /* Tri-state capability gates (Nav / Depth in NavigationPanel) */
+  --gate-ok: #22C55E;
+  --gate-block: #EF4444;
+  --gate-unknown: #6B7280;
+
+  /* Layout constants — TS source of truth lives in
+   * lib/design-tokens.ts; mirrored here for Tailwind arbitrary
+   * values that need CSS-time resolution. */
+  --chat-max-w: 768px;
+  --sheet-w: 380px;
+  --bubble-radius: 16px;
+  --bubble-pad-x: 16px;
+  --bubble-pad-y: 12px;
+
+  /* Animation timings */
+  --anim-sheet-slide: 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  --anim-message-appear: 150ms ease-out;
+  --anim-dev-button-fade: 250ms ease;
+  --anim-bubble-hover: 120ms ease;
+  --anim-pill-fade: 200ms ease;
+}
+
+/* Respect prefers-reduced-motion — collapse all chat animations
+ * to instant. Components opt-in by reading these vars in their
+ * transition declarations. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --anim-sheet-slide: 0ms linear;
+    --anim-message-appear: 0ms linear;
+    --anim-dev-button-fade: 0ms linear;
+    --anim-bubble-hover: 0ms linear;
+    --anim-pill-fade: 0ms linear;
+  }
+}
