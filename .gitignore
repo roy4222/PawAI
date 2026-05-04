@@ -55,6 +55,9 @@ PROJECT_MAP.md
 ## Benchmark raw results (working area)
 benchmarks/results/raw/*.jsonl
 
+## LLM eval raw results (intermediate artefacts; summary lives in result doc)
+tools/llm_eval/results/*.json
+
 ## Node.js (pawai-studio has its own, root should not)
 node_modules/
 

@@ -22,16 +22,45 @@ from collections import defaultdict
 from pathlib import Path
 
 
+def _extract_skill_from_reply(reply: str) -> str | None:
+    """Pull `skill` field out of model JSON reply, robust to fences / leading text."""
+    if not reply:
+        return None
+    # 1. Strict JSON parse (persona requires this)
+    try:
+        obj = json.loads(reply)
+        if isinstance(obj, dict) and isinstance(obj.get("skill"), str):
+            return obj["skill"].strip()
+    except (ValueError, TypeError):
+        pass
+    # 2. Strip markdown fence then retry
+    stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", reply.strip(), flags=re.MULTILINE)
+    if stripped != reply:
+        try:
+            obj = json.loads(stripped)
+            if isinstance(obj, dict) and isinstance(obj.get("skill"), str):
+                return obj["skill"].strip()
+        except (ValueError, TypeError):
+            pass
+    # 3. Regex fallback for malformed JSON
+    m = re.search(r'"skill"\s*:\s*"([^"]+)"', reply)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
 def auto_skill_score(reply: str, expected_skills: list[str]) -> int:
-    """Heuristic: search reply text for any expected skill name → 5; otherwise 1."""
-    lowered = reply.lower()
+    """5 = parsed skill matches expected; 3 = parsed but not in list;
+    1 = no parseable skill / keyword-only match.
+    """
+    parsed = _extract_skill_from_reply(reply)
+    if parsed is not None:
+        return 5 if parsed in expected_skills else 3
+    # Final fallback: substring search (degraded — model didn't follow JSON contract)
+    lowered = (reply or "").lower()
     for s in expected_skills:
         if s in lowered:
-            return 5
-    # Try parsing JSON if model returned structured output
-    m = re.search(r"\{[^{}]*\"skill\"\s*:\s*\"([^\"]+)\"", reply)
-    if m and m.group(1) in expected_skills:
-        return 5
+            return 2
     return 1
 
 

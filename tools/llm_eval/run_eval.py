@@ -28,10 +28,13 @@ PERSONA_FILE = ROOT / "persona.txt"
 RESULTS_DIR = ROOT / "results"
 
 # OpenRouter model slug mapping (alias → real slug).
+# Verified against /api/v1/models on 2026-05-04.
 MODEL_ALIASES: dict[str, str] = {
-    "gemini": "google/gemini-2.5-flash",          # placeholder for Gemini 3 Flash
-    "deepseek": "deepseek/deepseek-chat",          # placeholder for DeepSeek V4 Flash
-    "qwen": "qwen/qwen3-235b-a22b-thinking-2507",  # placeholder for Qwen3.6 Plus
+    "gemini": "google/gemini-3-flash-preview",   # $0.50/$3.00 per M
+    "deepseek": "deepseek/deepseek-v4-flash",    # $0.14/$0.28 per M (reasoning model)
+    "qwen": "qwen/qwen3.6-flash",                # $0.25/$1.50 per M (online candidate)
+    "qwen-plus": "qwen/qwen3.6-plus",            # $0.325/$1.95 per M (offline-only,
+                                                  # sample latency 22.89s — too slow for online Brain)
 }
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -77,11 +80,13 @@ def call_openrouter(
     for t in turns:
         messages.append({"role": "user", "content": t})
 
+    # max_tokens=500 因為 deepseek/qwen 是 reasoning model，會先吃 reasoning_tokens
+    # 再生 content，200 不夠（finish_reason=length 截斷）。
     body = json.dumps(
         {
             "model": model_slug,
             "messages": messages,
-            "max_tokens": 200,
+            "max_tokens": 500,
             "temperature": 0.6,
         }
     ).encode("utf-8")
@@ -109,13 +114,18 @@ def call_openrouter(
 
 def extract_reply(response: dict) -> str:
     try:
-        return response["response"]["choices"][0]["message"]["content"].strip()
+        content = response["response"]["choices"][0]["message"].get("content")
     except (KeyError, IndexError, TypeError):
         return ""
+    if not isinstance(content, str):
+        return ""
+    return content.strip()
 
 
 def run(args: argparse.Namespace) -> int:
     items = load_prompts(args.bucket)
+    if args.limit is not None and args.limit > 0:
+        items = items[: args.limit]
     persona = load_persona()
     models = resolve_models(args.models.split(",") if args.models else list(MODEL_ALIASES.keys()))
 
@@ -131,9 +141,17 @@ def run(args: argparse.Namespace) -> int:
         print("[run_eval] dry-run complete (no API calls).")
         return 0
 
-    api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    # Accept either OPENROUTER_API_KEY (canonical) or OPENROUTER_KEY (project .env).
+    api_key = (
+        os.environ.get("OPENROUTER_API_KEY", "")
+        or os.environ.get("OPENROUTER_KEY", "")
+    ).strip()
     if not api_key:
-        print("ERROR: OPENROUTER_API_KEY not set. Use --dry-run or export key.", file=sys.stderr)
+        print(
+            "ERROR: OPENROUTER_API_KEY (or OPENROUTER_KEY) not set. "
+            "Use --dry-run or export key.",
+            file=sys.stderr,
+        )
         return 2
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -192,6 +210,7 @@ def parse_args() -> argparse.Namespace:
         + ",".join(MODEL_ALIASES.keys()),
     )
     p.add_argument("--bucket", default=None, help="Filter to one bucket")
+    p.add_argument("--limit", type=int, default=None, help="Cap number of prompt items (cost guard)")
     p.add_argument("--output", default=None, help="Output JSON path")
     return p.parse_args()
 
