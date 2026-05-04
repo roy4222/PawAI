@@ -72,5 +72,17 @@ node_modules/
 /*.mp3
 /*.wav
 /LD*.pdf
+
+## Windows / WSL 下載 metadata（每個檔案會帶一份）
+*Zone.Identifier
+*:Zone.Identifier
+
+## Repo root 的暫存截圖 / 參考圖（reference 用，不入 commit）
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/螢幕擷取畫面*
 /LM*.pdf
 *.py[cod]

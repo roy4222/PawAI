@@ -224,6 +224,11 @@ class LlmBridgeNode(Node):
         # llm_persona_file: optional path to a system prompt file (e.g.
         # tools/llm_eval/persona.txt). Empty → use legacy SYSTEM_PROMPT inline.
         self.declare_parameter("llm_persona_file", "")
+        # max_reply_chars: hard cap on reply_text length. The eval persona
+        # writes "reply ≤ 25 字" but the actual reply may include audio tags
+        # like "[excited] " (~10 chars) so we need headroom. Default 40 allows
+        # ~25 char content + audio tag without truncation.
+        self.declare_parameter("max_reply_chars", 40)
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -270,6 +275,11 @@ class LlmBridgeNode(Node):
         self.openrouter_request_timeout_s = _float("openrouter_request_timeout_s")
         self.openrouter_overall_budget_s = _float("openrouter_overall_budget_s")
         self.llm_persona_file = _str("llm_persona_file")
+        self.max_reply_chars = int(
+            self.get_parameter("max_reply_chars").get_parameter_value().integer_value
+        )
+        if self.max_reply_chars <= 0:
+            self.max_reply_chars = 40
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
@@ -704,7 +714,10 @@ class LlmBridgeNode(Node):
 
     # ── Reply post-processing (hard limits) ──────────────────────────────
 
-    MAX_REPLY_CHARS = 12
+    # Class default kept for any code path that uses it before params are
+    # read (e.g. unit-test stubs binding methods onto a non-Node object).
+    # Runtime nodes override via self.max_reply_chars (ROS param, default 40).
+    MAX_REPLY_CHARS = 40
 
     def _post_process_reply(self, result: dict) -> dict:
         """Enforce hard reply_text length limit. Small LLMs ignore prompt constraints."""
@@ -712,8 +725,9 @@ class LlmBridgeNode(Node):
         # Remove stray emoji
         import re
         reply = re.sub(r"[\U0001f300-\U0001f9ff]", "", reply).strip()
-        if len(reply) > self.MAX_REPLY_CHARS:
-            reply = reply[: self.MAX_REPLY_CHARS]
+        cap = getattr(self, "max_reply_chars", self.MAX_REPLY_CHARS)
+        if len(reply) > cap:
+            reply = reply[:cap]
         result["reply_text"] = reply
         return result
 

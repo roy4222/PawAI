@@ -1,18 +1,33 @@
 """PawAI Studio — Gateway + Mock Event Server
 
-啟動: uvicorn mock_server:app --host 0.0.0.0 --port 8001 --reload
+啟動（推薦）: bash pawai-studio/start-live.sh --mock     # port 8080
+直接啟: uvicorn mock_server:app --host 0.0.0.0 --port 8080 --reload
 """
 from __future__ import annotations
 
 import asyncio
 import random
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# Import the real SKILL_REGISTRY (pure-Python dataclass module, no ROS deps)
+# so the mock skill_registry endpoint auto-syncs with brain_node's source of
+# truth. Path: <repo>/interaction_executive/interaction_executive/skill_contract.py
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "interaction_executive"))
+try:
+    from interaction_executive.skill_contract import SKILL_REGISTRY  # noqa: E402
+except ImportError as _exc:
+    SKILL_REGISTRY = {}
+    print(f"[mock_server] WARN: SKILL_REGISTRY import failed: {_exc}")
 
 from schemas import (
     BrainState,
@@ -375,32 +390,62 @@ async def post_chat(cmd: ChatCommand):
 
 @app.post("/api/skill_request")
 async def post_skill_request(payload: SkillRequestPayload):
+    """Mock skill_request — emits a proposal + success/blocked-by-safety result
+    based on the real SKILL_REGISTRY shape, so Studio Trace Drawer gets
+    feedback on every button click.
+    """
     request_id = payload.request_id or f"req-{int(time.time() * 1000)}"
     skill = payload.skill
-    if skill == "stop_move":
+    plan_id = f"p-mock-{int(time.time() * 1000)}"
+    contract = SKILL_REGISTRY.get(skill)
+
+    # Unknown skill — no event, just ack.
+    if contract is None:
+        return {"ok": False, "mock": True, "error": f"unknown skill {skill!r}"}
+
+    # Disabled-bucket or enabled_when-blocked → blocked_by_safety
+    if not contract.static_enabled or contract.enabled_when:
         await broadcast_brain_event("skill_result", {
-            "plan_id": f"p-stop-{int(time.time() * 1000)}",
-            "step_index": None,
-            "status": "completed",
-            "detail": "studio_button",
-            "selected_skill": "stop_move",
-            "priority_class": 0,
-            "step_total": 1,
-            "step_args": {},
-            "timestamp": time.time(),
-        })
-    elif skill == "go_to_named_place":
-        await broadcast_brain_event("skill_result", {
-            "plan_id": f"p-nav-{int(time.time() * 1000)}",
+            "plan_id": plan_id,
             "step_index": None,
             "status": "blocked_by_safety",
-            "detail": "Phase B 才整合 nav_capability",
-            "selected_skill": "go_to_named_place",
-            "priority_class": 3,
-            "step_total": 1,
+            "detail": "skill statically disabled or gated"
+                if not contract.static_enabled
+                else (contract.enabled_when[0][1] if contract.enabled_when else "blocked"),
+            "selected_skill": skill,
+            "priority_class": int(contract.priority_class),
+            "step_total": len(contract.steps),
             "step_args": {},
             "timestamp": time.time(),
         })
+        return {"ok": True, "mock": True, "request_id": request_id}
+
+    # Active path — emit proposal then completed result.
+    steps_payload = [
+        {"executor": s.executor.value, "args": dict(s.args)}
+        for s in contract.steps
+    ]
+    await broadcast_brain_event("proposal", {
+        "plan_id": plan_id,
+        "selected_skill": skill,
+        "steps": steps_payload,
+        "reason": f"studio_button:{skill}",
+        "source": "studio_button",
+        "priority_class": int(contract.priority_class),
+        "session_id": request_id,
+        "created_at": time.time(),
+    })
+    await broadcast_brain_event("skill_result", {
+        "plan_id": plan_id,
+        "step_index": None,
+        "status": "completed",
+        "detail": skill,
+        "selected_skill": skill,
+        "priority_class": int(contract.priority_class),
+        "step_total": len(contract.steps),
+        "step_args": {},
+        "timestamp": time.time(),
+    })
     return {"ok": True, "mock": True, "request_id": request_id}
 
 @app.post("/api/text_input")
@@ -446,6 +491,101 @@ async def get_health():
             {"name": "brain", "status": "active", "latency_ms": 150, "last_heartbeat": time.time()},
         ],
     ).model_dump()
+
+# ── Phase B B5a: skill_registry / capability / plan_mode ────────────
+#
+# Real gateway equivalents live in pawai-studio/gateway/studio_gateway.py.
+# This mock mirrors the same JSON shape so the Studio frontend can be tested
+# in browser without a running ROS / Jetson environment.
+
+# Mutable mock state for capability gates and plan mode.
+_mock_capability: dict[str, str] = {"nav_ready": "true", "depth_clear": "true"}
+_mock_plan_mode: dict[str, str] = {"mode": "A"}
+
+
+@app.get("/api/skill_registry")
+async def get_skill_registry():
+    """Mock /api/skill_registry — returns 27 skills synced with the real
+    interaction_executive.skill_contract.SKILL_REGISTRY.
+    """
+    skills = []
+    for name, c in SKILL_REGISTRY.items():
+        skills.append({
+            "name": name,
+            "bucket": c.bucket,
+            "static_enabled": c.static_enabled,
+            "enabled_when_blocked": bool(c.enabled_when),
+            "priority_class": int(c.priority_class),
+            "cooldown_s": c.cooldown_s,
+            "timeout_s": c.timeout_s,
+            "safety_requirements": list(c.safety_requirements),
+            "fallback_skill": c.fallback_skill,
+            "requires_confirmation": c.requires_confirmation,
+            "risk_level": c.risk_level,
+            "ui_style": c.ui_style,
+            "description": c.description,
+            "args_schema": c.args_schema,
+            "step_count": len(c.steps),
+        })
+    by_bucket: dict[str, int] = {"active": 0, "hidden": 0, "disabled": 0, "retired": 0}
+    for s in skills:
+        by_bucket[s["bucket"]] = by_bucket.get(s["bucket"], 0) + 1
+    return {"ok": True, "total": len(skills), "by_bucket": by_bucket, "skills": skills}
+
+
+@app.get("/api/capability")
+async def get_capability():
+    """Tri-state snapshot. Defaults: both green so nav-gated buttons can be tested."""
+    return {"ok": True, "capabilities": dict(_mock_capability)}
+
+
+class _CapabilityPayload(BaseModel):
+    name: str  # "nav_ready" | "depth_clear"
+    state: str  # "true" | "false" | "unknown"
+
+
+@app.post("/api/capability")
+async def post_capability(payload: _CapabilityPayload):
+    """Mock-only endpoint to flip a gate (so Studio Trace Drawer chips can be
+    visually verified in all 3 colours without a real perception pipeline).
+    """
+    if payload.name not in _mock_capability:
+        return {"ok": False, "error": f"unknown capability {payload.name!r}"}
+    if payload.state not in ("true", "false", "unknown"):
+        return {"ok": False, "error": "state must be true/false/unknown"}
+    _mock_capability[payload.name] = payload.state
+    # Broadcast the change as a synthetic event so /ws/events listeners update.
+    await manager.broadcast({
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "capability",
+        "event_type": f"capability_{payload.name}",
+        "data": {
+            "name": payload.name,
+            "value": payload.state == "true",
+            "tri_state": payload.state,
+        },
+    })
+    return {"ok": True, "name": payload.name, "state": payload.state}
+
+
+@app.get("/api/plan_mode")
+async def get_plan_mode():
+    return {"ok": True, "mode": _mock_plan_mode["mode"]}
+
+
+class _PlanModePayload(BaseModel):
+    mode: str  # "A" | "B"
+
+
+@app.post("/api/plan_mode")
+async def post_plan_mode(payload: _PlanModePayload):
+    mode = payload.mode.strip().upper()
+    if mode not in {"A", "B"}:
+        return {"ok": False, "error": "mode must be 'A' or 'B'"}
+    _mock_plan_mode["mode"] = mode
+    return {"ok": True, "mode": mode}
+
 
 # ── REST: Mock 控制端點 ─────────────────────────────────────────────
 
