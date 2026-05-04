@@ -1,40 +1,28 @@
-"use client"
+"use client";
 
-import { Topbar } from "./topbar"
-import { PanelContainer } from "./panel-container"
-import { cn } from "@/lib/utils"
+import { NavTabbar } from "./nav-tabbar";
+import { FeatureSheet } from "@/components/sheet/feature-sheet";
 
 interface StudioLayoutProps {
-  mainPanel: React.ReactNode
-  sidebarPanels?: React.ReactNode[]
-  bottomPanel?: React.ReactNode
-  isConnected: boolean
+  mainPanel: React.ReactNode;
+  isConnected: boolean;
 }
 
-export function StudioLayout({
-  mainPanel,
-  sidebarPanels,
-  bottomPanel,
-  isConnected,
-}: StudioLayoutProps) {
-  const hasSidebar = sidebarPanels && sidebarPanels.length > 0
-
+/**
+ * StudioLayout — chat-first redesign root layout.
+ *
+ * Replaces the prior sidebar-driven layout. All feature panels are now
+ * Sheet-based (slide in from right on desktop, bottom on mobile) and share
+ * a single <FeatureSheet /> mount point at the layout root.
+ */
+export function StudioLayout({ mainPanel, isConnected }: StudioLayoutProps) {
   return (
     <div className="flex flex-col h-screen bg-background">
-      <Topbar isConnected={isConnected} />
-      <div className="flex flex-1 overflow-hidden">
-        <main className={cn(
-          "flex-1 overflow-hidden transition-all duration-300 ease-out",
-        )}>
-          {mainPanel}
-        </main>
-        {hasSidebar && (
-          <PanelContainer position="sidebar">{sidebarPanels}</PanelContainer>
-        )}
-      </div>
-      {bottomPanel && (
-        <PanelContainer position="bottom">{bottomPanel}</PanelContainer>
-      )}
+      <NavTabbar isConnected={isConnected} />
+      <main className="flex-1 overflow-hidden transition-all duration-300 ease-out">
+        {mainPanel}
+      </main>
+      <FeatureSheet />
     </div>
-  )
+  );
 }
