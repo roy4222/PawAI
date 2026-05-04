@@ -25,6 +25,14 @@
 - **不要在 Jetson 跑 `colcon build`** — setuptools `--editable`/`--uninstall` 不相容，會 fail。改靠 editable install + source rsync（python source 改動立刻生效，launch.py / yaml 要手動 cp 到 `install/.../share/`）
 - **不要假設 `~/.local/lib/python3.10/site-packages/{nav_capability,go2_robot_sdk}-*.dist-info/entry_points.txt` 永遠完整**（5/3 教訓）— `colcon build` fail 時新增的 console_scripts 不會進 metadata，`load_entry_point` 拿 StopIteration → launch 起不來。手動 echo append 那 .txt 即可（`cp .bak.<ts>` 自動備份）
 
+### 2026-05-04 新增 3 條(Demo Scope Freeze)
+
+詳見 [`plans/2026-05-04-demo-scope-freeze.md`](plans/2026-05-04-demo-scope-freeze.md)。
+
+- **不要直接 `ros2 topic pub /goal_pose`** — bt_navigator subscriber QoS 是 BEST_EFFORT,直接 pub 會 race。所有 demo goal 走 `nav_action_server`(`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route`)。手動測試的 `scripts/send_relative_goal.py` Phase 2 PR 7 會改寫成走 action,在那之前**僅供開發機 debug 用,不進 demo 流程**
+- **不要在 demo 週(5/4–5/12)動硬體** — LiDAR mount / D435 angle / Jetson 供電 / Go2 背包線材 / 場地佈置全部凍結。精校排 5/13 後
+- **不要再無限加 `nav_ready` check** — 升級**只做** lifecycle(map_server/amcl)+ TF(`map → base_link`)+ `/scan` freshness 三項。其他(planner / controller / bt_navigator / costmap stale / driver process)延後。理由:check 越多 false negative 越多,demo 當天反而被自己擋死
+
 ## 5/3 demo 教訓（K-STATIC-AVOID-CONTROLLED PASS / detour FAIL）
 
 - **AMCL covariance 卡 0.30-0.42 plateau** 是常態:沒動就不收斂,初始 initialpose 後 60s 進 GREEN 偶爾,多數時候卡 YELLOW。建議:重設 initialpose + 等 60-90s,或物理推 Go2 0.3m 配合
