@@ -304,6 +304,18 @@ class NavActionServerNode(Node):
         goal = goal_handle.request
         result = GotoRelative.Result()
 
+        # PR1a measurement — log goal-accept-time pose for offline analysis.
+        # Pure observation; not used for actual_distance computation (that still
+        # references cx,cy captured after AMCL gating, line ~354).
+        accept_xy = self._current_xy()
+        accept_ns = self.get_clock().now().nanoseconds
+        self.get_logger().info(
+            f"[PR1a] goto_relative ACCEPT distance={goal.distance:.3f} "
+            f"max_speed_req={goal.max_speed:.3f} "
+            f"accept_pose={accept_xy if accept_xy else 'None'} "
+            f"accept_ns={accept_ns}"
+        )
+
         # Phase 8 — driver liveness watchdog (E5) with 3s warmup (Phase 9 review #4).
         if not await self._wait_for_odom(timeout_s=3.0):
             self.get_logger().warn(
@@ -385,22 +397,50 @@ class NavActionServerNode(Node):
             return result
 
         success, msg = await self._execute_nav_goal_with_pause_aware(goal_handle, nav_goal)
+        end_ns = self.get_clock().now().nanoseconds
         if success:
             result.success = True
             result.message = msg
             cur_after = self._current_map_pose()
             if cur_after is not None:
                 ax, ay, _ = cur_after
+                # Existing computation — reference cx,cy captured at line ~354 (after AMCL gating).
                 result.actual_distance = float(math.hypot(ax - cx, ay - cy))
+                # PR1a measurement — also compute from accept_xy for divergence check.
+                accept_displacement = (
+                    float(math.hypot(ax - accept_xy[0], ay - accept_xy[1]))
+                    if accept_xy is not None else float('nan')
+                )
+                duration_s = (end_ns - accept_ns) / 1e9
+                self.get_logger().info(
+                    f"[PR1a] goto_relative DONE goal={goal.distance:.3f} "
+                    f"actual_dist_from_cxcy={result.actual_distance:.3f} "
+                    f"actual_dist_from_accept={accept_displacement:.3f} "
+                    f"duration_s={duration_s:.2f} "
+                    f"end_pose=({ax:.3f},{ay:.3f}) "
+                    f"cxcy=({cx:.3f},{cy:.3f}) "
+                    f"accept_xy={accept_xy}"
+                )
             goal_handle.succeed()
-        elif msg == "cancelled":
-            result.success = False
-            result.message = msg
-            goal_handle.canceled()
         else:
+            # cancelled / nav2_failed / no_progress_timeout
+            cur_after = self._current_map_pose()
+            if cur_after is not None and accept_xy is not None:
+                ax, ay, _ = cur_after
+                accept_displacement = float(math.hypot(ax - accept_xy[0], ay - accept_xy[1]))
+                duration_s = (end_ns - accept_ns) / 1e9
+                self.get_logger().info(
+                    f"[PR1a] goto_relative END({msg}) goal={goal.distance:.3f} "
+                    f"actual_dist_from_accept={accept_displacement:.3f} "
+                    f"duration_s={duration_s:.2f} "
+                    f"end_pose=({ax:.3f},{ay:.3f})"
+                )
             result.success = False
             result.message = msg
-            goal_handle.abort()
+            if msg == "cancelled":
+                goal_handle.canceled()
+            else:
+                goal_handle.abort()
         return result
 
 
