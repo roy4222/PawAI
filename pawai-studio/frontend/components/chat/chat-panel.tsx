@@ -164,27 +164,15 @@ export function ChatPanel() {
     setInputText("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
-    try {
-      const response = await fetch(`${getGatewayHttpUrl()}/api/text_input`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, request_id: `txt-${Date.now()}` }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    } catch {
-      const errMsg: AIMessage = {
-        id: `ai-err-${Date.now()}`,
-        type: "ai",
-        text: "Brain 文字通道未連線，請確認 Gateway 是否啟動。",
-        timestamp: formatTime(new Date()),
-      };
-      setMessages((prev) => [...prev, errMsg]);
-      return;
-    }
-
-    setIsThinking(true);
+    // CRITICAL: arm the pending state BEFORE the fetch await. The mock /
+    // real backend can broadcast `tts:tts_speaking` while fetch is still
+    // in-flight (Gemini round-trip is ~2s); if we arm pending only after
+    // fetch resolves, the tts event lands while pendingRequestIdRef is
+    // still null and the AI bubble useEffect skips it → user sees the 8s
+    // timeout fallback even though Gemini answered correctly.
     const requestId = `req-${Date.now()}`;
     pendingRequestIdRef.current = requestId;
+    setIsThinking(true);
     if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
     pendingTimeoutRef.current = setTimeout(() => {
       if (pendingRequestIdRef.current === requestId) {
@@ -199,6 +187,33 @@ export function ChatPanel() {
         setMessages((prev) => [...prev, errMsg]);
       }
     }, 8000);
+
+    try {
+      const response = await fetch(`${getGatewayHttpUrl()}/api/text_input`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, request_id: requestId }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch {
+      // Network / gateway error — clear pending state and show error inline.
+      if (pendingRequestIdRef.current === requestId) {
+        pendingRequestIdRef.current = null;
+        setIsThinking(false);
+        if (pendingTimeoutRef.current) {
+          clearTimeout(pendingTimeoutRef.current);
+          pendingTimeoutRef.current = null;
+        }
+      }
+      const errMsg: AIMessage = {
+        id: `ai-err-${Date.now()}`,
+        type: "ai",
+        text: "Brain 文字通道未連線，請確認 Gateway 是否啟動。",
+        timestamp: formatTime(new Date()),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+      return;
+    }
 
     textareaRef.current?.focus();
   }
