@@ -1,7 +1,134 @@
 # 專案狀態
 
-**最後更新**：2026-05-03 evening（**Stage 1 K-STATIC-AVOID-CONTROLLED PASS / Demo A「停 → 拿走 → 繼續」可錄 / Stage 2 detour 仍 fail / nav_round_reset.sh + Jetson deployment 修補完整**）
+**最後更新**：2026-05-04 late evening（**Phase B Day 1 + Day 2 evening 完成 — 早 Skill Registry v1 / LLM eval / Studio chat-first；晚 Jetson smoke + B1 Plan D TTS 換血 5 stages 全綠**）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/4 evening 進度（Phase B Day 2 — Jetson smoke + TTS 換血）
+
+> 早上完成 Phase B Day 1（見下面 morning 段）後，evening 進 Jetson 真機驗證 + B1 Plan D「TTS provider 換血」。落地 6 個 commit、19 個新 unit tests、Demo 第一句話現在能用 Gemini Despina 自然渲染 audio tag。
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Jetson smoke 4 步全 PASS** | 喇叭硬體 → TTS 單獨 → LLM bridge brain mode → 全鏈 LLM→TTS。5 個 P0 修：USB 喇叭 plughw:2,0 / setuptools<70 / OpenRouter timeout 2.0→4.0s / text vs transcript schema 對齊澄清 / `[excited]` audio tag 確認被唸出（hack 修） | ✅ commits `29d46dd` `3c3a933` |
+| **B1 Plan D Stage 1 — 路徑決策** | Jetson 三條 curl + 耳朵聽：`google/gemini-3.1-flash-tts-preview` voice=Despina（user 從 Achird/Despina 選）勝出。Audio contract: PCM 24kHz/16-bit/mono；OpenRouter 端只接 response_format=pcm（mp3/wav 回 400），自包 WAV header | ✅ data in spec doc |
+| **B1 Plan D Stage 2 — `TTSProviderBase` Protocol** | 純 refactor，4 既有 class 加 class attrs（name/sample_rate/supports_audio_tags），不改邏輯。tts_callback 加 `if not provider.supports_audio_tags` 守門。157+5 tests PASS、edge_tts smoke 行為不變 | ✅ commit `1df3afe` |
+| **B1 Plan D Stage 3 — `TTSProvider_OpenRouterGemini`** | 新 class，name=`openrouter_gemini`、sample_rate=24000、supports_audio_tags=True。讀 OPENROUTER_KEY env，timeout 6.0s default。包 WAV header via stdlib `wave`。6 unit tests + Jetson 3 句 smoke：`[excited]` `[laughs]` `[curious]` 全部 user 耳朵驗收 PASS、cache hit replay 全綠 | ✅ commit `4f6da89` |
+| **B1 Plan D Stage 4 — Fallback chain + log fix** | `_build_fallback_chain`：openrouter_gemini → [edge_tts, piper] / edge_tts → [piper]。tts_callback 重寫成單一 chain 迭代（per-provider 文字 strip + cache key + voice 解析）。Cosmetic：log 顯示 `🎤 [provider_name] (voice: actual_voice)` 取代寫死的 ElevenLabs voice ID | ✅ commit `54c68d0`（5 chain tests）|
+| **B1 Plan D Stage 5 — Spec doc** | `docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md` 174 行：Stage 1 數據、Stage 2-4 設計、Known Limitations、Follow-up 排序 | ✅ commit `5671b33` |
+
+### 5/4 evening commit 鏈
+
+```
+29d46dd  docs(brain): Phase B Day 2 — Jetson smoke result + 3 ad-hoc smoke runners
+3c3a933  fix(speech): A+B from 5/4 Jetson smoke — strip audio tags, bump OpenRouter timeout, clean docs
+1df3afe  refactor(speech): Stage 2 — TTSProviderBase Protocol + provider-aware tag strip
+4f6da89  feat(speech): Stage 3 — TTSProvider_OpenRouterGemini (Despina, audio tags native)
+54c68d0  feat(speech): Stage 4 — TTS fallback chain + per-provider cache + log cleanup
+5671b33  docs(brain): Stage 5 — TTS rewrite spec doc (B1 Plan D complete)
+```
+
+### 5/4 evening 修掉的隱性坑（記到 CLAUDE.md）
+
+- USB 喇叭實際 `plughw:2,0`（不是 3,0）— card index 跟啟動順序變
+- Jetson setuptools 必須 `<70` — colcon setup.py shim 用 `--editable`/`--uninstall`，setuptools 80+ 拿掉這兩個 flag → `colcon build` 直接 fail
+- rsync 同步只搬源碼，不會 rebuild `install/` — 改 ROS param 沒生效時要 `colcon build`，不是只 `~/sync once`
+- OpenRouter Gemini TTS 只接 `response_format=pcm`，不像 OpenAI 接 mp3/wav
+
+### Demo 第一句的差別
+
+- 之前：`[excited] 你好` → edge_tts 把「open bracket excited close bracket」唸出來 → 5/4 evening commit `3c3a933` 加 strip hack 把 tag 拿掉，但聲音平
+- 現在：`[excited] 你好` → Gemini Despina 渲染情緒（user 確認「自然多了」），失敗時 fallback edge_tts（strip tag 平語氣），最後 Piper 兜底
+
+### B1 Plan D 完成的對應 spec 14 項清單
+
+✅ Gemini 3.1 Flash TTS audio contract / TTSProvider 統一 / USB 24kHz 直接 / audio tag 渲染 / TTS provider chain
+⏸ 剩 5 項（LLMProvider adapter、Qwen3.6 Plus 補跑、4 軸人工複核、Ollama explicit test、Megaphone 端到端）
+
+### 還沒做的（明天起算）
+
+完整 punch list 在 `~/.claude/plans/jetson-kind-book.md` — 23 項剩餘工作，B4 感知 + B6 PR port + B7 E2E/供電是大塊。建議排序：B7 dry-run + 60min 供電壓測 → B4 sitting/bending → B6 三 panel port → B1 LLMProvider adapter → 其他收尾。
+
+---
+
+## 5/4 進度（Phase B Day 1）
+
+> **方向轉換**：5/3 收 nav debt 後，5/4 全力進 Phase B「Brain × Studio 整合」。今天落地 11 個 commit、共 ~3700 行新增、221 tests PASS、Studio chat 已用 Gemini 3 Flash round-trip 通。
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Skill Registry v1**（27 條 SkillContract）| Active 17 / Hidden 5 / Disabled 4 / Retired 1，加 `bucket` 欄位、cooldown / safety / fallback / confirm 流程，21 條 say_template 預埋 audio tag | ✅ commit `9f45f65` |
+| **PendingConfirm state machine** | 純 Python（零 ROS2 依賴）OK 二次確認，Active Confirm Set 4 條 skill 共用，timeout 5s + ok stable 0.5s | ✅ commit `9f45f65`（18 unit tests）|
+| **Brain rules 擴充** | gesture（wave→wave_hello / palm→system_pause / thumbs_up→wiggle confirm / peace→stretch confirm / ok→tick）、pose sitting/bending/fallen + name、object stub、Studio button confirm allowlist 限定 nav_demo_point | ✅ commit `9f45f65` |
+| **LLM eval Stage 1+2+3** | 50 prompt × 3 model（gemini-3-flash-preview / deepseek-v4-flash / qwen3.6-flash），$0.28 USD，主線 = Gemini 3 Flash（1.61s avg / 1.87s p90），fallback = DeepSeek V4 Flash | ✅ commit `8347f26` |
+| **llm_bridge_node OpenRouter chain** | Jetson 端 `_try_openrouter_chain`：overall_budget 2.2s、Gemini 主線、DeepSeek 條件式 fallback（HTTP-fail 才試、timeout 不試）、`adapt_eval_schema` 解 schema 衝突 | ✅ commit `fda1b3c`（21 mock tests）|
+| **Studio chat-first redesign**（10 commits） | 從 dashboard 改成 ChatGPT 風純對話：6 個 icon-only nav button + Sheet primitive + dev mode（`?dev=1` / `/studio/dev`）+ design tokens + ui-ux-pro-max review fixes | ✅ commits `0f8a576` → `a55f83a` |
+| **Mock chat 接 OpenRouter Gemini** | `MOCK_OPENROUTER=1` opt-in、預設離線 say_canned + (mock) marker、shared `tools/llm_eval/openrouter_chat.py`（149 行，無 ROS deps）+ FastAPI integration tests | ✅ commit `c946113`（5 + 2 tests）|
+| **Defensive hotfix（user review 後）** | `_emit_text_reply` 廣播 tts:tts_speaking、ChatPanel race（pendingRef 在 await fetch 前 arm）、mock_server outer try/except、confidence cast guard | ✅ commits `adc3ef9` `39b58a0` `3432d25` |
+| **ui-ux-pro-max review + a11y polish** | 10 個 fix（hamburger 44×44、focus rings、Sheet title 16px、isThinking aria-live、DevButton dedupe + pathname guard、LiveIndicator a11y）— ~38 行 | ✅ commit `a55f83a` |
+
+### Studio 架構轉變（5/4）
+
+**從**：sidebar 5-panel dashboard + 主畫面 17+5+4 skill button + Brain trace drawer + 5 種 brain debug bubble
+**到**：ChatGPT 風純對話 + 頂部 6 個 icon-only nav 按鈕（point-open Sheet）+ `?dev=1` 才浮現 ⚙ 開發者按鈕
+
+**保留檔案、從 nav 隱藏的舊 routes**：`/studio/face|gesture|object|pose|speech` URL 直連仍可用（給組員 / 測試腳本）。新 `/studio/dev` 直連可用作完整 dev panel。
+
+### 真實 chat round-trip 驗證（mock 模式）
+
+```
+User 在 http://localhost:3001/studio 輸入「你好」
+→ POST /api/text_input
+→ mock_server (MOCK_OPENROUTER=1) 透過 openrouter_chat.py call Gemini 3 Flash
+→ ~1.7-2.2s 後回 [excited]/[curious]/[playful] audio tag JSON
+→ broadcast brain:proposal + skill_result + tts:tts_speaking
+→ ChatPanel useEffect on lastTtsText → render AI bubble (transparent + thin outline)
+```
+
+3 條真實對話通過：
+- 「你好」→「[excited] 汪！你好呀！我是 PawAI，很高興見到你！」
+- 「你是誰」→「[excited] 我是 PawAI！是你的居家小管家，也是最愛你的狗狗喔！」
+- 「你是哪個模型」→「[curious] 我是 PawAI 呀！是你最聰明的小狗夥伴！」（persona 守住，不承認 LLM）
+
+### 還沒做的（明天 Jetson session）
+
+- Jetson 真機 smoke：OpenRouter Gemini + Go2 + TTS hardware
+- 8 scene Plan A / Plan B 連跑
+- B7 60 min 供電壓測
+- 完整 voice → ASR → LLM → TTS → Megaphone E2E
+- Phase B Day 2-N
+
+### 今日 commit 鏈（11 個，依序）
+
+```
+9f45f65  feat(brain): Phase B Day 1 — Skill Registry v1 + PendingConfirm + Studio trace + LLM eval scaffold
+8347f26  docs(brain): finalize 2026-05-04 LLM eval — Gemini 3 Flash primary / DeepSeek V4 fallback
+fda1b3c  feat(speech): llm_bridge_node — OpenRouter Gemini 3 Flash primary + conditional DeepSeek fallback
+0f8a576  feat(studio): chat-first redesign — spec v2.1 + step 1 design tokens
+c0f518f  feat(studio): mock server endpoints + start-live --auto/--mock + smoke + reply char hotfix
+c946113  feat(studio): mock chat → OpenRouter Gemini (opt-in via MOCK_OPENROUTER=1)
+adc3ef9  hotfix(studio): defensive guards on mock chat OpenRouter call + confidence cast
+63f97d4  feat(studio): NavTabbar + Sheet primitive + 6 icon-only feature buttons (chat-first redesign step F)
+ff02518  feat(studio): ChatPanel slim — chat-only UI, brain debug widgets removed (step G)
+8e5d50f  feat(studio): dev mode + 6 feature panels wired + NavigationPanel (step H)
+39b58a0  hotfix(studio): mock chat broadcast tts event so ChatPanel renders AI reply
+3432d25  hotfix(studio): chat race — arm pending BEFORE fetch await
+a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I)
+```
+
+### 關鍵 spec / feedback 文件
+
+- `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` — Phase B 11 天 sprint design
+- `docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md` — 今日決策 notes
+- `docs/pawai-brain/specs/2026-05-04-llm-eval-result.md` — LLM eval 結果（150 calls 完整數據）
+- `docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md` — redesign spec v2.1
+- `docs/pawai-brain/studio/specs/2026-05-04-design-tokens.md` — 視覺 token rationale
+- `docs/pawai-brain/studio/specs/2026-05-04-studio-redesign-feedback.md` — ui-ux-pro-max review feedback
 
 ---
 

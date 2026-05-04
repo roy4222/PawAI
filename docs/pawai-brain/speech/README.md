@@ -34,11 +34,15 @@ TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
     |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
-llm_bridge_node（Cloud Qwen2.5-7B -> Ollama 1.5B -> RuleBrain 三級 fallback）
+llm_bridge_node（OpenRouter Gemini 3 Flash → DeepSeek V4 Flash → Cloud Qwen2.5-7B → Ollama 1.5B → RuleBrain 五級 fallback）
     |   output_mode=legacy → 發 /tts + sport /webrtc_req（既有行為）
     |   output_mode=brain  → 只發 /brain/chat_candidate（PawAI Brain MVS 模式）
+    |   OpenRouter timeout default 4.0s / overall budget 5.0s（5/4 Jetson smoke 後 bump）
     | /tts（legacy 模式）or /brain/chat_candidate（brain 模式）
-tts_node（edge-tts 雲端主線 / Piper 本地 fallback）
+tts_node（OpenRouter Gemini 3.1 Flash TTS Despina 主線 → edge-tts → Piper 三級 chain，5/4 落地）
+    |   provider=openrouter_gemini → audio tag 原生渲染（[excited]/[laughs]/[curious]）
+    |   audio_tag.py + tts_provider.py：provider.supports_audio_tags 守門 strip
+    |   Stage 4 chain：main fail → fallback edge_tts (strip tag) → Piper (offline)
     |
 USB 喇叭 local playback（Megaphone DataChannel 備用）
     |
@@ -46,7 +50,8 @@ echo gate 阻止 ASR 自激（total 1.5s）
 ```
 
 **Intent fast path**：stop/greet 等高頻 intent 跳過 LLM，直接 RuleBrain（~0ms）。
-**LLM timeout > 2s** 自動 fallback。
+**LLM timeout** Jetson default 4.0s（5/4 bump from 2.0s — Python urllib3+requests overhead 在 Jetson 把 1.5s curl 推到 2s 邊界，premature fallback）。
+**TTS provider chain**（5/4 落地，B1 Plan D）：`openrouter_gemini` (Despina, audio tag native, ~4.6s) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline, last-line)。Detail spec: `docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md`。
 
 ## 輸入/輸出
 

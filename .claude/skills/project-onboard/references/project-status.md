@@ -21,6 +21,8 @@
 | vision_perception Phase 2 | 3/18 | [DONE] RTMPose 真推理 Jetson 驗證通過（balanced mode, ~3.8 Hz debug_image, GPU 91-99%） |
 | Benchmark 框架 Batch 0+1 | 3/19 | [DONE] core framework + face YuNet adapter，28 tests pass |
 | P0 穩定化 | 4/6 | [PENDING] |
+| Phase B Day 1 — Skill Registry + LLM eval + Studio chat-first | 5/4 morning | [DONE] commits 9f45f65 / 8347f26 / fda1b3c / 0f8a576..a55f83a |
+| Phase B Day 2 — Jetson smoke + B1 Plan D TTS 換血（Despina + chain） | 5/4 evening | [DONE] commits 29d46dd / 3c3a933 / 1df3afe / 4f6da89 / 54c68d0 / 5671b33 |
 | **最終展示** | **4/13** | **[PENDING] 硬底線** |
 
 ## 各模組狀態
@@ -42,7 +44,7 @@
 | Executive safety wiring | [USABLE] | 5/2:WorldState 訂三個 capability、SafetyLayer 三段 gate。92/92 unit tests 過,未接 launch |
 | Capability launch wiring | [USABLE] | 5/3:8 windows + 7 nav nodes 全活、`nav_round_reset.sh` READY 流程驗證。已知坑：colcon build setuptools 不相容 → editable install 直接 source rsync 生效 |
 | **Stage 1 遇障停車** | **[PASS]** | 5/3 R3 R1：box 1.5m / goal 1.8m → Go2 走 0.85m / drift 0.19m / 停 box 前 0.54m。reactive_stop + D435 + auto-pause 三鏈同步。**K-STATIC-AVOID-CONTROLLED PASS** |
-| **Stage 2 自動繞行** | **[FAIL]** | 5/3 多輪嘗試（box 0.7-2.0m / goal 0.5-2.5m）DWB 都沒繞、`No valid trajectory` + BT spin recovery 失敗。當前 yaml 是「保守安全停」profile，要 detour 需獨立 profile + `robot.launch.py` 加 nav_params_file launch arg（line 77 寫死）|
+| **Stage 2 自動繞行** | **[L1+L2 PASS / L3 FAIL]** | 5/3 evening 完成 D435+RPLIDAR fusion 進 local_costmap (Phase 1+2 PASS)；Phase 3 L3 真自動繞開 FAIL，根因為 nav_action_server max_speed 不 enforce + AMCL plateau bug 串連，Go2 永遠進不到 DWB 測試起點。新檔：`nav2_params_detour.yaml` / `start_nav_capability_demo_tmux_detour.sh` / `robot.launch.py` 加 nav_params_file arg。Demo B 話術「融合進 costmap 安全停車」不宣稱「自動繞開」 |
 | nav_round_reset.sh | [STABLE] | 5/3 新工具：emergency release / nav resume / costmap clear / 3 capability snapshot / cmd_vel quiet → READY/NOT-READY summary |
 
 ## 近期焦點(2026-05-02 更新)
