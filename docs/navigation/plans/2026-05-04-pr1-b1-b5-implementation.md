@@ -1,5 +1,16 @@
 # PR 1 (B1+B5) — nav_action_server 距離/速度正確性 Implementation Plan
 
+> ⚠️ **SUPERSEDED 2026-05-04** by [`2026-05-04-pr1a-measurement-first.md`](2026-05-04-pr1a-measurement-first.md)
+>
+> Rejected during review with 5 valid blockers:
+> 1. Causation 未證 — overshoot 1.04m 可能不是 `max_vel_x` 造成,Task 0 只驗 param mutability 不驗 cmd_vel 影響
+> 2. `GO2_MIN_VEL_X=0.45` 硬編與「降速」目標矛盾(若 firmware min 是 0.50)
+> 3. `RclpyParamClient.spin_until_future_complete` 從 action callback 內 call 會 executor re-enter
+> 4. B5 描述可能錯 — `cx,cy` 在 line 354(AMCL gating 後但 compute_relative_goal 前)抓的,實質就是 goal-accept-time pose;真正 B5 要查的是 pause/resume 重送時是否重鎖 reference
+> 5. Task 8 deploy 用手動 rsync 違反 AGENTS.md `~/sync` workflow
+>
+> 改走 PR1a measurement-first 證明因果再決定 PR1b 是否寫 helper。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修 B1(`max_speed` 欄位 ignored,目前只 log warn,讓 0.5m goal 走 1.04m 的 overshoot)+ B5(`actual_distance` 用 send-time pose 而非 goal-accept-time start_pose)。
