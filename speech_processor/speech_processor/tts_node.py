@@ -222,6 +222,11 @@ class AudioCache:
 class TTSProvider_ElevenLabs:
     """ElevenLabs TTS provider implementation"""
 
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "elevenlabs"
+    sample_rate: int = 22050  # mp3 typical; pydub re-derives on decode
+    supports_audio_tags: bool = False
+
     def __init__(self, config: TTSConfig):
         self.config = config
         self.base_url = "https://api.elevenlabs.io/v1"
@@ -266,6 +271,11 @@ class TTSProvider_ElevenLabs:
 
 
 class TTSProvider_MeloTTS:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "melotts"
+    sample_rate: int = 0  # dynamic, read from self._model.hps.data.sampling_rate
+    supports_audio_tags: bool = False
+
     def __init__(self, config: TTSConfig):
         self.config = config
         try:
@@ -322,6 +332,11 @@ class TTSProvider_MeloTTS:
 
 
 class TTSProvider_Piper:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "piper"
+    sample_rate: int = 22050  # zh_CN-huayan-medium native rate
+    supports_audio_tags: bool = False
+
     def __init__(self, config: TTSConfig):
         self.config = config
         self._piper_bin = shutil.which("piper")
@@ -402,6 +417,11 @@ class TTSProvider_Piper:
 
 
 class TTSProvider_EdgeTTS:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "edge_tts"
+    sample_rate: int = 24000  # mp3 24 kHz mono confirmed via `file` on output
+    supports_audio_tags: bool = False
+
     """Microsoft Edge TTS (cloud, high quality, zh-TW/zh-CN support)"""
 
     def __init__(self, config: TTSConfig):
@@ -691,15 +711,24 @@ class EnhancedTTSNode(Node):
                 self.get_logger().warn("Received empty TTS request")
                 return
 
-            # Strip emotion/audio tags before synthesis. edge-tts and Piper
-            # read `[excited]` literally; until B1 TTS 換血 (Gemini 3.1) we
-            # remove the tags here. Original `raw_text` is preserved for log.
-            text = strip_audio_tags(raw_text)
-            if not text:
-                self.get_logger().warn(
-                    f"TTS request became empty after tag strip: {raw_text!r}"
-                )
-                return
+            # Strip emotion/audio tags before synthesis ONLY when the active
+            # provider does not natively render them. edge-tts / Piper /
+            # ElevenLabs / MeloTTS all read `[excited]` literally → strip.
+            # Gemini 3.1 Flash TTS renders tags as emotion → pass through.
+            # Per-provider behavior is declared via supports_audio_tags
+            # (TTSProviderBase protocol — see tts_provider.py).
+            supports_tags = bool(
+                getattr(self.tts_provider, "supports_audio_tags", False)
+            )
+            if supports_tags:
+                text = raw_text
+            else:
+                text = strip_audio_tags(raw_text)
+                if not text:
+                    self.get_logger().warn(
+                        f"TTS request became empty after tag strip: {raw_text!r}"
+                    )
+                    return
 
             if text != raw_text:
                 self.get_logger().info(
