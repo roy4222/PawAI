@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import sys
 import time
@@ -28,6 +29,29 @@ try:
 except ImportError as _exc:
     SKILL_REGISTRY = {}
     print(f"[mock_server] WARN: SKILL_REGISTRY import failed: {_exc}")
+
+# Optional OpenRouter chat helper — only used when MOCK_OPENROUTER=1.
+sys.path.insert(0, str(_REPO_ROOT / "tools/llm_eval"))
+try:
+    from openrouter_chat import chat as _openrouter_chat  # noqa: E402
+except ImportError as _exc:
+    _openrouter_chat = None
+    print(f"[mock_server] WARN: openrouter_chat import failed: {_exc}")
+
+# Read once at import; flipping requires server restart (intentional — env
+# changes mid-session would surprise active sessions).
+_MOCK_OPENROUTER_ENABLED = os.environ.get("MOCK_OPENROUTER", "").strip() == "1"
+if _MOCK_OPENROUTER_ENABLED:
+    _has_key = bool(
+        os.environ.get("OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    )
+    if _has_key and _openrouter_chat is not None:
+        print("[mock_server] MOCK_OPENROUTER=1 → /api/text_input will call Gemini 3 Flash")
+    else:
+        print(
+            "[mock_server] WARN: MOCK_OPENROUTER=1 but "
+            f"{'no key' if not _has_key else 'helper missing'} — falling back to canned"
+        )
 
 from schemas import (
     BrainState,
@@ -448,17 +472,27 @@ async def post_skill_request(payload: SkillRequestPayload):
     })
     return {"ok": True, "mock": True, "request_id": request_id}
 
-@app.post("/api/text_input")
-async def post_text_input(payload: TextInputPayload):
-    request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+async def _emit_text_reply(
+    request_id: str,
+    reply_text: str,
+    *,
+    selected_skill: str = "say_canned",
+    source: str = "mock",
+    reason: str = "mock_text_input",
+    extra_marker: str = "",
+) -> None:
+    """Broadcast proposal + completed result for a text reply.
+    extra_marker is appended verbatim to detail (e.g. " (mock)" / " (no key)").
+    """
     plan_id = f"p-text-{int(time.time() * 1000)}"
+    decorated = reply_text + extra_marker if extra_marker else reply_text
     await broadcast_brain_event("proposal", {
         "plan_id": plan_id,
-        "selected_skill": "say_canned",
-        "steps": [{"executor": "say", "args": {"text": "我聽不太懂"}}],
-        "reason": "mock_text_input",
-        "source": "mock",
-        "priority_class": 4,
+        "selected_skill": selected_skill,
+        "steps": [{"executor": "say", "args": {"text": decorated}}],
+        "reason": reason,
+        "source": source,
+        "priority_class": 3 if selected_skill != "say_canned" else 4,
         "session_id": request_id,
         "created_at": time.time(),
     })
@@ -466,14 +500,75 @@ async def post_text_input(payload: TextInputPayload):
         "plan_id": plan_id,
         "step_index": None,
         "status": "completed",
-        "detail": "我聽不太懂",
-        "selected_skill": "say_canned",
-        "priority_class": 4,
+        "detail": decorated,
+        "selected_skill": selected_skill,
+        "priority_class": 3 if selected_skill != "say_canned" else 4,
         "step_total": 1,
         "step_args": {},
         "timestamp": time.time(),
     })
-    return {"ok": True, "mock": True, "request_id": request_id}
+
+
+@app.post("/api/text_input")
+async def post_text_input(payload: TextInputPayload):
+    """Mock text input.
+
+    Default (MOCK_OPENROUTER unset / != "1"): emit say_canned("我聽不太懂")
+    with " (mock)" marker so frontend knows the reply is fake.
+
+    Opt-in (MOCK_OPENROUTER=1 + OPENROUTER_KEY in env): call Gemini 3 Flash
+    via tools/llm_eval/openrouter_chat.py and emit the real reply.
+    """
+    request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+    text = (payload.text or "").strip()
+
+    # Opt-in real Gemini path.
+    if _MOCK_OPENROUTER_ENABLED and _openrouter_chat is not None and text:
+        # Run the blocking requests.post in a worker thread so the FastAPI
+        # event loop stays responsive for /ws/events listeners.
+        result = await asyncio.to_thread(_openrouter_chat, text)
+        if result.get("ok"):
+            await _emit_text_reply(
+                request_id,
+                str(result["reply_text"]),
+                selected_skill=result.get("selected_skill") or "chat_reply",
+                source="mock_openrouter",
+                reason="mock_text_input:gemini",
+            )
+            return {
+                "ok": True,
+                "mock": True,
+                "openrouter": True,
+                "request_id": request_id,
+                "latency_s": result.get("latency_s"),
+                "raw_skill": result.get("raw_skill"),
+                "intent": result.get("intent"),
+            }
+        # Real call failed → fall through with explicit error marker.
+        marker = f" (openrouter:{result.get('error_kind', 'fail')})"
+        await _emit_text_reply(
+            request_id,
+            "我聽不太懂",
+            extra_marker=marker,
+            reason=f"mock_text_input:openrouter_fail:{result.get('error_kind')}",
+        )
+        return {
+            "ok": True,
+            "mock": True,
+            "openrouter": False,
+            "openrouter_error": result.get("error_kind"),
+            "request_id": request_id,
+        }
+
+    # Default offline mock.
+    if _MOCK_OPENROUTER_ENABLED and _openrouter_chat is None:
+        marker = " (no helper)"
+    elif _MOCK_OPENROUTER_ENABLED:
+        marker = " (no key)"
+    else:
+        marker = " (mock)"
+    await _emit_text_reply(request_id, "我聽不太懂", extra_marker=marker)
+    return {"ok": True, "mock": True, "openrouter": False, "request_id": request_id}
 
 @app.get("/api/brain")
 async def get_brain():
