@@ -94,7 +94,7 @@
 
 #### 6-lite-A: `scripts/preflight_nav_lite.py`
 
-一次性快照,30 行 Python,subscribe 一次 → print → exit。
+一次性快照,**極簡 script,功能只含 4 項**(rclpy + tf2 + QoS + timeout 寫乾淨大概 80–120 行,實作時不綁行數,綁功能)。subscribe 一次 → print → exit。
 
 **檢查項**(只 4 項):
 1. `/scan_rplidar` last msg age < 1s → PASS / FAIL
@@ -161,8 +161,10 @@ ros2 bag record -o "$OUT_DIR" "${TOPICS[@]}"
 - 先用 PR 6-lite-B 錄一包**修改前** baseline(Go2 靜止 60s),看 cov 軌跡 — 確認是 plateau 不是 drift
 - 修改後再錄一包,直接比對 cov_xy 時間序列
 
-**驗收**:
-- 用 `ros2 bag info` + 簡單 grep 看 `/amcl_pose` cov 在 60s 內降 ≥ 30%
+**驗收**(`ros2 bag info` 只看 topic metadata,看不到 cov 內容,要改用以下任一):
+- **方法 A**:`ros2 bag play <bag>` 在另一 terminal `ros2 topic echo /amcl_pose | grep -A 2 covariance`,人工讀 cov 軌跡
+- **方法 B**(推薦):PR 6-lite 加一個極簡 `scripts/extract_amcl_cov.py`(rosbag2_py 讀 bag → CSV: `t, cov_xx, cov_yy`),直接看 CSV 比對前後
+- 期望:60s 內 cov_xy 降 ≥ 30%
 - CPU 沒明顯升高(看 `top` 或 jetson stats)
 
 **估工**:0.5 天
@@ -176,15 +178,18 @@ ros2 bag record -o "$OUT_DIR" "${TOPICS[@]}"
 **HARD PASS(必過,4 條)**:
 1. `nav_action_server` 回 `SUCCEEDED`
 2. 無碰撞、無人工介入
-3. `actual_distance ∈ target × [0.85, 1.15]`
+3. **goal pose 接近目標** — `amcl_pose` 與 goal pose 的 xy 距離 ≤ 0.30m(寬鬆版,實機跑出分布再決定要不要收緊到 0.15m)
 4. 中途 `nav_ready` 不掉到 `RED`
 
-**SOFT METRIC(只記錄不擋,5 條)**:
-- goal xy error
+> ⚠️ **`actual_distance` 不在 Baseline A HARD**:理由 — `nav_demo_point` 走 named/fixed waypoint,路徑可能彎曲,`actual_distance ≠ goal 直線距離`。`actual_distance ∈ target × [0.85, 1.15]` **只用於 PR 1 的 `goto_relative 0.5m` 直線驗收**,在 Baseline A 只當 SOFT。
+
+**SOFT METRIC(只記錄不擋,6 條)**:
+- `actual_distance` vs straight-line goal distance(觀察彎曲程度)
 - time to complete
 - start/end covariance
 - 中途 YELLOW 持續時間
 - `cmd_vel` 是否出現異常尖峰(> 0.6 m/s 或 < -0.1 m/s)
+- goal xy 誤差精確值(便於後續收緊)
 
 **做法**:
 1. 跑 `python3 scripts/preflight_nav_lite.py`,確認 PASS / WARN(可繼續)
@@ -218,18 +223,27 @@ ros2 bag record -o "$OUT_DIR" "${TOPICS[@]}"
    - 加 launch arg `use_go2_safe_bt:=true`(default true,demo 用)
    - 條件 substitute BT XML 路徑
 
-**Feature flag 機制**(關鍵):
+**Feature flag 機制**(關鍵 — `nav2_params.yaml` 字串 substitute 不夠,要走 param override):
+
+`bt_navigator` 的 `default_nav_to_pose_bt_xml` 必須在 launch 階段就決定。可用三種機制(實作前**先確認現有 launch 怎麼載入 yaml** 才能挑):
+
+- **Option A — `RewrittenYaml`**:用 `nav2_common.launch.RewrittenYaml` 把 `default_nav_to_pose_bt_xml` 在 launch 時動態 rewrite,根據 `LaunchConfiguration` 決定值
+- **Option B — Parameter override**:啟動 `bt_navigator` 時用 `parameters=[..., {'default_nav_to_pose_bt_xml': bt_path}]` 直接 override yaml(順序在 yaml 之後)
+- **Option C — 兩個 yaml**:`nav2_params.yaml` 不寫該 key,`nav2_params_safe_bt.yaml` 多一行,launch 用條件選擇 yaml 路徑
+
 ```python
 use_safe_bt = LaunchConfiguration('use_go2_safe_bt')  # default 'true'
 bt_xml_path = PythonExpression([
     "'", safe_bt_path, "' if '", use_safe_bt, "' == 'true' else '", default_bt_path, "'"
 ])
+# 然後配合 Option A/B/C 把 bt_xml_path 套進 bt_navigator 參數
 ```
 
-**前置驗證**:
-1. `ros2 pkg prefix nav2_bt_navigator`找到 default BT XML 位置,複製過來改
+**寫 PR 5 implementation plan 前必做的前置驗證**:
+1. `ros2 pkg prefix nav2_bt_navigator` 找到 default BT XML 位置,複製過來改
 2. 確認 Nav2 Humble 的 BT plugin name(`Spin` / `BackUp` / `Wait`),版本相容性
-3. 在 WSL 起 dry run(不實機),`ros2 launch ... use_go2_safe_bt:=false` 確認 fallback 還能跑
+3. **看現有 `nav_capability.launch.py` 與 `start_nav_capability_demo_tmux.sh` 怎麼載 `nav2_params.yaml`** — 用 `Node parameters` 還是 yaml file path?決定 A/B/C 哪個可行
+4. 在 WSL 起 dry run(不實機),`ros2 launch ... use_go2_safe_bt:=false` 確認 fallback 還能跑、`ros2 param get /bt_navigator default_nav_to_pose_bt_xml` 看到正確值
 
 **驗收**:
 - 兩個 launch arg 切換都能跑(`use_go2_safe_bt:=true` / `false`)
@@ -285,7 +299,7 @@ bt_xml_path = PythonExpression([
   - `covariance_xy=X.XXX (level=YELLOW)`(從 amcl_pose,沿用現有)
 - 輸出格式改成 JSON list of strings
 
-**Out**:lifecycle check / TF check 都跳過 — 理由:demo 期間 lifecycle 用人工 `lifecycle set ... activate` workaround 已經 work,TF check 在 reactive_stop 已隱含
+**Out**:lifecycle check / TF check 都跳過 — 理由:**PR 4-lite 只服務 Studio panel 顯示,不承諾完整 nav_ready 升級**。lifecycle 用人工 `lifecycle set ... activate` workaround,TF / 完整 reasons 留 5/13 後 PR 4-full
 
 **估工**:1 hr(若做)
 
@@ -362,9 +376,11 @@ baseline 結果寫進:`docs/navigation/research/2026-05-XX-baseline-runs.md`(每
 | 30 min 供電連測 | 30 min(背景) |
 | approach_person(P1) | 2 hr |
 | 5/11 dry run + 小修 | 4 hr |
-| **小計 P0 必做** | **~14 hr / 2 天** |
-| **連同回歸 + 加分 + dry run** | **~22 hr / 3 天** |
-| **時間 buffer** | **5 天**(8 天 - 3 天 = 5 天緩衝) |
+| **小計 P0 必做** | **~14 hr / 2 天**(不含實機 debugging buffer) |
+| **連同回歸 + 加分 + dry run** | **~22 hr / 3 天**(不含實機 debugging buffer) |
+| **時間 buffer** | **5 天**(8 天 - 3 天 = 5 天緩衝;debugging / 場景重設 / 供電意外都吃這個 buffer) |
+
+> ⚠️ 工時是「程式碼撰寫 + 規畫驗收」的時間,**不含**:Jetson rsync / colcon build fail / 場景重置 / Go2 OTA / 供電斷電復原 / 5/3 那種「兩個 bug 串連找半天」的 debugging。實機週經驗值是 1.5–2× 的乘數,buffer 5 天是這個乘數內。
 
 ---
 
