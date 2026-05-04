@@ -1,174 +1,119 @@
-"use client"
+"use client";
 
-import { useState, useRef, useEffect, useCallback } from "react"
-import { ArrowUp, PawPrint, Sparkles, HandMetal, Activity, Mic, Square, Camera, User, Hand, Brain } from "lucide-react"
-import { useStateStore } from "@/stores/state-store"
-import { useAudioRecorder } from "@/hooks/use-audio-recorder"
-import { AudioVisualizer } from "@/components/chat/audio-visualizer"
-import { BrainStatusStrip } from "@/components/chat/brain/brain-status-strip"
-import { BubbleAlert } from "@/components/chat/brain/bubble-alert"
-import { BubbleBrainPlan } from "@/components/chat/brain/bubble-brain-plan"
-import { BubbleSafety } from "@/components/chat/brain/bubble-safety"
-import { BubbleSkillResult } from "@/components/chat/brain/bubble-skill-result"
-import { BubbleSkillStep } from "@/components/chat/brain/bubble-skill-step"
-import { SkillButtons } from "@/components/chat/brain/skill-buttons"
-import { SkillTraceDrawer } from "@/components/chat/brain/skill-trace-drawer"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import type { SkillPlan, SkillResult } from "@/contracts/types"
-import { getGatewayHttpUrl } from "@/lib/gateway-url"
-import { cn } from "@/lib/utils"
+import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowUp, Mic, PawPrint, Sparkles, Square } from "lucide-react";
+import { useStateStore } from "@/stores/state-store";
+import { useAudioRecorder } from "@/hooks/use-audio-recorder";
+import { AudioVisualizer } from "@/components/chat/audio-visualizer";
+import { BrainStatusPill } from "@/components/chat/brain-status-pill";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { getGatewayHttpUrl } from "@/lib/gateway-url";
+import { cn } from "@/lib/utils";
 
 interface UserMessage {
-  id: string
-  type: "user"
-  text: string
-  timestamp: string
+  id: string;
+  type: "user";
+  text: string;
+  timestamp: string;
 }
 
 interface AIMessage {
-  id: string
-  type: "ai"
-  text: string
-  timestamp: string
+  id: string;
+  type: "ai";
+  text: string;
+  timestamp: string;
 }
 
 interface VoiceMessage {
-  id: string
-  type: "voice"
-  text: string
-  intent: string
-  confidence: number
-  timestamp: string
+  id: string;
+  type: "voice";
+  text: string;
+  intent: string;
+  confidence: number;
+  timestamp: string;
 }
 
-type ChatMessage = UserMessage | AIMessage | VoiceMessage
-
-interface BrainPlanMessage {
-  id: string
-  type: "brain_plan"
-  plan: SkillPlan
-  timestamp: string
-}
-
-interface SkillStepMessage {
-  id: string
-  type: "skill_step"
-  result: SkillResult
-  timestamp: string
-}
-
-interface SafetyMessage {
-  id: string
-  type: "safety"
-  result: SkillResult
-  timestamp: string
-}
-
-interface AlertMessage {
-  id: string
-  type: "alert"
-  plan: SkillPlan
-  timestamp: string
-}
-
-interface SkillResultMessage {
-  id: string
-  type: "skill_result"
-  result: SkillResult
-  timestamp: string
-}
-
-type BrainChatMessage =
-  | BrainPlanMessage
-  | SkillStepMessage
-  | SafetyMessage
-  | AlertMessage
-  | SkillResultMessage
-
-type ConsoleMessage = ChatMessage | BrainChatMessage
+type ChatMessage = UserMessage | AIMessage | VoiceMessage;
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })
+  return date.toLocaleTimeString("zh-TW", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
-const MODULE_STATUS = [
-  { name: "Face", icon: User, key: "faceState" as const },
-  { name: "Speech", icon: Mic, key: "speechState" as const },
-  { name: "Gesture", icon: Hand, key: "gestureState" as const },
-  { name: "Pose", icon: Activity, key: "poseState" as const },
-  { name: "Brain", icon: Brain, key: "brainState" as const },
-]
-
-const QUICK_ACTIONS = [
-  { label: "打個招呼", desc: "讓 PawAI 揮手問好", Icon: HandMetal },
-  { label: "查看狀態", desc: "系統健康與模組狀態", Icon: Activity },
-  { label: "語音對話", desc: "開啟語音互動模式", Icon: Mic },
-  { label: "拍張照片", desc: "拍攝當前場景照片", Icon: Camera },
-]
-
+/**
+ * ChatPanel — chat-first redesign (commit step G).
+ *
+ * Renders ONLY normal user / assistant / voice chat bubbles + the input
+ * composer + a thin BrainStatusPill at the top. All brain debug widgets
+ * (skill buttons, trace drawer, brain plan / skill step / safety / alert /
+ * result bubbles) have been removed. Devs see those via /studio/dev or
+ * ?dev=1 + ⚙ button (step H).
+ */
 export function ChatPanel() {
-  const [messages, setMessages] = useState<ConsoleMessage[]>([])
-  const [inputText, setInputText] = useState("")
-  const [isThinking, setIsThinking] = useState(false)
-  const faceState = useStateStore((s) => s.faceState)
-  const speechState = useStateStore((s) => s.speechState)
-  const gestureState = useStateStore((s) => s.gestureState)
-  const poseState = useStateStore((s) => s.poseState)
-  const brainState = useStateStore((s) => s.brainState)
-  const brainProposals = useStateStore((s) => s.brainProposals)
-  const brainResults = useStateStore((s) => s.brainResults)
-  const stateMap = { faceState, speechState, gestureState, poseState, brainState }
-  const { isRecording, isProcessing, audioLevels, lastResult: voiceResult, error: voiceError, startRecording, stopRecording } = useAudioRecorder()
-  const lastTtsText = useStateStore((s) => s.lastTtsText)
-  const lastTtsAt = useStateStore((s) => s.lastTtsAt)
-  const pendingRequestIdRef = useRef<string | null>(null)
-  const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const seenProposalIdsRef = useRef<Set<string>>(new Set())
-  const seenResultKeysRef = useRef<Set<string>>(new Set())
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const prevVoiceResultRef = useRef(voiceResult)
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
 
-  const hasMessages = messages.length > 0
+  const lastTtsText = useStateStore((s) => s.lastTtsText);
+  const lastTtsAt = useStateStore((s) => s.lastTtsAt);
+  const {
+    isRecording,
+    isProcessing,
+    audioLevels,
+    lastResult: voiceResult,
+    error: voiceError,
+    startRecording,
+    stopRecording,
+  } = useAudioRecorder();
 
-  // Auto-scroll on new messages
+  const pendingRequestIdRef = useRef<string | null>(null);
+  const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevVoiceResultRef = useRef(voiceResult);
+
+  const hasMessages = messages.length > 0;
+
+  // Auto-scroll on new messages.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, isThinking])
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isThinking]);
 
-  // Cleanup pending timeout on unmount
+  // Cleanup pending timeout on unmount.
   useEffect(() => {
     return () => {
-      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
-    }
-  }, [])
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
+    };
+  }, []);
 
-  // TTS reply → AI bubble (only when pending)
+  // TTS reply → AI bubble (only when pending).
   useEffect(() => {
     if (lastTtsAt && lastTtsText && pendingRequestIdRef.current) {
-      pendingRequestIdRef.current = null
+      pendingRequestIdRef.current = null;
       if (pendingTimeoutRef.current) {
-        clearTimeout(pendingTimeoutRef.current)
-        pendingTimeoutRef.current = null
+        clearTimeout(pendingTimeoutRef.current);
+        pendingTimeoutRef.current = null;
       }
-      setIsThinking(false)
-
+      setIsThinking(false);
       const aiMsg: AIMessage = {
         id: `ai-${Date.now()}`,
         type: "ai",
         text: lastTtsText,
         timestamp: formatTime(new Date()),
-      }
-      setMessages((prev) => [...prev, aiMsg])
+      };
+      setMessages((prev) => [...prev, aiMsg]);
     }
-  }, [lastTtsAt, lastTtsText])
+  }, [lastTtsAt, lastTtsText]);
 
-  // Voice result → add as voice message + enter pending
+  // Voice result → add as voice message + enter pending.
   useEffect(() => {
     if (voiceResult && voiceResult !== prevVoiceResultRef.current) {
-      prevVoiceResultRef.current = voiceResult
+      prevVoiceResultRef.current = voiceResult;
       const voiceMsg: VoiceMessage = {
         id: `voice-${Date.now()}`,
         type: "voice",
@@ -176,164 +121,104 @@ export function ChatPanel() {
         intent: voiceResult.intent,
         confidence: voiceResult.confidence,
         timestamp: formatTime(new Date()),
-      }
-      setMessages((prev) => [...prev, voiceMsg])
+      };
+      setMessages((prev) => [...prev, voiceMsg]);
 
-      // Enter pending for TTS reply
-      const requestId = `voice-${Date.now()}`
-      pendingRequestIdRef.current = requestId
-      setIsThinking(true)
-
-      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
+      const requestId = `voice-${Date.now()}`;
+      pendingRequestIdRef.current = requestId;
+      setIsThinking(true);
+      if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
       pendingTimeoutRef.current = setTimeout(() => {
         if (pendingRequestIdRef.current === requestId) {
-          pendingRequestIdRef.current = null
-          setIsThinking(false)
+          pendingRequestIdRef.current = null;
+          setIsThinking(false);
         }
-      }, 8000)
+      }, 8000);
     }
-  }, [voiceResult])
+  }, [voiceResult]);
 
-  useEffect(() => {
-    for (const proposal of [...brainProposals].reverse()) {
-      if (seenProposalIdsRef.current.has(proposal.plan_id)) continue
-      seenProposalIdsRef.current.add(proposal.plan_id)
-      const timestamp = formatTime(new Date())
-      setMessages((prev) => [
-        ...prev,
-        proposal.priority_class === 1
-          ? {
-              id: `alert-${proposal.plan_id}`,
-              type: "alert",
-              plan: proposal,
-              timestamp,
-            }
-          : {
-              id: `plan-${proposal.plan_id}`,
-              type: "brain_plan",
-              plan: proposal,
-              timestamp,
-            },
-      ])
-    }
-  }, [brainProposals])
-
-  useEffect(() => {
-    for (const result of [...brainResults].reverse()) {
-      const key = `${result.plan_id}-${result.step_index ?? "plan"}-${result.status}`
-      if (seenResultKeysRef.current.has(key)) continue
-      seenResultKeysRef.current.add(key)
-
-      const timestamp = formatTime(new Date())
-      if (result.status === "blocked_by_safety" || result.selected_skill === "stop_move") {
-        setMessages((prev) => [
-          ...prev,
-          { id: `safety-${key}`, type: "safety", result, timestamp },
-        ])
-      } else if (
-        result.status === "step_started" ||
-        result.status === "step_success" ||
-        result.status === "step_failed"
-      ) {
-        setMessages((prev) => [
-          ...prev,
-          { id: `step-${key}`, type: "skill_step", result, timestamp },
-        ])
-      } else if (result.status === "completed" || result.status === "aborted") {
-        setMessages((prev) => [
-          ...prev,
-          { id: `result-${key}`, type: "skill_result", result, timestamp },
-        ])
-      }
-    }
-  }, [brainResults])
-
-  // Auto-resize textarea
+  // Auto-resize textarea.
   const adjustTextareaHeight = useCallback(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.style.height = "auto"
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
-  }, [])
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+  }, []);
 
   useEffect(() => {
-    adjustTextareaHeight()
-  }, [inputText, adjustTextareaHeight])
+    adjustTextareaHeight();
+  }, [inputText, adjustTextareaHeight]);
 
   async function handleSend() {
-    const text = inputText.trim()
-    if (!text || isThinking) return
+    const text = inputText.trim();
+    if (!text || isThinking) return;
 
     const userMsg: UserMessage = {
       id: `user-${Date.now()}`,
       type: "user",
       text,
       timestamp: formatTime(new Date()),
-    }
-    setMessages((prev) => [...prev, userMsg])
-    setInputText("")
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-    }
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInputText("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
       const response = await fetch(`${getGatewayHttpUrl()}/api/text_input`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, request_id: `txt-${Date.now()}` }),
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
     } catch {
       const errMsg: AIMessage = {
         id: `ai-err-${Date.now()}`,
         type: "ai",
         text: "Brain 文字通道未連線，請確認 Gateway 是否啟動。",
         timestamp: formatTime(new Date()),
-      }
-      setMessages((prev) => [...prev, errMsg])
-      return
+      };
+      setMessages((prev) => [...prev, errMsg]);
+      return;
     }
 
-    // Enter pending — wait for TTS reply
-    setIsThinking(true)
-    const requestId = `req-${Date.now()}`
-    pendingRequestIdRef.current = requestId
-
-    if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current)
+    setIsThinking(true);
+    const requestId = `req-${Date.now()}`;
+    pendingRequestIdRef.current = requestId;
+    if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
     pendingTimeoutRef.current = setTimeout(() => {
       if (pendingRequestIdRef.current === requestId) {
-        pendingRequestIdRef.current = null
-        setIsThinking(false)
+        pendingRequestIdRef.current = null;
+        setIsThinking(false);
         const errMsg: AIMessage = {
           id: `ai-timeout-${Date.now()}`,
           type: "ai",
           text: "回應逾時，請確認 LLM 是否在線。",
           timestamp: formatTime(new Date()),
-        }
-        setMessages((prev) => [...prev, errMsg])
+        };
+        setMessages((prev) => [...prev, errMsg]);
       }
-    }, 8000)
+    }, 8000);
 
-    textareaRef.current?.focus()
+    textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
   }
 
-  // ── Composer input ──
+  // Composer — text input + mic + send. Used in both empty and conversation views.
   const composerInput = (
-    <div className={cn(
-      "relative rounded-2xl border transition-all duration-200",
-      isRecording
-        ? "border-red-500/40 shadow-[0_0_0_1px_rgba(239,68,68,0.15)] bg-surface"
-        : "border-border/60 bg-surface focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(124,107,255,0.15)]",
-      hasMessages ? "mx-4 mb-4" : "w-full"
-    )}>
+    <div
+      className={cn(
+        "relative rounded-2xl border transition-all duration-200",
+        isRecording
+          ? "border-red-500/40 shadow-[0_0_0_1px_rgba(239,68,68,0.15)] bg-surface"
+          : "border-border/60 bg-surface focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(124,107,255,0.15)]",
+      )}
+    >
       <Textarea
         ref={textareaRef}
         value={inputText}
@@ -346,12 +231,11 @@ export function ChatPanel() {
           "min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-24",
           "text-foreground placeholder:text-muted-foreground/50",
           "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent",
-          "px-4 py-3 text-[15px] leading-relaxed"
+          "px-4 py-3 text-[15px] leading-relaxed",
         )}
       />
-      {/* Mic button — expands to pill with audio bars when recording */}
       <Button
-        onClick={() => isRecording ? stopRecording() : startRecording()}
+        onClick={() => (isRecording ? stopRecording() : startRecording())}
         disabled={isThinking || isProcessing}
         size={isRecording && audioLevels.length > 0 ? "default" : "icon"}
         className={cn(
@@ -360,7 +244,7 @@ export function ChatPanel() {
             ? "right-12 h-8 px-3 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm flex items-center gap-2"
             : isProcessing
               ? "right-12 h-8 w-8 rounded-lg bg-amber-500 text-white cursor-wait"
-              : "right-12 h-8 w-8 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+              : "right-12 h-8 w-8 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground",
         )}
         title={isRecording ? "停止錄音" : isProcessing ? "辨識中..." : "語音輸入"}
       >
@@ -374,7 +258,6 @@ export function ChatPanel() {
           <Mic className="h-4 w-4" />
         )}
       </Button>
-      {/* Send button */}
       <Button
         onClick={handleSend}
         disabled={isThinking || isRecording || !inputText.trim()}
@@ -383,7 +266,7 @@ export function ChatPanel() {
           "absolute right-2.5 bottom-2.5 h-8 w-8 rounded-lg transition-all duration-200",
           inputText.trim() && !isRecording
             ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-            : "bg-muted text-muted-foreground cursor-not-allowed"
+            : "bg-muted text-muted-foreground cursor-not-allowed",
         )}
       >
         <ArrowUp className="h-4 w-4" />
@@ -396,200 +279,131 @@ export function ChatPanel() {
         </div>
       )}
     </div>
-  )
+  );
 
-  // ── Welcome view (no messages yet) — Mission Control ──
+  // Empty state — minimal hero + composer (no skill buttons / no module strip).
   if (!hasMessages) {
     return (
       <div className="flex h-full flex-col">
-        <BrainStatusStrip />
-        <div className="relative flex flex-1 flex-col items-center justify-center px-6 control-grid control-glow">
-        <div className="flex flex-col items-center gap-8 w-full max-w-2xl -mt-16">
-          {/* Hero */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-400/20 hud-ring">
-              <PawPrint className="h-8 w-8 text-sky-400" />
-              <div className="absolute inset-0 rounded-2xl hud-pulse" />
+        <BrainStatusPill />
+        <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
+          <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-3 -mt-16">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/10 border border-sky-400/20">
+                <PawPrint className="h-7 w-7 text-sky-400" />
+              </div>
+              <h1 className="text-2xl font-semibold text-foreground tracking-tight">
+                嗨，我是 PawAI
+              </h1>
+              <p className="text-sm text-muted-foreground/70">
+                有什麼想聊的嗎？
+              </p>
             </div>
-            <h1 className="text-3xl font-bold text-foreground tracking-tighter">
-              PawAI Studio
-            </h1>
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground/60">
-              Embodied AI Control Center
-            </p>
+            <div className="w-full">{composerInput}</div>
           </div>
-
-          {/* Module Status Strip */}
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/30 bg-surface/30 backdrop-blur-sm">
-            {MODULE_STATUS.map(({ name, icon: Icon, key }) => {
-              const active = stateMap[key] != null
-              return (
-                <div key={name} className="flex items-center gap-1.5 px-2">
-                  <Icon className={cn(
-                    "h-3.5 w-3.5 transition-colors duration-300",
-                    active ? "text-emerald-400" : "text-muted-foreground/40"
-                  )} />
-                  <span className={cn(
-                    "text-[11px] font-mono transition-colors duration-300",
-                    active ? "text-foreground/80" : "text-muted-foreground/40"
-                  )}>
-                    {name}
-                  </span>
-                  <div className={cn(
-                    "w-1.5 h-1.5 rounded-full transition-all duration-300",
-                    active ? "bg-emerald-400 motion-safe:animate-pulse" : "bg-muted-foreground/20"
-                  )} />
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-2.5 w-full max-w-md">
-            {QUICK_ACTIONS.map(({ label, desc, Icon }) => (
-              <button
-                key={label}
-                onClick={() => {
-                  setInputText(label)
-                  textareaRef.current?.focus()
-                }}
-                className={cn(
-                  "relative flex items-center gap-3 rounded-xl border border-border/30 px-4 py-3",
-                  "bg-surface/30 backdrop-blur-sm overflow-hidden",
-                  "hover:bg-surface-hover hover:border-sky-400/20",
-                  "hover:shadow-[0_0_20px_rgba(56,189,248,0.06)]",
-                  "transition-all duration-200 cursor-pointer text-left group"
-                )}
-              >
-                {/* Left accent bar */}
-                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-sky-400/30 group-hover:bg-sky-400/60 transition-colors" />
-                <Icon className="h-4 w-4 text-muted-foreground group-hover:text-sky-400 transition-colors shrink-0" />
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground group-hover:text-foreground transition-colors">
-                    {label}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground/60">
-                    {desc}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Composer */}
-          <div className="w-full mt-2">
-            {composerInput}
-          </div>
-        </div>
         </div>
       </div>
-    )
+    );
   }
 
-  // ── Conversation view ──
+  // Conversation view — bubble stream + bottom composer.
   return (
-    <div className="flex flex-col h-full">
-      <BrainStatusStrip />
+    <div className="flex h-full flex-col">
+      <BrainStatusPill />
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-5">
+        <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
             if (msg.type === "user") {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[80%]">
-                    <div className="rounded-2xl rounded-br-md bg-primary/10 px-4 py-2.5 text-[15px] text-foreground leading-relaxed">
+                  <div className="max-w-[70%] md:max-w-[70%]">
+                    <div
+                      className="rounded-2xl rounded-br-md px-4 py-3 text-[15px] leading-relaxed"
+                      style={{
+                        backgroundColor: "var(--bubble-user-bg)",
+                        color: "var(--bubble-user-fg)",
+                      }}
+                    >
                       {msg.text}
                     </div>
                   </div>
                 </div>
-              )
+              );
             }
-
             if (msg.type === "voice") {
               return (
                 <div key={msg.id} className="flex justify-end">
-                  <div className="max-w-[80%]">
-                    <div className="rounded-2xl rounded-br-md bg-sky-500/10 border border-sky-400/20 px-4 py-2.5 text-[15px] text-foreground leading-relaxed">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Mic className="h-3 w-3 text-sky-400" />
-                        <span className="text-[10px] text-sky-400 font-mono">語音輸入</span>
-                        <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-500/10 text-emerald-400 border-transparent font-normal">
+                  <div className="max-w-[70%]">
+                    <div
+                      className="rounded-2xl rounded-br-md border px-4 py-3 text-[15px] leading-relaxed"
+                      style={{
+                        backgroundColor: "var(--bubble-user-bg)",
+                        borderColor: "var(--bubble-user-bg)",
+                        color: "var(--bubble-user-fg)",
+                      }}
+                    >
+                      <div className="mb-1 flex items-center gap-2">
+                        <Mic className="h-3 w-3" />
+                        <span className="font-mono text-[10px] opacity-80">語音輸入</span>
+                        <Badge className="h-4 rounded-full bg-emerald-500/20 px-1.5 py-0 text-[9px] font-normal text-emerald-200 border-transparent">
                           已發佈
                         </Badge>
                       </div>
                       {msg.text}
                       {msg.intent && (
-                        <div className="mt-1.5 text-[10px] text-muted-foreground font-mono">
+                        <div className="mt-1.5 font-mono text-[10px] opacity-70">
                           intent: {msg.intent} · {Math.round(msg.confidence * 100)}%
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-              )
+              );
             }
-
-            if (msg.type === "ai") {
-              return (
-                <div key={msg.id} className="flex gap-3">
-                  <div className="flex items-start pt-0.5 shrink-0">
-                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] text-foreground leading-relaxed">
-                      {msg.text}
-                    </p>
+            // AI message — left, transparent + thin outline.
+            return (
+              <div key={msg.id} className="flex gap-3">
+                <div className="flex shrink-0 items-start pt-0.5">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
                   </div>
                 </div>
-              )
-            }
-
-            if (msg.type === "brain_plan") {
-              return <BubbleBrainPlan key={msg.id} plan={msg.plan} />
-            }
-
-            if (msg.type === "skill_step") {
-              return <BubbleSkillStep key={msg.id} result={msg.result} />
-            }
-
-            if (msg.type === "safety") {
-              return <BubbleSafety key={msg.id} result={msg.result} />
-            }
-
-            if (msg.type === "alert") {
-              return <BubbleAlert key={msg.id} plan={msg.plan} />
-            }
-
-            if (msg.type === "skill_result") {
-              return <BubbleSkillResult key={msg.id} result={msg.result} />
-            }
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="rounded-2xl border px-4 py-3 text-[15px] leading-relaxed"
+                    style={{
+                      borderColor: "var(--bubble-ai-border)",
+                      color: "var(--bubble-ai-fg)",
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              </div>
+            );
           })}
-
           {isThinking && (
             <div className="flex gap-3">
-              <div className="flex items-start pt-0.5 shrink-0">
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
+              <div className="flex shrink-0 items-start pt-0.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
                 </div>
               </div>
               <div className="flex items-center gap-1 py-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:0ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/60 [animation-delay:300ms]" />
               </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
       </div>
-
-      <SkillTraceDrawer />
-      <SkillButtons />
-      <div className="max-w-3xl mx-auto w-full">
-        {composerInput}
+      <div className="border-t border-border/40">
+        <div className="mx-auto w-full max-w-[var(--chat-max-w)] px-4 md:px-8 py-3">
+          {composerInput}
+        </div>
       </div>
     </div>
-  )
+  );
 }
