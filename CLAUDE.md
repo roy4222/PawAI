@@ -405,7 +405,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 
 - Shell 用 **zsh**：source 時用 `setup.zsh` 而非 `setup.bash`
 - **主線麥克風**：USB UACDemoV1.0（device 24，mono，48kHz）— `input_device:=24 channels:=1 capture_sample_rate:=48000 mic_gain:=4.0`
-- **主線喇叭**：USB CD002-AUDIO（`plughw:3,0`）— `local_playback:=true local_output_device:=plughw:3,0`
+- **主線喇叭**：USB CD002-AUDIO（`plughw:2,0`）— `local_playback:=true local_output_device:=plughw:2,0`（card index 跟著 Jetson 啟動順序變，先跑 `source scripts/device_detect.sh` 拿 `$DETECTED_SPK_DEVICE` 為準）
 - **備用麥克風 HyperX SoloCast 是 stereo-only**（硬體 `CHANNELS: 2`），需 `channels:=2` + 手動 downmix
 - **Whisper 在 Jetson 走 CUDA 時必須用 `float16`**(`cuda + int8` 不支援會 silent fail);`speech_processor.yaml` 預設為 `cpu + int8` 可用但速度較慢,Demo 啟動腳本覆寫為 `cuda + float16`
 - `LD_LIBRARY_PATH` 必須含 `/home/jetson/.local/ctranslate2-cuda/lib`（啟動腳本已處理）
@@ -417,6 +417,8 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 - 同時間只允許一套 speech session（禁止多 tmux 混跑）
 - 測試前必須 clean-start：`bash scripts/clean_speech_env.sh`
 - 修改 Python 程式碼後必須 `colcon build` 再 `source install/setup.zsh`
+- **Jetson setuptools 必須 `<70`**（colcon 的 setup.py shim 用 `--editable`/`--uninstall`，setuptools 80+ 拿掉這兩個 flag → build 會 fail with `option --editable not recognized`）。修法：`pip install --user "setuptools<70"`（已知好版本：`69.5.1`）
+- **rsync 同步只搬源碼，不會 rebuild `install/`**：感覺到 brain 模式或新參數沒生效時，跑 `colcon build --packages-select <pkg>` 而不是只 `~/sync once`
 
 ---
 

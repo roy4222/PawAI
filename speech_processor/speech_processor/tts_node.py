@@ -38,6 +38,8 @@ import requests
 from std_msgs.msg import Bool, String, UInt8MultiArray
 from go2_interfaces.msg import WebRtcReq
 
+from speech_processor.audio_tag import strip_audio_tags
+
 
 def _env_str(name: str, default: str) -> str:
     value = os.getenv(name)
@@ -684,14 +686,30 @@ class EnhancedTTSNode(Node):
     def tts_callback(self, msg: String) -> None:
         """Handle incoming TTS requests"""
         try:
-            text = msg.data.strip()
-            if not text:
+            raw_text = msg.data.strip()
+            if not raw_text:
                 self.get_logger().warn("Received empty TTS request")
                 return
 
-            self.get_logger().info(
-                f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})'
-            )
+            # Strip emotion/audio tags before synthesis. edge-tts and Piper
+            # read `[excited]` literally; until B1 TTS 換血 (Gemini 3.1) we
+            # remove the tags here. Original `raw_text` is preserved for log.
+            text = strip_audio_tags(raw_text)
+            if not text:
+                self.get_logger().warn(
+                    f"TTS request became empty after tag strip: {raw_text!r}"
+                )
+                return
+
+            if text != raw_text:
+                self.get_logger().info(
+                    f'🎤 TTS Request: "{raw_text}" → stripped "{text}" '
+                    f"(voice: {self.config.voice_name})"
+                )
+            else:
+                self.get_logger().info(
+                    f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})'
+                )
 
             # Activate echo gate IMMEDIATELY — before synthesis, not after.
             # Without this, ASR records during the entire TTS synthesis + LLM

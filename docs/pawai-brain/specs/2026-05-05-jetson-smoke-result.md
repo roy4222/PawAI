@@ -89,10 +89,16 @@
 
 ## Follow-up 排序（明天決定要不要切 navigation）
 
-P0（今天 smoke 暴露的修正，工作量 < 1h 合計）：
-1. CLAUDE.md 修：USB 喇叭 `plughw:2,0`（不是 3,0）+ Jetson setuptools 必須 < 70
-2. `llm_bridge_node` 的 `openrouter_request_timeout_s` default 從 2.0 → 4.0、`overall_budget_s` 2.2 → 5.0
-3. 對齊 `text` vs `transcript` 欄位（看 contract / 看 stt_intent_node 實際 publish）
+P0（今天 smoke 暴露的修正）— **5/4 evening 第二輪已完成**：
+1. ✅ CLAUDE.md 修：USB 喇叭 `plughw:2,0` + Jetson setuptools < 70 + rsync 不 rebuild install/
+2. ✅ `llm_bridge_node` `openrouter_request_timeout_s` default 2.0 → 4.0、`overall_budget_s` 2.2 → 5.0
+3. ✅ Schema 對齊澄清：`stt_intent_node:1136` 和 `llm_bridge_node:308` 都用 `text`；contract doc 也是 `text`。今天 smoke 的「empty input」是我注入時筆誤用 `transcript`，不是程式碼 bug
+
+### B（audio tag strip）— 同輪一併做
+- ✅ 新檔 `speech_processor/speech_processor/audio_tag.py`（純函數，無 ROS 依賴）
+- ✅ `tts_node.py` import + 在 `tts_callback` 開頭 strip + 保留 `raw_text` 供 log
+- ✅ 13 unit tests PASS（含中文括號保留、idempotent、空字串 guard）
+- ✅ Jetson smoke：`"[excited] 你是誰"` → log 顯示 `→ stripped "你是誰"`，喇叭實聽 tag 已不被唸出
 
 P1（B1 TTS 換血，spec §8 已寫，~1 天）：
 4. Gemini 3.1 Flash TTS PCM 24kHz audio contract
