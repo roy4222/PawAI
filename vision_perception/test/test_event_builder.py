@@ -12,10 +12,15 @@ class TestBuildGestureEvent:
         evt = build_gesture_event("stop", 0.87, "right")
         assert evt["event_type"] == "gesture_detected"
 
-    def test_fist_compat_map(self):
+    def test_fist_passes_through_moc_enum(self):
         from vision_perception.event_builder import build_gesture_event
         evt = build_gesture_event("fist", 0.9, "left")
-        assert evt["gesture"] == "ok"  # v2.0 contract
+        assert evt["gesture"] == "fist"
+
+    def test_ok_passes_through_moc_enum(self):
+        from vision_perception.event_builder import build_gesture_event
+        evt = build_gesture_event("ok", 0.9, "left")
+        assert evt["gesture"] == "ok"
 
     def test_stop_passes_through(self):
         from vision_perception.event_builder import build_gesture_event

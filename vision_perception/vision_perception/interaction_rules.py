@@ -9,6 +9,15 @@ import time
 
 # Only these gestures produce a gesture_command event.
 # Everything else is ignored (node layer logs them as debug).
+#
+# 2026-05-05: raw MOC gestures are published on /event/gesture_detected for
+# Studio/Brain. This legacy interaction_router path only forwards gestures
+# that event_action_bridge can execute directly. Do not add palm/thumb/peace
+# here unless GESTURE_ACTION_MAP grows matching actions; otherwise the router
+# emits half-dead gesture_command events.
+#
+# Legacy aliases (stop/thumbs_up) kept temporarily so any old test
+# fixtures still pass; production path emits new MOC names directly.
 GESTURE_WHITELIST = {"stop", "thumbs_up", "ok"}
 
 

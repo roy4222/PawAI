@@ -177,6 +177,49 @@ class ObjectPerceptionNode(Node):
         return x1, y1, x2, y2
 
     # ------------------------------------------------------------------
+    # 5/5: HSV 4-color analysis on bbox crop (MOC §5 「要可以偵測顏色」).
+    # Lightweight (no extra deps): compute Hue histogram, gate by saturation
+    # (low S → "Unknown" — colourless / shaded). 4 buckets:
+    #   red    Hue ∈ [0,10] ∪ [160,180]
+    #   yellow Hue ∈ [20,35]
+    #   green  Hue ∈ [40,80]
+    #   blue   Hue ∈ [95,130]
+    # Returned confidence = peak histogram bin / total pixels (0..1).
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[str, float]:
+        h, w = image_bgr.shape[:2]
+        x1c = max(0, min(x1, w - 1))
+        x2c = max(0, min(x2, w))
+        y1c = max(0, min(y1, h - 1))
+        y2c = max(0, min(y2, h))
+        if x2c <= x1c or y2c <= y1c:
+            return ("Unknown", 0.0)
+        crop = image_bgr[y1c:y2c, x1c:x2c]
+        if crop.size == 0:
+            return ("Unknown", 0.0)
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        s_mean = float(hsv[:, :, 1].mean()) / 255.0
+        if s_mean < 0.4:
+            return ("Unknown", 0.0)  # too desaturated to claim a colour
+        hist = cv2.calcHist([hsv], [0], None, [18], [0, 180])
+        total = float(hist.sum())
+        if total <= 0:
+            return ("Unknown", 0.0)
+        peak_bin = int(np.argmax(hist))
+        peak_h = peak_bin * 10  # bin width 10 in 0..180 space
+        confidence = round(float(hist[peak_bin][0] / total), 3)
+        if peak_h <= 10 or peak_h >= 160:
+            return ("red", confidence)
+        if 20 <= peak_h <= 35:
+            return ("yellow", confidence)
+        if 40 <= peak_h <= 80:
+            return ("green", confidence)
+        if 95 <= peak_h <= 130:
+            return ("blue", confidence)
+        return ("Unknown", 0.0)
+
+    # ------------------------------------------------------------------
     # Main tick
     # ------------------------------------------------------------------
     def _tick(self):
@@ -223,11 +266,14 @@ class ObjectPerceptionNode(Node):
             )
             if x2 <= x1 or y2 <= y1:
                 continue
+            color, color_conf = self._analyze_bbox_color(image, x1, y1, x2, y2)
             detections.append({
                 "class_id": class_id,  # internal-only, stripped before event publish
                 "class_name": COCO_CLASSES[class_id],
                 "confidence": round(conf, 3),
                 "bbox": [x1, y1, x2, y2],
+                "color": color,
+                "color_confidence": color_conf,
             })
 
         # --- FPS tracking ---
@@ -250,17 +296,22 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     def _publish_events(self, detections: list):
         now = time.time()
-        # Collect new classes that pass cooldown (strip internal class_id from payload)
+        # Collect new classes that pass cooldown (strip internal class_id from payload).
+        # 5/5: include optional `color` + `color_confidence` from HSV analysis.
         new_objects = []
         for det in detections:
             cls = det["class_name"]
             last = self._cooldowns.get(cls, 0.0)
             if now - last >= self.class_cooldown:
-                new_objects.append({
+                obj = {
                     "class_name": det["class_name"],
                     "confidence": det["confidence"],
                     "bbox": det["bbox"],
-                })
+                }
+                if det.get("color") and det["color"] != "Unknown":
+                    obj["color"] = det["color"]
+                    obj["color_confidence"] = det.get("color_confidence", 0.0)
+                new_objects.append(obj)
                 self._cooldowns[cls] = now
 
         if not new_objects:

@@ -20,7 +20,7 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 from .event_builder import build_gesture_event, build_pose_event
-from .gesture_classifier import classify_gesture
+from .gesture_classifier import classify_gesture, detect_ok_circle
 from .mock_inference import MockInference
 from .pose_classifier import (
     classify_pose,
@@ -106,6 +106,10 @@ class VisionPerceptionNode(Node):
         self.declare_parameter("max_hands", 1)                  # 1=single(fast), 2=dual (launch: max_hands:=2)
         self.declare_parameter("hands_complexity", 0)          # 0=lite(fast), 1=full
         self.declare_parameter("gesture_every_n_ticks", 3)      # run hands every N ticks (1=every tick)
+        # MOC §3 「穩定性要求」— gesture must hold for this many seconds before
+        # /event/gesture_detected is published. Default 0.5 per MOC; set 0.0
+        # for live-debug bypass (`ros2 param set ... gesture_stable_s 0.0`).
+        self.declare_parameter("gesture_stable_s", 0.5)
 
         backend = str(self.get_parameter("inference_backend").value or "mock")
         self.use_camera = bool(self.get_parameter("use_camera").value)
@@ -127,6 +131,11 @@ class VisionPerceptionNode(Node):
         self.gesture_buffer: deque[str | None] = deque(maxlen=gesture_frames)
         self.pose_buffer: deque[str | None] = deque(maxlen=pose_frames)
         self.last_gesture: str | None = None
+        # 0.5s stable gate (MOC §3) — track when current vote winner first appeared.
+        stable_s = self.get_parameter("gesture_stable_s").value
+        self._gesture_stable_s = 0.5 if stable_s is None else max(0.0, float(stable_s))
+        self._gesture_hold_label: str | None = None
+        self._gesture_hold_ts: float = 0.0
         self.last_pose: str | None = None
         self.last_hand: str = "right"
         self._tick_counter: int = 0
@@ -317,6 +326,23 @@ class VisionPerceptionNode(Node):
                     best = max(detections, key=lambda d: d[1])
                     gesture_raw, _, hand = best
 
+                # 5/5 OK gesture override (MOC §3 group 1) — geometric rule on
+                # KPs takes priority over MediaPipe Recognizer label, since
+                # Recognizer doesn't ship OK natively. Run on whichever hand
+                # the recognizer favoured (or both if no detection).
+                ok_hands = []
+                if hand == "left" or not detections:
+                    ok_left, ok_conf_left = detect_ok_circle(lh_kps, lh_scores)
+                    if ok_left:
+                        ok_hands.append(("left", ok_conf_left))
+                if hand == "right" or not detections:
+                    ok_right, ok_conf_right = detect_ok_circle(rh_kps, rh_scores)
+                    if ok_right:
+                        ok_hands.append(("right", ok_conf_right))
+                if ok_hands:
+                    best_ok = max(ok_hands, key=lambda x: x[1])
+                    gesture_raw, hand = "ok", best_ok[0]
+
                 self.get_logger().info(
                     f"recognizer: {len(detections)} hands, "
                     f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
@@ -355,16 +381,38 @@ class VisionPerceptionNode(Node):
             if gesture_raw is not None:
                 self.gesture_buffer.append(gesture_raw)
                 self.last_hand = hand
+            else:
+                self.gesture_buffer.append(None)
             gesture_vote = _majority(self.gesture_buffer)
 
-            if gesture_vote is not None and gesture_vote != self.last_gesture:
-                self.last_gesture = gesture_vote
-                # Use vote ratio as confidence (semantic match with majority vote)
-                vote_count = sum(1 for x in self.gesture_buffer if x == gesture_vote)
-                vote_conf = round(vote_count / len(self.gesture_buffer), 4) if self.gesture_buffer else 0.0
-                msg = String()
-                msg.data = json.dumps(build_gesture_event(gesture_vote, vote_conf, self.last_hand))
-                self.gesture_pub.publish(msg)
+            # 5/5 MOC §3 0.5s temporal stable gate (param `gesture_stable_s`).
+            # Only emit an event when the vote winner has held steady for at
+            # least gesture_stable_s seconds; set 0.0 to bypass for debug.
+            now_ts = time.time()
+            stable_s = self.get_parameter("gesture_stable_s").value
+            self._gesture_stable_s = 0.5 if stable_s is None else max(0.0, float(stable_s))
+
+            if gesture_vote is None:
+                self._gesture_hold_label = None
+                self._gesture_hold_ts = now_ts
+                self.last_gesture = None
+            else:
+                if gesture_vote != self._gesture_hold_label:
+                    self._gesture_hold_label = gesture_vote
+                    self._gesture_hold_ts = now_ts
+                held_long_enough = (
+                    self._gesture_stable_s <= 0.0
+                    or now_ts - self._gesture_hold_ts >= self._gesture_stable_s
+                )
+
+                if held_long_enough and gesture_vote != self.last_gesture:
+                    self.last_gesture = gesture_vote
+                    # Use vote ratio as confidence (semantic match with majority vote)
+                    vote_count = sum(1 for x in self.gesture_buffer if x == gesture_vote)
+                    vote_conf = round(vote_count / len(self.gesture_buffer), 4) if self.gesture_buffer else 0.0
+                    msg = String()
+                    msg.data = json.dumps(build_gesture_event(gesture_vote, vote_conf, self.last_hand))
+                    self.gesture_pub.publish(msg)
 
         # --- Debug image (keypoint overlay, rate-limited) ---
         if self.use_camera and self.debug_pub is not None and image is not None:

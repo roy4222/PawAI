@@ -5,21 +5,25 @@
 class TestGestureMap:
     def test_all_builtin_gestures_mapped(self):
         from vision_perception.gesture_recognizer_backend import _GESTURE_MAP
-        expected = {"Open_Palm", "Closed_Fist", "Pointing_Up",
-                    "Thumb_Up", "Victory", "Thumb_Down", "ILoveYou"}
+        expected = {"Open_Palm", "Closed_Fist", "Pointing_Up", "Thumb_Up", "Victory"}
         assert expected == set(_GESTURE_MAP.keys())
 
-    def test_stop_mapping(self):
+    def test_palm_mapping(self):
         from vision_perception.gesture_recognizer_backend import _GESTURE_MAP
-        assert _GESTURE_MAP["Open_Palm"] == "stop"
+        assert _GESTURE_MAP["Open_Palm"] == "palm"
 
     def test_fist_mapping(self):
         from vision_perception.gesture_recognizer_backend import _GESTURE_MAP
         assert _GESTURE_MAP["Closed_Fist"] == "fist"
 
-    def test_point_mapping(self):
+    def test_index_mapping(self):
         from vision_perception.gesture_recognizer_backend import _GESTURE_MAP
-        assert _GESTURE_MAP["Pointing_Up"] == "point"
+        assert _GESTURE_MAP["Pointing_Up"] == "index"
+
+    def test_non_moc_builtin_gestures_are_dropped(self):
+        from vision_perception.gesture_recognizer_backend import _GESTURE_MAP
+        assert "Thumb_Down" not in _GESTURE_MAP
+        assert "ILoveYou" not in _GESTURE_MAP
 
     def test_unknown_not_in_map(self):
         from vision_perception.gesture_recognizer_backend import _GESTURE_MAP

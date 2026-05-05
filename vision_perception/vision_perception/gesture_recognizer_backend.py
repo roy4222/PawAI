@@ -30,15 +30,28 @@ _MODEL_URL = (
 )
 _MODEL_SHA256 = "97952348cf6a6a4915c2ea1496b4b37ebabc50cbbf80571435643c455f2b0482"
 
-# Map MediaPipe gesture labels → project event names
+# Map MediaPipe gesture labels → MOC enum names (5/5 align to MOC §3 9-gesture spec).
+#
+# MOC 5 "free" gestures (directly available from MediaPipe Gesture Recognizer):
+#   Open_Palm    → palm    (MOC: Palm  / Pause mode)
+#   Closed_Fist  → fist    (MOC: Fist  / Mute mode)        ← NOT remapped to "ok"
+#   Pointing_Up  → index   (MOC: Index / Listen mode)
+#   Thumb_Up     → thumb   (MOC: Thumb / Happy mode)
+#   Victory      → peace   (MOC: Peace / Relax mode)
+#
+# Dropped (not in MOC 9):
+#   Thumb_Down, ILoveYou
+#
+# Custom gestures (MOC: OK / Wave / ComeHere / Circle) are NOT in this map —
+# they come from gesture_classifier.py geometric rules + temporal trajectory
+# detectors. OK is the high-priority override; do NOT route Closed_Fist→ok
+# (that would collide with MOC's Fist=Mute semantics).
 _GESTURE_MAP = {
-    "Open_Palm": "stop",
-    "Closed_Fist": "fist",       # → event_builder COMPAT_MAP → "ok"
-    "Pointing_Up": "point",
-    "Thumb_Up": "thumbs_up",
-    "Victory": "victory",
-    "Thumb_Down": "thumbs_down",
-    "ILoveYou": "i_love_you",
+    "Open_Palm":   "palm",
+    "Closed_Fist": "fist",
+    "Pointing_Up": "index",
+    "Thumb_Up":    "thumb",
+    "Victory":     "peace",
 }
 
 

@@ -5,9 +5,30 @@ Does NOT touch speech events or face events (llm_bridge handles those).
 
 TTS guard: non-safety actions are skipped while TTS is playing.
 Safety actions (stop, fall_alert) always pass through.
+
+================================================================================
+DEMO BRIDGE — pose → /tts (5/12 sprint)
+================================================================================
+
+Below the existing router-driven path, this module ALSO acts as a thin
+perception → /tts bridge for the 5/12 demo. It subscribes directly to
+``/event/pose_detected`` and ``/state/perception/face`` and publishes pose-
+specific TTS templates ("會不會太累" / "我在這裡喔" / "請小心喔" / "{name},偵測到
+跌倒,請注意安全!").
+
+Constraints (do NOT relax without architecture review):
+  • The pose path ONLY publishes /tts. NEVER /webrtc_req or sport API.
+  • DO NOT extend GESTURE_ACTION_MAP. Gesture-driven motions stay in
+    interaction_executive.state_machine.
+  • This is a TEMPORARY shortcut. The long-term path is proper Brain
+    skills (sit_along / careful_remind / fallen_alert) consumed via
+    /brain/proposal → /skill_result. Migration tracked in plan
+    `~/.claude/plans/speech-bright-rivest.md` Phase 2 Stretch #13.
 """
 import json
+import threading
 import rclpy
+import time
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import Bool, String
@@ -33,6 +54,18 @@ GESTURE_ACTION_MAP = {
 # Fall alert → TTS only (no Go2 sport action)
 FALL_ALERT_TTS = "偵測到跌倒！請注意安全"
 
+# DEMO BRIDGE — pose → /tts (NO motion). Standing intentionally absent
+# (baseline state). Fallen template uses {name}; falls back to "你" if no
+# stable face identity is cached.
+POSE_TTS_MAP = {
+    "sitting":   "會不會太累？",
+    "crouching": "我在這裡喔",
+    "bending":   "請小心喔",
+    "fallen":    "{name}，偵測到跌倒，請注意安全！",
+}
+POSE_TTS_COOLDOWN_DEFAULT_S = 5.0
+POSE_TTS_COOLDOWN_FALLEN_S = 10.0
+
 
 class EventActionBridge(Node):
     def __init__(self):
@@ -40,6 +73,11 @@ class EventActionBridge(Node):
 
         # TTS playing state (subscribed from tts_node, latched)
         self._tts_playing = False
+
+        # DEMO BRIDGE state: latest stable face name + per-pose cooldown
+        self._face_lock = threading.Lock()
+        self._latest_face_name: str | None = None
+        self._pose_tts_last_ts: dict[str, float] = {}
 
         # Subscribe to interaction_router's processed events (NOT raw events)
         self.create_subscription(
@@ -53,6 +91,22 @@ class EventActionBridge(Node):
             "/event/interaction/fall_alert",
             self._on_fall_alert,
             10,
+        )
+
+        # DEMO BRIDGE: subscribe directly to raw pose events + face state
+        # (cf. module-level docstring for rationale and constraints).
+        self.create_subscription(
+            String,
+            "/event/pose_detected",
+            self._on_pose_event,
+            10,
+        )
+        face_state_qos = QoSProfile(depth=1)
+        self.create_subscription(
+            String,
+            "/state/perception/face",
+            self._on_face_state,
+            face_state_qos,
         )
 
         # Subscribe to TTS playing state for guard logic
@@ -73,7 +127,9 @@ class EventActionBridge(Node):
             )
         self.tts_pub = self.create_publisher(String, "/tts", 10)
 
-        self.get_logger().info("EventActionBridge ready (wired to interaction_router)")
+        self.get_logger().info(
+            "EventActionBridge ready (router path + DEMO BRIDGE pose→/tts)"
+        )
 
     # ------------------------------------------------------------------
     # TTS guard
@@ -172,6 +228,62 @@ class EventActionBridge(Node):
         )
 
         self._send_tts(FALL_ALERT_TTS)
+
+    # ------------------------------------------------------------------
+    # DEMO BRIDGE — pose → /tts (NO motion; see module docstring)
+    # ------------------------------------------------------------------
+    def _on_face_state(self, msg: String):
+        """Cache latest stable face name for {name} interpolation."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        tracks = data.get("tracks") or []
+        new_name: str | None = None
+        for tr in tracks:
+            if not isinstance(tr, dict):
+                continue
+            mode = tr.get("mode")
+            name = tr.get("stable_name")
+            if mode == "stable" and isinstance(name, str) and name and name != "unknown":
+                new_name = name
+                break
+        with self._face_lock:
+            self._latest_face_name = new_name
+
+    def _on_pose_event(self, msg: String):
+        """[DEMO BRIDGE] /event/pose_detected → /tts template (no motion)."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().warning(
+                f"Invalid JSON in pose_event: {e}",
+                throttle_duration_sec=5.0,
+            )
+            return
+
+        pose = data.get("pose")
+        template = POSE_TTS_MAP.get(pose) if isinstance(pose, str) else None
+        if not template:
+            return  # standing / akimbo / knee_kneel — bridge ignores
+
+        cooldown = (
+            POSE_TTS_COOLDOWN_FALLEN_S if pose == "fallen"
+            else POSE_TTS_COOLDOWN_DEFAULT_S
+        )
+        now = time.time()
+        last = self._pose_tts_last_ts.get(pose, 0.0)
+        if now - last < cooldown:
+            return
+        self._pose_tts_last_ts[pose] = now
+
+        with self._face_lock:
+            name = self._latest_face_name or "你"
+        text = template.format(name=name)
+        self._send_tts(text)
+        self.get_logger().info(
+            f"[demo-bridge] pose={pose} name={name!r} → tts={text!r}"
+        )
 
 
 def main():

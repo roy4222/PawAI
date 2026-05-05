@@ -17,12 +17,19 @@ STATIC_GESTURES = ("stop", "point", "fist")
 _WRIST = 0
 _FINGERTIPS = (4, 8, 12, 16, 20)  # thumb, index, middle, ring, pinky
 _INDEX_TIP = 8
+_THUMB_TIP = 4
 _MCPS = (5, 9, 13, 17)  # index, middle, ring, pinky MCP
 
 # Thresholds (pixel-space, tuned for ~640x480 input)
 _MIN_SCORE = 0.2          # minimum average keypoint confidence
 _EXTEND_RATIO = 1.8       # fingertip-to-wrist / MCP-to-wrist ratio for "extended"
 _CURL_RATIO = 0.8         # fingertip-to-wrist / MCP-to-wrist ratio for "curled"
+
+# OK gesture (MOC §3 group 1) — thumb tip + index tip touch (forming a circle),
+# while middle/ring/pinky are extended (or relaxed). MediaPipe Gesture
+# Recognizer doesn't ship OK natively, so we run this geometric check on top
+# of the recognizer output and override the label when matched.
+_OK_TOUCH_RATIO = 0.30    # thumb-tip ↔ index-tip distance / hand width ≤ this
 
 
 def _dist(a: np.ndarray, b: np.ndarray) -> float:
@@ -97,3 +104,61 @@ def classify_gesture(
         return "fist", avg_score
 
     return None, 0.0
+
+
+def detect_ok_circle(
+    hand_kps: np.ndarray,
+    hand_scores: np.ndarray,
+    min_score: float | None = None,
+) -> tuple[bool, float]:
+    """Detect MOC OK 👌 gesture (thumb-index pinch + other fingers free).
+
+    Geometric rule (independent of MediaPipe Gesture Recognizer output):
+      • thumb tip (4) and index tip (8) within `_OK_TOUCH_RATIO * hand_width`
+      • middle (12), ring (16), pinky (20) NOT curled (extended or relaxed)
+
+    Hand width is approximated by the wrist→middle-MCP distance (a stable
+    reference that scales with how far the hand is from camera).
+
+    Args:
+        hand_kps: (21, 2) pixel coords (COCO-WholeBody / MediaPipe Hands).
+        hand_scores: (21,) per-keypoint confidence.
+        min_score: override for _MIN_SCORE.
+
+    Returns:
+        (is_ok, confidence). confidence is the inverse of the touch
+        distance ratio (1.0 = fingers touching, ~0 at threshold).
+        Returns (False, 0.0) if input invalid or below score threshold.
+    """
+    if hand_kps.shape != (21, 2) or hand_scores.shape != (21,):
+        return False, 0.0
+
+    threshold = min_score if min_score is not None else _MIN_SCORE
+    avg_score = float(np.mean(hand_scores))
+    if avg_score < threshold:
+        return False, 0.0
+
+    wrist = hand_kps[_WRIST]
+    middle_mcp = hand_kps[9]
+    hand_width = _dist(wrist, middle_mcp)
+    if hand_width < 1e-6:
+        return False, 0.0
+
+    # Thumb-index touch check
+    thumb_tip = hand_kps[_THUMB_TIP]
+    index_tip = hand_kps[_INDEX_TIP]
+    touch_dist = _dist(thumb_tip, index_tip)
+    touch_ratio = touch_dist / hand_width
+    if touch_ratio > _OK_TOUCH_RATIO:
+        return False, 0.0
+
+    # Other 3 fingers should NOT be all curled (avoid clash with fist+thumb_up)
+    finger_pairs = list(zip(_FINGERTIPS[2:], _MCPS[1:]))  # middle, ring, pinky
+    n_other_curled = sum(_finger_curled(hand_kps, t, m, wrist) for t, m in finger_pairs)
+    if n_other_curled >= 3:
+        # Closed fist with thumb touching index = not OK, keep as fist
+        return False, 0.0
+
+    # Confidence: 1.0 when fingers fully touching, drop linearly to 0 at threshold
+    confidence = max(0.0, 1.0 - touch_ratio / _OK_TOUCH_RATIO)
+    return True, float(min(avg_score, confidence))
