@@ -139,15 +139,34 @@ export interface PoseState {
 
 export interface ObjectDetection {
   class_name: string;
+  /** Optional COCO class id (5/5 PR #40 port — not all backends emit). */
+  class_id?: number;
   confidence: number;
   bbox: [number, number, number, number];
+  /**
+   * Optional HSV color label from object_perception_node post-NMS step
+   * (5/5 sprint B4-4). Possible values include "red" / "yellow" / "blue" /
+   * "green" / "Unknown". Absent for backends that haven't shipped color yet.
+   */
+  color?: string;
 }
 
 export interface ObjectEvent extends PawAIEvent {
   source: "object";
   event_type: "object_detected";
   data: {
-    objects: ObjectDetection[];
+    /** ROS2 stamp (seconds since epoch). */
+    stamp?: number;
+    /** Whether any detection in this frame. */
+    active?: boolean;
+    /** State machine status, derived if absent. */
+    status?: "active" | "inactive" | "loading";
+    /**
+     * ROS2 emits `objects[]`; some legacy paths emit `detected_objects[]`.
+     * Frontend `normalizeObjectState()` (lib/object-event.ts) merges them.
+     */
+    objects?: ObjectDetection[];
+    detected_objects?: ObjectDetection[];
   };
 }
 

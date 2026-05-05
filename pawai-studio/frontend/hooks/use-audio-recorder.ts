@@ -9,6 +9,22 @@ interface AsrResult {
   confidence: number;
   latency_ms: number;
   published: boolean;
+  /** Optional LLM reply text (PR #42 partial port — only set if backend emits). */
+  reply_text?: string;
+  /** Optional TTS audio URL — when present, hook auto-plays it. */
+  audio_url?: string;
+}
+
+interface UseAudioRecorderOptions {
+  /**
+   * If true and the backend response includes `audio_url`, the hook will
+   * play it via `new Audio(url).play()`. Default **false** — ChatPanel
+   * uses the gateway `/tts` event flow for playback, so auto-play here
+   * would cause double-playback / echo. Enable only in dedicated debug
+   * panels (e.g. `/studio/speech` SpeechPanel) talking to a backend
+   * (e.g. PR #42's `:5000`) that delivers TTS as `audio_url`.
+   */
+  autoPlayResponseAudio?: boolean;
 }
 
 interface UseAudioRecorderResult {
@@ -42,7 +58,8 @@ function getPreferredMimeType(): string {
 
 const MIN_RECORD_MS = 500;
 
-export function useAudioRecorder(): UseAudioRecorderResult {
+export function useAudioRecorder(options: UseAudioRecorderOptions = {}): UseAudioRecorderResult {
+  const { autoPlayResponseAudio = false } = options;
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastResult, setLastResult] = useState<AsrResult | null>(null);
@@ -97,13 +114,30 @@ export function useAudioRecorder(): UseAudioRecorderResult {
         if (data.error) {
           setError(data.error as string);
         } else {
+          const replyText = typeof data.reply_text === "string" ? data.reply_text : undefined;
+          const audioUrl = typeof data.audio_url === "string" ? data.audio_url : undefined;
+
           setLastResult({
             asr: (data.asr as string) ?? "",
             intent: (data.intent as string) ?? "",
             confidence: (data.confidence as number) ?? 0,
             latency_ms: (data.latency_ms as number) ?? 0,
             published: (data.published as boolean) ?? false,
+            reply_text: replyText,
+            audio_url: audioUrl,
           });
+
+          // PR #42 partial port (5/5): only auto-play when caller opts in via
+          // `autoPlayResponseAudio: true`. Default false — ChatPanel relies
+          // on gateway `/tts` events for playback, so auto-play here would
+          // cause double-playback / echo. Errors swallowed to avoid
+          // disrupting the recording UX.
+          if (autoPlayResponseAudio && audioUrl) {
+            const audio = new Audio(audioUrl);
+            audio.play().catch((e) => {
+              console.warn("[useAudioRecorder] auto-play failed:", e);
+            });
+          }
         }
       } catch {
         setError("回應格式錯誤");
@@ -120,7 +154,7 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     ws.onclose = () => {
       wsRef.current = null;
     };
-  }, []);
+  }, [autoPlayResponseAudio]);
 
   const startRecording = useCallback(async () => {
     setError(null);
