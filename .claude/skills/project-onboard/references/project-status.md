@@ -1,6 +1,35 @@
 # 專案進度快照
 
-> 最後更新：2026-05-05 evening (B4 感知擴展 + B6 PR port 落地 / Phase 2 P0 整套 + Wave 動態 + akimbo/knee_kneel pose / TTS edge-tts smoke OK)
+> 最後更新：2026-05-05 night (PawAI Brain 語音聊天 LLM 個性化 + 對話記憶 + 環境 context + truncation 真兇排除)
+
+## 2026-05-05 night（unstaged，未 commit）
+
+聚焦在「Voice → Brain → Studio E2E + LLM 個性化」整套接通。本日上午 5 commits 為感知/Studio panel；下午+晚上工作集中在 LLM 個性化路線：
+
+| 改動範圍 | 檔案 | 摘要 |
+|---|---|---|
+| Brain MVS 路徑啟用 | `scripts/start_full_demo_tmux.sh` | llm_bridge 顯式 `output_mode:=brain`、加 `enable_openrouter`、persona file、`max_reply_chars=0`、`llm_max_tokens=2000`、`llm_timeout=20.0` |
+| Brain keyword 移除 | `interaction_executive/interaction_executive/brain_node.py` | self_introduce / show_status keyword bypass 拿掉（self_introduce 含 motion，近距離被 SafetyLayer 擋成 sleep；LLM persona 自然處理） |
+| Brain timing | `interaction_executive/config/executive.yaml` | `chat_wait_ms`：1500 → 20000ms（雲端 LLM 長 reply 需要時間） |
+| LLM 字數限制解除 | `speech_processor/speech_processor/llm_bridge_node.py` | `max_reply_chars` default 40 → 0；`_post_process_reply` cap≤0 跳過截斷；`_call_llm` 改用 `self._system_prompt`（之前還在用 inline 12 字 SYSTEM_PROMPT） |
+| 對話記憶 | 同上 | `_convo_history: deque(maxlen=10)`，OpenRouter + vLLM/Ollama 兩條路徑都送 history；只在 chat/greet/status 寫入 |
+| 環境 context | 同上 | `_time_of_day_zh()` 6 段 + `_get_weather_text()`（wttr.in/Taipei，10min cache，2s timeout） |
+| Persona v3 | `tools/llm_eval/persona.txt` | 4777 bytes，70/20/10 小狗/童心/守護，明令禁客服腔、不要主動列功能、長度情境決定 |
+| Eval alias | `tools/llm_eval/run_eval.py` | `gemini` alias `google/gemini-3-flash-preview` → `google/gemini-2.5-flash` |
+| Studio trace | `pawai-studio/frontend/components/chat/chat-panel.tsx` | 加單行 skill trace bar（`brain:skill_result` selected_skill / status / detail） |
+| Brain test | `interaction_executive/test/test_brain_rules.py` | 加 2 條 show_status keyword test（後因移除 keyword bypass，test 仍保留以驗 SKILL_REGISTRY 完整性） |
+
+### Truncation Bug Diagnosis（5h+ debug session）
+反覆出現「reply 在中文逗號或無標點處截斷至 30-40 字」。途中試了：切 stable Gemini → 切 DeepSeek → 拉 timeout 4s→30s → 拉 chat_wait_ms 1500→20000 → 改 temperature 0.2→0.7 → 都沒解。最後 curl 直打 OpenRouter API 回完整 138 token 故事 → 對比 md5 發現 **Jetson `install/` stale**，內含舊 `cap=40` 強制截斷邏輯。`speech_processor` 是 ament_python，sync source 不會更新 `install/`，必須 colcon build。已用 `--symlink-install` rebuild。**Stale install 是真兇**，model / timeout / temperature 全是 false lead。
+
+### 待驗證
+- 重 build 後第一次完整 smoke test 還沒跑（睡前故事 / 介紹功能 / 累陪聊三句）
+- DeepSeek V4 Flash vs Gemini 2.5 Flash 真實長回覆 A/B（之前 A/B 全被 stale install 干擾，無效）
+
+### 衍生 backlog
+- **LangGraph 重構評估**（使用者建議）：chat + tool calling 路徑目前散落在 `llm_bridge_node` (1100 行) + `brain_node._on_chat_candidate` + Studio gateway，多源 path 增加隱藏 bug 風險。建議搬到 `pawai-studio/backend/chat_agent/`，**5/16 demo 後再做**
+
+## 2026-05-05 進度（5 commits，上午）
 
 ## 2026-05-05 進度（5 commits）
 
@@ -47,7 +76,7 @@
 
 | 模組 | 狀態 | 說明 |
 |------|------|------|
-| 語音閉環 | [FROZEN] | E2E 已通（ASR→LLM→TTS→Megaphone→Go2），10/10 對話、9/10 播放。等硬體到貨做最後一輪（外接喇叭/麥克風 A/B、自激測試） |
+| 語音閉環 | [USABLE / 5/5 night 升級中] | Brain MVS 路徑（output_mode=brain → /brain/chat_candidate → /brain/proposal → /tts）已接通；persona v3 / 對話記憶 / 環境 context / 字數解除全 unstaged；stale install 已排除；待 rebuild 後真實 smoke 驗收 |
 | 人臉閉環 | [USABLE] | Jetson smoke passed（3/18）。D435 + state/event/debug_image 全通。int32 序列化 bug 已修。待驗：有人時識別準確率 |
 | 姿勢辨識 | [USABLE] | **全 MediaPipe**（3/21 晚）：MediaPipe Pose (CPU) 18.5 FPS、GPU 0%、Foxglove 實測通過。RTMPose 降為備援 |
 | 手勢辨識 | [USABLE] | **全 MediaPipe**（3/21 晚）：MediaPipe Hands (CPU) 16.8 FPS、GPU 0%。RTMPose 手部 keypoints 不可靠已驗證 |

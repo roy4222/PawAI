@@ -150,8 +150,10 @@ sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx in
 - SenseVoice 對「現在請停止動作」辨識不穩（stop intent 約 60% 正確）
 - **本地 ASR 不可用**：Whisper 上機後噪音干擾嚴重，長句辨識失敗
 - **本地 LLM 不可用**：Qwen2.5-0.8B 智商極低，胡言亂語（4/8 會議確認）
-- **LLM 回覆品質待改善**：max_tokens=120/25 字限制，回答過短、無個性、無多輪 memory
+- ~~**LLM 回覆品質待改善**：max_tokens=120/25 字限制，回答過短、無個性、無多輪 memory~~（5/5 evening 處理：persona v3 + max_reply_chars=0 + 5-turn deque）
 - **GPU 雲端不穩**：昨天斷線 2 次，Plan B 固定台詞為必備
+- **`speech_processor` 用 ament_python，code 改完必須 colcon build**：sync source 不會自動更新 `install/`，stale install 是 5/5 evening 整晚截斷的真兇。改 ROS param 或 persona file 是 runtime 生效，不需 build；改 .py 必須 build。
+- **架構碎片化警示（5/5）**：chat + tool calling 路徑跨 `llm_bridge_node` (1100 行) + `brain_node._on_chat_candidate` + ChatPanel + Studio gateway，多源 path 增加 hidden bug 風險（如本次 stale install + 截斷 cap）。已記為 backlog（LangGraph refactor 提案）
 
 ## Plan B 固定台詞模式（4/8 會議新增）
 
@@ -201,12 +203,73 @@ llm_bridge_node（output_mode=brain）
 
 詳細 schema 見 [`docs/contracts/interaction_contract.md`](../contracts/interaction_contract.md) v2.5。
 
+## 5/5 evening — LLM 個性化 + 對話記憶 + Brain MVS 全鏈接通
+
+當日改動 unstaged，主要把「Voice → Brain → Studio E2E」打通，並把 LLM 的個性、字數、記憶、環境感知一次升級。
+
+### Brain MVS 路徑啟用（先決條件）
+- `start_full_demo_tmux.sh` 顯式加 `-p output_mode:=brain` — llm_bridge 改發 `/brain/chat_candidate`，不再直發 `/tts`
+- `brain_node._on_speech_intent` 拿掉 self_introduce / show_status keyword bypass：
+  - 動作型 self_introduce 6-step 在使用者近距離（D435 ROI）會被 SafetyLayer 擋成 `blocked_by_safety` → 沉默
+  - LLM 的 persona 已能自然處理「你是誰 / 現在狀態」相關提問，不需要硬規則
+  - MOTION 完整 self_introduce 仍可從 Studio button 觸發（不依賴語音 keyword）
+- `interaction_executive/config/executive.yaml` 的 `chat_wait_ms` 1500 → **20000**（雲端 LLM 長回覆有時 ~10s，舊值 buffer 已失效）
+- ChatPanel（`pawai-studio/frontend/components/chat/chat-panel.tsx`）加單行 skill trace bar — 顯示最近一筆 `brain:skill_result` 的 `selected_skill / status / detail`，無 drawer 無 timeline
+
+### LLM 字數 + token 完全解除
+- `max_reply_chars` 預設 40 → **0（uncapped）**；`_post_process_reply` 改成 `cap<=0` 跳過截斷
+- `llm_max_tokens` 預設 80 → **2000**（啟動腳本顯式 4000）
+- `llm_timeout` 預設 5 → **20s**
+- `openrouter_request_timeout_s` 4 → **30s**、`openrouter_overall_budget_s` 5 → **35s**（短 timeout 是長故事被切的元兇之一）
+
+### 對話記憶（5 turns / 10 messages）
+- `llm_bridge_node` 加 `_convo_history: deque(maxlen=10)`，user/assistant pair
+- 兩條 LLM 路徑（OpenRouter + vLLM/Ollama）都會把 history 塞進 `messages` array
+- 只在「真聊天」（intent ∈ greet/chat/status）才寫入；stop/sit/stand 不污染 context
+- 隨手修了一個老 bug：`_call_llm`（vLLM/Ollama）路徑原本還寫死 inline `SYSTEM_PROMPT`（12 字版），現在統一用 `self._system_prompt`（persona file）
+
+### 台北時間 + wttr.in 天氣 context
+- `_time_of_day_zh()`：早上 / 中午 / 下午 / 傍晚 / 晚上 / 深夜
+- `_get_weather_text()`：打 `https://wttr.in/Taipei?format=%C+%t+濕度%h&lang=zh-tw`，10 分鐘 cache，2s timeout，失敗安靜
+- 注入到每次 user_message 結尾：`[環境] 台北 早上 10:23，外面 多雲 22°C 濕度 65%`
+- Persona 教 LLM「自然帶入，不要當天氣播報員」
+
+### Persona v3：寵物優先個性（4777 bytes，from `tools/llm_eval/persona.txt`）
+- **70% 小狗 / 20% 童心 / 10% 居家守護者**（Olaf 啟發但非模仿）
+- 核心句：「最重要的不是完成任務，而是讓人感覺：家裡有一個小傢伙在」
+- 個性原則拆「做這些 / 避免這些」兩欄；明令禁止客服腔、不要拍馬屁、不要每句都拋問題、不要主動列功能
+- 守護模式 override：跌倒 / 陌生人 / 危險 → 立刻認真，不撒嬌不脫線
+- 回答長度情境決定：閒聊 1-2 句 / 解釋 2-4 句 / 故事 / 安慰 / 共鳴 可長
+- 加 「短期對話記憶 vs 長期人臉資料庫」明確區分 — 防止 LLM 用「我看不到你的臉」拒答短期記住的事
+- `RuleBrain` `REPLY_TEMPLATES` 同步升人性版（`[excited] 嗨！我在這裡，今天過得怎麼樣？` 等）
+- `tools/llm_eval/run_eval.py` alias `gemini` → `google/gemini-2.5-flash`（從 `gemini-3-flash-preview` 切 stable）
+
+### Truncation Bug 真兇 — Stale `install/`
+晚間反覆觀察到「reply 在中文逗號或無標點處截斷至 30-40 字」現象，diagnose 路徑：
+1. ❌ 一開始懷疑 `gemini-3-flash-preview` preview model bug → 切 `gemini-2.5-flash` → 還截斷
+2. ❌ 懷疑 Gemini 系列 structured output 共通問題 → 切 `deepseek/deepseek-v4-flash` → 還截斷
+3. ❌ 懷疑 `temperature=0.2` 過低 → 改 0.7 → 還截斷
+4. ❌ 懷疑 `openrouter_request_timeout_s=4.0` 短 → 改 30s → 還截斷
+5. ❌ 懷疑 conversation history 內含截斷 sample 污染 → 清空 → 還截斷
+6. ✅ 用 `curl` 直打 OpenRouter DeepSeek，**回完整 138 token 故事** → 確認 API 層正常
+7. ✅ 對比 md5：WSL source 與 Jetson source 一致，但 **Jetson `install/` 目錄是 stale**！
+   - Jetson source: `6f8edce4...`
+   - Jetson install: `0f8952ca...` ← 含舊 cap=40 截斷邏輯
+   - 整晚的 code 改動全部沒生效（只有 ROS param overrides + persona file 因為是 runtime 讀取所以有作用）
+8. **Fix**：`colcon build --packages-select speech_processor --symlink-install`，未來改 source 仍需重 build，但 install layout 走 egg-link → build/，drift 會比較顯眼
+
+### 待驗證
+- 重 build 後第一次完整 smoke test 還沒跑，確認 reply 不再卡 40 char
+- DeepSeek V4 Flash vs Gemini 2.5 Flash 在「真實長回覆」情境下的比較還沒做（之前的 A/B 都被 stale install 干擾，無效）
+
 ## 下一步
 
 - [x] **OpenRouter 接入**（5/4 完成，B1 Plan D）：LLM/TTS 均走 OpenRouter，五級 fallback 全鏈通
-- [ ] LLM prompt 智慧化：放寬字數 12→50+、加入 PawAI 個性、自我介紹（陳若恩）
+- [x] **LLM prompt 智慧化**（5/5 evening）：persona v3 寵物個性 / max_reply_chars=0 解鎖 / 對話記憶 / 環境 context
+- [ ] **Stale install/ rebuild 後完整 smoke**：3 句固定題目（睡前故事 / 介紹功能 / 累陪聊），確認長 reply 不被砍
+- [ ] **長期持續 model A/B**：DeepSeek V4 Flash vs Gemini 2.5 Flash，看 persona 表現 / latency / cost
+- [ ] **LangGraph 重構評估（backlog）**：目前 chat + tool calling 邏輯散落 `llm_bridge_node`（1100 行）+ `brain_node`，使用者建議搬到 `pawai-studio/backend/chat_agent/`，5/16 demo 後再做
 - [ ] Plan B 固定台詞設計：至少 15 組問答（陳若恩）
-- [ ] 多輪對話 memory（conversation history）
 - [ ] B1-4 Ollama 1.5B 斷網壓測（驗證 fallback 路徑）
 - [ ] B1-5 Megaphone 16kHz 端到端（Despina 降採樣）
 
