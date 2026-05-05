@@ -56,12 +56,15 @@ FALL_ALERT_TTS = "偵測到跌倒！請注意安全"
 
 # DEMO BRIDGE — pose → /tts (NO motion). Standing intentionally absent
 # (baseline state). Fallen template uses {name}; falls back to "你" if no
-# stable face identity is cached.
+# stable face identity is cached. akimbo / knee_kneel templates are
+# placeholders — adjust copy to taste.
 POSE_TTS_MAP = {
-    "sitting":   "會不會太累？",
-    "crouching": "我在這裡喔",
-    "bending":   "請小心喔",
-    "fallen":    "{name}，偵測到跌倒，請注意安全！",
+    "sitting":     "會不會太累？",
+    "crouching":   "我在這裡喔",
+    "bending":     "請小心喔",
+    "fallen":      "{name}，偵測到跌倒，請注意安全！",
+    "akimbo":      "你看起來很有架式喔！",
+    "knee_kneel":  "需要我幫忙嗎？",
 }
 POSE_TTS_COOLDOWN_DEFAULT_S = 5.0
 POSE_TTS_COOLDOWN_FALLEN_S = 10.0
