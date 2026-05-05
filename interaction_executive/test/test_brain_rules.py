@@ -57,11 +57,20 @@ def test_speech_stop_hard_rule(brain):
     assert plan["priority_class"] == int(PriorityClass.SAFETY)
 
 
-def test_speech_self_introduce(brain):
+def test_speech_self_introduce_keyword_removed(brain):
+    """5/5 night: self_introduce / show_status keyword bypasses removed.
+    Voice 「介紹你自己」/「現在狀態」now flow through chat_buffer → LLM chat
+    path → chat_reply (純 SAY，不含 motion，避開 SafetyLayer depth gate).
+    Studio button path for full motion self_introduce still works
+    (covered by test_studio_skill_request_self_introduce below)."""
     brain._on_speech_intent(_msg({"transcript": "介紹你自己", "session_id": "s-intro"}))
-    plan = _latest(brain)
-    assert plan["selected_skill"] == "self_introduce"
-    assert len(plan["steps"]) == 6  # 6-step meta sequence (impl notes 2026-05-04)
+    # No immediate plan — buffered for LLM chat candidate, not direct emit
+    assert not brain._captured_proposals
+
+    brain._on_speech_intent(
+        _msg({"transcript": "現在狀態如何", "session_id": "s-status"})
+    )
+    assert not brain._captured_proposals
 
 
 def test_chat_candidate_matches_buffered_speech(brain):

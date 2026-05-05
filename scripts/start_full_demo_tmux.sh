@@ -186,7 +186,14 @@ tmux send-keys -t "$SESSION:llm" \
     -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
     -p local_llm_model:='$LOCAL_LLM_MODEL' \
     -p enable_actions:=$ENABLE_ACTIONS \
-    -p subscribe_face:=false" Enter
+    -p subscribe_face:=false \
+    -p output_mode:=brain \
+    -p enable_openrouter:=true \
+    -p openrouter_gemini_model:=deepseek/deepseek-v4-flash \
+    -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
+    -p max_reply_chars:=0 \
+    -p llm_max_tokens:=2000 \
+    -p llm_timeout:=20.0" Enter
 sleep 3
 
 # --- Static TF: base_link → camera_link (D435 mounted on Go2) ---

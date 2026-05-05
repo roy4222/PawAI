@@ -198,19 +198,15 @@ class BrainNode(Node):
             self._emit(plan)
             return
 
-        for keyword in ("介紹你自己", "自我介紹", "你是誰"):
-            if keyword in transcript:
-                if not self._in_cooldown("self_introduce", 60.0):
-                    self._mark_cooldown("self_introduce")
-                    self._emit(
-                        build_plan(
-                            "self_introduce",
-                            source="rule:self_introduce_keyword",
-                            reason=f"keyword:{keyword}",
-                            session_id=session_id,
-                        )
-                    )
-                return
+        # Note: self_introduce + show_status keyword bypasses removed 2026-05-05.
+        # Reasons:
+        #   1. self_introduce contains MOTION steps which SafetyLayer blocks
+        #      when D435 sees the user up close → silent failure.
+        #   2. The persona already handles 「你是誰」/「狀態」 naturally via
+        #      chat_reply, with full conversation memory + audio tags.
+        #   3. Keeping fewer keyword bypasses = more "pet-like" personality
+        #      driven by LLM, less rule-driven.
+        # MOTION-version self_introduce can still be triggered via Studio button.
 
         if self._has_active_sequence() or self._check_dedup("speech", session_id):
             return

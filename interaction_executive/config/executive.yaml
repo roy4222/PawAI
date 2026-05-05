@@ -1,6 +1,6 @@
 brain_node:
   ros__parameters:
-    chat_wait_ms: 1500
+    chat_wait_ms: 20000
     dedup_window_s: 1.0
     unknown_face_accumulate_s: 3.0
     fallen_accumulate_s: 2.0

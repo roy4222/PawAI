@@ -126,9 +126,12 @@ class _StubNode:
     """Minimal node with the attributes the OpenRouter helpers use."""
 
     def __init__(self, **overrides):
+        import threading
+        from collections import deque
         self._logger = _FakeLogger()
         self.last_error = ""
         self.llm_temperature = 0.6
+        self.llm_max_tokens = 500
         self._openrouter_key = "sk-or-test"
         self._openrouter_active = True
         self.openrouter_base_url = "https://openrouter.test/v1/chat/completions"
@@ -137,6 +140,9 @@ class _StubNode:
         self.openrouter_request_timeout_s = 2.0
         self.openrouter_overall_budget_s = 2.2
         self._system_prompt = "TEST PERSONA"
+        # 5/5 night: conversation memory deque + lock; openrouter call reads them
+        self._convo_history: deque = deque(maxlen=10)
+        self._convo_lock = threading.Lock()
         for k, v in overrides.items():
             setattr(self, k, v)
 

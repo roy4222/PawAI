@@ -16,6 +16,7 @@ import json
 import os
 import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,14 +50,14 @@ from .llm_contract import (
 # ── RuleBrain fallback templates (from intent_tts_bridge_node) ──────────
 
 REPLY_TEMPLATES = {
-    "greet": "哈囉，我在這裡。",
-    "come_here": "收到，我過去找你。",
-    "stop": "好的，停止動作。",
-    "sit": "好的，坐下。",
-    "stand": "好的，站起來。",
-    "take_photo": "收到，正在拍照。",
-    "status": "我目前狀態正常。",
-    "unknown": "請再說一次。",
+    "greet": "[excited] 嗨！我在這裡，今天過得怎麼樣？",
+    "come_here": "[playful] 收到，我馬上過去找你！",
+    "stop": "好的，我停下來。",
+    "sit": "[playful] 好喔，我坐下囉。",
+    "stand": "[excited] 好，我站起來！",
+    "take_photo": "[curious] 收到，我來拍張照。",
+    "status": "我現在狀態還不錯，感官都正常喔。",
+    "unknown": "[curious] 欸我沒聽清楚，可以再講一次嗎？",
 }
 
 RULE_SKILL_MAP = {
@@ -144,12 +145,26 @@ class LlmBridgeNode(Node):
         self._greet_cooldown_s = 5.0
         self._last_greet_ts = 0.0
 
+        # Conversation memory: last 5 turns (user, assistant) = 10 messages.
+        # Cleared on RuleBrain fallback intents that aren't real chat (stop/sit/stand).
+        self._convo_history: deque = deque(maxlen=10)
+        self._convo_lock = threading.Lock()
+        # Stash the raw ASR text per call (LLM lock serializes, so a single
+        # slot is fine). Read back in _dispatch / _rule_fallback to remember.
+        self._pending_user_text = ""
+
         self.last_trigger = ""
         self.last_intent = ""
         self.last_reply = ""
         self.last_skill = ""
         self.last_error = ""
         self.last_source = ""
+
+        # Weather cache for Taipei (refresh every 10 min via wttr.in, no key).
+        self._weather_cache_text = ""
+        self._weather_cache_ts = 0.0
+        self._weather_ttl_s = 600.0
+        self._weather_lock = threading.Lock()
 
         # OpenRouter setup (Phase B B1).
         self._openrouter_key = (
@@ -214,7 +229,7 @@ class LlmBridgeNode(Node):
             "https://openrouter.ai/api/v1/chat/completions",
         )
         self.declare_parameter(
-            "openrouter_gemini_model", "google/gemini-3-flash-preview"
+            "openrouter_gemini_model", "google/gemini-2.5-flash"
         )
         self.declare_parameter(
             "openrouter_deepseek_model", "deepseek/deepseek-v4-flash"
@@ -228,11 +243,11 @@ class LlmBridgeNode(Node):
         # llm_persona_file: optional path to a system prompt file (e.g.
         # tools/llm_eval/persona.txt). Empty → use legacy SYSTEM_PROMPT inline.
         self.declare_parameter("llm_persona_file", "")
-        # max_reply_chars: hard cap on reply_text length. The eval persona
-        # writes "reply ≤ 25 字" but the actual reply may include audio tags
-        # like "[excited] " (~10 chars) so we need headroom. Default 40 allows
-        # ~25 char content + audio tag without truncation.
-        self.declare_parameter("max_reply_chars", 40)
+        # max_reply_chars: optional hard cap on reply_text length.
+        # 0 = uncapped (let LLM persona control length). Storytelling / long
+        # explanations need 500+ chars; chitchat naturally stays short via
+        # persona guidance.
+        self.declare_parameter("max_reply_chars", 0)
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
@@ -282,8 +297,7 @@ class LlmBridgeNode(Node):
         self.max_reply_chars = int(
             self.get_parameter("max_reply_chars").get_parameter_value().integer_value
         )
-        if self.max_reply_chars <= 0:
-            self.max_reply_chars = 40
+        # 0 (or negative) = uncapped — _post_process_reply skips truncation.
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
@@ -311,14 +325,21 @@ class LlmBridgeNode(Node):
 
         asr_text = str(payload.get("text", "")).strip()
         confidence = float(payload.get("confidence", 0.0))
+        self._pending_user_text = asr_text
 
         face_context = self._build_face_context()
+        now_dt = datetime.now()
+        period = self._time_of_day_zh(now_dt.hour)
+        weather = self._get_weather_text()
+        env_line = f"[環境] 台北 {period} {now_dt.strftime('%H:%M')}"
+        if weather:
+            env_line += f"，外面 {weather}"
         user_message = (
             f"[觸發來源] 語音\n"
             f"[語音輸入] 使用者說：「{asr_text}」\n"
             f"[語音意圖] 本地分類：{intent}（信心度 {confidence:.2f}）\n"
             f"[人臉狀態] {face_context}\n"
-            f"[時間] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            f"{env_line}"
         )
 
         self.last_source = "speech"
@@ -530,16 +551,23 @@ class LlmBridgeNode(Node):
         if not self._openrouter_key:
             return {"ok": False, "error_kind": "no_key"}
 
+        with self._convo_lock:
+            history_msgs = list(self._convo_history)
+        if history_msgs:
+            self.get_logger().info(
+                f"convo_memory: sending {len(history_msgs)//2} prior turn(s) to {model_slug}"
+            )
         body = {
             "model": model_slug,
             "messages": [
                 {"role": "system", "content": self._system_prompt},
+                *history_msgs,
                 {"role": "user", "content": user_message},
             ],
             "temperature": self.llm_temperature,
-            # Eval used 500 to give reasoning models room. Brain MVS line is
-            # 12-char reply_text, so 500 is plenty for {reply, skill, args}.
-            "max_tokens": 500,
+            # Use the same param as vLLM/Ollama path so storytelling /
+            # long explanations don't get truncated mid-sentence.
+            "max_tokens": max(self.llm_max_tokens, 500),
         }
         headers = {
             "Authorization": f"Bearer {self._openrouter_key}",
@@ -579,10 +607,21 @@ class LlmBridgeNode(Node):
         try:
             data = resp.json()
             raw_content = data["choices"][0]["message"].get("content")
+            finish_reason = data["choices"][0].get("finish_reason", "")
+            usage = data.get("usage", {})
         except (KeyError, IndexError, ValueError) as exc:
             self.last_error = f"LLM[openrouter:{model_slug}] response structure: {exc}"
             self.get_logger().warn(self.last_error)
             return {"ok": False, "error_kind": "parse"}
+
+        # ALWAYS log raw response for diagnosis (truncation is happening
+        # across multiple model families; need to see exact byte length and
+        # finish_reason for every call, not just non-stop).
+        rc_len = len(raw_content) if raw_content else 0
+        self.get_logger().info(
+            f"LLM[openrouter:{model_slug}] finish_reason={finish_reason!r} "
+            f"raw_len={rc_len} usage={usage} tail={(raw_content or '')[-60:]!r}"
+        )
 
         if not isinstance(raw_content, str) or not raw_content.strip():
             self.last_error = f"LLM[openrouter:{model_slug}] empty content"
@@ -671,10 +710,13 @@ class LlmBridgeNode(Node):
             self.get_logger().error(self.last_error)
             return None
 
+        with self._convo_lock:
+            history_msgs = list(self._convo_history)
         body = {
             "model": model,
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self._system_prompt},
+                *history_msgs,
                 {"role": "user", "content": user_message},
             ],
             "temperature": self.llm_temperature,
@@ -723,15 +765,101 @@ class LlmBridgeNode(Node):
     # Runtime nodes override via self.max_reply_chars (ROS param, default 40).
     MAX_REPLY_CHARS = 40
 
+    # ── Time + weather context (Taipei) ──────────────────────────────────
+
+    def _time_of_day_zh(self, hour: int) -> str:
+        """Map 24h hour to a casual 中文 phrase."""
+        if 5 <= hour < 11:
+            return "早上"
+        if 11 <= hour < 13:
+            return "中午"
+        if 13 <= hour < 17:
+            return "下午"
+        if 17 <= hour < 19:
+            return "傍晚"
+        if 19 <= hour < 23:
+            return "晚上"
+        return "深夜"
+
+    def _get_weather_text(self) -> str:
+        """Best-effort Taipei weather string with 10-minute cache.
+        Returns empty string on any failure — never raises."""
+        now = time.time()
+        with self._weather_lock:
+            if (
+                self._weather_cache_text
+                and (now - self._weather_cache_ts) < self._weather_ttl_s
+            ):
+                return self._weather_cache_text
+        if requests is None:
+            return ""
+        try:
+            # wttr.in format spec: T=temp+unit, C=condition, h=humidity
+            resp = requests.get(
+                "https://wttr.in/Taipei?format=%C+%t+濕度%h&lang=zh-tw",
+                timeout=2.0,
+            )
+            if resp.status_code != 200:
+                return ""
+            text = resp.text.strip()
+            # Sanity check: wttr returns short string; reject HTML pages
+            if not text or len(text) > 80 or text.startswith("<"):
+                return ""
+        except Exception:
+            return ""
+        with self._weather_lock:
+            self._weather_cache_text = text
+            self._weather_cache_ts = now
+        return text
+
+    # ── Conversation memory ──────────────────────────────────────────────
+
+    def _remember_turn(self, user_text: str, assistant_reply: str) -> None:
+        """Append (user, assistant) pair to history. Drops empty/duplicate user."""
+        u = (user_text or "").strip()
+        a = (assistant_reply or "").strip()
+        if not u or not a:
+            return
+        with self._convo_lock:
+            self._convo_history.append({"role": "user", "content": u})
+            self._convo_history.append({"role": "assistant", "content": a})
+            depth = len(self._convo_history) // 2
+        self.get_logger().info(
+            f"convo_memory: appended turn (depth={depth}/5) user={u[:40]!r} reply={a[:40]!r}"
+        )
+
     def _post_process_reply(self, result: dict) -> dict:
-        """Enforce hard reply_text length limit. Small LLMs ignore prompt constraints."""
+        """Strip emoji + optional length cap (0 = uncapped, persona-driven).
+
+        Also warns if the reply tail looks truncated (ends with a Chinese
+        comma-class punctuation), which is a known symptom of Gemini
+        structured-output mid-string stop. We only warn — no retry yet.
+        """
         reply = str(result.get("reply_text", "")).strip()
-        # Remove stray emoji
+        # Remove stray emoji (audio tags like [excited] are kept; emoji break TTS)
         import re
         reply = re.sub(r"[\U0001f300-\U0001f9ff]", "", reply).strip()
         cap = getattr(self, "max_reply_chars", self.MAX_REPLY_CHARS)
-        if len(reply) > cap:
+        if cap and cap > 0 and len(reply) > cap:
             reply = reply[:cap]
+        # Truncation guard: A natural Chinese reply almost always ends with
+        # a sentence-final punctuation (。！？~) or quote/bracket/tilde.
+        # Tail in {，、：；} = mid-clause stop. Tail being a Han character
+        # with no terminator = mid-word stop (e.g. "有一天"). Both are bugs.
+        if len(reply) > 8:
+            tail = reply[-1]
+            sentence_end = "。！？~~」』）)】."
+            mid_clause = "，、：；,;"
+            if tail in mid_clause:
+                self.get_logger().warn(
+                    f"reply_likely_truncated[mid-clause]: tail={reply[-30:]!r}"
+                )
+            elif tail not in sentence_end and not tail.isspace():
+                # Most natural Chinese chat ends with terminator; if not,
+                # the model probably stopped mid-thought.
+                self.get_logger().warn(
+                    f"reply_likely_truncated[no-terminator]: tail={reply[-30:]!r}"
+                )
         result["reply_text"] = reply
         return result
 
@@ -785,6 +913,12 @@ class LlmBridgeNode(Node):
             f"LLM decision: intent={intent} skill={selected_skill} "
             f"reply={reply_text!r} reason={reasoning}"
         )
+
+        # ── Conversation memory append ───────────────────────────────
+        # Only remember real chat turns from speech source. Skip face-triggered
+        # greets and stop/sit/stand action commands — those are not conversation.
+        if source == "speech" and reply_text and intent in ("greet", "chat", "status"):
+            self._remember_turn(self._pending_user_text, reply_text)
 
         # ── Brain-mode output gate ───────────────────────────────────
         if self.output_mode == "brain":
@@ -847,6 +981,10 @@ class LlmBridgeNode(Node):
         self.get_logger().info(
             f"RuleBrain fallback: intent={intent} skill={skill} reply={reply!r}"
         )
+
+        # ── Conversation memory append (RuleBrain path) ──────────────
+        if source == "speech" and reply and intent in ("greet", "chat", "status"):
+            self._remember_turn(self._pending_user_text, reply)
 
         # ── Brain-mode output gate ───────────────────────────────────
         if self.output_mode == "brain":

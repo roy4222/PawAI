@@ -61,6 +61,7 @@ export function ChatPanel() {
 
   const lastTtsText = useStateStore((s) => s.lastTtsText);
   const lastTtsAt = useStateStore((s) => s.lastTtsAt);
+  const latestSkillResult = useStateStore((s) => s.brainResults[0]);
   const {
     isRecording,
     isProcessing,
@@ -417,6 +418,32 @@ export function ChatPanel() {
           <div ref={bottomRef} />
         </div>
       </div>
+      {latestSkillResult && (
+        <div
+          className="border-t border-border/40 px-4 md:px-8 py-1.5 text-[11px] font-mono text-muted-foreground/80 flex items-center gap-2"
+          aria-live="polite"
+        >
+          <span className="opacity-60">skill:</span>
+          <span className="text-foreground/90">{latestSkillResult.selected_skill}</span>
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[10px]",
+              latestSkillResult.status === "completed" || latestSkillResult.status === "step_success"
+                ? "bg-emerald-500/15 text-emerald-300"
+                : latestSkillResult.status === "step_failed" ||
+                    latestSkillResult.status === "aborted" ||
+                    latestSkillResult.status === "blocked_by_safety"
+                  ? "bg-red-500/15 text-red-300"
+                  : "bg-sky-500/15 text-sky-300"
+            )}
+          >
+            {latestSkillResult.status}
+          </span>
+          {latestSkillResult.detail && (
+            <span className="truncate opacity-70">· {latestSkillResult.detail}</span>
+          )}
+        </div>
+      )}
       <div className="border-t border-border/40">
         <div className="mx-auto w-full max-w-[var(--chat-max-w)] px-4 md:px-8 py-3">
           {composerInput}

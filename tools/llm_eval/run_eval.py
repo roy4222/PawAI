@@ -30,7 +30,7 @@ RESULTS_DIR = ROOT / "results"
 # OpenRouter model slug mapping (alias → real slug).
 # Verified against /api/v1/models on 2026-05-04.
 MODEL_ALIASES: dict[str, str] = {
-    "gemini": "google/gemini-3-flash-preview",   # $0.50/$3.00 per M
+    "gemini": "google/gemini-2.5-flash",         # $0.30/$2.50 per M (stable)
     "deepseek": "deepseek/deepseek-v4-flash",    # $0.14/$0.28 per M (reasoning model)
     "qwen": "qwen/qwen3.6-flash",                # $0.25/$1.50 per M (online candidate)
     "qwen-plus": "qwen/qwen3.6-plus",            # $0.325/$1.95 per M (offline-only,
