@@ -9,9 +9,9 @@
 | 項目 | 值 |
 |------|---|
 | 狀態 | **Chat 閉環 12 句通過** |
-| 版本/決策 | SenseVoice cloud + edge-tts + Cloud Qwen2.5-7B（全雲端主線）；本地 ASR（SenseVoice local / Whisper）作為降級 fallback，本地 LLM（Qwen2.5-1.5B）品質不足僅作形式備援 |
-| 完成度 | 90% |
-| 最後驗證 | 2026-04-08（Studio Chat 閉環 12 句，E2E ~2s） |
+| 版本/決策 | **LLM locked**: `google/gemini-3-flash-preview` (OpenRouter) ／ **TTS locked**: `google/gemini-3.1-flash-tts-preview` (OpenRouter, Despina voice)；ASR 用 SenseVoice cloud；fallback chain 完整保留作離線/網路斷線備援 |
+| 完成度 | 92% |
+| 最後驗證 | 2026-05-04（Jetson smoke + B1 Plan D TTS rewrite，commits `29d46dd` / `54c68d0`） |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
 | 測試 | `python3 -m pytest speech_processor/test/ -v` |
 
@@ -34,12 +34,12 @@ TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
     |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
-llm_bridge_node（OpenRouter Gemini 3 Flash → DeepSeek V4 Flash → Cloud Qwen2.5-7B → Ollama 1.5B → RuleBrain 五級 fallback）
+llm_bridge_node（**locked main**: OpenRouter Gemini 3 Flash Preview → DeepSeek V4 Flash → Cloud Qwen2.5-7B → Ollama 1.5B → RuleBrain 五級 fallback）
     |   output_mode=legacy → 發 /tts + sport /webrtc_req（既有行為）
     |   output_mode=brain  → 只發 /brain/chat_candidate（PawAI Brain MVS 模式）
     |   OpenRouter timeout default 4.0s / overall budget 5.0s（5/4 Jetson smoke 後 bump）
     | /tts（legacy 模式）or /brain/chat_candidate（brain 模式）
-tts_node（OpenRouter Gemini 3.1 Flash TTS Despina 主線 → edge-tts → Piper 三級 chain，5/4 落地）
+tts_node（**locked main**: OpenRouter Gemini 3.1 Flash TTS Preview Despina → edge-tts → Piper 三級 chain，5/4 落地）
     |   provider=openrouter_gemini → audio tag 原生渲染（[excited]/[laughs]/[curious]）
     |   audio_tag.py + tts_provider.py：provider.supports_audio_tags 守門 strip
     |   Stage 4 chain：main fail → fallback edge_tts (strip tag) → Piper (offline)
@@ -52,6 +52,13 @@ echo gate 阻止 ASR 自激（total 1.5s）
 **Intent fast path**：stop/greet 等高頻 intent 跳過 LLM，直接 RuleBrain（~0ms）。
 **LLM timeout** Jetson default 4.0s（5/4 bump from 2.0s — Python urllib3+requests overhead 在 Jetson 把 1.5s curl 推到 2s 邊界，premature fallback）。
 **TTS provider chain**（5/4 落地，B1 Plan D）：`openrouter_gemini` (Despina, audio tag native, ~4.6s) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline, last-line)。Detail spec: `docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md`。
+
+### 為什麼鎖 Gemini 3 Flash + Gemini 3.1 Flash TTS（2026-05-05）
+
+- **Audio tag 原生支援**：Gemini 3.1 Flash TTS 接收 `[excited]` / `[laughs]` / `[curious]` 等情緒標籤直接渲染，不需 strip — 個性表現最強，跟 Brain MVS persona 一致
+- **延遲在可接受範圍**：~4.6s P50（Despina voice），對 demo 場景足夠；fallback `edge_tts` 更快（~1.5s）但個性弱
+- **單一 provider 維護成本低**：LLM + TTS 都走 OpenRouter，credentials / rate limit / billing 統一管理
+- **其他選項不再評估**：Qwen3.6 Plus / DeepSeek V4 / Kimi K2.6 等候選曾出現在 MOC，但 5/12 sprint 已收斂只跑 Gemini 主線；fallback 保留是工程現實，不是 A/B 候選
 
 ## 輸入/輸出
 
@@ -181,10 +188,12 @@ llm_bridge_node（output_mode=brain）
 
 ## 下一步
 
-- [ ] **OpenRouter 接入**（4/29 軌道 2）：把 `_call_cloud_llm` 升級成 4 級 fallback — OpenRouter Sonnet 4.6 → 本地 Qwen2.5-7B → Ollama → RuleBrain
+- [x] **OpenRouter 接入**（5/4 完成，B1 Plan D）：LLM/TTS 均走 OpenRouter，五級 fallback 全鏈通
 - [ ] LLM prompt 智慧化：放寬字數 12→50+、加入 PawAI 個性、自我介紹（陳若恩）
 - [ ] Plan B 固定台詞設計：至少 15 組問答（陳若恩）
 - [ ] 多輪對話 memory（conversation history）
+- [ ] B1-4 Ollama 1.5B 斷網壓測（驗證 fallback 路徑）
+- [ ] B1-5 Megaphone 16kHz 端到端（Despina 降採樣）
 
 ## 子資料夾
 

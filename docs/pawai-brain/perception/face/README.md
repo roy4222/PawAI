@@ -46,6 +46,30 @@ interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 
 **face_db**：`/home/jetson/face_db/`，目前有 roy、grama 兩人。
 
+## Skill 觸發對應（5/12 Sprint Scene 4 + 8）
+
+| 事件 | Brain 觸發 Skill | Demo Scene | 備註 |
+|---|---|---|---|
+| `identity_stable`（已知人臉穩定 ≥2 hits）| `greet_known_person` | Scene 4 熟人互動 | LLM 動態問候，含 `{name}` 客製化 |
+| `identity_unknown`（陌生人 unknown_grace 後）| `stranger_alert` | Scene 8 陌生人 + safety stop | 固定台詞警報 + 配合 `stop_move` |
+| `track_started` / `track_lost` | （無 skill 直觸）| — | 純 state 更新，由 brain 規則判讀 |
+
+**`{name}` 客製化**：face name 從 `/state/perception/face` 取最近 `identity_stable` 的 `stable_name`，由 LLM bridge 用 say_template 渲染。同一變數也用在 `pose/README.md` 的 `fallen_alert`（「{name}，偵測到跌倒，請注意安全」）。
+
+## 註冊新人臉（進階，post-demo）
+
+> 5/12 demo 不開放現場註冊，只用既有 face_db。註冊機制標 **進階**，post-demo 再評估。
+
+**手動流程**（dev only）：
+1. 把目標人物 1-3 張正面照（256×256+）放進 `/home/jetson/face_db/<name>/`
+2. 重啟 `face_identity_node`，啟動時自動讀 face_db 重算 SFace embedding
+3. 對著鏡頭走幾步驗證 `identity_stable: <name>` 觸發
+
+**目前不做**：
+- ROS service `/face/register`（會擴大 demo scope）
+- Studio 上傳 UI
+- 自動相似度合併（一人多 ID 重整）
+
 ## 輸入/輸出
 
 | Topic | 方向 | 說明 |
@@ -72,9 +96,11 @@ interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 
 ## 下一步
 
-- Sprint B-prime Day 1-3：上機驗證 + baseline 穩定化
-- Sprint Day 4-5：整合進 executive v0
-- Clean Architecture 重構（4/13 後，詳見 `docs/archive/2026-05-docs-reorg/research-misc/2026-03-25-go2-sdk-capability-and-architecture.md` S5.4）
+- [ ] **5/12 Sprint Scene 4 + 8 上機驗證**：`greet_known_person` 對 roy / grama 各 3 次穩定觸發；`stranger_alert` 對未知人臉 3 次穩定觸發
+- [ ] Greeting 冷卻時間（防止同一人短時間重複觸發，目前已知問題）
+- [ ] 多人辨識穩定化（多人同時出現時 track 不亂跳）
+- [ ] Clean Architecture 重構（5/13 demo 後，詳見 `docs/archive/2026-05-docs-reorg/research-misc/2026-03-25-go2-sdk-capability-and-architecture.md` S5.4）
+- [ ] 註冊新人臉 ROS service（進階，post-demo）
 
 ## 子資料夾
 

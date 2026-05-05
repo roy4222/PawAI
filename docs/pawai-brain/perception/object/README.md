@@ -12,7 +12,7 @@
 | 版本/決策 | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16（不裝 ultralytics） |
 | 完成度 | 70%（Executive 整合完成，Demo 腳本已加入，待擴充白名單+TTS） |
 | 最後驗證 | 2026-04-06（cup → TTS「你要喝水嗎？」✅，bottle ❌） |
-| 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（9.5MB） |
+| 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（大小待實測） |
 | TRT Cache | `/home/jetson/trt_cache/`（首次啟動 3-10 分鐘，之後秒起） |
 | Package | `object_perception/`（ROS2 Python，entry: `object_perception_node`） |
 
@@ -65,6 +65,87 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 | 溫度 | 48°C（持平略降） |
 | Node process CPU | 38.5% |
 | ONNX providers | TensorRT + CUDA + CPU |
+
+## 模型比較（yolo26n vs yolov8n vs yolo26s）
+
+> **狀態**: 待實測。下表只列**比較維度與當前角色**；mAP / FPS / 模型大小等具體數字 **5/12 demo 後**才補（需自家 Jetson + class_whitelist 條件下的 benchmark 才有意義，引用上游 README 的全 80-class 數字會誤導）。
+
+| 模型 | 角色 | 比較維度 |
+|---|---|---|
+| **yolo26n** | **主線**（5/12 demo 已上機驗證） | 待實測：mAP / 大小 / Jetson FP16 FPS / 小物件偵測率 |
+| yolov8n | MOC §5 對比候選；目前未上機 | 同上；要進主線需先做 A/B |
+| yolo26s | 升級候選（post-demo） | 同上；MOC 提到改善小物件，需驗證 |
+
+> MOC §5 寫「yolo26n 和 yolov8n 辨識物體效果比較」— 5/12 demo 不做完整 A/B（時程不足），保留為 post-demo 評估項。**yolo26n 已經是上機驗證主線**，不切換。
+> 真實數字補在 [`research/`](./research/) 子資料夾的 benchmark 報告，更新到此表前先 cite 來源。
+
+## HSV 顏色偵測（5/12 Sprint Scene 6 配套）
+
+> MOC §5 明確：「要可以偵測顏色」。Sprint design Scene 6 演示「red cup → object_remark」串聯 YOLO + HSV + curious reply。
+
+### 演算法
+
+```
+YOLO bbox → crop ROI → 轉 HSV color space → histogram peak 取主色相 (Hue)
+                                          → saturation guard（S > 0.4 才算有色）
+                                          → 對應 4 色標籤
+```
+
+### 4 色分類（初版）
+
+| 標籤 | Hue 範圍（OpenCV 0-180）| 用途 |
+|:---:|:---:|---|
+| red | 0-10 OR 160-180 | 紅杯 / 紅瓶（Scene 6 主場）|
+| yellow | 20-35 | 黃色玩具 |
+| blue | 95-130 | 藍色物 |
+| green | 40-80 | 綠色物 |
+
+> 信心閾值初版 0.6（histogram peak 比例 / 總像素），低於閾值不發 color。
+> 不偵測：白 / 黑 / 灰（中性色，photometric 噪音大）。
+> 後處理位置：`object_perception_node` post-NMS 階段。
+
+## Scene 6 `object_remark` 整合（5/12 Sprint）
+
+### 觸發條件
+
+```
+/event/object_detected: { class_name: "cup", color: "red", confidence: ≥0.5 }
+    ↓
+brain_node 規則 `object_remark` 命中（class ∈ {cup, bottle, ...} + color 非空）
+    ↓
+SkillPlan(object_remark) → say_template 渲染 `{class}` + `{color}`
+    ↓
+TTS：「咦，你拿著紅色的杯子！」
+```
+
+### Event Schema 擴充（5/5 起）
+
+```json
+{
+  "event_type": "object_detected",
+  "objects": [
+    {
+      "class_name": "cup",
+      "confidence": 0.878,
+      "bbox": [336, 240, 462, 474],
+      "color": "red",          // 新增（HSV 結果，可為 null）
+      "color_confidence": 0.72  // 新增
+    }
+  ]
+}
+```
+
+> Schema 變動需同步 `docs/contracts/interaction_contract.md` v2.6（contract 升版）。本 README 為先描述，contract 升版時 cross-link。
+
+### 個性化回覆範例（傳給 brain，由 LLM 改寫）
+
+| class | color | TTS（demo baseline 範例）|
+|---|:---:|---|
+| cup | red | 「咦，你拿著紅色的杯子！」 |
+| cup | blue | 「藍杯子，看起來很涼」 |
+| bottle | red | 「紅瓶子，喝點水吧」 |
+| bottle | green | 「綠色瓶子是茶嗎？」 |
+| 其他 | * | LLM 動態生成 |
 
 ## 偵測類別 — COCO 80 class（預設全開）
 
@@ -155,16 +236,19 @@ ros2 launch object_perception object_perception.launch.py
 
 - **光線不足時小物體幾乎無法辨識** — Demo 必須開燈
 - 物體需在一定高度且正對攝影機角度才能偵測到
-- YOLO26n 是 Nano 版（9.5MB），小物件偵測率低
+- YOLO26n 是 Nano 版（小物件偵測率低，模型大小待實測）
 - 平放的扁平物體辨識困難（書本、手機平放）
 - **Jetson 供電不穩**：累積斷電 8+ 次
 - 追蹤、3D depth、target selection 未做
 
 ## 下一步
 
-- [ ] 決定白名單物品（室內 COCO 篩選）+ 每個物品 TTS 回應（黃旭，4/9 分工）
-- [ ] yolo26s 升級評估（mAP +6.3%，~20MB，改善小物件）
-- 見分工文件：`pawai-studio/docs/0410assignments/go2-jetson/object-huang.md`
+- [ ] **B4-4 HSV 顏色偵測**：`object_perception_node` 加 post-NMS 顏色判定（紅 / 黃 / 藍 / 綠 4 色）
+- [ ] **Scene 6 `object_remark` 整合**：brain skill + say_template `{class}` + `{color}` 變數，TTS demo 至少跑 red cup / blue cup / red bottle 三組
+- [ ] **Event schema 升版**（v2.6）：`objects[]` 加 `color` / `color_confidence` 欄位，同步 `docs/contracts/interaction_contract.md`
+- [ ] 室內 dataset 進階（post-demo）：MOC §5 提「資料集目前用 coco 看是否要用多一點室內的資料集」— 5/12 demo COCO 80 即可，post-demo 再評估 OpenImages / Objects365 finetune
+- [ ] yolo26s 升級評估（mAP / 大小 / Jetson FPS / 小物件偵測率 全部待實測）
+- [ ] 平放扁平物體（書本、手機）辨識率改善（光線 + 角度 + threshold tuning）
 
 ## 子資料夾
 
