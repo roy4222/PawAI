@@ -19,6 +19,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from .dynamic_gesture_detector import WaveDetector
 from .event_builder import build_gesture_event, build_pose_event
 from .gesture_classifier import classify_gesture, detect_ok_circle
 from .mock_inference import MockInference
@@ -142,6 +143,12 @@ class VisionPerceptionNode(Node):
         self._gesture_every_n = int(self.get_parameter("gesture_every_n_ticks").value or 3)
         self._cached_lh = (np.zeros((21, 2), dtype=np.float32), np.zeros(21, dtype=np.float32))
         self._cached_rh = (np.zeros((21, 2), dtype=np.float32), np.zeros(21, dtype=np.float32))
+
+        # MOC §3 group-3 dynamic Wave detector (per hand) — emits "wave" by
+        # detecting X-direction velocity reversals on the wrist KP within a
+        # ~1.5s window. Independent of MediaPipe Recognizer; runs every tick.
+        self._wave_left = WaveDetector()
+        self._wave_right = WaveDetector()
 
         # --- Backend configuration ---
         pose_backend = str(self.get_parameter("pose_backend").value or "rtmpose")
@@ -326,6 +333,20 @@ class VisionPerceptionNode(Node):
                     best = max(detections, key=lambda d: d[1])
                     gesture_raw, _, hand = best
 
+                # 5/5 Wave dynamic detector — feed wrist (KP 0) every tick so
+                # the buffer keeps a continuous trajectory even when the
+                # recognizer momentarily classifies as something else mid-wave.
+                # We only feed when the keypoint score is non-zero (hand seen).
+                wave_ts = time.time()
+                if lh_scores[0] > 0:
+                    self._wave_left.feed(wave_ts, float(lh_kps[0][0]), float(lh_kps[0][1]))
+                else:
+                    self._wave_left.reset()
+                if rh_scores[0] > 0:
+                    self._wave_right.feed(wave_ts, float(rh_kps[0][0]), float(rh_kps[0][1]))
+                else:
+                    self._wave_right.reset()
+
                 # 5/5 OK gesture override (MOC §3 group 1) — geometric rule on
                 # KPs takes priority over MediaPipe Recognizer label, since
                 # Recognizer doesn't ship OK natively. Run on whichever hand
@@ -342,6 +363,21 @@ class VisionPerceptionNode(Node):
                 if ok_hands:
                     best_ok = max(ok_hands, key=lambda x: x[1])
                     gesture_raw, hand = "ok", best_ok[0]
+
+                # 5/5 Wave dynamic override — only checked if no OK match
+                # (OK is higher-priority confirm gate). Wave wins over the
+                # native Recognizer label because the Recognizer can't see
+                # temporal motion, so a hand mid-wave often classifies as
+                # palm/peace by chance.
+                if gesture_raw != "ok":
+                    wave_left = self._wave_left.detect()
+                    wave_right = self._wave_right.detect()
+                    if wave_left or wave_right:
+                        gesture_raw = "wave"
+                        hand = "left" if wave_left and not wave_right else "right"
+                        # Reset so we don't re-emit on every tick of the same wave.
+                        self._wave_left.reset()
+                        self._wave_right.reset()
 
                 self.get_logger().info(
                     f"recognizer: {len(detections)} hands, "

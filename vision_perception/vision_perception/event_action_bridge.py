@@ -69,6 +69,17 @@ POSE_TTS_MAP = {
 POSE_TTS_COOLDOWN_DEFAULT_S = 5.0
 POSE_TTS_COOLDOWN_FALLEN_S = 10.0
 
+# DEMO BRIDGE — selected gestures → /tts (NO motion, NO GESTURE_ACTION_MAP
+# extension). Currently only `wave` lives here — it's an Active 5/12 demo
+# skill (`wave_hello`) but the proper Brain orchestration isn't wired yet.
+# The legacy `interaction_router` filter excludes wave because there's no
+# direct action map entry; this bridge fills the gap by listening to the
+# raw `/event/gesture_detected` topic and publishing a TTS template.
+GESTURE_TTS_MAP = {
+    "wave": "Hi！很高興看到你！",
+}
+GESTURE_TTS_COOLDOWN_S = 4.0
+
 
 class EventActionBridge(Node):
     def __init__(self):
@@ -77,10 +88,11 @@ class EventActionBridge(Node):
         # TTS playing state (subscribed from tts_node, latched)
         self._tts_playing = False
 
-        # DEMO BRIDGE state: latest stable face name + per-pose cooldown
+        # DEMO BRIDGE state: latest stable face name + per-pose / per-gesture cooldown
         self._face_lock = threading.Lock()
         self._latest_face_name: str | None = None
         self._pose_tts_last_ts: dict[str, float] = {}
+        self._gesture_tts_last_ts: dict[str, float] = {}
 
         # Subscribe to interaction_router's processed events (NOT raw events)
         self.create_subscription(
@@ -97,11 +109,19 @@ class EventActionBridge(Node):
         )
 
         # DEMO BRIDGE: subscribe directly to raw pose events + face state
-        # (cf. module-level docstring for rationale and constraints).
+        # + selected raw gesture events (e.g. wave) — see module docstring
+        # for rationale + constraints. NEVER publishes Go2 motion from this
+        # path; only /tts.
         self.create_subscription(
             String,
             "/event/pose_detected",
             self._on_pose_event,
+            10,
+        )
+        self.create_subscription(
+            String,
+            "/event/gesture_detected",
+            self._on_gesture_event_demo_bridge,
             10,
         )
         face_state_qos = QoSProfile(depth=1)
@@ -253,6 +273,41 @@ class EventActionBridge(Node):
                 break
         with self._face_lock:
             self._latest_face_name = new_name
+
+    def _on_gesture_event_demo_bridge(self, msg: String):
+        """[DEMO BRIDGE] /event/gesture_detected → /tts template (no motion).
+
+        Only handles gestures listed in GESTURE_TTS_MAP. Any other gesture
+        is ignored here; legacy router path (gesture_command → /webrtc_req)
+        still handles stop / ok / thumbs_up motions independently.
+        """
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().warning(
+                f"Invalid JSON in gesture_event: {e}",
+                throttle_duration_sec=5.0,
+            )
+            return
+
+        gesture = data.get("gesture")
+        template = GESTURE_TTS_MAP.get(gesture) if isinstance(gesture, str) else None
+        if not template:
+            return  # not a demo-bridge gesture; legacy router handles others
+
+        now = time.time()
+        last = self._gesture_tts_last_ts.get(gesture, 0.0)
+        if now - last < GESTURE_TTS_COOLDOWN_S:
+            return
+        self._gesture_tts_last_ts[gesture] = now
+
+        with self._face_lock:
+            name = self._latest_face_name or "你"
+        text = template.format(name=name)
+        self._send_tts(text)
+        self.get_logger().info(
+            f"[demo-bridge] gesture={gesture} name={name!r} → tts={text!r}"
+        )
 
     def _on_pose_event(self, msg: String):
         """[DEMO BRIDGE] /event/pose_detected → /tts template (no motion)."""
