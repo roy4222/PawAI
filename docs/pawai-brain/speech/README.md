@@ -25,6 +25,21 @@ bash scripts/start_llm_e2e_tmux.sh
 TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 ```
 
+### 5/5 補充：tts_node 獨立啟動 + USB 喇叭 fallback
+
+當 Go2 driver 沒在跑（例如本地 perception-only 測試），預設的 Megaphone DataChannel 路徑會 silent fail（沒聲音、沒錯誤）。改走本機 ALSA：
+
+```bash
+# Jetson 上獨立啟動 tts_node (跑 demo bridge / smoke test 用)
+ros2 run speech_processor tts_node --ros-args \
+  -p provider:=edge_tts \
+  -p local_playback:=true \
+  -p local_output_device:=plughw:0,0
+# (plughw:N,0 — N 由 `aplay -l` 找 USB 喇叭 card index，重開機後可能漂移)
+```
+
+開啟 `local_playback:=true` 後 startup log 應顯示 `Playback: Local`（而不是 `Robot`），TTS 會送到 USB 喇叭。Megaphone 路徑仍保留作 demo 主線（Go2 driver 跑時自動恢復）。
+
 ## 核心流程
 
 ```

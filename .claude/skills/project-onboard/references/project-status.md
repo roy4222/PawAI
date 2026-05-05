@@ -1,6 +1,24 @@
 # 專案進度快照
 
-> 最後更新：2026-05-03 evening (Stage 1 K-STATIC-AVOID-CONTROLLED PASS / Demo A 流程跑通 / Stage 2 detour 仍 fail)
+> 最後更新：2026-05-05 evening (B4 感知擴展 + B6 PR port 落地 / Phase 2 P0 整套 + Wave 動態 + akimbo/knee_kneel pose / TTS edge-tts smoke OK)
+
+## 2026-05-05 進度（5 commits）
+
+| Commit | 主軸 | 影響 |
+|---|---|---|
+| `45d29a8` | docs: 6 README aligned to MOC + 5/12 sprint design | 上午 docs 重構（face/gesture/pose/object/speech/studio）|
+| `add6b51` | feat(studio): B6 PR port — Pose/Gesture/Object/Speech panels + center modal | Sheet right-drawer → center modal；4 panel 抄入 PR #38/40/41/42；ChatPanel mic 與 SpeechPanel 分離；用 `LiveFeedCard` 接 Jetson `/ws/video/{face,vision,object}` |
+| `4f638ae` | feat(perception): land MOC P0 sensing demo bridge | gesture enum remap (palm/fist/index/thumb/peace) + OK 幾何規則 + 0.5s `gesture_stable_s` param + object HSV 4 色 + event_action_bridge demo bridge (pose→/tts) |
+| `ca32655` | feat(perception): pose 7 + akimbo/knee_kneel | pose_classifier `_is_akimbo` / `_is_knee_kneel`；POSE_TTS_MAP 補 akimbo/knee_kneel template |
+| `95982d6` | feat(perception): Wave 動態手勢 + gesture demo bridge | dynamic_gesture_detector.WaveDetector；`/event/gesture_detected` raw 訂閱 + GESTURE_TTS_MAP{"wave"} |
+
+**TTS 路徑（5/5）**：tts_node `local_playback:=true` + `local_output_device:=plughw:0,0`（USB CD002-AUDIO，Go2 driver 沒跑時的可聽路徑）。OpenRouter Gemini 仍 locked main，但 demo bridge smoke 用 edge-tts。
+
+**待補（明天）**：
+- pose 分類效果待 tune（5/5 實機回報不穩；threshold / vote / scale-invariant ratio）— `~/.claude/projects/.../memory/project_pose_classifier_tuning_0505.md`
+- Stretch #43 OK 二次確認 + Studio toast UI
+- Stretch #44 yolov8n A/B
+- Stretch contract.md v2.6 收尾文件升版（gesture/pose enum + object color/class_id 欄位）
 
 ## 當前階段
 

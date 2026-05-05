@@ -63,9 +63,9 @@ interaction_executive_node → Go2 動作
 | 🫴 | ComeHere | Follow | `follow_me`（Future）| 1018 | 手掌向內撥動（進階模式）|
 | 🔄 | Circle | Dance | `dance`（Future）| — | 畫圓軌跡 |
 
-> **Active**（5/12 demo 啟用）：Palm、OK、Thumb、Peace、Wave
-> **Hidden**（registry 內、Studio grayed-out）：Fist、Index
-> **Future**（hide-or-disabled）：ComeHere、Circle
+> **Active**（5/12 demo 啟用，5/5 已實作）：Palm、OK、Thumb、Peace、Wave
+> **Hidden**（registry 內、Studio grayed-out，enum 已實作但未綁 skill）：Fist、Index
+> **Future**（軌跡 detector 未實作）：ComeHere、Circle
 > 對應 sprint design §4 Skill Registry 26+1 條目。
 
 ## 觸發規則
@@ -81,14 +81,36 @@ interaction_executive_node → Go2 動作
    - 步驟 B：系統鎖定後，做出 👌（OK）持續 0.5 秒
    - 執行：Go2 執行動作 1017（伸懶腰）
 
+## 5/5 實作落地（Active enum）
+
+實際發出的 enum（對齊 MOC 命名）：
+
+| 規則來源 | 落地手勢 | 程式 |
+|---|---|---|
+| MediaPipe Recognizer label remap | palm / fist / index / thumb / peace | `gesture_recognizer_backend.py:_GESTURE_MAP` |
+| 自製幾何規則 override | **ok**（拇指尖↔食指尖距離 < hand_width × 0.3 + 中/無/小指未全屈）| `gesture_classifier.py:detect_ok_circle` |
+| 時序軌跡 override | **wave**（1.5s 窗內 wrist X 速度反轉 ≥ 2 + 振幅 > 50px）| `dynamic_gesture_detector.py:WaveDetector` |
+
+**未落地（仍為 Future）**：ComeHere、Circle — 軌跡 loop 需更長 buffer + 形狀比對，post-demo 評估。
+
+**5/5 移除**：`GESTURE_COMPAT_MAP={"fist":"ok"}` 實際轉換（語意衝突，MOC 的 Fist=Mute ≠ OK=Confirm）；常數保留為空 dict 以免下游 import 壞。
+
+## 0.5s 穩定 gate（已實作，可參數化）
+
+`vision_perception_node` 加 ROS param `gesture_stable_s`（default 0.5）：
+- 同一手勢需穩定維持 0.5 秒才會發 `/event/gesture_detected`
+- 設 `0.0` 可即時 bypass（debug 用）：
+  ```bash
+  ros2 param set /vision_perception_node gesture_stable_s 0.0
+  ```
+
 ## 操作限制與已知問題
 
 - **有效範圍**：D435 前方約 **2m** 以內（4/8 會議確認，距離過遠不精準）
 - **僅支援單人操作**：多人同時出現時可能混淆
-- point 手勢不穩定（MediaPipe backend）
-- 時序分析幀數 buffer 未參數化
-- GESTURE_COMPAT_MAP: fist→ok（v2.0 契約相容）
-- 快速切換手勢時可能有延遲（投票 buffer 需要穩定幀數）
+- point 手勢不穩定（MediaPipe backend）→ 5/5 已從 enum 移除（不再對應 MOC）
+- 快速切換手勢時可能有延遲（投票 buffer 5 幀 + 0.5s gate）
+- Wave detector reset 後需 ~6 frames 才再次觸發（min_samples）
 
 ## Event Schema（v2.0 凍結）
 

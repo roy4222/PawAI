@@ -37,19 +37,21 @@ pose_classifier.py（hip/knee/trunk 角度判定）
 interaction_executive_node → fallen = EMERGENCY
 ```
 
-## 支援姿勢（MOC 7 種，Demo Active 5 + Hidden 2）
+## 支援姿勢（MOC 7 種全部 Active，5/5 落地）
 
-| 姿勢 | 判定邏輯 | 觸發 Skill | 台詞範本 | 狀態 |
+| 姿勢 | 判定邏輯 | 觸發 Skill | 台詞範本（demo bridge）| 狀態 |
 |------|---------|---|---|:---:|
-| standing | hip_angle > 155° | （預設，不觸發）| — | Active |
-| sitting | 100° < hip < 150°, trunk < 35° | `sit_along` | 「會不會太累」（Go2 跟著坐下）| Active |
-| crouching | hip < 145°, knee < 145°, trunk > 10° | （互動 say）| 「我在這裡喔」 | Active |
-| bending | trunk > 35°, hip < 140°, knee > 130° | `careful_remind` | 「請小心喔」 | Active |
-| fallen | bbox_ratio > 1.0 AND trunk > 60° AND vertical_ratio < 0.4 | `fallen_alert`（EMERGENCY）| 「{name}，偵測到跌倒，請注意安全」 | Active（可關）|
-| akimbo | wrist 接近 hip，elbow 外展（待實作）| `akimbo_react` | TBD | **Hidden**（5/12 demo 不開）|
-| knee_kneel | 一膝彎 < 90°（另膝伸直），膝低於髖 | `knee_kneel_react` | TBD | **Hidden**（5/12 demo 不開）|
+| standing | hip_angle > 155° + knee_angle > 155° | （預設，不觸發）| — | Active |
+| akimbo ✨ | standing + 雙手腕近髖（< hip_width × 0.6）+ 雙肘 60-135° | `akimbo_react` | 「你看起來很有架式喔！」（暫定）| **Active** (5/5) |
+| sitting | 100° < hip_angle < 150°, trunk < 35° | `sit_along` | 「會不會太累？」 | Active |
+| crouching | hip_angle < 145°, knee_angle < 145°, trunk > 10° | （互動 say）| 「我在這裡喔」 | Active |
+| bending | trunk > 35°, hip_angle < 140°, knee_angle > 130° | `careful_remind` | 「請小心喔」 | Active |
+| knee_kneel ✨ | 一膝 y ≥ 髖 y + 該膝 < 100° + 另膝 > 130° | `knee_kneel_react` | 「需要我幫忙嗎？」（暫定）| **Active** (5/5) |
+| fallen | bbox_ratio > 1.0 AND trunk > 60° AND vertical_ratio < 0.4 | `fallen_alert`（EMERGENCY）| 「{name}，偵測到跌倒，請注意安全！」 | Active（可關）|
 
-> akimbo / knee_kneel 在 sprint design 列為 Hidden bucket（registry 內、Studio grayed-out）— 判定演算法 5/12 demo 後再做，現在 README 先佔位。
+> 5/5 變更：akimbo 與 knee_kneel 從 Hidden TBD 升級為 Active，幾何規則已落地在 `vision_perception/vision_perception/pose_classifier.py:_is_akimbo` / `_is_knee_kneel`。
+> akimbo 在 standing 之後檢測（standing 變體）；knee_kneel 在 crouching 之前檢測（避免被「兩膝彎曲」吃掉）。
+> 5/5 實機初測：分類效果整體仍待 tune（threshold / vote / scale-invariant ratio），詳見 `~/.claude/projects/.../memory/project_pose_classifier_tuning_0505.md`。
 
 ## 操作限制與已知問題
 

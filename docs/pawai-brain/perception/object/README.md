@@ -79,30 +79,41 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 > MOC §5 寫「yolo26n 和 yolov8n 辨識物體效果比較」— 5/12 demo 不做完整 A/B（時程不足），保留為 post-demo 評估項。**yolo26n 已經是上機驗證主線**，不切換。
 > 真實數字補在 [`research/`](./research/) 子資料夾的 benchmark 報告，更新到此表前先 cite 來源。
 
-## HSV 顏色偵測（5/12 Sprint Scene 6 配套）
+## HSV 顏色偵測（5/5 已落地）
 
 > MOC §5 明確：「要可以偵測顏色」。Sprint design Scene 6 演示「red cup → object_remark」串聯 YOLO + HSV + curious reply。
+> 程式：`object_perception/object_perception/object_perception_node.py:_analyze_bbox_color`（5/5 commit `4f638ae`）
 
 ### 演算法
 
 ```
-YOLO bbox → crop ROI → 轉 HSV color space → histogram peak 取主色相 (Hue)
-                                          → saturation guard（S > 0.4 才算有色）
-                                          → 對應 4 色標籤
+YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV) → histogram peak 取主色相 (Hue, 18 bins × 10)
+                                              → saturation guard（mean S < 0.4 → "Unknown"）
+                                              → 對應 4 色標籤
 ```
 
-### 4 色分類（初版）
+### 4 色分類（已落地）
 
 | 標籤 | Hue 範圍（OpenCV 0-180）| 用途 |
 |:---:|:---:|---|
-| red | 0-10 OR 160-180 | 紅杯 / 紅瓶（Scene 6 主場）|
+| red | ≤ 10 OR ≥ 160 | 紅杯 / 紅瓶（Scene 6 主場）|
 | yellow | 20-35 | 黃色玩具 |
-| blue | 95-130 | 藍色物 |
 | green | 40-80 | 綠色物 |
+| blue | 95-130 | 藍色物 |
 
-> 信心閾值初版 0.6（histogram peak 比例 / 總像素），低於閾值不發 color。
-> 不偵測：白 / 黑 / 灰（中性色，photometric 噪音大）。
-> 後處理位置：`object_perception_node` post-NMS 階段。
+實際輸出：每筆 detection 在 JSON event 加 `color` + `color_confidence`（peak bin / total pixels）。Saturation < 0.4 直接回 `"Unknown"`，**不**寫入 event payload（前端拿不到 color 欄位即視為無色）。
+
+例子（紅杯子）：
+```json
+{
+  "objects": [
+    {"class_name": "cup", "confidence": 0.84, "bbox": [..],
+     "color": "red", "color_confidence": 0.62}
+  ]
+}
+```
+
+Studio 物體 panel 「即時偵測」tab 自動讀 `box.color`，顯示 red / yellow / green / blue chip + 白名單 amber 邊。
 
 ## Scene 6 `object_remark` 整合（5/12 Sprint）
 
