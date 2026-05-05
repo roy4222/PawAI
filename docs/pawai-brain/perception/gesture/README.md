@@ -142,10 +142,10 @@ interaction_executive_node → Go2 動作
 
 ## 下一步
 
-- [ ] **B4-2 Wave 動態軌跡判定**（速度反轉計數 ≥ 2 鎖定 wave_hello）
-- [ ] **B4-3 Palm Pause / Fist Mute 規則聯動**（system_pause / enter_mute_mode 上線）
-- [ ] **0.5s 穩定 dedup logic**：在 `gesture_classifier.py` 加 sliding window，連續 0.5s 同手勢才發 event
-- [ ] **OK 二次確認 gate**：在 `interaction_executive` 加 confirmation state machine — 鎖定 pending skill → OK 觸發 → 執行
+- [x] **B4-2 Wave 動態軌跡判定** — 5/5 落地（commit `95982d6`，`dynamic_gesture_detector.WaveDetector` + bypass 5/12 fix）；**實機效果待驗證**，且需注意 wave 走獨立 publish path（不進靜態 stable gate，避免被相鄰 palm/peace 投票蓋掉）
+- [ ] **B4-3 Palm Pause / Fist Mute 規則聯動**（system_pause / enter_mute_mode 上線）— enum 已實作，skill 觸發鏈未接
+- [x] **0.5s 穩定 dedup gate** — 5/5 落地在 `vision_perception/vision_perception/vision_perception_node.py`（commit `4f638ae`），ros param `gesture_stable_s`（default 0.5，可設 0.0 bypass）；**僅作用於靜態手勢**，wave 不走此 gate
+- [ ] **OK 二次確認 gate**：在 `interaction_executive` 加 confirmation state machine — 鎖定 pending skill → OK 觸發 → 執行（Stretch P1）
 - [ ] ComeHere / Circle 手勢 detector（post-demo, Future bucket）
 - [ ] point 手勢穩定化（目前 MediaPipe backend 不穩，sprint design 已退場）
 

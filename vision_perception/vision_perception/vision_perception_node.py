@@ -147,8 +147,13 @@ class VisionPerceptionNode(Node):
         # MOC §3 group-3 dynamic Wave detector (per hand) — emits "wave" by
         # detecting X-direction velocity reversals on the wrist KP within a
         # ~1.5s window. Independent of MediaPipe Recognizer; runs every tick.
+        # Wave bypasses the static-gesture buffer / 0.5s stable gate (it
+        # would otherwise be out-voted by surrounding palm/peace frames),
+        # gated instead by a per-wave cooldown.
         self._wave_left = WaveDetector()
         self._wave_right = WaveDetector()
+        self._wave_publish_cooldown_s = 2.5
+        self._last_wave_publish_ts: float = 0.0
 
         # --- Backend configuration ---
         pose_backend = str(self.get_parameter("pose_backend").value or "rtmpose")
@@ -367,21 +372,43 @@ class VisionPerceptionNode(Node):
                 # 5/5 Wave dynamic override — only checked if no OK match
                 # (OK is higher-priority confirm gate). Wave wins over the
                 # native Recognizer label because the Recognizer can't see
-                # temporal motion, so a hand mid-wave often classifies as
-                # palm/peace by chance.
+                # temporal motion. Wave does NOT enter the static gesture
+                # buffer/gate (it would be out-voted by adjacent palm/peace
+                # frames and never pass the 0.5s stable check); we publish
+                # `/event/gesture_detected` directly here with its own
+                # cooldown.
+                wave_published = False
                 if gesture_raw != "ok":
                     wave_left = self._wave_left.detect()
                     wave_right = self._wave_right.detect()
                     if wave_left or wave_right:
-                        gesture_raw = "wave"
-                        hand = "left" if wave_left and not wave_right else "right"
-                        # Reset so we don't re-emit on every tick of the same wave.
+                        wave_hand = "left" if wave_left and not wave_right else "right"
+                        # Reset so we don't re-emit every tick of the same motion.
                         self._wave_left.reset()
                         self._wave_right.reset()
 
+                        if (time.time() - self._last_wave_publish_ts
+                                >= self._wave_publish_cooldown_s):
+                            self._last_wave_publish_ts = time.time()
+                            self.last_hand = wave_hand
+                            wave_msg = String()
+                            wave_msg.data = json.dumps(
+                                build_gesture_event("wave", 1.0, wave_hand)
+                            )
+                            self.gesture_pub.publish(wave_msg)
+                            self.get_logger().info(
+                                f"[wave-bypass] wave published hand={wave_hand}"
+                            )
+                            wave_published = True
+                        # Either way, skip the rest of static-gesture flow
+                        # this tick so a stale palm/peace doesn't override
+                        # the wave we just emitted.
+                        gesture_raw = None
+
                 self.get_logger().info(
                     f"recognizer: {len(detections)} hands, "
-                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)}",
+                    f"gesture={gesture_raw} buf={len(self.gesture_buffer)} "
+                    f"wave_pub={wave_published}",
                     throttle_duration_sec=5.0,
                 )
             else:

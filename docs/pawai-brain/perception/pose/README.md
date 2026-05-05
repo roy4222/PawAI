@@ -81,14 +81,15 @@ interaction_executive_node → fallen = EMERGENCY
 
 | 姿勢 | Brain 觸發 | Cooldown | Demo Scene |
 |---|---|:---:|---|
-| sitting | `sit_along`（Go2 跟著坐 + say）| 5s | 互動段 |
-| crouching | direct say（互動）| 5s | 互動段 |
-| bending | `careful_remind`（say only）| 5s | 互動段 |
-| fallen | `fallen_alert`（EMERGENCY: stop + alert say）| **10s** | Scene 8 / 守護 |
-| akimbo | `akimbo_react`（Hidden）| — | 未開 |
-| knee_kneel | `knee_kneel_react`（Hidden）| — | 未開 |
+| sitting | demo bridge → 「會不會太累？」TTS（say only）| 5s | 互動段 |
+| crouching | demo bridge → 「我在這裡喔」TTS | 5s | 互動段 |
+| bending | demo bridge → 「請小心喔」TTS | 5s | 互動段 |
+| fallen | demo bridge → 「{name}，偵測到跌倒，請注意安全！」（high priority）| **10s** | Scene 8 / 守護 |
+| akimbo | demo bridge → 「你看起來很有架式喔！」（暫定）| 5s | 互動段（5/5 升 Active）|
+| knee_kneel | demo bridge → 「需要我幫忙嗎？」（暫定）| 5s | 互動段（5/5 升 Active）|
 
 > 站立 standing 不觸發任何 skill（純 baseline 狀態）。
+> 全部走 `vision_perception/vision_perception/event_action_bridge.py` POSE_TTS_MAP 的 demo bridge — 只 publish `/tts`，不發 Go2 motion。長期路徑改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` / `akimbo_react` / `knee_kneel_react`）走 `/brain/proposal` → `/skill_result`，列為 post-demo Stretch。
 
 ### `fallen_alert` 接 face name（5/5 對齊）
 
@@ -103,10 +104,11 @@ interaction_executive_node → fallen = EMERGENCY
 ## 下一步
 
 - [x] fallen → EMERGENCY 整合進 executive（已 4/4 PASS）
-- [ ] **5/12 Sprint Active 5 上機驗證**：sitting → `sit_along` / bending → `careful_remind` / crouching say / fallen with `{name}` 各 3 次穩定觸發
-- [ ] **B4-1 Sitting/Bending 規則聯動驗收**（sprint Phase B-4 高優先項）
-- [ ] **B4-5 fallen_alert + {name} 全鏈路驗證**（pose → face name 取得 → say）
-- [ ] akimbo / knee_kneel 判定演算法（post-demo, Hidden bucket）
+- [x] **akimbo / knee_kneel 判定演算法**（5/5 commit `ca32655`，`pose_classifier._is_akimbo` / `_is_knee_kneel` + demo bridge TTS template）
+- [x] **B4-5 fallen_alert + {name} 全鏈路**（5/5 commit `4f638ae`，event_action_bridge demo bridge 訂閱 `/state/perception/face` cache 最近 stable name + format("{name}")）
+- [ ] **7 姿勢實機 tuning**（5/5 user 回報分類效果不穩；threshold / vote / scale-invariant ratio 三方向）— 詳見 `~/.claude/projects/-home-roy422-newLife-elder-and-dog/memory/project_pose_classifier_tuning_0505.md`
+- [ ] **5/12 Sprint Active 7 上機驗證**：sitting / crouching / bending / fallen-with-name / akimbo / knee_kneel / standing 各 3 次穩定觸發
+- [ ] **demo bridge 退場路徑**：把 pose→/tts 改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` 等）走 `/brain/proposal` → `/skill_result`（post-demo, Stretch P1）
 - [ ] 跌倒偵測幻覺（無人時鎖定衣架）— 投票 buffer 改 30 幀 OR 改 movement-based filter
 
 ## 子資料夾
