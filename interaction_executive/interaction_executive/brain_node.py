@@ -131,6 +131,9 @@ class BrainNode(Node):
         self._pub_brain_state = self.create_publisher(
             String, "/state/pawai_brain", _TRANSIENT_LOCAL_1
         )
+        self.conversation_trace_pub = self.create_publisher(
+            String, "/brain/conversation_trace", _RELIABLE_10
+        )
 
         self.create_subscription(
             String, "/event/speech_intent_recognized", self._on_speech_intent, _RELIABLE_10
@@ -299,25 +302,88 @@ class BrainNode(Node):
             return
         session_id = str(payload.get("session_id") or "")
         reply_text = str(payload.get("reply_text") or "").strip()
-        if not session_id or not reply_text:
+        engine = str(payload.get("engine") or "legacy")
+        if not session_id:
             return
+
         with self._lock:
             buffered = self._state.chat_buffer.pop(session_id, None)
             self._state.fallback_active = False
-        if buffered is None:
-            return
-        timer = self._chat_timeouts.pop(session_id, None)
-        if timer is not None:
-            self.destroy_timer(timer)
-        self._emit(
-            build_plan(
-                "chat_reply",
-                args={"text": reply_text},
-                source="llm_bridge",
-                reason="chat_candidate_match",
-                session_id=session_id,
+
+        # 1. Always speak the reply (if non-empty and we were waiting on this session).
+        if reply_text and buffered is not None:
+            timer = self._chat_timeouts.pop(session_id, None)
+            if timer is not None:
+                self.destroy_timer(timer)
+            self._emit(
+                build_plan(
+                    "chat_reply",
+                    args={"text": reply_text},
+                    source="llm_bridge",
+                    reason="chat_candidate_match",
+                    session_id=session_id,
+                )
             )
-        )
+
+        # 2. Optional skill proposal — independent side effect.
+        proposed_skill = payload.get("proposed_skill")
+        if not isinstance(proposed_skill, str) or not proposed_skill:
+            return
+        proposed_args = payload.get("proposed_args") or {}
+        if not isinstance(proposed_args, dict):
+            proposed_args = {}
+
+        if proposed_skill not in self.LLM_PROPOSABLE_SKILLS:
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="rejected_not_allowed",
+                detail=proposed_skill,
+            )
+            return
+
+        cd = SKILL_REGISTRY[proposed_skill].cooldown_s
+        if self._in_cooldown(proposed_skill, cd):
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="blocked",
+                detail=f"{proposed_skill}:cooldown",
+            )
+            return
+
+        mode = self.LLM_PROPOSAL_EXECUTE.get(proposed_skill, "trace_only")
+        if mode == "execute":
+            self._emit_with_cooldown(
+                proposed_skill,
+                args=proposed_args,
+                source="llm_proposal",
+                reason=f"llm_proposal:{proposed_skill}",
+            )
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="accepted",
+                detail=proposed_skill,
+            )
+        else:
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="accepted_trace_only",
+                detail=proposed_skill,
+            )
+
+    # Phase 0.5 LLM proposal gate (spec 2026-05-06 §6)
+    LLM_PROPOSABLE_SKILLS = frozenset({"show_status", "self_introduce"})
+    LLM_PROPOSAL_EXECUTE = {
+        "show_status": "execute",
+        "self_introduce": "trace_only",
+    }
 
     # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2):
     #   wave         → wave_hello       (low-risk, direct)
@@ -433,6 +499,29 @@ class BrainNode(Node):
             self._mark_cooldown(skill)
         self._emit(plan)
         return True
+
+    def _emit_trace(
+        self,
+        *,
+        session_id: str,
+        engine: str,
+        stage: str,
+        status: str,
+        detail: str = "",
+    ) -> None:
+        msg = String()
+        msg.data = json.dumps(
+            {
+                "session_id": session_id,
+                "engine": engine,
+                "stage": stage,
+                "status": status,
+                "detail": detail,
+                "ts": time.time(),
+            },
+            ensure_ascii=False,
+        )
+        self.conversation_trace_pub.publish(msg)
 
     def _on_face(self, msg: String) -> None:
         payload = self._load_json(msg)

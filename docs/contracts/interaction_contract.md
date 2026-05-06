@@ -88,6 +88,7 @@
 | `/brain/skill_request` | Command | 觸發式 | Studio → Brain skill button request | **v2.5** active |
 | `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
 | `/brain/skill_result` | Event | 觸發式 | Executive → Brain/Studio SkillResult lifecycle | **v2.5** active |
+| `/brain/conversation_trace` | Event | 觸發式 | Brain → Debug/Studio LLM proposal gate trace (skill_gate stage: accepted/accepted_trace_only/rejected_not_allowed/blocked) | **v2.7** active |
 | `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 

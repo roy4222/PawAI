@@ -25,18 +25,55 @@ def brain():
     node.fallen_accumulate_s = 0.05
     node.chat_wait_ms = 50
     captured = []
+    captured_traces = []
 
     def capture(plan):
         captured.append(node._plan_to_dict(plan))
 
     node._emit = capture
     node._captured_proposals = captured
+
+    # Intercept conversation_trace_pub.publish to capture traces in tests.
+    class _TraceCap:
+        def publish(self_inner, msg):
+            captured_traces.append(json.loads(msg.data))
+
+    node.conversation_trace_pub = _TraceCap()
+    node._captured_traces = captured_traces
+
     try:
         yield node
     finally:
         for timer in list(node._chat_timeouts.values()):
             node.destroy_timer(timer)
         node.destroy_node()
+
+
+# ---------------------------------------------------------------------------
+# Helpers for Task 4 tests (LLM proposal allowlist + trace publisher)
+# ---------------------------------------------------------------------------
+
+def _feed_speech(node, transcript, session_id):
+    """Buffer a speech intent without relying on ROS2 timer firing."""
+    node._on_speech_intent(_msg({"transcript": transcript, "session_id": session_id}))
+
+
+def _feed_chat_candidate(node, payload):
+    node._on_chat_candidate(_msg(payload))
+
+
+def _drain_proposals(node):
+    """Return and clear captured proposals."""
+    result = list(node._captured_proposals)
+    node._captured_proposals.clear()
+    return result
+
+
+def _drain_traces(node):
+    """Return and clear captured conversation traces."""
+    result = list(node._captured_traces)
+    node._captured_traces.clear()
+    return result
 
 
 def _msg(payload):
@@ -319,3 +356,79 @@ def test_system_pause_stops_motion_before_speaking(brain):
     )
     motion_step = next(s for s in plan["steps"] if s["executor"] == "motion")
     assert motion_step["args"]["name"] == "stop_move"
+
+
+# ---------------------------------------------------------------------------
+# Task 4 — LLM proposal allowlist + conversation_trace publisher
+# ---------------------------------------------------------------------------
+
+
+def test_chat_candidate_with_show_status_proposal_emits_chat_reply_then_show_status(brain):
+    """show_status is in EXECUTE allowlist → both chat_reply and show_status enqueued."""
+    _feed_speech(brain, "你還好嗎", "s1")
+    _feed_chat_candidate(brain, {
+        "session_id": "s1",
+        "reply_text": "我很好",
+        "proposed_skill": "show_status",
+        "proposed_args": {},
+        "proposal_reason": "openrouter:eval_schema",
+        "engine": "legacy",
+    })
+    plans = _drain_proposals(brain)
+    skills = [p["selected_skill"] for p in plans]
+    assert skills == ["chat_reply", "show_status"]
+    traces = _drain_traces(brain)
+    assert any(t["stage"] == "skill_gate" and t["status"] == "accepted" for t in traces)
+
+
+def test_chat_candidate_with_self_introduce_proposal_emits_chat_reply_only_trace_only(brain):
+    """self_introduce is TRACE_ONLY → only chat_reply enqueued; trace records accepted_trace_only."""
+    _feed_speech(brain, "你是誰", "s2")
+    _feed_chat_candidate(brain, {
+        "session_id": "s2",
+        "reply_text": "汪，我是 PawAI",
+        "proposed_skill": "self_introduce",
+        "proposed_args": {},
+        "engine": "legacy",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    traces = _drain_traces(brain)
+    assert any(
+        t["stage"] == "skill_gate" and t["status"] == "accepted_trace_only" and t["detail"] == "self_introduce"
+        for t in traces
+    )
+
+
+def test_chat_candidate_with_disallowed_proposal_rejected(brain):
+    """dance is not in the allowlist → only chat_reply enqueued; trace records rejected_not_allowed."""
+    _feed_speech(brain, "跳舞", "s3")
+    _feed_chat_candidate(brain, {
+        "session_id": "s3",
+        "reply_text": "好啊",
+        "proposed_skill": "dance",
+        "proposed_args": {},
+        "engine": "legacy",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    traces = _drain_traces(brain)
+    assert any(
+        t["stage"] == "skill_gate" and t["status"] == "rejected_not_allowed"
+        for t in traces
+    )
+
+
+def test_chat_candidate_with_no_proposal_only_chat_reply(brain):
+    """No proposed_skill → only chat_reply enqueued; no skill_gate trace emitted."""
+    _feed_speech(brain, "天氣如何", "s4")
+    _feed_chat_candidate(brain, {
+        "session_id": "s4",
+        "reply_text": "今天很適合散步",
+        "proposed_skill": None,
+        "engine": "legacy",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    traces = _drain_traces(brain)
+    assert not any(t["stage"] == "skill_gate" for t in traces)
