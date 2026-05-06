@@ -807,6 +807,157 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 }
 ```
 
+#### `/brain/chat_candidate`
+
+**說明**：Brain conversation engine 每輪對話提案。包含 LLM 回覆文字與選擇性的 skill 提案。
+**發布者**：`llm_bridge_node`（legacy）、`pawai_brain` conversation engine（未來）
+**訂閱者**：`brain_node`（中控仲裁）、`studio_gateway`（trace 觀測）
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema** (v2.7 Phase 0.5)：
+```json
+{
+  "session_id":       { "type": "string",           "description": "speech session ID（如 speech-173...）" },
+  "reply_text":       { "type": "string",           "description": "LLM 生成的自然回答文字" },
+  "intent":           { "type": "string | null",    "description": "Intent 分類（如 chat, greet, confirm）" },
+  "selected_skill":   { "type": "string | null",    "description": "legacy diagnostic，僅 4 條 P0 skill（已遺留，Brain 不採用）" },
+  "reasoning":        { "type": "string",           "description": "決策來源（如 openrouter:eval_schema）" },
+  "confidence":       { "type": "float",            "range": "[0.0, 1.0]" },
+  
+  "proposed_skill":   { "type": "string | null",    "description": "Phase 0.5：LLM 提案的 skill（如 self_introduce, show_status；null = 無提案）" },
+  "proposed_args":    { "type": "object",           "description": "Phase 0.5：該 skill 的參數 dict" },
+  "proposal_reason":  { "type": "string",           "description": "Phase 0.5：提案來源（如 openrouter:eval_schema, studio_button）" },
+  "engine":           { "type": "string",           "enum": ["legacy", "langgraph"], "description": "Phase 0.5：識別發布者是哪個 engine" }
+}
+```
+
+**範例**（含 skill 提案）：
+```json
+{
+  "session_id": "speech-1730000000",
+  "reply_text": "我是 PawAI，很高興認識你！",
+  "intent": "greet",
+  "selected_skill": null,
+  "reasoning": "openrouter:eval_schema",
+  "confidence": 0.88,
+  "proposed_skill": "self_introduce",
+  "proposed_args": {},
+  "proposal_reason": "user asked who I am",
+  "engine": "legacy"
+}
+```
+
+**Phase 0.5 欄位說明**：
+- `proposed_skill`：由 LLM JSON persona 的 `skill` 欄帶入（不過 `adapt_eval_schema` 的 SKILL_TO_CMD 過濾）。值為 null 時無 skill 提案，LLM 自然回答正常講出。
+- `proposed_args`：該 skill 需要的參數（如座標、名稱、音量等），如無則空 dict。
+- `proposal_reason`：紀錄提案來源以便除錯與 trace。
+- `engine`：區分是 legacy primary 或 langgraph shadow，供 studio_gateway 觀測。
+- `selected_skill`：保留向後相容，但 Brain MVS 不採用做提案來源；仍由 `adapt_eval_schema` 填入（診斷用）。
+
+---
+
+#### `/brain/conversation_trace`
+
+**說明**：Primary conversation engine（legacy 或 langgraph）的執行 trace。每個 pipeline 階段發一筆，供 Studio Skill Trace Drawer 可視化決策過程。
+**發布者**：`llm_bridge_node`（legacy 時發）、`pawai_brain` conversation engine（langgraph 時發）
+**訂閱者**：`studio_gateway`（展示 trace）、除錯工具
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema** (v2.7)：
+```json
+{
+  "session_id": { "type": "string",                              "description": "speech session ID，與 chat_candidate 一致" },
+  "engine":     { "type": "string",                              "enum": ["legacy", "langgraph"], "description": "發布來源引擎" },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "context", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"], "description": "pipeline 階段" },
+  "status":     { "type": "string",                              "description": "階段狀態（見下表）" },
+  "detail":     { "type": "string",                              "description": "階段特定訊息（如錯誤原因、skill 名稱、fallback 理由）" },
+  "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }
+}
+```
+
+**`status` enum 按 stage 分類**：
+
+| stage | 適用 status | 說明 |
+|-------|-----------|------|
+| `input` | `ok` \| `error` | 輸入驗證 |
+| `safety_gate` | `ok` \| `blocked` \| `error` | 安全層檢查 |
+| `context` | `ok` \| `retry` \| `error` | 上下文提取 |
+| `memory` | `ok` \| `error` | 記憶查詢 |
+| `llm_decision` | `ok` \| `fallback` \| `error` | LLM 調用（失敗 → fallback） |
+| `json_validate` | `ok` \| `retry` \| `error` | JSON 格式驗證 |
+| `repair` | `ok` \| `fallback` \| `error` | JSON 修復（失敗 → fallback） |
+| `skill_gate` | `proposed` \| `accepted` \| `accepted_trace_only` \| `blocked` \| `rejected_not_allowed` | Brain 的 skill allowlist + safety 檢查 |
+| `output` | `ok` \| `error` | 最終輸出（如 publish chat_candidate） |
+
+**範例**（skill 被 allowlist 過濾）：
+```json
+{
+  "session_id": "speech-1730000000",
+  "engine": "legacy",
+  "stage": "skill_gate",
+  "status": "rejected_not_allowed",
+  "detail": "proposed_skill='undefined_skill' not in allowlist",
+  "ts": 1730000000.456
+}
+```
+
+**範例**（skill 通過核可）：
+```json
+{
+  "session_id": "speech-1730000000",
+  "engine": "legacy",
+  "stage": "skill_gate",
+  "status": "accepted",
+  "detail": "show_status",
+  "ts": 1730000000.457
+}
+```
+
+**範例**（LLM 落地到 fallback）：
+```json
+{
+  "session_id": "speech-1730000000",
+  "engine": "legacy",
+  "stage": "llm_decision",
+  "status": "fallback",
+  "detail": "openrouter timeout; fallback to RuleBrain",
+  "ts": 1730000000.123
+}
+```
+
+---
+
+#### `/brain/conversation_trace_shadow`
+
+**說明**：Shadow conversation engine（LangGraph 或其他試驗版）的執行 trace。Schema 同 `/brain/conversation_trace`，但發布者為 shadow engine，**禁止** publish `/brain/chat_candidate` 或 `/brain/conversation_trace`。
+**發布者**：`pawai_brain` shadow engine（如 LangGraph shadow）
+**訂閱者**：`studio_gateway`（trace 展示）、除錯工具、A/B 比較系統
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/String` (JSON)
+
+**Schema**（同 `/brain/conversation_trace`）：
+```json
+{
+  "session_id": { "type": "string" },
+  "engine":     { "type": "string",                              "enum": ["legacy", "langgraph", "shadow"] },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "context", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"] },
+  "status":     { "type": "string" },
+  "detail":     { "type": "string" },
+  "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }
+}
+```
+
+**用途與約束**：
+- Shadow engine 可用 `engine="langgraph"` 或 `engine="shadow"` 標記自己（供前端 UI 分組顯示）
+- **禁止** shadow 發 `/brain/chat_candidate`（確保 primary 唯一性）
+- **禁止** shadow 發 `/brain/conversation_trace`（primary 專用）
+- shadow 的決策結果（如 proposed_skill）只作 trace，不驅動執行，完全隔離主線
+- Studio Trace Drawer 可同時展示 primary 與 shadow 的 stage 流程，用不同顏色/分欄區別
+
+---
+
 ### 5.1 `/webrtc_req`
 
 **說明**：Go2 WebRTC 命令（Skill 執行、音訊播放）
@@ -1040,6 +1191,7 @@ if not required.issubset(payload.keys()):
 | v2.2 | 2026-04-01 | Executive v0 取代 router+bridge；新增 `/executive/status`(v0)、`/event/obstacle_detected`(planned)；deprecate interaction_router/event_action_bridge 及其 3 個 topic；`/state/executive/brain` 標記 planned | System Architect |
 | v2.3 | 2026-04-05 | 新增 `/event/object_detected`（YOLO26n 物體偵測，多物件 objects 陣列 schema）；obstacle_detected 章節重編號 4.8→4.9 | System Architect |
 | v2.4 | 2026-04-05 | `/event/object_detected` 擴充至 COCO 80 class（預設全開）；`class_name` enum → reference `coco_classes.py`；新增 `class_whitelist` 參數可縮減 | System Architect |
+| v2.7 | 2026-05-06 | Phase 0.5 Conversation Engine：`/brain/chat_candidate` 新增 4 欄位（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`）；新增 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` topics | System Architect |
 
 ---
 
@@ -1052,4 +1204,4 @@ if not required.issubset(payload.keys()):
 ---
 
 *維護者：System Architect*
-*狀態：v2.2 凍結*
+*狀態：v2.7 active（Phase 0.5 Conversation Engine）*
