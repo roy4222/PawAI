@@ -245,3 +245,21 @@ def test_adapt_eval_schema_unchanged_for_legacy_skill():
     bridge = adapt_eval_schema({"reply": "stop", "skill": "stop_move", "args": {}})
     assert bridge["selected_skill"] == "stop_move"
     assert bridge["reply_text"] == "stop"
+
+
+def test_extract_proposal_treats_chat_reply_as_no_side_effect():
+    """Persona returning skill='chat_reply' is redundant with reply_text — surface as None."""
+    proposal = extract_proposal({"reply": "你好", "skill": "chat_reply", "args": {}})
+    assert proposal["proposed_skill"] is None
+
+
+def test_extract_proposal_treats_say_canned_as_no_side_effect():
+    proposal = extract_proposal({"reply": "好的", "skill": "say_canned", "args": {}})
+    assert proposal["proposed_skill"] is None
+
+
+def test_extract_proposal_still_passes_through_real_side_effects():
+    """show_status, self_introduce, dance, wiggle — all should pass through (brain gates them)."""
+    for s in ("show_status", "self_introduce", "dance", "wiggle"):
+        proposal = extract_proposal({"reply": "...", "skill": s, "args": {}})
+        assert proposal["proposed_skill"] == s

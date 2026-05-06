@@ -432,3 +432,19 @@ def test_chat_candidate_with_no_proposal_only_chat_reply(brain):
     assert [p["selected_skill"] for p in plans] == ["chat_reply"]
     traces = _drain_traces(brain)
     assert not any(t["stage"] == "skill_gate" for t in traces)
+
+
+def test_chat_candidate_for_orphan_session_drops_proposal_and_reply(brain):
+    """Late LLM response after timeout: no chat_reply, no skill, no trace."""
+    # Do NOT call feed_speech first — session is unknown / orphan.
+    _feed_chat_candidate(brain, {
+        "session_id": "orphan-session",
+        "reply_text": "我是 PawAI",
+        "proposed_skill": "show_status",
+        "proposed_args": {},
+        "engine": "legacy",
+    })
+    plans = _drain_proposals(brain)
+    assert plans == []  # no chat_reply, no show_status
+    traces = _drain_traces(brain)
+    assert not any(t["stage"] == "skill_gate" for t in traces)

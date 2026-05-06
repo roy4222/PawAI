@@ -310,8 +310,12 @@ class BrainNode(Node):
             buffered = self._state.chat_buffer.pop(session_id, None)
             self._state.fallback_active = False
 
-        # 1. Always speak the reply (if non-empty and we were waiting on this session).
-        if reply_text and buffered is not None:
+        # Stale candidate (session already timed out / unknown) — drop everything.
+        if buffered is None:
+            return
+
+        # 1. Always speak the reply (if non-empty).
+        if reply_text:
             timer = self._chat_timeouts.pop(session_id, None)
             if timer is not None:
                 self.destroy_timer(timer)

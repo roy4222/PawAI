@@ -149,6 +149,13 @@ def adapt_eval_schema(eval_obj: dict, fallback_intent: str = "chat") -> dict:
     }
 
 
+# Persona skills that are semantically equivalent to "no side-effect proposal":
+# the reply_text already conveys the action. Don't surface them as a skill
+# proposal — brain_node would reject them as "rejected_not_allowed" on every
+# normal chat turn, flooding Studio trace with spurious rejections.
+_PASSTHROUGH_SKILLS = frozenset({"chat_reply", "say_canned"})
+
+
 def extract_proposal(eval_obj: dict) -> dict:
     """Pull skill proposal fields from persona JSON, bypassing legacy filtering.
 
@@ -156,15 +163,24 @@ def extract_proposal(eval_obj: dict) -> dict:
     selected_skill), this preserves any skill name. brain_node enforces its
     own allowlist downstream -- this is just a faithful pass-through.
 
+    Skills in _PASSTHROUGH_SKILLS (chat_reply, say_canned) are semantically
+    equivalent to "no side effect beyond saying the reply" — they map to
+    proposed_skill=None so brain_node never sees them as a proposal at all.
+    This is a semantic filter, not a policy gate (policy gating still lives
+    in brain_node).
+
     Returns:
         dict with keys {proposed_skill, proposed_args, proposal_reason}.
-        proposed_skill is None if persona did not include one.
+        proposed_skill is None if persona did not include one or if the skill
+        is a passthrough (SAY-only, no side effect).
     """
     if not isinstance(eval_obj, dict):
         eval_obj = {}
 
     raw_skill = eval_obj.get("skill")
     proposed_skill = raw_skill.strip() if isinstance(raw_skill, str) and raw_skill.strip() else None
+    if proposed_skill in _PASSTHROUGH_SKILLS:
+        proposed_skill = None
 
     raw_args = eval_obj.get("args")
     proposed_args = raw_args if isinstance(raw_args, dict) else {}
