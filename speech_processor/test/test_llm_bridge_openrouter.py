@@ -191,7 +191,10 @@ class TestCallOpenRouter(unittest.TestCase):
         out = self.stub._call_openrouter("google/gemini-3-flash-preview", "hi", 2.0)
         self.assertTrue(out["ok"])
         # Result must include all required legacy fields plus Phase 0.5 proposal fields
-        self.assertTrue(LLM_REQUIRED_FIELDS.issubset(set(out["result"].keys())))
+        out_result_keys = set(out["result"].keys())
+        self.assertTrue(LLM_REQUIRED_FIELDS.issubset(out_result_keys))
+        PHASE05_FIELDS = {"proposed_skill", "proposed_args", "proposal_reason"}
+        self.assertTrue(PHASE05_FIELDS.issubset(out_result_keys))
         self.assertEqual(out["result"]["selected_skill"], "hello")
 
     @patch("speech_processor.llm_bridge_node.requests.post")

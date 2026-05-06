@@ -650,6 +650,10 @@ class LlmBridgeNode(Node):
 
         proposal = extract_proposal(parsed)
         result = self._post_process_reply(bridge_dict)
+        assert not (result.keys() & proposal.keys()), (
+            f"chat_candidate field collision between adapt_eval_schema and extract_proposal: "
+            f"{result.keys() & proposal.keys()}"
+        )
         result.update(proposal)
         return {"ok": True, "result": result}
 
