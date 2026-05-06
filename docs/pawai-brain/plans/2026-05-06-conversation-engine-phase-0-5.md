@@ -1197,6 +1197,9 @@ class ConversationGraphNode(Node):
         self.declare_parameter("conversation_engine", "shadow")  # shadow | langgraph
         engine_role = self.get_parameter("conversation_engine").get_parameter_value().string_value
         self._role = engine_role  # "shadow" today; "langgraph" reserved for Phase 1
+        # NOTE: engine label MUST be "langgraph" (matches contract enum and frontend
+        # ConversationTracePayload.engine type). Do NOT set this to "shadow" — the
+        # shadow role is encoded in the topic suffix (`_shadow`), not the engine field.
         self._engine_label = "langgraph"
 
         self._graph = build_graph()
