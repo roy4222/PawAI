@@ -11,10 +11,12 @@ caching, and multiple provider support.
 """
 
 import base64
+import concurrent.futures
 import io
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -141,7 +143,7 @@ class TTSConfig:
     # (timeout 6.0s = baseline + ~30% headroom).
     openrouter_gemini_voice: str = "Despina"
     openrouter_gemini_model: str = "google/gemini-3.1-flash-tts-preview"
-    openrouter_gemini_timeout_s: float = 6.0
+    openrouter_gemini_timeout_s: float = 60.0
 
 
 class AudioCache:
@@ -498,9 +500,73 @@ class TTSProvider_OpenRouterGemini:
                 "fail every synthesize() call until env is configured"
             )
 
-    def synthesize(self, text: str) -> Optional[bytes]:
-        if not self._api_key:
-            return None
+    # Gemini Flash TTS Preview drops tail randomly when input ≥ ~80 chars
+    # (5/6 evening empirical: 95-char chunks lose 25% of audio). Stay well
+    # under that threshold; rely on parallel synthesis to keep latency flat.
+    CHUNK_MAX_CHARS: int = 40
+    SENTENCE_PUNCT: str = "。！？!?\n"
+
+    _AUDIO_TAG_RE = re.compile(r"^\s*(\[[a-zA-Z][a-zA-Z _-]*\])\s*")
+
+    def _split_for_tts(self, text: str) -> list[str]:
+        """Split text into chunks ≤ CHUNK_MAX_CHARS at sentence boundaries.
+
+        If text starts with an audio tag like ``[whispers]``, prepend that tag
+        to every subsequent chunk so Gemini keeps the same voice characteristics
+        across the whole reply (otherwise chunks 2+ revert to default voice).
+        """
+        text = text.strip()
+        if not text:
+            return []
+
+        m = self._AUDIO_TAG_RE.match(text)
+        leading_tag = m.group(1) if m else ""
+        body = text[m.end() :].strip() if m else text
+
+        if len(text) <= self.CHUNK_MAX_CHARS:
+            return [text]
+
+        raw_chunks: list[str] = []
+        buf = ""
+        for ch in body:
+            buf += ch
+            if ch in self.SENTENCE_PUNCT and len(buf) >= self.CHUNK_MAX_CHARS // 2:
+                raw_chunks.append(buf.strip())
+                buf = ""
+            elif len(buf) >= self.CHUNK_MAX_CHARS:
+                cut = max(buf.rfind("，"), buf.rfind(","), buf.rfind(" "))
+                if cut > self.CHUNK_MAX_CHARS // 2:
+                    raw_chunks.append(buf[: cut + 1].strip())
+                    buf = buf[cut + 1 :]
+                else:
+                    raw_chunks.append(buf.strip())
+                    buf = ""
+        if buf.strip():
+            raw_chunks.append(buf.strip())
+
+        if not leading_tag:
+            return [c for c in raw_chunks if c]
+
+        # First chunk already has the tag (it's at the start of `text`); only
+        # prepend to subsequent chunks to keep voice consistent.
+        out: list[str] = []
+        for idx, chunk in enumerate(raw_chunks):
+            if not chunk:
+                continue
+            if idx == 0:
+                out.append(f"{leading_tag} {chunk}")
+            else:
+                out.append(f"{leading_tag} {chunk}")
+        return out
+
+    def _timed_chunk(self, text: str) -> tuple[Optional[bytes], float]:
+        """Wrap _synthesize_chunk with wall-clock timing for parallel debug."""
+        t0 = time.monotonic()
+        pcm = self._synthesize_chunk(text)
+        return pcm, time.monotonic() - t0
+
+    def _synthesize_chunk(self, text: str) -> Optional[bytes]:
+        """One OpenRouter TTS request → raw PCM bytes (no WAV header)."""
         try:
             response = requests.post(
                 self.OPENROUTER_TTS_URL,
@@ -537,9 +603,75 @@ class TTSProvider_OpenRouterGemini:
 
         pcm = response.content
         if not pcm or pcm.startswith(b"{"):
-            # Defensive: 200 with JSON body would mean upstream contract drift.
             _logger.warning("openrouter_gemini empty or JSON body, len=%d", len(pcm))
             return None
+        return pcm
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        if not self._api_key:
+            return None
+
+        chunks = self._split_for_tts(text)
+        if not chunks:
+            return None
+
+        if len(chunks) == 1:
+            pcm = self._synthesize_chunk(chunks[0])
+            if pcm is None:
+                return None
+            full_pcm = pcm
+        else:
+            t0 = time.monotonic()
+            _logger.warning(
+                "openrouter_gemini: %d chunks parallel, sizes=%s",
+                len(chunks),
+                [len(c) for c in chunks],
+            )
+            # Fire all chunks in parallel; preserve order via index map.
+            results: list[Optional[bytes]] = [None] * len(chunks)
+            timings: list[float] = [0.0] * len(chunks)
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(len(chunks), 8)
+            ) as pool:
+                future_to_idx = {}
+                for idx, chunk in enumerate(chunks):
+                    fut = pool.submit(self._timed_chunk, chunk)
+                    future_to_idx[fut] = idx
+                for fut in concurrent.futures.as_completed(future_to_idx):
+                    idx = future_to_idx[fut]
+                    pcm, latency = fut.result()
+                    results[idx] = pcm
+                    timings[idx] = latency
+                    if pcm is None:
+                        _logger.warning(
+                            "openrouter_gemini chunk[%d] FAILED (%.2fs) text=%r",
+                            idx,
+                            latency,
+                            chunks[idx][:30],
+                        )
+                    else:
+                        _logger.warning(
+                            "openrouter_gemini chunk[%d] ok (%.2fs, %d bytes)",
+                            idx,
+                            latency,
+                            len(pcm),
+                        )
+
+            # Concatenate in original order, skip failed chunks gracefully.
+            ok_parts = [p for p in results if p is not None]
+            if not ok_parts:
+                _logger.warning("openrouter_gemini: all chunks failed")
+                return None
+            full_pcm = b"".join(ok_parts)
+            wall = time.monotonic() - t0
+            _logger.warning(
+                "openrouter_gemini: %d/%d chunks ok in %.2fs wall (max single=%.2fs), %.1fs audio",
+                sum(1 for p in results if p is not None),
+                len(chunks),
+                wall,
+                max(timings),
+                len(full_pcm) / (self.sample_rate * 2),
+            )
 
         # Wrap raw PCM (24kHz / 16-bit / mono) in a WAV container.
         wav_io = io.BytesIO()
@@ -547,7 +679,7 @@ class TTSProvider_OpenRouterGemini:
             wf.setnchannels(1)
             wf.setsampwidth(2)  # 16-bit
             wf.setframerate(self.sample_rate)
-            wf.writeframes(pcm)
+            wf.writeframes(full_pcm)
         return wav_io.getvalue()
 
 
@@ -1004,7 +1136,7 @@ class EnhancedTTSNode(Node):
                         ["aplay", "-D", self.config.local_output_device, tmp_path],
                         check=True,
                         capture_output=True,
-                        timeout=30,
+                        timeout=max(30.0, audio.duration_seconds + 10.0),
                     )
                 finally:
                     os.unlink(tmp_path)
