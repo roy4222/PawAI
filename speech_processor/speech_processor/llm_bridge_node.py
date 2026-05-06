@@ -42,6 +42,7 @@ from .llm_contract import (
     P0_SKILLS,
     SKILL_TO_CMD,
     adapt_eval_schema,
+    extract_proposal,
     parse_llm_response,
     strip_markdown_fences,
 )
@@ -647,7 +648,10 @@ class LlmBridgeNode(Node):
         else:
             bridge_dict = adapt_eval_schema(parsed)
 
-        return {"ok": True, "result": self._post_process_reply(bridge_dict)}
+        proposal = extract_proposal(parsed)
+        result = self._post_process_reply(bridge_dict)
+        result.update(proposal)
+        return {"ok": True, "result": result}
 
     def _try_openrouter_chain(
         self, user_message: str, fallback_intent: str = "chat"
@@ -929,6 +933,9 @@ class LlmBridgeNode(Node):
                     intent=intent,
                     selected_skill=selected_skill,
                     confidence=confidence,
+                    proposed_skill=result.get("proposed_skill"),
+                    proposed_args=result.get("proposed_args", {}),
+                    proposal_reason=result.get("proposal_reason", ""),
                 )
             # face/state-triggered LLM responses are silently dropped in brain mode;
             # Brain owns face → greet_known_person via its own face rule.
@@ -995,6 +1002,9 @@ class LlmBridgeNode(Node):
                     intent=intent,
                     selected_skill=skill,
                     confidence=confidence,
+                    proposed_skill=None,
+                    proposed_args={},
+                    proposal_reason="",
                 )
             return
         # ── legacy mode below (unchanged) ────────────────────────────
@@ -1051,12 +1061,15 @@ class LlmBridgeNode(Node):
         intent: str,
         selected_skill: str | None,
         confidence: float,
+        proposed_skill: str | None = None,
+        proposed_args: dict | None = None,
+        proposal_reason: str = "",
     ) -> None:
         """Brain-mode output: publish reply for Brain to consume.
 
-        selected_skill is diagnostic only — Brain MVS only uses reply_text.
-        Empty reply_text is allowed; Brain will fall through to its
-        chat_candidate timeout (say_canned).
+        selected_skill is legacy diagnostic (4 P0 commands only).
+        proposed_skill / proposed_args are the new Phase 0.5 contract;
+        brain_node enforces an allowlist downstream.
         """
         payload = {
             "session_id": session_id,
@@ -1066,12 +1079,18 @@ class LlmBridgeNode(Node):
             "source": "llm_bridge",
             "confidence": float(confidence),
             "created_at": time.time(),
+            # Phase 0.5 additions
+            "proposed_skill": proposed_skill,
+            "proposed_args": proposed_args if isinstance(proposed_args, dict) else {},
+            "proposal_reason": proposal_reason,
+            "engine": "legacy",
         }
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
         self.chat_candidate_pub.publish(msg)
         self.get_logger().info(
-            f"Published /brain/chat_candidate: session={session_id} reply={reply_text!r}"
+            f"Published /brain/chat_candidate: session={session_id} "
+            f"reply={reply_text!r} proposed={proposed_skill}"
         )
 
     # ── State publish ───────────────────────────────────────────────────

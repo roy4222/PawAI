@@ -190,7 +190,8 @@ class TestCallOpenRouter(unittest.TestCase):
         mock_post.return_value = _good_response(skill="hello", reply="嗨")
         out = self.stub._call_openrouter("google/gemini-3-flash-preview", "hi", 2.0)
         self.assertTrue(out["ok"])
-        self.assertEqual(set(out["result"].keys()), LLM_REQUIRED_FIELDS)
+        # Result must include all required legacy fields plus Phase 0.5 proposal fields
+        self.assertTrue(LLM_REQUIRED_FIELDS.issubset(set(out["result"].keys())))
         self.assertEqual(out["result"]["selected_skill"], "hello")
 
     @patch("speech_processor.llm_bridge_node.requests.post")
