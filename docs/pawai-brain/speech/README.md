@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Chat 閉環 12 句通過** |
-| 版本/決策 | **LLM locked**: `google/gemini-3-flash-preview` (OpenRouter) ／ **TTS locked**: `google/gemini-3.1-flash-tts-preview` (OpenRouter, Despina voice)；ASR 用 SenseVoice cloud；fallback chain 完整保留作離線/網路斷線備援 |
-| 完成度 | 92% |
-| 最後驗證 | 2026-05-04（Jetson smoke + B1 Plan D TTS rewrite，commits `29d46dd` / `54c68d0`） |
+| 狀態 | **Phase 0.5 Cut 1 上線**：chat_candidate 升級成 SkillProposal contract（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`），brain_node 端 `LLM_PROPOSABLE_SKILLS = {show_status, self_introduce}` allowlist 把關 |
+| 版本/決策 | **LLM locked**: `google/gemini-3-flash-preview` (OpenRouter) ／ **TTS locked**: `google/gemini-3.1-flash-tts-preview` (OpenRouter, Despina voice)；ASR 用 SenseVoice cloud；fallback chain 完整保留作離線/網路斷線備援。Phase 0.5 spec: `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` |
+| 完成度 | 93% |
+| 最後驗證 | 2026-05-06 night（Phase 0.5 Cut 1 + 5 perception demo + nav2-amcl demo 真機錄完，brain trace 三態 accepted/accepted_trace_only/rejected_not_allowed 全部視覺驗證） |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
 | 測試 | `python3 -m pytest speech_processor/test/ -v` |
 
@@ -262,10 +262,69 @@ llm_bridge_node（output_mode=brain）
 - 重 build 後第一次完整 smoke test 還沒跑，確認 reply 不再卡 40 char
 - DeepSeek V4 Flash vs Gemini 2.5 Flash 在「真實長回覆」情境下的比較還沒做（之前的 A/B 都被 stale install 干擾，無效）
 
+## 5/6 night — Phase 0.5 Cut 1（chat_candidate SkillProposal contract）
+
+完整 spec / plan：
+- Spec: `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`
+- Plan: `docs/pawai-brain/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task）
+- Contract: `docs/contracts/interaction_contract.md` v2.7
+
+### `/brain/chat_candidate` schema（既有 + Phase 0.5 新增 4 欄）
+
+```json
+{
+  "session_id": "speech-...",
+  "reply_text": "汪我會看你會聽你...",
+  "intent": "chat",
+  "selected_skill": null,            // legacy diagnostic（4 P0 skill）
+  "reasoning": "openrouter:eval_schema",
+  "confidence": 0.82,
+  // ── Phase 0.5 新增 ──
+  "proposed_skill": "show_status",   // null | "show_status" | "self_introduce"（brain allowlist 由它決定接受）
+  "proposed_args": {},
+  "proposal_reason": "openrouter:eval_schema",
+  "engine": "legacy"                 // legacy | langgraph
+}
+```
+
+`extract_proposal()`（`speech_processor/llm_contract.py`）從 persona JSON 直接帶 `skill` / `args` 進新欄，繞過 `adapt_eval_schema` 的 4-skill SKILL_TO_CMD 過濾。`chat_reply` / `say_canned` 視為「沒有 side effect 的提案」，會被 filter 成 `None` 避免 brain trace 被誤判 rejected。
+
+### Brain 端執行政策（`interaction_executive/brain_node.py`）
+
+```python
+LLM_PROPOSABLE_SKILLS = frozenset({"show_status", "self_introduce"})
+LLM_PROPOSAL_EXECUTE = {
+    "show_status":    "execute",       # chat_reply + 真執行 show_status
+    "self_introduce": "trace_only",    # chat_reply only；motion 序列保留給 Studio button
+}
+```
+
+每筆 chat_candidate 永遠先 enqueue `chat_reply`（reply_text 非空時）；提案另外走 allowlist + cooldown + safety gate，accepted/accepted_trace_only/blocked/rejected_not_allowed 四態都發 `/brain/conversation_trace`。
+
+### TTS chunking（5/6 night 對應 Gemini 3.1 Flash Preview tail-truncation 行為）
+
+`TTSProvider_OpenRouterGemini` 加：
+- `CHUNK_MAX_CHARS = 40`：Gemini Flash TTS Preview 在 ≥ 80 字 input 會隨機砍尾段 25%；40 字以下穩定。
+- `_AUDIO_TAG_RE`：偵測開頭 `[whispers]` / `[playful]` 等，prepend 給每段確保 voice 一致（chunk 2+ 否則回到預設音色）。
+- `ThreadPoolExecutor` parallel synthesize：N 段同時打 OpenRouter `/audio/speech`，wall ≈ 單段時間（不是 N × 單段）。
+- 完整 observability log：`chunks parallel sizes=[..]`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall, Ys audio`。
+
+**仍有未解 issue**：long-form 故事偶爾跳句（兩句講兩句跳）。根因疑似 Gemini docs §限制 4 提到的 prompt classifier 行為（`[whispers]` 沒有 preamble 包覆會被當成模糊指示）。修法 plan: `~/.claude/plans/gemini-api-nifty-rain.md`（Plan A: preamble + retry）。
+
+### Persona（`tools/llm_eval/persona.txt`）
+
+加 8 條具體功能清單（語音聊天 / 認熟人 / 看手勢 / 看姿勢 / 看物體 / 唸故事詩 / OK 動作 / safety），明定 LLM 別瞎編做不到的事。被問「你會什麼」時要從清單具體挑 2-4 條。
+
+---
+
 ## 下一步
 
 - [x] **OpenRouter 接入**（5/4 完成，B1 Plan D）：LLM/TTS 均走 OpenRouter，五級 fallback 全鏈通
 - [x] **LLM prompt 智慧化**（5/5 evening）：persona v3 寵物個性 / max_reply_chars=0 解鎖 / 對話記憶 / 環境 context
+- [x] **Phase 0.5 Cut 1**（5/6 night）：chat_candidate SkillProposal contract + brain allowlist + Studio trace + Gemini 3 Flash Preview primary
+- [ ] **Phase 0.5 Cut 2**：`pawai_brain` ROS2 package shadow skeleton（4 graph node + LangGraph dependency spike）
+- [ ] **Phase 0.5 Cut 3**：`llm_bridge_node` 抽 5 個 conversation/ 純 module（行為零變化）
+- [ ] **Gemini TTS skip句修復**：preamble + retry（plan: `~/.claude/plans/gemini-api-nifty-rain.md`）
 - [ ] **Stale install/ rebuild 後完整 smoke**：3 句固定題目（睡前故事 / 介紹功能 / 累陪聊），確認長 reply 不被砍
 - [ ] **長期持續 model A/B**：DeepSeek V4 Flash vs Gemini 2.5 Flash，看 persona 表現 / latency / cost
 - [ ] **LangGraph 重構評估（backlog）**：目前 chat + tool calling 邏輯散落 `llm_bridge_node`（1100 行）+ `brain_node`，使用者建議搬到 `pawai-studio/backend/chat_agent/`，5/16 demo 後再做

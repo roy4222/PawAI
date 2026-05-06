@@ -1,7 +1,52 @@
 # 專案狀態
 
-**最後更新**：2026-05-06 evening（object detection v2 — 12 colour HSV + 80 zh class + brain colour-aware TTS）
+**最後更新**：2026-05-06 night（Phase 0.5 Conversation Engine Cut 1 + 5 perception demos + nav2-amcl demo 全錄完）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/6 night 進度（Phase 0.5 Conversation Engine + demo 錄影）
+
+晚上分兩段：先做 Phase 0.5 Cut 1（chat_candidate 升級成 SkillProposal contract、Brain allowlist gate、Studio trace drawer chip、Gemini 3 Flash primary 切換），再把 5 個 perception 功能 + nav2-amcl 全部錄成 demo 影片。
+
+### Phase 0.5 Cut 1（spec → plan → 8 task 全綠）
+
+| 項目 | 結果 |
+|---|---|
+| Spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（5 次 review 修到綠） |
+| Plan | `docs/pawai-brain/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task） |
+| Cut 1 Task 1 — `extract_proposal()` | commit `618492f` + `74f210a`，5 unit test |
+| Cut 1 Task 2 — chat_candidate proposal fields | commit `fc32c18` + `4c1a718`，schema 新增 `proposed_skill` / `proposed_args` / `proposal_reason` / `engine` |
+| Cut 1 Task 3 — primary OpenRouter model 切 `google/gemini-3-flash-preview` | commit `77a277e`，同步 default + tmux 覆寫 |
+| Cut 1 Task 4 — brain_node `LLM_PROPOSABLE_SKILLS = {show_status, self_introduce}` allowlist + `/brain/conversation_trace` publisher | commit `4169bd4`，4 unit test（execute / trace_only / rejected / no proposal） |
+| Cut 1 Task 5 — Studio gateway broadcast `/brain/conversation_trace[_shadow]` | commit `fe0297e` |
+| Cut 1 Task 6 — Studio Trace Drawer chips (proposed/accepted/blocked/rejected) | commit `c65db0d` |
+| Cut 1 Task 7 — `interaction_contract.md` v2.7 | commit `472b733` |
+| Cut 1 review fixes — passthrough skills (`chat_reply` / `say_canned` 視為無 proposal) + orphan-session early return | commit `16e7130`，3+1 test |
+
+309 unit test 全綠（145 brain + 164 speech_processor）。Jetson 真機驗證：「你還好嗎」→ `accepted · show_status`、「你是誰」→ `accepted_trace_only · self_introduce`、「跳個舞吧」→ `rejected_not_allowed · dance` trace 三態都看得到。
+
+### TTS / Persona 微調（uncommitted → 本次同步進來）
+
+- `speech_processor/speech_processor/tts_node.py` — `TTSProvider_OpenRouterGemini` 加 `CHUNK_MAX_CHARS=40` + `_AUDIO_TAG_RE` 做 leading audio tag 偵測 + `ThreadPoolExecutor` parallel 各 chunk synthesize + 完整 observability log（`chunks parallel sizes=`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall`）。Gemini Flash TTS Preview 對 ≥ 80 字 input 會隨機砍尾段，40 字以下穩定。
+- `tools/llm_eval/persona.txt` — 加 8 條具體功能清單（語音聊天 / 認熟人 / 看手勢 / 看姿勢 / 看物體 / 唸故事詩 / OK 動作 / safety），明定別瞎編做不到的事。
+- 已知未解 issue：long-form 故事仍偶爾跳句，根因疑似 OpenRouter 的 `/audio/speech` route + `[whispers]` audio tag 的 prompt classifier 行為（per Gemini docs §限制 4）。Plan 已寫在 `~/.claude/plans/gemini-api-nifty-rain.md`，Plan A = preamble + retry，明天另行實作。
+
+### Demo 錄影（5 個 perception + 1 個 nav）
+
+| Demo | 模組 | 觸發路徑 | TTS provider |
+|---|---|---|---|
+| 人臉辨識 | `face_identity_node`（YuNet+SFace） | `/event/face_identity` → brain rule `known_face` → `greet_known_person` | edge_tts |
+| 語音功能 | `stt_intent_node` + `llm_bridge_node` + `tts_node` | `/event/speech_intent_recognized` → `/brain/chat_candidate` → `chat_reply` | openrouter_gemini (Despina) |
+| 手勢辨識 | `vision_perception_node`（gesture_recognizer） | `/event/gesture_detected` → brain `_GESTURE_DIRECT` → `wave_hello` 等 | edge_tts |
+| 姿勢辨識 | `vision_perception_node`（mediapipe pose） | `/event/pose_detected` → standing/sitting/bending（fallen 已關） | edge_tts |
+| 辨識物體 | `object_perception_node`（YOLO26n + 12 色 HSV） | `/event/object_detected` → `object_remark` zh + 顏色 | edge_tts |
+| 導航避障 | `nav2_bringup` + RPLIDAR + AMCL | Foxglove `/initialpose` 設位姿 → `/goal_pose` 1m / 0.8m,-0.4m | n/a |
+
+Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://100.83.109.89:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
+
+`brain_node` 改用 ROS param `unknown_face_accumulate_s=99999.0` 暫時關掉 stranger_alert 干擾錄影；正式環境改回 3.0。
+`llm_bridge_node` 在 Jetson 上 sed 掉 `FAST_PATH_INTENTS = set()`（demo 期讓所有 intent 都走 LLM；目前 WSL 仍是 `{greet, stop, sit, stand}`，回 demo 後同步決定要不要正式落 ROS param）。
 
 ---
 

@@ -202,6 +202,33 @@ StudioLayout (root mount)
 
 `SkillTraceContent`（5/4 抽出）= 純 trace + GateChip + Plan toggle 渲染，不含 drawer 開關。`SkillTraceDrawer` 是 legacy collapsible wrapper，內部 render `SkillTraceContent`。共用 + 避免 drawer-in-sheet 巢狀。
 
+### Phase 0.5 Conversation Trace chips（5/6 night, commit `c65db0d`）
+
+`SkillTraceContent` 在既有 brain proposals 列表下方新增 **Conversation Trace · N** 區塊，渲染 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` 兩條 topic（gateway 已在 commit `fe0297e` 加進 topic_map）。
+
+| Status | 顏色 | 觸發 |
+|---|---|---|
+| `accepted` / `ok` | emerald-500/20 | brain 接受 LLM 提案並真執行（如 `show_status`） |
+| `accepted_trace_only` | emerald-50/20 | brain 接受但 policy 是 trace_only（如 `self_introduce` 不自動跑 motion） |
+| `proposed` | slate | engine 端產生提案（pre-gate） |
+| `blocked` / `fallback` / `retry` | amber | cooldown / safety / OpenRouter fallback chain |
+| `rejected_not_allowed` / `error` | rose | 提案不在 brain `LLM_PROPOSABLE_SKILLS` allowlist |
+
+事件流：
+```
+/event/speech_intent_recognized
+  → llm_bridge_node（output_mode=brain）
+  → /brain/chat_candidate { reply_text, proposed_skill, ... , engine: "legacy" }
+  → brain_node._on_chat_candidate
+  → 永遠先 enqueue chat_reply
+  → 提案另走 allowlist → /brain/proposal + /brain/conversation_trace
+  → studio_gateway → WS event_type="conversation_trace" / "conversation_trace_shadow"
+  → use-event-stream.ts → state-store.appendConversationTrace
+  → SkillTraceContent
+```
+
+詳細 Schema + status enum：`docs/contracts/interaction_contract.md` v2.7（Phase 0.5 章節）+ spec `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` §4。
+
 ### Brain topic ↔ UI 對應
 
 | 訂閱 ROS2 → broadcast WS | Studio 渲染位置 |
