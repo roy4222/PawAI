@@ -55,9 +55,23 @@ class TestClassifyPose:
         assert conf > 0.5
 
     def test_sitting(self):
+        """Sitting now requires y-geometry: hip≈knee in y, ankle far below hip,
+        upright trunk. The angle-only stick figure can't satisfy this, so use
+        explicit keypoints reflecting a chair-sitting silhouette."""
         from vision_perception.pose_classifier import classify_pose
-        # Upright trunk, hip_angle ≈ 120°, trunk ≈ 5°
-        kps = _body_from_angles(hip_angle_deg=120, knee_angle_deg=100, trunk_angle_deg=5)
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Upright torso
+        kps[5] = [200, 200]    # L_SHOULDER
+        kps[6] = [220, 200]    # R_SHOULDER
+        kps[11] = [200, 300]   # L_HIP
+        kps[12] = [220, 300]   # R_HIP
+        # Hips and knees at roughly the same y (chair height)
+        kps[13] = [260, 295]   # L_KNEE (same level as hip)
+        kps[14] = [280, 295]   # R_KNEE
+        # Ankles dropped down (shins vertical)
+        kps[15] = [260, 380]   # L_ANKLE
+        kps[16] = [280, 380]   # R_ANKLE
+        kps[0] = [210, 170]    # NOSE
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, conf = classify_pose(kps, scores, bbox_ratio=0.6)
         assert pose == "sitting"
@@ -204,3 +218,225 @@ class TestClassifyPose:
         # Wide bbox (person lying across frame)
         pose, _ = classify_pose(kps, scores, bbox_ratio=2.5)
         assert pose == "fallen", "Person lying flat must be detected as fallen"
+
+    # ── New tests (5/6 pose classifier improvements) ──────────────────
+
+    def test_fallen_no_bbox_required(self):
+        """fallen must trigger from trunk + vertical_ratio alone, even when
+        bbox_ratio is None — keypoint-derived bbox can be unreliable for
+        curled-up fallen poses."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=170, knee_angle_deg=170, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=None)
+        assert pose == "fallen"
+
+    def test_fallen_curled_legs_bent(self):
+        """Old rule (bbox-gated) AND any future rule must NOT require straight
+        legs for fallen — elderly often fall with knees flexed."""
+        from vision_perception.pose_classifier import classify_pose
+        # Trunk near horizontal, legs flexed at 90°, no bbox passed.
+        kps = _body_from_angles(hip_angle_deg=90, knee_angle_deg=90, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=None)
+        assert pose == "fallen"
+
+    def test_sitting_not_fallen_when_curled(self):
+        """A seated person leaning forward (trunk 40°, legs flexed) with
+        bbox_ratio > 1.0 must NOT be classified as fallen — vertical_ratio
+        keeps fallen out, even though bbox is wide."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=90, knee_angle_deg=90, trunk_angle_deg=40)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.1)
+        assert pose != "fallen", "Curled sitting must not trigger fallen"
+        # Geometry here matches crouching, not sitting (trunk 40° > 35°).
+        assert pose in ("sitting", "crouching")
+
+    def test_sitting_y_geometry(self):
+        """Sitting recognised by hip≈knee y + ankle far below hip + upright
+        trunk, even when knee is just slightly below hip (high chair)."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        kps[5] = [200, 200]    # L_SHOULDER
+        kps[6] = [220, 200]    # R_SHOULDER
+        kps[11] = [200, 300]   # L_HIP
+        kps[12] = [220, 300]   # R_HIP
+        # Knees just above hip in y (low stool)
+        kps[13] = [255, 290]   # L_KNEE
+        kps[14] = [275, 290]   # R_KNEE
+        # Ankles below hip (shins angled forward and down)
+        kps[15] = [260, 380]   # L_ANKLE
+        kps[16] = [280, 380]   # R_ANKLE
+        kps[0] = [210, 170]    # NOSE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.7)
+        assert pose == "sitting"
+
+    def test_akimbo_basic(self):
+        """雙手叉腰: wrists at hip y, elbows externally bent, otherwise standing."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Standing torso (legs straight, trunk vertical)
+        kps[5] = [180, 200]    # L_SHOULDER
+        kps[6] = [220, 200]    # R_SHOULDER
+        kps[11] = [180, 300]   # L_HIP
+        kps[12] = [220, 300]   # R_HIP
+        kps[13] = [180, 400]   # L_KNEE
+        kps[14] = [220, 400]   # R_KNEE
+        kps[15] = [180, 500]   # L_ANKLE
+        kps[16] = [220, 500]   # R_ANKLE
+        kps[0] = [200, 170]    # NOSE
+        # Akimbo arms: elbow bowed outward, wrist back at hip
+        kps[7] = [140, 270]    # L_ELBOW (out left, slightly above hip)
+        kps[8] = [260, 270]    # R_ELBOW (out right)
+        kps[9] = [180, 300]    # L_WRIST (on L_HIP)
+        kps[10] = [220, 300]   # R_WRIST (on R_HIP)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.6)
+        assert pose == "akimbo"
+
+    def test_akimbo_arms_dangling(self):
+        """Same standing torso but arms hanging down → standing, NOT akimbo."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        kps[5] = [180, 200]
+        kps[6] = [220, 200]
+        kps[11] = [180, 300]
+        kps[12] = [220, 300]
+        kps[13] = [180, 400]
+        kps[14] = [220, 400]
+        kps[15] = [180, 500]
+        kps[16] = [220, 500]
+        kps[0] = [200, 170]
+        # Arms straight down
+        kps[7] = [180, 280]    # L_ELBOW
+        kps[8] = [220, 280]    # R_ELBOW
+        kps[9] = [180, 380]    # L_WRIST (well below hip)
+        kps[10] = [220, 380]   # R_WRIST
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.6)
+        assert pose == "standing"
+
+    def test_knee_kneel_left(self):
+        """單膝跪地 — left knee dropped near floor (larger y), right leg
+        supporting at ~90° (sitting-like). Must classify as knee_kneel,
+        not crouching/standing."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Upright torso
+        kps[5] = [180, 200]    # L_SHOULDER
+        kps[6] = [220, 200]    # R_SHOULDER
+        kps[11] = [180, 300]   # L_HIP
+        kps[12] = [220, 300]   # R_HIP
+        # Asymmetric knees: L low (kneeling), R supporting at hip-level
+        kps[13] = [230, 400]   # L_KNEE  (kneel side: below)
+        kps[14] = [260, 290]   # R_KNEE  (support side: hip level)
+        # Ankles: L tucked behind (kneeling), R planted below (supporting)
+        kps[15] = [170, 420]   # L_ANKLE (back, knee bent)
+        kps[16] = [280, 380]   # R_ANKLE (planted)
+        kps[0] = [200, 170]    # NOSE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.7)
+        assert pose == "knee_kneel"
+
+    def test_knee_kneel_both_bent_no_y_diff(self):
+        """Both knees bent at the same height = crouching, NOT knee_kneel.
+        Ensures knee_y_diff gate prevents shallow crouches from being
+        misread as half-kneeling."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=70, knee_angle_deg=70, trunk_angle_deg=20)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.7)
+        assert pose != "knee_kneel"
+
+    def test_knee_kneel_ankle_hidden(self):
+        """Kneel-side ankle occluded (score < _MIN_SCORE) must NOT block
+        knee_kneel detection — foot tucked under the body or hidden by floor
+        is the dominant real-world case. Standing-side ankle still required."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        kps[5] = [180, 200]    # L_SHOULDER
+        kps[6] = [220, 200]    # R_SHOULDER
+        kps[11] = [180, 300]   # L_HIP
+        kps[12] = [220, 300]   # R_HIP
+        # L knee on floor (low), R knee at hip level (support)
+        kps[13] = [230, 400]   # L_KNEE  (kneel side)
+        kps[14] = [260, 290]   # R_KNEE  (support side)
+        # L ankle position is anything — score will mark it hidden
+        kps[15] = [170, 420]   # L_ANKLE (occluded)
+        kps[16] = [280, 380]   # R_ANKLE (planted)
+        kps[0] = [200, 170]
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        scores[15] = 0.05  # L_ANKLE hidden — would fail the old uniform gate
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.7)
+        assert pose == "knee_kneel"
+
+    def test_fallen_rejected_when_shoulder_below_hip(self):
+        """MediaPipe sometimes hallucinates shoulder landmarks BELOW the hip
+        (negative vertical_ratio) at awkward viewpoints — akimbo, half-kneel,
+        partial body. Such frames must NOT trigger fallen; the new gate
+        requires `vertical_ratio >= 0` so the rest of the classifier (or
+        buffer-hold via None) decides instead."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Shoulders BELOW hips (anatomically impossible standing pose) —
+        # exactly the garbage MediaPipe occasionally produces.
+        kps[5] = [200, 320]    # L_SHOULDER (y > hip y)
+        kps[6] = [220, 320]    # R_SHOULDER
+        kps[11] = [200, 280]   # L_HIP
+        kps[12] = [220, 280]   # R_HIP
+        kps[13] = [200, 380]   # L_KNEE
+        kps[14] = [220, 380]   # R_KNEE
+        kps[15] = [200, 480]   # L_ANKLE
+        kps[16] = [220, 480]   # R_ANKLE
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.4)
+        assert pose != "fallen", "negative vertical_ratio must not trigger fallen"
+
+    def test_fallen_rejected_when_torso_visibility_low(self):
+        """Even when geometry says fallen, low shoulder/hip visibility means
+        MediaPipe is unsure — drop the verdict to avoid false alarms."""
+        from vision_perception.pose_classifier import classify_pose
+        # Real fallen geometry from test_actual_fallen_still_detected
+        kps = np.zeros((17, 2), dtype=np.float32)
+        kps[5] = [100, 300]
+        kps[6] = [140, 305]
+        kps[11] = [250, 310]
+        kps[12] = [290, 308]
+        kps[13] = [370, 305]
+        kps[14] = [410, 310]
+        kps[15] = [470, 300]
+        kps[16] = [510, 305]
+        kps[0] = [60, 295]
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # Shoulder + hip visibility low (MediaPipe unsure)
+        scores[5] = 0.2
+        scores[6] = 0.2
+        scores[11] = 0.3
+        scores[12] = 0.3
+        pose, _ = classify_pose(kps, scores, bbox_ratio=2.5)
+        assert pose != "fallen", "Low torso visibility must NOT trigger fallen"
+
+    def test_deep_bending_not_fallen(self):
+        """Bending forward to touch the floor: trunk near horizontal but legs
+        still going straight down → must classify as bending, NOT fallen."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = np.zeros((17, 2), dtype=np.float32)
+        # Shoulders projected forward + slightly down (head down to toes)
+        kps[5] = [100, 295]    # L_SHOULDER
+        kps[6] = [140, 290]    # R_SHOULDER
+        # Hips upright
+        kps[11] = [195, 300]   # L_HIP
+        kps[12] = [225, 300]   # R_HIP
+        # Knees + ankles vertically below hips (legs straight)
+        kps[13] = [195, 400]   # L_KNEE
+        kps[14] = [225, 400]   # R_KNEE
+        kps[15] = [195, 500]   # L_ANKLE
+        kps[16] = [225, 500]   # R_ANKLE
+        kps[0] = [80, 285]     # NOSE (well forward)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # Narrow bbox (tall body silhouette).
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.6)
+        assert pose != "fallen", "Deep bending with legs vertical must not be fallen"
+        assert pose == "bending"

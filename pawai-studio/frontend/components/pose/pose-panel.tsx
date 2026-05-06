@@ -233,7 +233,7 @@ export function PosePanel() {
 
               {recentEvents.length > 0 ? (
                 <div className="space-y-1.5">
-                  {recentEvents.map((event) => {
+                  {recentEvents.map((event, idx) => {
                     const eventPose = normalizePoseKey(event.pose)
                     const eventLabel = getPoseLabel(event.pose)
                     const eventEmoji = getPoseEmoji(event.pose)
@@ -241,7 +241,7 @@ export function PosePanel() {
 
                     return (
                       <div
-                        key={event.id}
+                        key={`${event.id}-${idx}`}
                         className="flex h-7 items-center gap-2 rounded-md border border-border/20 bg-surface/60 px-2 py-1"
                       >
                         <span className="text-sm leading-none">{eventEmoji}</span>
@@ -289,7 +289,7 @@ export function PosePanel() {
               <ScrollArea className="h-[65vh] px-4 py-3">
                 {fullHistory.length > 0 ? (
                   <div className="space-y-2 pb-2">
-                    {fullHistory.map((event) => {
+                    {fullHistory.map((event, idx) => {
                       const eventPose = normalizePoseKey(event.pose)
                       const eventLabel = getPoseLabel(event.pose)
                       const eventEmoji = getPoseEmoji(event.pose)
@@ -297,7 +297,7 @@ export function PosePanel() {
 
                       return (
                         <div
-                          key={`modal-${event.id}`}
+                          key={`modal-${event.id}-${idx}`}
                           className="flex items-center gap-2 rounded-md border border-border/20 bg-surface/60 px-2.5 py-1.5"
                         >
                           <span className="text-base leading-none">{eventEmoji}</span>

@@ -1,7 +1,43 @@
 # 專案狀態
 
-**最後更新**：2026-05-04 late evening（**Phase B Day 1 + Day 2 evening 完成 — 早 Skill Registry v1 / LLM eval / Studio chat-first；晚 Jetson smoke + B1 Plan D TTS 換血 5 stages 全綠**）
+**最後更新**：2026-05-06（pose classifier v3 升級 — community-validated rules + MediaPipe garbage frame guard）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/6 進度（pose_classifier v3）
+
+聚焦在 pose 分類器演算法升級，所有改動 scoped 在 `vision_perception` 套件。**5/12 主線 5 個動作（standing / sitting / crouching / bending / fallen）已上機通過**；akimbo / knee_kneel 真機仍 miss。
+
+### 演算法變更
+
+| 姿勢 | 變更 | 來源 |
+|---|---|---|
+| `fallen` | 解除 `bbox_ratio > 1.0` 必要條件；改 `0 ≤ vertical_ratio < 0.4` + torso 4 點 visibility ≥ 0.5 為主守門；新增 deep-bending guard（hip→ankle 與向下 < 30° + bbox ≤ 1.0 跳過 fallen） | Sun et al. 2020 / arXiv 2503.19501 / TDS fall-detection 論文 |
+| `sitting` | 改 y-geometry：trunk < 35° + `hip ≈ knee y`（< 0.12×torso）OR `knee_y < hip_y` + `ankle_y - hip_y > 0.5×torso` + knee_angle < 145° | LearnOpenCV / niharpalem squat 框架 |
+| `akimbo` | wrist-near-hip 改為 elbow-bowed-out（> hip_width × 0.4）為主訊號；vis 門檻 0.2 → 0.5；wrist 隱藏不再阻擋 | BleedAI tutorial / MediaPipe issue #4462 wrist drift 通報 |
+| `knee_kneel` | 新增 kneel-side `ankle.y ≈ knee.y`（< 0.20×torso）區分 kneel-vs-lunge；ankle vis 隱藏視為 kneel 訊號；vis 門檻 0.5 | Yoga_Poses-Dataset / Knee-Bend-Counter 社群 |
+| `bending` | 放寬到 `trunk > 30° + knee > 130° + hip < 160°` | — |
+| 順序 | `fallen → akimbo/standing → knee_kneel → sitting → crouching → bending → None`（sitting 必須先於 crouching/bending）| — |
+
+### 檔案改動
+
+- `vision_perception/vision_perception/pose_classifier.py` — 5 處 surgical edits + `_is_akimbo` / `_is_knee_kneel` 重寫
+- `vision_perception/test/test_pose_classifier.py` — 14 → 26 條（synthetic 全綠）
+- `vision_perception/vision_perception/vision_perception_node.py` — log 加 `torso_vis` / `arm_vis` 欄位（debug 用）
+- `pawai-studio/frontend/components/pose/pose-panel.tsx` — React duplicate key 修（`${event.id}-${idx}`）
+
+### 上機結果（5/6）
+
+- ✅ standing / sitting / crouching / bending / fallen 穩定（5/7 動作）
+- ❌ **akimbo / knee_kneel 真機仍 miss**（user 回報「基本完全測不出來」）— 已套社群實證規則，但 MediaPipe Pose 在這兩動作下仍 hallucinate landmark；候選後手：拉視野 1.5-3m、切 RTMPose-wholebody、加 hand keypoint
+- 真因確認：MediaPipe 在 awkward viewpoint 偶會把 shoulder 標到 hip 下方（trunk=160°+ + torso_vis=1.0），新 vertical_ratio gate 已攔住誤判 fallen，但這也讓 akimbo / knee_kneel 條件難滿足
+
+### 衍生 backlog
+
+- akimbo / knee_kneel 視野距離 / backend 切換實驗
+- pose_buffer deque(20) majority vote 切換延遲 ~1.5s — 暫不動
+- 完整 design plan: `~/.claude/plans/pose-validated-harp.md`
 
 ---
 

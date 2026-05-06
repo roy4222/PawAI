@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **上機驗收 4/4 PASS**，fallen 可關閉 |
+| 狀態 | **5/6 tune 後 5/7 上機通過**：standing / sitting / crouching / bending / fallen 穩定；akimbo / knee_kneel 仍不穩 |
 | 版本/決策 | MediaPipe Pose (CPU 18.5 FPS) |
-| 完成度 | 95% |
-| 最後驗證 | 2026-04-04（standing/sitting/fallen→EMERGENCY/恢復→IDLE 全 PASS） |
+| 完成度 | 90% |
+| 最後驗證 | 2026-05-06（5/7 動作上機，akimbo+knee_kneel 待繼續 tune） |
 | 入口檔案 | `vision_perception/vision_perception/pose_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
 
@@ -42,16 +42,21 @@ interaction_executive_node → fallen = EMERGENCY
 | 姿勢 | 判定邏輯 | 觸發 Skill | 台詞範本（demo bridge）| 狀態 |
 |------|---------|---|---|:---:|
 | standing | hip_angle > 155° + knee_angle > 155° | （預設，不觸發）| — | Active |
-| akimbo ✨ | standing + 雙手腕近髖（< hip_width × 0.6）+ 雙肘 60-135° | `akimbo_react` | 「你看起來很有架式喔！」（暫定）| **Active** (5/5) |
-| sitting | 100° < hip_angle < 150°, trunk < 35° | `sit_along` | 「會不會太累？」 | Active |
+| akimbo | standing 變體；shoulder/elbow/hip vis ≥ 0.5；雙肘往外 > hip_width × 0.4；elbow y 在 shoulder 與 hip+0.5×hip_width 之間；wrist 可見時 elbow 角 60-140° | `akimbo_react` | 「你看起來很有架式喔！」（暫定）| **不穩**（5/6） |
+| sitting | y-geometry：trunk < 35° + hip_y ≈ knee_y（< 0.12×torso）OR knee_y < hip_y + ankle_y - hip_y > 0.5×torso + knee_angle < 145° | `sit_along` | 「會不會太累？」 | Active |
 | crouching | hip_angle < 145°, knee_angle < 145°, trunk > 10° | （互動 say）| 「我在這裡喔」 | Active |
-| bending | trunk > 35°, hip_angle < 140°, knee_angle > 130° | `careful_remind` | 「請小心喔」 | Active |
-| knee_kneel ✨ | 一膝 y ≥ 髖 y + 該膝 < 100° + 另膝 > 130° | `knee_kneel_react` | 「需要我幫忙嗎？」（暫定）| **Active** (5/5) |
-| fallen | bbox_ratio > 1.0 AND trunk > 60° AND vertical_ratio < 0.4 | `fallen_alert`（EMERGENCY）| 「{name}，偵測到跌倒，請注意安全！」 | Active（可關）|
+| bending | trunk > 30°, knee_angle > 130°, hip_angle < 160°, bbox ≤ 1.0 | `careful_remind` | 「請小心喔」 | Active |
+| knee_kneel | 兩膝 y 差 > 0.07×torso；hip/knee/stand_ankle vis ≥ 0.5；kneel ankle 隱藏 OR ankle_y ≈ knee_y（< 0.20×torso）OR kneel 角 < 130°；stand 角 > 130° OR sitting-like 支撐 | `knee_kneel_react` | 「需要我幫忙嗎？」（暫定）| **不穩**（5/6） |
+| fallen | trunk > 60° AND 0 ≤ vertical_ratio < 0.4 AND torso vis ≥ 0.5；deep-bending guard：hip→ankle 與向下垂直夾角 < 30° 且 bbox ≤ 1.0 時跳過；bbox > 1.0 加 +0.05 confidence bonus（不再為硬條件）| `fallen_alert`（EMERGENCY）| 「{name}，偵測到跌倒，請注意安全！」 | Active（可關）|
 
-> 5/5 變更：akimbo 與 knee_kneel 從 Hidden TBD 升級為 Active，幾何規則已落地在 `vision_perception/vision_perception/pose_classifier.py:_is_akimbo` / `_is_knee_kneel`。
-> akimbo 在 standing 之後檢測（standing 變體）；knee_kneel 在 crouching 之前檢測（避免被「兩膝彎曲」吃掉）。
-> 5/5 實機初測：分類效果整體仍待 tune（threshold / vote / scale-invariant ratio），詳見 `~/.claude/projects/.../memory/project_pose_classifier_tuning_0505.md`。
+> **5/6 演算法升級**（commits TBD，base on community-validated rules）：
+> - `fallen` 解除「bbox_ratio > 1.0 必要條件」，改 vertical_ratio 為主守門 + torso visibility ≥ 0.5 拒掉 MediaPipe garbage frames（有時把 shoulder 標到 hip 下方）；新增 deep-bending guard 防止彎腰摸地誤判 fallen。
+> - `sitting` 改用 y-geometry（hip≈knee y + ankle 明顯低於 hip）取代角度法，避免與 bending / crouching 重疊。
+> - `akimbo` 主訊號改為 elbow-bowed-out（社群 BleedAI / MediaPipe issue #4462 的 wrist drift 坑），visibility 門檻從 0.2 提到 0.5。
+> - `knee_kneel` 新增 kneel-side ankle.y ≈ knee.y 區分 kneel-vs-lunge（社群 yoga-pose 規則）；ankle 隱藏視為 kneel 訊號。
+> - 順序：fallen → standing/akimbo → knee_kneel → sitting → crouching → bending → None。
+> 26/26 unit tests 全綠（synthetic）；上機 5/7 動作 PASS，akimbo + knee_kneel 真實 MediaPipe 數據仍待調校。
+> 完整 plan：`/home/roy422/.claude/plans/pose-validated-harp.md`。
 
 ## 操作限制與已知問題
 
@@ -59,7 +64,10 @@ interaction_executive_node → fallen = EMERGENCY
 - **僅支援單人追蹤**：多人時 MediaPipe 只追蹤一人
 - RTMPose balanced mode GPU 91-99%（備援方案，主線用 MediaPipe CPU 0%）
 - ~~正面站姿被誤判為 fallen~~ — **已修復（4/3）**：新增 `vertical_ratio` guard，用 shoulder-hip 垂直差 / torso 長度作為相對尺度（閾值 0.4），不受距離影響
+- ~~彎腰摸地被吃成 fallen~~ — **已修復（5/6）**：fallen 主分支內加 deep-bending guard（hip→ankle 向量與向下垂直夾角 < 30° + bbox ≤ 1.0 → 跳過）。
+- ~~MediaPipe garbage frame 觸發 fallen~~ — **已修復（5/6）**：trunk_angle 計算出 shoulder.y > hip.y（vertical_ratio 為負）的 frame 被拒；torso 4 點 visibility 平均 < 0.5 也拒。
 - 跌倒偵測可能誤報（椅子上趴下）
+- **akimbo / knee_kneel 上機不穩**（5/6 實測）：MediaPipe Pose 對手腕近髖、單膝跪地的 frame 經常 hallucinate landmark（trunk=160°+ 是常見訊號）。已套用社群實證的修法（elbow-bowed-out 主訊號、ankle.y ≈ knee.y 區分 kneel-vs-lunge），但實機仍偶有 miss。可能需要：(1) 拉視野到 1.5-3m（避免半身出框），(2) 改用 RTMPose-wholebody（GPU 路徑），(3) 加入 hand keypoint 訊號。
 - 幽靈跌倒偵測：投票 buffer（20 幀多數決）已大幅降低誤報，但未完全消除。**4/8 會議確認幻覺仍頻繁**（無人時鎖定衣架等物體判為 fallen）
 - **`enable_fallen` 已參數化**（4/6）：Demo 可關閉跌倒偵測避免誤報
 - 因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
@@ -106,7 +114,9 @@ interaction_executive_node → fallen = EMERGENCY
 - [x] fallen → EMERGENCY 整合進 executive（已 4/4 PASS）
 - [x] **akimbo / knee_kneel 判定演算法**（5/5 commit `ca32655`，`pose_classifier._is_akimbo` / `_is_knee_kneel` + demo bridge TTS template）
 - [x] **B4-5 fallen_alert + {name} 全鏈路**（5/5 commit `4f638ae`，event_action_bridge demo bridge 訂閱 `/state/perception/face` cache 最近 stable name + format("{name}")）
-- [ ] **7 姿勢實機 tuning**（5/5 user 回報分類效果不穩；threshold / vote / scale-invariant ratio 三方向）— 詳見 `~/.claude/projects/-home-roy422-newLife-elder-and-dog/memory/project_pose_classifier_tuning_0505.md`
+- [x] **7 姿勢演算法升級**（5/6，社群實證規則：elbow-bowed-out / ankle ≈ knee y / vertical_ratio 守門 / deep-bending guard，26 unit tests 全綠）
+- [x] **5/12 Sprint 5/7 上機驗證**：standing / sitting / crouching / bending / fallen 通過（5/6）
+- [ ] **akimbo / knee_kneel 上機 miss 修復**（5/6 user 回報「基本完全測不出來」）— 候選：拉視野距離、切 RTMPose-wholebody、加 hand keypoint
 - [ ] **5/12 Sprint Active 7 上機驗證**：sitting / crouching / bending / fallen-with-name / akimbo / knee_kneel / standing 各 3 次穩定觸發
 - [ ] **demo bridge 退場路徑**：把 pose→/tts 改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` 等）走 `/brain/proposal` → `/skill_result`（post-demo, Stretch P1）
 - [ ] 跌倒偵測幻覺（無人時鎖定衣架）— 投票 buffer 改 30 幀 OR 改 movement-based filter

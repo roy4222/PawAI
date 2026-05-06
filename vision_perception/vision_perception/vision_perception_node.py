@@ -303,9 +303,21 @@ class VisionPerceptionNode(Node):
                 k_a = _angle_deg(hip, knee, ankle)
                 t_a = _trunk_angle_deg(shoulder, hip)
                 br = bbox_ratio if bbox_ratio is not None else 0.0
+                # Torso visibility — used by fallen gate to reject MediaPipe
+                # garbage frames where shoulder/hip landmarks are hallucinated.
+                torso_vis = float(np.mean([
+                    body_scores[_L_SHOULDER], body_scores[_R_SHOULDER],
+                    body_scores[_L_HIP], body_scores[_R_HIP],
+                ]))
+                # Wrist+hip visibility — useful when debugging akimbo failures.
+                arm_vis = float(np.mean([
+                    body_scores[9], body_scores[10],   # L_WRIST, R_WRIST
+                    body_scores[7], body_scores[8],    # L_ELBOW, R_ELBOW
+                ]))
                 self.get_logger().info(
                     f"pose: raw={pose_raw} hip={h_a:.0f} knee={k_a:.0f} "
-                    f"trunk={t_a:.0f} bbox_r={br:.2f} vote={pose_vote}"
+                    f"trunk={t_a:.0f} bbox_r={br:.2f} torso_vis={torso_vis:.2f} "
+                    f"arm_vis={arm_vis:.2f} vote={pose_vote}"
                 )
 
         if pose_vote is not None and pose_vote != self.last_pose:
