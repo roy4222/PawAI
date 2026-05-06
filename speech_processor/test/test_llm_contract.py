@@ -18,6 +18,8 @@ from speech_processor.llm_contract import (
     LLM_REQUIRED_FIELDS,
     P0_SKILLS,
     SKILL_TO_CMD,
+    adapt_eval_schema,
+    extract_proposal,
     parse_llm_response,
     strip_markdown_fences,
 )
@@ -204,8 +206,6 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # 7. extract_proposal helpers (Phase 0.5, 2026-05-06)
 # ---------------------------------------------------------------------------
-
-from speech_processor.llm_contract import adapt_eval_schema, extract_proposal  # noqa: E402
 
 
 def test_extract_proposal_returns_skill_and_args_when_present():
