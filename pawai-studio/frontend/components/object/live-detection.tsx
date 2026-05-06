@@ -1,7 +1,7 @@
 "use client"
 
 // live-detection.tsx — 📡 即時偵測卡片 Grid（PR #40 port）
-import { isWhitelisted, getObjectEntry, getLabel } from "./object-config"
+import { isWhitelisted, getObjectEntry, getLabel, COLOR_ZH } from "./object-config"
 import { cn } from "@/lib/utils"
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -42,7 +42,7 @@ function ObjectCard({ obj, idx }: { obj: DetectionLite; idx: number }) {
           <span className="text-2xl select-none leading-none">{entry?.emoji ?? "📦"}</span>
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-semibold text-foreground leading-tight">
-              {obj.color && obj.color !== "Unknown" ? `${obj.color} ` : ""}
+              {obj.color && obj.color !== "Unknown" ? `${COLOR_ZH[obj.color] ?? obj.color} ` : ""}
               {getLabel(obj.class_name)}
             </span>
             <span className="text-[10px] text-muted-foreground font-mono">{obj.class_name}</span>

@@ -224,14 +224,41 @@ def test_pose_fallen_uses_name_when_available(brain):
 
 
 def test_object_detected_triggers_object_remark(brain):
-    brain._on_object(_msg({"label": "cup", "color": "red"}))
+    """Production payload format (objects[] array) with colour preamble + special suffix."""
+    brain._on_object(_msg({
+        "stamp": 1.0,
+        "event_type": "object_detected",
+        "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10], "color": "red"}],
+    }))
     plan = _latest(brain)
     assert plan["selected_skill"] == "object_remark"
-    assert plan["steps"][0]["args"]["text"] == "我看到一個red cup"
+    assert plan["steps"][0]["args"]["text"] == "看到紅色的杯子了，你要喝水嗎？"
+
+
+def test_object_legacy_flat_payload_still_works(brain):
+    """Legacy/test format (flat dict) — backwards-compat with existing call sites."""
+    brain._on_object(_msg({"label": "laptop", "color": "blue"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "object_remark"
+    assert plan["steps"][0]["args"]["text"] == "看到藍色的筆電了"
+
+
+def test_object_unknown_color_drops_color_preamble(brain):
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    plan = _latest(brain)
+    assert plan["steps"][0]["args"]["text"] == "看到杯子了，你要喝水嗎？"
 
 
 def test_object_without_label_ignored(brain):
     brain._on_object(_msg({"color": "red"}))
+    assert not brain._captured_proposals
+
+
+def test_object_off_whitelist_class_silent(brain):
+    """frisbee not in OBJECT_CLASS_ZH whitelist — UI shows it but PawAI stays quiet."""
+    brain._on_object(_msg({
+        "objects": [{"class_name": "frisbee", "confidence": 0.9, "bbox": [0, 0, 10, 10], "color": "red"}],
+    }))
     assert not brain._captured_proposals
 
 

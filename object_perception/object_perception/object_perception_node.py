@@ -13,7 +13,43 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-from object_perception.coco_classes import COCO_CLASSES, class_color
+from object_perception.coco_classes import (
+    COCO_CLASSES,
+    COLOR_ZH,
+    class_color,
+    class_name_zh,
+)
+
+# CJK font lookup for debug overlay — cv2.putText cannot render zh-TW.
+# Use PIL with a system Noto/CJK font; cache the truetype handle once.
+try:
+    from PIL import Image as PILImage, ImageDraw, ImageFont  # type: ignore
+    _PIL_AVAILABLE = True
+except ImportError:  # pragma: no cover — Pillow ships with most ROS2 setups
+    _PIL_AVAILABLE = False
+
+_CJK_FONT_CANDIDATES = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+    "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
+    "/System/Library/Fonts/PingFang.ttc",  # macOS dev box fallback
+)
+
+
+def _resolve_cjk_font(size: int = 16):
+    """Return a PIL ImageFont supporting CJK, or None if no font found."""
+    if not _PIL_AVAILABLE:
+        return None
+    import os
+    for path in _CJK_FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return None
 
 
 class ObjectPerceptionNode(Node):
@@ -68,6 +104,13 @@ class ObjectPerceptionNode(Node):
         self._cooldowns: dict = {}
         # FPS tracking
         self._tick_times: list = []
+        # Cache a CJK font handle so PIL doesn't re-open the .ttc every frame.
+        self._zh_font = _resolve_cjk_font(size=18)
+        if self._zh_font is None:
+            self.get_logger().warning(
+                "No CJK font found — debug overlay will fall back to English class names",
+                once=True,
+            )
 
         # --- Camera subscription ---
         from cv_bridge import CvBridge
@@ -330,25 +373,48 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     def _publish_debug_image(self, image: np.ndarray, detections: list):
         debug = image.copy()
-
+        # Pre-build label strings + draw bboxes via cv2 (fast).
+        # Text rendering happens in a single PIL pass at the end (CJK requires PIL).
+        labels: list[tuple[int, int, str, tuple[int, int, int]]] = []
         for det in detections:
-            cls = det["class_name"]
-            conf = det["confidence"]
+            class_id = det.get("class_id", 0)
             x1, y1, x2, y2 = det["bbox"]
-            color = class_color(det.get("class_id", 0))
+            box_color = class_color(class_id)
+            cv2.rectangle(debug, (x1, y1), (x2, y2), box_color, 2)
 
-            cv2.rectangle(debug, (x1, y1), (x2, y2), color, 2)
-            label = f"{cls} {conf:.2f}"
-            (tw, th), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
-            )
-            cv2.rectangle(
-                debug, (x1, y1 - th - 6), (x1 + tw, y1), color, -1
-            )
-            cv2.putText(
-                debug, label, (x1, y1 - 4),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
-            )
+            class_zh = class_name_zh(class_id)
+            color_str = det.get("color")
+            parts: list[str] = []
+            if color_str and color_str != "Unknown":
+                parts.append(COLOR_ZH.get(color_str, color_str))
+            parts.append(class_zh)
+            label = " ".join(parts) + f" {det['confidence']:.2f}"
+            labels.append((x1, y1, label, box_color))
+
+        if labels and self._zh_font is not None:
+            pil_img = PILImage.fromarray(cv2.cvtColor(debug, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(pil_img)
+            for x1, y1, label, box_color in labels:
+                # PIL text bbox for label background sizing
+                left, top, right, bottom = draw.textbbox((x1, y1), label, font=self._zh_font)
+                tw = right - left
+                th = bottom - top
+                bg_top = max(0, y1 - th - 6)
+                # Note: PIL uses RGB; box_color is BGR — flip.
+                rgb_bg = (box_color[2], box_color[1], box_color[0])
+                draw.rectangle((x1, bg_top, x1 + tw + 4, y1), fill=rgb_bg)
+                draw.text((x1 + 2, bg_top), label, font=self._zh_font, fill=(255, 255, 255))
+            debug = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        elif labels:
+            # No CJK font — fall back to ASCII class_name + color english
+            for x1, y1, label, box_color in labels:
+                ascii_label = label.encode("ascii", errors="ignore").decode() or "obj"
+                (tw, th), _ = cv2.getTextSize(ascii_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(debug, (x1, y1 - th - 6), (x1 + tw, y1), box_color, -1)
+                cv2.putText(
+                    debug, ascii_label, (x1, y1 - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
+                )
 
         # FPS + detection count overlay
         avg_ms = (

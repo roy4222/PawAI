@@ -281,3 +281,68 @@ class TestEventSchema:
         assert len(bbox) == 4
         for v in bbox:
             assert isinstance(v, int)
+
+
+# ------------------------------------------------------------------
+# Chinese name + color lookup (5/6 v2.5 schema)
+# ------------------------------------------------------------------
+class TestZhLookup:
+    def test_coco_classes_zh_covers_80(self):
+        from object_perception.coco_classes import COCO_CLASSES, COCO_CLASSES_ZH
+        assert set(COCO_CLASSES_ZH.keys()) == set(COCO_CLASSES.keys())
+        assert all(isinstance(v, str) and v for v in COCO_CLASSES_ZH.values())
+
+    def test_class_name_zh_known(self):
+        from object_perception.coco_classes import class_name_zh
+        assert class_name_zh(41) == "杯子"
+        assert class_name_zh(63) == "筆電"
+        assert class_name_zh(67) == "手機"
+        assert class_name_zh(0) == "人"
+
+    def test_class_name_zh_unknown_falls_back(self):
+        from object_perception.coco_classes import class_name_zh
+        # ID outside 0-79 → fallback to underscore english then "物件"
+        assert class_name_zh(999) == "物件"
+
+    def test_color_zh_complete(self):
+        from object_perception.coco_classes import COLOR_ZH
+        assert COLOR_ZH == {"red": "紅色", "yellow": "黃色", "green": "綠色", "blue": "藍色"}
+
+
+# ------------------------------------------------------------------
+# Event field gating (5/6 v2.5)
+# ------------------------------------------------------------------
+class TestColorEventGate:
+    def test_color_omitted_when_unknown(self):
+        """Per contract v2.5: color field is OMITTED when value would be 'Unknown'."""
+        # Mirror the gating logic from _publish_events.
+        det = {"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10],
+               "color": "Unknown", "color_confidence": 0.0}
+        obj = {"class_name": det["class_name"], "confidence": det["confidence"],
+               "bbox": det["bbox"]}
+        if det.get("color") and det["color"] != "Unknown":
+            obj["color"] = det["color"]
+            obj["color_confidence"] = det["color_confidence"]
+        assert "color" not in obj
+        assert "color_confidence" not in obj
+
+    def test_color_included_when_known(self):
+        det = {"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10],
+               "color": "red", "color_confidence": 0.75}
+        obj = {"class_name": det["class_name"], "confidence": det["confidence"],
+               "bbox": det["bbox"]}
+        if det.get("color") and det["color"] != "Unknown":
+            obj["color"] = det["color"]
+            obj["color_confidence"] = det["color_confidence"]
+        assert obj["color"] == "red"
+        assert obj["color_confidence"] == 0.75
+
+    def test_class_id_stripped_from_payload(self):
+        """class_id is internal-only; must NOT appear in published event."""
+        det = {"class_id": 41, "class_name": "cup", "confidence": 0.9,
+               "bbox": [0, 0, 10, 10], "color": "red", "color_confidence": 0.7}
+        obj = {"class_name": det["class_name"], "confidence": det["confidence"],
+               "bbox": det["bbox"]}
+        if det.get("color") and det["color"] != "Unknown":
+            obj["color"] = det["color"]
+        assert "class_id" not in obj

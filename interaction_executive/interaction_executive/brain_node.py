@@ -29,6 +29,56 @@ from .skill_contract import (
 from .world_state import WorldState
 
 
+# Mirror of object_perception/coco_classes.py:COCO_CLASSES_ZH (whitelist subset)
+# and pawai-studio/frontend/components/object/object-config.ts. Three copies are
+# self-contained on purpose — sharing a Python module across ROS2 packages would
+# couple build/install order. Keep all three in sync when whitelist changes.
+OBJECT_CLASS_ZH: dict[str, str] = {
+    "cup": "杯子", "bottle": "瓶子", "book": "書",
+    "person": "人", "dog": "狗狗", "cat": "貓咪",
+    "chair": "椅子", "couch": "沙發", "bed": "床",
+    "dining_table": "餐桌", "tv": "電視", "laptop": "筆電",
+    "cell_phone": "手機", "remote": "遙控器", "keyboard": "鍵盤",
+    "mouse": "滑鼠", "backpack": "背包", "handbag": "手提包",
+    "umbrella": "雨傘", "clock": "時鐘", "vase": "花瓶",
+    "potted_plant": "盆栽", "teddy_bear": "玩偶", "scissors": "剪刀",
+    "wine_glass": "酒杯", "fork": "叉子", "knife": "刀子",
+    "spoon": "湯匙", "bowl": "碗", "banana": "香蕉",
+    "apple": "蘋果", "orange": "橘子",
+}
+OBJECT_COLOR_ZH: dict[str, str] = {
+    "red": "紅色", "yellow": "黃色", "green": "綠色", "blue": "藍色",
+}
+# Personality phrases — appended AFTER the colour-aware preamble (per 5/6
+# user feedback). Never replace the preamble; user wants both colour
+# announcement and the playful phrase.
+OBJECT_TTS_SPECIAL_SUFFIX: dict[str, str] = {
+    "cup": "，你要喝水嗎？",
+    "bottle": "，喝點水吧",
+    "book": "，在看書啊",
+}
+
+
+def build_object_tts(class_name: str, color: str | None) -> str | None:
+    """Compose object_remark TTS string, or None when class is outside the
+    PawAI TTS whitelist (UI still shows it; PawAI just stays quiet).
+
+    Examples:
+        build_object_tts("cup", "red")     == "看到紅色的杯子了，你要喝水嗎？"
+        build_object_tts("laptop", "blue") == "看到藍色的筆電了"
+        build_object_tts("cup", "Unknown") == "看到杯子了，你要喝水嗎？"
+        build_object_tts("frisbee", "red") is None
+    """
+    if not class_name or class_name not in OBJECT_CLASS_ZH:
+        return None
+    class_zh = OBJECT_CLASS_ZH[class_name]
+    if color and color != "Unknown" and color in OBJECT_COLOR_ZH:
+        preamble = f"看到{OBJECT_COLOR_ZH[color]}的{class_zh}了"
+    else:
+        preamble = f"看到{class_zh}了"
+    return preamble + OBJECT_TTS_SPECIAL_SUFFIX.get(class_name, "")
+
+
 _RELIABLE_10 = QoSProfile(depth=10, reliability=QoSReliabilityPolicy.RELIABLE)
 _TRANSIENT_LOCAL_1 = QoSProfile(
     depth=1,
@@ -497,21 +547,50 @@ class BrainNode(Node):
         self._state.bending_first_seen = None
 
     def _on_object(self, msg: String) -> None:
-        # Phase B v1 minimal stub. B4 will wire HSV color enrichment.
+        """Handle /event/object_detected.
+
+        Production payload from object_perception_node:
+            {"stamp": ..., "event_type": "object_detected", "objects": [
+                {"class_name": "cup", "confidence": 0.9, "bbox": [...],
+                 "color": "red", "color_confidence": 0.7}, ...]}
+
+        Legacy/test payload (kept for backwards-compat with existing tests):
+            {"label": "cup", "color": "red"}
+        """
         payload = self._load_json(msg)
         if payload is None:
             return
-        label = str(payload.get("label") or payload.get("class") or "").strip()
-        color = str(payload.get("color") or "").strip()
-        if not label:
+
+        # Production format: take the first detection in the array.
+        # Legacy format: payload itself is the single-object dict.
+        objects = payload.get("objects")
+        if isinstance(objects, list) and objects:
+            det = objects[0]
+            class_name = str(
+                det.get("class_name") or det.get("label") or det.get("class") or ""
+            ).strip()
+            color = str(det.get("color") or "").strip()
+        else:
+            class_name = str(
+                payload.get("class_name") or payload.get("label") or payload.get("class") or ""
+            ).strip()
+            color = str(payload.get("color") or "").strip()
+
+        if not class_name:
             return
         if self._has_active_sequence():
             return
+
+        # Compose zh-TW TTS — None means class is outside the speaking whitelist.
+        text = build_object_tts(class_name, color)
+        if text is None:
+            return
+
         self._emit_with_cooldown(
             "object_remark",
-            args={"label": label, "color": color},
+            args={"text": text, "label": class_name, "color": color},
             source="rule:object_detected",
-            reason=f"object:{color}{label}",
+            reason=f"object:{color}{class_name}",
         )
 
     def _on_text_input(self, msg: String) -> None:

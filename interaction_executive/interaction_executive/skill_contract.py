@@ -303,11 +303,14 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     # ---- Object ----
     "object_remark": SkillContract(
         name="object_remark",
-        steps=[SkillStep(ExecutorKind.SAY, {"text_template": "我看到一個{color} {label}"})],
+        # 5/6: brain_node now pre-builds the localized text via build_object_tts
+        # (colour preamble + class zh + optional personality suffix). Template
+        # just renders {text}; legacy {color}/{label} args are kept for trace.
+        steps=[SkillStep(ExecutorKind.SAY, {"text_template": "{text}"})],
         priority_class=PriorityClass.SKILL,
         cooldown_s=5.0,
-        description="Comment on a salient detected object (LLM may override text).",
-        args_schema={"label": "string", "color": "string"},
+        description="Comment on a salient detected object (text pre-built in brain).",
+        args_schema={"text": "string", "label": "string", "color": "string"},
         bucket="active",
     ),
 

@@ -14,7 +14,7 @@ import { Video } from "lucide-react"
 import { LiveFeedCard } from "@/components/live/live-feed-card"
 import { useStateStore } from "@/stores/state-store"
 import type { ObjectState } from "@/contracts/types"
-import { isWhitelisted, getObjectEntry, getLabel, YOLO_MODEL_W, YOLO_MODEL_H } from "./object-config"
+import { isWhitelisted, getObjectEntry, getLabel, COLOR_ZH, YOLO_MODEL_W, YOLO_MODEL_H } from "./object-config"
 import { cn } from "@/lib/utils"
 
 interface DetectionBox {
@@ -132,7 +132,7 @@ function WebcamWithOverlay() {
               >
                 <span>{entry?.emoji ?? "📦"}</span>
                 <span>
-                  {box.color && box.color !== "Unknown" ? `${box.color} ` : ""}
+                  {box.color && box.color !== "Unknown" ? `${COLOR_ZH[box.color] ?? box.color} ` : ""}
                   {getLabel(box.class_name)}
                 </span>
                 <span className="opacity-70">{Math.round(box.confidence * 100)}%</span>

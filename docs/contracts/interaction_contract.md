@@ -657,22 +657,28 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 
 **說明**：物體偵測事件（COCO 80 class，預設全開；per-class cooldown 5s 去重）
 **發布者**：`object_perception_node`
-**訂閱者**：`interaction_executive_node`（Day 10 晚已整合，3 class TTS 話術：cup/bottle/book）
+**訂閱者**：`interaction_executive_node`（5/6 起 brain_node `_on_object` 直接拆 `objects[]`；TTS whitelist ≈ 30 class，模板：`看到{COLOR_ZH}的{class_zh}了` + 可選 personality suffix）
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
-**Schema**：
+**Schema**（v2.5 5/6 補 `color` / `color_confidence`）：
 ```json
 {
   "stamp":       { "type": "float",  "unit": "seconds (Unix timestamp)" },
   "event_type":  { "type": "string", "enum": ["object_detected"] },
   "objects":     { "type": "array", "items": {
-    "class_name":  { "type": "string", "description": "COCO 80 class name (underscored)，完整列表見 object_perception/object_perception/coco_classes.py" },
-    "confidence":  { "type": "float",  "range": "[0.0, 1.0]" },
-    "bbox":        { "type": "array[4]", "items": "int", "description": "[x1, y1, x2, y2] pixel coords" }
+    "class_name":        { "type": "string", "description": "COCO 80 class name (underscored)，完整列表見 object_perception/object_perception/coco_classes.py" },
+    "confidence":        { "type": "float",  "range": "[0.0, 1.0]" },
+    "bbox":              { "type": "array[4]", "items": "int", "description": "[x1, y1, x2, y2] pixel coords" },
+    "color":             { "type": "string?", "enum": ["red","yellow","green","blue"], "optional": true,
+                           "description": "HSV-derived dominant colour. Field is OMITTED (not 'Unknown') when saturation is below threshold." },
+    "color_confidence":  { "type": "float?",  "range": "[0.0, 1.0]", "optional": true,
+                           "description": "peak hue histogram bin / total pixels. Always paired with `color` when present." }
   }}
 }
 ```
+
+**`class_id` 不在 publish payload**：`object_perception_node._publish_events` 顯式 strip 內部欄位（line ~306）；前端若需 id 應透過 `class_name` 反查 `coco_classes.py`。
 
 **類別範圍**：COCO 80 class（YOLO 0-79 contiguous IDs）。原名含空格者統一底線（例：`dining table` → `dining_table`、`cell phone` → `cell_phone`、`traffic light` → `traffic_light`）。完整映射見 `object_perception/object_perception/coco_classes.py`。
 

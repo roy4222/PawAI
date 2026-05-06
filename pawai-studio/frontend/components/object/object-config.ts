@@ -153,13 +153,60 @@ const WHITELIST_MAP: Record<string, ObjectEntry> = Object.fromEntries(
 // COCO 中文對照 Fallback（非白名單物品的中文名）
 // ══════════════════════════════════════════════════════════════════
 
+// Mirror of object_perception/coco_classes.py:COCO_CLASSES_ZH (full 80 classes).
+// Three independent copies are intentional — sharing a module across ROS2
+// packages would couple build/install order. Keep all three in sync.
+//
+// Both underscore and space variants are included so the lookup works whether
+// the class_name comes from YOLO output ("dining_table") or another source
+// ("dining table") that may have raw COCO labels.
 const COCO_ZH_FALLBACK: Record<string, string> = {
-  person: "人", bicycle: "腳踏車", car: "汽車", dog: "狗", cat: "貓",
-  chair: "椅子", bottle: "瓶子", cup: "杯子", book: "書",
-  "dining table": "餐桌", dining_table: "餐桌",
-  "cell phone": "手機", cell_phone: "手機",
-  laptop: "筆電", backpack: "背包", umbrella: "雨傘", handbag: "手提包",
-  couch: "沙發", remote: "遙控器", clock: "時鐘",
+  person: "人", bicycle: "腳踏車", car: "汽車", motorcycle: "機車",
+  airplane: "飛機", bus: "公車", train: "火車", truck: "卡車", boat: "船",
+  traffic_light: "紅綠燈", "traffic light": "紅綠燈",
+  fire_hydrant: "消防栓", "fire hydrant": "消防栓",
+  stop_sign: "停車牌", "stop sign": "停車牌",
+  parking_meter: "停車計費表", "parking meter": "停車計費表",
+  bench: "長椅", bird: "鳥", cat: "貓咪", dog: "狗狗", horse: "馬",
+  sheep: "羊", cow: "牛", elephant: "大象", bear: "熊", zebra: "斑馬",
+  giraffe: "長頸鹿", backpack: "背包", umbrella: "雨傘", handbag: "手提包",
+  tie: "領帶", suitcase: "行李箱", frisbee: "飛盤",
+  skis: "雙板滑雪", snowboard: "單板滑雪",
+  sports_ball: "球", "sports ball": "球",
+  kite: "風箏",
+  baseball_bat: "球棒", "baseball bat": "球棒",
+  baseball_glove: "棒球手套", "baseball glove": "棒球手套",
+  skateboard: "滑板", surfboard: "衝浪板",
+  tennis_racket: "網球拍", "tennis racket": "網球拍",
+  bottle: "瓶子",
+  wine_glass: "酒杯", "wine glass": "酒杯",
+  cup: "杯子", fork: "叉子", knife: "刀子", spoon: "湯匙", bowl: "碗",
+  banana: "香蕉", apple: "蘋果", sandwich: "三明治", orange: "橘子",
+  broccoli: "花椰菜", carrot: "胡蘿蔔",
+  hot_dog: "熱狗", "hot dog": "熱狗",
+  pizza: "披薩", donut: "甜甜圈", cake: "蛋糕",
+  chair: "椅子", couch: "沙發",
+  potted_plant: "盆栽", "potted plant": "盆栽",
+  bed: "床",
+  dining_table: "餐桌", "dining table": "餐桌",
+  toilet: "馬桶", tv: "電視", laptop: "筆電", mouse: "滑鼠",
+  remote: "遙控器", keyboard: "鍵盤",
+  cell_phone: "手機", "cell phone": "手機",
+  microwave: "微波爐", oven: "烤箱", toaster: "烤麵包機", sink: "水槽",
+  refrigerator: "冰箱", book: "書", clock: "時鐘", vase: "花瓶",
+  scissors: "剪刀",
+  teddy_bear: "玩偶", "teddy bear": "玩偶",
+  hair_drier: "吹風機", "hair drier": "吹風機",
+  toothbrush: "牙刷",
+}
+
+// Color-name translations for Studio panel — mirrors object_perception
+// COLOR_ZH and brain_node OBJECT_COLOR_ZH.
+export const COLOR_ZH: Record<string, string> = {
+  red: "紅色",
+  yellow: "黃色",
+  green: "綠色",
+  blue: "藍色",
 }
 
 // ══════════════════════════════════════════════════════════════════
