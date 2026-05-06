@@ -189,7 +189,7 @@ tmux send-keys -t "$SESSION:llm" \
     -p subscribe_face:=false \
     -p output_mode:=brain \
     -p enable_openrouter:=true \
-    -p openrouter_gemini_model:=deepseek/deepseek-v4-flash \
+    -p openrouter_gemini_model:=google/gemini-3-flash-preview \
     -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
     -p max_reply_chars:=0 \
     -p llm_max_tokens:=2000 \

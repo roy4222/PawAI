@@ -230,7 +230,7 @@ class LlmBridgeNode(Node):
             "https://openrouter.ai/api/v1/chat/completions",
         )
         self.declare_parameter(
-            "openrouter_gemini_model", "google/gemini-2.5-flash"
+            "openrouter_gemini_model", "google/gemini-3-flash-preview"
         )
         self.declare_parameter(
             "openrouter_deepseek_model", "deepseek/deepseek-v4-flash"
