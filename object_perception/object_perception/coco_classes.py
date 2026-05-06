@@ -124,11 +124,21 @@ COCO_CLASSES_ZH: dict[int, str] = {
 # Color label translations — used by debug overlay AND mirrored in:
 #   - frontend object-config.ts
 #   - interaction_executive brain_node.py
+# 5/6 expanded 4 → 12 colours. Brown is a special case (warm hue + low V).
+# black/white/gray are achromatic gates (S/V), not hue-based.
 COLOR_ZH: dict[str, str] = {
     "red": "紅色",
+    "orange": "橘色",
     "yellow": "黃色",
     "green": "綠色",
+    "cyan": "青色",
     "blue": "藍色",
+    "purple": "紫色",
+    "pink": "粉紅色",
+    "brown": "咖啡色",
+    "black": "黑色",
+    "white": "白色",
+    "gray": "灰色",
 }
 
 

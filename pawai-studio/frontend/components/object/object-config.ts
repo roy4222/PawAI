@@ -201,12 +201,20 @@ const COCO_ZH_FALLBACK: Record<string, string> = {
 }
 
 // Color-name translations for Studio panel — mirrors object_perception
-// COLOR_ZH and brain_node OBJECT_COLOR_ZH.
+// COLOR_ZH and brain_node OBJECT_COLOR_ZH. 5/6 expanded 4 → 12.
 export const COLOR_ZH: Record<string, string> = {
   red: "紅色",
+  orange: "橘色",
   yellow: "黃色",
   green: "綠色",
+  cyan: "青色",
   blue: "藍色",
+  purple: "紫色",
+  pink: "粉紅色",
+  brown: "咖啡色",
+  black: "黑色",
+  white: "白色",
+  gray: "灰色",
 }
 
 // ══════════════════════════════════════════════════════════════════

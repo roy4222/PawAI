@@ -47,7 +47,9 @@ OBJECT_CLASS_ZH: dict[str, str] = {
     "apple": "蘋果", "orange": "橘子",
 }
 OBJECT_COLOR_ZH: dict[str, str] = {
-    "red": "紅色", "yellow": "黃色", "green": "綠色", "blue": "藍色",
+    "red": "紅色", "orange": "橘色", "yellow": "黃色", "green": "綠色",
+    "cyan": "青色", "blue": "藍色", "purple": "紫色", "pink": "粉紅色",
+    "brown": "咖啡色", "black": "黑色", "white": "白色", "gray": "灰色",
 }
 # Personality phrases — appended AFTER the colour-aware preamble (per 5/6
 # user feedback). Never replace the preamble; user wants both colour

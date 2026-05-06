@@ -52,6 +52,89 @@ def _resolve_cjk_font(size: int = 16):
     return None
 
 
+# ----------------------------------------------------------------------
+# 5/6: HSV 12-colour analysis on bbox crop. Per-pixel classification with
+# V/S gates (so brown / black / white / gray work — they need value, not
+# just hue). OpenCV HSV ranges: H ∈ [0,180], S ∈ [0,255], V ∈ [0,255].
+# Returns peak colour + (peak_pixels / total_pixels).
+#
+# Classification priority (mutually exclusive masks):
+#   1. black   V < 50
+#   2. white   S < 40 AND V ≥ 200
+#   3. gray    S < 40 AND 50 ≤ V < 200
+#   4. brown   warm hue (5..25) AND V < 130 (chromatic & dark)
+#   5. pink    red side (H ≥ 160 OR ≤ 5) AND S < 150 AND V ≥ 180
+#              OR magenta band (150 < H < 165)
+#   6. red     H ≤ 8 OR H ≥ 165
+#   7. orange  8 < H ≤ 22
+#   8. yellow  22 < H ≤ 35
+#   9. green   35 < H ≤ 85
+#  10. cyan    85 < H ≤ 100
+#  11. blue    100 < H ≤ 130
+#  12. purple  130 < H ≤ 150
+#
+# Returns ("Unknown", 0.0) if peak / total < 0.25 (too fragmented to
+# commit) — protects against speckled / multi-coloured surfaces.
+# Module-level (vs class staticmethod) so unit tests can import without
+# pulling in rclpy. ObjectPerceptionNode._analyze_bbox_color delegates here.
+# ----------------------------------------------------------------------
+def analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[str, float]:
+    h, w = image_bgr.shape[:2]
+    x1c = max(0, min(x1, w - 1))
+    x2c = max(0, min(x2, w))
+    y1c = max(0, min(y1, h - 1))
+    y2c = max(0, min(y2, h))
+    if x2c <= x1c or y2c <= y1c:
+        return ("Unknown", 0.0)
+    crop = image_bgr[y1c:y2c, x1c:x2c]
+    if crop.size == 0:
+        return ("Unknown", 0.0)
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    H = hsv[..., 0]
+    S = hsv[..., 1]
+    V = hsv[..., 2]
+
+    # Achromatic gates first.
+    m_black = V < 50
+    m_white = (S < 40) & (V >= 200) & ~m_black
+    m_gray = (S < 40) & ~m_black & ~m_white
+    chromatic = ~(m_black | m_white | m_gray)
+
+    # Brown — warm hue (orange-yellow) with low V. Subset of chromatic.
+    m_brown = chromatic & (H >= 5) & (H <= 25) & (V < 130)
+    rest = chromatic & ~m_brown
+
+    # Pink — red-magenta side, lighter / less saturated than red.
+    m_pink_red_side = rest & ((H >= 160) | (H <= 5)) & (S < 150) & (V >= 180)
+    m_pink_magenta = rest & (H > 150) & (H < 165)
+    m_pink = m_pink_red_side | m_pink_magenta
+    rest = rest & ~m_pink
+
+    m_red = rest & ((H <= 8) | (H >= 165))
+    m_orange = rest & (H > 8) & (H <= 22)
+    m_yellow = rest & (H > 22) & (H <= 35)
+    m_green = rest & (H > 35) & (H <= 85)
+    m_cyan = rest & (H > 85) & (H <= 100)
+    m_blue = rest & (H > 100) & (H <= 130)
+    m_purple = rest & (H > 130) & (H <= 150)
+
+    masks = {
+        "black": m_black, "white": m_white, "gray": m_gray,
+        "brown": m_brown, "pink": m_pink,
+        "red": m_red, "orange": m_orange, "yellow": m_yellow,
+        "green": m_green, "cyan": m_cyan, "blue": m_blue, "purple": m_purple,
+    }
+    counts = {k: int(m.sum()) for k, m in masks.items()}
+    total = float(sum(counts.values()))
+    if total <= 0:
+        return ("Unknown", 0.0)
+    peak = max(counts, key=counts.get)
+    ratio = counts[peak] / total
+    if ratio < 0.25:
+        return ("Unknown", 0.0)
+    return (peak, round(float(ratio), 3))
+
+
 class ObjectPerceptionNode(Node):
     def __init__(self):
         super().__init__("object_perception_node")
@@ -219,48 +302,9 @@ class ObjectPerceptionNode(Node):
         y2 = int(max(0, min((y2 - pad_top) / scale, orig_h - 1)))
         return x1, y1, x2, y2
 
-    # ------------------------------------------------------------------
-    # 5/5: HSV 4-color analysis on bbox crop (MOC §5 「要可以偵測顏色」).
-    # Lightweight (no extra deps): compute Hue histogram, gate by saturation
-    # (low S → "Unknown" — colourless / shaded). 4 buckets:
-    #   red    Hue ∈ [0,10] ∪ [160,180]
-    #   yellow Hue ∈ [20,35]
-    #   green  Hue ∈ [40,80]
-    #   blue   Hue ∈ [95,130]
-    # Returned confidence = peak histogram bin / total pixels (0..1).
-    # ------------------------------------------------------------------
     @staticmethod
     def _analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[str, float]:
-        h, w = image_bgr.shape[:2]
-        x1c = max(0, min(x1, w - 1))
-        x2c = max(0, min(x2, w))
-        y1c = max(0, min(y1, h - 1))
-        y2c = max(0, min(y2, h))
-        if x2c <= x1c or y2c <= y1c:
-            return ("Unknown", 0.0)
-        crop = image_bgr[y1c:y2c, x1c:x2c]
-        if crop.size == 0:
-            return ("Unknown", 0.0)
-        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        s_mean = float(hsv[:, :, 1].mean()) / 255.0
-        if s_mean < 0.4:
-            return ("Unknown", 0.0)  # too desaturated to claim a colour
-        hist = cv2.calcHist([hsv], [0], None, [18], [0, 180])
-        total = float(hist.sum())
-        if total <= 0:
-            return ("Unknown", 0.0)
-        peak_bin = int(np.argmax(hist))
-        peak_h = peak_bin * 10  # bin width 10 in 0..180 space
-        confidence = round(float(hist[peak_bin][0] / total), 3)
-        if peak_h <= 10 or peak_h >= 160:
-            return ("red", confidence)
-        if 20 <= peak_h <= 35:
-            return ("yellow", confidence)
-        if 40 <= peak_h <= 80:
-            return ("green", confidence)
-        if 95 <= peak_h <= 130:
-            return ("blue", confidence)
-        return ("Unknown", 0.0)
+        return analyze_bbox_color(image_bgr, x1, y1, x2, y2)
 
     # ------------------------------------------------------------------
     # Main tick

@@ -670,10 +670,10 @@ idle_wakeword → wake_ack → loading_local_stack → listening
     "class_name":        { "type": "string", "description": "COCO 80 class name (underscored)，完整列表見 object_perception/object_perception/coco_classes.py" },
     "confidence":        { "type": "float",  "range": "[0.0, 1.0]" },
     "bbox":              { "type": "array[4]", "items": "int", "description": "[x1, y1, x2, y2] pixel coords" },
-    "color":             { "type": "string?", "enum": ["red","yellow","green","blue"], "optional": true,
-                           "description": "HSV-derived dominant colour. Field is OMITTED (not 'Unknown') when saturation is below threshold." },
+    "color":             { "type": "string?", "enum": ["red","orange","yellow","green","cyan","blue","purple","pink","brown","black","white","gray"], "optional": true,
+                           "description": "HSV-derived dominant colour from 12-class per-pixel classifier (5/6 expanded from 4). Brown gated on warm hue + dark V; black/white/gray on S/V achromatic. Field OMITTED when peak/total < 0.25 (too fragmented to commit)." },
     "color_confidence":  { "type": "float?",  "range": "[0.0, 1.0]", "optional": true,
-                           "description": "peak hue histogram bin / total pixels. Always paired with `color` when present." }
+                           "description": "peak colour mask pixels / total pixels in bbox. Always paired with `color` when present." }
   }}
 }
 ```
