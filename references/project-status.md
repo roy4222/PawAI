@@ -1,11 +1,65 @@
 # 專案狀態
 
-**最後更新**：2026-05-06（pose classifier v3 升級 — community-validated rules + MediaPipe garbage frame guard）
+**最後更新**：2026-05-06 evening（object detection v2 — 12 colour HSV + 80 zh class + brain colour-aware TTS）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
 
 ---
 
-## 5/6 進度（pose_classifier v3）
+## 5/6 evening 進度（object detection v2）
+
+承接早上 pose v3，下午+晚上聚焦在物體辨識「顯示顏色 + 說出物件名」三個缺口。**Brain 全鏈路真機驗證通過**：chair brown / chair black / cup gray / person cyan 都正確跑出 zh TTS。
+
+> 5/6 morning pose v3 commit `ac6d45a` 在下方延續。
+
+### 演算法 / 架構變更
+
+| 項目 | 變更 | Commit |
+|---|---|---|
+| HSV 4 色 → 12 色 | per-pixel V/S 守門 + brown(warm hue+dark V) + 黑灰白 + pink + 8 chromatic；ratio < 0.25 視為 fragmented 不出 colour | `d9fef2d` |
+| `analyze_bbox_color` | 從 staticmethod 提到 module-level，可不 import rclpy 單元測試 | `d9fef2d` |
+| brain `_on_object` 重寫 | 支援 production `objects[]` array + legacy flat dict；whitelist 32 類，外面靜默 | `545cd33` |
+| `build_object_tts` helper | colour preamble + zh class + 可選 personality suffix（cup/bottle/book）；社群實證的 wrist drift / kneel-vs-lunge 規則 | `545cd33` |
+| `skill_contract.object_remark` template | `"我看到一個{color} {label}"` → `"{text}"`（brain 預先組好）| `545cd33` |
+| 80 類中文 dict | `coco_classes.py:COCO_CLASSES_ZH` + helpers；frontend 80 類；executive 32 類 whitelist；三份各自 self-contained 避免 ROS2 package coupling | `545cd33` |
+| Debug overlay zh 渲染 | cv2.putText 不支援 CJK，切 PIL pipeline + Noto Sans CJK font | `545cd33` |
+| 12 色 zh 同步 | 三份 dict（coco_classes / brain / frontend）+ contract §4.8 enum | `d9fef2d` |
+| Contract §4.8 sync | v2.5 補 color / color_confidence schema + class_id strip 註明 | `545cd33` / `d9fef2d` |
+| React duplicate key fix | pose-panel.tsx event.id → composite key | `545cd33` |
+
+### 範例輸出
+
+```
+red cup    → 看到紅色的杯子了，你要喝水嗎？   (preamble + special suffix)
+blue laptop → 看到藍色的筆電了                (no special suffix)
+brown chair → 看到咖啡色的椅子了              (Jetson 真機觀察)
+black chair → 看到黑色的椅子了                (Jetson 真機觀察)
+Unknown cup → 看到杯子了，你要喝水嗎？        (無顏色)
+frisbee     → None                          (whitelist 外，UI 顯示但 brain 靜默)
+```
+
+### 上機驗證（5/6 evening）
+
+| 元件 | 狀態 |
+|---|---|
+| `/event/object_detected` JSON | 含 `color` / `color_confidence`（saturation 過低 omit）|
+| `/brain/proposal` `object_remark` 模板 | colour preamble + zh class + suffix 正確渲染 |
+| Jetson tmux fv | 6 window：camera / object / vision / fox / gateway / brain 全跑 |
+| Studio Live `/studio/live` | 連 ws://100.83.109.89:8080，2 ws_clients |
+| 真實顏色觀察 | brown 0.367 / black 0.309 / cyan 0.471 / gray 0.549（confidence 偏低正常，HSV 規則式本質）|
+
+### 衍生 backlog
+
+- 小物件偵測距離問題（input_size 640 → 960）— YOLO26n 訓練 640，需 mAP × FPS A/B
+- yolo26s 升級評估 — post-demo
+- 平放扁平物體（書、手機）辨識率 — 光線 + 角度 + threshold tuning
+
+### 未在範圍
+
+- 舊 `state_machine.py:OBJECT_TTS_MAP` 留在檔案裡未被 wire（5/5 設計，3 類英文）— 標 deprecated，新增類別不要改它
+
+---
+
+## 5/6 morning 進度（pose_classifier v3）
 
 聚焦在 pose 分類器演算法升級，所有改動 scoped 在 `vision_perception` 套件。**5/12 主線 5 個動作（standing / sitting / crouching / bending / fallen）已上機通過**；akimbo / knee_kneel 真機仍 miss。
 

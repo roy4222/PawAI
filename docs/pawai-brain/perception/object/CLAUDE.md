@@ -14,7 +14,11 @@
 
 - **不要在 Jetson 上 `pip install ultralytics`** — 會拉升 torch 2.11+cu130 + numpy 2.2.6，破壞 Jetson 專用 torch wheel（4/4 已踩坑，耗時環境救援）
 - 不要改 `COCO_CLASSES` 的 class name 命名規則（COCO 原名空格一律改底線，例 `dining_table` / `cell_phone`）
-- 不要改 `/event/object_detected` schema 的欄位名（`stamp` / `event_type` / `objects[]`），contract v2.4 已凍結
+- 不要改 `/event/object_detected` 凍結欄位（`stamp` / `event_type` / `objects[]` / 內部 class_name / confidence / bbox），contract v2.5（5/6 加 color + color_confidence 為 optional）
+- 不要把 `class_id` 加進 publish payload — 5/6 已確認 strip 在 `_publish_events` line ~306，frontend 若要 id 自己反查
+- 不要 import `object_perception.coco_classes` 進 `interaction_executive`（跨 ROS2 package coupling）— executive 內 `OBJECT_CLASS_ZH` / `OBJECT_COLOR_ZH` 自包，三份 keep in sync 由人手維護
+- 不要回退 12 色到 4 色 — brown / pink / 黑灰白都是 5/6 demo 範圍
+- 不要把 `_is_akimbo` / TTS whitelist subset 寫死 80 類；UI 顯示 80 類，但 TTS 只 ~32 類（避免 babbling）
 - 不要用 PyTorch FasterRCNN 或其他模型（舊方案已棄用）
 
 ## 踩過的坑（寫給後人看）
@@ -61,6 +65,8 @@ ssh jetson-nano "cd ~/elder_and_dog && source /opt/ros/humble/setup.zsh && \
 
 ## 下一步（Day 11+）
 
-- Executive 整合：訂閱 `/event/object_detected` → TTS 回報
-- `start_full_demo_tmux.sh` 加 object window
-- 整合場景驗收（配合其他感知模組）
+- ✅ Executive 整合（5/6 brain `_on_object` + `build_object_tts` + `object_remark` skill）
+- ✅ HSV 12 色 + brown 特例（5/6 commit `d9fef2d`）
+- ✅ 80 類中文 + 12 色 zh 顯示（debug overlay PIL CJK + Studio panel）
+- 小物件距離限制（640 input）— independent A/B issue，未排
+- yolo26s 升級評估 — post-demo

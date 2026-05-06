@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Executive 整合完成**，cup 觸發 TTS 通過 |
+| 狀態 | **Brain 全鏈路通**：12 colour HSV + zh class label + colour-aware TTS（5/6 Jetson 上機驗證） |
 | 版本/決策 | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16（不裝 ultralytics） |
-| 完成度 | 70%（Executive 整合完成，Demo 腳本已加入，待擴充白名單+TTS） |
-| 最後驗證 | 2026-04-06（cup → TTS「你要喝水嗎？」✅，bottle ❌） |
+| 完成度 | 85%（顏色 / 中文 / 32 class TTS whitelist 落地；小物件距離問題未解）|
+| 最後驗證 | 2026-05-06（chair brown/black、cup gray、person cyan 全鏈路觀察到 brain `object_remark` 觸發 zh TTS）|
 | 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（大小待實測） |
 | TRT Cache | `/home/jetson/trt_cache/`（首次啟動 3-10 分鐘，之後秒起） |
 | Package | `object_perception/`（ROS2 Python，entry: `object_perception_node`） |
@@ -79,41 +79,64 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 > MOC §5 寫「yolo26n 和 yolov8n 辨識物體效果比較」— 5/12 demo 不做完整 A/B（時程不足），保留為 post-demo 評估項。**yolo26n 已經是上機驗證主線**，不切換。
 > 真實數字補在 [`research/`](./research/) 子資料夾的 benchmark 報告，更新到此表前先 cite 來源。
 
-## HSV 顏色偵測（5/5 已落地）
+## HSV 顏色偵測（5/6 12 色升級）
 
-> MOC §5 明確：「要可以偵測顏色」。Sprint design Scene 6 演示「red cup → object_remark」串聯 YOLO + HSV + curious reply。
-> 程式：`object_perception/object_perception/object_perception_node.py:_analyze_bbox_color`（5/5 commit `4f638ae`）
+> MOC §5：「要可以偵測顏色」。
+> 程式：`object_perception/object_perception/object_perception_node.py::analyze_bbox_color`（module-level，可單元測試；class staticmethod 委派之）
+> 歷史：5/5 落地 4 色（commit `4f638ae`）→ 5/6 升 12 色（commit `d9fef2d`）
 
-### 演算法
+### 演算法（per-pixel 分類取 mode）
 
 ```
-YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV) → histogram peak 取主色相 (Hue, 18 bins × 10)
-                                              → saturation guard（mean S < 0.4 → "Unknown"）
-                                              → 對應 4 色標籤
+YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV)
+  → 12 個互斥 mask（V/S 守門優先於 hue band）
+  → peak mask pixels / total pixels = ratio
+  → ratio < 0.25 視為「太碎」回 "Unknown"
 ```
 
-### 4 色分類（已落地）
+### 12 色分類
 
-| 標籤 | Hue 範圍（OpenCV 0-180）| 用途 |
+| 優先 | 標籤 | 規則（OpenCV: H 0-180, S/V 0-255）|
 |:---:|:---:|---|
-| red | ≤ 10 OR ≥ 160 | 紅杯 / 紅瓶（Scene 6 主場）|
-| yellow | 20-35 | 黃色玩具 |
-| green | 40-80 | 綠色物 |
-| blue | 95-130 | 藍色物 |
+| 1 | black | V < 50 |
+| 2 | white | S < 40 AND V ≥ 200 |
+| 3 | gray | S < 40 AND 50 ≤ V < 200 |
+| 4 | brown | warm hue 5-25 AND V < 130（chromatic & dark）|
+| 5 | pink | (red side H ≥ 160 OR ≤ 5 + S < 150 + V ≥ 180) OR magenta band 150-165 |
+| 6 | red | H ≤ 8 OR ≥ 165（不是 brown / pink）|
+| 7 | orange | 8 < H ≤ 22 |
+| 8 | yellow | 22 < H ≤ 35 |
+| 9 | green | 35 < H ≤ 85 |
+| 10 | cyan | 85 < H ≤ 100 |
+| 11 | blue | 100 < H ≤ 130 |
+| 12 | purple | 130 < H ≤ 150 |
 
-實際輸出：每筆 detection 在 JSON event 加 `color` + `color_confidence`（peak bin / total pixels）。Saturation < 0.4 直接回 `"Unknown"`，**不**寫入 event payload（前端拿不到 color 欄位即視為無色）。
+**為什麼 brown / pink 要先過 V/S，不只看 hue**：brown 的 hue 在 orange/yellow band 但 V 偏低；pink 在紅或洋紅側但通常 S 較低 V 較高。單純擴 hue band 會把咖啡色椅子歸成 yellow / red。
 
-例子（紅杯子）：
+### Event 寫入規則
+
+Saturation 過低或 ratio < 0.25 → 不寫 `color` / `color_confidence`（前端視為無色）。
+
+例子（咖啡色椅子）：
 ```json
 {
   "objects": [
-    {"class_name": "cup", "confidence": 0.84, "bbox": [..],
-     "color": "red", "color_confidence": 0.62}
+    {"class_name": "chair", "confidence": 0.51, "bbox": [..],
+     "color": "brown", "color_confidence": 0.367}
   ]
 }
 ```
 
-Studio 物體 panel 「即時偵測」tab 自動讀 `box.color`，顯示 red / yellow / green / blue chip + 白名單 amber 邊。
+### 中文顯示 + TTS 渲染
+
+- 三份 zh dict（perception node `coco_classes.py:COLOR_ZH` / brain `OBJECT_COLOR_ZH` / frontend `object-config.ts:COLOR_ZH`）— 互不依賴，避免 ROS2 跨 package import；keep in sync 於檔頂註明
+- `紅 / 橘 / 黃 / 綠 / 青 / 藍 / 紫 / 粉紅 / 咖啡 / 黑 / 白 / 灰`
+- Studio 物體 panel `live-detection.tsx` 渲染：「咖啡色 椅子」（COLOR_ZH + getLabel(class_name)）
+- Brain `build_object_tts(class_name, color)` 產出：`看到{COLOR_ZH}的{class_zh}了` + 可選 personality suffix
+
+### 80 類中文 + zh 渲染（debug overlay）
+
+`object_perception_node._publish_debug_image` 5/6 起切 PIL CJK rendering（cv2.putText 不支援中文），讀 `coco_classes.COCO_CLASSES_ZH` 顯示 80 類中文 label，font 從 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc` 載入，無 CJK 字型則 fallback ASCII。
 
 ## Scene 6 `object_remark` 整合（5/12 Sprint）
 
@@ -218,21 +241,43 @@ ros2 launch object_perception object_perception.launch.py
 
 **TRT 參數陷阱**：`trt_engine_cache_enable` 和 `trt_fp16_enable` 的值必須是 `"True"`/`"False"` 字串，不是 `"1"`/`"0"`，否則會 fallback 到 CPU。
 
-## Executive 整合（Day 10 晚完成）
+## Brain 整合（5/6 改寫，取代 5/5 state_machine 路徑）
 
-`interaction_executive_node` 已訂閱 `/event/object_detected`，支援 3 個高價值 class 的 TTS 話術（其他 COCO 77 class 靜默忽略）：
+實際生產路徑走 `interaction_executive/brain_node.py:_on_object` → `build_object_tts` → `object_remark` skill，**不**經 `state_machine.py:OBJECT_TTS_MAP`（後者已不在實際 wire 上）。
 
-| class | TTS 話術 |
-|-------|---------|
-| `cup` | 「你要喝水嗎？」 |
-| `bottle` | 「喝點水吧」 |
-| `book` | 「在看書啊」 |
+### TTS whitelist（~32 class）
 
-**行為約束**：
-- 只在 IDLE 狀態觸發（Greeting / Conversing / Emergency 不被打斷）
-- Per-class 5s cooldown dedup（避免同物品反覆觸發）
-- Priority 5（低於 face / speech / gesture / obstacle / fall）
-- 未來擴展新 class：修改 `interaction_executive/state_machine.py` 的 `OBJECT_TTS_MAP`
+只對常見家居物件開口；其他 48 類（飛盤、紅綠燈、滑雪板等）UI 仍顯示，但 brain 靜默：
+
+```
+cup, bottle, book, person, dog, cat, chair, couch, bed, dining_table,
+tv, laptop, cell_phone, remote, keyboard, mouse, backpack, handbag,
+umbrella, clock, vase, potted_plant, teddy_bear, scissors, wine_glass,
+fork, knife, spoon, bowl, banana, apple, orange
+```
+
+### 模板：colour preamble + optional personality suffix
+
+```python
+# 標準格式：「看到 {COLOR_ZH 顏色} 的 {class_zh}」
+build_object_tts("cup", "red")     == "看到紅色的杯子了，你要喝水嗎？"   # special suffix
+build_object_tts("laptop", "blue") == "看到藍色的筆電了"                # no suffix
+build_object_tts("chair", "brown") == "看到咖啡色的椅子了"
+build_object_tts("cup", "Unknown") == "看到杯子了，你要喝水嗎？"        # 無顏色
+build_object_tts("frisbee", "red") is None                            # 不在 whitelist
+```
+
+`OBJECT_TTS_SPECIAL_SUFFIX` 只 cup / bottle / book 三個有 personality phrase（5/6 user 回饋：suffix 接在 colour preamble 後，不替換）。
+
+### 行為約束
+
+- Cooldown 5s（在 brain `_emit_with_cooldown`）
+- payload 兩種格式都吃：production `{"objects": [...]}` 與 legacy flat `{"label", "color"}`
+- 不在 active sequence 中才觸發（brain `_has_active_sequence` 守門）
+
+### 棄用路徑
+
+`interaction_executive/state_machine.py:OBJECT_TTS_MAP`（5/5 設計，cup / bottle / book 三類英文模板）— 還在檔案裡但未被 wire；新增類別不要改它。
 
 ## 實測結果（4/6 上機驗證）
 
@@ -254,10 +299,11 @@ ros2 launch object_perception object_perception.launch.py
 
 ## 下一步
 
-- [ ] **B4-4 HSV 顏色偵測**：`object_perception_node` 加 post-NMS 顏色判定（紅 / 黃 / 藍 / 綠 4 色）
-- [ ] **Scene 6 `object_remark` 整合**：brain skill + say_template `{class}` + `{color}` 變數，TTS demo 至少跑 red cup / blue cup / red bottle 三組
-- [ ] **Event schema 升版**（v2.6）：`objects[]` 加 `color` / `color_confidence` 欄位，同步 `docs/contracts/interaction_contract.md`
-- [ ] 室內 dataset 進階（post-demo）：MOC §5 提「資料集目前用 coco 看是否要用多一點室內的資料集」— 5/12 demo COCO 80 即可，post-demo 再評估 OpenImages / Objects365 finetune
+- [x] **B4-4 HSV 顏色偵測**（5/5 commit `4f638ae` 落地 4 色；5/6 commit `d9fef2d` 升 12 色 + brown / pink / 黑灰白）
+- [x] **Scene 6 `object_remark` 整合**（5/6 commit `545cd33` brain pipeline，real-machine 觀察 chair brown / chair black 觸發 zh TTS）
+- [x] **Event schema 升版 v2.5**（5/6 commit `545cd33` 補 color / color_confidence；commit `d9fef2d` 升 12 色 enum）
+- [ ] **小物件偵測距離問題**：`input_size` 640 → 960 A/B（YOLO26n 訓練 640，調 960 不保證好；需 mAP + Jetson FPS 雙軸驗證）
+- [ ] 室內 dataset 進階（post-demo）：MOC §5 提「資料集目前用 coco 看是否要用多一點室內」— 5/12 demo COCO 80 + 12 colour 即可，post-demo 再評估 OpenImages / Objects365 finetune
 - [ ] yolo26s 升級評估（mAP / 大小 / Jetson FPS / 小物件偵測率 全部待實測）
 - [ ] 平放扁平物體（書本、手機）辨識率改善（光線 + 角度 + threshold tuning）
 
