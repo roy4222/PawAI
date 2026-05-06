@@ -147,3 +147,30 @@ def adapt_eval_schema(eval_obj: dict, fallback_intent: str = "chat") -> dict:
         "reasoning": "openrouter:eval_schema",
         "confidence": confidence,
     }
+
+
+def extract_proposal(eval_obj: dict) -> dict:
+    """Pull skill proposal fields from persona JSON, bypassing legacy filtering.
+
+    Unlike adapt_eval_schema (which only keeps the 4 P0 legacy commands in
+    selected_skill), this preserves any skill name. brain_node enforces its
+    own allowlist downstream -- this is just a faithful pass-through.
+
+    Returns:
+        dict with keys {proposed_skill, proposed_args, proposal_reason}.
+        proposed_skill is None if persona did not include one.
+    """
+    if not isinstance(eval_obj, dict):
+        eval_obj = {}
+
+    raw_skill = eval_obj.get("skill")
+    proposed_skill = raw_skill.strip() if isinstance(raw_skill, str) and raw_skill.strip() else None
+
+    raw_args = eval_obj.get("args")
+    proposed_args = raw_args if isinstance(raw_args, dict) else {}
+
+    return {
+        "proposed_skill": proposed_skill,
+        "proposed_args": proposed_args,
+        "proposal_reason": "openrouter:eval_schema",
+    }
