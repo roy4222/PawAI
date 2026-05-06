@@ -66,6 +66,8 @@ TOPIC_MAP: dict[str, str] = {
     "/state/pawai_brain":              "brain:state",
     "/brain/proposal":                 "brain:proposal",
     "/brain/skill_result":             "brain:skill_result",
+    "/brain/conversation_trace":        "brain:conversation_trace",
+    "/brain/conversation_trace_shadow": "brain:conversation_trace_shadow",
 }
 
 FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
