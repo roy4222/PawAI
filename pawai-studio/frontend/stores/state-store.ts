@@ -14,6 +14,7 @@ import type {
   CapabilityState,
   CapabilityTriState,
   PlanMode,
+  ConversationTracePayload,
 } from "@/contracts/types";
 
 interface StateStore {
@@ -24,6 +25,7 @@ interface StateStore {
   brainState: BrainState | null;
   brainProposals: SkillPlan[];
   brainResults: SkillResult[];
+  conversationTraces: ConversationTracePayload[];
   systemHealth: SystemHealth | null;
   objectState: ObjectState | null;
   lastTtsText: string | null;
@@ -38,6 +40,7 @@ interface StateStore {
   updateBrainState: (state: BrainState) => void;
   appendBrainProposal: (proposal: SkillPlan) => void;
   appendBrainResult: (result: SkillResult) => void;
+  appendConversationTrace: (trace: ConversationTracePayload) => void;
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
   updateTts: (text: string) => void;
@@ -53,6 +56,7 @@ export const useStateStore = create<StateStore>((set) => ({
   brainState: null,
   brainProposals: [],
   brainResults: [],
+  conversationTraces: [],
   systemHealth: null,
   objectState: null,
   lastTtsText: null,
@@ -72,6 +76,10 @@ export const useStateStore = create<StateStore>((set) => ({
   appendBrainResult: (result) =>
     set((state) => ({
       brainResults: [result, ...state.brainResults].slice(0, 200),
+    })),
+  appendConversationTrace: (trace) =>
+    set((state) => ({
+      conversationTraces: [trace, ...state.conversationTraces].slice(0, 50),
     })),
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),

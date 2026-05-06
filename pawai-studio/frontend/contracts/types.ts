@@ -423,3 +423,34 @@ export type PanelId =
   | "object";
 
 export type PanelPosition = "main" | "sidebar" | "bottom" | "overlay";
+
+// ══════════════════════════════════════════════════════════════════
+// Conversation Trace  (/brain/conversation_trace)
+// ══════════════════════════════════════════════════════════════════
+
+export interface ConversationTracePayload {
+  session_id: string;
+  engine: "legacy" | "langgraph";
+  stage:
+    | "input"
+    | "safety_gate"
+    | "context"
+    | "memory"
+    | "llm_decision"
+    | "json_validate"
+    | "repair"
+    | "skill_gate"
+    | "output";
+  status:
+    | "ok"
+    | "retry"
+    | "fallback"
+    | "error"
+    | "proposed"
+    | "accepted"
+    | "accepted_trace_only"
+    | "blocked"
+    | "rejected_not_allowed";
+  detail: string;
+  ts: number;
+}

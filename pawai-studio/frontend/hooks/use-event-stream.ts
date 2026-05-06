@@ -17,6 +17,7 @@ import type {
   SkillPlan,
   SkillResult,
   SystemHealth,
+  ConversationTracePayload,
 } from "@/contracts/types";
 
 interface UseEventStreamResult {
@@ -32,6 +33,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateBrainState = useStateStore((s) => s.updateBrainState);
   const appendBrainProposal = useStateStore((s) => s.appendBrainProposal);
   const appendBrainResult = useStateStore((s) => s.appendBrainResult);
+  const appendConversationTrace = useStateStore((s) => s.appendConversationTrace);
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
@@ -74,6 +76,11 @@ export function useEventStream(): UseEventStreamResult {
             appendBrainProposal(data as unknown as SkillPlan);
           } else if (event.event_type === "skill_result") {
             appendBrainResult(data as unknown as SkillResult);
+          } else if (
+            event.event_type === "conversation_trace" ||
+            event.event_type === "conversation_trace_shadow"
+          ) {
+            appendConversationTrace(data as unknown as ConversationTracePayload);
           } else if ("executive_state" in data) {
             updateBrainState(toPawAIBrainState(data as unknown as LegacyBrainLike));
           }
@@ -119,6 +126,7 @@ export function useEventStream(): UseEventStreamResult {
       updateBrainState,
       appendBrainProposal,
       appendBrainResult,
+      appendConversationTrace,
       updateSystemHealth,
       updateObjectState,
       updateTts,

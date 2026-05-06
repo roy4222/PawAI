@@ -20,6 +20,7 @@ import { SkillTraceContent } from "./skill-trace-content";
 export function SkillTraceDrawer() {
   const [open, setOpen] = useState(false);
   const proposals = useStateStore((state) => state.brainProposals);
+  const traces = useStateStore((state) => state.conversationTraces);
 
   return (
     <div className="border-t border-border/50 bg-background/80">
@@ -31,7 +32,7 @@ export function SkillTraceDrawer() {
         onClick={() => setOpen((value) => !value)}
       >
         {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        Skill Trace · {proposals.length}
+        Skill Trace · {proposals.length} / Trace · {traces.length}
       </Button>
       {open && <SkillTraceContent />}
     </div>
