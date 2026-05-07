@@ -75,6 +75,38 @@ Trace/topic：tmux capture brain log 缺少 dropped 警告；但 graph 處理時
 是否可重現：YES（rapid pub）
 下一步：demo 場景下使用者語音間隔 >5s，自然不會撞到此行為。記入 P2 backlog 觀察 single-flight 是否需要 queue 而非 drop。
 
+## [#A2.2] safety_gate stop / 緊急 keyword 短路 (3 phrases)
+結果：PASS
+分類：A
+觸發：「停」/「stop」/「緊急」 三條獨立 pub
+預期：safety_gate 攔截，bypass LLM，回 `好的，我停下來` 罐頭
+實際：✓ 三條 trace 都是 input → **safety_gate status=hit detail=stop_move** → output (detail=safety_path)
+  - reply: `好的，我停下來。` (RuleBrain canned)
+Trace/topic：`/brain/conversation_trace` 完整三段；無 LLM call（safety_gate 短路）
+是否可重現：YES
+**Hard gate 確認**：safety_gate 確實是 demo 第一道閘門，3/3 不漏。
+
+## [#A3.4] invalid / disabled skill 不執行 motion
+結果：PASS（跳舞）/ OBS（後空翻 — rapid-pub 排隊掉，非邏輯失敗）
+分類：A
+觸發：「跳舞」（disabled in registry）/「後空翻」（unknown）
+預期：LLM 提案被 skill_gate blocked / rejected_not_allowed，**不發 /skill_request、不發 /webrtc_req**
+實際：
+- 跳舞：Gemini persona 直接婉拒（reply: `[playful] 跳舞我現在還不太會耶，我的關節今天有點緊。不過如果你對我比個...`）
+  → 沒提 skill，所以 skill_gate 沒 trace
+  → `/brain/skill_request` topic timeout 5s 確認沒任何訊息
+- 後空翻：未被 brain 處理（rapid pub 排隊掉，跟 A2.1.3 同一個 OBS）
+Trace/topic：dance-01 trace = memory → llm_decision → json_validate → repair → output（缺 skill_gate stage 因為沒提案）
+是否可重現：YES（跳舞，每次 demo）
+**Hard gate 確認**：整個今晚 session `/webrtc_req` 0 message — invalid skill 真的動 = **0** ✓
+
+## [#Hard-Gate-Summary] 截至目前的 demo 安全閘
+- ✅ safety_gate keyword 短路 100%（3/3 phrases）
+- ✅ invalid skill 不執行 motion 100%（0 webrtc_req emitted）
+- ✅ trace_only mode 正確 defer（caps-02: skill_gate blocked self_introduce:defer）
+- ✅ `/brain/skill_request` 和 `/webrtc_req` 至今 0 訊息
+- 後續要驗：執行型 skill（wave_hello / sit_along / wiggle confirm）能正確發 skill_request → motion 真跑
+
 
 (items appended as testing progresses)
 
