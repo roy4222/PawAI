@@ -1,7 +1,30 @@
 # 專案狀態
 
-**最後更新**：2026-05-07 evening（Phase A.6 Capability-Aware Self-Demonstration 完工 — capability layer + DemoGuide registry + 33-entry merged context，121 pawai_brain test / 152 interaction_executive test / 2 legacy llm_bridge test 全綠）
+**最後更新**：2026-05-08（Brain LLM allowlist 擴 2→8 + needs_confirm handoff 修正 + persona 規則 2/4 矛盾修正，132 pawai_brain test / 158 interaction_executive test / 2 legacy llm_bridge test 全綠）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/8 進度（Brain Allowlist Expansion + needs_confirm Handoff）
+
+LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 仍只有 2 條 + pawai_brain `skill_policy_gate.v2` 在 needs_confirm 分支把 proposed_skill 吃掉，導致 wiggle / stretch 永遠到不了 brain_node、wave_hello / sit_along / careful_remind / greet_known_person 永遠被擋。本次修齊以解鎖 5/18 driver-less demo「PAI 自己介紹自己 + 自己選功能展示」主軸。完整 plan：`/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md`。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| `pawai_brain.skill_policy_gate.v2` needs_confirm 分支 | 從 `return None` 改為保留 `proposed_skill="wiggle/stretch"`，brain_node 才看得到 |
+| `interaction_executive.brain_node.LLM_PROPOSABLE_SKILLS` | 2 → 8（show_status / self_introduce / wave_hello / sit_along / greet_known_person / careful_remind / wiggle / stretch） |
+| brain_node mode dispatch | 二分支 (execute / trace_only) → 三分支（+ confirm，重用 `_pending_confirm.request_confirm`，不額外 emit say_canned 邀請） |
+| `pawai_brain.nodes.skill_policy_gate.LLM_PROPOSABLE_SKILLS` 鏡像 | 同步擴 8，`test_allowlist_matches_spec` 強制 sync |
+| `tools/llm_eval/persona.txt` rule 2 / 4 / +10 | 修正規則矛盾（rule 2 允許 needs_confirm 進 skill 欄位；rule 4 改邀請語氣；rule 10 強調 confirm 模式語氣） |
+| 測試新增 | pawai_brain +1 smoke（needs_confirm proposed_skill 保留）；interaction_executive +6（4 execute + 2 confirm）|
+
+### 不在本 cut 範圍
+
+- ❌ 不擴 nav / approach_person / object_remark / stranger_alert / fallen_alert 進 allowlist（場地未驗 / demo 期關閉）
+- ❌ 不動 executive / skill_queue / PendingConfirm 內部 / `/brain/chat_candidate` schema
+- ❌ self_introduce 維持 trace_only（10 步 motion 走 Studio button）
 
 ---
 

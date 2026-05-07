@@ -419,6 +419,11 @@ def normalize_proposal(raw_skill, raw_args, capability_context) -> tuple[
     return None, args, None, "blocked", f"{entry.name}:{entry.effective_status}"
 ```
 
+brain_node `_on_chat_candidate` mode dispatch：
+  available  → execute (直接 _emit_with_cooldown)
+  needs_confirm → confirm (PendingConfirm + needs_confirm trace)
+  其他 (kind=demo_guide / explain_only / etc.) → trace_only
+
 ### 6.5 output_builder（小改）
 
 state.selected_demo_guide 寫進 trace（在 trace_emitter 階段），**不寫進 chat_candidate**。
@@ -562,6 +567,11 @@ available_execute (8):
 
 available_confirm (2):
   wiggle, stretch
+
+備註：available_confirm 的 skill 從 LLM 提案進來時，pawai_brain `skill_policy_gate.v2`
+保留 proposed_skill 名稱往下傳（不再 needs_confirm 就吃掉），brain_node 看到 mode="confirm"
+時呼叫 self._pending_confirm.request_confirm(...)，重用既有 PendingConfirm state machine。
+使用者比 OK 後 _tick_pending_confirm() 觸發 skill 真執行。
 
 explain_only (5):
   stranger_alert, object_remark, nav_demo_point, approach_person, fallen_alert
