@@ -476,3 +476,78 @@ def test_chat_candidate_with_wiggle_proposal_requests_pending_confirm(brain):
         and t["detail"] == "wiggle"
         for t in traces
     )
+
+
+def test_chat_candidate_with_wave_hello_proposal_executes(brain):
+    _feed_speech(brain, "跟我打招呼", "s-wave")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-wave",
+        "reply_text": "[excited] 嗨！",
+        "proposed_skill": "wave_hello",
+        "proposed_args": {},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply", "wave_hello"]
+    traces = _drain_traces(brain)
+    assert any(t["stage"] == "skill_gate" and t["status"] == "accepted"
+               and t["detail"] == "wave_hello" for t in traces)
+
+
+def test_chat_candidate_with_sit_along_proposal_executes(brain):
+    _feed_speech(brain, "我坐下來", "s-sit")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-sit",
+        "reply_text": "[playful] 我也坐下陪你",
+        "proposed_skill": "sit_along",
+        "proposed_args": {},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply", "sit_along"]
+
+
+def test_chat_candidate_with_greet_known_person_proposal_executes(brain):
+    _feed_speech(brain, "向 Roy 打招呼", "s-greet")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-greet",
+        "reply_text": "歡迎回來，Roy",
+        "proposed_skill": "greet_known_person",
+        "proposed_args": {"name": "Roy"},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply", "greet_known_person"]
+
+
+def test_chat_candidate_with_careful_remind_proposal_executes(brain):
+    _feed_speech(brain, "提醒一下小心", "s-care")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-care",
+        "reply_text": "[worried] 小心一點喔",
+        "proposed_skill": "careful_remind",
+        "proposed_args": {},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply", "careful_remind"]
+
+
+def test_chat_candidate_with_stretch_proposal_requests_pending_confirm(brain):
+    """stretch shares wiggle's confirm wiring — same expectation."""
+    from interaction_executive.pending_confirm import ConfirmState
+    _feed_speech(brain, "伸個懶腰", "s-str")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-str",
+        "reply_text": "[sighs] 好啊，請比 OK",
+        "proposed_skill": "stretch",
+        "proposed_args": {},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    assert brain._pending_confirm.state == ConfirmState.PENDING
+    assert brain._pending_confirm.pending_skill == "stretch"
+    traces = _drain_traces(brain)
+    assert any(t["stage"] == "skill_gate" and t["status"] == "needs_confirm"
+               and t["detail"] == "stretch" for t in traces)
