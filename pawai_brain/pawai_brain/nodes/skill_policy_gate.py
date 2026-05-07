@@ -14,8 +14,17 @@ from __future__ import annotations
 from ..state import ConversationState
 
 
-# Mirrors brain_node.LLM_PROPOSABLE_SKILLS (kept for v1 compat)
-LLM_PROPOSABLE_SKILLS: frozenset[str] = frozenset({"show_status", "self_introduce"})
+# Mirrors brain_node.LLM_PROPOSABLE_SKILLS — keep in sync.
+LLM_PROPOSABLE_SKILLS: frozenset[str] = frozenset({
+    "show_status",
+    "self_introduce",
+    "wave_hello",
+    "sit_along",
+    "greet_known_person",
+    "careful_remind",
+    "wiggle",
+    "stretch",
+})
 
 # v1 passthrough names (unchanged); v2 uses the same set
 PASSTHROUGH_SKILLS: frozenset[str] = frozenset({"chat_reply", "say_canned"})

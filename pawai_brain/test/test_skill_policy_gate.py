@@ -86,7 +86,11 @@ def test_skill_with_surrounding_whitespace_stripped():
 
 def test_allowlist_matches_spec():
     """Sync check: keep allowlist aligned with brain_node.LLM_PROPOSABLE_SKILLS."""
-    assert LLM_PROPOSABLE_SKILLS == frozenset({"show_status", "self_introduce"})
+    assert LLM_PROPOSABLE_SKILLS == frozenset({
+        "show_status", "self_introduce",
+        "wave_hello", "sit_along", "greet_known_person", "careful_remind",
+        "wiggle", "stretch",
+    })
 
 
 # ── skill_policy_gate node integration ──────────────────────────────────
