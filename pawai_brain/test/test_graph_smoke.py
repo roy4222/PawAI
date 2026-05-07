@@ -292,3 +292,22 @@ def test_smoke_world_state_present_in_state():
         )
     assert "world_state" in result
     assert "period" in result["world_state"]
+
+
+def test_smoke_needs_confirm_skill_preserves_proposed_skill():
+    """E2E: LLM proposes wiggle → graph final state has proposed_skill='wiggle'
+    + skill_gate trace status='needs_confirm'. brain_node will then route this
+    to confirm mode."""
+    stub = _StubSkill("wiggle", baseline="available_confirm")
+    patcher, _ = _wire_for_test(
+        persona_response={"reply": "[playful] 好啊，請比 OK 我就搖", "skill": "wiggle", "args": {}},
+        skills={"wiggle": stub},
+    )
+    with patcher:
+        graph = build_graph()
+        result = graph.invoke({"session_id": "s-wig", "user_text": "搖一下", "source": "speech"})
+
+    assert result["proposed_skill"] == "wiggle"  # ← preserved
+    assert (result.get("selected_demo_guide") or "") == ""
+    skill_gate_entries = [t for t in result["trace"] if t["stage"] == "skill_gate"]
+    assert skill_gate_entries and skill_gate_entries[-1]["status"] == "needs_confirm"
