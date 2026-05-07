@@ -107,6 +107,17 @@ Trace/topic：dance-01 trace = memory → llm_decision → json_validate → rep
 - ✅ `/brain/skill_request` 和 `/webrtc_req` 至今 0 訊息
 - 後續要驗：執行型 skill（wave_hello / sit_along / wiggle confirm）能正確發 skill_request → motion 真跑
 
+## [#A5.4-noise] object_remark 對靜態物體狂講
+結果：FAIL → A:BLOCKER → 已修
+分類：A
+觸發：Roy 開 full demo 後，YOLO 持續偵測同一張咖啡色椅子，brain_node 每 5s 發一次 `看到咖啡色的椅子了` TTS，干擾語音主鏈測試
+預期：同一物體只講 1 次，60s 後可再觸發
+實際：每 5s 重講（SkillContract.cooldown_s=5 只擋 skill 不擋同物重發）
+Trace/topic：`/event/object_detected` 持續、`/skill_request` 每 5s 一筆 say `text="看到咖啡色的椅子了"`
+是否可重現：YES（每次靜態物體入鏡都會）
+下一步：已修 — `brain_node.py` 加 `OBJECT_REMARK_DEDUP_S=60.0` + `_object_remark_seen[(class, color)] = ts` per-key gate（commit 685c97d）。restart `interaction_executive launch` 生效。
+**Demo 影響**：未修則任何靜態物體展示都會干擾對話 + Studio 大螢幕 spam。
+
 
 (items appended as testing progresses)
 
