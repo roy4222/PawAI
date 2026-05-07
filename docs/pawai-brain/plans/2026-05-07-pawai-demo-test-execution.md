@@ -32,7 +32,7 @@
 - Create: `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md`
 
 **3 fixes to apply** (from cross-check earlier in this conversation):
-1. §6.2 trace stage names → use actual graph node names: `input / safety_gate / world_state / capability / memory / llm / validator / repair / skill_gate / output / trace` (not `llm_decision`/`json_validate`)
+1. §6.2 trace stage names → keep checklist v2 wording: `input / safety_gate / world_state / capability / memory / llm_decision / json_validate / repair / skill_gate / output / trace`. **DO NOT** rename to graph internal node names — `/brain/conversation_trace` actually publishes `llm_decision` / `json_validate` strings, not `llm` / `validator`.
 2. §3.1 `careful_remind` trigger → not "提醒我小心"; instead Roy does bending pose → PAI 主動觸發 (move into §5.3 pose section, or remove from LLM-active test)
 3. §2.1 早晚問候 → mark `(OBS)` not P0 hard gate
 
@@ -51,11 +51,11 @@ Use the v2 content Roy posted in conversation. Apply the 3 edits above before wr
 
 Run:
 ```bash
-grep -n "json_validate\|llm_decision" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
 grep -n "提醒我小心" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
-grep -n "早晚問候" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+grep -nE "早晚問候.*OBS" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+grep -n "llm_decision\|json_validate" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
 ```
-Expected: first two return empty; third returns the line and it has `(OBS)` marker.
+Expected: first returns empty; second returns line with `(OBS)` marker; third returns the trace stage names (these are correct, do NOT remove).
 
 - [ ] **Step 3: Commit**
 ```bash
@@ -110,27 +110,33 @@ git commit -m "docs(test): seed fail-map result file"
 ```
 Expected: rsync 完成、無錯誤。
 
+**Note**: All Jetson `ros2`/`colcon` calls must source ROS + workspace install. Use this prefix in every SSH command below:
+```text
+JETSON_ENV='cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh'
+```
+(zsh on Jetson per CLAUDE.md hard rule — `setup.bash` and `setup.zsh` not interchangeable.)
+
 - [ ] **Step 2: Build 5 packages on Jetson**
 ```bash
-ssh jetson-nano "cd ~/elder_and_dog && colcon build --packages-select pawai_brain interaction_executive vision_perception speech_processor face_perception"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && colcon build --packages-select pawai_brain interaction_executive vision_perception speech_processor face_perception"
 ```
 Expected: 5 packages built, no errors.
 
 - [ ] **Step 3: Start full demo tmux**
 ```bash
-ssh jetson-nano "cd ~/elder_and_dog && bash scripts/start_full_demo_tmux.sh"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && bash scripts/start_full_demo_tmux.sh"
 ```
 Expected: 10/10 windows up, no crash within 30s.
 
 - [ ] **Step 4: Verify single chat publisher (spec v1.1 §1.2)**
 ```bash
-ssh jetson-nano "ros2 node list | grep -E 'conversation_graph|llm_bridge'"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 node list | grep -E 'conversation_graph|llm_bridge'"
 ```
 Expected: only `/conversation_graph_node` (langgraph default); NO `/llm_bridge_node`.
 
 - [ ] **Step 5: Verify perception topics**
 ```bash
-ssh jetson-nano "ros2 topic list | grep -E '/state/perception/face|/event/(gesture|pose|object)_detected|/brain/proposal'"
+ssh jetson-nano "cd /home/jetson/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && ros2 topic list | grep -E '/state/perception/face|/event/(gesture|pose|object)_detected|/brain/proposal'"
 ```
 Expected: 5 topics all present.
 
@@ -192,8 +198,10 @@ Voice triggers:
 | 「介紹一下你自己」 | self_introduce | accepted_trace_only（狗不動）|
 | 「搖一下」 | wiggle | needs_confirm |
 | 「伸個懶腰」 | stretch | needs_confirm |
-| 「跳舞」 | dance | rejected_not_allowed |
-| 「後空翻」 | (unknown) | rejected_or_blocked |
+| 「跳舞」 | dance (disabled) | `blocked` 或 `rejected_not_allowed` 都算 PASS |
+| 「後空翻」 | (unknown) | `rejected_or_blocked` 任一 |
+
+**重點是不執行 motion**。dance 在 SKILL_REGISTRY 是 `disabled` capability，可能走 `blocked` 路徑而非 `rejected_not_allowed`，兩者皆視為正確。
 
 Watch `/brain/proposal` and `/brain/conversation_trace` for each.
 
