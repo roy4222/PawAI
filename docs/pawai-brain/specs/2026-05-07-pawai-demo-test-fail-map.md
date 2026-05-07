@@ -107,6 +107,40 @@ Trace/topic：dance-01 trace = memory → llm_decision → json_validate → rep
 - ✅ `/brain/skill_request` 和 `/webrtc_req` 至今 0 訊息
 - 後續要驗：執行型 skill（wave_hello / sit_along / wiggle confirm）能正確發 skill_request → motion 真跑
 
+## [#A2.3-feat] Studio chat → Gemini TTS / 其他 → edge_tts (per-message routing)
+結果：PASS
+分類：feature (Roy 5/7 night 加 demo 需求)
+觸發：5 步 smoke
+- Smoke 1: `ros2 topic pub --once /tts std_msgs/String 'data: 測試純文字一'`
+- Smoke 2: `curl -X POST http://192.168.0.222:8080/api/text_input -d '{"text":"小狗你今天好嗎"}'`
+- Smoke 3: 麥克風講「你好」（待 Roy 確認）
+- Smoke 4: 物體偵測 → object_remark
+- Smoke 5: 拔 OPENROUTER_KEY fallback（待跑）
+預期：Studio chat 走 Gemini，其他走 edge_tts
+實際：
+- ✅ Smoke 1：「測試純文字一」 → `🎤 [edge_tts]`
+- ✅ Smoke 2：「小狗你今天好嗎」 → `🎤 [openrouter_gemini]` (Despina voice, 2 chunks parallel, 6.5s first-chunk, 12s audio)
+- ⏸ Smoke 3：待 Roy 麥克風驗
+- ✅ Smoke 4：「看到咖啡色的椅子了」(object_remark) → `🎤 [edge_tts]`
+- ⏸ Smoke 5：待跑
+- 啟動 log：`tts_node: studio chain built: ['openrouter_gemini', 'edge_tts', 'piper']`
+- pawai_brain: `Published /brain/chat_candidate session=txt-... input_origin=studio_text`
+Trace/topic：`/tts` JSON envelope when input_origin=studio_text；純文字 when None
+是否可重現：YES
+下一步：等 Roy 跑麥克風語音 + Gemini key 失效 fallback。Demo 影響：5/18 demo 用 Studio chat 演 Gemini TTS (Despina) 漂亮聲音、其他通道 edge_tts 維持 demo 反應速度。
+修法：commit 10829ca（per-message routing 5 file plumbing + studio chain pre-build）
+build_plan bug 中途發現：line 627 只 copy text 不 copy input_origin → fix line 632-634
+
+## [#Reboot-1] Jetson 重開機（XL4015 供電不穩）
+結果：FAIL → 已恢復
+分類：A (硬體 demo 風險，memory project_jetson_power_issue.md 已標)
+觸發：build smoke 過程中 SSH 突然 timeout，Tailscale ping 不通
+預期：Jetson 連續運行 30 min+
+實際：uptime 0 min（reboot），Roy 確認重開電源
+Trace/topic：N/A
+是否可重現：YES (XL4015 在 Go2 運行中歷史多次掉電)
+下一步：持續觀察。建議 demo 準備期間插穩定電源，Go2 換大電源不依賴 XL4015。
+
 ## [#A5.4-noise] object_remark 對靜態物體狂講
 結果：FAIL → A:BLOCKER → 已修
 分類：A
