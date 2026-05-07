@@ -373,7 +373,24 @@ class BrainNode(Node):
                 status="accepted",
                 detail=proposed_skill,
             )
-        else:
+        elif mode == "confirm":
+            # Reuse the gesture-confirm machinery — LLM's chat_reply already
+            # asked the user to OK, so we don't emit an extra say_canned hint
+            # (avoids "好啊我搖一下 + 比 OK 我就做 wiggle" double prompt).
+            self._pending_confirm.request_confirm(
+                proposed_skill, proposed_args, time.time()
+            )
+            self.get_logger().info(
+                f"PendingConfirm requested via llm_proposal skill={proposed_skill}"
+            )
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="needs_confirm",
+                detail=proposed_skill,
+            )
+        else:  # trace_only
             self._emit_trace(
                 session_id=session_id,
                 engine=engine,
@@ -383,10 +400,26 @@ class BrainNode(Node):
             )
 
     # Phase 0.5 LLM proposal gate (spec 2026-05-06 §6)
-    LLM_PROPOSABLE_SKILLS = frozenset({"show_status", "self_introduce"})
+    # Phase A.6 (5/8 expansion): 8 skills + new "confirm" mode
+    LLM_PROPOSABLE_SKILLS = frozenset({
+        "show_status",
+        "self_introduce",
+        "wave_hello",
+        "sit_along",
+        "greet_known_person",
+        "careful_remind",
+        "wiggle",
+        "stretch",
+    })
     LLM_PROPOSAL_EXECUTE = {
         "show_status": "execute",
         "self_introduce": "trace_only",
+        "wave_hello": "execute",
+        "sit_along": "execute",
+        "greet_known_person": "execute",
+        "careful_remind": "execute",
+        "wiggle": "confirm",
+        "stretch": "confirm",
     }
 
     # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2):

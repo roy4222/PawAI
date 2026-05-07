@@ -448,3 +448,31 @@ def test_chat_candidate_for_orphan_session_drops_proposal_and_reply(brain):
     assert plans == []  # no chat_reply, no show_status
     traces = _drain_traces(brain)
     assert not any(t["stage"] == "skill_gate" for t in traces)
+
+
+def test_chat_candidate_with_wiggle_proposal_requests_pending_confirm(brain):
+    """wiggle is CONFIRM mode → no skill plan, PendingConfirm becomes PENDING,
+    trace=needs_confirm. Brain_node delegates to existing _pending_confirm
+    machinery (shared with gesture-confirm path)."""
+    from interaction_executive.pending_confirm import ConfirmState
+    _feed_speech(brain, "搖一下", "s-wig")
+    _feed_chat_candidate(brain, {
+        "session_id": "s-wig",
+        "reply_text": "[playful] 好啊，請比 OK 我就搖",
+        "proposed_skill": "wiggle",
+        "proposed_args": {},
+        "engine": "langgraph",
+    })
+    plans = _drain_proposals(brain)
+    # chat_reply emitted, but no wiggle motion plan (waiting for OK)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    # PendingConfirm primed
+    assert brain._pending_confirm.state == ConfirmState.PENDING
+    assert brain._pending_confirm.pending_skill == "wiggle"   # ← property name
+    # Trace evidence
+    traces = _drain_traces(brain)
+    assert any(
+        t["stage"] == "skill_gate" and t["status"] == "needs_confirm"
+        and t["detail"] == "wiggle"
+        for t in traces
+    )
