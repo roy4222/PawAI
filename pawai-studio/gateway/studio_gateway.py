@@ -22,6 +22,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -382,6 +383,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="PawAI Studio Gateway", lifespan=lifespan)
+
+# CORS — Studio frontend at laptop IP (e.g. 100.101.41.4:3000) POSTs to
+# Gateway at Jetson IP (192.168.0.222:8080). WebSocket bypasses CORS so
+# /ws/* worked, but /api/text_input was blocked by browser preflight.
+# 5/7 night fix per Roy's "Brain 文字通道未連線" report.
+# Demo internal network — allow_origins=["*"] is acceptable risk.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ── Static & Health ─────────────────────────────────────────────
