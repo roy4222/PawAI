@@ -78,7 +78,7 @@ LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 
 | DemoGuide registry | `pawai_brain/config/demo_guides.yaml` — 6 entries（face / speech / gesture / pose / object / navigation） |
 | Demo policy | `pawai_brain/config/demo_policy.yaml` — limits + max_motion_per_turn |
 | SkillContract demo metadata | 27 entries 全部加上 4 個 demo 欄位（display_name / demo_status_baseline / demo_value / demo_reason），interaction_executive 152 test 全綠（B2） |
-| Graph wiring | conversation_graph 11 階段（input → safety → context → env → memory → ws → cap → llm → validator → repair → skill_gate → output → trace），新增 world_state_builder + capability_builder + demo_guide passthrough；context_builder / env_builder 保留但 unused（B3） |
+| Graph wiring | conversation_graph 11 階段（`input → safety_gate → world_state → capability → memory → llm → validator → repair → skill_gate → output → trace`，B3 已把 context+env 的責任合併到 `world_state_builder`，graph 不再呼叫舊的 context_builder / env_builder — 兩檔保留只是還沒刪），新增 world_state_builder + capability_builder + demo_guide passthrough（B3） |
 | ROS hooks | conversation_graph_node 訂閱 `/state/tts_playing`（Bool TRANSIENT_LOCAL）/ `/state/reactive_stop/status` / `/state/nav/safety` / `/state/pawai_brain` / `/brain/skill_result`；`selected_skill` 從 skill_result payload 直接 populate `recent_skill_results`（B4） |
 | Persona rules | `tools/llm_eval/persona.txt` 加上 9 條 CapabilityContext 規則（kind=demo_guide trace-only、needs_confirm 要求 OK、recent_skill_results 自然銜接等）（B5 Task 16） |
 | Studio chips | `skill-trace-content.tsx` 加 needs_confirm（yellow）+ demo_guide（blue）chip color，配合既有 amber/rose/emerald palette（B5 Task 17） |

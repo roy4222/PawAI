@@ -865,7 +865,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
-**Schema** (v2.7)：
+**Schema** (v2.8)：
 ```json
 {
   "session_id": { "type": "string",                              "description": "speech session ID，與 chat_candidate 一致" },
