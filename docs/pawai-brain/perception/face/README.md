@@ -11,7 +11,7 @@
 | 狀態 | **greeting 可靠化** |
 | 版本/決策 | YuNet 2023mar (CPU 71.3 FPS) + SFace 2021dec |
 | 完成度 | 95% |
-| 最後驗證 | 2026-04-06（sim_threshold 調降，identity_stable 21 次/2min） |
+| 最後驗證 | 2026-05-08（sim_threshold_upper 0.30→0.40 拉高陌生人門檻，避免 demo 期 60%+ 誤判）；上次完整 smoke 2026-04-06（identity_stable 21 次/2min） |
 | 入口檔案 | `face_perception/face_perception/face_identity_node.py` |
 | 測試 | `python3 -m pytest face_perception/test/ -v` |
 
@@ -38,10 +38,11 @@ face_identity_node（YuNet 偵測 -> SFace embedding -> IOU 追蹤）
 interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 ```
 
-**Hysteresis 穩定化**（4/6 Jetson 調參）：
-- `sim_threshold_upper`: 0.35 → **0.30**，`sim_threshold_lower`: 0.25 → **0.22**
+**Hysteresis 穩定化**（4/6 + 5/8 兩階段調參）：
+- 4/6：`sim_threshold_upper`: 0.35 → 0.30，`sim_threshold_lower`: 0.25 → **0.22**（為了讓 known faces 認得快）
+- **5/8**：`sim_threshold_upper`: 0.30 → **0.40**（為了讓 unknown 不亂叫；demo white-box 觀察 60%+ stranger 誤觸來自手 / 玻璃倒影 / 膚色物。已配 `unknown_face_accumulate_s`: 3.0 → 5.0 多 2 秒確認）
 - `track_iou_threshold`: **0.15**，`track_max_misses`: **20**，`stable_hits`: **2**，`unknown_grace_s`: **2.5**
-- 調參後 2 分鐘 smoke test：`identity_stable: roy` 21 次（調前 1-3 次），零誤認
+- 4/6 調參後 2 分鐘 smoke test：`identity_stable: roy` 21 次（調前 1-3 次），零誤認
 - **已知限制**：track 抖動仍在（45 tracks/2min，目標 ≤5），根因是 YuNet 偵測不穩定
 
 **face_db**：`/home/jetson/face_db/`，目前有 roy、grama 兩人。

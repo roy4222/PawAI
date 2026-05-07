@@ -88,7 +88,7 @@
 | `/brain/skill_request` | Command | 觸發式 | Studio → Brain skill button request | **v2.5** active |
 | `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
 | `/brain/skill_result` | Event | 觸發式 | Executive → Brain/Studio SkillResult lifecycle | **v2.5** active |
-| `/brain/conversation_trace` | Event | 觸發式 | Brain → Debug/Studio LLM proposal gate trace (skill_gate stage: accepted/accepted_trace_only/rejected_not_allowed/blocked) | **v2.7** active |
+| `/brain/conversation_trace` | Event | 觸發式 | Brain → Debug/Studio LLM proposal gate trace（skill_gate stage 完整 enum 見 §`/brain/conversation_trace` 章節，5/8 加 `needs_confirm` / `demo_guide`） | **v2.8** active |
 | `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 
@@ -154,7 +154,7 @@
 ```
 
 **欄位說明**：
-- `stable_name`：經 Hysteresis 穩定化後的名稱（`stable_hits=3`，`sim_threshold_upper=0.35` / `lower=0.25`）
+- `stable_name`：經 Hysteresis 穩定化後的名稱（`stable_hits=2`，`sim_threshold_upper=0.40` / `lower=0.22`；5/8 把 upper 從 0.30→0.40 拉高陌生人門檻避免 demo 誤觸）
 - `mode`：`stable` 表示已過穩定化閾值；`hold` 表示追蹤中但尚未達穩定條件
 - `sim`：SFace cosine similarity 原始分數，非二值化結果
 
@@ -870,7 +870,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 {
   "session_id": { "type": "string",                              "description": "speech session ID，與 chat_candidate 一致" },
   "engine":     { "type": "string",                              "enum": ["legacy", "langgraph"], "description": "發布來源引擎" },
-  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "context", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"], "description": "pipeline 階段" },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"], "description": "pipeline 階段（5/7 起 langgraph engine 把 context+env 併進 world_state，並新增 capability stage）" },
   "status":     { "type": "string",                              "description": "階段狀態（見下表）" },
   "detail":     { "type": "string",                              "description": "階段特定訊息（如錯誤原因、skill 名稱、fallback 理由）" },
   "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }
@@ -882,14 +882,15 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 | stage | 適用 status | 說明 |
 |-------|-----------|------|
 | `input` | `ok` \| `error` | 輸入驗證 |
-| `safety_gate` | `ok` \| `blocked` \| `error` | 安全層檢查 |
-| `context` | `ok` \| `retry` \| `error` | 上下文提取 |
+| `safety_gate` | `ok` \| `hit` \| `blocked` \| `error` | 安全層檢查；`hit` 為短路命中關鍵字 |
+| `world_state` | `ok` \| `error` | env + perception 狀態快照（5/7 langgraph 引入） |
+| `capability` | `ok` \| `error` | 33 條能力快照組裝（5/7 langgraph 引入；27 SkillContract + 6 DemoGuide） |
 | `memory` | `ok` \| `error` | 記憶查詢 |
 | `llm_decision` | `ok` \| `fallback` \| `error` | LLM 調用（失敗 → fallback） |
 | `json_validate` | `ok` \| `retry` \| `error` | JSON 格式驗證 |
 | `repair` | `ok` \| `fallback` \| `error` | JSON 修復（失敗 → fallback） |
-| `skill_gate` | `proposed` \| `accepted` \| `accepted_trace_only` \| `blocked` \| `rejected_not_allowed` | Brain 的 skill allowlist + safety 檢查 |
-| `output` | `ok` \| `error` | 最終輸出（如 publish chat_candidate） |
+| `skill_gate` | `proposed` \| `accepted` \| `accepted_trace_only` \| `blocked` \| `rejected_not_allowed` \| `needs_confirm` \| `demo_guide` | Brain 的 skill allowlist + safety 檢查；`needs_confirm`/`demo_guide` 為 5/8 langgraph 新增 |
+| `output` | `ok` \| `fallback` \| `error` | 最終輸出（如 publish chat_candidate） |
 
 **範例**（skill 被 allowlist 過濾）：
 ```json
@@ -942,7 +943,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 {
   "session_id": { "type": "string" },
   "engine":     { "type": "string",                              "enum": ["legacy", "langgraph", "shadow"] },
-  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "context", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"] },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"] },
   "status":     { "type": "string" },
   "detail":     { "type": "string" },
   "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }
@@ -1192,6 +1193,7 @@ if not required.issubset(payload.keys()):
 | v2.3 | 2026-04-05 | 新增 `/event/object_detected`（YOLO26n 物體偵測，多物件 objects 陣列 schema）；obstacle_detected 章節重編號 4.8→4.9 | System Architect |
 | v2.4 | 2026-04-05 | `/event/object_detected` 擴充至 COCO 80 class（預設全開）；`class_name` enum → reference `coco_classes.py`；新增 `class_whitelist` 參數可縮減 | System Architect |
 | v2.7 | 2026-05-06 | Phase 0.5 Conversation Engine：`/brain/chat_candidate` 新增 4 欄位（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`）；新增 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` topics | System Architect |
+| v2.8 | 2026-05-08 | Phase A.6 Capability Awareness：`/brain/conversation_trace.stage` enum 把 `context` 換成 `world_state` + `capability`（langgraph engine）；`skill_gate.status` 加 `needs_confirm` / `demo_guide`；`/state/perception/face` 的 `sim_threshold_upper` 從 0.30 拉高到 **0.40**（5/8 demo 期陌生人誤觸抑制）；`/brain/chat_candidate` schema 不變（DemoGuide 只進 conversation_trace，Brain contract 維持乾淨） | System Architect |
 
 ---
 

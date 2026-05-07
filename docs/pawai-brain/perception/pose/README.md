@@ -92,12 +92,20 @@ interaction_executive_node → fallen = EMERGENCY
 | sitting | demo bridge → 「會不會太累？」TTS（say only）| 5s | 互動段 |
 | crouching | demo bridge → 「我在這裡喔」TTS | 5s | 互動段 |
 | bending | demo bridge → 「請小心喔」TTS | 5s | 互動段 |
-| fallen | demo bridge → 「{name}，偵測到跌倒，請注意安全！」（high priority）| **10s** | Scene 8 / 守護 |
+| fallen | **demo silence**（5/8）— TTS 兩條路徑都已 mute，Studio Trace 仍顯示紅 alert | **10s** | Scene 8 / 守護 |
 | akimbo | demo bridge → 「你看起來很有架式喔！」（暫定）| 5s | 互動段（5/5 升 Active）|
 | knee_kneel | demo bridge → 「需要我幫忙嗎？」（暫定）| 5s | 互動段（5/5 升 Active）|
 
 > 站立 standing 不觸發任何 skill（純 baseline 狀態）。
 > 全部走 `vision_perception/vision_perception/event_action_bridge.py` POSE_TTS_MAP 的 demo bridge — 只 publish `/tts`，不發 Go2 motion。長期路徑改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` / `akimbo_react` / `knee_kneel_react`）走 `/brain/proposal` → `/skill_result`，列為 post-demo Stretch。
+
+**5/8 fallen demo silence**（兩條 TTS 路徑都 mute，避免推車/椅子等 mid-frame 假跌倒打斷對話）：
+1. `_on_fall_alert`（topic `/event/interaction/fall_alert`）→ `FALL_ALERT_TTS = ""` + `if FALL_ALERT_TTS:` guard（commit `9d8acb7`）
+2. `_on_pose_event`（topic `/event/pose_detected`）→ `POSE_TTS_MAP` 移除 `"fallen"` key（commit `b224217`）
+
+加 sync test `test_pose_tts_map_no_fallen_template_demo_silence` 鎖兩條路。Studio 仍顯示紅 alert chip — 視覺紀錄保留，只是不發語音。
+
+**5/8 ankle-on-floor gate**（`pose_classifier.classify_pose` 加 `image_height` 參數）：當 `image_height` 提供時，要求 `ankle_y / image_height > 0.7`（人在畫面下半部 30% → 真的躺在地上）才認 fallen。`image_height=None` 維持原行為（既有 unit test 不破），mid-frame ankles（推車 / 椅子 / 彎腰物）擋下。`vision_perception_node.py:289` 在呼叫處傳 `image.shape[0]`。
 
 ### `fallen_alert` 接 face name（5/5 對齊）
 

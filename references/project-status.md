@@ -1,7 +1,44 @@
 # 專案狀態
 
-**最後更新**：2026-05-08（Brain LLM allowlist 擴 2→8 + needs_confirm handoff 修正 + persona 規則 2/4 矛盾修正，132 pawai_brain test / 158 interaction_executive test / 2 legacy llm_bridge test 全綠）
+**最後更新**：2026-05-08 night（Demo 誤觸抑制 + TTS chunking 重構 + capability layer defense-in-depth；135 pawai_brain test / 158 interaction_executive test / 47 vision_perception event/pose test / 180 speech_processor test 全綠）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/8 night 進度（Demo readiness — 誤觸抑制 + TTS chunking + Capability defense-in-depth）
+
+5/8 white box review 後抓出三批會毀實機測試的問題：(1) capability layer 對 unknown-but-allowlisted skill 沒擋 → brain_node 仍會 execute（5/8 allowlist 擴大後變嚴重）。(2) 5/7 列在 plan 但未實作的「五功能誤觸抑制 + Gemini TTS 跳行」，當天直接進 LangGraph cutover 跳過了。(3) `FALL_ALERT_TTS=""` 只關了一條 fall TTS 路徑，`POSE_TTS_MAP["fallen"]` 還會經 `_on_pose_event` 漏出。本批一次補齊。
+
+### 落地內容
+
+| 項目 | 結果 | Commit |
+|---|---|---|
+| capability layer first-gate（unknown allowlisted skill）| `normalize_proposal_v2` 在 `entry is None && skill ∈ LLM_PROPOSABLE_SKILLS` 時**丟掉** proposed_skill + trace `blocked:not_in_capability_context`；非 allowlist 不變 | `075fb23` |
+| `face_perception.yaml` `sim_threshold_upper` | 0.30 → **0.40**（拉高陌生人認定門檻；下限 0.22 不動） | `9d8acb7` |
+| `executive.yaml` `unknown_face_accumulate_s` | 3.0 → **5.0**（多 2 秒確認再警告） | `9d8acb7` |
+| `event_action_bridge.FALL_ALERT_TTS` | `""` + `if FALL_ALERT_TTS:` guard at publish site | `9d8acb7` |
+| `event_action_bridge.POSE_TTS_MAP["fallen"]` | **移除** key（demo 期靜音；`_on_pose_event` 既有 `if not template: return` 處理） | `b224217` |
+| `pose_classifier` 加 `image_height` + `ankle_y_ratio > 0.7` gate | 推車 / 椅子等 mid-frame 假跌倒擋下；image_height=None 維持 backward compat | `9d8acb7` |
+| `tts_node._split_for_tts` 抽到 `tts_split.py`（ROS-free） | pre-commit hook 不需 source ROS；單元測試直接 import | `6d548b8` |
+| TTS chunking 句號優先門檻 | `MIN_SPLIT_CHARS = 30`（原 `CHUNK_MAX_CHARS // 2 = 20`），避免短句早切丟語氣 | `6d548b8` |
+| TTS chunking 逗號 fallback | explicit `-1` guard + cut ≥ MIN_SPLIT_CHARS-1 邊界 | `6d548b8` |
+| 測試新增 | pawai_brain +3（capability defense-in-depth allowlist sweep）；vision_perception +5（4 ankle gate + 1 demo silence sync）；speech_processor +13（split chunking 全覆蓋） | — |
+
+### 兩條 fall TTS 路徑都關了
+
+| 路徑 | topic | 被 mute 在 |
+|---|---|---|
+| `_on_fall_alert` → `FALL_ALERT_TTS` | `/event/interaction/fall_alert` | `9d8acb7` |
+| `_on_pose_event` → `POSE_TTS_MAP["fallen"]` | `/event/pose_detected` | `b224217` |
+
+新 sync test `test_pose_tts_map_no_fallen_template_demo_silence` 把兩條路綁在一起 — 復原一條會被另一條 test 提醒。
+
+### 不在本 cut 範圍
+
+- ❌ 不接 IMU / 自身姿態 telemetry（硬體 safety 留 Phase 2）
+- ❌ TTS P1 並行→串行 + 前文 hint（demo 後再評估）
+- ❌ 不動 PendingConfirm internals / executive skill_queue
+- ❌ 不擴 nav / object 進 allowlist（場地 5/13-14 才驗）
 
 ---
 

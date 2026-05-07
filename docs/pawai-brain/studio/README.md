@@ -208,11 +208,13 @@ StudioLayout (root mount)
 
 | Status | 顏色 | 觸發 |
 |---|---|---|
-| `accepted` / `ok` | emerald-500/20 | brain 接受 LLM 提案並真執行（如 `show_status`） |
-| `accepted_trace_only` | emerald-50/20 | brain 接受但 policy 是 trace_only（如 `self_introduce` 不自動跑 motion） |
+| `accepted` / `ok` | emerald-500/20 | brain 接受 LLM 提案並真執行（如 `show_status` / `wave_hello` / `sit_along` / `careful_remind` / `greet_known_person`） |
+| `accepted_trace_only` | emerald-50/20 | brain 接受但 policy 是 trace_only（`self_introduce` 不自動跑 motion，10 步序列走 Studio button） |
 | `proposed` | slate | engine 端產生提案（pre-gate） |
-| `blocked` / `fallback` / `retry` | amber | cooldown / safety / OpenRouter fallback chain |
-| `rejected_not_allowed` / `error` | rose | 提案不在 brain `LLM_PROPOSABLE_SKILLS` allowlist |
+| `needs_confirm` | yellow-500/20 | **5/8 新增** — wiggle / stretch 等 confirm 模式 skill：brain_node 已 `_pending_confirm.request_confirm`，等使用者比 OK 才執行 |
+| `demo_guide` | blue-500/20 | **5/8 新增** — kind=demo_guide 的提案（face / speech / gesture / pose / object / navigation 6 條 pseudo-skill），純 trace 不進 chat_candidate / proposal |
+| `blocked` / `fallback` / `retry` | amber | cooldown / safety / OpenRouter fallback chain（含 5/8 capability layer 的 `blocked:not_in_capability_context`，把 unknown-but-allowlisted skill 擋在 pawai_brain 層） |
+| `rejected_not_allowed` / `error` | rose | 提案不在 brain `LLM_PROPOSABLE_SKILLS` allowlist（5/8 已擴 8 條） |
 
 事件流：
 ```

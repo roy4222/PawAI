@@ -75,6 +75,18 @@ echo gate 阻止 ASR 自激（total 1.5s）
 - **單一 provider 維護成本低**：LLM + TTS 都走 OpenRouter，credentials / rate limit / billing 統一管理
 - **其他選項不再評估**：Qwen3.6 Plus / DeepSeek V4 / Kimi K2.6 等候選曾出現在 MOC，但 5/12 sprint 已收斂只跑 Gemini 主線；fallback 保留是工程現實，不是 A/B 候選
 
+### 5/8 補充：TTS chunking 重構 + ROS-free 切分模組
+
+長句語氣斷掉根因不只 Gemini 自身限制，而是 chunking 邏輯太貪心：原本 `len(buf) >= CHUNK_MAX_CHARS // 2 (= 20)` 就在句號切，把 20 字內的自然停頓也切成獨立 chunk → 跨 chunk Gemini 重新初始化 → 氣音 / narrate 語氣完全消失。逗號 fallback 用 `max(rfind(','), rfind('，'), rfind(' '))` + `> CHUNK_MAX_CHARS // 2` 比較，在 `-1` 邊界也有歧義（沒命中時 max 仍回 -1，會誤判進入硬切分支但語意不清）。
+
+5/8 修法（commit `6d548b8`）：
+- 抽純 module `speech_processor/speech_processor/tts_split.py`（**ROS-free**）— pre-commit hook 不需 source ROS，單元測試直接 import；`tts_node` 透過 class 屬性 + `_split_for_tts` shim 維持 backward compat
+- 新增 `MIN_SPLIT_CHARS = 30`（原 `CHUNK_MAX_CHARS // 2 = 20`）— 句號要 30 字才切，跨 chunk 語氣不再頻繁重置
+- 逗號 fallback 加 explicit `-1` guard：`cut = max([c for c in candidates if c >= 0], default=-1)`，且 `cut >= MIN_SPLIT_CHARS - 1` 才採用，否則硬切到 `CHUNK_MAX_CHARS = 40`
+- 13 個新 unit test 覆蓋邊界（短句 / 跨句 / 全 CJK 無標點 / audio-tag preservation / hard-cut 字元保留）
+
+**P1 未做（demo 後再評估）**：parallel→serial chunk synthesis + 前文最後 5 字當 hint。要犧牲 latency 換 cross-chunk 語氣連續性。
+
 ## 輸入/輸出
 
 | Topic | 方向 | 說明 |
