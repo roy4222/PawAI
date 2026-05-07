@@ -65,8 +65,19 @@ def normalize_proposal_v2(raw_skill, raw_args, capability_context):
     # 2. lookup in capability_context
     entry = _lookup(skill_str, capability_context)
 
-    # 3. unknown skill — kept so brain_node can reject
+    # 3. unknown skill — capability layer is the FIRST gate.
+    #    If the skill is in the LLM_PROPOSABLE_SKILLS allowlist but missing
+    #    from capability_context (e.g. CapabilityRegistry init failed, yaml
+    #    didn't load, SKILL_REGISTRY entry missing), DROP the proposed_skill
+    #    so brain_node never sees it. Otherwise the LLM could propose
+    #    `wave_hello` from persona knowledge, pawai_brain would mark it
+    #    rejected_not_allowed, but still forward to brain_node which would
+    #    execute it because wave_hello IS in the brain_node allowlist.
+    #    Only forward truly unknown skills (e.g. `dance_wildly`) so brain_node
+    #    can emit its own rejected_not_allowed trace for visibility.
     if entry is None:
+        if skill_str in LLM_PROPOSABLE_SKILLS:
+            return None, args, None, "blocked", f"{skill_str}:not_in_capability_context"
         return skill_str, args, None, "rejected_not_allowed", skill_str
 
     # 4. demo_guide branch — never enters proposed_skill

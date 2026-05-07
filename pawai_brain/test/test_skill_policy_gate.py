@@ -194,10 +194,48 @@ def test_v2_skill_blocked_states_are_blocked():
 
 
 def test_v2_unknown_skill_kept_with_rejected():
+    """Truly unknown skill (not in allowlist, not in capability_context) →
+    forward to brain_node so it can emit its own rejected_not_allowed trace."""
     skill, _, guide, status, _ = normalize_proposal_v2("dance_wildly", {}, _ctx())
     assert skill == "dance_wildly"
     assert guide is None
     assert status == "rejected_not_allowed"
+
+
+def test_v2_unknown_skill_in_allowlist_blocked_at_capability_layer():
+    """Defense-in-depth: skill IS in LLM_PROPOSABLE_SKILLS but missing from
+    capability_context (e.g. CapabilityRegistry init failed) MUST be dropped
+    here. Otherwise brain_node would execute it because the name is in the
+    allowlist — capability layer becomes ineffective.
+
+    Regression: before this fix, normalize_proposal_v2 forwarded any unknown
+    skill to brain_node, which routed wave_hello/wiggle to execute/confirm
+    based purely on its own allowlist, bypassing capability gating entirely.
+    """
+    skill, _, guide, status, detail = normalize_proposal_v2("wave_hello", {}, _ctx())
+    assert skill is None  # ← must be dropped, not forwarded
+    assert guide is None
+    assert status == "blocked"
+    assert "not_in_capability_context" in detail
+
+
+def test_v2_unknown_skill_in_allowlist_with_args_blocked():
+    """args still normalised even when skill is dropped."""
+    skill, args, _, status, _ = normalize_proposal_v2("greet_known_person",
+                                                       {"name": "Roy"}, _ctx())
+    assert skill is None
+    assert args == {"name": "Roy"}
+    assert status == "blocked"
+
+
+def test_v2_each_allowlisted_skill_blocked_when_missing_from_context():
+    """Sweep all 8 allowlisted skills to confirm capability gating defends
+    each one. If any leaks through brain_node could execute a 'phantom'
+    skill the runtime believes isn't available."""
+    for name in LLM_PROPOSABLE_SKILLS:
+        skill, _, _, status, _ = normalize_proposal_v2(name, {}, _ctx())
+        assert skill is None, f"{name} leaked through despite empty context"
+        assert status == "blocked", f"{name} status={status!r} expected blocked"
 
 
 def test_v2_null_or_non_string_skill_yields_none():
