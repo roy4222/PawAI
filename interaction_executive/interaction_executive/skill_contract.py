@@ -624,8 +624,14 @@ def build_plan(
                     step_args[target_key] = template.format(**args)
                 except KeyError:
                     step_args[target_key] = template
-        if contract.name in ("chat_reply", "say_canned") and "text" in args:
-            step_args["text"] = args["text"]
+        if contract.name in ("chat_reply", "say_canned"):
+            if "text" in args:
+                step_args["text"] = args["text"]
+            # Per-message TTS routing hint (5/7 plan). Only chat_reply matters
+            # in practice (LLM reply path); say_canned included for consistency.
+            # IE-node SAY dispatch reads this to wrap /tts as JSON envelope.
+            if "input_origin" in args:
+                step_args["input_origin"] = args["input_origin"]
         resolved_steps.append(SkillStep(step.executor, step_args))
 
     return SkillPlan(

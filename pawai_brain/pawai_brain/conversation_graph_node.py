@@ -139,6 +139,12 @@ class ConversationGraphNode(Node):
         self.create_subscription(
             String, self.intent_event_topic, self._on_speech_event, 10
         )
+        # Studio chat panel text → bypass ASR, go straight to LangGraph.
+        # Marks input_origin="studio_text" so /tts gets envelope routing to
+        # Gemini TTS (per 5/7 night plan polished-questing-starlight).
+        self.create_subscription(
+            String, "/brain/text_input", self._on_text_input, 10
+        )
 
         self._memory = ConversationMemory(max_turns=self.chat_history_max_turns)
         self._client = OpenRouterClient(
@@ -333,11 +339,49 @@ class ConversationGraphNode(Node):
         if not text:
             return
 
-        self._executor.submit(self._process_one, text, confidence, session_id)
+        self._executor.submit(self._process_one, text, confidence, session_id, None)
+
+    # ── Studio chat panel text-input handler ────────────────────────────
+
+    def _on_text_input(self, msg: String) -> None:
+        """Studio chat → LangGraph (no ASR, no buffering).
+
+        studio_gateway POST /api/text_input → /brain/text_input with payload
+        {"text", "request_id", "source", "created_at"}. We mark
+        input_origin="studio_text" so chat_candidate carries it through to
+        the IE-node SAY step, which wraps /tts in a JSON envelope; tts_node
+        then routes to the Gemini fallback chain.
+        """
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(payload, dict):
+            return
+        text = str(payload.get("text") or "").strip()
+        if not text:
+            return
+        # request_id is always present from gateway (studio_gateway.py:500).
+        # Match brain_node._on_text_input fallback so session_id is consistent
+        # across the buffer pop in _on_chat_candidate.
+        session_id = str(
+            payload.get("request_id") or f"studio-{time.time_ns()}"
+        )
+        input_origin = (
+            str(payload.get("source") or "studio_text").strip() or "studio_text"
+        )
+        # Same single-flight worker as speech path; confidence=1.0 (no ASR error).
+        self._executor.submit(self._process_one, text, 1.0, session_id, input_origin)
 
     # ── Worker — invoke graph + publish ─────────────────────────────────
 
-    def _process_one(self, text: str, confidence: float, session_id: str) -> None:
+    def _process_one(
+        self,
+        text: str,
+        confidence: float,
+        session_id: str,
+        input_origin: str | None = None,
+    ) -> None:
         # Single-flight guard mirrors llm_bridge_node._llm_lock usage.
         if not self._lock.acquire(blocking=False):
             self.get_logger().warning("graph invocation already in progress — dropping turn")
@@ -346,8 +390,9 @@ class ConversationGraphNode(Node):
         try:
             initial_state = {
                 "session_id": session_id,
-                "source": "speech",
+                "source": "text" if input_origin else "speech",
                 "user_text": text,
+                "input_origin": input_origin,
                 "trace": [],
             }
             try:
@@ -355,10 +400,14 @@ class ConversationGraphNode(Node):
             except Exception as exc:  # noqa: BLE001 — wrapper-level boundary
                 self.get_logger().error(f"graph fatal: {exc}")
                 self._publish_error_trace(session_id, str(exc))
-                self._publish_fallback_chat_candidate(text, session_id, confidence)
+                self._publish_fallback_chat_candidate(
+                    text, session_id, confidence, input_origin
+                )
                 return
 
-            self._publish_chat_candidate_from_state(final, session_id, confidence)
+            self._publish_chat_candidate_from_state(
+                final, session_id, confidence, input_origin
+            )
             self._publish_traces(session_id, final.get("trace", []))
 
             # Memory: only remember real chat turns (mirror llm_bridge logic)
@@ -372,7 +421,11 @@ class ConversationGraphNode(Node):
     # ── Publish helpers ─────────────────────────────────────────────────
 
     def _publish_chat_candidate_from_state(
-        self, state: dict, session_id: str, confidence: float
+        self,
+        state: dict,
+        session_id: str,
+        confidence: float,
+        input_origin: str | None = None,
     ) -> None:
         payload = ChatCandidatePayload(
             session_id=session_id,
@@ -384,17 +437,23 @@ class ConversationGraphNode(Node):
             proposed_args=state.get("proposed_args") or {},
             proposal_reason=str(state.get("proposal_reason", "")),
             engine=self.engine_label,
+            input_origin=input_origin or state.get("input_origin"),
         )
         msg = String()
         msg.data = json.dumps(payload.to_dict(), ensure_ascii=False)
         self._publish_chat.publish(msg)
         self.get_logger().info(
             f"Published /brain/chat_candidate: session={session_id} "
-            f"reply={payload.reply_text!r} proposed={payload.proposed_skill}"
+            f"reply={payload.reply_text!r} proposed={payload.proposed_skill} "
+            f"input_origin={payload.input_origin}"
         )
 
     def _publish_fallback_chat_candidate(
-        self, user_text: str, session_id: str, confidence: float
+        self,
+        user_text: str,
+        session_id: str,
+        confidence: float,
+        input_origin: str | None = None,
     ) -> None:
         reply, intent, skill = fallback_reply(user_text)
         payload = ChatCandidatePayload(
@@ -407,6 +466,7 @@ class ConversationGraphNode(Node):
             proposed_args={},
             proposal_reason="wrapper_fallback",
             engine=self.engine_label,
+            input_origin=input_origin,
         )
         msg = String()
         msg.data = json.dumps(payload.to_dict(), ensure_ascii=False)

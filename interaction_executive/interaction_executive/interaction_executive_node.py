@@ -179,8 +179,19 @@ class InteractionExecutiveNode(Node):
             text = str(step.args.get("text", ""))
             if not text:
                 return False, "empty_tts_text"
+            # input_origin: per-message TTS routing hint (5/7 plan
+            # polished-questing-starlight). studio_text → tts_node Gemini
+            # chain; absent → plain text → edge_tts default. All perception
+            # SAY steps (no input_origin) keep byte-identical wire format.
+            input_origin = step.args.get("input_origin")
             msg = String()
-            msg.data = text
+            if input_origin:
+                msg.data = json.dumps(
+                    {"text": text, "input_origin": input_origin},
+                    ensure_ascii=False,
+                )
+            else:
+                msg.data = text
             self._pub_tts.publish(msg)
             return True, "ok"
 

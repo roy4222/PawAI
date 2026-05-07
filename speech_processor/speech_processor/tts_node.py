@@ -718,6 +718,33 @@ class EnhancedTTSNode(Node):
 
         self._fallback_chain = self._build_fallback_chain()
 
+        # Pre-build a Studio override chain (gemini-first) for per-message routing.
+        # Used when /tts message arrives as JSON envelope with input_origin=studio_text.
+        # Order: gemini → default-primary (e.g. edge_tts) → default-fallbacks (e.g. piper).
+        # Dedup by provider name handles default==gemini case. Skipped silently when
+        # OPENROUTER_KEY env not set so demo stays audible (falls through to default).
+        self._studio_fallback_chain = None
+        if os.environ.get("OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY"):
+            try:
+                gemini = TTSProvider_OpenRouterGemini(self.config)
+                chain = [gemini, self.tts_provider] + list(self._fallback_chain)
+                seen: set[str] = set()
+                deduped: List = []
+                for prov in chain:
+                    if prov.name not in seen:
+                        seen.add(prov.name)
+                        deduped.append(prov)
+                self._studio_fallback_chain = deduped
+                self.get_logger().info(
+                    f"studio chain built: {[p.name for p in deduped]}"
+                )
+            except Exception as exc:
+                self.get_logger().warn(f"studio chain disabled: {exc}")
+        else:
+            self.get_logger().info(
+                "studio chain disabled: OPENROUTER_KEY env not set"
+            )
+
         # Setup subscriptions and publishers
         self._setup_communication()
 
@@ -976,6 +1003,22 @@ class EnhancedTTSNode(Node):
         """
         try:
             raw_text = msg.data.strip()
+            input_origin: str | None = None
+
+            # Per-message envelope (5/7 plan polished-questing-starlight):
+            # accepts both plain text (legacy publishers untouched) and JSON
+            # `{"text": "...", "input_origin": "studio_text"}`. raw_text MUST
+            # be replaced with payload["text"] otherwise providers synthesize
+            # the entire JSON string verbatim (Gemini reads "input_origin"
+            # aloud, demo-killer).
+            try:
+                payload = json.loads(raw_text)
+                if isinstance(payload, dict) and "text" in payload:
+                    raw_text = str(payload["text"]).strip()
+                    input_origin = payload.get("input_origin")
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass  # plain-text path; raw_text already correct
+
             if not raw_text:
                 self.get_logger().warn("Received empty TTS request")
                 return
@@ -989,7 +1032,15 @@ class EnhancedTTSNode(Node):
             # (~8s), capturing Go2's own playback as input.
             self._publish_tts_playing(True)
 
-            chain = [self.tts_provider] + list(self._fallback_chain)
+            # Default chain MUST keep [primary] + [fallbacks] order — naked
+            # `self._fallback_chain` would skip primary (e.g. edge_tts), making
+            # all non-Studio TTS fall through to Piper. Per-message override:
+            # input_origin=="studio_text" picks pre-built Gemini-first chain.
+            default_chain = [self.tts_provider] + list(self._fallback_chain)
+            if input_origin == "studio_text" and self._studio_fallback_chain is not None:
+                chain = self._studio_fallback_chain
+            else:
+                chain = default_chain
             audio_data = None
             cache_hit = False
             served_by = ""

@@ -327,10 +327,17 @@ class BrainNode(Node):
             timer = self._chat_timeouts.pop(session_id, None)
             if timer is not None:
                 self.destroy_timer(timer)
+            # input_origin: forwarded from pawai_brain ChatCandidatePayload.
+            # When set ("studio_text"), IE-node SAY wraps /tts as JSON envelope
+            # so tts_node routes to Gemini chain. None → plain text → edge_tts.
+            input_origin = payload.get("input_origin")
+            plan_args: dict[str, Any] = {"text": reply_text}
+            if input_origin:
+                plan_args["input_origin"] = input_origin
             self._emit(
                 build_plan(
                     "chat_reply",
-                    args={"text": reply_text},
+                    args=plan_args,
                     source="llm_bridge",
                     reason="chat_candidate_match",
                     session_id=session_id,

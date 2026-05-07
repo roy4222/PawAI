@@ -10,8 +10,9 @@ from typing import Any, TypedDict
 class ConversationState(TypedDict, total=False):
     # ── Input ─────────────────────────────────────────────────────────
     session_id: str
-    source: str  # "speech" today; reserved: "studio_text"
+    source: str  # "speech" (mic ASR) | "text" (studio chat)
     user_text: str
+    input_origin: str | None  # "studio_text" routes TTS to Gemini; else edge_tts
 
     # ── Context (filled by builders) ──────────────────────────────────
     perception_context: dict  # context_builder stub today

@@ -1,8 +1,11 @@
 """Output schemas — wire format for /brain/chat_candidate and /brain/conversation_trace.
 
-Schema must remain identical to legacy llm_bridge_node._emit_chat_candidate
-(see speech_processor/speech_processor/llm_bridge_node.py:1078-1098). The only
-delta is engine="langgraph" instead of "legacy".
+Schema mirrors legacy llm_bridge_node._emit_chat_candidate
+(speech_processor/speech_processor/llm_bridge_node.py:1078-1098), with two
+langgraph-specific additions:
+  - engine="langgraph" instead of "legacy"
+  - optional input_origin for per-message TTS routing (studio_text →
+    Gemini TTS chain in tts_node; None → edge_tts default)
 """
 from __future__ import annotations
 from dataclasses import dataclass, field, asdict
@@ -22,6 +25,7 @@ class ChatCandidatePayload:
     proposal_reason: str
     engine: str = "langgraph"
     source: str = "pawai_brain"
+    input_origin: str | None = None  # studio_text → Gemini TTS; None → edge_tts default
     created_at: float = field(default_factory=time.time)
 
     def to_dict(self) -> dict:
