@@ -264,7 +264,9 @@ Conversation Engine 是 **Phase A.5 過渡**，不是 Phase B 啟動。Phase B �
 | **Safety hard rule** | 5 個關鍵字（停 / stop / 煞車 / 暫停 / 緊急）→ 立刻發 stop_move 提案 | `safety_layer.py` |
 | **Pre-action validate** | obstacle / emergency / banned_api / unknown_motion 守衛 | `safety_layer.py` |
 | **WorldState 聚合** | tts_playing / reactive_stop_obstacle / nav_safe / fallen | `world_state.py` |
-| **SkillContract registry** | 27 entries（Active 17 / Hidden 5 / Disabled 4 / Retired 1），含 bucket / static_enabled / enabled_when 三層開關；Brain 只 build static_enabled 且 runtime 條件通過的 skill | `skill_contract.py` |
+| **SkillContract registry** | 27 entries（Active 17 / Hidden 5 / Disabled 4 / Retired 1）+ 4 demo metadata fields per entry (display_name / demo_status_baseline / demo_value / demo_reason) | `interaction_executive/skill_contract.py` |
+| **DemoGuide registry**     | 6 entries（face / speech / gesture / pose / object / navigation）— pseudo-skills for self-demonstration | `pawai_brain/config/demo_guides.yaml` |
+| **CapabilityContext**      | LLM-facing merged view (27 + 6 = 33 entries) with `effective_status` per turn; flows via `pawai_brain` only — `/brain/chat_candidate` schema unchanged | `pawai_brain/pawai_brain/capability/registry.py` |
 | **Skill template 解析** | `text_template`、`name_template` 在 plan 展開時用 args 替換 | `skill_contract.py:build_plan` |
 | **Sequence 編排** | self_introduce 10 步交替 say + motion；序列中只 SAFETY/ALERT 可中斷 | `skill_contract.py:META_SKILLS` |
 | **Per-skill cooldown** | greet_known_person 每名 20s、stranger_alert 30s、fallen_alert 15s | `brain_node.py:_in_cooldown` |
