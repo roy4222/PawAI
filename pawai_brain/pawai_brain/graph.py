@@ -1,12 +1,10 @@
-"""LangGraph build_graph() — Phase 1 primary cutover, 11-node graph.
+"""LangGraph build_graph() — Phase A.6 with capability awareness.
 
 Flow:
   input → safety_gate ─┬─→ output (when safety_hit=True)
-                       └─→ context → env → memory → llm → validator → repair
-                           → skill_gate → output
+                       └─→ world_state → capability → memory → llm
+                           → validator → repair → skill_gate → output
   output → trace → END
-
-Conditional edge after safety_gate keeps the safety path short (skip LLM).
 """
 from __future__ import annotations
 
@@ -15,8 +13,8 @@ from langgraph.graph import StateGraph, END
 from .state import ConversationState
 from .nodes.input_normalizer import input_normalizer
 from .nodes.safety_gate import safety_gate
-from .nodes.context_builder import context_builder
-from .nodes.env_builder import env_builder
+from .nodes.world_state_builder import world_state_builder
+from .nodes.capability_builder import capability_builder
 from .nodes.memory_builder import memory_builder
 from .nodes.llm_decision import llm_decision
 from .nodes.json_validator import json_validator
@@ -27,7 +25,7 @@ from .nodes.trace_emitter import trace_emitter
 
 
 def _route_after_safety(state: ConversationState) -> str:
-    return "output" if state.get("safety_hit") else "context"
+    return "output" if state.get("safety_hit") else "world_state"
 
 
 def build_graph():
@@ -35,8 +33,8 @@ def build_graph():
 
     g.add_node("input", input_normalizer)
     g.add_node("safety_gate", safety_gate)
-    g.add_node("context", context_builder)
-    g.add_node("env", env_builder)
+    g.add_node("world_state", world_state_builder)
+    g.add_node("capability", capability_builder)
     g.add_node("memory", memory_builder)
     g.add_node("llm", llm_decision)
     g.add_node("validator", json_validator)
@@ -50,10 +48,10 @@ def build_graph():
     g.add_conditional_edges(
         "safety_gate",
         _route_after_safety,
-        {"output": "output", "context": "context"},
+        {"output": "output", "world_state": "world_state"},
     )
-    g.add_edge("context", "env")
-    g.add_edge("env", "memory")
+    g.add_edge("world_state", "capability")
+    g.add_edge("capability", "memory")
     g.add_edge("memory", "llm")
     g.add_edge("llm", "validator")
     g.add_edge("validator", "repair")

@@ -15,7 +15,22 @@ from pawai_brain.nodes import llm_decision as llm_node
 from pawai_brain.nodes import memory_builder as memory_node
 
 
-def _wire_for_test(persona_response: dict | None):
+class _StubSkill:
+    """Minimal SkillContract-shaped stub for CapabilityRegistry tests."""
+    def __init__(self, name, baseline="available_execute"):
+        self.name = name
+        self.display_name = name
+        self.demo_status_baseline = baseline
+        self.demo_value = "high"
+        self.demo_reason = ""
+        self.static_enabled = True
+        self.enabled_when = []
+        self.cooldown_s = 0.0
+        self.steps = []
+        self.requires_confirmation = False
+
+
+def _wire_for_test(persona_response: dict | None, skills: dict | None = None):
     """Configure the module-level hooks the wrapper would set in production."""
     client = OpenRouterClient(
         config=OpenRouterConfig(),
@@ -54,6 +69,22 @@ def _wire_for_test(persona_response: dict | None):
     )
     mem = ConversationMemory()
     memory_node.set_history_provider(mem.recent)
+
+    # Phase A.6: configure world_state + capability nodes
+    from pawai_brain.nodes import world_state_builder as ws_node
+    from pawai_brain.nodes import capability_builder as cb_node
+    from pawai_brain.capability.world_snapshot import WorldStateSnapshot
+    from pawai_brain.capability.registry import CapabilityRegistry
+
+    ws_node.set_world_provider(lambda: WorldStateSnapshot())
+    if skills is None:
+        skills = {"self_introduce": _StubSkill("self_introduce")}
+    registry = CapabilityRegistry(skills=skills, guides=[])
+    cb_node.configure(
+        registry=registry,
+        skill_result_provider=lambda: [],
+        policy_provider=lambda: {"limits": [], "max_motion_per_turn": 1},
+    )
     return patcher, mem
 
 
@@ -94,9 +125,9 @@ def test_happy_path_with_proposed_skill():
     assert result["proposed_skill"] == "self_introduce"
     assert result["proposed_args"] == {}
     stages = [t["stage"] for t in result["trace"]]
-    for required in ("input", "safety_gate", "context", "env", "memory",
-                     "llm_decision", "json_validate", "repair", "skill_gate",
-                     "output"):
+    for required in ("input", "safety_gate", "world_state", "capability",
+                     "memory", "llm_decision", "json_validate", "repair",
+                     "skill_gate", "output"):
         assert required in stages, f"missing stage {required}"
     # skill_gate should be 'proposed' for an allowlisted skill
     skill_gate_entries = [t for t in result["trace"] if t["stage"] == "skill_gate"]
