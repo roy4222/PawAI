@@ -31,6 +31,16 @@ ENABLE_LOCAL_LLM="${ENABLE_LOCAL_LLM:-true}"
 LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/completions}"
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
+# ── Conversation Engine selection ──
+# langgraph (default): pawai_brain.conversation_graph_node owns /brain/chat_candidate
+# legacy             : speech_processor.llm_bridge_node owns /brain/chat_candidate
+# 兩者互斥；同一時間只啟動一個。
+CONVERSATION_ENGINE="${CONVERSATION_ENGINE:-langgraph}"
+if [[ "$CONVERSATION_ENGINE" != "langgraph" && "$CONVERSATION_ENGINE" != "legacy" ]]; then
+  echo "[ERROR] CONVERSATION_ENGINE must be 'langgraph' or 'legacy', got '$CONVERSATION_ENGINE'"
+  exit 1
+fi
+
 # ── ASR ──
 ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"sensevoice_local\",\"whisper_local\"]'}"
 QWEN_ASR_BASE_URL="${QWEN_ASR_BASE_URL:-http://127.0.0.1:8001/v1/audio/transcriptions}"
@@ -68,6 +78,7 @@ pkill -f object_perception 2>/dev/null || true
 pkill -f stt_intent_node 2>/dev/null || true
 pkill -f tts_node 2>/dev/null || true
 pkill -f llm_bridge_node 2>/dev/null || true
+pkill -f conversation_graph_node 2>/dev/null || true
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 sleep 2
 
@@ -174,26 +185,43 @@ tmux send-keys -t "$SESSION:tts" \
     -p playback_method:=datachannel" Enter
 sleep 3
 
-# --- Window 7: LLM Bridge ---
-echo "[8/10] Starting llm_bridge_node (Cloud + Ollama fallback, face=executive)..."
+# --- Window 7: Conversation Engine (langgraph primary | legacy fallback) ---
+# 兩條互斥：CONVERSATION_ENGINE 控制誰做 /brain/chat_candidate 的唯一發送者。
+# Emergency fallback：在另一個 shell 跑
+#   pkill -f conversation_graph_node && \
+#   $ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args ...
+# 不要兩個同時跑（會雙發 chat_candidate 觸發 brain_node 雙重處理）。
 tmux new-window -t "$SESSION" -n llm
-tmux send-keys -t "$SESSION:llm" \
-  "$ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args \
-    -p llm_endpoint:='$LLM_ENDPOINT' \
-    -p llm_model:='$LLM_MODEL' \
-    -p llm_timeout:=$LLM_TIMEOUT \
-    -p enable_local_llm:=$ENABLE_LOCAL_LLM \
-    -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
-    -p local_llm_model:='$LOCAL_LLM_MODEL' \
-    -p enable_actions:=$ENABLE_ACTIONS \
-    -p subscribe_face:=false \
-    -p output_mode:=brain \
-    -p enable_openrouter:=true \
-    -p openrouter_gemini_model:=google/gemini-3-flash-preview \
-    -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
-    -p max_reply_chars:=0 \
-    -p llm_max_tokens:=2000 \
-    -p llm_timeout:=20.0" Enter
+if [[ "$CONVERSATION_ENGINE" == "langgraph" ]]; then
+  echo "[8/10] Starting pawai_brain.conversation_graph_node (langgraph primary)..."
+  tmux send-keys -t "$SESSION:llm" \
+    "$ROS_SETUP && ros2 launch pawai_brain pawai_conversation_graph.launch.py \
+      llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
+      openrouter_gemini_model:=google/gemini-3-flash-preview \
+      openrouter_request_timeout_s:=4.0 \
+      openrouter_overall_budget_s:=5.0 \
+      llm_max_tokens:=2000 \
+      chat_history_max_turns:=5" Enter
+else
+  echo "[8/10] Starting llm_bridge_node (legacy fallback)..."
+  tmux send-keys -t "$SESSION:llm" \
+    "$ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args \
+      -p llm_endpoint:='$LLM_ENDPOINT' \
+      -p llm_model:='$LLM_MODEL' \
+      -p llm_timeout:=$LLM_TIMEOUT \
+      -p enable_local_llm:=$ENABLE_LOCAL_LLM \
+      -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
+      -p local_llm_model:='$LOCAL_LLM_MODEL' \
+      -p enable_actions:=$ENABLE_ACTIONS \
+      -p subscribe_face:=false \
+      -p output_mode:=brain \
+      -p enable_openrouter:=true \
+      -p openrouter_gemini_model:=google/gemini-3-flash-preview \
+      -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
+      -p max_reply_chars:=0 \
+      -p llm_max_tokens:=2000 \
+      -p llm_timeout:=20.0" Enter
+fi
 sleep 3
 
 # --- Static TF: base_link → camera_link (D435 mounted on Go2) ---

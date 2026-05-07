@@ -1,7 +1,64 @@
 # 專案狀態
 
-**最後更新**：2026-05-06 night（Phase 0.5 Conversation Engine Cut 1 + 5 perception demos + nav2-amcl demo 全錄完）
+**最後更新**：2026-05-07 morning（Phase 1 Primary Cutover — pawai_brain 取代 llm_bridge_node 為 /brain/chat_candidate primary publisher，46 unit test 全綠）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/7 morning 進度（LangGraph Primary Cutover — Phase 1）
+
+把 `llm_bridge_node` 從 primary 退為 manual fallback；新建 `pawai_brain` ROS2 package 作為 `/brain/chat_candidate` 主要發送者。原本規劃 Cut 2 是 shadow skeleton，5/7 改成直接做 primary cutover（demo 影片已落袋，shadow 無架構槓桿）。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| Plan | `/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md` — 5 step waterfall |
+| 新 package | `pawai_brain/` — package.xml / setup.py / launch / 11 graph nodes / wrapper / 4 test files |
+| LangGraph 版本 | langgraph 1.1.10 + langchain-core 1.3.3（WSL；Jetson 待部署日驗） |
+| 純 module 移植 | `llm_client.py`（OpenRouter chain）/ `memory.py` / `validator.py` / `repair.py` / `rule_fallback.py` / `schemas.py` / `state.py`（全 copy 自 llm_bridge_node，原檔保留） |
+| 11 個 graph node | input → safety_gate → (條件 edge) → context → env → memory → llm → validator → repair → skill_gate → output → trace |
+| skill_policy_gate 契約 | 違規 skill 保留原值 + trace `rejected_not_allowed`，由 brain_node 真正 reject（Studio 看雙層 trace） |
+| Wrapper failure boundary | graph fatal exception → 發 error trace + RuleBrain fallback chat_candidate（不卡死） |
+| Tests | 46 全綠（4 graph smoke + 7 llm_client offline + 16 skill_policy_gate + 19 validator）；legacy `test_llm_bridge_node.py` 仍 2/2 綠 |
+| Demo script | `scripts/start_full_demo_tmux.sh` 加 `CONVERSATION_ENGINE=langgraph|legacy` 互斥分支（預設 langgraph） |
+
+### 切換 / Fallback 程序
+
+正常啟動（langgraph primary）：
+```
+bash scripts/start_full_demo_tmux.sh
+# 驗證： ros2 node list | grep -E 'conversation_graph_node|llm_bridge_node'
+#       → 應該只看到 conversation_graph_node
+```
+
+Demo 期 emergency 切回 legacy：
+```
+# 在 tmux 的 llm window 內 ctrl-c 殺掉 conversation_graph_node 後
+pkill -f conversation_graph_node
+CONVERSATION_ENGINE=legacy bash scripts/start_full_demo_tmux.sh
+```
+
+或不重啟整 session、只重啟 llm window：
+```
+tmux kill-window -t demo:llm
+# 在新 window 跑 llm_bridge_node 完整參數（見 start_full_demo_tmux.sh:194-211 註解）
+```
+
+**不變式**：同時間只能有一個 chat_candidate publisher。雙跑會讓 brain_node 收到雙份 candidate，觸發 cooldown / dedup 邏輯不可預測。
+
+### 待 Jetson 上機驗證
+
+- `pip install --user langgraph langchain-core` 在 Jetson 是否拿得到 wheel（失敗即整個 Cut 不上機，demo 改 `CONVERSATION_ENGINE=legacy`）
+- `colcon build --packages-select pawai_brain` 在 Jetson 通過
+- 對 PAI 講「你好」→ Studio Trace Drawer 看到 11 階段 trace，engine=`langgraph`
+- 對 PAI 講「停」→ safety_gate 短路，selected_skill=stop_move
+- 對 PAI 講「介紹你自己」→ proposed_skill=`self_introduce`，brain_node trace `accepted_trace_only`
+- 對 PAI 講「亂跳一下」→ skill_gate trace `rejected_not_allowed`，brain_node 也擋一次
+
+### 不在本 cut 範圍
+
+Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦身、context_builder 整合 perception state、跨 session memory — 全部留 Phase 2。
 
 ---
 
