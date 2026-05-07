@@ -41,6 +41,7 @@ from std_msgs.msg import Bool, String, UInt8MultiArray
 from go2_interfaces.msg import WebRtcReq
 
 from speech_processor.audio_tag import strip_audio_tags
+from speech_processor import tts_split as _tts_split
 
 
 def _env_str(name: str, default: str) -> str:
@@ -500,64 +501,23 @@ class TTSProvider_OpenRouterGemini:
                 "fail every synthesize() call until env is configured"
             )
 
-    # Gemini Flash TTS Preview drops tail randomly when input ≥ ~80 chars
-    # (5/6 evening empirical: 95-char chunks lose 25% of audio). Stay well
-    # under that threshold; rely on parallel synthesis to keep latency flat.
-    CHUNK_MAX_CHARS: int = 40
-    SENTENCE_PUNCT: str = "。！？!?\n"
-
-    _AUDIO_TAG_RE = re.compile(r"^\s*(\[[a-zA-Z][a-zA-Z _-]*\])\s*")
+    # Constants kept as class attributes for backward compatibility with any
+    # subclass / test that referenced TTSProvider_OpenRouterGemini.* directly.
+    # Source of truth: speech_processor.tts_split (ROS-free, importable in
+    # pre-commit hook env without sourcing ROS).
+    CHUNK_MAX_CHARS: int = _tts_split.CHUNK_MAX_CHARS
+    MIN_SPLIT_CHARS: int = _tts_split.MIN_SPLIT_CHARS
+    SENTENCE_PUNCT: str = _tts_split.SENTENCE_PUNCT
+    _AUDIO_TAG_RE = _tts_split._AUDIO_TAG_RE
 
     def _split_for_tts(self, text: str) -> list[str]:
         """Split text into chunks ≤ CHUNK_MAX_CHARS at sentence boundaries.
 
-        If text starts with an audio tag like ``[whispers]``, prepend that tag
-        to every subsequent chunk so Gemini keeps the same voice characteristics
-        across the whole reply (otherwise chunks 2+ revert to default voice).
+        Implementation lives in `speech_processor.tts_split.split_for_tts`
+        so unit tests can call it without importing this module (which pulls
+        in ROS std_msgs).
         """
-        text = text.strip()
-        if not text:
-            return []
-
-        m = self._AUDIO_TAG_RE.match(text)
-        leading_tag = m.group(1) if m else ""
-        body = text[m.end() :].strip() if m else text
-
-        if len(text) <= self.CHUNK_MAX_CHARS:
-            return [text]
-
-        raw_chunks: list[str] = []
-        buf = ""
-        for ch in body:
-            buf += ch
-            if ch in self.SENTENCE_PUNCT and len(buf) >= self.CHUNK_MAX_CHARS // 2:
-                raw_chunks.append(buf.strip())
-                buf = ""
-            elif len(buf) >= self.CHUNK_MAX_CHARS:
-                cut = max(buf.rfind("，"), buf.rfind(","), buf.rfind(" "))
-                if cut > self.CHUNK_MAX_CHARS // 2:
-                    raw_chunks.append(buf[: cut + 1].strip())
-                    buf = buf[cut + 1 :]
-                else:
-                    raw_chunks.append(buf.strip())
-                    buf = ""
-        if buf.strip():
-            raw_chunks.append(buf.strip())
-
-        if not leading_tag:
-            return [c for c in raw_chunks if c]
-
-        # First chunk already has the tag (it's at the start of `text`); only
-        # prepend to subsequent chunks to keep voice consistent.
-        out: list[str] = []
-        for idx, chunk in enumerate(raw_chunks):
-            if not chunk:
-                continue
-            if idx == 0:
-                out.append(f"{leading_tag} {chunk}")
-            else:
-                out.append(f"{leading_tag} {chunk}")
-        return out
+        return _tts_split.split_for_tts(text)
 
     def _timed_chunk(self, text: str) -> tuple[Optional[bytes], float]:
         """Wrap _synthesize_chunk with wall-clock timing for parallel debug."""
