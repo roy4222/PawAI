@@ -71,3 +71,22 @@ def load_demo_guides(path: Path) -> list:
         except ValueError as exc:
             logger.warning("demo_guides skipping invalid entry %s: %s", name, exc)
     return guides
+
+
+def load_demo_policy(path: Path) -> dict:
+    """Load demo_policy yaml. Returns sensible defaults on failure."""
+    defaults = {"limits": [], "max_motion_per_turn": 1}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return defaults
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return defaults
+    if not isinstance(data, dict):
+        return defaults
+    return {
+        "limits": list(data.get("limits") or []),
+        "max_motion_per_turn": int(data.get("max_motion_per_turn") or 1),
+    }
