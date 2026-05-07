@@ -17,7 +17,25 @@ SESSION="demo"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKDIR="/home/jetson/elder_and_dog"
 CT2_LIB_PATH="$HOME/.local/ctranslate2-cuda/lib"
-ROS_SETUP="source /opt/ros/humble/setup.zsh && source $WORKDIR/install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-}"
+
+# ── Load secrets (.env at repo root) ──
+# Holds OPENROUTER_KEY / OPENROUTER_API_KEY etc. Without this, every tmux child
+# process loses access to cloud LLM keys and conversation_graph_node falls back
+# to RuleBrain on every turn (engine=langgraph, openrouter=off).
+if [[ -f "$WORKDIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$WORKDIR/.env"
+  set +a
+  echo "[env] loaded $WORKDIR/.env"
+else
+  echo "[env] WARNING: $WORKDIR/.env missing — OpenRouter will be disabled"
+fi
+
+# Compose ROS setup with .env re-sourced inside each tmux pane (each pane is a
+# fresh shell; just exporting in this script body would not propagate). The
+# `set -a` ensures every var becomes exported.
+ROS_SETUP="source /opt/ros/humble/setup.zsh && source $WORKDIR/install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-} && { [[ -f $WORKDIR/.env ]] && set -a && source $WORKDIR/.env && set +a; } || true"
 
 # ── Go2 ──
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
