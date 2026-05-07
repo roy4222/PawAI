@@ -1,7 +1,44 @@
 # 專案狀態
 
-**最後更新**：2026-05-08 night（Demo 誤觸抑制 + TTS chunking 重構 + capability layer defense-in-depth；135 pawai_brain test / 158 interaction_executive test / 47 vision_perception event/pose test / 180 speech_processor test 全綠）
-**硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+**最後更新**：2026-05-07 night（per-message TTS routing 上線：Studio chat → Gemini TTS / 其他 → edge_tts；293 unit tests pass）
+**硬底線**：5/18 期末 demo（11 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/7 night 進度（Per-message TTS routing + 誤觸靜音 + Studio CORS）
+
+對照 5/7 demo 測試問題逐條修復。**今晚發 5 個 commit**：
+
+### Commits
+- `202a7e3` `fix(scripts): full demo tmux loads .env so OpenRouter key reaches conv graph` — `start_full_demo_tmux.sh` 沒 source `.env`，conversation_graph_node 啟動時 `openrouter=off` → 全部掉 RuleBrain。腳本加 `set -a; source .env; set +a` 雙層注入（top-level + ROS_SETUP 給每個 tmux pane re-source）。**Demo 阻塞修復**
+- `685c97d` `fix(brain): per-(class,color) dedup for object_remark — 60s window` — SkillContract.cooldown_s=5 只擋 SAY skill 不擋同物重發，YOLO 持續偵測同一張椅子每 5s 喊一次「看到咖啡色的椅子了」。`brain_node._on_object` 加 `_object_remark_seen[(class, color)]` 60s 窗口
+- `10829ca` `feat(brain,tts): per-message TTS routing — Studio chat → Gemini, others → edge_tts` — Plumbing 6 file。`pawai_brain` 訂閱 `/brain/text_input`（補主鏈斷）+ ChatCandidatePayload 加 `input_origin` 欄位 + `build_plan` 把 input_origin 帶進 step args + IE-node SAY 條件包 JSON envelope + tts_node 預 build studio chain（gemini → edge_tts → piper, dedup）+ tts_callback parse envelope 選 chain。Plan: `~/.claude/plans/polished-questing-starlight.md` v1.4
+- `e1363c8` `fix(brain): silence stranger_alert TTS + skip object_remark for person class` — `stranger_alert` SAY text → 空字串（IE-node SAY return `empty_tts_text`，trace 留 chip 但 /tts 不發）+ `build_object_tts` 對 class==`person` return None（避開 stranger / greet 路徑衝突）。同 fall_alert b224217 模式
+- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（100.101.41.4），Gateway 在 Jetson（192.168.0.222）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
+
+### Smoke 結果（Jetson 實機）
+| Smoke | 結果 |
+|---|---|
+| 1. `ros2 topic pub /tts std_msgs/String 'data: 測試純文字一'` | ✅ `🎤 [edge_tts]` |
+| 2. `curl POST /api/text_input "小狗你今天好嗎"` | ✅ `🎤 [openrouter_gemini]` Despina, 2 chunks parallel, 6.5s 首音, 12s audio |
+| 3. 麥克風 Roy 講「你好」 | ✅ `🎤 [edge_tts]`（reply 走 Gemini LLM persona）|
+| 4. Object detect 「看到咖啡色的椅子了」 | ✅ `🎤 [edge_tts]`，60s 才再講一次 |
+| 5. stranger_alert / object person | ✅ trace 留、TTS 不發（commit e1363c8 後驗證）|
+| 6. Studio chat panel UI | ⏸ 待 Roy CORS 修完後 + 重連 frontend 驗 |
+
+### Carry-over（明天 5/8 處理）
+- TTS 首句 6.5s（Gemini chunk）— 若 demo 不能接受可考慮 edge_tts 主線 + Studio 按鈕觸發 Gemini
+- single-flight 排隊：rapid pub 會掉 session（A2.1.3 OBS）— 自然語音間隔不會撞，demo 安全
+- langgraph pip 應寫進 `pawai_brain/package.xml` 或 README（fresh Jetson 要手裝），P2 backlog
+- 5/14 SL201 是否放假待確認；LW211 5/13-14 都借走
+
+### 與 5/7 教授會議方向對齊
+- ✅ LLM：Qwen 7B → OpenRouter Gemini 3 Flash（5/4 上線、5/7 night `openrouter=on` 修通）
+- ✅ TTS：edge_tts → 雙模（Studio chat 走 Gemini Despina、其他 edge_tts）
+- ✅ 陌生人警告誤觸：靜音
+- ✅ 跌倒判定放寬：`POSE_TTS_MAP['fallen']` 拆掉 + `FALL_ALERT_TTS=""`（之前已修）
+- ⏸ 動態手勢正面 / wave：放推（會議共識）
+- ⏸ SLAM 動態繞行：5/12 帶到大空間後再調
 
 ---
 

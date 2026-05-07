@@ -52,7 +52,7 @@ interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 | 事件 | Brain 觸發 Skill | Demo Scene | 備註 |
 |---|---|---|---|
 | `identity_stable`（已知人臉穩定 ≥2 hits）| `greet_known_person` | Scene 4 熟人互動 | LLM 動態問候，含 `{name}` 客製化 |
-| `identity_unknown`（陌生人 unknown_grace 後）| `stranger_alert` | Scene 8 陌生人 + safety stop | 固定台詞警報 + 配合 `stop_move` |
+| `identity_unknown`（陌生人 unknown_grace 後）| `stranger_alert` | Scene 8 陌生人 + safety stop | **5/7 night demo silence**：`SkillContract.steps[0].args["text"] = ""`，IE-node SAY return `empty_tts_text`，`/tts` 不發。`/brain/proposal` trace 仍 emit，Studio chip 仍可見。同 fall_alert b224217 模式 |
 | `track_started` / `track_lost` | （無 skill 直觸）| — | 純 state 更新，由 brain 規則判讀 |
 
 **`{name}` 客製化**：face name 從 `/state/perception/face` 取最近 `identity_stable` 的 `stable_name`，由 LLM bridge 用 say_template 渲染。同一變數也用在 `pose/README.md` 的 `fallen_alert`（「{name}，偵測到跌倒，請注意安全」）。

@@ -815,7 +815,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 **QoS**：Reliable, Volatile, depth=10
 **Message Type**：`std_msgs/String` (JSON)
 
-**Schema** (v2.7 Phase 0.5)：
+**Schema** (v2.9 Per-message TTS routing)：
 ```json
 {
   "session_id":       { "type": "string",           "description": "speech session ID（如 speech-173...）" },
@@ -824,11 +824,13 @@ idle_wakeword → wake_ack → loading_local_stack → listening
   "selected_skill":   { "type": "string | null",    "description": "legacy diagnostic，僅 4 條 P0 skill（已遺留，Brain 不採用）" },
   "reasoning":        { "type": "string",           "description": "決策來源（如 openrouter:eval_schema）" },
   "confidence":       { "type": "float",            "range": "[0.0, 1.0]" },
-  
+
   "proposed_skill":   { "type": "string | null",    "description": "Phase 0.5：LLM 提案的 skill（如 self_introduce, show_status；null = 無提案）" },
   "proposed_args":    { "type": "object",           "description": "Phase 0.5：該 skill 的參數 dict" },
   "proposal_reason":  { "type": "string",           "description": "Phase 0.5：提案來源（如 openrouter:eval_schema, studio_button）" },
-  "engine":           { "type": "string",           "enum": ["legacy", "langgraph"], "description": "Phase 0.5：識別發布者是哪個 engine" }
+  "engine":           { "type": "string",           "enum": ["legacy", "langgraph"], "description": "Phase 0.5：識別發布者是哪個 engine" },
+
+  "input_origin":     { "type": "string | null",    "enum": ["studio_text", null], "description": "v2.9：使用者輸入來源。studio_text → IE-node SAY 包 /tts JSON envelope → tts_node 路由到 Gemini TTS chain；null → 純文字 → edge_tts default chain" }
 }
 ```
 
@@ -854,6 +856,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 - `proposal_reason`：紀錄提案來源以便除錯與 trace。
 - `engine`：區分是 legacy primary 或 langgraph shadow，供 studio_gateway 觀測。
 - `selected_skill`：保留向後相容，但 Brain MVS 不採用做提案來源；仍由 `adapt_eval_schema` 填入（診斷用）。
+- `input_origin` (v2.9)：5/7 night per-message TTS routing。`studio_text` 從 `studio_gateway POST /api/text_input` 開始一路傳到 IE-node SAY → `/tts` JSON envelope → tts_node 選 Gemini chain。語音 / 自動感知路徑為 `null`，走 edge_tts default chain。
 
 ---
 
@@ -983,16 +986,31 @@ uint8   priority    # 0=normal, 1=priority
 
 ### 5.2 `/tts`
 
-**說明**：TTS 輸入文字
+**說明**：TTS 輸入文字。v2.9 起接受兩種 payload：純文字（既有 publisher 全部適用）或 JSON envelope（用於 per-message provider routing）。
 **訂閱者**：`tts_node`
 **Message Type**：`std_msgs/String`
 
-**範例**：
+**Payload 形態 1：純文字（default，backwards-compat）**
 ```python
 msg = String()
 msg.data = "哈囉，你好！"
 self.publisher.publish(msg)
 ```
+tts_node 行為：走 default chain（`[primary] + [fallbacks]`，e.g. `edge_tts → piper`）。
+
+**Payload 形態 2：JSON envelope（v2.9 per-message routing）**
+```python
+import json
+msg = String()
+msg.data = json.dumps(
+    {"text": "哈囉，你好！", "input_origin": "studio_text"},
+    ensure_ascii=False,
+)
+self.publisher.publish(msg)
+```
+tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 studio chain（`[gemini, edge_tts, piper]` dedup）；其他值或缺欄位則退回 default chain。Parse 失敗（malformed JSON）也退回純文字 path（fail-safe）。
+
+**僅 `interaction_executive_node._dispatch_step` 在 `step.args["input_origin"]` 存在時發 envelope**。其他 publisher（`event_action_bridge`、`llm_bridge_node`、`intent_tts_bridge_node`、`route_runner_node`、人手 `ros2 topic pub`）byte-for-byte 維持純文字。詳見 `docs/pawai-brain/speech/README.md` §TTS Provider Chain。
 
 ---
 
@@ -1194,6 +1212,7 @@ if not required.issubset(payload.keys()):
 | v2.4 | 2026-04-05 | `/event/object_detected` 擴充至 COCO 80 class（預設全開）；`class_name` enum → reference `coco_classes.py`；新增 `class_whitelist` 參數可縮減 | System Architect |
 | v2.7 | 2026-05-06 | Phase 0.5 Conversation Engine：`/brain/chat_candidate` 新增 4 欄位（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`）；新增 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` topics | System Architect |
 | v2.8 | 2026-05-08 | Phase A.6 Capability Awareness：`/brain/conversation_trace.stage` enum 把 `context` 換成 `world_state` + `capability`（langgraph engine）；`skill_gate.status` 加 `needs_confirm` / `demo_guide`；`/state/perception/face` 的 `sim_threshold_upper` 從 0.30 拉高到 **0.40**（5/8 demo 期陌生人誤觸抑制）；`/brain/chat_candidate` schema 不變（DemoGuide 只進 conversation_trace，Brain contract 維持乾淨） | System Architect |
+| v2.9 | 2026-05-07 | Per-message TTS routing：`/brain/chat_candidate` 加 `input_origin: str \| null` 欄位（plumbed from `studio_gateway POST /api/text_input` → `pawai_brain` LangGraph → IE-node SAY）；`/tts` payload 雙模化（純文字 backwards-compat OR JSON envelope `{"text", "input_origin"}`）。Studio chat 文字輸入路徑 → tts_node Gemini chain；其他全部 → edge_tts default chain。Plan: `~/.claude/plans/polished-questing-starlight.md`；commit `10829ca` | System Architect |
 
 ---
 
