@@ -92,6 +92,7 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 - [ ] **長句不跳行**：>40 字元 chunk 切分（5/8 改 MIN_SPLIT_CHARS=30 已 in）
 - [ ] **語氣連貫觀察**：後半段語氣（OBS）— **待 Roy 親耳聽**
 - [x] **TTS 開始播放延遲**：Studio chat (Gemini Despina) 6.5s 首音 / 麥克風 (edge_tts) ~1-2s。**目標 < 12-15s ✓**
+- [ ] **Gemini TTS voice A/B**（**OBS，若恩 5/7 會議 action**）：Despina 以外候選 voice（如 Aoede / Charon / Fenrir 等 OpenRouter Gemini TTS preview 支援）試聽，挑 demo 最自然的
 
 ### 2.4 Fallback
 
@@ -188,7 +189,7 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 
 - [ ] **站立**：至少成功 1 次
 - [ ] **坐姿**：至少成功 1 次
-- [ ] **側躺 / 躺平**：觀察 fall chip，不出聲
+- [ ] **躺平在地板上 → fallen 觸發**：5/7 會議共識「放寬判定為躺平在地上即算跌倒」（ankle-on-floor gate `pose_classifier.py:165-167` 已實作）。驗收：**fall chip 出現 ≥1 次（不出聲打斷對話）**
 - [ ] **推車 / 椅子**：不出聲打斷
 - [ ] **蹲下**：記 OBS
 - [ ] **彎腰 / 叉腰 / 單膝跪地**：`SKIP→C` 或 OBS
@@ -296,14 +297,15 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 
 - [ ] **連續運作 30 分鐘**：5/7 night 中途 reboot，**未達 30 min**（fail-map [#Reboot-1]）
 - [ ] **連續運作 1 小時**：5/12 LM307 補
-- [ ] **變壓器穩定**：5/7 教授會議提到換新降壓器後解決部分問題，**5/12 LM307 連續驗**
+- [ ] **新降壓器（換 V 後）連續運作不掉電**：5/7 會議 Roy 報告「換不同 V 大小後解決系統會跑掉的問題」。但 5/7 night 仍發生 1 次 reboot（fail-map `[#Reboot-1]` carry-over）。**5/12 LM307 連續 30/60 min 驗**
 - [ ] **Jetson 不突然斷電**：5/7 night 1 次 reboot（XL4015 風險，memory project_jetson_power_issue.md 已標）
 
 ### 9.2 機構
 
 - [ ] **光達不晃動**
+- [ ] **新 LiDAR（私人科技）+ Go2 原廠 LiDAR 各跑各，不互相干擾**（5/7 會議 Roy 報告「接 Jetson 上跟 Go2 原廠 LiDAR 不衝突，各跑各的」）
 - [ ] **頭盔不脫落**
-- [ ] **喇叭不掉**
+- [ ] **新外接喇叭不掉**（會議提到「整體 Jetson + 新降壓器 + 新喇叭 重新配置後不擁擠」）
 - [ ] **線材不卡腿**
 - [ ] **做 motion 時線不拉扯**
 
