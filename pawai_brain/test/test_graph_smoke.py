@@ -166,3 +166,22 @@ def test_disallowed_skill_kept_with_rejected_trace():
     assert result["proposed_skill"] == "dance_wildly"
     skill_gate_entries = [t for t in result["trace"] if t["stage"] == "skill_gate"]
     assert skill_gate_entries[-1]["status"] == "rejected_not_allowed"
+
+
+def test_output_builder_does_not_add_demo_guide_to_state_reply():
+    """HIGH-RISK: demo_guide path must not put guide name into reply_text or chat_candidate fields."""
+    from pawai_brain.nodes.output_builder import output_builder
+    state = {
+        "user_text": "請介紹手勢",
+        "selected_demo_guide": "gesture_demo",
+        "llm_json": {"reply": "好啊，請比 OK", "skill": "gesture_demo", "args": {}},
+        "validation_error": "",
+        "trace": [],
+    }
+    out = output_builder(state)
+    # selected_demo_guide preserved but reply_text is the LLM's natural reply
+    assert out["selected_demo_guide"] == "gesture_demo"
+    assert out["reply_text"] == "好啊，請比 OK"
+    # Brain contract fields don't leak guide name
+    assert "gesture_demo" not in (out.get("selected_skill") or "")
+    assert out.get("proposed_skill") in (None, "")

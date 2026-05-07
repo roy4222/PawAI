@@ -12,6 +12,9 @@ from ..state import ConversationState
 
 
 def output_builder(state: ConversationState) -> ConversationState:
+    # Phase A.6: ensure selected_demo_guide is preserved; never write to chat_candidate.
+    state.setdefault("selected_demo_guide", None)
+
     if state.get("safety_hit"):
         # safety_gate already populated everything; nothing to do.
         state.setdefault("trace", []).append(
