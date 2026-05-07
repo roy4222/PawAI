@@ -120,3 +120,88 @@ def test_node_handles_missing_llm_json():
     assert out["proposed_skill"] is None
     assert out["proposed_args"] == {}
     assert out["trace"] == []
+
+
+# ── Phase A.6 additions ──
+from pawai_brain.nodes.skill_policy_gate import normalize_proposal_v2
+
+
+def _entry(name, kind, effective="available"):
+    return type("E", (), {"name": name, "kind": kind, "effective_status": effective})
+
+
+def _ctx(*entries):
+    return {"capabilities": [{"name": e.name, "kind": e.kind,
+                              "effective_status": e.effective_status}
+                             for e in entries]}
+
+
+def test_v2_passthrough_chat_reply_yields_no_proposal_no_trace():
+    """HIGH-RISK: chat_reply must not become proposed_skill even though it's in SKILL_REGISTRY."""
+    skill, args, guide, status, detail = normalize_proposal_v2("chat_reply", {}, _ctx())
+    assert skill is None
+    assert guide is None
+    assert status is None  # no skill_gate trace at all
+
+
+def test_v2_passthrough_say_canned_yields_no_proposal_no_trace():
+    skill, args, guide, status, _ = normalize_proposal_v2("say_canned", {}, _ctx())
+    assert skill is None
+    assert guide is None
+    assert status is None
+
+
+def test_v2_demo_guide_routes_to_selected_demo_guide():
+    """HIGH-RISK: demo_guide must NOT enter proposed_skill."""
+    ctx = _ctx(_entry("gesture_demo", "demo_guide", "explain_only"))
+    skill, args, guide, status, _ = normalize_proposal_v2("gesture_demo", {}, ctx)
+    assert skill is None
+    assert guide == "gesture_demo"
+    assert status == "demo_guide"
+
+
+def test_v2_skill_available_proposed():
+    ctx = _ctx(_entry("self_introduce", "skill", "available"))
+    skill, _, guide, status, _ = normalize_proposal_v2("self_introduce", {}, ctx)
+    assert skill == "self_introduce"
+    assert guide is None
+    assert status == "proposed"
+
+
+def test_v2_skill_needs_confirm_blocks_with_specific_status():
+    ctx = _ctx(_entry("wiggle", "skill", "needs_confirm"))
+    skill, _, guide, status, _ = normalize_proposal_v2("wiggle", {}, ctx)
+    assert skill is None
+    assert guide is None
+    assert status == "needs_confirm"
+
+
+def test_v2_skill_blocked_states_are_blocked():
+    for eff in ("explain_only", "blocked", "cooldown", "defer", "studio_only", "disabled"):
+        ctx = _ctx(_entry("foo", "skill", eff))
+        skill, _, guide, status, detail = normalize_proposal_v2("foo", {}, ctx)
+        assert skill is None
+        assert guide is None
+        assert status == "blocked"
+        assert eff in detail
+
+
+def test_v2_unknown_skill_kept_with_rejected():
+    skill, _, guide, status, _ = normalize_proposal_v2("dance_wildly", {}, _ctx())
+    assert skill == "dance_wildly"
+    assert guide is None
+    assert status == "rejected_not_allowed"
+
+
+def test_v2_null_or_non_string_skill_yields_none():
+    for raw in (None, 123, [], {}):
+        skill, _, guide, status, _ = normalize_proposal_v2(raw, {}, _ctx())
+        assert skill is None
+        assert guide is None
+        assert status is None
+
+
+def test_v2_args_normalised():
+    ctx = _ctx(_entry("self_introduce", "skill", "available"))
+    _, args, _, _, _ = normalize_proposal_v2("self_introduce", "not a dict", ctx)
+    assert args == {}
