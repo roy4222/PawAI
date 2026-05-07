@@ -168,12 +168,15 @@ def test_v2_skill_available_proposed():
     assert status == "proposed"
 
 
-def test_v2_skill_needs_confirm_blocks_with_specific_status():
+def test_v2_skill_needs_confirm_preserves_proposed_skill():
+    """needs_confirm must keep proposed_skill so brain_node can route to confirm mode.
+    Previous behaviour returned None which dropped the handoff entirely."""
     ctx = _ctx(_entry("wiggle", "skill", "needs_confirm"))
-    skill, _, guide, status, _ = normalize_proposal_v2("wiggle", {}, ctx)
-    assert skill is None
+    skill, _, guide, status, detail = normalize_proposal_v2("wiggle", {}, ctx)
+    assert skill == "wiggle"   # ← was None
     assert guide is None
     assert status == "needs_confirm"
+    assert detail == "wiggle"
 
 
 def test_v2_skill_blocked_states_are_blocked():

@@ -69,7 +69,9 @@ def normalize_proposal_v2(raw_skill, raw_args, capability_context):
     if eff == "available":
         return entry["name"], args, None, "proposed", entry["name"]
     if eff == "needs_confirm":
-        return None, args, None, "needs_confirm", entry["name"]
+        # Preserve proposed_skill so brain_node can route to confirm mode.
+        # (pre-fix: returned None and brain_node never saw the skill.)
+        return entry["name"], args, None, "needs_confirm", entry["name"]
     return None, args, None, "blocked", f"{entry['name']}:{eff}"
 
 
