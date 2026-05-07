@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 from glob import glob
 
 package_name = "pawai_brain"
@@ -6,7 +6,10 @@ package_name = "pawai_brain"
 setup(
     name=package_name,
     version="0.1.0",
-    packages=[package_name, f"{package_name}.nodes"],
+    # find_packages catches all sub-packages including pawai_brain.capability
+    # (regression check after non-symlink colcon build:
+    #  python3 -c "import pawai_brain.capability.registry").
+    packages=find_packages(include=[package_name, f"{package_name}.*"]),
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),

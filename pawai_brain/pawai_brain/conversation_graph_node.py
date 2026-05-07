@@ -73,14 +73,56 @@ reply 用繁體中文，自然像在跟朋友聊天。
 
 
 def _build_user_message(state) -> str:
+    """Build the LLM user message — surface capability_context + world_state.
+
+    Phase A.6 essence: the LLM cannot do "self-demonstration" unless it sees
+    the capability list, recent skill results, and current limits each turn.
+    Adapted from the legacy `env_context` reader to the new world_state shape
+    (Phase A.6 dropped env_builder; world_state_builder now owns time/weather).
+    """
     text = (state.get("user_text") or "").strip()
-    env = state.get("env_context") or {}
     parts = [f"[語音輸入] 使用者說：「{text}」"]
-    if env:
-        line = f"[環境] 台北 {env.get('period', '')} {env.get('time', '')}"
-        if env.get("weather"):
-            line += f"，外面 {env['weather']}"
+
+    ws = state.get("world_state") or {}
+    if ws.get("period") or ws.get("time"):
+        line = f"[環境] 台北 {ws.get('period', '')} {ws.get('time', '')}".rstrip()
+        if ws.get("weather"):
+            line += f"，外面 {ws['weather']}"
         parts.append(line)
+
+    cap = state.get("capability_context") or {}
+    if cap:
+        # Trim each capability to the minimal field set the persona prompt
+        # actually uses (name, kind, display_name, effective_status,
+        # demo_value, can_execute, requires_confirmation, reason; demo_guides
+        # also include intro + related_skills). Avoids 5+ KB context bloat.
+        compact_caps = []
+        for c in cap.get("capabilities", []):
+            entry = {
+                "name": c.get("name"),
+                "kind": c.get("kind"),
+                "display_name": c.get("display_name"),
+                "effective_status": c.get("effective_status"),
+                "can_execute": c.get("can_execute", False),
+                "demo_value": c.get("demo_value", "low"),
+            }
+            if c.get("reason"):
+                entry["reason"] = c["reason"]
+            if c.get("requires_confirmation"):
+                entry["requires_confirmation"] = True
+            if c.get("kind") == "demo_guide":
+                entry["intro"] = c.get("intro", "")
+                if c.get("related_skills"):
+                    entry["related_skills"] = list(c.get("related_skills") or [])
+            compact_caps.append(entry)
+
+        cap_payload = {
+            "capabilities": compact_caps,
+            "limits": list(cap.get("limits") or []),
+            "recent_skill_results": list(cap.get("recent_skill_results") or []),
+        }
+        parts.append("[能力] " + json.dumps(cap_payload, ensure_ascii=False))
+
     return "\n".join(parts)
 
 
