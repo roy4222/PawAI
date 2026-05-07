@@ -1,7 +1,57 @@
 # 專案狀態
 
-**最後更新**：2026-05-07 morning（Phase 1 Primary Cutover — pawai_brain 取代 llm_bridge_node 為 /brain/chat_candidate primary publisher，46 unit test 全綠）
+**最後更新**：2026-05-07 evening（Phase A.6 Capability-Aware Self-Demonstration 完工 — capability layer + DemoGuide registry + 33-entry merged context，121 pawai_brain test / 152 interaction_executive test / 2 legacy llm_bridge test 全綠）
 **硬底線**：2026/4/13 文件繳交完成，**真正剩「4/30 那一週」**（5/11 那週搬 Go2 到老師辦公室、5/19 12:00-13:30 驗收），6 月口頭報告
+
+---
+
+## 5/7 evening 進度（Phase A.6 Capability-Aware Self-Demonstration）
+
+把 Brain 的能力宣告從「27 個 SkillContract」擴成「27 SkillContract + 6 DemoGuide」三層結構（SkillContract / DemoGuide / CapabilityContext），讓 LLM 在 5/18 driver-less demo 能流暢自介所有功能，但實體 motion 仍受 SkillContract allowlist 嚴格控制。完整 plan `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md`，5 個 batch（B1-B5）共 19 task 一次到位。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| Plan | `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md` — 19 task / 5 batch（B1 capability core / B2 SkillContract demo metadata / B3 graph wiring / B4 ROS hooks / B5 persona+studio+docs） |
+| Capability layer | `pawai_brain/pawai_brain/capability/` — registry / demo_guides_loader / world_state / effective_status / skill_result_memory / world_state_builder / capability_builder（B1-B3） |
+| DemoGuide registry | `pawai_brain/config/demo_guides.yaml` — 6 entries（face / speech / gesture / pose / object / navigation） |
+| Demo policy | `pawai_brain/config/demo_policy.yaml` — limits + max_motion_per_turn |
+| SkillContract demo metadata | 27 entries 全部加上 4 個 demo 欄位（display_name / demo_status_baseline / demo_value / demo_reason），interaction_executive 152 test 全綠（B2） |
+| Graph wiring | conversation_graph 11 階段（input → safety → context → env → memory → ws → cap → llm → validator → repair → skill_gate → output → trace），新增 world_state_builder + capability_builder + demo_guide passthrough；context_builder / env_builder 保留但 unused（B3） |
+| ROS hooks | conversation_graph_node 訂閱 `/state/tts_playing`（Bool TRANSIENT_LOCAL）/ `/state/reactive_stop/status` / `/state/nav/safety` / `/state/pawai_brain` / `/brain/skill_result`；`selected_skill` 從 skill_result payload 直接 populate `recent_skill_results`（B4） |
+| Persona rules | `tools/llm_eval/persona.txt` 加上 9 條 CapabilityContext 規則（kind=demo_guide trace-only、needs_confirm 要求 OK、recent_skill_results 自然銜接等）（B5 Task 16） |
+| Studio chips | `skill-trace-content.tsx` 加 needs_confirm（yellow）+ demo_guide（blue）chip color，配合既有 amber/rose/emerald palette（B5 Task 17） |
+| Architecture docs | `docs/pawai-brain/architecture/overview.md` §5.1 加上 DemoGuide registry + CapabilityContext 兩列三層結構（B5 Task 18） |
+| Tests | pawai_brain 121 / interaction_executive 152 / legacy llm_bridge 2 全綠；wrapper smoke 載入 6 demo guides + 編譯 CompiledStateGraph 通過（B5 Task 19） |
+
+### Brain contract 不變式（B1-B5 全程守住）
+
+- `/brain/chat_candidate` schema 完全不動 — `selected_demo_guide` **不出現**在 payload，只在 `/brain/conversation_trace` 流通
+- Brain（interaction_executive）對 demo_guide 一無所知，仍只看 SkillContract allowlist 仲裁
+- chat_reply / say_canned passthrough 不變 — `proposed_skill=None`，沒有副作用
+- demo_guide 在 Studio 顯示為 blue chip + trace stage `demo_guide`，不會誤觸發 motion
+
+### 提交序列（B5）
+
+```
+86ad931 feat(persona): capability_context awareness rules (Phase A.6)
+89c704c feat(studio): add needs_confirm + demo_guide chip colors
+ade4bca docs(architecture): three-tier capability layer (SkillContract + DemoGuide + CapabilityContext)
+（本 commit）docs(project-status): Phase A.6 capability awareness complete
+```
+
+B1-B5 全部從 `2bc6566` 起；B5 4 個 commit 把 plan 收尾。
+
+### 待 5/13 場地測試前要做
+
+- Jetson 上機跑全 33 capability matrix（plan acceptance §最後一條）
+- LLM 真實 prompt 驗證：問「你會做什麼」是否優先列 demo_guide display_name；提議 dance / wiggle / chat_reply 是否走對 trace 分流
+- legacy `context_builder.py` / `env_builder.py` 雖留著，後續若 Phase B 不再用可整批清掉
+
+### 不在本 cut 範圍
+
+`/brain/chat_candidate` 加 `selected_demo_guide` 欄位（demo_guide 仍只走 trace）、Studio 主動拉 capability snapshot 顯示 33 entries、Jetson colcon build + 真機驗證 — 留下次 session。
 
 ---
 
