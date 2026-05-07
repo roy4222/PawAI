@@ -61,14 +61,20 @@ GESTURE_ACTION_MAP = {
 FALL_ALERT_TTS = ""
 
 # DEMO BRIDGE — pose → /tts (NO motion). Standing intentionally absent
-# (baseline state). Fallen template uses {name}; falls back to "你" if no
-# stable face identity is cached. akimbo / knee_kneel templates are
-# placeholders — adjust copy to taste.
+# (baseline state). akimbo / knee_kneel templates are placeholders.
+#
+# 5/8: "fallen" template intentionally REMOVED from this map. The same
+# demo-silence rationale as FALL_ALERT_TTS above applies — pose-event
+# false positives (carts / chairs / bent persons) would still trigger
+# TTS via this code path otherwise. _on_pose_event's early return on
+# missing template (`if not template: return`) handles the absence
+# cleanly. Restore by re-adding "fallen": "{name}，..." once the pose
+# classifier ankle filter and pose buffer reach acceptable
+# false-positive rate.
 POSE_TTS_MAP = {
     "sitting":     "會不會太累？",
     "crouching":   "我在這裡喔",
     "bending":     "請小心喔",
-    "fallen":      "{name}，偵測到跌倒，請注意安全！",
     "akimbo":      "你看起來很有架式喔！",
     "knee_kneel":  "需要我幫忙嗎？",
 }

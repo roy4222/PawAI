@@ -90,6 +90,19 @@ class TestFallAlertConfig(unittest.TestCase):
             f"FALL_ALERT_TTS={FALL_ALERT_TTS!r} — demo silence requires empty"
         )
 
+    def test_pose_tts_map_no_fallen_template_demo_silence(self):
+        """Defense-in-depth: same demo-silence rationale as FALL_ALERT_TTS
+        applies to the POSE_TTS_MAP['fallen'] code path in _on_pose_event.
+        Both routes must be muted, otherwise a single fallen false-positive
+        from /event/pose_detected still interrupts the conversation even
+        though /event/interaction/fall_alert is silenced."""
+        from vision_perception.event_action_bridge import POSE_TTS_MAP
+
+        assert "fallen" not in POSE_TTS_MAP or not POSE_TTS_MAP.get("fallen"), (
+            f"POSE_TTS_MAP['fallen']={POSE_TTS_MAP.get('fallen')!r} — "
+            "both fall TTS routes must be muted during demo"
+        )
+
 
 class TestTTSGuardLogic(unittest.TestCase):
     """Test the TTS guard decision table without ROS2.
