@@ -67,6 +67,7 @@ def classify_pose(
     body_kps: np.ndarray,
     body_scores: np.ndarray,
     bbox_ratio: float | None = None,
+    image_height: float | None = None,
 ) -> tuple[str | None, float]:
     """Single-frame pose classification.
 
@@ -75,6 +76,13 @@ def classify_pose(
         body_scores: (17,) confidence per keypoint.
         bbox_ratio: width/height of person bounding box (from Node layer).
             Used only as a fallen confidence bonus, not as a gating condition.
+        image_height: optional frame height in pixels. When provided, fallen
+            verdicts also require ankles to sit in the lower 30% of the frame
+            (ankle_y / image_height > 0.7). This filters out false fallen
+            classifications on objects detected mid-frame (e.g. a person bent
+            over a cart that the silhouette projection still labels as
+            horizontal). Skip the gate when image_height is None to preserve
+            backward compatibility.
 
     Returns:
         (pose_name, confidence) or (None, 0.0).
@@ -146,7 +154,18 @@ def classify_pose(
                     )
                     if lower_body_angle < 30.0:
                         is_deep_bending = True
-            if not is_deep_bending:
+            # 5/8 ankle-on-floor gate: real fallen poses have ankles in the
+            # lower portion of the frame. Mid-frame ankles indicate a bent
+            # person, leaning silhouette, or upper-body-in-frame chair/cart
+            # whose pixel projection happens to look horizontal — none of
+            # which we want to alert on. Skip when image_height is unknown
+            # (preserve old behaviour for legacy callers / unit tests that
+            # don't pass it).
+            ankle_on_floor = True
+            if image_height is not None and image_height > 0:
+                ankle_y_ratio = float(ankle[1]) / float(image_height)
+                ankle_on_floor = ankle_y_ratio > 0.7
+            if not is_deep_bending and ankle_on_floor:
                 bonus = 0.05 if (bbox_ratio is not None and bbox_ratio > 1.0) else 0.0
                 return "fallen", float(min(avg_score + bonus, 1.0))
 

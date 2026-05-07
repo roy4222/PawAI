@@ -2,7 +2,10 @@ brain_node:
   ros__parameters:
     chat_wait_ms: 20000
     dedup_window_s: 1.0
-    unknown_face_accumulate_s: 3.0
+    # 5/8: 3.0 → 5.0. Adds 2s of confirmation before stranger_alert fires,
+    # cutting transient mis-recognitions (hand / glass / object). For full
+    # demo silence, override at launch with a large value (e.g. 99999).
+    unknown_face_accumulate_s: 5.0
     fallen_accumulate_s: 2.0
 
 interaction_executive_node:

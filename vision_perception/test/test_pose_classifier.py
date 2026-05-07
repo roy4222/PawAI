@@ -440,3 +440,45 @@ class TestClassifyPose:
         pose, _ = classify_pose(kps, scores, bbox_ratio=0.6)
         assert pose != "fallen", "Deep bending with legs vertical must not be fallen"
         assert pose == "bending"
+
+    # ── 5/8 ankle-on-floor gate ────────────────────────────────────────
+
+    def test_fallen_with_image_height_when_ankle_on_floor(self):
+        """When ankle_y / image_height > 0.7, ankle is in lower 30% of frame
+        → person is on the ground → real fallen verdict allowed through."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=170, knee_angle_deg=170, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # Helper places ankle at y ≈ 312. With image_height=400 → ratio ≈ 0.78.
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.5, image_height=400)
+        assert pose == "fallen"
+
+    def test_fallen_blocked_when_ankle_mid_frame(self):
+        """A 'fallen' silhouette where the ankles are still mid-frame is the
+        cart / chair / leaning-over-furniture false-positive case. Must NOT
+        classify as fallen."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=170, knee_angle_deg=170, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # Helper places ankle at y ≈ 312. With image_height=1000 → ratio ≈ 0.31
+        # (well above 0.7) → mid-frame → gate fires.
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.5, image_height=1000)
+        assert pose != "fallen", "Mid-frame ankle must block fallen verdict"
+
+    def test_fallen_image_height_none_preserves_legacy_behavior(self):
+        """Default image_height=None must not break existing callers that
+        don't pass it (legacy tests, mock pipelines)."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=170, knee_angle_deg=170, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        # No image_height → ankle gate skipped → still classifies fallen.
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.5)
+        assert pose == "fallen"
+
+    def test_fallen_image_height_zero_skips_gate(self):
+        """Defensive: image_height=0 must not divide by zero; skip gate."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=170, knee_angle_deg=170, trunk_angle_deg=80)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(kps, scores, bbox_ratio=1.5, image_height=0)
+        assert pose == "fallen"  # gate skipped, fallen verdict stands

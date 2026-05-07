@@ -286,7 +286,13 @@ class VisionPerceptionNode(Node):
 
         # --- Pose classification ---
         bbox_ratio = _bbox_ratio_from_kps(body_kps)
-        pose_raw, pose_conf = classify_pose(body_kps, body_scores, bbox_ratio)
+        # Pass image height for ankle-on-floor fallen gate (5/8 fix).
+        # image is HxWxC numpy array; if a node path didn't fetch image
+        # (rare) fall through with None and skip the gate.
+        image_height = float(image.shape[0]) if image is not None else None
+        pose_raw, pose_conf = classify_pose(
+            body_kps, body_scores, bbox_ratio, image_height=image_height
+        )
         if pose_raw is not None:
             self.pose_buffer.append(pose_raw)
         pose_vote = _majority(self.pose_buffer)

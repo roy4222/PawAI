@@ -52,7 +52,13 @@ GESTURE_ACTION_MAP = {
 }
 
 # Fall alert → TTS only (no Go2 sport action)
-FALL_ALERT_TTS = "偵測到跌倒！請注意安全"
+# 5/8: empty string disables fall TTS broadcast to avoid interrupting
+# conversation on false-positive fallen detections (e.g. carts / chairs).
+# Studio still surfaces the red alert chip via /event/* trace; behaviour
+# only differs on the audible channel. Restore by setting to a non-empty
+# string when the pose_classifier ankle filter and pose buffer reach
+# acceptable false-positive rate.
+FALL_ALERT_TTS = ""
 
 # DEMO BRIDGE — pose → /tts (NO motion). Standing intentionally absent
 # (baseline state). Fallen template uses {name}; falls back to "你" if no
@@ -250,7 +256,11 @@ class EventActionBridge(Node):
             f"FALL_ALERT received: who={who}, persist={persist}s"
         )
 
-        self._send_tts(FALL_ALERT_TTS)
+        # Guard: empty FALL_ALERT_TTS (5/8 demo silence) skips TTS publish
+        # to avoid emitting empty /tts payloads that downstream nodes may
+        # log-spam or attempt to synthesise as silence.
+        if FALL_ALERT_TTS:
+            self._send_tts(FALL_ALERT_TTS)
 
     # ------------------------------------------------------------------
     # DEMO BRIDGE — pose → /tts (NO motion; see module docstring)

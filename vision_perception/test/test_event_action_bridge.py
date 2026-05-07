@@ -71,10 +71,24 @@ class TestGestureActionMap(unittest.TestCase):
 
 
 class TestFallAlertConfig(unittest.TestCase):
-    def test_fall_alert_tts_is_nonempty(self):
+    def test_fall_alert_tts_is_string(self):
+        """5/8: empty FALL_ALERT_TTS disables fall TTS broadcast for demo
+        silence. Must remain a string (not None) so the guard `if FALL_ALERT_TTS:`
+        in _on_fall_alert can short-circuit cleanly without TypeError."""
         from vision_perception.event_action_bridge import FALL_ALERT_TTS
 
-        assert FALL_ALERT_TTS and len(FALL_ALERT_TTS) > 0
+        assert isinstance(FALL_ALERT_TTS, str)
+
+    def test_fall_alert_tts_demo_silence_default(self):
+        """Demo period: FALL_ALERT_TTS should default to empty string so
+        false-positive fallen detections don't interrupt conversation. Restore
+        to a non-empty string when the pose_classifier ankle filter and pose
+        buffer reach acceptable false-positive rate."""
+        from vision_perception.event_action_bridge import FALL_ALERT_TTS
+
+        assert FALL_ALERT_TTS == "", (
+            f"FALL_ALERT_TTS={FALL_ALERT_TTS!r} — demo silence requires empty"
+        )
 
 
 class TestTTSGuardLogic(unittest.TestCase):
