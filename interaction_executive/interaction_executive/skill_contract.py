@@ -72,6 +72,15 @@ class SkillContract:
     risk_level: Literal["low", "medium", "high"] = "low"
     bucket: SkillBucket = "active"
 
+    # Phase A.6 demo metadata
+    display_name: str = ""
+    demo_status_baseline: Literal[
+        "available_execute", "available_confirm",
+        "explain_only", "studio_only", "disabled",
+    ] = "disabled"
+    demo_value: Literal["high", "medium", "low"] = "low"
+    demo_reason: str = ""
+
 
 @dataclass
 class SkillPlan:
@@ -140,6 +149,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Emergency stop. Safety hard-rule path.",
         ui_style="safety",
         bucket="active",
+        display_name="緊急停止",
+        demo_status_baseline="available_execute",
+        demo_value="high",
+        demo_reason="安全短路，不會被 LLM 提案",
     ),
     "system_pause": SkillContract(
         name="system_pause",
@@ -151,6 +164,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="System pause: stop motion first, then silence + ignore non-safety triggers.",
         ui_style="safety",
         bucket="active",
+        display_name="系統暫停",
+        demo_status_baseline="studio_only",
+        demo_value="low",
+        demo_reason="系統級開關只給 Studio",
     ),
     "show_status": SkillContract(
         name="show_status",
@@ -159,6 +176,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=2.0,
         description="Status read-out (Studio button).",
         bucket="active",
+        display_name="狀態回報",
+        demo_status_baseline="available_execute",
+        demo_value="medium",
+        demo_reason="低風險語音回報",
     ),
 
     # ---- Chat (LLM-driven, dynamic text) ----
@@ -169,6 +190,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="LLM-sourced free-form chat reply.",
         args_schema={"text": "string"},
         bucket="active",
+        display_name="自然對話",
+        demo_status_baseline="available_execute",
+        demo_value="high",
+        demo_reason="Demo 主軸功能",
     ),
     "say_canned": SkillContract(
         name="say_canned",
@@ -177,6 +202,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Brain rule fallback canned line.",
         args_schema={"text": "string"},
         bucket="active",
+        display_name="規則回覆",
+        demo_status_baseline="available_execute",
+        demo_value="medium",
+        demo_reason="LLM 失敗時的 fallback",
     ),
 
     # ---- Sequence (meta) ----
@@ -195,6 +224,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         timeout_s=60.0,
         description="Self-introduction 6-step meta sequence.",
         bucket="active",
+        display_name="自我介紹",
+        demo_status_baseline="available_execute",
+        demo_value="high",
+        demo_reason="Demo 主軸功能",
     ),
 
     # ---- Social motion (low-risk) ----
@@ -208,6 +241,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=5.0,
         description="Wave back when user waves.",
         bucket="active",
+        display_name="揮手打招呼",
+        demo_status_baseline="available_execute",
+        demo_value="high",
+        demo_reason="低風險社交動作",
     ),
     "sit_along": SkillContract(
         name="sit_along",
@@ -219,6 +256,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=15.0,
         description="Sit when user sits.",
         bucket="active",
+        display_name="跟坐",
+        demo_status_baseline="available_execute",
+        demo_value="medium",
+        demo_reason="低風險陪伴動作",
     ),
     "careful_remind": SkillContract(
         name="careful_remind",
@@ -227,6 +268,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=10.0,
         description="Remind user to be careful (bending detected).",
         bucket="active",
+        display_name="小心提醒",
+        demo_status_baseline="available_execute",
+        demo_value="medium",
+        demo_reason="貼心語音提示",
     ),
 
     # ---- Social motion (high-risk, requires OK confirm) ----
@@ -244,6 +289,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         fallback_skill="say_canned",
         description="Hip wiggle. High-risk motion, requires OK confirm.",
         bucket="active",
+        display_name="搖擺",
+        demo_status_baseline="available_confirm",
+        demo_value="medium",
+        demo_reason="低風險表演動作但需 OK 確認",
     ),
     "stretch": SkillContract(
         name="stretch",
@@ -259,6 +308,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         fallback_skill="say_canned",
         description="Body stretch. High-risk motion, requires OK confirm.",
         bucket="active",
+        display_name="伸展",
+        demo_status_baseline="available_confirm",
+        demo_value="medium",
+        demo_reason="低風險表演動作但需 OK 確認",
     ),
 
     # ---- Face-driven ----
@@ -273,6 +326,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Personalised greeting for a registered face.",
         args_schema={"name": "string"},
         bucket="active",
+        display_name="熟人問候",
+        demo_status_baseline="available_execute",
+        demo_value="high",
+        demo_reason="人臉識別 + 個人化招呼",
     ),
     "stranger_alert": SkillContract(
         name="stranger_alert",
@@ -282,6 +339,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Unknown face stable for 3 seconds.",
         ui_style="alert",
         bucket="active",
+        display_name="陌生人警告",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="關閉誤觸打斷對話；只在 Studio 顯示警示",
     ),
     "fallen_alert": SkillContract(
         name="fallen_alert",
@@ -298,6 +359,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         ui_style="alert",
         args_schema={"name": "string"},
         bucket="active",
+        display_name="跌倒提醒",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="關閉誤觸打斷對話；只在 Studio 顯示警示",
     ),
 
     # ---- Object ----
@@ -312,6 +377,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Comment on a salient detected object (text pre-built in brain).",
         args_schema={"text": "string", "label": "string", "color": "string"},
         bucket="active",
+        display_name="物體解說",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="Demo 不主動展示，由 demo_guide 引導",
     ),
 
     # ---- Navigation (high-risk) ----
@@ -327,6 +396,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         fallback_skill="say_canned",
         description="Short relative goto (Scene 2 保底). Studio button bypass confirm.",
         bucket="active",
+        display_name="短距離移動",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="動態避障非主展示，需場地較大",
     ),
     "approach_person": SkillContract(
         name="approach_person",
@@ -341,6 +414,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Approach person to 1m (Scene 7 Wow C).",
         args_schema={"name": "string"},
         bucket="active",
+        display_name="走近人",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="動態導航非主展示",
     ),
 
     # ---- Hidden (registry 內、Studio grayed-out) ----
@@ -353,6 +430,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         risk_level="medium",
         description="Mute TTS until next un-mute. Hidden in Phase B Demo.",
         bucket="hidden",
+        display_name="靜音模式",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B Demo 隱藏",
     ),
     "enter_listen_mode": SkillContract(
         name="enter_listen_mode",
@@ -361,6 +442,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=3.0,
         description="Force-open ASR window. Hidden in Phase B Demo.",
         bucket="hidden",
+        display_name="聆聽模式",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B Demo 隱藏",
     ),
     "akimbo_react": SkillContract(
         name="akimbo_react",
@@ -372,6 +457,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=10.0,
         description="React to akimbo pose. Hidden in Phase B Demo.",
         bucket="hidden",
+        display_name="叉腰回應",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B Demo 隱藏",
     ),
     "knee_kneel_react": SkillContract(
         name="knee_kneel_react",
@@ -383,6 +472,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         cooldown_s=10.0,
         description="React to single-knee kneel. Hidden in Phase B Demo.",
         bucket="hidden",
+        display_name="跪地回應",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B Demo 隱藏",
     ),
     "patrol_route": SkillContract(
         name="patrol_route",
@@ -396,6 +489,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Run a saved route. Hidden in Phase B Demo (optional surface).",
         args_schema={"route_id": "string"},
         bucket="hidden",
+        display_name="巡邏路線",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B Demo 隱藏",
     ),
 
     # ---- Disabled / Future ----
@@ -407,6 +504,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         risk_level="high",
         description="Follow the user. Disabled in 5/12 Demo (Future Work).",
         bucket="disabled",
+        display_name="跟隨我",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Future Work",
     ),
     "follow_person": SkillContract(
         name="follow_person",
@@ -417,6 +518,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Follow a specific named person. Disabled (Future).",
         args_schema={"name": "string"},
         bucket="disabled",
+        display_name="跟隨人",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Future Work",
     ),
     "dance": SkillContract(
         name="dance",
@@ -426,6 +531,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         risk_level="high",
         description="Choreographed dance. Disabled (Future).",
         bucket="disabled",
+        display_name="跳舞",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="動作不穩定",
     ),
     "go_to_named_place": SkillContract(
         name="go_to_named_place",
@@ -437,6 +546,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         risk_level="medium",
         args_schema={"place_id": "string"},
         bucket="disabled",
+        display_name="前往指定地點",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="Phase B 才整合 nav_capability",
     ),
 
     # ---- Retired (registry 保留、Studio 不顯示、brain 不選) ----
@@ -452,6 +565,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         description="Generic gesture ack. Retired — split into wave_hello / wiggle / stretch.",
         args_schema={"gesture": "string"},
         bucket="retired",
+        display_name="手勢確認 (retired)",
+        demo_status_baseline="disabled",
+        demo_value="low",
+        demo_reason="已退役，拆成 wave_hello / wiggle / stretch",
     ),
 }
 
