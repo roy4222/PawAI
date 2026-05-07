@@ -28,6 +28,12 @@ class ChatCandidatePayload:
         return asdict(self)
 
 
+# TracePayload.status enum (extended in Phase A.6):
+#   pipeline / LLM stages: ok | retry | fallback | error
+#   skill_gate stage:      proposed | accepted | accepted_trace_only |
+#                          blocked | rejected_not_allowed |
+#                          needs_confirm    (← Phase A.6)
+#                          demo_guide       (← Phase A.6)
 @dataclass
 class TracePayload:
     """Schema for /brain/conversation_trace entries.

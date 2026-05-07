@@ -41,3 +41,9 @@ class ConversationState(TypedDict, total=False):
 
     # ── Trace accumulation (each node may append) ─────────────────────
     trace: list[dict[str, Any]]
+
+    # ── Phase A.6 additions ──────────────────────────────────────────
+    world_state: dict
+    capability_context: dict
+    recent_skill_results: list[dict]
+    selected_demo_guide: str | None
