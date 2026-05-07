@@ -333,7 +333,11 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     ),
     "stranger_alert": SkillContract(
         name="stranger_alert",
-        steps=[SkillStep(ExecutorKind.SAY, {"text": "偵測到不認識的人，請注意"})],
+        # 5/7 night demo silence: empty text → IE-node SAY returns
+        # "empty_tts_text" → no /tts publish. Studio still sees the
+        # /brain/proposal trace (chip visible). Same pattern as
+        # fall_alert FALL_ALERT_TTS="" / POSE_TTS_MAP['fallen'] removal.
+        steps=[SkillStep(ExecutorKind.SAY, {"text": ""})],
         priority_class=PriorityClass.ALERT,
         cooldown_s=30.0,
         description="Unknown face stable for 3 seconds.",
@@ -342,7 +346,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         display_name="陌生人警告",
         demo_status_baseline="explain_only",
         demo_value="medium",
-        demo_reason="關閉誤觸打斷對話；只在 Studio 顯示警示",
+        demo_reason="Demo 期間靜音；trace 仍可見，避免打斷語音主鏈",
     ),
     "fallen_alert": SkillContract(
         name="fallen_alert",

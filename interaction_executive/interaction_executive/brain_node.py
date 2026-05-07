@@ -79,6 +79,11 @@ def build_object_tts(class_name: str, color: str | None) -> str | None:
     """
     if not class_name or class_name not in OBJECT_CLASS_ZH:
         return None
+    # 5/7 night demo silence: don't say "看到X色的人了". Person detection
+    # collides with face/stranger_alert path AND repeats every time YOLO
+    # ticks during conversation. Studio chip still shows the detection.
+    if class_name == "person":
+        return None
     class_zh = OBJECT_CLASS_ZH[class_name]
     if color and color != "Unknown" and color in OBJECT_COLOR_ZH:
         preamble = f"看到{OBJECT_COLOR_ZH[color]}的{class_zh}了"
