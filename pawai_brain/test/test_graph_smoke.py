@@ -30,7 +30,8 @@ class _StubSkill:
         self.requires_confirmation = False
 
 
-def _wire_for_test(persona_response: dict | None, skills: dict | None = None):
+def _wire_for_test(persona_response: dict | None, skills: dict | None = None,
+                   guides: list | None = None):
     """Configure the module-level hooks the wrapper would set in production."""
     client = OpenRouterClient(
         config=OpenRouterConfig(),
@@ -79,7 +80,9 @@ def _wire_for_test(persona_response: dict | None, skills: dict | None = None):
     ws_node.set_world_provider(lambda: WorldStateSnapshot())
     if skills is None:
         skills = {"self_introduce": _StubSkill("self_introduce")}
-    registry = CapabilityRegistry(skills=skills, guides=[])
+    if guides is None:
+        guides = []
+    registry = CapabilityRegistry(skills=skills, guides=guides)
     cb_node.configure(
         registry=registry,
         skill_result_provider=lambda: [],
@@ -216,3 +219,76 @@ def test_output_builder_does_not_add_demo_guide_to_state_reply():
     # Brain contract fields don't leak guide name
     assert "gesture_demo" not in (out.get("selected_skill") or "")
     assert out.get("proposed_skill") in (None, "")
+
+
+def test_smoke_capability_demo_guide_proposal_routes_to_trace_only():
+    """HIGH-RISK: LLM picks demo_guide -> no proposed_skill, only trace."""
+    from pawai_brain.capability.demo_guides_loader import DemoGuide
+
+    guide = DemoGuide(
+        name="gesture_demo",
+        display_name="手勢",
+        baseline_status="explain_only",
+        demo_value="high",
+        intro="比 OK",
+    )
+    patcher, _ = _wire_for_test(
+        persona_response={"reply": "好啊，請比 OK", "skill": "gesture_demo", "args": {}},
+        skills={},
+        guides=[guide],
+    )
+    with patcher:
+        graph = build_graph()
+        result = graph.invoke(
+            {"session_id": "s-guide", "user_text": "介紹手勢", "source": "speech"}
+        )
+
+    assert result["selected_demo_guide"] == "gesture_demo"
+    assert (result.get("proposed_skill") or "") == ""
+    skill_gate = [t for t in result["trace"] if t["stage"] == "skill_gate"]
+    assert skill_gate and skill_gate[-1]["status"] == "demo_guide"
+
+
+def test_smoke_capability_blocked_skill_no_proposal():
+    """HIGH-RISK: skill with effective=disabled -> no proposed_skill."""
+    blocked = _StubSkill("blocked_skill", baseline="disabled")
+    patcher, _ = _wire_for_test(
+        persona_response={"reply": "好", "skill": "blocked_skill", "args": {}},
+        skills={"blocked_skill": blocked},
+    )
+    with patcher:
+        graph = build_graph()
+        result = graph.invoke(
+            {"session_id": "s-blocked", "user_text": "做點什麼", "source": "speech"}
+        )
+
+    assert (result.get("proposed_skill") or "") == ""
+    skill_gate = [t for t in result["trace"] if t["stage"] == "skill_gate"]
+    assert skill_gate and skill_gate[-1]["status"] == "blocked"
+
+
+def test_smoke_chat_reply_passthrough_never_proposed():
+    """HIGH-RISK: chat_reply must never become proposed_skill — even with capability_context."""
+    patcher, _ = _wire_for_test(
+        persona_response={"reply": "你好啊", "skill": "chat_reply", "args": {}}
+    )
+    with patcher:
+        graph = build_graph()
+        result = graph.invoke(
+            {"session_id": "s-chat", "user_text": "你好", "source": "speech"}
+        )
+    assert (result.get("proposed_skill") or "") == ""
+    assert result.get("selected_demo_guide") is None
+
+
+def test_smoke_world_state_present_in_state():
+    patcher, _ = _wire_for_test(
+        persona_response={"reply": "嗨", "skill": None, "args": {}}
+    )
+    with patcher:
+        graph = build_graph()
+        result = graph.invoke(
+            {"session_id": "s-ws", "user_text": "你好", "source": "speech"}
+        )
+    assert "world_state" in result
+    assert "period" in result["world_state"]
