@@ -21,6 +21,10 @@ function statusToClass(status: string): string {
     case "rejected_not_allowed":
     case "error":
       return "bg-rose-500/20 text-rose-300 border-rose-500/40";
+    case "needs_confirm":
+      return "bg-yellow-500/20 text-yellow-300 border-yellow-500/40";
+    case "demo_guide":
+      return "bg-blue-500/20 text-blue-300 border-blue-500/40";
     default:
       return "bg-slate-500/20 text-slate-300 border-slate-500/40";
   }
