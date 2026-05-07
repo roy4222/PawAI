@@ -60,6 +60,12 @@ OBJECT_TTS_SPECIAL_SUFFIX: dict[str, str] = {
     "book": "，在看書啊",
 }
 
+# Per-(class, color) speaking dedup. SkillContract.cooldown_s=5 only stops the
+# *skill* from re-firing; it doesn't stop the same chair being announced every
+# 5s when YOLO keeps detecting it. 60s here means "PAI mentioned this exact
+# coloured object recently — shut up." Cleared by _gc_object_remark_seen.
+OBJECT_REMARK_DEDUP_S = 60.0
+
 
 def build_object_tts(class_name: str, color: str | None) -> str | None:
     """Compose object_remark TTS string, or None when class is outside the
@@ -126,6 +132,8 @@ class BrainNode(Node):
         self._chat_timeouts: dict[str, rclpy.timer.Timer] = {}
         self._pending_confirm = PendingConfirm(timeout_s=5.0, stable_s=0.5)
         self._gesture_live_window_s = 0.5
+        # Per-(class, color) → last-emit-ts. See OBJECT_REMARK_DEDUP_S.
+        self._object_remark_seen: dict[tuple[str, str], float] = {}
 
         self._pub_proposal = self.create_publisher(String, "/brain/proposal", _RELIABLE_10)
         self._pub_brain_state = self.create_publisher(
@@ -713,6 +721,17 @@ class BrainNode(Node):
         text = build_object_tts(class_name, color)
         if text is None:
             return
+
+        # Per-(class, color) dedup: same coloured object only spoken once per
+        # OBJECT_REMARK_DEDUP_S. Otherwise YOLO keeps re-detecting a static
+        # chair and PAI shouts "看到咖啡色的椅子了" every 5s — verified painful
+        # in 5/7 night live test.
+        now = time.time()
+        seen_key = (class_name, color or "")
+        last = self._object_remark_seen.get(seen_key, 0.0)
+        if now - last < OBJECT_REMARK_DEDUP_S:
+            return
+        self._object_remark_seen[seen_key] = now
 
         self._emit_with_cooldown(
             "object_remark",
