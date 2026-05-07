@@ -16,6 +16,7 @@ setup(
         "setuptools",
         "langgraph>=0.2.0",
         "langchain-core>=0.3.0",
+        "PyYAML>=5.4",
     ],
     zip_safe=True,
     maintainer="roy",
