@@ -24,15 +24,42 @@ from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool as BoolMsg
 from std_msgs.msg import String
 
+from .capability.demo_guides_loader import load_demo_guides, load_demo_policy
+from .capability.registry import CapabilityRegistry
+from .capability.skill_result_memory import SkillResultMemory
+from .capability.world_snapshot import WorldStateSnapshot
 from .graph import build_graph
 from .llm_client import OpenRouterClient, OpenRouterConfig, resolve_openrouter_key
 from .memory import ConversationMemory
+from .nodes import capability_builder as capability_builder_node
 from .nodes import llm_decision as llm_decision_node
 from .nodes import memory_builder as memory_builder_node
+from .nodes import world_state_builder as world_state_builder_node
 from .rule_fallback import fallback_reply
 from .schemas import ChatCandidatePayload, TracePayload
+
+
+TERMINAL_STATUSES = frozenset({"completed", "aborted", "blocked_by_safety", "step_failed"})
+
+# QoS for /state/tts_playing must match the publisher (tts_node.py:998-999)
+_TTS_PLAYING_QOS = QoSProfile(
+    depth=1,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    reliability=ReliabilityPolicy.RELIABLE,
+    history=HistoryPolicy.KEEP_LAST,
+)
+
+# QoS for /state/pawai_brain (brain_node publishes TRANSIENT_LOCAL @ 2Hz)
+_BRAIN_STATE_QOS = QoSProfile(
+    depth=1,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    reliability=ReliabilityPolicy.RELIABLE,
+    history=HistoryPolicy.KEEP_LAST,
+)
 
 
 # Inline persona used when llm_persona_file is empty / unreadable.
@@ -94,6 +121,58 @@ class ConversationGraphNode(Node):
             client=self._client,
             system_prompt=self._system_prompt,
             user_message_builder=_build_user_message,
+        )
+
+        # Phase A.6 — capability layer
+        self._world_snapshot = WorldStateSnapshot()
+        self._skill_results = SkillResultMemory(maxlen=5)
+
+        # Locate demo_guides.yaml & demo_policy.yaml from share/
+        from ament_index_python.packages import get_package_share_directory
+        try:
+            share = Path(get_package_share_directory("pawai_brain"))
+            guides_path = share / "config" / "demo_guides.yaml"
+            policy_path = share / "config" / "demo_policy.yaml"
+        except Exception:
+            # Fallback to source path during dev
+            here = Path(__file__).resolve().parent.parent
+            guides_path = here / "config" / "demo_guides.yaml"
+            policy_path = here / "config" / "demo_policy.yaml"
+
+        guides = load_demo_guides(guides_path)
+        policy = load_demo_policy(policy_path)
+
+        from interaction_executive.skill_contract import SKILL_REGISTRY
+        try:
+            registry = CapabilityRegistry(skills=SKILL_REGISTRY, guides=guides)
+        except ValueError as exc:
+            self.get_logger().error(f"CapabilityRegistry build failed: {exc}")
+            registry = CapabilityRegistry(skills={}, guides=guides)
+
+        # Wire module-level node hooks
+        world_state_builder_node.set_world_provider(lambda: self._world_snapshot)
+        capability_builder_node.configure(
+            registry=registry,
+            skill_result_provider=self._skill_results.recent,
+            policy_provider=lambda: policy,
+        )
+
+        # ROS subscribers for world state
+        # /state/tts_playing — std_msgs/Bool + TRANSIENT_LOCAL (matches tts_node.py:998-999)
+        self.create_subscription(
+            BoolMsg, "/state/tts_playing", self._on_tts_playing, _TTS_PLAYING_QOS
+        )
+        self.create_subscription(
+            String, "/state/reactive_stop/status", self._on_reactive_stop, 10
+        )
+        self.create_subscription(
+            String, "/state/nav/safety", self._on_nav_safety, 10
+        )
+        self.create_subscription(
+            String, "/state/pawai_brain", self._on_pawai_brain_state, _BRAIN_STATE_QOS
+        )
+        self.create_subscription(
+            String, "/brain/skill_result", self._on_skill_result, 10
         )
 
         self._graph = build_graph()
@@ -304,6 +383,39 @@ class ConversationGraphNode(Node):
             msg = String()
             msg.data = json.dumps(payload.to_dict(), ensure_ascii=False)
             self._publish_trace.publish(msg)
+
+    # ── World-state / skill-result callbacks ────────────────────────────
+
+    def _on_tts_playing(self, msg: BoolMsg) -> None:
+        """std_msgs/Bool — direct flag, no JSON parse."""
+        self._world_snapshot.apply_tts_playing(bool(msg.data))
+
+    def _on_reactive_stop(self, msg: String) -> None:
+        self._world_snapshot.apply_reactive_stop_status_json(msg.data)
+
+    def _on_nav_safety(self, msg: String) -> None:
+        self._world_snapshot.apply_nav_safety_json(msg.data)
+
+    def _on_pawai_brain_state(self, msg: String) -> None:
+        self._world_snapshot.apply_pawai_brain_state_json(msg.data)
+
+    def _on_skill_result(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+        except json.JSONDecodeError:
+            return
+        status = str(payload.get("status", ""))
+        if status not in TERMINAL_STATUSES:
+            return
+        name = str(payload.get("selected_skill") or "").strip()
+        if not name:
+            return
+        self._skill_results.add({
+            "name": name,
+            "status": status,
+            "detail": str(payload.get("detail", ""))[:80],
+            "ts": time.time(),
+        })
 
     def _publish_error_trace(self, session_id: str, detail: str) -> None:
         payload = TracePayload(
