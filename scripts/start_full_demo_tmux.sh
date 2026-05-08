@@ -243,27 +243,34 @@ fi
 sleep 3
 
 # --- Static TF: base_link → camera_link (D435 mounted on Go2) ---
-echo "[9/10] Publishing base_link → camera_link static TF..."
+echo "[9/13] Publishing base_link → camera_link static TF..."
 tmux new-window -t "$SESSION" -n camtf
 tmux send-keys -t "$SESSION:camtf" \
   "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher 0.15 0 0.1 0 0 0 base_link camera_link" Enter
 sleep 1
 
+# --- Depth Safety: D435 depth → /capability/depth_clear (gates motion in safety_layer) ---
+echo "[10/13] Starting depth_safety_node (publishes /capability/depth_clear @ 5Hz)..."
+tmux new-window -t "$SESSION" -n depth_safety
+tmux send-keys -t "$SESSION:depth_safety" \
+  "$ROS_SETUP && ros2 run go2_robot_sdk depth_safety_node" Enter
+sleep 2
+
 # --- Window 8: Foxglove Bridge ---
-echo "[10/10] Starting Foxglove bridge..."
+echo "[11/13] Starting Foxglove bridge..."
 tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
   "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p best_effort_qos_topic_whitelist:='[\"/(point_cloud2|scan|camera/.*/image_raw)\"]'" Enter
 
 # --- Window 9: Object Perception ---
-echo "[11/12] Starting object_perception_node (YOLO26n)..."
+echo "[12/13] Starting object_perception_node (YOLO26n)..."
 tmux new-window -t "$SESSION" -n object
 tmux send-keys -t "$SESSION:object" \
   "$ROS_SETUP && ros2 launch object_perception object_perception.launch.py" Enter
 sleep 3
 
 # --- Window 10: Studio Gateway (speech bridge, port 8080) ---
-echo "[12/12] Starting Studio Gateway (speech bridge, port 8080)..."
+echo "[13/13] Starting Studio Gateway (speech bridge, port 8080)..."
 tmux new-window -t "$SESSION" -n gateway
 tmux send-keys -t "$SESSION:gateway" \
   "$ROS_SETUP && python3 $WORKDIR/pawai-studio/gateway/studio_gateway.py" Enter
@@ -285,6 +292,7 @@ echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
 echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
 echo "  camtf     — Static TF: base_link → camera_link (D435)"
+echo "  depth_safety — D435 depth → /capability/depth_clear (gates motion)"
 echo "  object    — Object Perception (YOLO26n)"
 echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765, best_effort QoS)"
 echo "  gateway   — Studio Gateway (http://$(hostname -I | awk '{print $1}'):8080/speech)"
