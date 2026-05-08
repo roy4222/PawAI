@@ -50,7 +50,10 @@ _GESTURE_MAP = {
     "Open_Palm":   "palm",
     "Closed_Fist": "fist",
     "Pointing_Up": "index",
-    "Thumb_Up":    "thumb",
+    # 5/8 [#thumb-label-mismatch]: 對齊 docs/contracts/interaction_contract.md:485
+    # gesture enum 規定 "thumbs_up"。原本 "thumb" 違反 contract，導致 brain_node
+    # _GESTURE_CONFIRM[thumbs_up→wiggle] 永遠 silent drop。
+    "Thumb_Up":    "thumbs_up",
     "Victory":     "peace",
 }
 
