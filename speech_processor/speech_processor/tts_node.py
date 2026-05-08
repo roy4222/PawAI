@@ -1034,10 +1034,11 @@ class EnhancedTTSNode(Node):
 
             # Default chain MUST keep [primary] + [fallbacks] order — naked
             # `self._fallback_chain` would skip primary (e.g. edge_tts), making
-            # all non-Studio TTS fall through to Piper. Per-message override:
-            # input_origin=="studio_text" picks pre-built Gemini-first chain.
+            # all non-Studio TTS fall through to Piper.
+            # 5/8: OPENROUTER_KEY 有設 → 一律走 Gemini Flash TTS preview chain（Studio + mic 統一音色）。
+            # input_origin 欄位保留供未來 per-source policy（chunk size / voice tweak）使用。
             default_chain = [self.tts_provider] + list(self._fallback_chain)
-            if input_origin == "studio_text" and self._studio_fallback_chain is not None:
+            if self._studio_fallback_chain is not None:
                 chain = self._studio_fallback_chain
             else:
                 chain = default_chain
