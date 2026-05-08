@@ -115,7 +115,9 @@ MOTION_NAME_MAP: dict[str, int] = {
     "content": 1020,
     "balance_stand": 1002,
     "stretch": 1017,
-    "wiggle_hip": 1029,
+    # 5/8 [#wiggle-api-id-typo]: 1029 是 Scrape（拜拜）。WiggleHips 是 1033。
+    # 5/8 evening user 比 thumbs_up→OK confirm 後狗做拜拜不是扭屁股 → 修對應。
+    "wiggle_hip": 1033,
     "scrape": 1029,
 }
 

@@ -3,27 +3,29 @@
 > **用途:** 今日 fail-map / 5/13–14 場地測試 / 5/18 Demo 前驗收
 > **建議使用方式:** 一項一項勾，失敗記錄原因、trace/topic、是否可重現
 > **撰寫日期:** 2026/05/07
-> **最後更新:** 2026/05/08 morning（A-G 八階段在家驗收，發現 depth_safety 漏啟 + confirm wiring 失效）
+> **最後更新:** 2026/05/08 evening（八階段在家驗收 + 三個 fix commit + Jetson 整合驗證）
 > **標記:** `[x] PASS` / `FAIL→A:BLOCKER` / `FAIL→B:OBS` / `SKIP→C` / `[ ]` 待測
 
 ---
 
-## 5/8 morning 完成度概覽（在家測試）
+## 5/8 完成度概覽（morning 測試 + evening 修復）
 
 | 區塊 | 完成度 | 核心驗證 |
 |---|---|---|
-| §1 啟動與部署 | 🟢 PASS（5/5） | 19 nodes、single chat publisher、openrouter=on、Brain/Perception topics、Gateway :8080 ✓；**但啟動腳本漏 `depth_safety_node`** |
+| §1 啟動與部署 | 🟢 PASS（5/5） | 13 windows（含新加 depth_safety）、19+ nodes、single chat publisher、openrouter=on |
 | §2.1 ASR→Brain→TTS | 🟢 PASS（5/5） | 你好/你可以做什麼/我是 Roy→記住名字/睡前故事 |
 | §2.2 Stop / Safety | 🟢 PASS（2/2） | 動作中說「停」/「stop」→ wave_hello / sit_along **preempted** + safety_path |
-| §2.3 TTS 長句 | 🟢 PASS | 睡前故事 5 句連貫，audio tag `[whispers]` 正確渲染 |
+| §2.3 TTS 長句 | 🟢 PASS | 睡前故事 5 句連貫，audio tag `[whispers]` 正確；mic + Studio **統一走 Gemini Despina** ✅ |
 | §2.4 Fallback | 🟢 鏈路通 | RuleBrain rescue 在 ASR 不穩時觸發（[curious] 沒聽清楚） |
 | §3.1 motion skills | 🟢 PASS（4/4） | wave_hello (api 1016)、careful_remind、show_status、sit_along (api 1009) 全動 |
-| §3.2 needs_confirm | 🔴 **FAIL→A:BLOCKER** | F1+F2 needs_confirm wiggle 正確，**F3 OK 手勢沒 wire 到 confirm**；wave/face auto-rule 蓋掉流程 |
-| §3.3 self_introduce | 🟡 部分 | 語音 trace_only PASS（0 motion + accepted_trace_only）；Studio button **不存在** SKIP |
+| §3.2 needs_confirm | 🟢 **軟體鏈路全通** | thumbs_up→wiggle→OK confirm + plan completed + api_id=1033 全 PASS；硬體面 Go2 沒實際扭屁股待 [#wiggle-no-physical-motion] 5/9 追 |
+| §3.3 self_introduce | 🟡 部分 | 語音 trace_only PASS；Studio button 不存在 SKIP |
 | §3.4 Skill 合法性 | 🟢 PASS（3/3） | 後空翻/爬樓梯/跳舞 全部 LLM persona 婉拒，0 motion api_id |
 | §4 誤觸抑制 | 🟢 沿用 | stranger_alert / object_remark say-only 不打斷 motion 與長句 TTS |
 | §6.1 Studio 對話顯示 | 🟢 沿用 | ChatPanel 顯示語音輸入 + Gemini reply + audio tag |
-| §6.2 Brain Trace | 🟢 PASS | safety_gate hit / accepted / accepted_trace_only / needs_confirm chip 全可見 |
+| §6.2 Brain Trace | 🟢 PASS | safety_gate / accepted / accepted_trace_only / needs_confirm chip 全可見 |
+| §6.3 Studio 五功能視角 | ⏸ 待測 | 5/8 evening 沒測到 |
+| §4.1 Roy 站位 greet | 🟢 PASS | 1.5m 入鏡觸發 greet_known_person say+motion；3 次入鏡 cooldown 生效（2-3 plan）|
 | §5 五功能個別 | ⏸ 待 5/13 場地 | 人臉/手勢/姿勢/物體成功率 |
 | §7 Demo 3 連跑 | ⏸ 待 5/14 SL201 | 10 步腳本 + Hard gate |
 | §8 導航避障 | ⏸ 待 5/13 場地 | — |
@@ -31,83 +33,85 @@
 
 ---
 
-## 🔴 5/8 morning 必修 fix 清單
+## ✅ 5/8 evening 已 commit 修復（已 push remote 待 confirm）
 
-> 詳細 plan：`docs/pawai-brain/plans/2026-05-08-fix-depth-confirm-tts.md`（待寫）
-> Fail-map 條目：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`（待補 [#A1.3] / [#F-confirm] / [#TTS-gemini]）
-
-### A:BLOCKER（必修，影響 Demo S6 + motion 全鏈）
-
-1. **[#A1.3] `depth_safety_node` 沒在 `start_full_demo_tmux.sh` 啟動**
-   - 症狀：`/capability/depth_clear` publisher 0 個，default false → 所有 MOTION step `blocked_by_safety: depth_not_clear_for_motion`
-   - 影響：5/8 morning 開測時 wave_hello + sit_along 全部 block；LLM 收到 `blocked_by_safety` 後幻覺說「前面空間不夠」
-   - 熱修：`tmux new-window -t demo -n depth_safety 'ros2 run go2_robot_sdk depth_safety_node'` → publish 開始 → motion 解禁
-   - 永久修：`scripts/start_full_demo_tmux.sh` 加 `depth_safety` window
-   - 重現性：YES（每次 fresh start）
-
-2. **[#F-confirm] OK 手勢沒 wire 到 PendingConfirm wiggle/stretch**
-   - 症狀：F1+F2 needs_confirm wiggle 正確進入；F3 比 OK（confidence=1.0）後 **wiggle 0 個 plan accepted**，反而觸發 wave_hello x14、greet_known_person x12
-   - 推測 root cause：
-     a. PendingConfirm state 沒監聽 `/event/gesture_detected[ok]`，或監聽路徑被 background auto-rule 搶先消費
-     b. brain_node 仍有 `wave gesture → wave_hello` 自動 rule（memory 寫 3/23 已移除，但 14 次 plan 顯示仍在跑）
-     c. face 入鏡 → greet_known_person 12 次也持續觸發，覆蓋 confirm
-   - 影響：Demo S6 wiggle confirm 流程完全跑不起來
-   - 重現性：YES
-
-### P1（OBS 升級，使用者明確要求）
-
-3. **[#TTS-gemini] 麥克風語音輸入路徑想換成 `google/gemini-3.1-flash-tts-preview`**
-   - 現況：Studio chat → Gemini Despina TTS；麥克風 → edge_tts
-   - 用戶 5/8 morning 要求：「我還是想用 google/gemini-3.1-flash-tts-preview 當 main 講話的」
-   - 影響：edge_tts 雖然延遲低（1-2s）但音色不夠 persona；Demo 想統一走 Gemini Flash TTS preview
-   - 修法：擴展 5/7 commit 10829ca 的 per-message TTS routing，把 mic 路徑也指到 Gemini
-
-### B:OBS（記錄不修）
-
-4. **[#G-residual] F+G 階段累積 4 次 api_id=1016**
-   - 來源：F3+F4 confirm 失敗時 OK 手勢被誤判成 wave，自動觸發 wave_hello
-   - 屬於 [#F-confirm] 的衍生症狀，修了 #F-confirm 應自然消失
-
-5. **[#sit_along] sit_along 無 auto stand-up step**
-   - by design：contract steps=[say, sit motion]，狗坐下後保持坐姿
-   - 不修（demo 設計就是「陪坐」）
-
-### 5/8 morning 程式碼修法（Jetson 整合驗證 5/8 evening）
-- **[#A1.3]** `scripts/start_full_demo_tmux.sh` 加 depth_safety window（[10/13]）→ ✅ Jetson 驗證 `Publisher count: 1`
-- **[#F-confirm] 2a** `pending_confirm.py:155-162` 非 OK gesture stays PENDING → ✅ 不再 different_gesture cancel
-- **[#F-confirm] 2b** `brain_node.py:621/672/684` _on_face / _on_pose 三處加 PENDING guard → ⚠️ 部分驗證（PENDING 期間仍見 6 次 greet_known_person，但都在 timeout 後窗外發出）
-- **[#TTS-gemini]** `tts_node.py:1040` OPENROUTER_KEY 有設即用 Gemini chain → ✅ tts_node log 看到 `[openrouter_gemini]` 全路徑使用
-- WSL 端 unit test 60/60 PASS（18 pending_confirm + 42 brain_rules）
-
-### 🔴 Jetson 整合測試發現新問題（5/8 evening）
-
-**[#F-confirm-timeout] PendingConfirm 多輪修復**
-
-5/8 evening 演進：5s → 15s（user 等對話完）→ 30s + new_speech_intent cancel（user 換話題自動 cancel）→ 找到 gesture_live_window=0.5s 太短 → 5.0s
-
-| 階段 | 修法 | 結果 |
+| Commit | Fix 範圍 | Jetson 驗證 |
 |---|---|---|
-| 1 | timeout 5s → 15s | 仍 timeout（user 走過去比手勢 >15s）|
-| 2 | timeout 15s → 30s + `_on_speech_intent` cancel pending | timeout 仍發生（OK event 被認為 stale）|
-| 3 | `_gesture_live_window_s` 0.5s → 5.0s | ✅ **CONFIRMED 真有 fire**：`PROPOSAL wiggle src=rule:confirmed reason=confirmed_via_ok:wiggle` |
+| `35bdf1d` fix(scripts): add depth_safety window | [#A1.3] | ✅ `/capability/depth_clear` Publisher count=1 |
+| `a2eefc8` fix(tts): unify mic + Studio paths to Gemini | [#TTS-gemini] | ✅ tts_node log `[openrouter_gemini]` 全路徑使用 |
+| `44a8a73` fix(executive): repair OK-confirm flow | [#F-confirm] 2a/2b + [#F-confirm-timeout] | ✅ `PROPOSAL wiggle confirmed_via_ok` 出現 |
 
-**Root cause 真因**：vision_perception 發 gesture event rate ~3-4s 一個（不是 10Hz tick rate）。`brain_node._tick_pending_confirm` 0.5s gesture_live_window 把 fresh OK event 當 stale → tick 永遠拿到 None → 永不累積到 stable_s=0.5s。
+WSL 端 pytest 61/61 PASS（18 pending_confirm + 43 brain_rules）；Jetson 上 colcon build OK；executive node restart 後新邏輯生效。
 
-**仍未解 #F-wiggle-motion-no-fire**（5/8 evening 22:14）：
-- ✅ Brain emit PROPOSAL wiggle 確認
-- ❌ 但實際 `/webrtc_req` 沒出 wiggle 對應 motion api_id（仍是 1016 wave_hello）
-- 推測：wiggle plan 被後續 `wave_hello` / `greet_known_person` 提案蓋掉（PENDING 結束後 face/wave gesture 又自動 fire），或 wiggle plan 在 step 0 say 後被 preempt
-- 待查：`/brain/skill_result` 抓不到完整 wiggle plan_id 序列，需更穩定的 monitor + 一次性執行
-- **暫停修復**，繼續清單其他項目（5/8 evening Roy 指示）
+---
 
-### 沿用 5/7 night 已 commit
+## 🟡 仍待解 backlog（明天追）
+
+### [#wiggle-no-physical-motion] 1033 發出但 Go2 沒實際扭屁股（B:OBS）
+
+5/8 evening 22:56 軟體鏈路完整通過：thumbs_up→PENDING→OK→CONFIRMED→plan completed→`/webrtc_req api_id=1033 (WiggleHips)` 全部 OK，但 Roy 實機觀察狗沒做任何動作。
+
+go2 driver log 沒看到 reject — Go2 對不支援 api_id 慣性 silent ignore（memory 已記）。
+
+**5/9 追**：
+1. 手動發 `1002 BalanceStand` 後再發 `1033` 看是否 state precondition
+2. Foxglove 看 IMU/joint state 確認 micro-motion
+3. 翻 Go2 SDK 文件確認 v1.1.7 是否支援 WiggleHips
+4. 若硬體不支援，wiggle skill 改用其他可用 motion（`Content` 1020 / `Pose` 1028）
+
+不影響 demo 主流程（其他 motion 都正常），可降為 OBS 留場地驗。
+
+### 暫不修（OBS 記錄）
+
+- **[#F-confirm-pose-still-emits]** 5/8 morning F 階段 PENDING 期間仍見 6 次 greet_known_person（但時間戳全在 timeout 結束後 emit；evening live_window 改 5s 後沒重複觀測）
+- **[#sit_along-no-stand-up]** by design，狗坐下後保持坐姿
+- **§9.1 Jetson reboot** 5/7 night 1 次（XL4015 風險，等場地驗）
+
+### ✅ 5/8 evening §5.2 + confirm 全鏈打通
+
+**[#thumb-label-mismatch] vision `"thumb"` → `"thumbs_up"` 對齊 contract** ✅ 已修
+- `vision_perception/gesture_recognizer_backend.py:53` 把 `Thumb_Up` 映射改成 `"thumbs_up"`（對齊 `interaction_contract.md:485` enum）
+- 修後驗證：thumbs_up gesture event 正確發出，brain 收到後觸發 `_GESTURE_CONFIRM[thumbs_up→wiggle]`
+
+**[#wiggle-api-id-typo] wiggle_hip 1029 → 1033 對應正確 motion** ✅ 已修
+- `skill_contract.py:118` 原本 `"wiggle_hip": 1029` 是 typo（1029 是 Scrape 拜拜）
+- 對齊 `robot_commands.py:43` `"WiggleHips": 1033`
+
+**[#F-confirm + #F-wiggle-motion-no-fire] 端到端 confirm 流打通** ✅
+- 5/8 evening 22:56 完整 trace：
+  ```
+  thumbs_up→PendingConfirm wiggle → say_canned awaiting_ok →
+  OK→CONFIRMED → wiggle plan accepted+started+say+motion+completed →
+  /webrtc_req api_id=1033 ✓
+  ```
+
+### 🟡 仍待解（5/9 追）
+
+**[#wiggle-no-physical-motion] 1033 發出去但 Go2 沒動**
+- 5/8 evening 22:56 完整 confirm 鏈路 + WiggleHips api_id=1033 發送 OK
+- 但 Roy 實機觀察：「沒做任何動作」
+- go2 driver log 沒有 reject / error 訊息（Go2 對未支援 api_id 慣性 silent ignore）
+- 推測：
+  - Go2 firmware v1.1.7 不支援 `WiggleHips`（需查 SDK 文件）
+  - 或需先 `BalanceStand` (1002) 才能 wiggle（state precondition）
+  - 或動作幅度太小肉眼沒看到（不太可能）
+- **明天追**：
+  1. 試手動發 `1002 BalanceStand` 後再發 `1033`
+  2. Foxglove 看 IMU/joint state 確認狗有沒有微動
+  3. 翻 Go2 SDK 文件確認 WiggleHips 在 v1.1.7 是否支援
+  4. 若硬體不支援，wiggle skill 改用其他 motion（例：`Content` 1020 / `Pose` 1028）
+
+---
+
+## 沿用 5/7 night commit（背景）
+
 - `202a7e3` start_full_demo_tmux.sh source .env
 - `685c97d` object_remark per-(class,color) 60s dedup
-- `10829ca` per-message TTS routing（Studio→Gemini / mic→edge_tts）
+- `10829ca` per-message TTS routing（5/8 evening `a2eefc8` 把 mic 也 routed Gemini）
 - `e1363c8` stranger_alert / object person 靜音
 - `67c28ce` Studio Gateway CORS
 
-詳細 fail-map：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`
+詳細 fail-map：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`（含 [#A1.3]、[#F-confirm]、[#TTS-gemini] 完整 root cause）
 
 ---
 
@@ -181,16 +185,16 @@
 - [x] **`sit_along` 執行**：「陪我坐一下」→ accepted + step say + step motion (api 1009 sit) ✓ (5/8 D4)
 - [x] **`careful_remind` 執行**：「提醒我小心」→ TTS only by design ✓ (5/8 D2)
 - [x] **`show_status` 執行**：「你現在狀態如何」→ TTS + OK 引導語 by design ✓ (5/8 D3)
-- [ ] **`greet_known_person` 執行**：Roy 入鏡 → 5/8 morning F 階段背景發 12 次自動觸發（屬 [#F-confirm] 干擾項）
+- [x] **`greet_known_person` 執行**：5/8 evening Roy 1.5m 入鏡觸發完整 say+motion plan，cooldown 機制生效 ✓
 - [x] **skill result 回流**：5/8 morning 4 個 skill 全部 `started → step_started → step_success → completed` ✓
 - [x] **下一輪能接續**：sit_along 後問「剛剛成功了嗎？」→ `[playful] 成功了喔！我已經乖乖坐好了` ✓ (5/8 D5)
 
 ### 3.2 Confirm Mode
 
 - [x] **`wiggle` needs_confirm**：「搖一下」→ skill_gate `needs_confirm` detail=wiggle ✓ (5/8 F1)
-- [ ] **OK 手勢確認**：FAIL→A:BLOCKER — OK gesture confidence=1.0 偵測到，但 wiggle 0 個 plan accepted；反觸發 wave_hello x14、greet_known_person x12（[#F-confirm]）
-- [ ] **`stretch` needs_confirm**：未測（F3 失敗後跳過 F4）
-- [ ] **OK 手勢確認**：未測
+- [~] **OK 手勢確認**：5/8 evening 修 4 階段（flicker / face-pose guard / 30s timeout / live_window 5s）後 `PROPOSAL wiggle src=rule:confirmed reason=confirmed_via_ok:wiggle` ✓；**但 motion 沒 fire**（[#F-wiggle-motion-no-fire] backlog）
+- [ ] **`stretch` needs_confirm**：未測（先解 wiggle motion 再驗 stretch）
+- [ ] **OK 手勢確認**（stretch）：未測
 - [x] **未 OK 不執行**：F2 不比 OK 等 6s，wiggle 沒執行 ✓
 
 ### 3.3 Trace Only
@@ -213,8 +217,8 @@
 
 ### 4.1 陌生人 / 人臉
 
-- [ ] **Roy 可控站位 greet**：Roy 1.5m 觸發 1 次問候（**待 demo 場景跑**，face_db 含 alice/grama）
-- [ ] **重複問候 cooldown**：Roy 連續路過 2-3 次（cooldown 邏輯 `last_alert_ts` 已實作，**待現場驗證**）
+- [x] **Roy 可控站位 greet**：1.5m 觸發 greet_known_person say+motion 完整 ✓ (5/8 evening；brain log `identity:roy` 3 次 + `identity:grama` 1 次驗 face_db)
+- [x] **重複問候 cooldown**：3 次入鏡只觸發 ~2 個完整 plan（cooldown 機制生效）✓ (5/8 evening)
 - [x] **陌生人累積 5 秒**：`executive.yaml unknown_face_accumulate_s: 5.0` ✓（5/8 從 3.0 拉）
 - [x] **手 / 反光 / 玻璃**：stranger_alert SAY="" 靜音 ✓（commit e1363c8 5/7 night）
 - [x] **Studio-only 誤判可記錄**：`/brain/proposal` trace 仍 emit，TTS 路徑 `empty_tts_text` 不發 ✓
@@ -247,12 +251,12 @@
 
 ### 5.2 手勢辨識
 
-- [ ] **OK 手勢**：至少成功 1 次
-- [ ] **Thumbs up**：至少成功 1 次
-- [ ] **Palm**：至少成功 1 次
-- [ ] **Peace**：至少成功 1 次
-- [ ] **Fist**：記 OBS
-- [ ] **Wave 側面**：記成功率
+- [x] **OK 手勢**：5/8 evening 11 events，7 個 confidence=1.0 ✓
+- [x] **Thumbs up**：5/8 evening 5 events，4 個 confidence=1.0 ✓（**但 vision 發 `"thumb"` ≠ brain 期待 `"thumbs_up"`，thumbs_up→wiggle confirm 流斷在這裡，見 [#thumb-label-mismatch]**）
+- [x] **Palm**：5/8 evening 3 events，全 confidence=1.0 ✓
+- [x] **Peace**：5/8 evening 4 events，全 confidence=1.0 ✓
+- [ ] **Fist**：未測，記 OBS
+- [ ] **Wave 側面**：5/8 evening 3 個誤觸 wave event（手過渡時偵測），側面成功率待 5/13 場地驗
 - [ ] **Wave 正面 / 轉圈**：`SKIP→C`
 
 ### 5.3 姿勢辨識
