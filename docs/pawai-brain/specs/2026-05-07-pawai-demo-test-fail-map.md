@@ -166,3 +166,98 @@ Trace/topic：`/event/object_detected` 持續、`/skill_request` 每 5s 一筆 s
 ## Phase C — Triage Notes
 
 (P0 fixes applied + verification results)
+
+---
+
+## Phase D — 5/8 morning 在家驗收（A-H 八階段）+ 三項 fix
+
+### Sync / Build / 啟動 (5/8 09:31)
+- WSL → Jetson sync 完成（warnings 為 face_dashboard_nextjs/node_modules legacy 殘留，無關緊要）
+- `bash scripts/start_full_demo_tmux.sh` 起 12 個 window，19 個 ROS2 node
+- A 階段 baseline 5/5 PASS：單一 `/conversation_graph_node`、`engine=langgraph openrouter=on`、Brain/Perception topics、Studio Gateway :8080
+
+### 5/8 morning 測試結果概覽
+
+| 階段 | 結果 | 備註 |
+|------|------|------|
+| A Baseline | 🟢 5/5 | 但發現 `depth_safety_node` 沒被啟動腳本拉起（[#A1.3]）|
+| B 語音回歸 | 🟢 5/5 | 含記住名字、長句 TTS、persona tag |
+| C trace_only | 🟢 C1 PASS / C2 SKIP | C2 Studio button 不存在也不需要 |
+| D motion skills | 🟢 5/5 | wave_hello + sit_along + 接續記憶 |
+| E 動作中 stop | 🟢 2/2 | preempted hard gate 守住 |
+| F confirm mode | 🔴 F1+F2 PASS / F3+F4 FAIL | OK 手勢 confirm wiring 失效（[#F-confirm]）|
+| G invalid skill | 🟢 3/3 | 後空翻/爬樓梯/跳舞 0 motion |
+| H 多模態干擾 | 🟢 H1+H3 PASS / H2 SKIP→5/13 | fallen 在家不便驗 |
+
+---
+
+## [#A1.3] full demo / depth_safety_node 沒在啟動腳本
+結果：FAIL → A:BLOCKER → **已修（5/8 morning, 程式碼提交，待 Jetson 整合驗證）**
+分類：A
+觸發：`bash scripts/start_full_demo_tmux.sh` cold start 後對狗講「跟我打招呼」
+預期：wave_hello plan accepted → motion api_id=1016 執行
+實際：D 階段 wave_hello + sit_along 全部 `blocked_by_safety: depth_not_clear_for_motion`
+Trace/topic：
+- `/capability/depth_clear` Publisher count = 0（3 個 subscriber 全在等 latched message）
+- `world_state.depth_clear` default `False` → `safety_layer.py:94` block 所有 MOTION step
+- `/brain/skill_result`：`{"plan_id":"p-d9e57bf5","status":"blocked_by_safety","detail":"depth_not_clear_for_motion"}`
+- LLM 收到 blocked_by_safety 後 reflect 為「[sighs] 失敗了，前面空間不夠」（**不是幻覺**）
+是否可重現：YES（每次 fresh start）
+下一步（已執行）：
+- 5/8 morning 熱修：手動 `tmux new-window -t demo -n depth_safety 'ros2 run go2_robot_sdk depth_safety_node'` → publish=true → motion 解禁
+- 永久修：`scripts/start_full_demo_tmux.sh` 在 camtf 後插入 depth_safety window（[10/13]），啟動序列更新為 13 個 window
+- 待驗證（下次 session）：fresh `bash scripts/start_full_demo_tmux.sh` 後 `/capability/depth_clear` Publisher count = 1
+
+## [#F-confirm] OK 手勢 confirm wiring 失效 + 背景 auto-rule 蓋掉
+結果：FAIL → A:BLOCKER → **已修（5/8 morning, 程式碼提交 + 5 個 unit test 全綠，待 Jetson 整合驗證）**
+分類：A
+觸發：對狗講「搖一下」進入 needs_confirm wiggle，比 OK 手勢確認
+預期：wiggle 真執行（webrtc_req 對應 motion api_id）
+實際：
+- F1+F2 needs_confirm wiggle 進入 PENDING 正確 ✓
+- F3 比 OK gesture confidence=1.0 偵測到，但 wiggle **0 個 plan accepted**
+- 反觸發：wave_hello x14 + greet_known_person x12 + object_remark x16 + stranger_alert x6
+Trace/topic：
+- `/event/gesture_detected`：ok / wave 在 5/8 log 中混雜出現（MediaPipe Gesture Recognizer 在 OK 和 wave 之間 flicker）
+- `/brain/conversation_trace`：session 進入 `skill_gate needs_confirm wiggle` 後就被 background plan 蓋掉
+是否可重現：YES（每次 PENDING 期間）
+Root cause（5/8 morning 程式碼追查）：
+- **2a**：`pending_confirm.py:161-163` 對任何非 OK 非 NEUTRAL gesture 立即 CANCEL → MediaPipe flicker 第一個 wave event 進來就退出 PENDING → 接著 `_on_gesture` 走 `_GESTURE_DIRECT["wave"]` 直接 fire wave_hello
+- **2b**：`brain_node.py` 的 `_on_face`（greet_known_person）和 `_on_pose`（sit_along / careful_remind）沒有 PENDING guard，PENDING 期間持續 emit plan 蓋掉 confirm 流（`_on_gesture:471` 已有 guard，face/pose 漏掉）
+下一步（已執行）：
+- **2a fix**：`pending_confirm.py:155-162` 改寫 — 非 OK gesture 改為 reset OK stability streak 但保持 PENDING，timeout (5s) 為唯一 cancel 路徑
+- **2b fix**：`brain_node.py:621-622` _on_face、`:671` sit_along、`:683` careful_remind 三處加 `or self._pending_confirm.state == ConfirmState.PENDING` guard
+- **Test 同步**：
+  - `test_pending_confirm.py` 改寫 2 個 test：`test_different_gesture_stays_pending`、`test_wrong_gesture_after_partial_ok_resets_streak_but_stays_pending`（皆驗證 flicker 後可以 resume OK 完成 confirm）
+  - `test_brain_rules.py` 新增 3 個 test：face/sitting/bending during PENDING 不發 plan
+  - WSL 端 `pytest interaction_executive/test/` 60 個 test 全綠（18 pending_confirm + 42 brain_rules）
+- 待驗證（下次 session）：Jetson 上重講「搖一下」+ 比 OK → wiggle 執行 + PENDING 5s 期間無 greet_known_person/sit_along/careful_remind plan emit
+
+## [#TTS-gemini] Mic 路徑 TTS 想統一走 Gemini Flash TTS preview
+結果：OBS → P1 升級為 fix（用戶 5/8 morning 明確要求） → **已修（程式碼提交，待 Jetson 整合驗證）**
+分類：B（升 P1）
+觸發：5/8 morning B4 睡前故事 Roy 親耳聽完後反饋：「目前是用 edge tts 雖然延遲蠻低的 但我還是想用 google/gemini-3.1-flash-tts-preview 當 main 講話的」
+預期：mic 與 Studio chat 統一音色（Gemini Despina）
+實際：
+- Studio chat → Gemini Despina TTS（5/7 commit 10829ca per-message routing）✓
+- Mic 路徑 → edge_tts（routing 條件 `input_origin == "studio_text"` 排除 mic）
+是否可重現：YES（by design）
+下一步（已執行）：
+- `tts_node.py:1040-1043` routing 條件改為「OPENROUTER_KEY 有設就一律用 Gemini chain」（`_studio_fallback_chain` 不再依 input_origin 區分）
+- `input_origin` 欄位保留供未來 per-source policy（chunk size / voice tweak）
+- 待驗證（下次 session）：Jetson 上對麥克風講「你好」→ 應聽到 Gemini Despina 音色（不是 edge_tts 平直音）；OPENROUTER_KEY 失敗時自動 fallback edge_tts → Piper
+
+---
+
+## 5/8 morning 程式碼變更 summary
+
+| 檔案 | 變更 | 對應 fail-map |
+|------|------|--------------|
+| `scripts/start_full_demo_tmux.sh` | 加 `depth_safety` window，[10/13]，總 window 12 → 13 | [#A1.3] |
+| `interaction_executive/interaction_executive/pending_confirm.py` | line 155-162 非 OK gesture stays PENDING | [#F-confirm] 2a |
+| `interaction_executive/interaction_executive/brain_node.py` | line 621/672/684 加 PENDING guard | [#F-confirm] 2b |
+| `interaction_executive/test/test_pending_confirm.py` | 改寫 2 個 test 對應新行為 | [#F-confirm] |
+| `interaction_executive/test/test_brain_rules.py` | 新增 3 個 face/pose during PENDING test | [#F-confirm] |
+| `speech_processor/speech_processor/tts_node.py` | line 1040 routing 條件改 OPENROUTER_KEY 即用 Gemini chain | [#TTS-gemini] |
+
+整體：3 個 commit（每個 fix 一個），unit test 60/60 PASS（WSL 端 pytest）。

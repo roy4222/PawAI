@@ -13,8 +13,8 @@ from interaction_executive.pending_confirm import (
 
 @pytest.fixture
 def pc():
-    # default timeout 5s, stable 0.5s, ok gesture "ok"
-    return PendingConfirm()
+    # 5/8: default timeout bumped to 15s — pin test fixture to 5s for timing-sensitive cases
+    return PendingConfirm(timeout_s=5.0)
 
 
 # ---- request_confirm ------------------------------------------------------
@@ -104,20 +104,33 @@ def test_ok_case_and_whitespace_normalized(pc):
 # ---- wrong gesture --------------------------------------------------------
 
 
-def test_different_gesture_cancels(pc):
+def test_different_gesture_stays_pending(pc):
+    """5/8 [#F-confirm]: non-OK gesture during PENDING window must NOT cancel.
+    MediaPipe Gesture Recognizer flickers between OK/wave at hand boundaries —
+    cancelling on first mis-classification kills confirm flow. Timeout (5s)
+    is the only cancel path."""
     pc.request_confirm("wiggle", {}, now=100.0)
     out = pc.tick(now=100.2, current_gesture="palm")
-    assert out.kind == ConfirmOutcomeKind.CANCELLED
-    assert out.reason == "different_gesture"
-    assert pc.state == ConfirmState.IDLE
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+    # OK afterwards still works
+    pc.tick(now=100.3, current_gesture="ok")
+    out = pc.tick(now=100.9, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
 
 
-def test_wrong_gesture_after_partial_ok_cancels(pc):
+def test_wrong_gesture_after_partial_ok_resets_streak_but_stays_pending(pc):
+    """Partial OK streak → flicker (thumbs_up) → resume OK → still confirms.
+    OK stability streak resets on flicker but PENDING state persists."""
     pc.request_confirm("wiggle", {}, now=100.0)
-    pc.tick(now=100.0, current_gesture="ok")
-    out = pc.tick(now=100.2, current_gesture="thumbs_up")
-    assert out.kind == ConfirmOutcomeKind.CANCELLED
-    assert out.reason == "different_gesture"
+    pc.tick(now=100.0, current_gesture="ok")  # start OK streak
+    out = pc.tick(now=100.2, current_gesture="thumbs_up")  # flicker
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+    # Need to re-build OK streak from scratch
+    pc.tick(now=100.3, current_gesture="ok")
+    out = pc.tick(now=100.85, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
 
 
 # ---- idle no-op -----------------------------------------------------------

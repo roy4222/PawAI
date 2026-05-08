@@ -72,7 +72,7 @@ class PendingConfirm:
 
     def __init__(
         self,
-        timeout_s: float = 5.0,
+        timeout_s: float = 15.0,
         stable_s: float = 0.5,
         ok_gesture: str = "ok",
     ) -> None:
@@ -153,14 +153,13 @@ class PendingConfirm:
                 return ConfirmOutcome.confirmed(skill, args)
             return ConfirmOutcome.pending()
 
-        if gesture in _NEUTRAL_GESTURES:
-            # No gesture this tick — break stability streak but stay pending.
-            self._ok_stable_since = None
-            return ConfirmOutcome.pending()
-
-        # Any other concrete gesture cancels the pending request.
-        self._reset()
-        return ConfirmOutcome.cancelled("different_gesture")
+        # Non-OK gesture (NEUTRAL or any other concrete label like wave/thumbs_up):
+        # reset OK stability streak but stay PENDING. MediaPipe Gesture Recognizer
+        # flickers between OK / wave at hand boundaries, so cancelling on first
+        # mis-classification kills 5/8 confirm flow. Timeout (5s) is the only
+        # cancel path — caller can re-emit "搖一下" to restart if user gives up.
+        self._ok_stable_since = None
+        return ConfirmOutcome.pending()
 
     # ---- internal --------------------------------------------------------
 

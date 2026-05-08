@@ -3,41 +3,111 @@
 > **用途:** 今日 fail-map / 5/13–14 場地測試 / 5/18 Demo 前驗收
 > **建議使用方式:** 一項一項勾，失敗記錄原因、trace/topic、是否可重現
 > **撰寫日期:** 2026/05/07
-> **最後更新:** 2026/05/07 night（per-message TTS routing + 誤觸靜音 + Studio CORS）
+> **最後更新:** 2026/05/08 morning（A-G 八階段在家驗收，發現 depth_safety 漏啟 + confirm wiring 失效）
 > **標記:** `[x] PASS` / `FAIL→A:BLOCKER` / `FAIL→B:OBS` / `SKIP→C` / `[ ]` 待測
 
 ---
 
-## 5/7 night 完成度概覽
+## 5/8 morning 完成度概覽（在家測試）
 
 | 區塊 | 完成度 | 核心驗證 |
 |---|---|---|
-| §1 啟動與部署 | **🟢 全 PASS** | 5 packages build、19 nodes 起、單一 chat publisher、Brain + Perception topics 全到 |
-| §2.1 ASR→Brain→TTS | 🟢 主路徑 PASS | 「你好」「你可以做什麼」「我餓了」「早安」全走 Gemini LLM + Despina/edge_tts |
-| §2.2 Stop / Safety | **🟢 全 PASS** | 停 / stop / 緊急 三 phrase safety_gate hit + LLM bypass，trace 短路 |
-| §2.3 TTS 品質 | 🟡 部分 | 一般對話自然 ✓；首音延遲 Studio 6.5s / mic 1-2s（OBS）；長句睡前故事**待 Roy 親測** |
-| §2.4 Fallback | 🟢 鏈路通 | LangGraph chain：Gemini → DeepSeek → RuleBrain，5/7 早安冷啟掉 RuleBrain unknown 已驗 |
-| §3.4 Skill 合法性 | 🟢 全 PASS | 「跳舞」Gemini 婉拒 + 0 webrtc_req；整夜 `/skill_request` 0 動作 |
-| §4 誤觸抑制 | 🟢 已修 | stranger_alert SAY="" 靜音；object_remark person skip + 60s dedup；fall TTS 雙路關閉沿用 |
-| §6.1 Studio 對話顯示 | 🟢 PASS | ChatPanel 收語音輸入、TTS 文本、歷史保留 |
-| §6.2 Brain Trace | 🟢 PASS | engine=langgraph、blocked / trace_only chip 出現；needs_confirm 待 wiggle 測 |
-| §3.1 motion skills | ⏸ **待 Roy 親測** | wave_hello / sit_along / wiggle confirm 都需要狗有空間 |
-| §3.2 PendingConfirm | ⏸ **待 Roy 親測** | OK 手勢確認 5s window |
-| §3.3 self_introduce | ⏸ **待 Roy 親測** | trace_only 路徑 + Studio button 6-step 序列 |
-| §5 五功能個別 | ⏸ **待 5/13 場地** | 人臉 Roy 5 次、手勢 4 種、姿勢、物體成功率 |
-| §7 Demo 主流程 3 連跑 | ⏸ **待 5/14 SL201** | 10 步腳本 + Hard gate + 自由互動 |
-| §8 導航避障 | ⏸ **待 5/13 場地** | 家裡空間不夠 |
-| §9 硬體穩定 | ⚠️ Jetson reboot 1 次 | XL4015 供電風險（memory 已標 demo 風險項）；場地實機需驗 30/60 min |
+| §1 啟動與部署 | 🟢 PASS（5/5） | 19 nodes、single chat publisher、openrouter=on、Brain/Perception topics、Gateway :8080 ✓；**但啟動腳本漏 `depth_safety_node`** |
+| §2.1 ASR→Brain→TTS | 🟢 PASS（5/5） | 你好/你可以做什麼/我是 Roy→記住名字/睡前故事 |
+| §2.2 Stop / Safety | 🟢 PASS（2/2） | 動作中說「停」/「stop」→ wave_hello / sit_along **preempted** + safety_path |
+| §2.3 TTS 長句 | 🟢 PASS | 睡前故事 5 句連貫，audio tag `[whispers]` 正確渲染 |
+| §2.4 Fallback | 🟢 鏈路通 | RuleBrain rescue 在 ASR 不穩時觸發（[curious] 沒聽清楚） |
+| §3.1 motion skills | 🟢 PASS（4/4） | wave_hello (api 1016)、careful_remind、show_status、sit_along (api 1009) 全動 |
+| §3.2 needs_confirm | 🔴 **FAIL→A:BLOCKER** | F1+F2 needs_confirm wiggle 正確，**F3 OK 手勢沒 wire 到 confirm**；wave/face auto-rule 蓋掉流程 |
+| §3.3 self_introduce | 🟡 部分 | 語音 trace_only PASS（0 motion + accepted_trace_only）；Studio button **不存在** SKIP |
+| §3.4 Skill 合法性 | 🟢 PASS（3/3） | 後空翻/爬樓梯/跳舞 全部 LLM persona 婉拒，0 motion api_id |
+| §4 誤觸抑制 | 🟢 沿用 | stranger_alert / object_remark say-only 不打斷 motion 與長句 TTS |
+| §6.1 Studio 對話顯示 | 🟢 沿用 | ChatPanel 顯示語音輸入 + Gemini reply + audio tag |
+| §6.2 Brain Trace | 🟢 PASS | safety_gate hit / accepted / accepted_trace_only / needs_confirm chip 全可見 |
+| §5 五功能個別 | ⏸ 待 5/13 場地 | 人臉/手勢/姿勢/物體成功率 |
+| §7 Demo 3 連跑 | ⏸ 待 5/14 SL201 | 10 步腳本 + Hard gate |
+| §8 導航避障 | ⏸ 待 5/13 場地 | — |
+| §9 硬體穩定 | ⏸ 待 5/13 場地 | 30/60 min run + 供電 |
 
-### 今晚發 5 個 commit
-- `202a7e3` `start_full_demo_tmux.sh` 加 source `.env`（OpenRouter key 注入 tmux 子 shell）
+---
+
+## 🔴 5/8 morning 必修 fix 清單
+
+> 詳細 plan：`docs/pawai-brain/plans/2026-05-08-fix-depth-confirm-tts.md`（待寫）
+> Fail-map 條目：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`（待補 [#A1.3] / [#F-confirm] / [#TTS-gemini]）
+
+### A:BLOCKER（必修，影響 Demo S6 + motion 全鏈）
+
+1. **[#A1.3] `depth_safety_node` 沒在 `start_full_demo_tmux.sh` 啟動**
+   - 症狀：`/capability/depth_clear` publisher 0 個，default false → 所有 MOTION step `blocked_by_safety: depth_not_clear_for_motion`
+   - 影響：5/8 morning 開測時 wave_hello + sit_along 全部 block；LLM 收到 `blocked_by_safety` 後幻覺說「前面空間不夠」
+   - 熱修：`tmux new-window -t demo -n depth_safety 'ros2 run go2_robot_sdk depth_safety_node'` → publish 開始 → motion 解禁
+   - 永久修：`scripts/start_full_demo_tmux.sh` 加 `depth_safety` window
+   - 重現性：YES（每次 fresh start）
+
+2. **[#F-confirm] OK 手勢沒 wire 到 PendingConfirm wiggle/stretch**
+   - 症狀：F1+F2 needs_confirm wiggle 正確進入；F3 比 OK（confidence=1.0）後 **wiggle 0 個 plan accepted**，反而觸發 wave_hello x14、greet_known_person x12
+   - 推測 root cause：
+     a. PendingConfirm state 沒監聽 `/event/gesture_detected[ok]`，或監聽路徑被 background auto-rule 搶先消費
+     b. brain_node 仍有 `wave gesture → wave_hello` 自動 rule（memory 寫 3/23 已移除，但 14 次 plan 顯示仍在跑）
+     c. face 入鏡 → greet_known_person 12 次也持續觸發，覆蓋 confirm
+   - 影響：Demo S6 wiggle confirm 流程完全跑不起來
+   - 重現性：YES
+
+### P1（OBS 升級，使用者明確要求）
+
+3. **[#TTS-gemini] 麥克風語音輸入路徑想換成 `google/gemini-3.1-flash-tts-preview`**
+   - 現況：Studio chat → Gemini Despina TTS；麥克風 → edge_tts
+   - 用戶 5/8 morning 要求：「我還是想用 google/gemini-3.1-flash-tts-preview 當 main 講話的」
+   - 影響：edge_tts 雖然延遲低（1-2s）但音色不夠 persona；Demo 想統一走 Gemini Flash TTS preview
+   - 修法：擴展 5/7 commit 10829ca 的 per-message TTS routing，把 mic 路徑也指到 Gemini
+
+### B:OBS（記錄不修）
+
+4. **[#G-residual] F+G 階段累積 4 次 api_id=1016**
+   - 來源：F3+F4 confirm 失敗時 OK 手勢被誤判成 wave，自動觸發 wave_hello
+   - 屬於 [#F-confirm] 的衍生症狀，修了 #F-confirm 應自然消失
+
+5. **[#sit_along] sit_along 無 auto stand-up step**
+   - by design：contract steps=[say, sit motion]，狗坐下後保持坐姿
+   - 不修（demo 設計就是「陪坐」）
+
+### 5/8 morning 程式碼修法（Jetson 整合驗證 5/8 evening）
+- **[#A1.3]** `scripts/start_full_demo_tmux.sh` 加 depth_safety window（[10/13]）→ ✅ Jetson 驗證 `Publisher count: 1`
+- **[#F-confirm] 2a** `pending_confirm.py:155-162` 非 OK gesture stays PENDING → ✅ 不再 different_gesture cancel
+- **[#F-confirm] 2b** `brain_node.py:621/672/684` _on_face / _on_pose 三處加 PENDING guard → ⚠️ 部分驗證（PENDING 期間仍見 6 次 greet_known_person，但都在 timeout 後窗外發出）
+- **[#TTS-gemini]** `tts_node.py:1040` OPENROUTER_KEY 有設即用 Gemini chain → ✅ tts_node log 看到 `[openrouter_gemini]` 全路徑使用
+- WSL 端 unit test 60/60 PASS（18 pending_confirm + 42 brain_rules）
+
+### 🔴 Jetson 整合測試發現新問題（5/8 evening）
+
+**[#F-confirm-timeout] PendingConfirm 多輪修復**
+
+5/8 evening 演進：5s → 15s（user 等對話完）→ 30s + new_speech_intent cancel（user 換話題自動 cancel）→ 找到 gesture_live_window=0.5s 太短 → 5.0s
+
+| 階段 | 修法 | 結果 |
+|---|---|---|
+| 1 | timeout 5s → 15s | 仍 timeout（user 走過去比手勢 >15s）|
+| 2 | timeout 15s → 30s + `_on_speech_intent` cancel pending | timeout 仍發生（OK event 被認為 stale）|
+| 3 | `_gesture_live_window_s` 0.5s → 5.0s | ✅ **CONFIRMED 真有 fire**：`PROPOSAL wiggle src=rule:confirmed reason=confirmed_via_ok:wiggle` |
+
+**Root cause 真因**：vision_perception 發 gesture event rate ~3-4s 一個（不是 10Hz tick rate）。`brain_node._tick_pending_confirm` 0.5s gesture_live_window 把 fresh OK event 當 stale → tick 永遠拿到 None → 永不累積到 stable_s=0.5s。
+
+**仍未解 #F-wiggle-motion-no-fire**（5/8 evening 22:14）：
+- ✅ Brain emit PROPOSAL wiggle 確認
+- ❌ 但實際 `/webrtc_req` 沒出 wiggle 對應 motion api_id（仍是 1016 wave_hello）
+- 推測：wiggle plan 被後續 `wave_hello` / `greet_known_person` 提案蓋掉（PENDING 結束後 face/wave gesture 又自動 fire），或 wiggle plan 在 step 0 say 後被 preempt
+- 待查：`/brain/skill_result` 抓不到完整 wiggle plan_id 序列，需更穩定的 monitor + 一次性執行
+- **暫停修復**，繼續清單其他項目（5/8 evening Roy 指示）
+
+### 沿用 5/7 night 已 commit
+- `202a7e3` start_full_demo_tmux.sh source .env
 - `685c97d` object_remark per-(class,color) 60s dedup
-- `10829ca` per-message TTS routing（Studio chat → Gemini, others → edge_tts，5 file plumbing）
+- `10829ca` per-message TTS routing（Studio→Gemini / mic→edge_tts）
 - `e1363c8` stranger_alert / object person 靜音
-- `67c28ce` Studio Gateway 加 CORS（Studio chat panel 「Brain 文字通道未連線」修復）
+- `67c28ce` Studio Gateway CORS
 
 詳細 fail-map：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`
-Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 
 ---
 
@@ -73,7 +143,7 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 - [x] **單輪對話**：「你好」→ Gemini reply `[excited] 嗨！你回來啦` ✓
 - [x] **連續五輪不中斷**：Roy 麥克風 5+ 輪不 crash（早安/餓了/叫什麼/介紹/你好）
 - [x] **CapabilityContext 生效**：「你可以做什麼」→ caps-02 trace 列六大功能 + skill_gate blocked self_introduce:defer
-- [ ] **記住名字**：「我是 Roy」→ 下一輪測試（deque(maxlen=10) 已 wired，待 demo 跑）
+- [x] **記住名字**：「我是 Roy」→ 下一輪「我叫什麼名字？」→ `[laughs] 你是 Roy 啊！` ✓ (5/8 morning B3)
 - [x] **時間感知**：「早安」reply 含「現在已經晚上八點多」 ✓
 - [x] **天氣感知**：「早安」reply 含「外面多雲，但家裡很亮」 ✓
 - [x] **早晚問候**：晚上說「早安」→ Gemini 自動糾正成晚上 ✓ (5/7 night Roy 實測)
@@ -83,14 +153,14 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 - [x] **中文 stop**：「停」→ trace input → safety_gate hit (stop_move) → output (safety_path)，bypass LLM
 - [x] **英文 stop**：「stop」→ 同上
 - [x] **緊急詞**：「緊急」→ safety_gate hit ✓（煞車 / 暫停 keyword 在 list 但未獨立測，邏輯同）
-- [ ] **任何狀態 stop 都生效**：動作中也能停（待 motion 測試時驗）
+- [x] **任何狀態 stop 都生效**：wave_hello 動作中說「停」+ sit_along 動作中說「stop」→ 兩 plan 都 `aborted: preempted` + stop_move api_id=1003 completed ✓ (5/8 morning E1+E2)
 
 ### 2.3 TTS 品質
 
 - [x] **一般對話自然**：Gemini Despina + audio tag `[playful] [excited] [curious]` 渲染 ✓
-- [ ] **長句不漏整句**：「講一個短短的睡前故事」→ **待 Roy 親測**（5/8 chunking 重構已 in，但 Studio chat 路徑用 Gemini 需重驗）
-- [ ] **長句不跳行**：>40 字元 chunk 切分（5/8 改 MIN_SPLIT_CHARS=30 已 in）
-- [ ] **語氣連貫觀察**：後半段語氣（OBS）— **待 Roy 親耳聽**
+- [x] **長句不漏整句**：「講一個短短的睡前故事」→ 5 句完整故事，audio tag `[whispers]` 正確 ✓ (5/8 morning B4)
+- [x] **長句不跳行**：>40 字元 chunk 切分（5/8 MIN_SPLIT_CHARS=30，5 句連貫）✓
+- [x] **語氣連貫觀察**：後半段語氣 Roy 親耳聽「還不錯」✓ (5/8 morning)
 - [x] **TTS 開始播放延遲**：Studio chat (Gemini Despina) 6.5s 首音 / 麥克風 (edge_tts) ~1-2s。**目標 < 12-15s ✓**
 - [ ] **Gemini TTS voice A/B**（**OBS，若恩 5/7 會議 action**）：Despina 以外候選 voice（如 Aoede / Charon / Fenrir 等 OpenRouter Gemini TTS preview 支援）試聽，挑 demo 最自然的
 
@@ -107,31 +177,31 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 
 ### 3.1 LLM → Brain → Skills
 
-- [ ] **`wave_hello` 執行**：「跟我打招呼」→ accepted + motion
-- [ ] **`sit_along` 執行**：「陪我坐一下」→ accepted + motion
-- [ ] **`careful_remind` 執行**：「提醒我小心」→ accepted + TTS
-- [ ] **`show_status` 執行**：「你現在狀態如何」→ accepted + 狀態回覆
-- [ ] **`greet_known_person` 執行**：Roy 入鏡或提案 → 問候 Roy
-- [ ] **skill result 回流**：執行後 `/brain/skill_result` 有結果
-- [ ] **下一輪能接續**：LLM 知道上一個 skill 成功 / 失敗
+- [x] **`wave_hello` 執行**：「跟我打招呼」→ accepted + step say + step motion (api 1016) ✓ (5/8 D1，**前提：depth_safety_node 已啟**)
+- [x] **`sit_along` 執行**：「陪我坐一下」→ accepted + step say + step motion (api 1009 sit) ✓ (5/8 D4)
+- [x] **`careful_remind` 執行**：「提醒我小心」→ TTS only by design ✓ (5/8 D2)
+- [x] **`show_status` 執行**：「你現在狀態如何」→ TTS + OK 引導語 by design ✓ (5/8 D3)
+- [ ] **`greet_known_person` 執行**：Roy 入鏡 → 5/8 morning F 階段背景發 12 次自動觸發（屬 [#F-confirm] 干擾項）
+- [x] **skill result 回流**：5/8 morning 4 個 skill 全部 `started → step_started → step_success → completed` ✓
+- [x] **下一輪能接續**：sit_along 後問「剛剛成功了嗎？」→ `[playful] 成功了喔！我已經乖乖坐好了` ✓ (5/8 D5)
 
 ### 3.2 Confirm Mode
 
-- [ ] **`wiggle` needs_confirm**：「搖一下」→ `needs_confirm`
-- [ ] **OK 手勢確認**：比 OK 後 `wiggle` 真執行
-- [ ] **`stretch` needs_confirm**：「伸個懶腰」→ `needs_confirm`
-- [ ] **OK 手勢確認**：比 OK 後 `stretch` 真執行
-- [ ] **未 OK 不執行**：不比 OK 時不自動 motion
+- [x] **`wiggle` needs_confirm**：「搖一下」→ skill_gate `needs_confirm` detail=wiggle ✓ (5/8 F1)
+- [ ] **OK 手勢確認**：FAIL→A:BLOCKER — OK gesture confidence=1.0 偵測到，但 wiggle 0 個 plan accepted；反觸發 wave_hello x14、greet_known_person x12（[#F-confirm]）
+- [ ] **`stretch` needs_confirm**：未測（F3 失敗後跳過 F4）
+- [ ] **OK 手勢確認**：未測
+- [x] **未 OK 不執行**：F2 不比 OK 等 6s，wiggle 沒執行 ✓
 
 ### 3.3 Trace Only
 
-- [ ] **`self_introduce` trace_only**：「介紹一下你自己」→ 狗不動，只說介紹文
-- [ ] **Studio button 自介**：按完整自我介紹 button → sequence 執行
-- [ ] **trace 顯示正確**：`accepted_trace_only` 清楚出現
+- [x] **`self_introduce` trace_only**：「介紹一下你自己」→ 狗不動，只說介紹文（`/webrtc_req` 0 行）✓ (5/8 C1)
+- [ ] **Studio button 自介**：SKIP→C — Studio 沒這個 button（5/8 morning Roy 確認不存在也不需要）
+- [x] **trace 顯示正確**：skill_gate `accepted_trace_only` detail=self_introduce 多次出現 ✓ (5/8 C1)
 
 ### 3.4 Skill 合法性檢查
 
-- [ ] **不存在 skill**：「後空翻」→ blocked / rejected，不動（rapid-pub 排隊掉，邏輯架構正確待重測）
+- [x] **不存在 skill**：「後空翻」→ `[thinking] 那個對我來說太難了啦...` LLM persona 婉拒，0 motion ✓ (5/8 G1)；「爬樓梯」→ `[thinking] 有點太刺激了` 0 motion ✓ (5/8 G2)
 - [x] **禁用 skill**：「跳舞」→ Gemini persona 婉拒「跳舞我現在還不太會耶...」+ 0 skill_request + 0 webrtc_req ✓
 - [x] **unknown-but-allowlisted 防線**：5/7 white box review 已修（pawai_brain skill_policy_gate.normalize_proposal_v2，27 case test pass）
 - [x] **invalid skill 不會 motion**：整夜 `/webrtc_req` topic 0 motion 命令 ✓
@@ -158,10 +228,10 @@ Plan：`~/.claude/plans/polished-questing-starlight.md` v1.4
 
 ### 4.3 多模態互不干擾
 
-- [ ] **講話中不被人臉打斷**：stranger TTS 已靜音 ✓ + chair object_remark 60s dedup ✓（**待長對話現場驗**）
-- [ ] **講話中不被姿勢打斷**：fall TTS 雙路關閉 ✓（**待親測**）
-- [ ] **動作中不被 object / pose TTS 插隊**：執行 SkillPlan 時 `_has_active_sequence()` 已 gate，**待 motion 測試驗**
-- [ ] **pending confirm 期間 OK 不誤觸其他流程**：架構上 `_GESTURE_CONFIRM` map gated，**待 wiggle/stretch 現場流程驗**
+- [x] **講話中不被人臉打斷**：5/8 morning B/C/D 階段全程 stranger_alert + greet_known_person plan 多次發但 TTS 不出聲，長句故事完整 ✓
+- [ ] **講話中不被姿勢打斷**：fall TTS 雙路關閉 ✓（H2 SKIP — 在家不便躺下，**留 5/13 場地驗**）
+- [x] **動作中不被 object / pose TTS 插隊**：5/8 D1/D4 wave_hello + sit_along motion 期間 background object_remark 多次但無 abort/preempt by object ✓
+- [ ] **pending confirm 期間 OK 不誤觸其他流程**：FAIL→A:BLOCKER（[#F-confirm] OK 沒 wire，反觸發 wave_hello）
 
 ---
 

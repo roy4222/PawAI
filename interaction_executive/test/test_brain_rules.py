@@ -251,6 +251,55 @@ def test_pose_bending_stable_triggers_careful_remind(brain):
     assert plan["selected_skill"] == "careful_remind"
 
 
+# 5/8 [#F-confirm]: PENDING 期間 face/pose auto-rule 不應發 plan，避免蓋掉 confirm 流
+
+
+def test_face_during_pending_does_not_emit(brain):
+    """PENDING 期間人臉穩定不應觸發 greet_known_person。"""
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))  # enter PENDING(wiggle)
+    brain._captured_proposals.clear()
+    # known face stable → 平常會發 greet_known_person，但 PENDING 應 suppress
+    brain._on_face(_msg({"identity": "alice", "stable": True}))
+    assert not any(
+        p["selected_skill"] == "greet_known_person" for p in brain._captured_proposals
+    )
+
+
+def test_pose_sitting_during_pending_does_not_emit(brain):
+    """PENDING 期間 sitting 穩定不應觸發 sit_along。"""
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))  # enter PENDING(wiggle)
+    brain._captured_proposals.clear()
+    brain._on_pose(_msg({"pose": "sitting"}))
+    brain._state.sitting_first_seen -= 1.1
+    brain._on_pose(_msg({"pose": "sitting"}))
+    assert not any(
+        p["selected_skill"] == "sit_along" for p in brain._captured_proposals
+    )
+
+
+def test_pose_bending_during_pending_does_not_emit(brain):
+    """PENDING 期間 bending 穩定不應觸發 careful_remind。"""
+    brain._on_gesture(_msg({"gesture": "peace"}))  # enter PENDING(stretch)
+    brain._captured_proposals.clear()
+    brain._on_pose(_msg({"pose": "bending"}))
+    brain._state.bending_first_seen -= 1.1
+    brain._on_pose(_msg({"pose": "bending"}))
+    assert not any(
+        p["selected_skill"] == "careful_remind" for p in brain._captured_proposals
+    )
+
+
+def test_new_speech_intent_cancels_pending_confirm(brain):
+    """5/8 [#F-confirm-timeout]: user 換新話題（語音）→ pending confirm 主動 cancel。"""
+    from interaction_executive.pending_confirm import ConfirmState
+
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))  # enter PENDING(wiggle)
+    assert brain._pending_confirm.state == ConfirmState.PENDING
+    brain._on_speech_intent(_msg({"transcript": "你好啊", "session_id": "s-newchat"}))
+    # speech intent 經 buffer 等 chat_candidate；pending 應已 reset
+    assert brain._pending_confirm.state == ConfirmState.IDLE
+
+
 def test_pose_fallen_uses_name_when_available(brain):
     brain._on_pose(_msg({"pose": "fallen", "name": "Roy"}))
     brain._state.fallen_first_seen -= 0.06

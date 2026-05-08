@@ -135,8 +135,15 @@ class BrainNode(Node):
         self._safety = SafetyLayer()
         self._world = WorldState(self)
         self._chat_timeouts: dict[str, rclpy.timer.Timer] = {}
-        self._pending_confirm = PendingConfirm(timeout_s=5.0, stable_s=0.5)
-        self._gesture_live_window_s = 0.5
+        # 5/8 [#F-confirm-timeout]: 5s → 30s — 給 user 等 say_canned 講完 + 走過去比手勢的時間。
+        # 新語音 intent 進來會主動 cancel（_on_speech_intent），所以 30s 只是硬尾線防止永久卡住。
+        self._pending_confirm = PendingConfirm(timeout_s=30.0, stable_s=0.5)
+        # 5/8 [#F-confirm-gesture-rate]: 0.5s → 5.0s
+        # vision_perception_node 發 gesture event 的 rate 是 ~3-4s 一個（不是 10Hz tick），
+        # live_window 0.5s 會讓 tick 把 fresh OK event 立刻當 stale → reset stability →
+        # 永遠累積不到 stable_s=0.5s。拉到 5s 讓單一 OK event 維持 5s active state，
+        # 配合 vision 的 sparse event rate 仍能達成 confirm。
+        self._gesture_live_window_s = 5.0
         # Per-(class, color) → last-emit-ts. See OBJECT_REMARK_DEDUP_S.
         self._object_remark_seen: dict[tuple[str, str], float] = {}
 
@@ -278,6 +285,12 @@ class BrainNode(Node):
 
         if self._has_active_sequence() or self._check_dedup("speech", session_id):
             return
+
+        # 5/8 [#F-confirm-timeout]: user 換新話題 → cancel 任何 pending confirm。
+        # 設計：「持續辨識直到下次語音」— 比 5s/15s timeout 更符合對話直覺。
+        if self._pending_confirm.state == ConfirmState.PENDING:
+            self._pending_confirm.cancel(reason="new_speech_intent")
+            self.get_logger().info("PendingConfirm cancelled by new speech intent")
 
         with self._lock:
             self._state.chat_buffer[session_id] = BufferedSpeech(
@@ -617,7 +630,9 @@ class BrainNode(Node):
             return
 
         self._state.unknown_face_first_seen = None
-        if not stable or self._has_active_sequence():
+        # 5/8 [#F-confirm]: PENDING 期間不發 greet_known_person，避免蓋掉 confirm 流
+        if not stable or self._has_active_sequence() \
+                or self._pending_confirm.state == ConfirmState.PENDING:
             return
         cooldown_key = f"greet_known_person:{identity}"
         if self._in_cooldown(cooldown_key, 20.0):
@@ -664,11 +679,14 @@ class BrainNode(Node):
         self._state.fallen_first_seen = None
         self._world.set_fallen(False)
 
+        # 5/8 [#F-confirm]: PENDING 期間 sitting/bending auto-rule 不發 plan
+        confirm_pending = self._pending_confirm.state == ConfirmState.PENDING
+
         # ---- sitting → sit_along (low-risk social) ----
         if pose == "sitting":
             if self._state.sitting_first_seen is None:
                 self._state.sitting_first_seen = now
-            elif (now - self._state.sitting_first_seen) >= 1.0:
+            elif (now - self._state.sitting_first_seen) >= 1.0 and not confirm_pending:
                 self._emit_with_cooldown(
                     "sit_along", source="rule:pose_sitting", reason="pose_sitting_stable_1s"
                 )
@@ -680,7 +698,7 @@ class BrainNode(Node):
         if pose == "bending":
             if self._state.bending_first_seen is None:
                 self._state.bending_first_seen = now
-            elif (now - self._state.bending_first_seen) >= 1.0:
+            elif (now - self._state.bending_first_seen) >= 1.0 and not confirm_pending:
                 self._emit_with_cooldown(
                     "careful_remind",
                     source="rule:pose_bending",
