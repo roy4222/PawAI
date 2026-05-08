@@ -87,7 +87,7 @@ interaction_executive_node → Go2 動作
 
 | 規則來源 | 落地手勢 | 程式 |
 |---|---|---|
-| MediaPipe Recognizer label remap | palm / fist / index / thumb / peace | `gesture_recognizer_backend.py:_GESTURE_MAP` |
+| MediaPipe Recognizer label remap | palm / fist / index / **thumbs_up** / peace | `gesture_recognizer_backend.py:_GESTURE_MAP`（5/8 commit `efda3c0`：`thumb` → `thumbs_up` 對齊 contract enum，否則 `brain_node._GESTURE_CONFIRM` 收不到 thumbs_up→wiggle）|
 | 自製幾何規則 override | **ok**（拇指尖↔食指尖距離 < hand_width × 0.3 + 中/無/小指未全屈）| `gesture_classifier.py:detect_ok_circle` |
 | 時序軌跡 override | **wave**（1.5s 窗內 wrist X 速度反轉 ≥ 2 + 振幅 > 50px）| `dynamic_gesture_detector.py:WaveDetector` |
 

@@ -1,7 +1,49 @@
 # 專案狀態
 
-**最後更新**：2026-05-07 night（per-message TTS routing 上線：Studio chat → Gemini TTS / 其他 → edge_tts；293 unit tests pass）
-**硬底線**：5/18 期末 demo（11 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-08 evening（A-H 八階段在家驗收 + 5 個 commit fix：depth_safety / Gemini TTS 統一 / confirm wiring 大修 / thumb 對齊 contract / wiggle_hip api_id 修正）
+**硬底線**：5/18 期末 demo（10 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/8 進度（在家驗收 8 階段 + 5 個 fix commit）
+
+### Morning：A-H 八階段測試 + 找到 3 個 P0 bug
+- A Baseline ✅ 5/5（但發現腳本漏 depth_safety_node）
+- B 語音回歸 ✅ 5/5（含記住名字 / 長句 TTS）
+- C trace_only 自介 ✅ C1（C2 Studio button 不存在 SKIP）
+- D motion skills ✅ 4/4（wave_hello / careful_remind / show_status / sit_along）
+- E 動作中 stop ✅ 2/2（preempted hard gate 守住）
+- F confirm mode 🔴 FAIL→A:BLOCKER（OK 手勢沒 wire + auto-rule 蓋掉）
+- G invalid skill ✅ 3/3（後空翻/爬樓梯/跳舞 LLM 婉拒）
+- H 多模態干擾 ✅ H1+H3（H2 fallen 留場地）
+
+### Evening：5 個 fix commit + Jetson 整合驗證
+- `35bdf1d` `fix(scripts): add depth_safety window to start_full_demo_tmux` — `/capability/depth_clear` 0 publishers → motion 全 `blocked_by_safety`，加 [10/13] window 自動啟動 `depth_safety_node`
+- `a2eefc8` `fix(tts): unify mic + Studio paths to Gemini Flash TTS preview` — Roy 要求 mic 也走 Gemini Despina（`tts_node.py:1040` routing 條件移除 input_origin gate）
+- `44a8a73` `fix(executive): repair OK-confirm flow and survive gesture event sparsity` — 4 段修法：(2a) flicker 不再 cancel pending；(2b) face/pose auto-rule 加 PENDING guard；(2c) timeout 5s→30s + new_speech_intent cancel；(2d) `_gesture_live_window_s` 0.5s→5.0s（vision 發 event ~3-4s/個，原值讓 fresh OK 永遠 stale）
+- `efda3c0` `fix(vision): align Thumb_Up label with contract enum thumbs_up` — `gesture_recognizer_backend.py:53` `"thumb"` → `"thumbs_up"` 對齊 `interaction_contract.md:485`，原本 brain `_GESTURE_CONFIRM[thumbs_up→wiggle]` silent drop
+- `31aa2ea` `fix(executive): correct wiggle_hip motion api_id 1029 → 1033` — `skill_contract.py` typo：1029 是 Scrape（拜拜），WiggleHips 真正 id 是 1033（Roy 觀察狗做拜拜抓到）
+
+### Jetson 整合驗證結果
+| 項 | 結果 |
+|---|---|
+| `/capability/depth_clear` Publisher count | 0 → **1** ✅ |
+| 對麥克風講「你好」TTS chain | `[openrouter_gemini]` ✅ |
+| §4.1 Roy 站位 greet + cooldown | brain log `identity:roy` 3 次 + `identity:grama` 1 次，cooldown 機制生效 ✅ |
+| §5.2 4 種手勢成功率 | OK / Thumb / Palm / Peace 全 confidence=1.0 ✅ |
+| §3.2 confirm 全鏈軟體面 | thumbs_up→PENDING wiggle → say_canned awaiting_ok → OK→CONFIRMED → `/webrtc_req api_id=1033` ✅ |
+
+### Carry-over（明 5/9）
+- **[#wiggle-no-physical-motion]** — 1033 (WiggleHips) 發出 Go2 沒實際扭屁股，可能 firmware v1.1.7 不支援或需 BalanceStand precondition；其他 motion (1016 Hello, 1009 Sit) 都正常，不阻擋 demo 主流程
+- **§6.3 Studio 五功能視角** — 5/8 evening 沒測到，留下次 session
+- **§5.1 Roy 5 次成功率** — 已過 3/3（in §4.1），剩 2 次取樣
+
+### 沿用 5/7 night commit 背景
+- `202a7e3` start_full_demo_tmux.sh source .env
+- `685c97d` object_remark per-(class,color) 60s dedup
+- `10829ca` per-message TTS routing 基礎建設（5/8 `a2eefc8` 把 routing 條件改寬）
+- `e1363c8` stranger_alert / object person 靜音
+- `67c28ce` Studio Gateway CORS
 
 ---
 

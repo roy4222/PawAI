@@ -54,12 +54,12 @@ llm_bridge_node（**locked main**: OpenRouter Gemini 3 Flash Preview → DeepSee
     |   output_mode=brain  → 只發 /brain/chat_candidate（PawAI Brain MVS 模式）
     |   OpenRouter timeout default 4.0s / overall budget 5.0s（5/4 Jetson smoke 後 bump）
     | /tts（legacy 模式）or /brain/chat_candidate（brain 模式）
-tts_node（**5/7 night per-message routing**：default chain edge_tts → piper；Studio chat 路徑切到 gemini → edge → piper）
+tts_node（**5/8 evening 統一 routing**：OPENROUTER_KEY 有設一律走 gemini → edge_tts → piper；mic + Studio 同音色）
     |   `/tts` payload 雙模：純文字 OR JSON envelope `{"text", "input_origin"}`
-    |   input_origin == "studio_text" → studio chain（gemini → edge → piper, dedup）
-    |   其他（純文字、null、未知值）→ default chain（edge_tts → piper）
+    |   有 _studio_fallback_chain（OPENROUTER_KEY 設）→ 一律用該 chain
+    |   無（key 缺）→ default chain（edge_tts → piper）
     |   audio_tag.py + tts_provider.py：provider.supports_audio_tags 守門 strip
-    |   Gemini key 沒設時 studio chain 自動 disabled，studio_text 也走 default chain（demo-safe）
+    |   input_origin 欄位保留供未來 per-source policy（chunk / voice tweak），目前不再做 routing 分支
     |
 USB 喇叭 local playback（Megaphone DataChannel 備用）
     |
@@ -68,20 +68,22 @@ echo gate 阻止 ASR 自激（total 1.5s）
 
 **Intent fast path**：stop/greet 等高頻 intent 跳過 LLM，直接 RuleBrain（~0ms）。
 **LLM timeout** Jetson default 4.0s（5/4 bump from 2.0s — Python urllib3+requests overhead 在 Jetson 把 1.5s curl 推到 2s 邊界，premature fallback）。
-**TTS provider chain**（5/7 night per-message routing）：
+**TTS provider chain**（5/8 evening 統一 routing — commit `a2eefc8`）：
 
-| 路徑 | input_origin | Chain | 主 use case |
+| 路徑 | input_origin | Chain | 備註 |
 |---|---|---|---|
-| Studio chat panel 文字輸入 | `studio_text` | `openrouter_gemini` (Despina, audio tag native, ~6.5s 首音) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline) | Demo 給觀眾聽的「漂亮版」對話 |
-| 麥克風語音輸入 + 自動感知（greet / object_remark / fall_alert / careful_remind ...） | `null` 或缺欄位 | `edge_tts` (~1.5s) → `piper` (offline) | 反應速度優先 |
-| `ros2 topic pub /tts std_msgs/String "..."` | parse fail → null | default chain | 開發 / debug |
+| Studio chat panel 文字輸入 | `studio_text` | `openrouter_gemini` (Despina, audio tag native, ~6.5s 首音) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline) | Demo 對話主路徑 |
+| 麥克風語音輸入 + 自動感知（greet / object_remark / fall_alert / careful_remind ...） | `null` 或缺欄位 | **同上**（5/8 起 mic 也走 Gemini chain，Roy 要求統一 persona 音色） | 與 Studio chat 同音色 |
+| `ros2 topic pub /tts std_msgs/String "..."` | parse fail → null | 同上 | 開發 / debug |
+| OPENROUTER_KEY 缺 / 失敗 | 任意 | `default_chain`（edge_tts → piper） | demo-safe fallback |
 
 關鍵實作：
 - `tts_node.tts_callback` 解析 `/tts` payload — 嘗試 `json.loads`，是 dict 且有 `"text"` → override raw_text + 讀 `input_origin`；否則純文字 path
 - `_studio_fallback_chain` 啟動時 lazy build（讀 `OPENROUTER_KEY` env），dedup by provider name
+- 5/8 起 routing 條件改為「有 `_studio_fallback_chain` 即用」，不再依 input_origin 分支（commit `a2eefc8`，line 1040-1043）
 - chain iteration loop（line ~1024-1080）對所有 chain 同樣處理，cache key per-provider 不衝突
 
-詳見：`docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md`（Stage 4 chain 機制）+ `~/.claude/plans/polished-questing-starlight.md` v1.4（per-message routing 設計）+ commit `10829ca`（plumbing）。
+詳見：`docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md`（Stage 4 chain 機制）+ commit `10829ca`（per-message plumbing）+ commit `a2eefc8`（5/8 統一 routing）。
 
 ### 為什麼鎖 Gemini 3 Flash + Gemini 3.1 Flash TTS（2026-05-05）
 
