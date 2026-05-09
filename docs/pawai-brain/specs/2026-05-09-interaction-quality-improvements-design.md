@@ -570,96 +570,80 @@ idle_phase 軸（新加）：`NORMAL / DUE / COOLING`
 - **避重**：deque(maxlen=5) of last said text，重複就重抽
 - **語氣對齊 persona**：idle prompt 強調 audio tag 風格 + ≤ 15 字 + playful/curious/yawn 三選一
 
-**動作白名單（idle 專用）**
+**動作白名單（idle MVP — Roy 5/9 收斂）**
 ```python
-IDLE_SAFE_SKILLS = ["say_canned", "wave_hello", "sit_along"]
+IDLE_SAFE_SKILLS = ["say_canned", "wave_hello"]
 # 比例（weighted random）：
-#   say_canned 70% (純講話最安全)
-#   wave_hello 20% (動作 + 揮手)
-#   sit_along  10% (緩慢坐下)
-# 禁止：wiggle / stretch (needs_confirm 不適合 idle)
-#       nav / approach / dance (高風險)
-#       stop_move (safety override only)
+#   say_canned 90% (純講話最安全)
+#   wave_hello 10% (短促揮手；Phase b 才開比例可調)
+# 禁止：sit_along (改變姿態)、wiggle / stretch (needs_confirm)、
+#       nav / approach / dance (高風險)、stop_move (safety only)
 ```
-**全部 non-confirm**：idle 動作不走 PendingConfirm（user 不在沒法比 OK）
+**全部 non-confirm**：idle 動作不走 PendingConfirm
 
-**取消與優先級**
-- `_on_speech_intent` / `_on_gesture` / `_on_face`(known engaged) callback 開頭加：
-  ```python
-  if self._state.active_plan and self._state.active_plan.get("source") == "idle":
-      self._cancel_active_plan(reason="user_returned")
-      self._set_attention(ENGAGED)
-  ```
-- safety override：fallen / stop_move / depth_unsafe 期間不觸發（現有 SafetyLayer 自動 gate）
+**取消與優先級（MVP 保守版 — Roy 收斂）**
+
+brain_node 不是 executor，**不嘗試取消已送出的 active plan**。
+- `_on_speech_intent` / `_on_gesture` / `_on_face`(known engaged) callback 只**阻止下一次 idle**：
+  - 更新 `last_user_interaction_ts`
+  - 設 `_idle_phase = COOLING`（強制冷卻）
+  - 不 cancel 進行中的 idle plan（讓它自然走完，反正只是短句 + 揮手）
+- safety override：fallen / stop_move / depth_unsafe 期間 `_tick_idle` 直接 return（現有 SafetyLayer + 顯式檢查雙保險）
 - 上限：`_idle_recent_ts: deque(maxlen=4)` 記過去 4 次觸發；`now - oldest < 3600` 跳過
 
-**改動範圍**
-- `interaction_executive/.../brain_node.py` ~+100 行：state field 5 個 / `_tick_idle` / `_maybe_emit_idle` / `_record_user_interaction` helper / 4 處 callback 加 1 行 / `_IDLE_CANNED` 常量
-- `pawai_brain/.../conversation_graph_node.py` ~+30 行：訂 `/brain/idle_request` + idle system prompt + 路由到 `_publish_chat_candidate`
-- `interaction_executive/launch/` + `config/`：新增 `config/idle.yaml` + launch arg
-- 測試 +2 unit：`test_idle_trigger.py` / `test_idle_cancel_on_user.py`
-- 總計 ~150-180 行，3-4 小時實作 + 1 小時測
+**三階段 MVP / Studio / LLM（Roy 5/9 拆）**
 
-**三模式 demo / home / dev**
+**P3-1a Idle MVP（spec only，現在不實作）**
+- 前置：issue 4 P2-1 attention policy 先做完
+- 範圍：state field + `_tick_idle` + `_maybe_emit_idle` + `_IDLE_CANNED` 8-12 句寫死
+- 動作池：90% say_canned / 10% wave_hello（**不含 sit_along**）
+- 模式：**預設 `idle_mode: off`**（demo 不主動觸發；要展示時手動切）
+- 不接 LLM；不嘗試 cancel active plan
+- ~80 行 brain_node 改動
+
+**P3-1b Studio toggle（demo 期想展示才開）**
+- Studio header 加 idle mode selector（off / demo / home / dev）
+- 前端 POST `/api/idle_mode` → gateway publish `/brain/idle_mode` (std_msgs/String) → brain 訂閱熱切換
+- demo 時 Roy 手動切 `demo` 展示；切 `off` 關
+- ~40 行（前端 + gateway + brain 訂閱）
+
+**P3-1c Idle LLM 接入（demo 後）**
+- 接 `/brain/idle_request` → conversation_graph idle system prompt
+- ~50 行；等 Wave 0/1/2 全穩
+
+**改動範圍（總計）**
+- a: `brain_node.py` ~+80 行 + `config/idle.yaml`
+- b: `pawai-studio/frontend/` + `gateway/` + `brain_node.py` 訂閱 ~+40 行
+- c: `conversation_graph_node.py` ~+50 行 + brain 發 idle_request ~+15 行
+- 測試 +2 unit：`test_idle_trigger.py` / `test_idle_no_emit_when_active.py`
+
+**三模式 + 預設改 off**
 ```yaml
 # interaction_executive/config/idle.yaml
 idle_enabled: true
-idle_mode: "demo"   # demo | home | dev | off
+idle_mode: "off"   # off | demo | home | dev (Roy 5/9 改預設 off)
 profiles:
   demo: {threshold_s: 60,  cooldown_s: 120, max_per_hour: 6}
   home: {threshold_s: 600, cooldown_s: 600, max_per_hour: 4}
   dev:  {threshold_s: 20,  cooldown_s: 30,  max_per_hour: 30}
   off:  {enabled: false}
 ```
-launch arg `idle_mode:=demo`；env var `PAWAI_IDLE_MODE=home`
+launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var `PAWAI_IDLE_MODE`
 
-**為何 demo 用 60s 而不是原 spec 的 10 min**
-- 5/13-5/18 demo 期一直在互動，10 min idle 永遠不觸發 → 觀眾看不到
-- 60s 才能在展示中真的觸發一次 idle utterance / wave_hello → 增加「會自己玩」印象
-- demo 後 Roy 5/18 改 `idle_mode:=home` 即恢復 10 min
+**為何預設 off**（Roy 5/9 抓出）
+- demo 場地老師講話 / 切畫面 / 狗剛完成技能後，60s idle 可能插話像亂講
+- demo 想展示時，操作員手動切 `demo` mode 或用 P3-1b Studio toggle
+- 比「預設 demo 反而擾亂」更安全
 
-**Roy 5/9 收斂：拆三階段，預設 off，MVP 只 canned**
+**收益**：demo 想展示時可開、不想時不擾亂；home 期使用者覺得有靈魂；產品感從工具升級為陪伴
 
-| 階段 | 範圍 | 預設 | 工時 |
-|---|---|---|---|
-| **P3-1a idle MVP** | canned pool only；無 LLM；只 say_canned 90% / wave_hello 10%；前置 P2-1 | `idle_mode=off` 預設 | 2-3 小時 |
-| **P3-1b Studio 控制** | Studio toggle + mode selector；demo 要展示才手動切 `demo` | UI 在 settings | 1 小時 |
-| **P3-1c LLM idle** | `/brain/idle_request` + conversation_graph 路由（Wave 0/1/2 穩了才做） | feature flag | 2 小時 |
-
-**Roy 收斂的關鍵修正**
-
-1. **`idle_mode` 預設 `off`**（不是 `demo`）
-   - 60s idle 在 demo 場地可能會在老師講話、切畫面、狗剛完成技能後插一句
-   - demo 想展示時手動切 `idle_mode:=demo` 或 Studio toggle 開
-
-2. **MVP 不做 LLM idle_request**
-   - 多一條主動 LLM 路徑容易跟 speech/context/reset 混
-   - 先確認 canned 不打斷、不亂觸發再做 LLM
-
-3. **不嘗試取消 active plan**
-   - `brain_node` 不是 executor，沒可靠取消能力
-   - MVP 不發 sequence、只發短 utterance；使用者回來時**只阻止下一次 idle**，不取消已送出的 plan
-
-4. **MVP 白名單砍到 2 個**
-   - `say_canned` 90% / `wave_hello` 10%
-   - **拿掉** `sit_along`（坐下會改姿態，現場狀態不一定適合）
-
-5. **驗收依 profile 拆**
-   - dev profile：20s 觸發
-   - demo profile（手動開）：60s 觸發
-   - home profile：600s 觸發
-   - 不要寫死「10 min 觸發」
-
-**收益**：demo 期觀眾看到「會自己玩、自言自語」（但只在手動開時）；home 期使用者覺得有靈魂；產品感從工具升級為陪伴
-
-**明確不做（demo 前風險）**
-- ❌ MVP 接 LLM（P3-1c 才做）
-- ❌ MVP 放 sit_along（姿態不穩）
-- ❌ idle_mode 預設 demo（手動開才安全）
-- ❌ idle 嘗試取消 active plan（brain 沒 executor 能力）
-- ❌ idle 中 nav 巡邏（守護犬 spec superseded）
-- ❌ idle 中主動拍照 / 互動誘導（隱私 + demo 風險）
-- ❌ context 太重（讀整天對話 history 推測）
+**明確不做**
+- ❌ 預設 demo mode（會在演示中插話）
+- ❌ MVP 接 LLM（會跟 speech/context/reset 主鏈混）
+- ❌ MVP 含 sit_along（改變姿態風險）
+- ❌ MVP 嘗試 cancel active plan（brain 不是 executor）
+- ❌ idle 中 nav 巡邏 / 主動拍照
+- ❌ context 太重（LLM prompt 只給最近 5 物體 + 時段）
 
 ---
 
@@ -692,12 +676,25 @@ launch arg `idle_mode:=demo`；env var `PAWAI_IDLE_MODE=home`
 - [ ] 自由對話首音延遲 中位數 < 3s（如 P2-2 通）或 < 5s（如只 P2-3 雙軌）
 - [ ] 同一椅子 60s 內 dedup 不繞過（顏色抖動測試）
 
-### Wave 3 完成標誌（依 profile）
-- [ ] dev profile（threshold 20s）：閒置 20s 觸發 idle utterance ≥ 1 次
-- [ ] demo profile（手動開，threshold 60s）：閒置 60s 觸發 ≥ 1 次
-- [ ] home profile（threshold 600s）：閒置 10 min 觸發 ≥ 1 次
-- [ ] idle utterance 期間 user 一講話 → 阻止下一次 idle（< 500ms 不再觸發）；不嘗試取消已送出 plan
-- [ ] `idle_mode=off` 預設不觸發任何 idle
+### Wave 3 完成標誌（demo 後）
+
+**P3-1a MVP（按 idle_mode）**
+- [ ] dev mode：閒置 20s 觸發 idle utterance ≥ 1 次
+- [ ] demo mode：閒置 60s 觸發 idle utterance ≥ 1 次
+- [ ] home mode：閒置 600s 觸發 idle utterance ≥ 1 次
+- [ ] off mode：永不觸發
+
+**Cancel / 互動行為**
+- [ ] idle 期間 user 一講話 → 阻止下一次 idle，不 cancel 進行中的 plan（保守版）
+- [ ] safety event（fallen / stop / depth_unsafe）期間不觸發 idle
+
+**P3-1b Studio toggle**
+- [ ] Studio header 可切 off/demo/home/dev mode
+- [ ] 切換 < 1s 內 brain 行為改變（熱切換）
+
+**P3-1c LLM idle**
+- [ ] LLM idle utterance 內容含 audio tag，≤ 15 字
+- [ ] 斷網時 fallback 到 canned pool
 
 ---
 
