@@ -89,7 +89,8 @@
 | `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
 | `/brain/skill_result` | Event | 觸發式 | Executive → Brain/Studio SkillResult lifecycle | **v2.5** active |
 | `/brain/conversation_trace` | Event | 觸發式 | Brain → Debug/Studio LLM proposal gate trace（skill_gate stage 完整 enum 見 §`/brain/conversation_trace` 章節，5/8 加 `needs_confirm` / `demo_guide`） | **v2.8** active |
-| `/tts` | Command | 觸發式 | TTS 輸入文字 | active |
+| `/brain/reset_context` | Command | 觸發式 | Studio → Brain context 重置（std_msgs/Empty）— `conversation_graph_node` 清 `_memory + _seen_sessions`；`brain_node` cancel `_pending_confirm`；**不清** `_active_plans` / `_state.attention` | **v2.10** active |
+| `/tts` | Command | 觸發式 | TTS 輸入文字（v2.10：envelope 加 `source` 欄位 — chat_reply / say_canned / skill_say；純文字 backward compat） | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 
 **Actions（v2.3 新增）**：`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route` / `/log_pose`（型別於 `go2_interfaces/action/`）
@@ -764,6 +765,21 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 }
 ```
 
+#### `/brain/reset_context`（v2.10，5/9 加）
+
+**說明**：Studio ChatPanel「新對話」按鈕觸發；重置 LLM 對話 context。**不**清進行中的 active_plan / attention.state（避免打斷正在做的 skill）。
+**發布者**：`studio_gateway` (POST `/api/reset` endpoint)
+**訂閱者**：`conversation_graph_node`、`brain_node`
+**QoS**：Reliable, Volatile, depth=10
+**Message Type**：`std_msgs/Empty`（無 payload）
+
+| Subscriber | 行為 |
+|---|---|
+| `conversation_graph_node._on_reset_context` | `self._memory.clear()`（ConversationMemory deque）+ `with self._seen_lock: self._seen_sessions.clear()`（session ID dedup set） |
+| `brain_node._on_reset_context` | `self._pending_confirm.cancel(reason="page_reset")`；**不**清 `_active_plans` / `_state.attention` / `_state.idle_emit_history` |
+
+Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=true` 才開（demo 預設 false 靠手動按鈕）。詳見 `docs/pawai-brain/studio/README.md` §「新對話」按鈕。
+
 #### `/brain/proposal`
 
 **說明**：Brain 仲裁後送往 Executive 的 SkillPlan。
@@ -998,19 +1014,30 @@ self.publisher.publish(msg)
 ```
 tts_node 行為：走 default chain（`[primary] + [fallbacks]`，e.g. `edge_tts → piper`）。
 
-**Payload 形態 2：JSON envelope（v2.9 per-message routing）**
+**Payload 形態 2：JSON envelope（v2.9 per-message routing；v2.10 加 `source` 欄位）**
 ```python
 import json
 msg = String()
 msg.data = json.dumps(
-    {"text": "哈囉，你好！", "input_origin": "studio_text"},
+    {
+        "text": "哈囉，你好！",
+        "input_origin": "studio_text",     # v2.9: TTS chain routing hint
+        "source": "chat_reply",            # v2.10: ChatPanel CSS routing hint
+    },
     ensure_ascii=False,
 )
 self.publisher.publish(msg)
 ```
-tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 studio chain（`[gemini, edge_tts, piper]` dedup）；其他值或缺欄位則退回 default chain。Parse 失敗（malformed JSON）也退回純文字 path（fail-safe）。
 
-**僅 `interaction_executive_node._dispatch_step` 在 `step.args["input_origin"]` 存在時發 envelope**。其他 publisher（`event_action_bridge`、`llm_bridge_node`、`intent_tts_bridge_node`、`route_runner_node`、人手 `ros2 topic pub`）byte-for-byte 維持純文字。詳見 `docs/pawai-brain/speech/README.md` §TTS Provider Chain。
+| 欄位 | 加入版本 | 用途 |
+|---|---|---|
+| `text` | v2.9 | TTS 文字 |
+| `input_origin` | v2.9 | tts_node provider chain 選擇（`studio_text` → studio chain；其他/null → default chain） |
+| `source` | v2.10 (5/9) | gateway broadcast 給 Studio ChatPanel CSS 三色 routing：`chat_reply`（一般灰）/ `say_canned`（橙 LLM 失敗 fallback）/ `skill_say`（綠 skill SAY step） |
+
+tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 studio chain（`[gemini, edge_tts, piper]` dedup）；其他值或缺欄位則退回 default chain。`source` 欄位由 gateway `_parse_tts_payload` 解析後 forward 到 ws/events broadcast，frontend 用 source 決定 ChatPanel bubble CSS class。Parse 失敗（malformed JSON）退回純文字 path（fail-safe）— 純文字 = no source = ChatPanel 顯示淡灰 spontaneous + ⏰ icon。
+
+**`interaction_executive_node._dispatch_step` 在 `step.args["input_origin"]` OR `step.args["source"]` 存在時發 envelope**（5/9 加 source 條件）。`source` 由 `skill_contract.py:_resolve_say_source(skill_name)` 在 `build_plan` 時注入 SAY step args（`chat_reply` → "chat_reply"，`say_canned` → "say_canned"，其他 skill SAY → "skill_say"）。其他 publisher（`event_action_bridge`、`llm_bridge_node`、`intent_tts_bridge_node`、`route_runner_node`、人手 `ros2 topic pub`）byte-for-byte 維持純文字。詳見 `docs/pawai-brain/speech/README.md` §TTS dual-route。
 
 ---
 
@@ -1213,6 +1240,7 @@ if not required.issubset(payload.keys()):
 | v2.7 | 2026-05-06 | Phase 0.5 Conversation Engine：`/brain/chat_candidate` 新增 4 欄位（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`）；新增 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` topics | System Architect |
 | v2.8 | 2026-05-08 | Phase A.6 Capability Awareness：`/brain/conversation_trace.stage` enum 把 `context` 換成 `world_state` + `capability`（langgraph engine）；`skill_gate.status` 加 `needs_confirm` / `demo_guide`；`/state/perception/face` 的 `sim_threshold_upper` 從 0.30 拉高到 **0.40**（5/8 demo 期陌生人誤觸抑制）；`/brain/chat_candidate` schema 不變（DemoGuide 只進 conversation_trace，Brain contract 維持乾淨） | System Architect |
 | v2.9 | 2026-05-07 | Per-message TTS routing：`/brain/chat_candidate` 加 `input_origin: str \| null` 欄位（plumbed from `studio_gateway POST /api/text_input` → `pawai_brain` LangGraph → IE-node SAY）；`/tts` payload 雙模化（純文字 backwards-compat OR JSON envelope `{"text", "input_origin"}`）。Studio chat 文字輸入路徑 → tts_node Gemini chain；其他全部 → edge_tts default chain。Plan: `~/.claude/plans/polished-questing-starlight.md`；commit `10829ca` | System Architect |
+| v2.10 | 2026-05-09 | 互動品質改善 8 issue 主線落地：(1) 新 topic `/brain/reset_context` (std_msgs/Empty) — Studio「新對話」按鈕 → POST `/api/reset` → 清 `_memory + _seen_sessions` + cancel pending_confirm；(2) `/tts` envelope 加 `source` 欄位（`chat_reply` / `say_canned` / `skill_say`）— gateway forward 給 ChatPanel CSS 三色 routing；純文字 backward compat 維持。Spec: `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`；PRs #51-#62 + #64 | System Architect |
 
 ---
 
