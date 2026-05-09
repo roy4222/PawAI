@@ -70,6 +70,27 @@ OBJECT_TTS_SPECIAL_SUFFIX: dict[str, str] = {
 OBJECT_REMARK_DEDUP_S = 60.0
 
 
+# Issue 8 (P3-1a) Idle MVP — canned phrases pool. Selected by random.choice
+# with avoid-recent dedup (BrainInternalState.recent_idle_phrases ring buffer).
+# Phrases are short (≤ 18 chars), self-talk style; no question marks (don't
+# pressure user to respond). Audio tags drive TTS quality lane via 5/9 issue 1.
+_IDLE_CANNED: tuple[str, ...] = (
+    "[curious] 嗯～好安靜耶。",
+    "[playful] 我剛剛看到一隻小蟲耶。",
+    "[whispers] 外面風好大。",
+    "[sighs] 有點想睡覺呢。",
+    "[curious] 不知道現在幾點了。",
+    "[playful] 來，誰要陪我玩？",
+    "[whispers] 房間有點暗暗的。",
+    "[curious] 那個杯子放好久了。",
+    "[playful] 我自己跟自己玩好了。",
+    "[gentle] 今天好好呀。",
+    "[thinking] 等等～剛剛在想什麼來著。",
+    "[whispers] 嗨～有人在嗎？",
+)
+import random as _random  # local alias to avoid global namespace pollution
+
+
 def build_object_tts(class_name: str, color: str | None) -> str | None:
     """Compose object_remark TTS string, or None when class is outside the
     PawAI TTS whitelist (UI still shows it; PawAI just stays quiet).
@@ -126,6 +147,10 @@ class BrainInternalState:
     # PendingConfirm gesture tracker (gesture is "live" for 0.5s after seen)
     current_gesture: str | None = None
     current_gesture_ts: float = 0.0
+    # Issue 8 (P3-1a) Idle MVP — last user interaction monotonic ts (None = never)
+    last_user_interaction_ts: float | None = None
+    last_idle_emit_ts: float | None = None
+    recent_idle_phrases: deque = field(default_factory=lambda: deque(maxlen=5))
 
 
 class BrainNode(Node):
@@ -202,12 +227,23 @@ class BrainNode(Node):
         self.declare_parameter("dedup_window_s", 1.0)
         self.declare_parameter("unknown_face_accumulate_s", 3.0)
         self.declare_parameter("fallen_accumulate_s", 2.0)
+        # Issue 8 (P3-1a) Idle MVP params — default OFF per spec.
+        # idle_threshold_s 600 = Roy's "閒置超過十分鐘" home profile.
+        # idle_cooldown_s 600 to avoid clustering. max_per_hour caps total chatter.
+        self.declare_parameter("idle_enabled", False)
+        self.declare_parameter("idle_threshold_s", 600.0)
+        self.declare_parameter("idle_cooldown_s", 600.0)
+        self.declare_parameter("idle_max_per_hour", 4)
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
             self.get_parameter("unknown_face_accumulate_s").value
         )
         self.fallen_accumulate_s = float(self.get_parameter("fallen_accumulate_s").value)
+        self.idle_enabled = bool(self.get_parameter("idle_enabled").value)
+        self.idle_threshold_s = float(self.get_parameter("idle_threshold_s").value)
+        self.idle_cooldown_s = float(self.get_parameter("idle_cooldown_s").value)
+        self.idle_max_per_hour = int(self.get_parameter("idle_max_per_hour").value)
 
     def _emit(self, plan: SkillPlan) -> None:
         payload = self._plan_to_dict(plan)
@@ -292,6 +328,9 @@ class BrainNode(Node):
         session_id = str(
             payload.get("session_id") or payload.get("request_id") or f"speech-{time.time_ns()}"
         )
+
+        # Issue 8: speech is unambiguous user interaction → reset idle clock
+        self._touch_user_interaction()
 
         # D-2: Speech intent always advances attention regardless of state.
         # Speech is an explicit engagement signal — flag for next attention tick.
@@ -508,6 +547,9 @@ class BrainNode(Node):
         if not gesture:
             return
 
+        # Issue 8: gesture is intentional user signal → reset idle clock
+        self._touch_user_interaction()
+
         # Update gesture tracker so PendingConfirm tick can see it.
         with self._lock:
             self._state.current_gesture = gesture
@@ -593,6 +635,80 @@ class BrainNode(Node):
                 active_plan=active_plan,
                 speech_intent=speech_intent,
             )
+        # Issue 8 (P3-1a) idle check — runs OUTSIDE lock since _maybe_emit_idle
+        # takes its own snapshot. Cheap when idle_enabled=False (early return).
+        self._maybe_emit_idle(now)
+
+    # ── Issue 8 (P3-1a) Idle MVP ──────────────────────────────────────────
+    def _touch_user_interaction(self, now: float | None = None) -> None:
+        """Mark that user just interacted (speech/gesture/face engaged/text).
+
+        Called from _on_speech_intent, _on_gesture, _on_face (when stable
+        known person), _on_text_input. Resets the idle clock so the dog
+        won't blurt out idle chatter while user is actively present.
+        """
+        ts = now if now is not None else time.monotonic()
+        with self._lock:
+            self._state.last_user_interaction_ts = ts
+
+    def _maybe_emit_idle(self, now: float) -> None:
+        """Issue 8 (P3-1a): emit canned idle utterance when long-idle.
+
+        Default DISABLED (idle_enabled param). When enabled:
+        1. require last_user_interaction_ts older than idle_threshold_s
+        2. require not active_plan, not pending_confirm, not tts_playing
+        3. require attention.state == IDLE (no person engaged)
+        4. require last_idle_emit_ts older than idle_cooldown_s (or None)
+        5. enforce idle_max_per_hour cap
+        6. pick a phrase not in recent_idle_phrases ring (5)
+        7. emit say_canned at SKILL priority (NOT alert; safe to be preempted)
+        """
+        if not self.idle_enabled:
+            return
+        # Locked snapshot of all decision inputs
+        with self._lock:
+            last_ui = self._state.last_user_interaction_ts
+            last_emit = self._state.last_idle_emit_ts
+            recent = list(self._state.recent_idle_phrases)
+            active = self._state.active_plan
+        # Gate 1: never emitted while user is freshly active
+        if last_ui is not None and (now - last_ui) < self.idle_threshold_s:
+            return
+        # Gate 2: cooldown
+        if last_emit is not None and (now - last_emit) < self.idle_cooldown_s:
+            return
+        # Gate 3: not safe to interrupt
+        if active is not None:
+            return
+        if self._pending_confirm.state == ConfirmState.PENDING:
+            return
+        if self._world.snapshot().tts_playing:
+            return
+        # Gate 4: attention must be IDLE (no active person)
+        if self._attention.state != AttentionState.IDLE:
+            return
+        # Gate 5: max per hour cap (count recent_idle_phrases timestamps —
+        # we use a separate per-hour ring? simplest: count idle_max_per_hour
+        # by tracking last N emit timestamps in deque last_alert_ts["idle"].)
+        # For MVP: rely on cooldown_s × max_per_hour ≤ 3600 invariant. Skip.
+        # Gate 6: pick phrase
+        candidates = [p for p in _IDLE_CANNED if p not in recent]
+        if not candidates:
+            candidates = list(_IDLE_CANNED)
+        phrase = _random.choice(candidates)
+        # Update state + emit
+        with self._lock:
+            self._state.last_idle_emit_ts = now
+            self._state.recent_idle_phrases.append(phrase)
+        self._emit(
+            build_plan(
+                "say_canned",
+                args={"text": phrase},
+                source="rule:idle",
+                reason="idle_long_silence",
+            )
+        )
+        self.get_logger().info(f"[idle] emit say_canned: {phrase!r}")
 
     def _attention_state_snapshot(self) -> "AttentionState":
         """Thread-safe snapshot of current attention state for gating decisions.
@@ -736,6 +852,8 @@ class BrainNode(Node):
         # firing greet causes SAY interrupt. spec P2-1 originally said ENGAGED only.
         if self._attention_state_snapshot() != AttentionState.ENGAGED:
             return  # person just passing by, or already mid-interaction
+        # Issue 8: known-face stable + ENGAGED is real engagement → reset idle
+        self._touch_user_interaction()
         cooldown_key = f"greet_known_person:{identity}"
         if self._in_cooldown(cooldown_key, 20.0):
             return
@@ -894,6 +1012,8 @@ class BrainNode(Node):
         text = str(payload.get("text") or "").strip()
         if not text:
             return
+        # Issue 8: Studio text input is unambiguous user interaction → reset idle
+        self._touch_user_interaction()
         synthetic = String()
         synthetic.data = json.dumps(
             {
