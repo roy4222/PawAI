@@ -590,6 +590,21 @@ def skills_by_bucket(bucket: SkillBucket) -> list[SkillContract]:
     return [c for c in SKILL_REGISTRY.values() if c.bucket == bucket]
 
 
+def _resolve_say_source(skill_name: str) -> str:
+    """Map skill name to TTS source classification for ChatPanel CSS routing.
+
+    Three-way classification (P1-1 Phase 2-mini):
+      chat_reply  → 'chat_reply'   (green bubble — LLM conversational reply)
+      say_canned  → 'say_canned'   (grey bubble  — scripted fallback/canned line)
+      everything else → 'skill_say' (orange bubble — skill-driven utterance)
+    """
+    if skill_name == "chat_reply":
+        return "chat_reply"
+    if skill_name == "say_canned":
+        return "say_canned"
+    return "skill_say"
+
+
 def _phase_a_enabled_when_blocks(contract: SkillContract) -> list[str]:
     """Return Phase A sentinel block reasons.
 
@@ -619,6 +634,8 @@ def build_plan(
     if block_reasons:
         raise ValueError(f"Skill {skill_name!r} blocked: {'; '.join(block_reasons)}")
 
+    say_source = _resolve_say_source(skill_name)
+
     resolved_steps: list[SkillStep] = []
     for step in contract.steps:
         step_args = dict(step.args)
@@ -638,6 +655,10 @@ def build_plan(
             # IE-node SAY dispatch reads this to wrap /tts as JSON envelope.
             if "input_origin" in args:
                 step_args["input_origin"] = args["input_origin"]
+        # SAY step source injection (P1-1 Phase 2-mini): enables ChatPanel CSS routing.
+        # Use setdefault so any template that already hard-codes source is not overridden.
+        if step.executor == ExecutorKind.SAY:
+            step_args.setdefault("source", say_source)
         resolved_steps.append(SkillStep(step.executor, step_args))
 
     return SkillPlan(

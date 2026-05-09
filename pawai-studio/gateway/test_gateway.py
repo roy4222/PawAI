@@ -178,7 +178,7 @@ class TestBuildTtsEvent:
         assert env["event_type"] == "tts_speaking"
         assert env["data"]["text"] == "roy，你好！"
         assert env["data"]["phase"] == "speaking"
-        assert env["data"]["origin"] == "unknown"
+        assert env["data"]["origin"] == "tts"
         assert "id" in env
         assert "timestamp" in env
 
@@ -193,6 +193,51 @@ class TestBuildTtsEvent:
         from studio_gateway import build_tts_event
         env = build_tts_event("謝謝你的幫忙")
         assert env["data"]["text"] == "謝謝你的幫忙"
+
+
+class TestParseTtsPayload:
+    """Test _parse_tts_payload helper from studio_gateway."""
+
+    def test_tts_envelope_parse_extracts_text_and_origin(self):
+        """JSON envelope: {text, input_origin, source} → broadcast with parsed fields."""
+        sys.path.insert(0, str(Path(__file__).parent))
+        from studio_gateway import _parse_tts_payload
+
+        raw = '{"text":"我是 PawAI","input_origin":"studio_text","source":"chat_reply"}'
+        parsed = _parse_tts_payload(raw)
+
+        assert parsed["text"] == "我是 PawAI"
+        assert parsed["origin"] == "studio_text"
+        assert parsed["source"] == "chat_reply"
+
+    def test_tts_plain_text_backward_compat(self):
+        """Plain text (no JSON) → text only, origin/source default."""
+        from studio_gateway import _parse_tts_payload
+
+        raw = "嗨，今天好嗎？"
+        parsed = _parse_tts_payload(raw)
+
+        assert parsed["text"] == "嗨，今天好嗎？"
+        assert parsed["origin"] == "tts"
+        assert parsed.get("source") is None
+
+    def test_tts_envelope_malformed_falls_back_to_text(self):
+        """Malformed JSON → treat as plain text."""
+        from studio_gateway import _parse_tts_payload
+
+        raw = '{"text": "broken'  # truncated
+        parsed = _parse_tts_payload(raw)
+
+        assert parsed["text"] == raw  # original string preserved
+
+    def test_tts_envelope_missing_text_field_falls_back(self):
+        """JSON dict without 'text' field → treat as plain text."""
+        from studio_gateway import _parse_tts_payload
+
+        raw = '{"foo": "bar"}'
+        parsed = _parse_tts_payload(raw)
+
+        assert parsed["text"] == raw
 
 
 class TestPayloadSchema:

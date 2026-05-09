@@ -5,7 +5,8 @@
 ## 不能做
 
 - 不要改 echo gate 的 timing（tts_playing + cooldown 0.5s + echo_cooldown 1.0s = 1.5s）除非有完整 E2E 測試
-- 不要用 MeloTTS 或 ElevenLabs（已棄用 3/26）
+- 不要用 MeloTTS（已棄用 3/26）
+- ElevenLabs 的 3/26 棄用決議已被 5/9 B-lite 決策 supersede：demo 前只允許作為 quality lane spike，不可直接替換主鏈或做 custom voice cloning
 - 不要假設 Whisper 可以用 int8（Jetson 不支援，必須 cuda + float16）
 
 ## 改之前先看

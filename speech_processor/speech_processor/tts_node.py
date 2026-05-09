@@ -617,16 +617,20 @@ class TTSProvider_OpenRouterGemini:
                             len(pcm),
                         )
 
-            # Concatenate in original order, skip failed chunks gracefully.
-            ok_parts = [p for p in results if p is not None]
-            if not ok_parts:
-                _logger.warning("openrouter_gemini: all chunks failed")
+            # All-or-nothing: any chunk failure → fallback chain.
+            if any(p is None for p in results):
+                _logger.warning(
+                    "openrouter_gemini: chunked synth partial failure "
+                    "(%d/%d chunks None) — returning None for provider chain fallback",
+                    sum(1 for p in results if p is None),
+                    len(results),
+                )
                 return None
-            full_pcm = b"".join(ok_parts)
+            full_pcm = b"".join(results)  # type: ignore[arg-type]
             wall = time.monotonic() - t0
             _logger.warning(
                 "openrouter_gemini: %d/%d chunks ok in %.2fs wall (max single=%.2fs), %.1fs audio",
-                sum(1 for p in results if p is not None),
+                len(results),
                 len(chunks),
                 wall,
                 max(timings),
