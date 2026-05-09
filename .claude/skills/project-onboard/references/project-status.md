@@ -1,6 +1,46 @@
 # 專案進度快照
 
-> 最後更新：2026-05-05 night (PawAI Brain 語音聊天 LLM 個性化 + 對話記憶 + 環境 context + truncation 真兇排除)
+> 最後更新：2026-05-09 evening（互動品質改善 8 issue 主線落地 + 4 P0 audit fix；待 Jetson smoke 驗收）
+
+## 2026-05-09 — Roy 8 issue 互動品質改善（13 PR merged）
+
+5/8 evening Roy 列 8 issue：TTS 音色 / LLM 死板 / LLM 不主動鏈式 / 物體人臉重複干擾 / Studio 顯示每句 / ASR 簡→繁 / refresh 重置 / idle 待機。5/9 全天 spec brainstorm → 5 個 feature branch + 4 P0 audit 全 merge `origin/main`（PR #51-#62 + #64）。
+
+### 主線狀態（不是「100% 完成」）
+
+| # | Issue | 狀態 | 殘餘 |
+|---|---|---|---|
+| 1 | TTS 音色 | 部分 | ElevenLabs spike 待 Roy 親耳評；現走 Gemini quality lane + emotional tag 強制 |
+| 2 | LLM 死板 | 主線落地 | 待 Jetson smoke：「介紹一下」是否真擺脫 70 字功能列表 |
+| 3 | LLM 主動鏈式 | 主線落地 | 待 Jetson smoke：「扭一下」LLM 是否穩定出 `skill: wiggle` |
+| 4 | 重複觸發干擾 | 主線落地 | 待 Jetson smoke：路過比 OK 不被打招呼 |
+| 5 | Studio 顯示每句 | 完成 | — |
+| 6 | ASR 簡→繁 | 主線落地 | 待 Jetson runtime 確認 `opencc` import |
+| 7 | refresh reset | 主線落地 | 待 Jetson smoke：按鈕清 brain 後第一句不帶舊 context |
+| 8 | Idle 待機 | MVP **default OFF** | demo 啟用待 Roy 決定 |
+
+### 新元件（5/9 落地）
+
+- topic：`/brain/reset_context` (std_msgs/Empty)
+- `/tts` envelope schema 擴 `source` 欄位（`chat_reply` / `say_canned` / `skill_say`），純文字 backward compat
+- 新 module：`pawai_brain/pawai_brain/nodes/mode_classifier.py`（5-mode regex）
+- 新 module：`interaction_executive/interaction_executive/attention_machine.py`（4-state pure Python）
+- 新 directory：`pawai_brain/personas/v1/{IDENTITY,STYLE,CAPABILITIES,EXAMPLES,OUTPUT}.md`（OpenClaw-lite L7）
+- 新 helper（兩份）：`text_normalization.py`（speech_processor + gateway 各一份避免 cross-package import）
+- 新 params：idle_*（default off）/ enable_s2twp / tts_dual_route_enabled / tts_fast_lane_threshold / llm_temperature default 0.8
+
+### Carry-over（5/10）
+- Jetson sync + colcon build (含 `rm -rf build/install/pawai_brain` 強制 data_files 重 install) + restart demo
+- 5 case Roy 親測（介紹/audio tag/扭一下/路過 OK/新對話按鈕）
+- ElevenLabs Spike-Mini 由 Roy 親耳評分（`tools/tts_spike/`）
+- 本機 main reconcile（22 ahead local 個人 commit / 14 behind origin/main）
+
+### Spec / plan 文件
+- spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+- roadmap：`docs/pawai-brain/plans/2026-05-09-master-execution-roadmap.md`
+- 5 個 branch plans 在 `docs/pawai-brain/plans/2026-05-09-*` 和 `2026-05-11-*` 和 `2026-05-12-*`
+
+---
 
 ## 2026-05-05 night（unstaged，未 commit）
 

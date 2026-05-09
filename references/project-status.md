@@ -1,7 +1,85 @@
 # 專案狀態
 
-**最後更新**：2026-05-08 evening（A-H 八階段在家驗收 + 5 個 commit fix：depth_safety / Gemini TTS 統一 / confirm wiring 大修 / thumb 對齊 contract / wiggle_hip api_id 修正）
-**硬底線**：5/18 期末 demo（10 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-09 evening（互動品質改善 8 issue 全主線落地 + 4 P0 audit fix；待 Jetson smoke 驗收）
+**硬底線**：5/18 期末 demo（9 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/9 進度（Roy 8 issue 互動品質改善 — 13 PR 主線落地）
+
+5/8 evening Roy 列出 8 issue（TTS 音色 / LLM 死板 / LLM 不主動鏈式 / 物體人臉重複干擾 / Studio 顯示每句 / ASR 簡→繁 / refresh 重置 context / idle 待機）。5/9 全天從 spec brainstorm → master roadmap → 5 個 feature branch + 4 P0 audit fix 全 merge 進 `origin/main`。
+
+### Commits / PRs（13 條）
+
+| PR | SHA | Issue | 內容 |
+|---|---|---|---|
+| #51 | 91c8ab5 | 5（觀測底座）+ 1 跳句 | Wave 0 + P1-1：tts silent-skip 改 all-or-nothing；gateway `/tts` envelope parse；ChatPanel `ttsMessages` ring buffer + dedup + rate-limit；Phase 2-mini source pipeline (`build_plan` → IE-node envelope `source` → gateway → CSS) |
+| #52 | 79c17a1 | 6 + 7 | Branch C：OpenCC s2twp 雙入口（`stt_intent_node` + `/ws/speech`）+ ChatPanel「新對話」按鈕 + `/api/reset` endpoint + dev-only F5 hybrid auto-detect (`NEXT_PUBLIC_AUTO_RESET_ON_REFRESH`) |
+| #53 | 837541e | 2 + 3 | Branch B：persona 拆 5 檔 `personas/v1/{IDENTITY,STYLE,CAPABILITIES,EXAMPLES,OUTPUT}.md`；`mode_classifier` graph node 5-mode；capability lazy inject；4-bucket whitelist；temperature 0.6（launch 預設）；few-shot 補 wiggle/stretch + identity 8 case |
+| #54 | 3b4fb3e | 4 | Branch D：`AttentionMachine` 4-state pure Python（IDLE/NOTICED/ENGAGED/INTERACTING, dwell 1.5s / quiet 8s / face_lost 3s）+ emit gate per skill（greet ENGAGED-only, object_remark + active_plan/pending/tts not 條件）+ dedup key 改 `class_name only` |
+| #55 | fc80bf2 | 1 partial | Branch E partial：TTS dual-route（fast lane edge-tts + quality lane Gemini）+ provider `output_format` attr + `_last_served_format` 修 fallback chain Piper/MP3 decode bug |
+| #56 | fce4281 | (script fix) | `start_full_demo_tmux.sh` drop legacy persona.txt arg → 用 launch default `personas/v1` directory |
+| #57 | c59ba01 | 1 (calibrate) | TTS threshold 30 → 12；emotional audio tags（[playful]/[excited]/[whispers] etc 12 個）強制 quality lane；ElevenLabs Spike-Mini 工具 + dev-log 模板 |
+| #58 | 1c4d766 | 2 (deep) | `_build_user_message` 移除 `elif cap:` chat/identity/safety mode 不再注入 `[能力]` JSON（issue 2 真兇）；mode_classifier regex 補「介紹一下/介紹一下你/介紹一下 PawAI/自我介紹/你叫啥/你會啥/功能有哪些」；launch temp 0.6 → 0.8 |
+| #59 | 1b0593f | 4 (deep) | `AttentionMachine._transition(IDLE)` 集中清 face/dwell timestamps（修 flicker bypass）；`_attention.tick()` 進 `self._lock`；新 `_attention_state_snapshot()` helper；stranger_alert 加 active_skill+pending+tts guards；greet_known_person 改 ENGAGED-only（drop INTERACTING） |
+| #60 | ac3990a | 6 (complete) | `/api/text_input` REST endpoint 也呼叫 `to_traditional_tw`（補 Branch C 漏的第三入口） |
+| #61 | 50d18ec | 7 (complete) | `_on_reset_context` 加 `_seen_sessions.clear()` + `with self._seen_lock`（修 Branch C 漏的會話 ID dedup） |
+| #62 | a3cc9ab | 8 | Idle MVP P3-1a：12 個 audio-tagged 短語、`_maybe_emit_idle()` 6 道 gate（idle_enabled / threshold / cooldown / no active_plan / no pending / not tts_playing / attention IDLE）、`_touch_user_interaction()` 在 4 個 callback 重置時鐘、復用 10Hz `_tick_attention` timer、**default OFF** |
+| #64 | 9ea1657 | (final audit) | declare_parameter llm_temperature 0.2 → 0.8（兩處 — `conversation_graph_node:308` + `llm_bridge_node:202`）；`_on_object` 改用 `_attention_state_snapshot()`（第 3 處 race fix）；idle 時鐘統一 `time.time()`（跟 brain_node 其他 cooldown 一致）；`idle_max_per_hour` 真 enforcement（`idle_emit_history` deque + 3600s window） |
+
+### 8 issue 真實狀態（不是「100% 完成」）
+
+| # | Issue | 主線狀態 | 殘餘 |
+|---|---|---|---|
+| 1 | TTS 音色/延遲 | **部分** — dual-route 可走 Gemini quality lane，emotional tag override；threshold 12（避免短句全卡 fast lane） | ElevenLabs 待 Roy 親耳 spike（`tools/tts_spike/elevenlabs_mini.py`），spike-mini GO 後才進主鏈 |
+| 2 | LLM 死板 | **主線落地** — capability JSON 不再 leak 進 chat/identity prompt；mode regex 補完；temp 0.8 | 待 Jetson smoke：「介紹一下」是否真擺脫 70 字功能列表 |
+| 3 | LLM 不主動鏈式 | **主線落地** — wiggle/stretch few-shot 9 case + 4 桶白名單 + action_request mode regex | 待 Jetson smoke：「扭一下」LLM 是否穩定出 `skill: wiggle` |
+| 4 | 重複觸發干擾 | **主線落地** — attention 4-state + 3 race-condition lock + greet ENGAGED-only + stranger 加 active_skill 守護 + dedup key drop color | 待 Jetson smoke：路過比 OK 不被打招呼 / wiggle 不被 stranger 中斷 |
+| 5 | Studio 顯示每句 | **完成** — pipeline 已驗（build_plan → envelope → gateway → ws → CSS）；Roy 5/8 smoke 已說「ui 郝非常多 很棒」 | — |
+| 6 | ASR 簡→繁 | **主線落地** — 三入口（stt_intent + /ws/speech + /api/text_input）全 OpenCC s2twp | 待 Jetson runtime 確認 `opencc` import OK |
+| 7 | refresh reset | **主線落地** — backend `/brain/reset_context` 清 memory + seen_sessions；frontend「新對話」button + confirm + F5 dev flag | 待 Jetson smoke：按鈕清 brain 後第一句不帶舊 context |
+| 8 | Idle 待機 | **MVP 落地但 default OFF** — Roy 訴求「閒置 10 分鐘」對應 `idle_threshold_s=600` home profile | demo 是否啟用待 Roy 決定；啟用要 `-p idle_enabled:=true` |
+
+### 新增 ROS 元件 / Topic / Param
+
+- **新 topic**：`/brain/reset_context` (std_msgs/Empty)
+- **`/tts` envelope schema 擴**：JSON 新增 `source` 欄位 (`chat_reply` / `say_canned` / `skill_say`) — 純文字 backward compat 維持
+- **新 module**：`pawai_brain/pawai_brain/nodes/mode_classifier.py`（純 Python regex，5 mode）
+- **新 module**：`interaction_executive/interaction_executive/attention_machine.py`（純 Python 4-state，fake-clock injectable）
+- **新 directory**：`pawai_brain/personas/v1/`（5 檔，`setup.py` data_files 安裝到 `share/`）
+- **新 helper**（兩份）：`speech_processor/speech_processor/text_normalization.py` + `pawai-studio/gateway/text_normalization.py`
+- **新 ROS params**：
+  - `idle_enabled`（默認 False）/ `idle_threshold_s`（600s）/ `idle_cooldown_s`（600s）/ `idle_max_per_hour`（4）
+  - `enable_s2twp`（True）+ env `PAWAI_ENABLE_S2TWP`
+  - `tts_dual_route_enabled`（True）/ `tts_fast_lane_threshold`（12）
+  - `llm_temperature` declare_parameter 默認 0.2 → 0.8（兩 node）
+
+### 新增測試
+- IE：`test_attention_machine.py`（12 fake-clock unit）+ `test_attention_integration.py`（5 場景）+ `test_idle_mvp.py`（5 phrase pool sanity）
+- pawai_brain：`test_mode_classifier.py`（含 5/9 補 8 個 identity/capability case）
+- gateway：`TestTextNormalizationGateway`（4 case）
+- frontend vitest：`reset-conversation.test.ts`（3 case）
+
+合計：375+ tests pass on origin/main，0 regression。
+
+### Carry-over（明 5/10）
+
+- **Jetson sync + colcon build + restart demo**：rsync source + `rm -rf build/pawai_brain install/pawai_brain` + colcon build （`data_files` glob 增量不 trigger，需清重 build）+ tmux kill + restart
+- **5 case 實測**（Roy 親測）：
+  1. 「介紹一下」是否擺脫功能列表 → 期待識別 identity mode + 不注入 capability
+  2. 「[playful] 嗨～」是否走 quality lane（不再 google 小姐）
+  3. 「扭一下」→ wiggle skill emit → PendingConfirm → 比 OK → 真扭（不被 stranger / object 中斷）
+  4. 路過比 OK → greet/object 不發；停下 dwell 1.5s + ≤1.6m → ENGAGED → greet 才發
+  5. 「新對話」按鈕 → 對話記憶 + seen_sessions 都清，第一句不帶舊 context
+- **ElevenLabs Spike-Mini**：Roy 拿 API key + 挑 3 voice ID + 跑 `tools/tts_spike/elevenlabs_mini.py` + 聽 15 mp3 + 評分；GO 後再 PR 把 ElevenLabs 進 quality lane
+- **本機 main reconcile**：`ahead 22, behind origin/main 14`（Roy 自己 22 commits + 我 today 13 PRs 進 origin），需 rebase 或 cherry-pick
+- **Idle 啟用決策**：demo 是否展示 idle，要展示用 `-p idle_enabled:=true -p idle_threshold_s:=45 -p idle_cooldown_s:=120`
+
+### 與 5/9 brainstorm spec 對接
+
+完整 spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+Master roadmap：`docs/pawai-brain/plans/2026-05-09-master-execution-roadmap.md`
+Branch plans：B/C/D/E 各一份在 `docs/pawai-brain/plans/`
 
 ---
 
