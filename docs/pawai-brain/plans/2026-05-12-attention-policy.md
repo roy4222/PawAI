@@ -16,17 +16,24 @@
 
 ```
 interaction_executive/interaction_executive/attention_machine.py   # NEW — 4 state machine module
-interaction_executive/interaction_executive/world_state.py         # MODIFY — 加 attention field
-interaction_executive/interaction_executive/brain_node.py          # MODIFY — gate logic + dedup + helper rename
-interaction_executive/test/test_attention_machine.py               # NEW — 8 unit tests
+interaction_executive/interaction_executive/brain_node.py          # MODIFY — gate logic + dedup + helper rename + attention 進 _publish_state
+interaction_executive/test/test_attention_machine.py               # NEW — 8 unit tests (fake clock)
 ```
 
 **brain_node.py 改動點**（spec L702-803）：
 - L67 `OBJECT_REMARK_DEDUP_S = 60.0` 保留
 - L256-259 `_has_active_sequence` → `_has_active_skill_or_sequence`（修 SKILL 不擋 SKILL bug）
+- L596 `_on_face` callback（**Roy review #1 — 實際是 `_on_face`，topic 是 `/event/face_identity`，不是 spec 寫的 `/state/perception/face`**；payload schema 開工前 echo 確認）
 - L637-640 `greet_known_person` per-identity 20s cooldown 保留 + 加 attention gate（僅 ENGAGED）
 - L715 `_on_object`：spec 明確不讀 distance_m（payload 無此欄位）；改加 attention + active_plan + pending + tts not 條件
 - L760-764 dedup key 從 `(class_name, color)` 改 `class_name only`
+- `_publish_brain_state()` payload 加 `attention.state` 欄位（**Roy review #2 — 不放 world_state.py，那邊偏 SafetyLayer flags；attention 是 brain 仲裁狀態，廣播給 Studio 用 _publish_state 比較直接**）
+
+**Roy review 修正**：
+- ❶ face callback 實際命名 + topic 開工前 grep + echo verify
+- ❷ attention state 從 brain `_publish_state` broadcast，不動 `interaction_executive/world_state.py`
+- ❸ 8 unit tests 用 fake clock（`time.monotonic` injectable），**不**用 real time sleep
+- ❹ AttentionMachine 純 Python class，無 ROS2 依賴（100% testable，跟 SkillContract 同 pattern）
 
 ---
 
@@ -52,9 +59,9 @@ interaction_executive/test/test_attention_machine.py               # NEW — 8 u
 ## Task D-2: Wire AttentionMachine into brain_node
 
 - [ ] brain_node `__init__` 建 `self._attention = AttentionMachine(...)`
-- [ ] `_on_face_state` callback 推 face msg 給 attention
-- [ ] 10Hz tick timer 跑 attention.tick()
-- [ ] state.attention field 加進 `/state/pawai_brain` JSON broadcast（讓 Studio Trace Drawer 顯示）
+- [ ] `_on_face` callback（既有，L596）推 face msg + identity 給 attention
+- [ ] 10Hz tick timer 跑 attention.tick(now=time.monotonic(), ...)；**不**塞 sleep
+- [ ] `_publish_brain_state()` 加 `attention: {"state": "...", "since_ts": ...}` 給 Studio Trace Drawer
 - [ ] commit
 
 ## Task D-3: Emit gate per skill

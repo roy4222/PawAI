@@ -33,16 +33,26 @@ pawai_brain/test/test_mode_classifier.py           # NEW — 8 unit tests
 **修改檔案**:
 
 ```
-pawai_brain/launch/pawai_conversation_graph.launch.py:20-40   # llm_persona_file default → personas/v1; temperature 0.2 → 0.6
+pawai_brain/setup.py                                          # ★ 加 data_files install personas/v1/*.md (Roy review #1)
+pawai_brain/launch/pawai_conversation_graph.launch.py:20-40   # llm_persona_file default → get_package_share_directory; temperature 0.2 → 0.6
 pawai_brain/pawai_brain/conversation_graph_node.py:67-126     # _INLINE_PERSONA + _load_persona file/dir 雙模 + _build_user_message lazy inject + face state subscription
-pawai_brain/pawai_brain/world_state_builder.py                # current_speaker field
-pawai_brain/pawai_brain/graph.py                              # 加 mode_classifier graph node
+pawai_brain/pawai_brain/nodes/world_state_builder.py          # current_speaker field（路徑修正：實際在 nodes/，不是 pawai_brain 直下）
+pawai_brain/pawai_brain/capability/world_snapshot.py          # WorldSnapshot 加 current_speaker 欄位（給 nodes/world_state_builder.py 寫入）
+pawai_brain/pawai_brain/graph.py:34-47                        # 加 mode_classifier 在 input 和 safety_gate 之間（實際 entry 是 "input" 不是 "input_normalizer"）
 pawai_brain/pawai_brain/state.py                              # ConversationState 加 mode field
 interaction_executive/interaction_executive/brain_node.py:447-456   # LLM_PROPOSAL_EXECUTE 4 桶
 interaction_executive/interaction_executive/skill_policy_gate.py:18-27   # LLM_PROPOSABLE_SKILLS 移除 greet_known_person
-scripts/start_pawai_brain_tmux.sh:15                          # 切到 conversation_graph_node 路徑
+scripts/start_pawai_brain_tmux.sh                             # ★ 整窗改：移除 llm_bridge_node window，新增 conversation_graph_node window（拆 Task 9 獨立做 + smoke）
 tools/llm_eval/run_eval.py                                    # 1I A/B eval 加 case
 ```
+
+**Roy 5/9 review 修正**：
+- ❶ `setup.py data_files` 必須裝 `share/pawai_brain/personas/v1/*.md`，否則 colcon build 過但 runtime 從 install/share 跑時找不到
+- ❷ launch default 用 `get_package_share_directory("pawai_brain")` + `personas/v1`，**不**用 `Path(__file__).parent.parent`（source path ≠ install path）
+- ❸ graph entry 是 `"input"` 不是 `"input_normalizer"`；mode_classifier 接在 `input → mode_classifier → safety_gate`
+- ❹ world_state_builder 實際在 `nodes/` 子資料夾；`WorldSnapshot` 在 `capability/world_snapshot.py`
+- ❺ tmux script 切到 conversation_graph_node 是 runtime topology 變更，獨立 Task 9 做 + smoke
+- ❻ test helper `_build_test_node` 用 `object.__new__(ConversationGraphNode)` + 手 patch logger，避免啟動 ROS context
 
 ---
 
@@ -50,9 +60,14 @@ tools/llm_eval/run_eval.py                                    # 1I A/B eval 加 
 
 **Files**:
 - Modify: `pawai_brain/pawai_brain/conversation_graph_node.py:295-315` (`_load_persona`)
-- Modify: `pawai_brain/launch/pawai_conversation_graph.launch.py:20-22` (`llm_persona_file` default)
-- Modify: `scripts/start_pawai_brain_tmux.sh:15` (切 conversation_graph_node)
+- Modify: `pawai_brain/launch/pawai_conversation_graph.launch.py:20-22` (`llm_persona_file` default 用 `get_package_share_directory`)
+- Modify: `pawai_brain/setup.py:13-17` (data_files 裝 personas/v1/*.md — Roy review #1)
 - Test: `pawai_brain/test/test_conversation_graph_node.py`（新建或現有）
+
+**注意（Roy review）**：
+- tmux script 改動拆到 **Task 9** 獨立做 + smoke，這個 task 只動 loader
+- launch default **不**用 `Path(__file__).parent.parent`（source 路徑 ≠ colcon install 路徑），用 `get_package_share_directory("pawai_brain") / "personas" / "v1"`
+- `_build_test_node` 用 `object.__new__(ConversationGraphNode)` + monkeypatch `get_logger` 為 fake logger，避免啟 ROS node
 
 - [ ] **Step 1.1: 讀現況**
 
@@ -177,23 +192,41 @@ def _load_persona(self) -> str:
 self._capabilities_md: str = ""  # set by _load_persona; used by _build_user_message lazy inject
 ```
 
-- [ ] **Step 1.5: 改 launch default + tmux script**
+- [ ] **Step 1.5: 改 setup.py 安裝 personas + launch default**
 
-`pawai_conversation_graph.launch.py` L20-22:
+**setup.py**（必須先做，否則 launch 找不到 install/share/pawai_brain/personas/v1/）：
+
 ```python
+# pawai_brain/setup.py
+from glob import glob
+
+# 既有 data_files 加：
+data_files=[
+    ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
+    (f"share/{package_name}", ["package.xml"]),
+    (f"share/{package_name}/launch", glob("launch/*.launch.py")),
+    (f"share/{package_name}/config", glob("config/*.yaml")),
+    (f"share/{package_name}/personas/v1", glob("personas/v1/*.md")),  # ← NEW
+],
+```
+
+**`pawai_conversation_graph.launch.py` L20-22**：
+
+```python
+from ament_index_python.packages import get_package_share_directory
+from pathlib import Path
+
+# 在 generate_launch_description() 內：
+default_persona_dir = str(Path(get_package_share_directory("pawai_brain")) / "personas" / "v1")
+
 DeclareLaunchArgument(
     "llm_persona_file",
-    default_value=str(Path(__file__).parent.parent / "personas" / "v1"),
+    default_value=default_persona_dir,
     description="Path to persona file (legacy) or directory (5 files: IDENTITY/STYLE/OUTPUT/EXAMPLES/CAPABILITIES)",
 ),
 ```
 
-`scripts/start_pawai_brain_tmux.sh` L15:
-```bash
-ros2 run pawai_brain conversation_graph_node \
-    --ros-args -p llm_persona_file:=$(pwd)/pawai_brain/personas/v1
-# (移除 ros2 run speech_processor llm_bridge_node — 已被 conversation_graph_node 取代)
-```
+**tmux script 不在這個 task 改**（拆到 Task 9 獨立做 + smoke `/brain/chat_candidate`）
 
 - [ ] **Step 1.6: 跑 test 確認 pass**
 
@@ -206,7 +239,7 @@ python3 -m pytest pawai_brain/test/test_conversation_graph_node.py -v
 ```bash
 git add pawai_brain/pawai_brain/conversation_graph_node.py \
         pawai_brain/launch/pawai_conversation_graph.launch.py \
-        scripts/start_pawai_brain_tmux.sh \
+        pawai_brain/setup.py \
         pawai_brain/test/test_conversation_graph_node.py
 git commit -m "feat(brain): 1A persona loader file/dir dual mode
 
@@ -453,7 +486,8 @@ class ConversationState(TypedDict, total=False):
     mode: str  # safety / identity / capability_question / action_request / chat (default)
 ```
 
-`graph.py` 加 mode_classifier node 在 input_normalizer 之後、safety_gate 之前：
+`graph.py` 在現有 `g.add_edge("input", "safety_gate")` 之前插 mode_classifier（Roy review #4 — graph entry 是 `"input"` 不是 `"input_normalizer"`）：
+
 ```python
 from pawai_brain.pawai_brain.nodes.mode_classifier import classify_mode
 
@@ -466,9 +500,11 @@ def mode_classifier_node(state: ConversationState) -> ConversationState:
     })
     return state
 
-# graph.add_node("mode_classifier", mode_classifier_node)
-# graph.add_edge("input_normalizer", "mode_classifier")
-# graph.add_edge("mode_classifier", "safety_gate")
+# graph.py 改動（既有 entry "input" 保留）：
+g.add_node("mode_classifier", mode_classifier_node)
+# 把 g.add_edge("input", "safety_gate") 改成：
+g.add_edge("input", "mode_classifier")
+g.add_edge("mode_classifier", "safety_gate")
 ```
 
 - [ ] **Step 3.6: Commit**
@@ -880,10 +916,17 @@ Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.
 
 **Files**:
 - Modify: `pawai_brain/pawai_brain/conversation_graph_node.py`（face subscription + recent identity tracking）
-- Modify: `pawai_brain/pawai_brain/world_state_builder.py`（current_speaker field）
+- Modify: `pawai_brain/pawai_brain/nodes/world_state_builder.py`（路徑修正：實際在 `nodes/` 子資料夾）
+- Modify: `pawai_brain/pawai_brain/capability/world_snapshot.py`（`WorldSnapshot` 加 `current_speaker` field — Roy review #3）
 - Test: `pawai_brain/test/test_conversation_graph_node.py`
 
-**背景**：spec 寫 face_perception publish 8 Hz `/state/perception/face`。conversation_graph_node 訂閱 + 維護 `_recent_face_identity: tuple[str, float]`，> 3s 視為 unknown。world_state_builder 加 `current_speaker` field。
+**背景**：spec 寫 face_perception publish 8 Hz `/state/perception/face`。conversation_graph_node 訂閱 + 維護 `_recent_face_identity: tuple[str, float]`，> 3s 視為 unknown。`WorldSnapshot` 加 `current_speaker` field、`world_state_builder` 寫入。
+
+**前置確認**：開工前 grep 確認哪個 face topic 較穩：
+- `/event/face_identity`（brain_node 既有 sub）
+- `/state/perception/face`（spec 寫的 — 需確認 face_perception 是否真的 publish）
+
+如果 `/state/perception/face` 不存在或不穩，改用 `/event/face_identity`。
 
 - [ ] **Step 8.1: 寫 failing tests**
 
@@ -991,7 +1034,39 @@ Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.
 
 ---
 
-## Task 9: 1I — A/B Eval Suite (4 組對照)
+## Task 9: tmux Script Runtime Topology Switch（Roy review #5 — 獨立 task + smoke）
+
+**Files**:
+- Modify: `scripts/start_pawai_brain_tmux.sh`（移除 llm_bridge_node window，新增 conversation_graph_node window）
+
+**背景**：原 plan Task 1 把 tmux script 切到 conversation_graph_node 跟 persona loader 綁同 commit。Roy review #5 拆獨立 — 因為 runtime topology change 風險獨立於 loader bug。
+
+**Steps**:
+- [ ] 改 `start_pawai_brain_tmux.sh`：
+  - 移除 `llm_bridge_node --ros-args -p output_mode:=brain` 那個 window（已被 conversation_graph_node 取代）
+  - 新增 `ros2 launch pawai_brain pawai_conversation_graph.launch.py llm_persona_file:=<install/share path>` window
+- [ ] Jetson smoke：
+  - 啟動 tmux
+  - `ros2 topic echo /brain/chat_candidate` 確認新 conversation_graph_node 真的 publish
+  - 文字輸入「你好」→ 期望 chat_candidate emit + ChatPanel 收到 reply
+- [ ] 確認 demo flow 仍跑（self_introduce skill button 測試）
+- [ ] commit
+
+```bash
+git add scripts/start_pawai_brain_tmux.sh
+git commit -m "feat(scripts): switch start_pawai_brain_tmux to conversation_graph_node
+
+Replace legacy llm_bridge_node window with pawai_conversation_graph launch.
+Smoke verified /brain/chat_candidate publishes from new node.
+
+Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1A
+Roy review #5: runtime topology change separate from loader patch.
+"
+```
+
+---
+
+## Task 10: 1I — A/B Eval Suite (4 組對照)
 
 **Files**:
 - Modify: `tools/llm_eval/run_eval.py`（加 4 組 config）

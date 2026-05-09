@@ -42,7 +42,8 @@
   - 中文自然度 ≥ 4/5
   - 短句 < 2s AND 長句 < 4s
   - 無破音/吞字/簡體腔
-  - PAYG $5 quota demo 期足夠
+  - PAYG quota 充足（**Roy review #1**：以 ElevenLabs dashboard 實際剩餘 quota 為準，spike log 記錄字數消耗 + 比例；不硬寫「50k chars」承諾）
+- [ ] **Voice ID 記錄**（Roy review #2）：spike script 必須記下選中 voice 的 `voice_id`（永久 ID）+ `name` + `language`，主鏈 launch arg 用 voice_id 不靠 display name
 - [ ] **GO** → 進 Phase E-2
 - [ ] **NO-GO** → 5/12 改做 `spike/gemini-native-tts`（spec P2-2-fallback；半天）
 
@@ -75,16 +76,25 @@
 **Branch**: `feat/tts-dual-route`（從 main 建）
 
 ### Task E-3.1: Provider class 加 output_format 屬性
+
+**Roy review #4 — 採較小改法**：保留 `synthesize() -> bytes | None`，**不**改 tuple return。fallback chain 風險最小。
+
 - [ ] `tts_node.py` 各 provider class（ElevenLabs / OpenRouterGemini / EdgeTTS / Piper）加：
   ```python
   output_format: AudioFormat = AudioFormat.MP3  # 或 WAV (Piper)
   ```
-- [ ] `synthesize()` 回傳 `(audio_bytes, served_by_format)` tuple
-  - 或：tts_callback 跑完 provider chain 後記下 `last_served_format`
+- [ ] **不改** `synthesize()` 簽名（仍 `bytes | None`）— provider chain loop 在選中成功 provider 時記：
+  ```python
+  audio = provider.synthesize(text)
+  if audio is not None:
+      self._last_served_format = provider.output_format  # 給 _play_on_robot 用
+      return audio
+  ```
 
 ### Task E-3.2: `_play_on_robot` 改吃 served format
-- [ ] L1185 改：`src_fmt = served_by_format` 而非 `self.config.provider == TTSProvider.PIPER ? WAV : MP3`
+- [ ] L1185 改：`src_fmt = self._last_served_format` 而非 `self.config.provider == TTSProvider.PIPER ? WAV : MP3`
 - [ ] 解 fallback chain bug（fallback 到 Piper 出 WAV 卻被當 MP3）
+- [ ] backward compat：第一次呼叫前 `self._last_served_format = AudioFormat.MP3` 預設
 
 ### Task E-3.3: tts_callback 雙軌路由邏輯
 - [ ] 入口判 effective_text_length:
@@ -94,14 +104,20 @@
 - [ ] effective_length 算法：去 audio tag `[playful]` + 去空白標點，中文 1 char = 1 unit + 英文 1 word = 1 unit
 - [ ] safety keyword：`停|停止|不要動|先不要動|別動|小心|警告|危險|stop`
 
-### Task E-3.4: Provider chain 配置
-- [ ] **Mini GO 路徑**：
+### Task E-3.4: Provider chain 配置（Roy review #3）
+
+**ElevenLabs 進主鏈條件**：**Spike-Real GO**（不只 Mini GO）。Spike-Mini GO 但 Real NO-GO（Megaphone 整合失敗）→ ElevenLabs **不**放 quality lane 主軌。
+
+- [ ] **Spike-Real GO 路徑**：
   - Fast lane: `edge-tts → Piper`
   - Quality lane: `ElevenLabs → OpenRouter Gemini → edge-tts → Piper`
-- [ ] **Mini NO-GO 路徑**（若退 Gemini native）：
+- [ ] **Spike-Real NO-GO（即使 Mini GO）路徑**：
   - Fast lane 同上
-  - Quality lane: `Gemini native / OpenRouter Gemini → edge-tts → Piper`
-  - **不**留 ElevenLabs 在鏈中
+  - Quality lane: `OpenRouter Gemini → edge-tts → Piper`（不放 ElevenLabs）
+- [ ] **Mini NO-GO 路徑**（5/12 退 Gemini native spike）：
+  - Fast lane 同上
+  - Quality lane: `Gemini native → OpenRouter Gemini → edge-tts → Piper`
+  - 不留 ElevenLabs 在鏈中
 
 ### Task E-3.5: 4 fallback 路徑單元測試
 - [ ] fast lane edge fail → Piper（serve format WAV）
@@ -143,7 +159,7 @@
 | Risk | Mitigation |
 |---|---|
 | ElevenLabs Mini 5/11 NO-GO | 5/12 退 Gemini native spike（spec P2-2-fallback 已寫） |
-| ElevenLabs API quota 用爆 | PAYG $5 ~50k chars，demo 多輪估算夠 |
+| ElevenLabs API quota 用爆 | 以 ElevenLabs dashboard 實際 quota 為準；spike script 記錄字數消耗；demo 期 quota 不足即 top-up |
 | Megaphone 跟 ElevenLabs 整合卡關 | Spike-Real 半天若卡 → 退 Gemini native + edge-tts dual route |
 | Dual-route 路由邏輯打亂既有 say_canned | 既有 say_canned 短，自然落 fast lane（< 30 字） |
 
