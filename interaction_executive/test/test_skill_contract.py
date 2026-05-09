@@ -240,3 +240,41 @@ def test_active_static_say_skills_have_audio_tag():
             assert "[" in text and "]" in text, (
                 f"{c.name} say_template missing audio tag: {text!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2-mini: SAY step source injection (P1-1 observability)
+# ---------------------------------------------------------------------------
+
+
+def test_build_plan_chat_reply_source():
+    """chat_reply skill SAY step gets source='chat_reply'."""
+    plan = build_plan("chat_reply", args={"text": "嗨"})
+    say_steps = [s for s in plan.steps if s.executor == ExecutorKind.SAY]
+    assert len(say_steps) >= 1
+    assert say_steps[0].args.get("source") == "chat_reply"
+
+
+def test_build_plan_say_canned_source():
+    """say_canned SAY step gets source='say_canned'."""
+    plan = build_plan("say_canned", args={"text": "我聽不太懂"})
+    say_steps = [s for s in plan.steps if s.executor == ExecutorKind.SAY]
+    assert len(say_steps) >= 1
+    assert say_steps[0].args.get("source") == "say_canned"
+
+
+def test_build_plan_other_skill_source():
+    """Other skill (self_introduce / wave_hello) SAY steps get source='skill_say'."""
+    plan = build_plan("self_introduce")
+    say_steps = [s for s in plan.steps if s.executor == ExecutorKind.SAY]
+    assert len(say_steps) >= 1
+    for step in say_steps:
+        assert step.args.get("source") == "skill_say"
+
+
+def test_build_plan_preserves_existing_args():
+    """Existing args (input_origin) preserved alongside source injection."""
+    plan = build_plan("chat_reply", args={"text": "嗨", "input_origin": "studio_text"})
+    say_steps = [s for s in plan.steps if s.executor == ExecutorKind.SAY]
+    assert say_steps[0].args.get("input_origin") == "studio_text"
+    assert say_steps[0].args.get("source") == "chat_reply"
