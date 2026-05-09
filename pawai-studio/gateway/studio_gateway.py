@@ -75,18 +75,47 @@ FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
 MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 5MB payload cap for speech
 
 
-def build_tts_event(text: str) -> dict:
-    """Wrap plain-text /tts message into PawAIEvent envelope."""
+def _parse_tts_payload(raw: str) -> dict:
+    """Parse /tts msg.data: JSON envelope {text, input_origin, source} or plain text.
+
+    Returns dict with keys: text (str), origin (str, default 'tts'), source (str|None).
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return {"text": "", "origin": "tts", "source": None}
+
+    # Try JSON envelope
+    if raw.startswith("{"):
+        try:
+            envelope = json.loads(raw)
+            if isinstance(envelope, dict) and isinstance(envelope.get("text"), str):
+                return {
+                    "text": envelope["text"],
+                    "origin": envelope.get("input_origin") or "tts",
+                    "source": envelope.get("source"),
+                }
+        except (json.JSONDecodeError, TypeError):
+            pass  # fall through to plain text
+
+    # Plain text fallback (backward compat with §5.2)
+    return {"text": raw, "origin": "tts", "source": None}
+
+
+def build_tts_event(text: str, origin: str = "tts", source: str | None = None) -> dict:
+    """Wrap /tts message into PawAIEvent envelope."""
+    data: dict = {
+        "text": text,
+        "phase": "speaking",
+        "origin": origin,
+    }
+    if source:
+        data["source"] = source
     return {
         "id": str(uuid.uuid4()),
         "timestamp": datetime.now().astimezone().isoformat(),
         "source": "tts",
         "event_type": "tts_speaking",
-        "data": {
-            "text": text,
-            "phase": "speaking",
-            "origin": "unknown",
-        },
+        "data": data,
     }
 
 
@@ -296,11 +325,15 @@ class GatewayNode(Node):
         )
 
     def _on_tts_msg(self, msg: String) -> None:
-        """Wrap plain-text /tts into PawAIEvent envelope and broadcast."""
-        text = msg.data.strip()
-        if not text:
+        """Parse /tts msg (plain text or JSON envelope) and broadcast."""
+        parsed = _parse_tts_payload(msg.data)
+        if not parsed["text"]:
             return
-        envelope = build_tts_event(text)
+        envelope = build_tts_event(
+            text=parsed["text"],
+            origin=parsed["origin"],
+            source=parsed["source"],
+        )
         asyncio.run_coroutine_threadsafe(
             ws_manager.broadcast(envelope), self._loop
         )
