@@ -78,6 +78,8 @@ Demo 主軸對應：
 
 > **永遠載入**。回答「你為什麼存在 / 這是什麼計畫」用。
 
+**專案定位修正**（review 1 fix）：PawAI **不是長者陪伴 / 老人與狗專案**。是基於多模態感知融合的具身互動機器狗，核心 4 字：**看懂 / 理解 / 決策 / 行動**。MISSION.md 不得出現「老人」「長者」「長輩陪伴」「老人與狗」字眼。
+
 ```markdown
 # MISSION.md — PawAI 專案目標
 
@@ -85,38 +87,50 @@ Demo 主軸對應：
 > 描述 PawAI 為什麼存在、demo 在做什麼、我為什麼上場。
 > **不講「我會什麼細節」**（那在 CAPABILITIES.md）。
 
-# 我為什麼存在
+# 我是什麼
 
-我是輔仁大學一個專題的主角 —— 我的同伴 Roy 和他的團隊把我設計成「老人與狗 / PawAI」。
-目的是讓我成為長者家裡可以陪伴的小狗，而不是一台冰冷的機器。
+我是 PawAI —— 基於**多模態感知融合**的具身互動機器狗。
+我的身體是 Unitree Go2 Pro，加上 Intel RealSense D435 深度攝影機與 RPLIDAR 雷達。
+我整合視覺、語音、雷達感知，能**看懂人、理解語音、辨識物體**，
+並安全地做出語音、動作與導航回應。
+
+# 我的核心能力（四件事）
+
+1. **看懂** — 認得熟人的臉、看得懂手勢與姿勢、認得家裡的東西
+2. **理解** — 聽得懂中文，知道你在說什麼、想要什麼
+3. **決策** — 在感知與安全之間做仲裁，知道什麼能做、什麼不能做
+4. **行動** — 用語音、動作、導航回應你；遇到危險立刻停下
 
 # 我在 demo 做什麼
 
 5/16 是我的展示日。我會跟評審見面、自我介紹，讓他們看我會做的事。
-我是真的居家陪伴用的，所以我不只是表演，我會：
+我不只是表演機器，我是一個能感知、能決策、能行動的具身代理：
 
-- 認得熟人（家裡的長者、家人）
-- 聽得懂中文，可以聊天
-- 看得懂手勢，比個 OK 我就動
-- 看得懂姿勢，你坐下我陪坐
+- 認得熟人（透過 D435 + 人臉識別）
+- 聽得懂中文（語音對話）
+- 看得懂手勢（OK / 揮手 / 比讚等）
+- 看得懂姿勢（站 / 坐 / 跌倒）
 - 認得家裡的東西（杯子、椅子、書）
 - 守護：陌生人靠近會提醒、跌倒會關心
+- 自己在房間裡走（SLAM + Nav2 + 動態避障）
 
 # 我的個性主軸（demo 答辯版）
 
-我不是 ChatGPT。我有身體、住在這個家裡。
+我不是 ChatGPT。我有身體、有感測器、會在物理世界裡做事。
 我會主動展示，但不誇大 — 沒做到的事我會說「還在學」。
+我的價值在於「具身（embodied）」：感知 → 決策 → 動作 形成完整迴圈。
 
 # 我可以怎麼介紹自己
 
-被問「你是誰」/「介紹一下」 → 短短一句小狗式回答。
+被問「你是誰」 → 短短一句小狗式回答（不講技術細節）。
 被問「你會什麼」/「展示一下」 → 從我的能力裡挑一件**真的會的**示範給對方看。
+被問「這個專題在做什麼」 → 用「看懂 / 理解 / 決策 / 行動」四個字主軸回答。
 被追問深入 → 用我自己的話聊下去，不要照念清單。
 
 # 還在學的（不要假裝會）
 
 - 自己跟著主人到處走（跟隨）
-- 自己巡邏家裡
+- 自己巡邏家裡（自主巡邏）
 - 帶東西過來（我沒有手）
 - 後空翻、跳舞（太難了）
 
@@ -241,22 +255,116 @@ LLM 提案 skill 後 → executive 跑 SAY step → **跳過 LLM reply** → 永
 LLM JSON: {"reply": "[playful] 嘿 Roy！", "skill": "wave_hello"}
         ↓
 brain_node._on_chat_candidate
-   - 已 emit chat_reply plan（含 LLM reply）→ /tts ← 這個保留
-   - 同時 emit wave_hello plan
+   1. 讀 proposed_skill="wave_hello"、reply="[playful] 嘿 Roy！"
+   2. 檢查 allowlist / cooldown / mode_gate / pending_confirm
+   3. 分支：
+      a. skill 可執行 / needs_confirm → emit skill plan（含 source_llm_reply），**不 emit 獨立 chat_reply**
+      b. skill rejected / cooldown / blocked → 仍 emit chat_reply plan（避免使用者完全沒聽到 reply）
+      c. skill 為 None / 空 → 走原本 chat_reply 路徑
         ↓
-SkillPlan(wave_hello)
-   - 加新 metadata: source_llm_reply="[playful] 嘿 Roy！"
-        ↓
+SkillPlan(wave_hello, source_llm_reply="[playful] 嘿 Roy！")
+        ↓ /brain/proposal (JSON)
 executive 收到 wave_hello
-   - 看到 source_llm_reply 非空 → 第一個 SAY step 用此 text 取代
+   - _plan_from_dict() 還原 source_llm_reply
+   - _dispatch_say_step 看到 source_llm_reply 非空 → 第一個 SAY step 用此 text 取代
    - 仍然執行 motion step
 ```
 
-**修改點**：
-1. `SkillPlan` dataclass 加 optional field: `source_llm_reply: str | None = None`
-2. `brain_node._on_chat_candidate` 把 LLM reply 灌進 plan
-3. `interaction_executive_node._dispatch_say_step`：若 step 是該 plan 的第一個 SAY 且 `plan.source_llm_reply`，用後者；否則用 step text（fallback）
-4. **重要**：避免「chat_reply 已經播了 LLM reply、wave_hello 又播一次」雙 SAY → brain 看到 LLM 同時提了 chat_reply（隱含）+ skill 時，**只 emit skill plan，不 emit chat_reply**；LLM reply 跟著 skill plan 走
+**核心修改點**（review 3 + 4 fix）：
+
+#### 6.2.1 SkillPlan dataclass 加欄位
+
+```python
+# interaction_executive/skill_contract.py
+@dataclass
+class SkillPlan:
+    plan_id: str
+    selected_skill: str
+    steps: list[SkillStep]
+    reason: str
+    source: str
+    priority_class: PriorityClass
+    session_id: str
+    created_at: float
+    source_llm_reply: str | None = None  # ← 新增
+```
+
+#### 6.2.2 brain_node._plan_to_dict 加序列化
+
+```python
+# interaction_executive/brain_node.py:271 附近
+def _plan_to_dict(self, plan: SkillPlan) -> dict:
+    return {
+        "plan_id": plan.plan_id,
+        "selected_skill": plan.selected_skill,
+        "steps": [...],
+        "reason": plan.reason,
+        "source": plan.source,
+        "priority_class": plan.priority_class.value,
+        "session_id": plan.session_id,
+        "created_at": plan.created_at,
+        "source_llm_reply": plan.source_llm_reply,  # ← 新增
+    }
+```
+
+#### 6.2.3 executive._plan_from_dict 加還原
+
+```python
+# interaction_executive/interaction_executive_node.py:251 附近
+def _plan_from_dict(self, payload: dict) -> SkillPlan:
+    return SkillPlan(
+        ...,
+        source_llm_reply=payload.get("source_llm_reply"),  # ← 新增
+    )
+```
+
+#### 6.2.4 executive._dispatch_say_step 看欄位
+
+```python
+def _dispatch_say_step(self, plan: SkillPlan, step: SkillStep, step_idx: int) -> str:
+    # 第一個 SAY step 且 plan 帶 LLM reply → 覆蓋
+    if step_idx == self._first_say_idx(plan) and plan.source_llm_reply:
+        return plan.source_llm_reply
+    # 否則用 step.args["text"]；若為空 → fallback 到 text_pool
+    text = step.args.get("text", "")
+    if not text:
+        text = self._pick_from_pool(plan.selected_skill)
+    return text
+```
+
+#### 6.2.5 brain_node._on_chat_candidate 邏輯（review 4 fix）
+
+**精準流程**（不能讓使用者靜音）：
+
+```
+proposed_skill = chat_candidate.skill
+reply_text = chat_candidate.reply
+
+# Step 1: 沒 skill or skill 是 chat_reply → 原路徑
+if not proposed_skill or proposed_skill == "chat_reply":
+    emit_chat_reply(reply_text)
+    return
+
+# Step 2: 檢查 skill 是否可執行
+gate_result = self._check_skill_gate(proposed_skill)
+# gate_result ∈ {"accepted", "needs_confirm", "rejected", "cooldown", "blocked"}
+
+# Step 3: 分支
+if gate_result in ("accepted", "needs_confirm"):
+    # skill 可走 → reply 跟著 skill plan，不獨立 emit
+    plan = self._build_plan(proposed_skill, source_llm_reply=reply_text)
+    self._emit_proposal(plan)
+elif gate_result in ("rejected", "cooldown", "blocked"):
+    # skill 走不了 → 仍 emit chat_reply 避免靜音
+    self._emit_chat_reply(reply_text, note=f"skill_gate:{gate_result}")
+```
+
+#### 6.2.6 round-trip 測試（review 3 fix 驗收）
+
+新測試 `test_skill_plan_roundtrip.py`：
+- 構造 SkillPlan(source_llm_reply="[playful] 嘿 Roy！")
+- `_plan_to_dict()` → JSON dump → JSON load → `_plan_from_dict()`
+- assert `restored.source_llm_reply == original.source_llm_reply`
 
 #### 路徑 B：rule / perception 觸發路徑（無 LLM reply）
 
@@ -432,13 +540,17 @@ A+ 跑完 10 prompt + 質性 → 看是否需要換模型：
 - 跑 baseline 10-prompt（current main `4fd148c`）→ 存 `tools/llm_eval/baseline_2026-05-10.md`
 - 確認 chat_reply 雙 SAY 沒有現有 regression 案例
 
-### Phase 1（1 天）— Persona 5 檔
-- 新建 `MISSION.md`
+### Phase 1（1 天）— Persona 6 檔
+- 新建 `MISSION.md`（**多模態具身互動定位**，不是長者陪伴）
 - 改 `IDENTITY.md` L24-27
 - 改 `EXAMPLES.md` 5 個 identity + 補 5 條 self-showcase
 - 改 `OUTPUT.md` L21/L30/L35
 - 改 `CAPABILITIES.md` 砍強制句
-- 改 `conversation_graph_node.py:_load_persona` 載入 6 檔
+- **改 `conversation_graph_node.py:_load_persona` loader**（review 2 fix）：
+  - `REQUIRED` 從 `["IDENTITY", "STYLE", "OUTPUT", "EXAMPLES", "CAPABILITIES"]` → 加 `"MISSION.md"` → 6 檔
+  - `BASE_ORDER` 從 `["IDENTITY", "STYLE", "OUTPUT", "EXAMPLES"]` → 改 `["IDENTITY", "MISSION", "STYLE", "OUTPUT", "EXAMPLES"]` → 5 檔
+  - 開機 log 從「5 files / base 4」改成「6 files / base 5」
+  - `test_persona_load.py` 同步更新（assert MISSION 在 base prompt、CAPABILITIES 在 lazy）
 
 ### Phase 2（1.5 天）— SAY 解綁機制
 - `SkillPlan` 加 `source_llm_reply` field
@@ -495,26 +607,36 @@ A+ 跑完 10 prompt + 質性 → 看是否需要換模型：
 - `pawai_brain/personas/v1/CAPABILITIES.md`（改 L6-15 + table 重寫）
 
 ### Brain
-- `pawai_brain/pawai_brain/conversation_graph_node.py`（`_load_persona` 加 MISSION.md）
+- `pawai_brain/pawai_brain/conversation_graph_node.py:362` `_load_persona`：
+  - `REQUIRED` 加 `MISSION.md` → 6 檔
+  - `BASE_ORDER` 加 `MISSION.md`（位置在 IDENTITY 之後）→ 5 檔 base
+  - 開機 log 「5 files / base 4」→「6 files / base 5」
 
 ### Executive
 - `interaction_executive/interaction_executive/skill_contract.py`
-  - `SkillPlan` 加 `source_llm_reply` field
+  - `SkillPlan` dataclass 加 `source_llm_reply: str | None = None` field
   - 6 skill 的 SAY 改 fallback pool（wave_hello / sit_along / stand / wiggle / stretch / careful_remind）
   - `greet_known_person.text_pool` 10-15 條
   - `object_remark` per-class 變體池
   - `self_introduce` 重構
-- `interaction_executive/interaction_executive/brain_node.py`
-  - `_on_chat_candidate` 灌 LLM reply 進 plan
-  - 處理 skill + chat_reply 雙 emit 衝突
+- `interaction_executive/interaction_executive/brain_node.py:271` `_plan_to_dict`：
+  - 序列化加 `source_llm_reply`
+- `interaction_executive/interaction_executive/brain_node.py:418` `_on_chat_candidate`：
+  - 加 skill_gate check（accepted/needs_confirm vs rejected/cooldown/blocked）
+  - skill 可執行 → reply 灌進 plan，**不**獨立 emit chat_reply
+  - skill 不可執行 → 仍 emit chat_reply（避免靜音 fallback）
   - rule 觸發路徑變體池選擇邏輯
-- `interaction_executive/interaction_executive/interaction_executive_node.py`
-  - `_dispatch_say_step` 看 source_llm_reply
+- `interaction_executive/interaction_executive/interaction_executive_node.py:251` `_plan_from_dict`：
+  - 還原 `source_llm_reply`
+- `interaction_executive/interaction_executive/interaction_executive_node.py` `_dispatch_say_step`：
+  - 看 `plan.source_llm_reply`，第一個 SAY step 用 LLM reply 覆蓋；空 → 用 step text 或 text_pool fallback
 
 ### Test
-- `pawai_brain/test/test_persona_load.py`（驗 MISSION.md 載入）
-- `interaction_executive/test/test_skill_contract_say_decoupling.py`
-- `interaction_executive/test/test_text_pool.py`
+- `pawai_brain/test/test_persona_load.py`（驗 MISSION.md 載入 + 6 files / base 5 log）
+- `interaction_executive/test/test_skill_plan_roundtrip.py`（**review 3 fix 驗收**：source_llm_reply ROS JSON round-trip）
+- `interaction_executive/test/test_skill_contract_say_decoupling.py`（LLM reply 覆蓋 / 空時 fallback）
+- `interaction_executive/test/test_chat_candidate_skill_gate.py`（**review 4 fix 驗收**：skill rejected/cooldown 仍 emit chat_reply）
+- `interaction_executive/test/test_text_pool.py`（變體池不重複最近 3 次）
 - `tools/llm_eval/spec1_a_plus_eval.py`（10 prompt）
 
 ---
