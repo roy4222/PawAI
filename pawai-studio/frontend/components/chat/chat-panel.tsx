@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, Mic, PawPrint, Sparkles, Square } from "lucide-react";
+import { ArrowUp, Mic, PawPrint, RotateCcw, Sparkles, Square } from "lucide-react";
 import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { AudioVisualizer } from "@/components/chat/audio-visualizer";
@@ -182,6 +182,18 @@ export function ChatPanel() {
       }, 8000);
     }
   }, [voiceResult]);
+
+  // P1-2: New conversation — clear local messages + POST /api/reset to clear global context.
+  const handleNewConversation = useCallback(async () => {
+    const ok = window.confirm(
+      "將清除目前所有對話記憶，包括其他開啟的 Studio 視窗。確定？"
+    );
+    if (!ok) return;
+    await fetch(`${getGatewayHttpUrl()}/api/reset`, { method: "POST" });
+    setMessages([]);
+    useStateStore.setState({ ttsMessages: [] });
+    lastSeenTtsIdRef.current = null;
+  }, []);
 
   // Auto-resize textarea.
   const adjustTextareaHeight = useCallback(() => {
@@ -372,7 +384,19 @@ export function ChatPanel() {
   // Conversation view — bubble stream + bottom composer.
   return (
     <div className="flex h-full flex-col">
-      <BrainStatusPill />
+      <div className="flex items-center justify-between">
+        <BrainStatusPill />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleNewConversation}
+          title="重置全局對話記憶（所有 device 共用）"
+          aria-label="新對話"
+          className="mr-2 h-8 w-8 text-muted-foreground hover:text-foreground"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
