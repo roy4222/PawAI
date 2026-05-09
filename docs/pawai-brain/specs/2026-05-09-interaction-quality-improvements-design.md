@@ -93,7 +93,11 @@ full_pcm = b"".join(ok_parts)
 
 **P0-2 Gateway `/tts` JSON envelope parse（P1-1 前置必要）**
 
-**為何排 P0**：合約 §5.2 規定 `/tts` 雙模化（純文字 OR JSON envelope `{text, input_origin}`），目前 `studio_gateway._on_tts_msg()` L298-306 用 `msg.data.strip()` 當純文字處理 — JSON envelope 會直接被當文字塞進 ChatPanel，使用者看到整段 `{"text":"...","input_origin":"studio_text"}` 字串。
+**為何排 P0**（Roy 5/9 grep 確認，真實 bug 不是假想）：
+- 上游 publisher 確實會發 JSON envelope：`interaction_executive_node.py:185-194` 在 step `input_origin` 存在時 `msg.data = json.dumps({"text": text, "input_origin": input_origin}, ensure_ascii=False)`
+- 下游 gateway 在 `studio_gateway._on_tts_msg()` L298-306 `text = msg.data.strip()` 直接當純文字 wrap 進 `build_tts_event(text)` → ChatPanel 拿到的 `text` 欄位內容就是整段 JSON 字串
+- 觸發條件：Studio 文字輸入經 chat_reply 路徑回 SAY step 時 `input_origin="studio_text"` 會帶進 envelope，**demo 期 Studio chat 100% 觸發**
+- 合約 §5.2 規定 `/tts` 雙模化（純文字 OR JSON envelope）— gateway 必須處理
 
 **改法**（gateway 側 ~10 行）：
 1. `studio_gateway._on_tts_msg`：先嘗試 `json.loads(msg.data)`，成功且有 `text` field → 用 envelope.text + 帶 `origin = envelope.input_origin or "tts"`
@@ -138,15 +142,32 @@ full_pcm = b"".join(ok_parts)
 - 不需要後端 source metadata，純看「當下有沒有 pendingRequestId」分類
 - demo 後 P1-1 Phase 2 拿到 origin 欄位再細分 skill_say/canned/alert
 
-**Phase 2（demo 後可選，再 1 小時）— source metadata 漸進升級**
-1. IE-node `_dispatch_step` SAY 時 `/tts` JSON envelope 加 `source: skill_say|canned|alert`
-2. event_action_bridge 改 JSON envelope 同上
-3. gateway 已會 parse（P0-2 已做）→ broadcast 帶 source 欄位
-4. ChatPanel CSS 細分 source（skill_say 綠 / canned 橙 / alert 紅）
-5. **保留**純文字 backward compat（合約 §5.2 雙模化）
+**Phase 2-mini（Roy 5/9 review #3 提前到 Wave 1，30min）— IE-node SAY source 單點**
+
+只改 1 個 publisher（IE-node `_dispatch_step` SAY），其他 7 個維持純文字（demo 後再補）。CP 值最高，因為 IE-node SAY 是 demo 核心（self_introduce 10 步 + wave_hello 等都走這條），skill_say 不分色 demo 觀感跟 chat 完全混。
+
+具體：
+1. `interaction_executive_node.py:185-194` SAY envelope 已有 `input_origin`，再加 `source: "skill_say"` 欄位
+2. gateway P0-2 改造後一併 parse `source` field 進 broadcast
+3. ChatPanel CSS：skill_say（綠）/ chat_reply pending（一般灰）/ canned 與 alert（淡灰，沒 source 欄位）
+4. **保留**純文字 backward compat（合約 §5.2 雙模化）
+
+**Phase 2-full（demo 後可選，再 1 小時）— 其餘 publisher source metadata**
+1. event_action_bridge 改 JSON envelope（gesture/pose/fall 三個）
+2. llm_bridge / intent_tts_bridge / route_runner 改 JSON envelope
+3. ChatPanel CSS 細分 source（skill_say 綠 / canned 橙 / alert 紅 / 其他）
 
 **風險：spam scroll**
-- 路過 5 物體 + 多人入鏡 → 1 分鐘 30+ 條訊息
+
+**P1-1 Phase 1 部分先做 client-side rate-limit**（Roy 5/9 review #1）— P2-1 attention policy 5/12-13 才上，5/10-12 之間 P1-1 一上線會洪水。
+
+**Rate-limit 規則**（state-store 內 5 行 dedup logic）：
+- **限制範圍**：spontaneous / autonomous TTS（origin 為 `say_canned` / `alert` / 其他自動觸發）
+- **不擋**：user pending reply（`pendingRequestIdRef.current` 存在的 reply）、safety（含 stop/小心 keyword）、user 自己問的回覆
+- **規則**：同 source（粗判可用 text 前 10 字 hash 或 origin 欄位）5s 內最多 1 條 append；超出 silently drop（不進 ttsMessages，不 append bubble）
+- **目的**：5/10-12 開發測試體驗不洪水；P2-1 attention policy 上線後 rate-limit 仍保留作 belt-and-suspenders
+
+其他防線：
 - 緩解：依賴 P2-1 attention policy（only ENGAGED 才 emit）自然降量
 - 前端 ring buffer 200 條 + auto-trim 防爆
 - 加 filter UI（toggle 顯示 user_speech / llm_reply / auto_trigger）— Phase 2 可選
@@ -175,6 +196,11 @@ full_pcm = b"".join(ok_parts)
 **P1-2a 手動按鈕（必做、demo 主用）**
 1. ChatPanel header 加「新對話」按鈕 → `fetch('/api/reset', {method: 'POST'})` + 清前端 messages 陣列
 2. 操作員（Roy）控制按下時機，避免奶奶/教授看到對話突然斷
+3. **按鈕加 confirm dialog + tooltip**（Roy 5/9 review）：
+   - tooltip：「重置全局對話記憶（所有 device 共用）」
+   - confirm dialog：「將清除目前所有對話記憶，包括其他開啟的 Studio 視窗。確定？」
+   - 理由：brain memory 是全局單例，按下會清所有 device 對話 — 不能讓操作員誤觸
+4. **不加刷新警告**：demo 預設 `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=false`，刷新不會 auto reset；加警告反而誤導
 
 **P1-2b F5 auto-detect（dev-only feature flag）**
 - 預設 **OFF**；開 `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=true` 才啟用
@@ -699,15 +725,15 @@ t=1.5  椅子 → object_remark 又插嘴 ⚠️
 | State | 進入條件 | 退出條件 |
 |---|---|---|
 | `IDLE` | 無 face ≥ 0.5s | face 出現 → NOTICED |
-| `NOTICED` | face stable | distance ≤ 1.6m AND dwell ≥ 1.2s → ENGAGED；face 消失 ≥ 3s → IDLE |
+| `NOTICED` | face stable | distance ≤ 1.6m AND dwell ≥ 1.5s → ENGAGED；face 消失 ≥ 3s → IDLE |
 | `ENGAGED` | 上條 | plan emit / speech intent → INTERACTING |
-| `INTERACTING` | 任意 skill active | active_plan 結束 + 5s 安靜 → ENGAGED；face 消失 ≥ 3s → IDLE |
+| `INTERACTING` | 任意 skill active | active_plan 結束 + 8s 安靜 → ENGAGED；face 消失 ≥ 3s → IDLE |
 
-**Threshold（Roy 確認，不要太緊）**：
+**Threshold（Roy 5/9 review 收斂）**：
 - engaged distance：**≤ 1.6m**（不是 1.3m，奶奶/展示現場可能站較遠）
-- dwell：**1.2s**（不是 1.5s 太硬）
+- dwell：**1.5s**（Roy 5/9 review：手勢 OK 在 NOTICED+ 就允許，拉長 dwell 只減少路過 greet 不擋走過去比 OK）
 - face lost exit：**3s**
-- interaction quiet：plan done + **5s**
+- interaction quiet：plan done + **8s**（Roy 5/9 review：讓自動物體/人臉插嘴更保守；語音 intent 任何狀態可進，不妨礙連續講第二句）
 
 **emit gate（取代零散 guard）**：
 
@@ -737,7 +763,7 @@ t=1.5  椅子 → object_remark 又插嘴 ⚠️
 - t=0.5 thumbs_up → PendingConfirm（NOTICED 允許 gesture ✅）
 - t=1.0 OK → wiggle → INTERACTING
 - t=1.5 椅子 → state≠ENGAGED → 靜音 ✅
-- 若 Roy 真的停下來 dwell ≥ 1.2s + dist ≤ 1.6m → ENGAGED → greet 才發 ✅
+- 若 Roy 真的停下來 dwell ≥ 1.5s + dist ≤ 1.6m → ENGAGED → greet 才發 ✅
 
 **明確不做**
 - ❌ Gaze detection（D435 視角不穩，5/13 demo 來不及）
@@ -870,7 +896,7 @@ idle_phase 軸（新加）：`NORMAL / DUE / COOLING`
 
 | attention | 狀態 |
 |---|---|
-| ENGAGED | face_visible AND distance ≤ 1.6m AND dwell ≥ 1.2s 或 voice intent < 10s |
+| ENGAGED | face_visible AND distance ≤ 1.6m AND dwell ≥ 1.5s 或 voice intent < 10s |
 | RECENT | 上述 10-60s 內 |
 | **IDLE** | > threshold（demo 60s / home 600s） → `idle_phase=DUE` 觸發 |
 
