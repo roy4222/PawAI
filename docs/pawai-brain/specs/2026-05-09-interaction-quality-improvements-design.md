@@ -317,131 +317,344 @@ if enable_s2twp:
 
 **收益**：Studio + 實機 + brain memory + LLM context **全部繁體**；s2twp 帶來台灣詞彙風格對齊
 
-**P1-4 LLM persona 不死板 — 保守版 A（Roy 5/9 brainstorm 確認）**
+**P1-4 LLM persona 不死板 — OpenClaw-lite Persona Architecture（Roy 5/9 brainstorm 收斂後重寫）**
 
-**已實證根因**：
-- `pawai_conversation_graph.launch.py:20-22` `llm_persona_file` 預設 `default_value=""`
-- 空字串落回 `conversation_graph_node.py:67-72` 6 行 inline persona（176 字元 vs 完整 11.5KB / 6940 tokens）
-- **但**：`scripts/start_full_demo_tmux.sh:217` **已正確傳** `llm_persona_file:=...persona.txt`
-- 真正問題：`scripts/start_pawai_brain_tmux.sh:15` 還在啟舊 `llm_bridge_node`，不是 conversation_graph_node — 這條路徑會 silent 用 inline persona
+> **重寫動機**：5/9 brainstorm 第一版 1B「persona 內部 5 層重排不拆檔」被推翻。Roy 抓到核心：**現有 persona.txt 把「你是誰」+「你會什麼」+「JSON schema」+「few-shot」混在一個 184 行檔案，導致 LLM 一被問「介紹一下」就照 L24-36 的 9 條能力 bullet 串成功能型客服回答。死板的不是 model，是 prompt 教它這樣寫。**
+>
+> **解法靈感**：[OpenClaw 9 層 system prompt 架構](https://x.com/servasyy_ai/article/2029489020208848966)。**不照抄 9 層**（demo 前太大），抄它兩個核心設計：
+> 1. **L7 Workspace Files = persona 拆檔**（IDENTITY 跟 CAPABILITIES 分檔）
+> 2. **L8 Bootstrap Hook = capability_context lazy inject**（不是每輪都灌）
+>
+> **與 Phase B PawClaw 對接**：Phase B (`docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`) 已規劃 `workspace/{BODY,SKILLS,SAFETY,PLACES,DEMO_MODE}.md` 但目的是**人類可讀文件**，Phase C 才注入 LLM。本 5/9 P1-4 拆的 5 檔是 **chat path LLM prompt 用**，命名 `pawai_brain/personas/v1/{IDENTITY,STYLE,CAPABILITIES,EXAMPLES,OUTPUT}.md` — 不同 namespace、不同階段、不衝突。Phase C 合流時可由 generator 從 BODY/SKILLS 抽 → personas/CAPABILITIES。
 
-**1A 立即做（半天，必做）**
-- 修 `pawai_conversation_graph.launch.py` 預設 → `tools/llm_eval/persona.txt` 絕對路徑
-- 修 `conversation_graph_node._load_persona()` — missing/empty 改 ERROR raise 而非 silent fallback
-- 修 `scripts/start_pawai_brain_tmux.sh` 切到 conversation_graph_node 路徑，移除 llm_bridge_node
-- 加開機 log：`[persona] loaded /path, N lines, sha=...`
+**5 個已實證根因**（Roy 5/9 brainstorm 診斷）：
+1. `persona.txt` L24-36 寫死 9 條能力 bullet「被問『介紹自己』時要列出來」← 死板核心
+2. `_build_user_message()` 每輪都灌完整 capability_context JSON ← 把 LLM anchor 到「能力選單」
+3. `temperature=0.2` ← 趨向最常見答案，模板感
+4. 單一 prompt 同時負責閒聊 / 技能選擇 / 安全 / demo guide ← 永遠在「我要不要執行功能」框架說話
+5. `_build_user_message()` 寫死 `[語音輸入]` 即使是 Studio 文字輸入 ← prompt sanity 雜訊
 
-**1B 同日做（半天，輕量重排 + LLM 4 桶白名單）**
+---
 
-**Roy 5/9 brainstorm 修正**：issue 3「LLM 不主動鏈式」**不是單一 bug**，是「LLM 可提案集合」與「persona 教提案」沒對齊。先做 4 桶分類 + persona few-shot + eval validation。
+**1A Persona Loader — 支援 file 或 directory mode（半天）**
 
-**1B-1 LLM 可提案 4 桶白名單**
+**設計**：`llm_persona_file` 參數同時支援兩種模式，舊 persona.txt 立即可 fallback：
+
+```python
+# conversation_graph_node._load_persona() 新邏輯
+path = Path(self.llm_persona_file).expanduser()
+
+if path.is_file():
+    # 舊模式：單檔 persona.txt（向後相容）
+    return path.read_text(encoding="utf-8")
+
+if path.is_dir():
+    # 新模式：directory，按固定檔名順序 concat
+    files = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
+    # 注意：CAPABILITIES.md 不在預設 concat — 1D lazy inject 處理
+    parts = []
+    for fname in files:
+        f = path / fname
+        if not f.is_file():
+            self.get_logger().error(f"[persona] missing required {fname}")
+            raise FileNotFoundError(f)
+        parts.append(f.read_text(encoding="utf-8"))
+    persona = "\n\n".join(parts)
+    self.get_logger().info(
+        f"[persona] loaded directory {path}, "
+        f"{len(files)} files, {len(persona)} chars, sha={hashlib.sha256(persona.encode()).hexdigest()[:12]}"
+    )
+    return persona
+
+raise FileNotFoundError(path)
+```
+
+**修改項**：
+- 修 `pawai_conversation_graph.launch.py` 預設 → `pawai_brain/personas/v1`（directory）
+- 修 `_load_persona()` 支援 file/dir 雙模、missing required file 改 ERROR raise（不 silent fallback）
+- 修 `scripts/start_pawai_brain_tmux.sh:15` 切到 conversation_graph_node 路徑，移除 llm_bridge_node
+- 加開機 log：`[persona] loaded directory /path, 4 files, sha=...`
+- 舊 `tools/llm_eval/persona.txt` 保留作 demo 安全網（launch arg fallback 即可切回）
+
+---
+
+**1B Persona 拆 5 檔（OpenClaw-lite L7 Workspace Files）**
+
+**檔案結構**：
+
+```
+pawai_brain/personas/v1/
+├── IDENTITY.md       # 你是誰（70/20/10 小狗童心守護者、靈魂、住在哪）
+├── STYLE.md          # 怎麼說話（不客服腔、不拋問題、長度情境決定、audio tag）
+├── CAPABILITIES.md   # 你會什麼（lazy inject — 1D 按 mode 注入，預設不載）
+├── EXAMPLES.md       # 18-22 個 few-shot（含介紹/identity 6-8 例 — 1F 補）
+└── OUTPUT.md         # JSON schema + skill proposal 規則（OpenClaw L5 抽離）
+```
+
+**現有 184 行 persona.txt 拆解對應**：
+
+| 現有區段 | 拆到哪 |
+|---|---|
+| L1-23 Identity & 靈魂 | **IDENTITY.md**（保留全部） |
+| L24-36 你具體會什麼（9 條 bullet） | **CAPABILITIES.md**（移出！demo 預設不注入） |
+| L38-55 個性原則 DO/AVOID | **STYLE.md** |
+| L62-68 回答長度規則 | **STYLE.md**（刪 L65「自我介紹 2-4 句」這條） |
+| L69-82 對話記憶 | **STYLE.md** |
+| L83-88 環境資訊 | **STYLE.md** |
+| L89-114 17 個技能表 | **CAPABILITIES.md**（lazy inject） |
+| L115-118 Audio Tag 8 個 | **OUTPUT.md** |
+| L119-127 JSON 輸出格式 | **OUTPUT.md** |
+| L128-165 13 個 Few-shot | **EXAMPLES.md**（補到 18-22 個 — 見 1F） |
+| L166-185 CapabilityContext 規則 10 條 | **OUTPUT.md** |
+
+**關鍵設計決定**：
+- **IDENTITY.md 不講「我會什麼」**，只講「我是誰、我活在哪、我的靈魂」 — 介紹預設只看這檔，自然不會列功能
+- **CAPABILITIES.md lazy inject**（見 1D）— 一般聊天 LLM 看不到能力清單，不會 anchor 到工具人模式
+- **OUTPUT.md 抽出 JSON schema + audio tag** — 跟人格情緒文字分開，重寫人格時不用怕碰壞 schema 規則
+
+**1B 工時**：拆檔 + 搬段落 + 刪 L24-36 + 刪 L65 = 1.5h（不寫新內容，純機械搬）
+
+---
+
+**1C Conversation Mode Classifier（OpenClaw-lite L8 Hook 雛形）**
+
+**位置**：`pawai_brain/pawai_brain/nodes/mode_classifier.py`（新建，graph 第一個 node 之後）
+
+**5 個 mode + rule-based classifier**（不用 LLM，~20 行）：
+
+```python
+MODE_PATTERNS = {
+    "safety":              r"停|停止|不要動|別動|小心|警告|危險|stop",
+    "identity":            r"你是誰|你叫什麼|介紹.*自己|你誰啊|你是 AI",
+    "capability_question": r"你會什麼|你會啥|有什麼功能|能做什麼|會做啥|有哪些能力",
+    "action_request":      r"扭|搖|伸|懶腰|揮|過來|坐下|跳舞|走|看[你我].*OK",
+    # default: chat
+}
+
+def classify_mode(user_text: str) -> str:
+    for mode, pattern in MODE_PATTERNS.items():
+        if re.search(pattern, user_text):
+            return mode
+    return "chat"
+```
+
+| mode | trigger | persona/context inject 策略 |
+|---|---|---|
+| `safety` | 停/小心/danger keyword | safety_gate hard rule 短路（不進 LLM）；保留 mode 標籤給 trace |
+| `identity` | 「你是誰」「介紹自己」 | **僅 IDENTITY+STYLE+OUTPUT+EXAMPLES**；CAPABILITIES **不注入**；persona prefix 加「使用者問你是誰，講靈魂、講住在哪、講剛剛發生的事，**不要列功能清單**，除非他追問」 |
+| `capability_question` | 「你會什麼」「有什麼功能」 | 全注（含 CAPABILITIES）+ capability_context JSON |
+| `action_request` | 動作 keyword + skill 詞彙 | 全注 + capability_context JSON（LLM 需看可提案 skill） |
+| `chat` (default) | 其他 | IDENTITY+STYLE+OUTPUT+EXAMPLES，**不注入** CAPABILITIES，**不注入** capability_context JSON |
+
+**收益**：`identity` mode 直接解死板根因；`chat` mode 拿掉 capability JSON 後 LLM 不再被「能力清單」拉回工具人。
+
+**1C 工時**：classifier + 5 mode pattern + unit tests (8 cases) = 1h
+
+---
+
+**1D Capability Lazy Injection（OpenClaw-lite L8 Hook 落地）**
+
+**位置**：`_build_user_message()` 改造（`conversation_graph_node.py:75-126`）
+
+**現況**：每輪都 dump `[能力] {capabilities, limits, recent_skill_results}` JSON
+
+**改造**：
+
+```python
+def _build_user_message(state) -> str:
+    text = (state.get("user_text") or "").strip()
+    mode = state.get("mode") or "chat"
+    source = state.get("source") or "speech"
+
+    # 1E: 修「[語音輸入]」寫死 — 改用 source 判
+    label = "[語音]" if source == "speech" else "[文字]"
+    parts = [f"{label} 使用者說：「{text}」"]
+
+    # world_state（time/weather/current_speaker）— 永遠注入
+    ws = state.get("world_state") or {}
+    if ws.get("period") or ws.get("time"):
+        line = f"[環境] 台北 {ws.get('period', '')} {ws.get('time', '')}".rstrip()
+        if ws.get("weather"):
+            line += f"，外面 {ws['weather']}"
+        parts.append(line)
+    if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
+        parts.append(f"[眼前的人] {ws['current_speaker']}")
+
+    # capability_context lazy inject — 僅 capability_question / action_request
+    if mode in ("capability_question", "action_request"):
+        cap = state.get("capability_context") or {}
+        if cap:
+            compact_caps = _compact_capabilities(cap)  # 既有邏輯
+            cap_payload = {
+                "capabilities": compact_caps,
+                "limits": list(cap.get("limits") or []),
+                "recent_skill_results": list(cap.get("recent_skill_results") or []),
+            }
+            parts.append("[能力] " + json.dumps(cap_payload, ensure_ascii=False))
+
+    # mode hint — 僅 identity 注入特殊 instruction
+    if mode == "identity":
+        parts.append("[mode_hint] 使用者問你是誰。請從性格、生活、剛剛發生的事切入，不要列功能清單，除非他追問。")
+
+    return "\n".join(parts)
+```
+
+**system prompt 構造**也改：
+
+```python
+def _assemble_system_prompt(mode: str) -> str:
+    parts = [self._persona_files["IDENTITY"], self._persona_files["STYLE"], self._persona_files["OUTPUT"]]
+    if mode in ("capability_question", "action_request"):
+        parts.append(self._persona_files["CAPABILITIES"])
+    parts.append(self._persona_files["EXAMPLES"])  # examples 永遠在尾段（prefix-cache 友善）
+    return "\n\n".join(parts)
+```
+
+**1D 工時**：`_build_user_message()` + `_assemble_system_prompt()` + 單元測試 5 mode = 1.5h
+
+---
+
+**1E Runtime Params Sanity（半小時）**
+
+| 參數 | 現值 | 改值 | 理由 |
+|---|---|---|---|
+| `temperature` | 0.2 | **0.6** | OpenClaw / Anthropic chat 建議 0.7-1.0；0.6 是 PawAI 折衷（保 JSON 穩定 + 提升自然度） |
+| user message label | `[語音輸入]` 寫死 | 用 `source` 判 `[語音]` vs `[文字]` | Studio 文字 vs USB mic 同樣文字，prompt 標籤要對 |
+| `max_tokens` | 500 | 不改 | 已 OK |
+| `max_reply_chars` | 0（無上限） | 不改 | 5/5 已修 |
+
+**修改位置**：`pawai_conversation_graph.launch.py:40` `temperature` default + `_build_user_message()` label 邏輯
+
+---
+
+**1F Identity / Self-intro Few-shot 補（必做，半天）**
+
+**現況**：persona.txt L140 唯一 self_introduce few-shot 只有「[playful] 我是 PawAI 啊，住在你家的小狗。」12 字短句，**被 L24-36 + L65「2-4 句」蓋過**，LLM 不照短句 few-shot。
+
+**1B 已刪掉 L24-36 + L65**，需在 EXAMPLES.md 補 6-8 個介紹/identity few-shot 涵蓋情境多樣性：
+
+- **短應答**（5-12 字，閒聊接話用）— 「你是誰」/「你叫什麼」
+- **中應答**（15-25 字，第一次見的人 / 略陌生情境）— 「嗨，自我介紹一下」
+- **長應答**（30-50 字，使用者明確說「介紹詳細一點」/「你會什麼」追問後）
+- **情境式**（不從零介紹，從「剛剛發生的事」切入）—「你都做啥？」（剛被問過天氣後）
+- **反例**（被打斷 / 第二次被問）— 「你又是誰？」（5 分鐘前已介紹過）
+- **婉拒**（做不到的事）— 「幫我倒水」
+
+完整 few-shot 文本見 `pawai_brain/personas/v1/EXAMPLES.md` Identity 段。
+
+**Wiggle / Stretch / 婉拒 few-shot 維持**（每個可提案 skill ≥ 3 case + 負例的硬條件不變，搬到 EXAMPLES.md）。
+
+**驗收硬條件**：每個 LLM 可提案 skill 必須有 ≥ 3 prompt eval case；identity mode 必須有 ≥ 6 case 涵蓋短/中/長/情境/反例/婉拒。
+
+**1F 工時**：補 6-8 identity case + 9 wiggle/stretch 正例 + 3 負例 + 寫進 EXAMPLES.md = 3h
+
+---
+
+**1G LLM 可提案 4 桶白名單（從原 1B-1 平移）**
 
 | 桶 | Skill | LLM 提案 | mode | 行為 |
 |---|---|---|---|---|
 | **Bucket 1: 直接執行** | `wave_hello` / `sit_along` / `careful_remind` / `show_status` | ✅ | execute | LLM output skill → 直接做 |
 | **Bucket 2: 需 OK confirm** | `wiggle` / `stretch` | ✅ | confirm | LLM output skill → PendingConfirm → OK 手勢 → 執行 |
-| **Bucket 3: 只說明不執行** | `greet_known_person` / `object_remark` / `stranger_alert` / `fallen_alert` / `nav_*` | ⚠️ trace_only | trace | LLM 可講「我能認識你」但不主動 emit；觸發走 face/object/pose 自動鏈 |
-| **Bucket 4: 禁止** | `dance` / `follow_me` / `follow_person` / `go_to_named_place` / `nav_demo_point` / `approach_person` | ❌ | n/a | LLM 提案被 skill_gate block；persona 教婉拒 |
+| **Bucket 3: 只說明不執行** | `greet_known_person` / `object_remark` / `stranger_alert` / `fallen_alert` / `nav_*` | trace_only | trace | LLM 可講「我能認識你」但不主動 emit；觸發走 face/object/pose 自動鏈 |
+| **Bucket 4: 禁止** | `dance` / `follow_me` / `follow_person` / `go_to_named_place` | ❌ | n/a | LLM 提案被 skill_gate block；persona 教婉拒 |
 
-**對 `LLM_PROPOSABLE_SKILLS` 的影響**（`skill_policy_gate.py:18-27`）：
+**對 `LLM_PROPOSABLE_SKILLS`（`skill_policy_gate.py:18-27`）的影響**：
 - **移除** `greet_known_person`（從 execute → trace_only；改由 face stable 觸發更合理）
 - 保留 wave_hello / sit_along / show_status / careful_remind（execute）
 - 保留 wiggle / stretch（confirm）
-- 保留 self_introduce（trace_only — 已是 trace mode，現況維持）
-- nav_demo_point / approach_person 移到 Bucket 4 直到場地驗
+- 保留 self_introduce（trace_only — 已是 trace mode）
+- nav_demo_point / approach_person 場地驗前留 trace_only（不放 Bucket 4，因 demo button 仍可觸發）
 
-**1B-2 persona 內部重排成 OpenClaw 式 5 層**（不拆檔）：
-```
-## Identity (誰、靈魂 70/20/10)
-## Style Rules (hard constraints — 不說「我是 AI」、字數上限、語氣分布)
-## Skill Policy (4 桶白名單 + 觸發條件 + skill 欄位必填規則)
-## Few-shot Examples (12 → 18-22 個，每個可提案 skill ≥ 3 case + 負例)
-## Runtime Instructions (audio tag、JSON schema、capability_context 用法)
-```
+**1G 工時**：改 `LLM_PROPOSAL_EXECUTE` dict（`brain_node.py:447-456`）+ unit test = 30min
 
-**1B-3 persona few-shot 補**（每個可提案 skill ≥ 3 case + 負例）：
+---
 
-**正例 wiggle（≥ 3 case）**：
-```
-使用者：扭一下
-output: {"reply": "[playful] 好啊！比個 OK 我就扭給你看", "skill": "wiggle", "args": {}}
+**1H current_speaker 注入（從原 1D 平移，半天）**
 
-使用者：你會什麼可愛動作
-output: {"reply": "[curious] 我會扭屁股呀～比個 OK 就扭給你看", "skill": "wiggle", "args": {}}
+**現況**：`conversation_graph_node` 沒訂閱 `/state/perception/face`；`WorldStateSnapshot` 沒 `current_speaker` field
 
-使用者：比 OK 會怎樣 / 比 OK 我就扭一扭
-output: {"reply": "[excited] 比 OK 我就扭給你看", "skill": "wiggle", "args": {}}
-```
+**實作步驟**：
+1. `conversation_graph_node` 訂 `/state/perception/face`（face_perception 8Hz JSON — spec 原寫 10Hz 是誤標）
+2. node 內維護 `_recent_face_identity: tuple[str, float]`，callback 更新；> 3s 視為 unknown
+3. `WorldStateSnapshot` 加 `current_speaker: str` field
+4. `world_state_builder()` 從 node 注入抓最近 1s identity，超時 fallback `"unknown"`
+5. `_build_user_message()` 在 1D 已加 `[眼前的人] {current_speaker}`（identity != unknown 才注入）
+6. EXAMPLES.md 補 current_speaker few-shot：對 Roy 俏皮快、對 grama 溫柔慢、對 unknown 禮貌試探
+7. face_perception 未啟（無 topic）整段 silent omit，prompt 不夾 unknown 字串
 
-**正例 stretch（≥ 3 case）**：
-```
-使用者：伸個懶腰
-output: {"reply": "[playful] 好喔～比個 OK 我就伸個懶腰", "skill": "stretch", "args": {}}
+**1H 工時**：subscription + WorldState 擴 + builder 改 + 3 case few-shot = 3h
 
-使用者：你想不想動一下
-output: {"reply": "[curious] 想動！比個 OK 我來伸展一下", "skill": "stretch", "args": {}}
+---
 
-使用者：給我看伸展
-output: {"reply": "[playful] 好啊！比個 OK 我就伸給你看", "skill": "stretch", "args": {}}
-```
+**1I Gemini / DeepSeek A/B（驗證用，不換主線 — Roy 5/9 收斂）**
 
-**負例（避免過度提案）**：
-```
-使用者：不要動 / 別扭了
-output: {"reply": "[gentle] 好喔～我不動了", "skill": "chat_reply", "args": {}}
+**主線決策**：**Demo 前主線維持 Gemini-3 Flash + temperature 0.6**。1A-1H 落地後驗證實際自然度，不把希望押在換 model。
 
-使用者：停 / 緊急停
-（safety_gate keyword 短路，不進 LLM；但 persona 留註提醒）
+> Roy 引用：「如果 prompt 還在強迫模型列功能，Opus / GPT-5.5 只會更認真地列一份更漂亮的功能表。」
 
-使用者：跳舞 / 後空翻
-output: {"reply": "[thinking] 那個對我來說太難了啦...", "skill": "chat_reply", "args": {}}
-```
+**A/B eval（用 `tools/llm_eval/`）— 4 組對照，純驗證 1A-1F 的效果是否真實**：
+- Gemini-3 + temp 0.2（1A-1H 重構**前** baseline，作為對比）
+- Gemini-3 + temp 0.6（1A-1H 重構**後** demo 主線）
+- DeepSeek-V4 + temp 0.6（候選驗證；若明顯更好留 demo 後再切主）
+- Gemini-3 + temp 0.9（探索上限；JSON schema 是否還穩）
 
-**1B-4 不**硬規則「句尾汪/嗚」（避免幼兒化、尷尬重複）；改寫成「**偶爾、低頻、只在 playful 情緒**」guideline
+**評分維度**（每組 30 round）：
+- persona 維持力（不講「我是 AI」、不客服腔）
+- JSON schema 命中率（reply / skill / args 三欄位）
+- skill 提案率（在 action_request mode 下）
+- 中文自然度（人工 1-5 分）
+- 介紹死板度（identity mode 下「列功能 vs 講性格」比例）
+- 延遲 P50/P95
 
-**1B-5 注入順序**：穩定區（identity/rules/skills/examples）在前，volatile（runtime/memory/face_state）在後 — prefix-cache 友善
+**何時切主線**：5/16 demo 後若 DeepSeek 在 5 個維度有 ≥3 個明顯贏 + 延遲不差 → 切。Demo 前不換。
 
-**驗收硬條件**：每個 LLM 可提案 skill **必須有 ≥ 3 prompt eval case**，否則只修「扭一扭」這句、換個說法又壞。1C 的 eval suite 加 case：每 skill × 3 變體 × 4 模型/temperature 組合
+**1I 工時**：eval 30 round × 4 組 = 半天（Jetson 上跑）
 
-**1C 同日做（半天，A/B eval）**
+---
 
-**主線決策**：**短期主線仍用 Gemini**，DeepSeek 作候選測試。不直接換主線 — 避免把 prompt 載入問題和模型問題混在一起。30 round eval 結果若 DeepSeek 在「自然度 + JSON 穩定 + skill 提案率 + 延遲」明顯贏，再切。
+**安全邊界（OpenClaw L1+L2 對照）**
 
-**現有 launch arg**：只有 `openrouter_gemini_model` / `openrouter_deepseek_model`，**沒有 primary_model arg**。client 行為固定先打 gemini fallback deepseek。A/B 測試方式：
-- Gemini 主線：用現有預設
-- DeepSeek 試切主線：`openrouter_gemini_model:=deepseek/deepseek-v4-flash` 暫時把主 slot 換成 DeepSeek（**這是 hack，正式做法在 1E**）
-- temperature：launch arg 已有 `temperature` (見 `pawai_conversation_graph.launch.py:40`)，從 0.2 → 0.6 A/B
+> Roy 5/9 brainstorm：「**安全做事靠執行層，不靠 LLM 自律。**」
 
-**1E（可選後續）**：若 1C 結果支持換主線，新增 `primary_model` arg + 改 `OpenRouterClient` 動態切主備，再正式切
+| OpenClaw 對應 | PawAI 落地（已有 / 不變） |
+|---|---|
+| LLM 只提出 proposal | persona OUTPUT.md 明寫 reply + skill + args；不能直接執行 |
+| Tool registry 驗證 | `skill_policy_gate` v2 驗 effective_status |
+| Allow/deny | `LLM_PROPOSABLE_SKILLS` + 4 桶（1G） |
+| 執行層覆蓋 | `brain_node` PendingConfirm + SafetyLayer hard rule + IE-node validate |
 
-**eval 4 組對照**（用 `tools/llm_eval/`）：
-- Gemini-3 + temp 0.2（baseline）
-- Gemini-3 + temp 0.6
-- DeepSeek-V4（暫切主） + temp 0.2
-- DeepSeek-V4（暫切主） + temp 0.6
-- 評分維度：persona 維持力、JSON schema 命中率、skill 提案率、中文自然度、延遲
-- 結論決定 demo 前是否值得做 1E 切主線
+**LLM 任何提案不會直接控狗** — 這是 PawAI Brain 既有設計（overview.md §2「Brain 提建議，Executive 才執行」），1A-1H 不動這條線。
 
-**1D 同日做（半天）— current_speaker 注入**
-
-**現況檢查**：`conversation_graph_node` **目前沒訂閱 face topic**，`WorldStateSnapshot` 也沒有 face identity field。完整實作步驟：
-
-1. `conversation_graph_node` 新增 ROS subscription：`/state/perception/face`（face_perception 已發 10Hz JSON）
-2. 在 node 內維護 `_recent_face_identity: tuple[str, float]`（identity, timestamp），on_face_msg callback 更新；超過 3s 視為 unknown
-3. `WorldStateSnapshot` (`world_state_builder.py`) 加 `current_speaker: str` field
-4. `world_state_builder()` 從 node 注入的 _recent_face_identity 抓最近 1s 內 identity，超時 fallback `"unknown"`
-5. `_build_user_message()` user payload 加 `current_speaker: Roy / grama / unknown`
-6. persona.txt 1B 重排時補對應 few-shot：對 Roy 俏皮快、對 grama 溫柔慢、對 unknown 禮貌試探
-7. face_state 不可得（face_perception 未啟）時整段 silent omit，prompt 不報錯不夾 unknown 字串
+---
 
 **明確不做（demo 前風險）**
-- ❌ Reply Tags `<say><skill>` schema 改造（動 validator + repair + skill_gate，太深）
-- ❌ persona.txt 拆 4 檔（IDENTITY/RULES/SKILLS/EXAMPLES 多檔）— 留 demo 後
-- ❌ Claude Opus 4.7 / GPT-5.5 試點（成本高、延遲不確定、GPT-5.5 官方未列）
-- ❌ 完整 OpenClaw 8 種 hook 系統化
 
-**預期收益**：互動自然度 5/10 → 7-8/10；不誘人感大幅改善；wiggle/OK 主動鏈式打通
+- ❌ Reply Tags `<say><skill>` schema 改造（動 validator + repair + skill_gate，太深）
+- ❌ 完整 OpenClaw 9 層架構（demo 前太大；只抄 L7 拆檔 + L8 lazy inject）
+- ❌ Phase B PawClaw 的 `workspace/{BODY,SKILLS,SAFETY,PLACES}.md` 整套（範圍不同 — 那是給人看的；本 5/9 拆的是給 LLM 看的）
+- ❌ Claude Opus 4.7 / GPT-5.5 主線替換（成本 + 延遲 + GPT-5.5 官方未列；1I 純驗證）
+- ❌ 完整 OpenClaw 8 種 hook 系統化（用簡單 mode classifier 已夠）
+- ❌ persona content 大改寫（保留 184 行原內容 90%，只刪 L24-36 + L65 + 拆檔搬段落 + 補 6-8 介紹 few-shot）
+
+---
+
+**預期收益**
+
+| 維度 | 重構前（5/8 evening） | 重構後（1A-1H 完成） |
+|---|---|---|
+| 介紹死板度 | LLM 看 L24-36 列 9 條功能 bullet → 70 字「住在這個家裡的小狗。我會聽你說話...」 | identity mode 不注入 capability，LLM 從 IDENTITY.md 講性格 → 「我啊？住你家的小狗～」5-25 字 |
+| 工具人感 | 每輪都看到 capability JSON → 答話偏「我可以幫你 X」 | chat mode 不注入 capability → 答話自然 |
+| Persona 維持 | inline 6 行 fallback 載入時退化嚴重 | directory mode + missing file ERROR raise，不會 silent 退化 |
+| 自然度（人工 1-5） | 估 2-3 分 | 估 4-4.5 分（不換 model 前提） |
+| Wiggle/OK 鏈式 | LLM 不出 skill 欄位 | EXAMPLES.md 補 9 case + 1G 桶清晰 → 出 skill 欄位 |
+| Studio 文字 vs 語音 prompt | 全部標 `[語音輸入]` | 1E 改 source 判 `[語音]` / `[文字]` |
+
+---
+
+**1A-1I 總工時**：~1.5 天（拆檔 1.5h + classifier 1h + lazy inject 1.5h + runtime 0.5h + identity few-shot 3h + 4 桶 0.5h + current_speaker 3h + eval 4h ≈ 14-15h）
+
+可與 issue 1 ElevenLabs Spike-Mini（5/11 半天）並行，5/12 evening 前完成 1A-1H，5/13 跑 1I eval，5/14 三連跑驗。
 
 ### Wave 2 — P2 互動品質升級（5/12-5/13）
 
