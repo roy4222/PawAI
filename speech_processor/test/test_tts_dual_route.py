@@ -118,14 +118,15 @@ class TestShouldUseFastLane:
         _, fast, _ = _helpers()
         assert fast("危險") is True
 
-    def test_short_chinese_fast(self):
+    def test_short_emotional_audio_tag_forces_quality(self):
         _, fast, _ = _helpers()
-        # "嗨～" is short → fast lane
-        assert fast("[playful] 嗨～") is True
+        # 5/9 fix: short emotional sentences with audio tag should NOT use
+        # fast lane (edge-tts robotic) — voice fidelity matters more than latency.
+        assert fast("[playful] 嗨～") is False
 
-    def test_short_greeting_fast(self):
+    def test_short_greeting_no_tag_fast(self):
         _, fast, _ = _helpers()
-        assert fast("你好啊！") is True  # 3 CJK ≤ 30
+        assert fast("你好啊！") is True  # 3 CJK ≤ 12, no audio tag
 
     def test_long_chinese_quality(self):
         _, fast, _ = _helpers()
@@ -133,21 +134,36 @@ class TestShouldUseFastLane:
         long_text = "今天天氣很好，我們去公園散步好嗎？你可以給我一些建議嗎，比如穿什麼衣服最合適。"
         assert fast(long_text) is False
 
-    def test_threshold_boundary_at_exactly_30(self):
+    def test_threshold_boundary_at_exactly_threshold(self):
         _, fast, threshold = _helpers()
-        # Build a text that is exactly threshold CJK chars
+        # Build a text that is exactly threshold CJK chars (no audio tag)
         text = "一" * threshold
-        assert fast(text) is True  # equal → fast
+        assert fast(text) is True  # equal → fast (no emotional tag)
 
-    def test_threshold_boundary_at_31(self):
+    def test_threshold_boundary_above_threshold(self):
         _, fast, threshold = _helpers()
         text = "一" * (threshold + 1)
         assert fast(text) is False  # over → quality
 
-    def test_audio_tag_stripping_makes_short(self):
+    def test_audio_tag_emotional_overrides_short(self):
+        # Short content + emotional audio tag → quality lane (not fast)
+        # This is the core 5/9 fix: short emotional → quality voice.
         _, fast, _ = _helpers()
-        # Long audio tag + short content → fast after strip
-        assert fast("[playful][excited][laughs] 好") is True
+        assert fast("[playful][excited][laughs] 好") is False
+
+    def test_unknown_audio_tag_does_not_force_quality(self):
+        # An unknown tag (not in QUALITY_LANE_AUDIO_TAGS) shouldn't override.
+        _, fast, _ = _helpers()
+        assert fast("[noise] 嗯") is True  # 1 CJK after strip → fast
+
+    def test_threshold_default_is_12(self):
+        _, _, threshold = _helpers()
+        assert threshold == 12, "5/9 review: threshold lowered from 30 to 12"
+
+    def test_safety_keyword_overrides_audio_tag(self):
+        # Safety > emotional tag — even with [worried], 停 forces fast lane.
+        _, fast, _ = _helpers()
+        assert fast("[worried] 停下來") is True
 
     def test_dont_move_keyword_is_fast(self):
         _, fast, _ = _helpers()
