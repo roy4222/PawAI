@@ -238,6 +238,7 @@ class TTSProvider_ElevenLabs:
     name: str = "elevenlabs"
     sample_rate: int = 22050  # mp3 typical; pydub re-derives on decode
     supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.MP3
 
     def __init__(self, config: TTSConfig):
         self.config = config
@@ -287,6 +288,7 @@ class TTSProvider_MeloTTS:
     name: str = "melotts"
     sample_rate: int = 0  # dynamic, read from self._model.hps.data.sampling_rate
     supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.WAV  # deprecated; kept for safety
 
     def __init__(self, config: TTSConfig):
         self.config = config
@@ -348,6 +350,7 @@ class TTSProvider_Piper:
     name: str = "piper"
     sample_rate: int = 22050  # zh_CN-huayan-medium native rate
     supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.WAV
 
     def __init__(self, config: TTSConfig):
         self.config = config
@@ -433,6 +436,7 @@ class TTSProvider_EdgeTTS:
     name: str = "edge_tts"
     sample_rate: int = 24000  # mp3 24 kHz mono confirmed via `file` on output
     supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.MP3
 
     """Microsoft Edge TTS (cloud, high quality, zh-TW/zh-CN support)"""
 
@@ -485,6 +489,7 @@ class TTSProvider_OpenRouterGemini:
     name: str = "openrouter_gemini"
     sample_rate: int = 24000
     supports_audio_tags: bool = True
+    output_format: AudioFormat = AudioFormat.WAV  # wraps raw PCM into WAV container
 
     OPENROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
 
@@ -696,6 +701,81 @@ class AudioProcessor:
         return [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]
 
 
+# ---------------------------------------------------------------------------
+# E3-3: Dual-route helpers (fast lane / quality lane)
+# ---------------------------------------------------------------------------
+
+# Safety / stop keywords that always force fast lane regardless of text length.
+SAFETY_KEYWORDS: re.Pattern = re.compile(
+    r"停|停止|不要動|先不要動|別動|小心|警告|危險|stop",
+    re.IGNORECASE,
+)
+
+FAST_LANE_THRESHOLD: int = 30  # effective char/word units
+
+# Regex to strip audio-tag markup like [playful], [excited] before counting.
+_AUDIO_TAG_RE_LANE: re.Pattern = re.compile(r"\[\w+\]")
+
+# Chinese / English punctuation that doesn't count as content.
+_PUNCT_RE: re.Pattern = re.compile(r"[，。！？：；、,.!?:;\s]")
+
+
+def _compute_effective_length(text: str) -> int:
+    """Compute effective length for dual-route lane decision.
+
+    Algorithm:
+    1. Strip audio tags (e.g. ``[playful]``, ``[excited]``).
+    2. Strip Chinese/English punctuation and whitespace.
+    3. Count CJK characters (each = 1 unit) + English words (each = 1 unit).
+    """
+    # Strip audio tags
+    stripped = _AUDIO_TAG_RE_LANE.sub("", text)
+    # Strip punctuation and whitespace to isolate content tokens
+    stripped = _PUNCT_RE.sub(" ", stripped).strip()
+
+    if not stripped:
+        return 0
+
+    cjk_count = 0
+    en_words_count = 0
+    current_en: list[str] = []
+
+    for ch in stripped:
+        if "一" <= ch <= "鿿" or "㐀" <= ch <= "䶿":
+            # Flush pending English word
+            if current_en:
+                en_words_count += 1
+                current_en = []
+            cjk_count += 1
+        elif ch.isalpha() or ch.isdigit():
+            current_en.append(ch)
+        else:
+            # Space or other separator — flush English word
+            if current_en:
+                en_words_count += 1
+                current_en = []
+
+    if current_en:
+        en_words_count += 1
+
+    return cjk_count + en_words_count
+
+
+def _should_use_fast_lane(text: str, threshold: int = FAST_LANE_THRESHOLD) -> bool:
+    """Return True when fast lane (edge-tts → Piper) should handle ``text``.
+
+    Fast lane is used when:
+    - Text contains a safety/stop keyword (always fast, overrides length), OR
+    - Effective text length ≤ ``threshold`` (default 30 units).
+    """
+    if SAFETY_KEYWORDS.search(text):
+        return True
+    return _compute_effective_length(text) <= threshold
+
+
+# ---------------------------------------------------------------------------
+
+
 class EnhancedTTSNode(Node):
     """Enhanced TTS Node with improved architecture"""
 
@@ -708,6 +788,14 @@ class EnhancedTTSNode(Node):
         # Load configuration
         self.config = self._load_configuration()
 
+        # E3-4: dual-route routing flags (loaded after _declare_parameters)
+        self._dual_route_enabled: bool = (
+            self.get_parameter("tts_dual_route_enabled").get_parameter_value().bool_value
+        )
+        self._fast_lane_threshold: int = (
+            self.get_parameter("tts_fast_lane_threshold").get_parameter_value().integer_value
+        )
+
         # Initialize components
         self.cache = AudioCache(self.config.cache_dir, self.config.use_cache)
         self.audio_processor = AudioProcessor()
@@ -715,6 +803,10 @@ class EnhancedTTSNode(Node):
         # Initialize TTS provider + fallback chain (Stage 4 of B1 Plan D)
         self.tts_provider = self._create_tts_provider()
         self._fallback_chain: List = []
+
+        # E3-1: track the format of the last successfully served provider
+        # Default MP3 so _play_on_robot has a sane fallback before first call.
+        self._last_served_format: AudioFormat = AudioFormat.MP3
 
         if not self.tts_provider:
             self.get_logger().error("Failed to initialize TTS provider!")
@@ -814,6 +906,15 @@ class EnhancedTTSNode(Node):
         self.declare_parameter(
             "openrouter_gemini_timeout_s",
             _env_float("OPENROUTER_GEMINI_TIMEOUT_S", 6.0),
+        )
+        # E3-4: dual-route parameters
+        self.declare_parameter(
+            "tts_dual_route_enabled",
+            _env_bool("TTS_DUAL_ROUTE_ENABLED", True),
+        )
+        self.declare_parameter(
+            "tts_fast_lane_threshold",
+            _env_int("TTS_FAST_LANE_THRESHOLD", 30),
         )
 
     def _load_configuration(self) -> TTSConfig:
@@ -1036,16 +1137,53 @@ class EnhancedTTSNode(Node):
             # (~8s), capturing Go2's own playback as input.
             self._publish_tts_playing(True)
 
-            # Default chain MUST keep [primary] + [fallbacks] order — naked
-            # `self._fallback_chain` would skip primary (e.g. edge_tts), making
-            # all non-Studio TTS fall through to Piper.
-            # 5/8: OPENROUTER_KEY 有設 → 一律走 Gemini Flash TTS preview chain（Studio + mic 統一音色）。
-            # input_origin 欄位保留供未來 per-source policy（chunk size / voice tweak）使用。
+            # ---------------------------------------------------------------------------
+            # E3-4: Dual-route chain selection
+            # ---------------------------------------------------------------------------
+            # Fast lane: edge-tts → Piper   (low latency, short/safety text)
+            # Quality lane: OpenRouter Gemini → edge-tts → Piper  (richer voice, long text)
+            #
+            # When tts_dual_route_enabled=False, behaviour matches pre-E3 single chain.
+            # ---------------------------------------------------------------------------
             default_chain = [self.tts_provider] + list(self._fallback_chain)
-            if self._studio_fallback_chain is not None:
-                chain = self._studio_fallback_chain
+
+            if self._dual_route_enabled:
+                use_fast = _should_use_fast_lane(raw_text, self._fast_lane_threshold)
+                lane = "fast" if use_fast else "quality"
+                self.get_logger().info(
+                    f"[tts] lane={lane} "
+                    f"effective_len={_compute_effective_length(raw_text)} "
+                    f"text_preview={raw_text[:30]!r}"
+                )
+                if use_fast:
+                    # Fast lane: edge-tts primary, Piper fallback
+                    fast_chain: List = []
+                    edge_prov = None
+                    piper_prov = None
+                    for p in [self.tts_provider] + list(self._fallback_chain):
+                        if getattr(p, "name", "") == "edge_tts" and edge_prov is None:
+                            edge_prov = p
+                        elif getattr(p, "name", "") == "piper" and piper_prov is None:
+                            piper_prov = p
+                    if edge_prov is not None:
+                        fast_chain.append(edge_prov)
+                    if piper_prov is not None:
+                        fast_chain.append(piper_prov)
+                    # If neither found (e.g. main provider is neither), fall back to default
+                    chain = fast_chain if fast_chain else default_chain
+                else:
+                    # Quality lane: Gemini → edge-tts → Piper (no ElevenLabs until spike-real GO)
+                    if self._studio_fallback_chain is not None:
+                        chain = self._studio_fallback_chain
+                    else:
+                        chain = default_chain
             else:
-                chain = default_chain
+                # Dual-route disabled: legacy single-chain behaviour
+                if self._studio_fallback_chain is not None:
+                    chain = self._studio_fallback_chain
+                else:
+                    chain = default_chain
+
             audio_data = None
             cache_hit = False
             served_by = ""
@@ -1090,6 +1228,10 @@ class EnhancedTTSNode(Node):
                     audio_data = hit
                     cache_hit = True
                     served_by = pname
+                    # E3-1: record format of cache-hit provider
+                    self._last_served_format = getattr(
+                        prov, "output_format", AudioFormat.MP3
+                    )
                     break
 
                 # Synthesize
@@ -1107,6 +1249,10 @@ class EnhancedTTSNode(Node):
                         self.get_logger().info(f"💾 Cached [{pname}]")
                     audio_data = fresh
                     served_by = pname
+                    # E3-1: record format of successful provider
+                    self._last_served_format = getattr(
+                        prov, "output_format", AudioFormat.MP3
+                    )
                     break
                 else:
                     self.get_logger().warn(
@@ -1184,9 +1330,12 @@ class EnhancedTTSNode(Node):
                 duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
                 self._play_on_robot_audio_track(wav_data, duration)
             else:
-                # DataChannel: needs 16kHz/16bit/mono for Go2 audiohub
-                # Piper now returns WAV directly; other providers still return MP3
-                src_fmt = AudioFormat.WAV if self.config.provider == TTSProvider.PIPER else AudioFormat.MP3
+                # DataChannel: needs 16kHz/16bit/mono for Go2 audiohub.
+                # E3-2: use _last_served_format so fallback chain demotions
+                # (e.g. Gemini→Piper) decode with the correct container format.
+                # Old code keyed off config.provider which is the *primary*
+                # provider and wrong when a fallback (e.g. Piper WAV) ran.
+                src_fmt = self._last_served_format
                 wav_data = self.audio_processor.convert_to_wav(audio_data, src_fmt)
                 if not wav_data:
                     self.get_logger().error("Failed to convert audio to WAV")
