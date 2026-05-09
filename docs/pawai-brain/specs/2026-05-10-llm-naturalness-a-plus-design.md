@@ -52,7 +52,7 @@ Demo 主軸對應：
 - 4 個無聊點優先處理：`self_introduce` / `wave_hello` / `greet_known_person` / `object_remark`
 - 改後 Day 4-5 補：`wiggle` / `stretch` / `sit_along` / `stand`
 - Persona 5 檔（4 改 + 1 新）：IDENTITY / EXAMPLES / OUTPUT / CAPABILITIES + `MISSION.md`
-- SAY 解綁機制：不動 JSON schema、不動 LangGraph 11 節點
+- SAY 解綁機制：不動 **LLM 輸出** JSON schema、不動 LangGraph 11 節點；會擴充 internal SkillPlan / `/brain/proposal` JSON 加 `source_llm_reply` 欄位
 - 模型不換：A+ 完成後跑 10-prompt benchmark 再決定
 
 ---
@@ -435,11 +435,11 @@ elif gate_result == "needs_confirm":
     # 2) 註冊 PendingConfirm，等 OK gesture / 語音
     # 3) 真正 motion plan 在 OK confirmed 後才 build
     self._emit_chat_reply(reply_text, note=f"awaiting_ok:{proposed_skill}")
+    # review 3 fix: 用現有 PendingConfirm signature，不擴簽名
     self._pending_confirm.request_confirm(
-        skill=proposed_skill,
-        args=proposed_args,
-        post_confirm_reply=None,  # demo 後可擴充：confirm 後再講一句
-        timeout_s=30.0,
+        proposed_skill,
+        proposed_args,
+        time.time(),
     )
     # ↑ OK 收到時，PendingConfirm 觸發 _on_ok_confirmed → build_plan(source="rule:confirmed_via_ok")
     #   那條路徑因為已過 LLM，没有現成 reply → fallback 到 text_pool（見 §6.3）
@@ -449,9 +449,10 @@ elif gate_result in ("rejected", "cooldown", "blocked"):
     self._emit_chat_reply(reply_text, note=f"skill_gate:{gate_result}")
 ```
 
-**對應 PendingConfirm 端**（現有機制，本 spec 不改其核心）：
-- `request_confirm()` 簽名加 optional `post_confirm_reply: str | None`（為 Phase B 預留，A+ 不用）
+**對應 PendingConfirm 端**（review 3 fix：A+ **不**動 PendingConfirm signature）：
+- 沿用現有 `request_confirm(skill, args, ts)` signature
 - OK confirmed → `_on_ok_confirmed` 走 `source="rule:confirmed_via_ok"`，無 LLM reply → executive `_resolve_say_text` 看 `source_llm_reply == None` → 走 `text_pool` fallback
+- `post_confirm_reply` 機制留 Phase B，本 spec 不引入
 
 #### 6.2.6 round-trip 測試（review 3 fix 驗收）
 
@@ -467,31 +468,51 @@ face state 偵測到 Roy 入鏡
         ↓
 brain_node._on_face_state → emit greet_known_person plan
    - source_llm_reply = None
+   - SAY step text="" （見路徑 B 對 SkillContract 的最小改動）
         ↓
 executive 收到 plan
-   - source_llm_reply 為 None → 用 SkillContract template
-   - 但 template 改成「多變體池」：從 N 個變體隨機/輪播
+   - _resolve_say_text() 三段邏輯：
+     1. source_llm_reply 非空 → 用 LLM reply（路徑 B 走不到這裡）
+     2. step.args["text"] 非空 → 用 step text
+     3. step.args["text"] 為空 → 走 executor 端 GREET_KNOWN_PERSON_POOL / OBJECT_REMARK_POOL
 ```
 
-**多變體池**（取代 hardcoded template）：
+**多變體池**（review 1 + 4 fix：落點在 executive node，**不**改 SkillContract registry schema）：
 
-`skill_contract.py` 改：
-- `greet_known_person.text_template` → `text_pool: list[str]`（10-15 變體）
-- `object_remark` 的 `OBJECT_TTS_SPECIAL_SUFFIX` → 各 object 5-8 變體 + 30 分鐘 cooldown
+- 變體池本體：`interaction_executive_node.py` module dict
+  - `SAY_TEXT_POOLS` per skill
+  - `GREET_KNOWN_PERSON_POOL` per name (roy / grama / _default)
+  - `OBJECT_REMARK_POOL` per class (cup / bottle / book / chair / _default)
+  - 30 分鐘 cooldown 由 brain_node 端 dedup（沿用現有機制），不在 pool dict 內
+- SkillContract 改動最小：
+  - `greet_known_person` 的 `text_template` 改成 `""`（讓 executor fallback）；`SkillStep` 結構不變
+  - `object_remark` 的 SAY step `text=""`；brain_node 不再注入 `OBJECT_TTS_SPECIAL_SUFFIX` 字串到 step.args，改在 executor 查 pool
+  - **不**新增 `text_pool` 欄位到 SkillContract dataclass
+- `_pick_from_pool(skill, plan)` + `_text_pool_history` deque(maxlen=3) 避免最近 3 次重複（見 §6.3）
 
-範例 `greet_known_person.text_pool`：
+範例 `GREET_KNOWN_PERSON_POOL`（落在 `interaction_executive_node.py`）：
 ```python
-[
-    "歡迎回來，{name}！",
-    "[excited] 嘿，{name} 回來啦",
-    "[playful] {name}！我等你好久了",
-    "[curious] {name}～外面在忙嗎",
-    "[sighs] {name}，我剛剛還在打盹",
-    "[gentle] 阿嬤回來了喔",  # name=grama 才用
-    "{name}，今天看起來不錯欸",
-    "回來啦～",
-    # ... + 5-7 條
-]
+GREET_KNOWN_PERSON_POOL: dict[str, list[str]] = {
+    "roy": [
+        "[excited] 嘿，Roy 回來啦",
+        "[playful] Roy！我等你好久了",
+        "[curious] Roy～外面在忙嗎",
+        "[sighs] Roy，我剛剛還在打盹",
+        "Roy，今天看起來不錯欸",
+        "回來啦～",
+    ],
+    "grama": [
+        "[gentle] 阿嬤回來了喔",
+        "[gentle] 阿嬤好～今天還好嗎",
+        "[whispers] 阿嬤回來啦，要不要坐一下",
+        "阿嬤好",
+    ],
+    "_default": [
+        "歡迎回來，{name}！",  # template 字串由 executor 用 plan.args["name"] 套
+        "{name} 回來啦",
+        "嗨，{name}！",
+    ],
+}
 ```
 
 **選擇策略**：
