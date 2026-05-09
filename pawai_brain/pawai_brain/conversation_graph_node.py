@@ -660,9 +660,20 @@ class ConversationGraphNode(Node):
         })
 
     def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
-        """P1-2: Clear ConversationMemory when browser requests a context reset."""
+        """P1-2: Clear ConversationMemory + seen_sessions on browser reset.
+
+        5/9 review: was only clearing _memory; spec required _seen_sessions
+        too. Without clearing, the same session_id (e.g. studio request
+        replay) would be silently dropped post-reset because it remained
+        in _seen_sessions. Take _seen_lock to prevent race with
+        _on_speech_event / _on_text_input writers that mutate _seen_sessions.
+        """
         self._memory.clear()
-        self.get_logger().info("ConversationMemory cleared by /brain/reset_context")
+        with self._seen_lock:
+            self._seen_sessions.clear()
+        self.get_logger().info(
+            "/brain/reset_context: ConversationMemory + seen_sessions cleared"
+        )
 
     def _on_face_state(self, msg: String) -> None:
         """1H: /state/perception/face (8 Hz) — track most stable known person.
