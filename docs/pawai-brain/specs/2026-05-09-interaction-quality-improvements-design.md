@@ -142,15 +142,49 @@ full_pcm = b"".join(ok_parts)
 - 不需要後端 source metadata，純看「當下有沒有 pendingRequestId」分類
 - demo 後 P1-1 Phase 2 拿到 origin 欄位再細分 skill_say/canned/alert
 
-**Phase 2-mini（Roy 5/9 review #3 提前到 Wave 1，30min）— IE-node SAY source 單點**
+**Phase 2-mini（Roy 5/9 review #3 提前到 Wave 1，30min）— IE-node SAY source 條件分類**
 
-只改 1 個 publisher（IE-node `_dispatch_step` SAY），其他 7 個維持純文字（demo 後再補）。CP 值最高，因為 IE-node SAY 是 demo 核心（self_introduce 10 步 + wave_hello 等都走這條），skill_say 不分色 demo 觀感跟 chat 完全混。
+只改 1 個 publisher（IE-node `_dispatch_step` SAY），其他 7 個維持純文字（demo 後再補）。CP 值最高，因為 IE-node SAY 是 demo 核心（self_introduce 10 步 + wave_hello 等都走這條）。
 
-具體：
-1. `interaction_executive_node.py:185-194` SAY envelope 已有 `input_origin`，再加 `source: "skill_say"` 欄位
-2. gateway P0-2 改造後一併 parse `source` field 進 broadcast
-3. ChatPanel CSS：skill_say（綠）/ chat_reply pending（一般灰）/ canned 與 alert（淡灰，沒 source 欄位）
-4. **保留**純文字 backward compat（合約 §5.2 雙模化）
+**source 判斷邏輯**（Roy 5/9 review #4 — 不可無條件染 skill_say）：
+
+```python
+# interaction_executive_node.py:_dispatch_step SAY 段
+def _resolve_say_source(plan, step) -> str:
+    # 1. step.args 顯式 source 優先（最穩，由 skill_contract.build_plan 時塞入）
+    if step.args.get("source"):
+        return step.args["source"]
+    # 2. selected_skill 推斷
+    if plan.selected_skill == "chat_reply":
+        return "chat_reply"
+    if plan.selected_skill == "say_canned":
+        return "say_canned"
+    if step.args.get("input_origin") == "studio_text":
+        return "chat_reply"  # Studio 文字 chat path 一律 chat_reply
+    # 3. 預設：其他 SAY 都當 skill_say（self_introduce / wave_hello / 各 skill SAY step）
+    return "skill_say"
+```
+
+**正確映射**：
+- `chat_reply` SAY（含 Studio 文字輸入回覆） → `source: "chat_reply"`
+- `say_canned` SAY（含 timeout fallback「我聽不太懂」） → `source: "say_canned"`
+- 其他 skill SAY（self_introduce 10 步 / wave_hello / wiggle 提示句 / careful_remind 等） → `source: "skill_say"`
+
+**首選方案（更穩）**：在 `skill_contract.build_plan()` 生成 SkillStep 時直接在 `args` 塞 `source` 欄位，dispatch 階段不用「猜」。若 build_plan 改動範圍大，退而求其次走上面的推斷邏輯。
+
+**ChatPanel CSS**：
+- `chat_reply` → 一般灰氣泡（pending 配對 + Studio 文字回覆）
+- `skill_say` → 綠氣泡（標明這是 skill 動作中的 SAY 步驟）
+- `say_canned` → 橙氣泡（fallback 警告，看到代表 LLM 失敗）
+- 沒 source（其他 7 publisher 走純文字 backward compat） → 淡灰（spontaneous 既有樣式）
+
+**保留**純文字 backward compat（合約 §5.2 雙模化）
+
+具體實作步驟：
+1. `skill_contract.build_plan()` 生成 SAY step 時 `args["source"] = <skill 名 → "skill_say"|"chat_reply"|"say_canned">`（首選）
+2. `interaction_executive_node.py:185-194` 在 envelope 加 `source` 欄位
+3. gateway P0-2 改造後一併 parse `source` 進 broadcast
+4. ChatPanel CSS 三色 + 預設淡灰
 
 **Phase 2-full（demo 後可選，再 1 小時）— 其餘 publisher source metadata**
 1. event_action_bridge 改 JSON envelope（gesture/pose/fall 三個）
@@ -1013,7 +1047,7 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 - [ ] Studio 不顯示原始 JSON
 
 ### Wave 1 完成標誌
-- [ ] Studio ChatPanel 顯示所有 PawAI utterance（包含 stranger_alert / object_remark / greet / idle）
+- [ ] Studio ChatPanel 顯示所有 PawAI utterance（包含 stranger_alert / object_remark / greet / skill SAY / chat_reply；idle 待 P3-1 才驗）
 - [ ] 重整頁面後第一句對話不帶舊 context
 - [ ] ASR 輸出全是繁體（5/5 round 抽樣 100% 繁體）
 - [ ] 開機 log 確認 `personas/v1` directory 載入：5 檔 verified、base 4 檔 concat、CAPABILITIES.md cached separately、`base_sha` 印出
