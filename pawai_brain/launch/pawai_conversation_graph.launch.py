@@ -57,8 +57,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("llm_max_tokens", default_value="500"),
         DeclareLaunchArgument(
             "llm_temperature",
-            default_value="0.6",  # 1E: was 0.2; 0.6 balances JSON stability + naturalness
-            description="LLM temperature (0.6 demo main; OpenClaw chat 0.7-1.0)",
+            default_value="0.8",  # 5/9 review: 0.6 still felt templated; 0.8 toward OpenClaw 0.7-1.0 chat sweet spot
+            description="LLM temperature (0.8 demo main; OpenClaw chat 0.7-1.0). Lower if JSON schema gets unstable.",
         ),
         DeclareLaunchArgument(
             "engine_label", default_value="langgraph",
