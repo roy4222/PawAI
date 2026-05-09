@@ -618,17 +618,48 @@ launch arg `idle_mode:=demo`；env var `PAWAI_IDLE_MODE=home`
 - 60s 才能在展示中真的觸發一次 idle utterance / wave_hello → 增加「會自己玩」印象
 - demo 後 Roy 5/18 改 `idle_mode:=home` 即恢復 10 min
 
-**先做順序（3 步驟分 PR）**
-1. issue 4 P2-1 attention policy（~50 行）— idle 前置
-2. **idle MVP**（demo 模式 + canned pool only，~80 行）
-3. **idle LLM 接入**（+50 行 conversation_graph idle_request）
+**Roy 5/9 收斂：拆三階段，預設 off，MVP 只 canned**
 
-**收益**：demo 期觀眾看到「會自己玩、自言自語」；home 期使用者覺得有靈魂；產品感從工具升級為陪伴
+| 階段 | 範圍 | 預設 | 工時 |
+|---|---|---|---|
+| **P3-1a idle MVP** | canned pool only；無 LLM；只 say_canned 90% / wave_hello 10%；前置 P2-1 | `idle_mode=off` 預設 | 2-3 小時 |
+| **P3-1b Studio 控制** | Studio toggle + mode selector；demo 要展示才手動切 `demo` | UI 在 settings | 1 小時 |
+| **P3-1c LLM idle** | `/brain/idle_request` + conversation_graph 路由（Wave 0/1/2 穩了才做） | feature flag | 2 小時 |
 
-**明確不做**
+**Roy 收斂的關鍵修正**
+
+1. **`idle_mode` 預設 `off`**（不是 `demo`）
+   - 60s idle 在 demo 場地可能會在老師講話、切畫面、狗剛完成技能後插一句
+   - demo 想展示時手動切 `idle_mode:=demo` 或 Studio toggle 開
+
+2. **MVP 不做 LLM idle_request**
+   - 多一條主動 LLM 路徑容易跟 speech/context/reset 混
+   - 先確認 canned 不打斷、不亂觸發再做 LLM
+
+3. **不嘗試取消 active plan**
+   - `brain_node` 不是 executor，沒可靠取消能力
+   - MVP 不發 sequence、只發短 utterance；使用者回來時**只阻止下一次 idle**，不取消已送出的 plan
+
+4. **MVP 白名單砍到 2 個**
+   - `say_canned` 90% / `wave_hello` 10%
+   - **拿掉** `sit_along`（坐下會改姿態，現場狀態不一定適合）
+
+5. **驗收依 profile 拆**
+   - dev profile：20s 觸發
+   - demo profile（手動開）：60s 觸發
+   - home profile：600s 觸發
+   - 不要寫死「10 min 觸發」
+
+**收益**：demo 期觀眾看到「會自己玩、自言自語」（但只在手動開時）；home 期使用者覺得有靈魂；產品感從工具升級為陪伴
+
+**明確不做（demo 前風險）**
+- ❌ MVP 接 LLM（P3-1c 才做）
+- ❌ MVP 放 sit_along（姿態不穩）
+- ❌ idle_mode 預設 demo（手動開才安全）
+- ❌ idle 嘗試取消 active plan（brain 沒 executor 能力）
 - ❌ idle 中 nav 巡邏（守護犬 spec superseded）
 - ❌ idle 中主動拍照 / 互動誘導（隱私 + demo 風險）
-- ❌ context 太重（讀整天對話 history 推測）— LLM prompt 只給最近 5 物體 + 時段，輕量
+- ❌ context 太重（讀整天對話 history 推測）
 
 ---
 
@@ -661,9 +692,12 @@ launch arg `idle_mode:=demo`；env var `PAWAI_IDLE_MODE=home`
 - [ ] 自由對話首音延遲 中位數 < 3s（如 P2-2 通）或 < 5s（如只 P2-3 雙軌）
 - [ ] 同一椅子 60s 內 dedup 不繞過（顏色抖動測試）
 
-### Wave 3 完成標誌（demo 後）
-- [ ] 閒置 10 min 觸發 idle utterance ≥ 1 次
-- [ ] idle 期間 user 一講話立刻 cancel（ < 500ms）
+### Wave 3 完成標誌（依 profile）
+- [ ] dev profile（threshold 20s）：閒置 20s 觸發 idle utterance ≥ 1 次
+- [ ] demo profile（手動開，threshold 60s）：閒置 60s 觸發 ≥ 1 次
+- [ ] home profile（threshold 600s）：閒置 10 min 觸發 ≥ 1 次
+- [ ] idle utterance 期間 user 一講話 → 阻止下一次 idle（< 500ms 不再觸發）；不嘗試取消已送出 plan
+- [ ] `idle_mode=off` 預設不觸發任何 idle
 
 ---
 
