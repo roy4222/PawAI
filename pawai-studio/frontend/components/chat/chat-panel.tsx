@@ -100,12 +100,27 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevVoiceResultRef = useRef(voiceResult);
+  // J: stick-to-bottom — only auto-scroll when user is already near the
+  // bottom. If they scroll up to read older messages, new messages must
+  // not yank the viewport back down.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
 
   const hasMessages = messages.length > 0;
 
-  // Auto-scroll on new messages.
+  function handleScrollContainer() {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    // 30px tolerance — within this distance to bottom counts as "stuck".
+    shouldAutoScrollRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+  }
+
+  // Auto-scroll on new messages, but only when user is at/near the bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (shouldAutoScrollRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, isThinking]);
 
   // Cleanup pending timeout on unmount.
@@ -412,7 +427,11 @@ export function ChatPanel() {
           <RotateCcw className="h-4 w-4" />
         </Button>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScrollContainer}
+        className="flex-1 overflow-y-auto"
+      >
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
             if (msg.type === "user") {
