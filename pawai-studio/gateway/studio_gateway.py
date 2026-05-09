@@ -558,8 +558,19 @@ async def post_text_input(payload: TextInputPayload):
     if node is None:
         return {"ok": False, "error": "ros_node_not_ready"}
     request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+    text = payload.text
+    # 5/9 review: Studio chat-panel typing path was missing s2twp normalization.
+    # User typing is normally already 繁體, but pasted content / mobile keyboard /
+    # mixed input can leak 簡體; normalize defensively for consistency with the
+    # two ASR paths (stt_intent_node + /ws/speech).
+    if ENABLE_S2TWP and text:
+        try:
+            from text_normalization import to_traditional_tw
+            text = to_traditional_tw(text)
+        except Exception:
+            pass  # silent fallback to original text
     msg = {
-        "text": payload.text,
+        "text": text,
         "request_id": request_id,
         "source": "studio_text",
         "created_at": time.time(),
