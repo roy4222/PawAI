@@ -532,19 +532,103 @@ t=1.5  椅子 → object_remark 又插嘴 ⚠️
 
 ### Wave 3 — P3 加分項（5/14 之後或 demo 後）
 
-**P3-1 Idle 待機行為**
-- `brain_node` 加 `last_user_interaction_ts` (在 `_on_speech_intent` / `_on_gesture` 更新)
-- 加 `_idle_tick_timer` (0.2 Hz)
-- guardrail：
-  - `not _has_active_sequence()`
-  - `_pending_confirm.state == IDLE`
-  - `_chat_buffer.empty()`
-  - `last_tts_finished_ts > 5s ago`
-  - `depth_clear == True`
-  - `now - last_user_interaction_ts > 600s` (10 min)
-- whitelist：`say_canned` 短句、`wave_hello`；**禁止** wiggle / stretch / nav / dance 自主觸發
-- LLM 決策路徑：brain 主動 emit `idle_prompt` event → conversation_graph_node 用特殊 system prompt「你閒置了 10 分鐘，講一句可愛的觀察」→ output 走 say_canned plan
-- 收益：產品感升級為「會自己玩」
+**P3-1 Idle 待機行為（Roy 5/9 brainstorm 詳細設計）**
+
+**靈感**：遊戲 NPC idle animation + Anki Vector「occasionally piping in」+ Tamagotchi 多重條件觸發
+
+**業界共識**（MIT Media Lab、Anki、Tamagotchi、HRI 文獻）：
+1. 多因素觸發優於純 timer（時間 AND 無 face AND 無 ENGAGED）
+2. 隨機 jitter ±30-50% 避免機械感
+3. 內容池要大 + LLM 動態生成 + canned fallback
+4. context-bound（「我看到桌上有杯子」勝過「天氣真好」）
+5. owner control（可關閉，env var / launch arg）
+
+**設計：兩 axis state machine（attention × idle_phase）**
+
+attention 軸（issue 4 P2-1 已設計）：`ENGAGED / RECENT / IDLE`
+idle_phase 軸（新加）：`NORMAL / DUE / COOLING`
+
+| attention | 狀態 |
+|---|---|
+| ENGAGED | face_visible AND distance ≤ 1.6m AND dwell ≥ 1.2s 或 voice intent < 10s |
+| RECENT | 上述 10-60s 內 |
+| **IDLE** | > threshold（demo 60s / home 600s） → `idle_phase=DUE` 觸發 |
+
+**前置依賴**：必須 issue 4 P2-1 attention policy 先做完，idle 才能掛 attention=IDLE 上面。建議**同 PR 一起做**或 attention 先 merge。
+
+**觸發策略**
+- `_state.last_user_interaction_ts`：在 `_on_speech_intent` / `_on_gesture` / `_on_face`(known engaged) / `_on_text_input` 4 處更新
+- threshold：`idle_threshold_s` config（demo=60, home=600, dev=20）
+- cooldown：`idle_cooldown_s` config（demo=120, home=600, dev=30）
+- jitter：uniform(0.7, 1.3) × cooldown
+- 每小時上限：`idle_max_per_hour=4`（deque 紀錄 ts，超過跳過）
+- timer：新增 `_idle_tick_timer = self.create_timer(5.0, self._tick_idle)`（5s tick 夠用）
+
+**內容生成（混合）**
+- **主線**：brain 發 `/brain/idle_request` JSON `{context: {recent_objects, time_of_day, last_user_topic}}` → `conversation_graph_node` 訂閱 → 用特殊 system prompt（「自言自語、好玩、≤15 字、不對誰說」）→ 回 `/brain/chat_candidate` 走既有 `say_canned` 路徑
+- **Fallback canned**（斷網或 LLM fail）：8-12 句寫死 `brain_node._IDLE_CANNED = ["[curious] 嗯～好安靜耶", "[playful] 我剛剛看到一隻小蟲耶", ...]`，random.choice
+- **避重**：deque(maxlen=5) of last said text，重複就重抽
+- **語氣對齊 persona**：idle prompt 強調 audio tag 風格 + ≤ 15 字 + playful/curious/yawn 三選一
+
+**動作白名單（idle 專用）**
+```python
+IDLE_SAFE_SKILLS = ["say_canned", "wave_hello", "sit_along"]
+# 比例（weighted random）：
+#   say_canned 70% (純講話最安全)
+#   wave_hello 20% (動作 + 揮手)
+#   sit_along  10% (緩慢坐下)
+# 禁止：wiggle / stretch (needs_confirm 不適合 idle)
+#       nav / approach / dance (高風險)
+#       stop_move (safety override only)
+```
+**全部 non-confirm**：idle 動作不走 PendingConfirm（user 不在沒法比 OK）
+
+**取消與優先級**
+- `_on_speech_intent` / `_on_gesture` / `_on_face`(known engaged) callback 開頭加：
+  ```python
+  if self._state.active_plan and self._state.active_plan.get("source") == "idle":
+      self._cancel_active_plan(reason="user_returned")
+      self._set_attention(ENGAGED)
+  ```
+- safety override：fallen / stop_move / depth_unsafe 期間不觸發（現有 SafetyLayer 自動 gate）
+- 上限：`_idle_recent_ts: deque(maxlen=4)` 記過去 4 次觸發；`now - oldest < 3600` 跳過
+
+**改動範圍**
+- `interaction_executive/.../brain_node.py` ~+100 行：state field 5 個 / `_tick_idle` / `_maybe_emit_idle` / `_record_user_interaction` helper / 4 處 callback 加 1 行 / `_IDLE_CANNED` 常量
+- `pawai_brain/.../conversation_graph_node.py` ~+30 行：訂 `/brain/idle_request` + idle system prompt + 路由到 `_publish_chat_candidate`
+- `interaction_executive/launch/` + `config/`：新增 `config/idle.yaml` + launch arg
+- 測試 +2 unit：`test_idle_trigger.py` / `test_idle_cancel_on_user.py`
+- 總計 ~150-180 行，3-4 小時實作 + 1 小時測
+
+**三模式 demo / home / dev**
+```yaml
+# interaction_executive/config/idle.yaml
+idle_enabled: true
+idle_mode: "demo"   # demo | home | dev | off
+profiles:
+  demo: {threshold_s: 60,  cooldown_s: 120, max_per_hour: 6}
+  home: {threshold_s: 600, cooldown_s: 600, max_per_hour: 4}
+  dev:  {threshold_s: 20,  cooldown_s: 30,  max_per_hour: 30}
+  off:  {enabled: false}
+```
+launch arg `idle_mode:=demo`；env var `PAWAI_IDLE_MODE=home`
+
+**為何 demo 用 60s 而不是原 spec 的 10 min**
+- 5/13-5/18 demo 期一直在互動，10 min idle 永遠不觸發 → 觀眾看不到
+- 60s 才能在展示中真的觸發一次 idle utterance / wave_hello → 增加「會自己玩」印象
+- demo 後 Roy 5/18 改 `idle_mode:=home` 即恢復 10 min
+
+**先做順序（3 步驟分 PR）**
+1. issue 4 P2-1 attention policy（~50 行）— idle 前置
+2. **idle MVP**（demo 模式 + canned pool only，~80 行）
+3. **idle LLM 接入**（+50 行 conversation_graph idle_request）
+
+**收益**：demo 期觀眾看到「會自己玩、自言自語」；home 期使用者覺得有靈魂；產品感從工具升級為陪伴
+
+**明確不做**
+- ❌ idle 中 nav 巡邏（守護犬 spec superseded）
+- ❌ idle 中主動拍照 / 互動誘導（隱私 + demo 風險）
+- ❌ context 太重（讀整天對話 history 推測）— LLM prompt 只給最近 5 物體 + 時段，輕量
 
 ---
 
