@@ -76,6 +76,47 @@ WSL pytest 375 / 375 pass（4 個 skill registry count test 同步更新）。
 
 ---
 
+## 5/9 evening Round 3 — Branch fix 回歸測試結果
+
+`fix/demo-motion-and-chat-polish` 4 commit 部署後實機跑：
+
+### Round A — Motion fix 回歸（PASS）
+
+| 步驟 | 結果 | 備註 |
+|---|---|---|
+| [1-3] wiggle × 3+ | ✅ 3/3 confirmed_via_ok | 1020 Content 每次都有可見動作 |
+| [4] 「站起來」 rule path | ✅ | intent=stand 93% → stand skill |
+| [5] 「站好一點啦」 LLM path | ✅ | `PROPOSAL stand src=llm_proposal` |
+| [6] 「陪我坐一下」 sit_along | ✅ | StandDown 1005，視覺趴低（非半坐） |
+
+### Round B — Stop / Safety（PASS）
+
+| 步驟 | 結果 |
+|---|---|
+| [7] wave_hello 動作中「停止」 | ✅ `PROPOSAL stop_move` 1778332085 |
+| [8] sit_along 動作中「停著」 | ✅ Roy 回報「有成功」 |
+| [9] wiggle 動作中 stop | ⏸ skip（動作太短） |
+
+intent_classifier：「停止」=stop 75%、「停著」=stop 50%。
+
+### Round C — Confirm skills（PASS）
+
+| 步驟 | 結果 |
+|---|---|
+| [10] 第一次「伸個懶腰」+ thumbs_up + OK | ✅ stretch motion 1017 |
+| [11] 15s 內第二次 | 🟡 by-design block（cooldown_s=15） |
+| [11b] 等 cooldown 後再試 | ✅ 第二次成功 |
+
+**Round 3 結論：branch 4 commit 全 PASS。整 demo 動作骨架穩。**
+
+### 觀察項（不擋 demo，記錄供後續）
+
+- **「快取沒看我手勢」現象**：brain 看到 thumbs_up gesture 直接進 PendingConfirm（gesture-only path），不必先語音觸發，by design
+- **雙 SAY (chat_reply + skill_say)**：「[excited] 嗨！」+「[excited] 歡迎回來」、stretch 後又 propose wave_hello — 是 PR #65 source 標籤設計，UX 怪但不擋 demo
+- **stand LLM-propose 雙 SAY**：「[playful] 好啦好啦，我站直！」+「[excited] 好，我站起來！」— 兩段都能合理對應 stand 場景，意外可接受
+
+---
+
 ## 5/8 完成度概覽（morning 測試 + evening 修復）
 
 | 區塊 | 完成度 | 核心驗證 |
