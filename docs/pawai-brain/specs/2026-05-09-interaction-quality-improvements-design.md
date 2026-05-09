@@ -340,40 +340,56 @@ if enable_s2twp:
 
 **設計**：`llm_persona_file` 參數同時支援兩種模式，舊 persona.txt 立即可 fallback：
 
+**重要區分**（Roy 5/9 review #3 修正）：
+
+| 概念 | 範圍 | 啟動檢查 | 進 base system prompt? |
+|---|---|---|---|
+| **directory required files** | 5 檔（含 CAPABILITIES.md） | 全 5 檔必須存在，缺即 ERROR raise | — |
+| **base system prompt** | 4 檔（IDENTITY + STYLE + OUTPUT + EXAMPLES） | 啟動 concat | ✅ 永遠載 |
+| **CAPABILITIES.md** | 第 5 檔 | 啟動讀進記憶體 cache | ❌ base 不放；1D 由 user message conditional block 注入 |
+
 ```python
 # conversation_graph_node._load_persona() 新邏輯
 path = Path(self.llm_persona_file).expanduser()
 
 if path.is_file():
     # 舊模式：單檔 persona.txt（向後相容）
+    self._capabilities_md = ""  # legacy mode 沒拆檔，CAPABILITIES 內容已在 persona.txt
     return path.read_text(encoding="utf-8")
 
 if path.is_dir():
-    # 新模式：directory，按固定檔名順序 concat
-    files = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
-    # 注意：CAPABILITIES.md 不在預設 concat — 1D lazy inject 處理
-    parts = []
-    for fname in files:
+    # 新模式：directory；5 檔必須齊，base 載 4
+    REQUIRED = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md", "CAPABILITIES.md"]
+    BASE_ORDER = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
+
+    contents = {}
+    for fname in REQUIRED:
         f = path / fname
         if not f.is_file():
             self.get_logger().error(f"[persona] missing required {fname}")
             raise FileNotFoundError(f)
-        parts.append(f.read_text(encoding="utf-8"))
-    persona = "\n\n".join(parts)
+        contents[fname] = f.read_text(encoding="utf-8")
+
+    base = "\n\n".join(contents[f] for f in BASE_ORDER)
+    self._capabilities_md = contents["CAPABILITIES.md"]  # 給 1D 用，不進 base
+
     self.get_logger().info(
         f"[persona] loaded directory {path}, "
-        f"{len(files)} files, {len(persona)} chars, sha={hashlib.sha256(persona.encode()).hexdigest()[:12]}"
+        f"5 files verified, base 4 files concat ({len(base)} chars), "
+        f"CAPABILITIES.md cached separately ({len(self._capabilities_md)} chars), "
+        f"base_sha={hashlib.sha256(base.encode()).hexdigest()[:12]}"
     )
-    return persona
+    return base
 
 raise FileNotFoundError(path)
 ```
 
 **修改項**：
 - 修 `pawai_conversation_graph.launch.py` 預設 → `pawai_brain/personas/v1`（directory）
-- 修 `_load_persona()` 支援 file/dir 雙模、missing required file 改 ERROR raise（不 silent fallback）
+- 修 `_load_persona()` 支援 file/dir 雙模；directory mode 5 檔必須齊（含 CAPABILITIES）但 base 只 concat 4 檔；缺 file 即 ERROR raise（不 silent fallback）
+- node 加 `self._capabilities_md` 屬性給 1D user message 注入用
 - 修 `scripts/start_pawai_brain_tmux.sh:15` 切到 conversation_graph_node 路徑，移除 llm_bridge_node
-- 加開機 log：`[persona] loaded directory /path, 4 files, sha=...`
+- 加開機 log：`[persona] loaded directory /path, 5 files verified, base 4 files concat, CAPABILITIES cached separately`
 - 舊 `tools/llm_eval/persona.txt` 保留作 demo 安全網（launch arg fallback 即可切回）
 
 ---
@@ -438,15 +454,23 @@ def classify_mode(user_text: str) -> str:
     return "chat"
 ```
 
-| mode | trigger | persona/context inject 策略 |
-|---|---|---|
-| `safety` | 停/小心/danger keyword | safety_gate hard rule 短路（不進 LLM）；保留 mode 標籤給 trace |
-| `identity` | 「你是誰」「介紹自己」 | **僅 IDENTITY+STYLE+OUTPUT+EXAMPLES**；CAPABILITIES **不注入**；persona prefix 加「使用者問你是誰，講靈魂、講住在哪、講剛剛發生的事，**不要列功能清單**，除非他追問」 |
-| `capability_question` | 「你會什麼」「有什麼功能」 | 全注（含 CAPABILITIES）+ capability_context JSON |
-| `action_request` | 動作 keyword + skill 詞彙 | 全注 + capability_context JSON（LLM 需看可提案 skill） |
-| `chat` (default) | 其他 | IDENTITY+STYLE+OUTPUT+EXAMPLES，**不注入** CAPABILITIES，**不注入** capability_context JSON |
+**重要區分**（Roy 5/9 review #1 + #2 修正）：
 
-**收益**：`identity` mode 直接解死板根因；`chat` mode 拿掉 capability JSON 後 LLM 不再被「能力清單」拉回工具人。
+> **capability_context 仍每輪建立**，給 graph `skill_policy_gate` v2 仲裁用（看 `effective_status` / cooldown / blocked / needs_confirm reason）— **lazy 是 prompt-level，不是 builder-level**。
+>
+> **system prompt 啟動時固定載 base 4 檔**（IDENTITY+STYLE+OUTPUT+EXAMPLES），不做 per-turn 重組（`llm_decision.configure(system_prompt=...)` 是啟動時注入，per-turn 重組會破壞 prefix-cache 友善性 + 改 graph node 介面）。
+>
+> **CAPABILITIES.md 與 mode hint 都注入 user message conditional block**，不動 system prompt。
+
+| mode | trigger | base system prompt | user message conditional block |
+|---|---|---|---|
+| `safety` | 停/小心/danger keyword | base 4 檔 | safety_gate hard rule 在 brain_node 短路（**附加防線**：LangGraph safety_gate node 若也 hit 可加防線，**不取代** brain_node/Executive 的 SafetyLayer）；保留 mode 標籤給 trace |
+| `identity` | 「你是誰」「介紹自己」 | base 4 檔 | + `[mode_hint] 不要列功能清單` ；**不注入** CAPABILITIES.md；**不注入** capability_context JSON |
+| `capability_question` | 「你會什麼」「有什麼功能」 | base 4 檔 | + CAPABILITIES.md + `[能力] {capability_context JSON}` |
+| `action_request` | 動作 keyword + skill 詞彙 | base 4 檔 | + CAPABILITIES.md + `[能力] {capability_context JSON}`（LLM 需看可提案 skill）|
+| `chat` (default) | 其他 | base 4 檔 | **不注入** CAPABILITIES.md；**不注入** capability_context JSON |
+
+**收益**：`identity` mode 直接解死板根因；`chat` mode 拿掉 capability JSON 後 LLM 不再被「能力清單」拉回工具人；**capability_context 仍每輪建立 → skill_policy_gate v2 effective_status gate 永不退化到 v1 allowlist**（防 Roy review #1 風險）。
 
 **1C 工時**：classifier + 5 mode pattern + unit tests (8 cases) = 1h
 
@@ -454,11 +478,11 @@ def classify_mode(user_text: str) -> str:
 
 **1D Capability Lazy Injection（OpenClaw-lite L8 Hook 落地）**
 
-**位置**：`_build_user_message()` 改造（`conversation_graph_node.py:75-126`）
+**位置**：`_build_user_message()` 改造（`conversation_graph_node.py:75-126`）。**system prompt 不動**（base 啟動載 4 檔，`llm_decision.configure()` 介面維持）。
 
-**現況**：每輪都 dump `[能力] {capabilities, limits, recent_skill_results}` JSON
+**現況**：每輪都 dump `[能力] {capabilities, limits, recent_skill_results}` JSON 到 user message
 
-**改造**：
+**改造**（lazy 是 prompt-level，capability_context **仍每輪建立**給 graph 用）：
 
 ```python
 def _build_user_message(state) -> str:
@@ -480,8 +504,14 @@ def _build_user_message(state) -> str:
     if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
         parts.append(f"[眼前的人] {ws['current_speaker']}")
 
-    # capability_context lazy inject — 僅 capability_question / action_request
+    # CAPABILITIES.md 與 capability_context JSON — 僅 capability_question / action_request 注入 prompt
+    # 注意：capability_context 在 graph capability_builder 仍每輪建立，這裡只控「是否暴露給 LLM」
     if mode in ("capability_question", "action_request"):
+        # CAPABILITIES.md 內容（人類可讀的能力描述，從 self._capabilities_md 讀）
+        if self._capabilities_md:
+            parts.append("[能力描述]\n" + self._capabilities_md)
+
+        # capability_context JSON（runtime effective_status / cooldown / limits）
         cap = state.get("capability_context") or {}
         if cap:
             compact_caps = _compact_capabilities(cap)  # 既有邏輯
@@ -490,7 +520,7 @@ def _build_user_message(state) -> str:
                 "limits": list(cap.get("limits") or []),
                 "recent_skill_results": list(cap.get("recent_skill_results") or []),
             }
-            parts.append("[能力] " + json.dumps(cap_payload, ensure_ascii=False))
+            parts.append("[能力 runtime] " + json.dumps(cap_payload, ensure_ascii=False))
 
     # mode hint — 僅 identity 注入特殊 instruction
     if mode == "identity":
@@ -499,18 +529,9 @@ def _build_user_message(state) -> str:
     return "\n".join(parts)
 ```
 
-**system prompt 構造**也改：
+**capability_builder graph node 維持每輪 build**：不改 `pawai_brain/nodes/capability_builder.py`，state["capability_context"] 永遠存在 — `skill_policy_gate` v2 看 `effective_status` 仲裁不退化到 v1 allowlist（Roy review #1）。
 
-```python
-def _assemble_system_prompt(mode: str) -> str:
-    parts = [self._persona_files["IDENTITY"], self._persona_files["STYLE"], self._persona_files["OUTPUT"]]
-    if mode in ("capability_question", "action_request"):
-        parts.append(self._persona_files["CAPABILITIES"])
-    parts.append(self._persona_files["EXAMPLES"])  # examples 永遠在尾段（prefix-cache 友善）
-    return "\n\n".join(parts)
-```
-
-**1D 工時**：`_build_user_message()` + `_assemble_system_prompt()` + 單元測試 5 mode = 1.5h
+**1D 工時**：`_build_user_message()` 改造 + 單元測試 5 mode × 2 case (with/without capability inject) = 1h（比原估 1.5h 少，因不重組 system prompt）
 
 ---
 
@@ -969,7 +990,7 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 - [ ] Studio ChatPanel 顯示所有 PawAI utterance（包含 stranger_alert / object_remark / greet / idle）
 - [ ] 重整頁面後第一句對話不帶舊 context
 - [ ] ASR 輸出全是繁體（5/5 round 抽樣 100% 繁體）
-- [ ] 開機 log 確認 persona.txt 185 行載入
+- [ ] 開機 log 確認 `personas/v1` directory 載入：5 檔 verified、base 4 檔 concat、CAPABILITIES.md cached separately、`base_sha` 印出
 - [ ] 「比 OK 我就扭一扭」mic 觸發 → wiggle skill 進 PendingConfirm（3/3 round）
 
 ### Wave 2 完成標誌
@@ -1011,7 +1032,7 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 | ElevenLabs WAV → Megaphone 4001/4003/4002 整合穩定 | 5/12 Spike-Real Go2 實機 5 句 |
 | Gemini native SDK 模型名 + streaming（fallback only） | 僅 Mini NO-GO 才驗 |
 | OpenCC s2twp 在 Jetson aarch64 wheel 可用 | `uv pip install opencc-python-reimplemented` 預期 OK |
-| persona.txt 185 行 model 真能跟 | Gemini-3 上下文 1M tokens 不是問題；deepseek-v4-flash 待測 |
+| personas/v1 base 4 檔（IDENTITY+STYLE+OUTPUT+EXAMPLES）+ 條件 inject CAPABILITIES.md model 真能跟 | Gemini-3 上下文 1M tokens 不是問題；deepseek-v4-flash 待測；token 預算 base ~10KB + capability inject ~5KB ≈ 15KB system+prompt |
 
 ---
 
