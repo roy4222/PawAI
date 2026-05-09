@@ -305,7 +305,7 @@ class ConversationGraphNode(Node):
         self.declare_parameter("openrouter_request_timeout_s", 4.0)
         self.declare_parameter("openrouter_overall_budget_s", 5.0)
         self.declare_parameter("llm_persona_file", "")
-        self.declare_parameter("llm_temperature", 0.2)
+        self.declare_parameter("llm_temperature", 0.8)  # 5/9 review: was 0.2 (greedy → templated); 0.8 = OpenClaw chat sweet spot. Launch arg can still override.
         self.declare_parameter("llm_max_tokens", 500)
         self.declare_parameter("chat_history_max_turns", 5)
 

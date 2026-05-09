@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 from collections import deque
@@ -88,9 +89,6 @@ _IDLE_CANNED: tuple[str, ...] = (
     "[thinking] 等等～剛剛在想什麼來著。",
     "[whispers] 嗨～有人在嗎？",
 )
-import random as _random  # local alias to avoid global namespace pollution
-
-
 def build_object_tts(class_name: str, color: str | None) -> str | None:
     """Compose object_remark TTS string, or None when class is outside the
     PawAI TTS whitelist (UI still shows it; PawAI just stays quiet).
@@ -147,10 +145,13 @@ class BrainInternalState:
     # PendingConfirm gesture tracker (gesture is "live" for 0.5s after seen)
     current_gesture: str | None = None
     current_gesture_ts: float = 0.0
-    # Issue 8 (P3-1a) Idle MVP — last user interaction monotonic ts (None = never)
+    # Issue 8 (P3-1a) Idle MVP — all timestamps in time.time() seconds
+    # (consistent with rest of brain_node which uses time.time(); 5/9 review).
     last_user_interaction_ts: float | None = None
     last_idle_emit_ts: float | None = None
     recent_idle_phrases: deque = field(default_factory=lambda: deque(maxlen=5))
+    # idle_max_per_hour enforcement: ring of recent emit timestamps (time.time()).
+    idle_emit_history: deque = field(default_factory=lambda: deque(maxlen=10))
 
 
 class BrainNode(Node):
@@ -635,9 +636,10 @@ class BrainNode(Node):
                 active_plan=active_plan,
                 speech_intent=speech_intent,
             )
-        # Issue 8 (P3-1a) idle check — runs OUTSIDE lock since _maybe_emit_idle
-        # takes its own snapshot. Cheap when idle_enabled=False (early return).
-        self._maybe_emit_idle(now)
+        # Issue 8 (P3-1a) idle check — uses time.time() (consistent with rest
+        # of brain_node cooldowns/timestamps; 5/9 final review). Cheap when
+        # idle_enabled=False (early return).
+        self._maybe_emit_idle(time.time())
 
     # ── Issue 8 (P3-1a) Idle MVP ──────────────────────────────────────────
     def _touch_user_interaction(self, now: float | None = None) -> None:
@@ -646,8 +648,11 @@ class BrainNode(Node):
         Called from _on_speech_intent, _on_gesture, _on_face (when stable
         known person), _on_text_input. Resets the idle clock so the dog
         won't blurt out idle chatter while user is actively present.
+
+        5/9 final review: now uses time.time() (was time.monotonic()) to be
+        consistent with rest of brain_node cooldowns/timestamps.
         """
-        ts = now if now is not None else time.monotonic()
+        ts = now if now is not None else time.time()
         with self._lock:
             self._state.last_user_interaction_ts = ts
 
@@ -655,13 +660,12 @@ class BrainNode(Node):
         """Issue 8 (P3-1a): emit canned idle utterance when long-idle.
 
         Default DISABLED (idle_enabled param). When enabled:
-        1. require last_user_interaction_ts older than idle_threshold_s
-        2. require not active_plan, not pending_confirm, not tts_playing
-        3. require attention.state == IDLE (no person engaged)
-        4. require last_idle_emit_ts older than idle_cooldown_s (or None)
-        5. enforce idle_max_per_hour cap
-        6. pick a phrase not in recent_idle_phrases ring (5)
-        7. emit say_canned at SKILL priority (NOT alert; safe to be preempted)
+        1. last_user_interaction_ts older than idle_threshold_s
+        2. last_idle_emit_ts older than idle_cooldown_s (or never)
+        3. not active_plan, not pending_confirm, not tts_playing
+        4. attention.state == IDLE (no person engaged) — locked snapshot
+        5. idle_max_per_hour cap (real enforcement; 5/9 final review)
+        6. pick phrase not in recent_idle_phrases ring (5)
         """
         if not self.idle_enabled:
             return
@@ -671,7 +675,12 @@ class BrainNode(Node):
             last_emit = self._state.last_idle_emit_ts
             recent = list(self._state.recent_idle_phrases)
             active = self._state.active_plan
-        # Gate 1: never emitted while user is freshly active
+            # Drop stale emit timestamps (>1h old) so deque only holds last hour
+            cutoff = now - 3600.0
+            while self._state.idle_emit_history and self._state.idle_emit_history[0] < cutoff:
+                self._state.idle_emit_history.popleft()
+            emits_last_hour = len(self._state.idle_emit_history)
+        # Gate 1: user freshly active → silent
         if last_ui is not None and (now - last_ui) < self.idle_threshold_s:
             return
         # Gate 2: cooldown
@@ -684,22 +693,22 @@ class BrainNode(Node):
             return
         if self._world.snapshot().tts_playing:
             return
-        # Gate 4: attention must be IDLE (no active person)
-        if self._attention.state != AttentionState.IDLE:
+        # Gate 4: attention IDLE (locked snapshot helper — race safe)
+        if self._attention_state_snapshot() != AttentionState.IDLE:
             return
-        # Gate 5: max per hour cap (count recent_idle_phrases timestamps —
-        # we use a separate per-hour ring? simplest: count idle_max_per_hour
-        # by tracking last N emit timestamps in deque last_alert_ts["idle"].)
-        # For MVP: rely on cooldown_s × max_per_hour ≤ 3600 invariant. Skip.
-        # Gate 6: pick phrase
+        # Gate 5: REAL max-per-hour enforcement (5/9 final review)
+        if emits_last_hour >= self.idle_max_per_hour:
+            return
+        # Gate 6: pick phrase avoiding recent
         candidates = [p for p in _IDLE_CANNED if p not in recent]
         if not candidates:
             candidates = list(_IDLE_CANNED)
-        phrase = _random.choice(candidates)
-        # Update state + emit
+        phrase = random.choice(candidates)
+        # Atomic update + emit
         with self._lock:
             self._state.last_idle_emit_ts = now
             self._state.recent_idle_phrases.append(phrase)
+            self._state.idle_emit_history.append(now)
         self._emit(
             build_plan(
                 "say_canned",
@@ -708,7 +717,9 @@ class BrainNode(Node):
                 reason="idle_long_silence",
             )
         )
-        self.get_logger().info(f"[idle] emit say_canned: {phrase!r}")
+        self.get_logger().info(
+            f"[idle] emit say_canned: {phrase!r} (emits/hr={emits_last_hour + 1}/{self.idle_max_per_hour})"
+        )
 
     def _attention_state_snapshot(self) -> "AttentionState":
         """Thread-safe snapshot of current attention state for gating decisions.
@@ -973,7 +984,10 @@ class BrainNode(Node):
         #   3. not pending_confirm (middle of gesture confirmation flow)
         #   4. not tts_playing (TTS currently speaking — don't interrupt mid-SAY)
         snap = self._world.snapshot()
-        if self._attention.state != AttentionState.ENGAGED:
+        # 5/9 final review: was reading self._attention.state without lock —
+        # 3rd race-condition hole alongside stranger_alert / greet_known_person
+        # which already use _attention_state_snapshot(). Fix: same helper.
+        if self._attention_state_snapshot() != AttentionState.ENGAGED:
             return  # IDLE / NOTICED / INTERACTING — stay quiet
         if self._has_active_skill_or_sequence():
             return
