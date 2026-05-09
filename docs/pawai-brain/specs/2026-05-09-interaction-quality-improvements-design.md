@@ -244,11 +244,74 @@ output: {"reply": "[thinking] 那個對我來說太難了啦...", "skill": "chat
 
 ### Wave 2 — P2 互動品質升級（5/12-5/13）
 
-**P2-1 face/object audible cooldown 調整**
-- `OBJECT_REMARK_DEDUP_S` 60 → 保留；**dedup key 改成 `class_name` 不含 color**（`brain_node.py:760-764`）
-- `greet_known_person` per-identity 20s → 60s（甚至 90-120s 看實測）
-- 加全局 engaged-state：`_user_engaged_until_ts`，speech intent 進來就更新；engaged 期間 stranger_alert / object_remark / greet 全靜音
-- 收益：路過比 OK 不再被打招呼打斷；同一椅子顏色抖動不會繞過 dedup
+**P2-1 Attention Policy（取代原 cooldown 調整）— Roy 5/9 brainstorm 確認**
+
+**已實證的 3 個程式碼 bug**：
+1. `brain_node.py:715` `_on_object` 沒讀 distance_m（YOLO 偵測就 emit）
+2. `face_identity_node.py:82` `stable_hits=3` ≈ 0.3-0.5s（路過就觸發 greet）
+3. `brain_node.py:256-259` `_has_active_sequence` 只擋 SEQUENCE 不擋 SKILL（動作中還是被插嘴）
+
+**Roy 路過比 OK 場景時序**（4 個事件互相打斷）：
+```
+t=0.0  face stable 3 frames → greet emit ⚠️
+t=0.5  thumbs_up → PendingConfirm 撞上 greet TTS
+t=1.0  OK → wiggle 疊在 greet 後
+t=1.5  椅子 → object_remark 又插嘴 ⚠️
+```
+
+**設計：4 狀態 attention machine（保守版，不做 5 狀態 / 不做 gaze）**
+
+| State | 進入條件 | 退出條件 |
+|---|---|---|
+| `IDLE` | 無 face ≥ 0.5s | face 出現 → NOTICED |
+| `NOTICED` | face stable | distance ≤ 1.6m AND dwell ≥ 1.2s → ENGAGED；face 消失 ≥ 3s → IDLE |
+| `ENGAGED` | 上條 | plan emit / speech intent → INTERACTING |
+| `INTERACTING` | 任意 skill active | active_plan 結束 + 5s 安靜 → ENGAGED；face 消失 ≥ 3s → IDLE |
+
+**Threshold（Roy 確認，不要太緊）**：
+- engaged distance：**≤ 1.6m**（不是 1.3m，奶奶/展示現場可能站較遠）
+- dwell：**1.2s**（不是 1.5s 太硬）
+- face lost exit：**3s**
+- interaction quiet：plan done + **5s**
+
+**emit gate（取代零散 guard）**：
+
+| Skill | 允許狀態 | 額外條件 |
+|---|---|---|
+| `greet_known_person` | **僅 ENGAGED** | per-identity cooldown 維持 |
+| `stranger_alert` | NOTICED+ | 已有 3s 累積（不變） |
+| `object_remark` | **僅 ENGAGED** | **AND not active_plan AND not pending_confirm AND not tts_playing** |
+| `fallen_alert` | 任何狀態 | safety override |
+| gesture confirm（thumbs_up/OK→wiggle） | **NOTICED+** | 確保「走過去比 OK」不被擋 |
+| speech intent | **任何狀態** | 永遠允許（語音是明確互動邀請） |
+
+**重要修正：object_remark 不看 distance**（Roy 抓到的）
+- object event payload **無 `distance_m`**（只有 bbox/confidence/color）
+- demo 前簡化：**只用 engaged gate + active_plan/pending/tts not 條件**，不看距離
+- demo 後：object_perception 接 depth，payload 加 `distance_m`，那時再加 distance threshold
+
+**其他改動**
+- `OBJECT_REMARK_DEDUP_S` 60 保留；**dedup key 改成 `class_name` 不含 color**（`brain_node.py:760-764`）— 避免咖啡/灰色抖動繞過
+- 修 `_has_active_sequence` → 拆成 `_has_active_skill_or_sequence`（順便修 SKILL 不擋 SKILL bug）
+- 不改 face_perception（distance_m 已 publish）
+
+**改動範圍**：~120 行 brain_node + 8 unit tests，半天
+
+**Roy 路過比 OK 跑法**：
+- t=0 face stable → NOTICED（不發 greet ✅）
+- t=0.5 thumbs_up → PendingConfirm（NOTICED 允許 gesture ✅）
+- t=1.0 OK → wiggle → INTERACTING
+- t=1.5 椅子 → state≠ENGAGED → 靜音 ✅
+- 若 Roy 真的停下來 dwell ≥ 1.2s + dist ≤ 1.6m → ENGAGED → greet 才發 ✅
+
+**明確不做**
+- ❌ Gaze detection（D435 視角不穩，5/13 demo 來不及）
+- ❌ Exponential backoff cooldown（per-identity 20s 已夠）
+- ❌ DISENGAGING 5 狀態 + 半折 cooldown（過度工程）
+- ❌ object_remark distance gate（payload 無 distance_m，demo 後再做）
+- ❌ RL/HMM（rule + 三 hard threshold 解 80%）
+
+**收益**：路過不被打招呼/物體解說打斷；動作中不被插嘴；同一椅子顏色抖動不繞過 dedup
 
 **P2-2 TTS Plan A spike — gemini_native provider**
 - 新增 `TTSProvider_GeminiNative` class，**保留** `openrouter_gemini` 不取代
