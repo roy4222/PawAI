@@ -514,21 +514,88 @@ t=1.5  椅子 → object_remark 又插嘴 ⚠️
 
 **收益**：路過不被打招呼/物體解說打斷；動作中不被插嘴；同一椅子顏色抖動不繞過 dedup
 
-**P2-2 TTS Plan A spike — gemini_native provider**
-- 新增 `TTSProvider_GeminiNative` class，**保留** `openrouter_gemini` 不取代
-- 用 google-genai SDK，加 prompt prefix「請使用台灣用語的繁體中文，以親切活潑、像小狗的語氣朗讀。語氣要連貫不要斷句。」
-- **先確認模型名**：官方目前是 `gemini-2.5-flash-preview-tts` / `gemini-2.5-pro-tts`，文章寫的 `gemini-3.1-flash-tts-preview` 待 Jetson smoke 驗證
-- Jetson 跑 10 句 smoke：短句 / 長句 / audio tag / 繁中台灣語氣 / fallback / timeout
-- 若 streaming 真實可用 → 評估 Megaphone 邊收邊播；若不可用 → 整段送但 prompt 改善至少解決語氣
-- 收益（如果通）：跳句永久消失 + 語氣連貫 + 首音 ~1-2s
-- 收益（如果不通）：至少解決語氣，延遲問題 fall back 到 P2-3
+**P2-2 ElevenLabs Spike + 雙軌路由（Roy 5/9 brainstorm 收斂，取代原 Gemini native spike）**
 
-**P2-3 TTS provider 雙軌路由**
-- `tts_callback` 加路由邏輯：
-  - **短句即時反應**（< 30 字 或 source=say_canned）→ edge-tts（1-2s）
-  - **情緒句 / 長句 / 故事**（> 30 字 或 LLM free reply）→ gemini_native（如 P2-2 通）或 openrouter_gemini（fallback）
-- ElevenLabs / gpt-4o-mini-tts 不在 demo 前引入（成本 + 風險）
-- 收益：60%+ 對話走 edge-tts 1-2s 路徑，互動感大幅提升
+> **背景**：Roy 5/9 brainstorm 路線改為「B-lite — ElevenLabs 可加，TTS provider spike，不立刻替換主鏈」。原 Gemini native SDK spike 退為 conditional fallback（見 P2-2-fallback）。
+
+**P2-2a Spike-Mini（5/11 半天，gate Wave 2 設計選擇）**
+
+範圍：
+1. 帳號：ElevenLabs Free + Pay-As-You-Go $5 top-up（不買月費）
+2. Voice 候選：Voice Library 中 2 個 Mandarin / Chinese 童音或年輕女聲 + 1 個多語年輕女聲（如 Hope / Bella 類型）；具體 voice ID 在實作當天查 Voice Library 補上（spec 不硬寫 voice ID 避免 library 變動）
+3. 模型：`eleven_flash_v2_5`（low-latency 多語）
+4. 5 句固定文本（短/中/長/情緒/safety 各一）
+5. 量測：HTTP 整段 fetch latency（**不上 Megaphone**，落地 WAV / MP3 → 本機 paplay）
+6. 主觀打分：音色雪寶感 1-5、中文自然度 1-5、破音/吞字/簡體腔 ✓/✗
+7. 不驗：Megaphone 整合、streaming、Go2 實機
+
+**Voice selection criteria**（不寫 voice ID，寫條件）：
+- 童趣 + 溫暖 + 不客服腔 + 中文自然
+- 不做 custom voice cloning（demo 前 out of scope — 授權/素材/聲線倫理/穩定性風險）
+
+**GO 判準**（全過才進 Spike-Real）：
+1. 至少 **1 個** voice 音色 ≥ 4/5
+2. 中文自然度 ≥ 4/5
+3. 5 句 HTTP latency：短句 < 2s AND 長句 < 4s
+4. 無明顯破音 / 吞字 / 簡體腔
+5. PAYG $5 quota 對 demo 期使用量夠（10k chars 換算 demo 多輪測試足夠）
+
+**NO-GO**：任一核心項不過 → 5/12 改做 P2-2-fallback（Gemini native SDK Mini）
+
+**P2-2b Spike-Real（5/12 半天，僅在 Mini GO 後執行）**
+
+- Mini 全部 + ElevenLabs WAV 走 Megaphone 4001/4003/4002 鏈
+- 5 句 Go2 實機 + 5 句 USB 喇叭
+- GO：Mini GO 條件 AND Go2 實機 5 句無 silent fail AND echo gate 不誤觸
+- NO-GO：撤掉 ElevenLabs，5/13 場地驗保 Gemini chain + edge-tts
+
+**P2-2-fallback Gemini native SDK spike（conditional / post-demo）**
+
+狀態：**conditional / post-demo**
+觸發條件：
+- ElevenLabs Spike-Mini no-go（5/12 退而求其次），或
+- demo 後要降低 ElevenLabs 成本 / 避免 vendor lock-in / 想保留 Gemini Despina 風格
+
+範圍（觸發時）：
+- 新增 `TTSProvider_GeminiNative` class，**保留** `openrouter_gemini` 不取代
+- google-genai SDK，prompt prefix「請使用台灣用語的繁體中文...」
+- 模型名先 confirm：官方 `gemini-2.5-flash-preview-tts` 主線；文章寫的 `gemini-3.1-flash-tts-preview` 待驗
+- Jetson 10 句 smoke
+
+**P2-3 TTS 雙軌路由（B-lite final）**
+
+**路由規則**（`tts_callback` 入口判一次，整通結束都屬該 provider；不在 chunk 後重判）
+
+```
+1. 計算 effective_text_length(text)
+   - 去除 audio tag [playful]/[excited]/...
+   - 去除空白與標點
+   - 計中文字 + 英文 word（中文 1 char = 1 unit、英文 1 word = 1 unit）
+
+2. safety / stop / alert / confirm prompt → 永遠 fast lane
+   （source 標籤之後 P1-1 Phase 2 可拿到；demo 前用 keyword: stop|小心|警告|先不動 短路）
+
+3. effective_length <= 30 → fast lane
+   effective_length > 30 → quality lane
+```
+
+**Fast lane**（短句重速度）：
+```
+edge-tts → Piper
+```
+**不繞 ElevenLabs / Gemini**（雲端 latency 漂高會破壞「馬上回」體感）。Piper 本機保底，edge-tts fail 直接退 Piper。
+
+**Quality lane**（長句重音色）：
+```
+ElevenLabs (eleven_flash_v2_5) → OpenRouter Gemini → edge-tts → Piper
+```
+雲端優先取情緒；ElevenLabs fail 退 OpenRouter Gemini，再退 edge / Piper 保底。「一定有聲音」可靠性 + 音色品質兼顧。
+
+**閾值演進**：
+- demo 前：30 字（spec 預設，保互動速度）
+- ElevenLabs 短句 spike 確認穩定 < 2s 後（demo 後）：可降到 20 字 或 改 source metadata routing（依 P1-1 Phase 2 進度）
+
+**收益**：60%+ 對話走 fast lane（edge-tts 1-2s）；長句走 ElevenLabs Flash v2.5（首音目標 < 4s）取雪寶感；跳句由 P0-1 all-or-nothing fallback 永久消失
 
 ### Wave 3 — P3 加分項（5/14 之後或 demo 後）
 
@@ -649,7 +716,9 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 
 ## 3. 不做的事（Demo 前明確 out of scope）
 
-- ❌ ElevenLabs / GPT-Realtime-2 TTS 主鏈替換（成本 $99+/mo + 風險高）
+- ❌ GPT-Realtime / GPT-Realtime-2 主鏈替換（voice agent 架構 + WebSocket session，demo 前重構成本太高，留 demo 後研究）
+- ❌ ElevenLabs custom voice cloning（授權 / 素材 / 聲線倫理 / 穩定性風險；demo 期改用 Voice Library 現成聲線）
+- ❌ ElevenLabs Pro $99/mo 月費（demo 期改用 Free + PAYG $5 top-up；demo 後再評估升級）
 - ❌ LLM streaming 改 conversation_graph_node（動 LangGraph 太深）
 - ❌ VAD 演算法替換（webrtc-vad / silero-vad，風險誤切句）
 - ❌ Megaphone 16kHz → 24kHz 改造（DataChannel 協議改動，Go2 不一定支援）
@@ -673,8 +742,10 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 
 ### Wave 2 完成標誌
 - [ ] 路過比 OK 連續 5 次：face greet 出現 ≤ 2 次
-- [ ] 自由對話首音延遲 中位數 < 3s（如 P2-2 通）或 < 5s（如只 P2-3 雙軌）
+- [ ] 短句首音延遲 中位數 < 2s（fast lane edge-tts）
+- [ ] 長句首音延遲 中位數 < 4s（quality lane ElevenLabs Mini GO 後）或 < 6s（Mini NO-GO 退 Gemini native / OpenRouter）
 - [ ] 同一椅子 60s 內 dedup 不繞過（顏色抖動測試）
+- [ ] ElevenLabs Spike-Mini 5 句 GO 判準達標（音色 ≥ 4/5、中文自然 ≥ 4/5、無破音）
 
 ### Wave 3 完成標誌（demo 後）
 
@@ -702,10 +773,11 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 
 | 假設 | 待驗 |
 |---|---|
-| 文章寫的 `gemini-3.1-flash-tts-preview` 模型名 | 官方 docs 主線是 `gemini-2.5-flash-preview-tts`，先 Jetson smoke 確認 |
-| native SDK streaming 真的能 1-2s 首音 | 待 Jetson 10 句 smoke；可能還是 6-7s（Google API region latency） |
-| Megaphone DataChannel 邊收邊播可行 | 目前是整 WAV chunk_size=4096 base64 上傳，streaming 要重看協議 |
-| ElevenLabs class 已實作可直接啟用 | code 第 234 行存在，但未 demo 期測試；spike 不在 demo 前做 |
+| ElevenLabs Flash v2.5 中文 voice 有「雪寶感」候選 | 5/11 Spike-Mini 跑 2-3 voice，主觀打分 ≥ 4/5 |
+| ElevenLabs HTTP fetch 短句 < 2s、長句 < 4s（Jetson → ElevenLabs API） | 5/11 Spike-Mini latency 量測 |
+| ElevenLabs PAYG $5 quota 對 demo 期足夠 | 10k chars 換算多輪 demo 測試估算 |
+| ElevenLabs WAV → Megaphone 4001/4003/4002 整合穩定 | 5/12 Spike-Real Go2 實機 5 句 |
+| Gemini native SDK 模型名 + streaming（fallback only） | 僅 Mini NO-GO 才驗 |
 | OpenCC s2twp 在 Jetson aarch64 wheel 可用 | `uv pip install opencc-python-reimplemented` 預期 OK |
 | persona.txt 185 行 model 真能跟 | Gemini-3 上下文 1M tokens 不是問題；deepseek-v4-flash 待測 |
 
@@ -721,8 +793,9 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 4. **`feat/asr-tw`** — P1-3，半天
 5. **`fix/persona-load`** — P1-4 + P1-5（同改 persona.txt + launch），半天
 6. **`feat/attention-policy`** — P2-1，1 天
-7. **`spike/gemini-native-tts`** — P2-2，1-2 天，**spike branch 不 merge**，確認可行再開 feat
-8. **`feat/tts-dual-route`** — P2-3，半天（依 P2-2 結果調整）
+7. **`spike/elevenlabs-tts-mini`** — P2-2a，5/11 半天，**不上 Megaphone**，純驗音色 + latency；GO 才進 Spike-Real
+8. **`spike/elevenlabs-tts-real`** — P2-2b，5/12 半天，僅 Mini GO 後執行；含 Megaphone + Go2 實機
+9. **`feat/tts-dual-route`** — P2-3，半天（依 P2-2 結果決定 quality lane 主軌）。Mini NO-GO → 退而做 `spike/gemini-native-tts` 並 quality lane 主軌改 Gemini native
 9. **`feat/idle-mode`** — P3-1，1-2 天
 
 每支 PR 都跑：`pytest 61/61` + Jetson colcon build + 手動 demo flow 5 句驗。
@@ -735,7 +808,8 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 |---|---|---|
 | 互動完整度 | 45-55% | 70-80% |
 | TTS 跳句 | 偶發 | 0% |
-| 自由對話首音延遲 | 6-7s | 2-4s |
+| 短句首音延遲（safety/confirm/短答） | 6-7s 全鏈 | < 2s（fast lane edge-tts） |
+| 長句首音延遲（情緒句/故事） | 6-7s | < 4s（quality lane ElevenLabs Flash v2.5，Mini GO 後） |
 | Studio 對話可觀測性 | 30%（只 pending request） | 100% |
 | Persona 自然度 | 模板感 | 完整 persona + 主動鏈式 |
 | 路過比 OK 被打斷 | 有 | 無（engaged-state） |
