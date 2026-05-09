@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useEventStore } from "@/stores/event-store";
 import { useStateStore } from "@/stores/state-store";
@@ -148,6 +148,17 @@ export function useEventStream(): UseEventStreamResult {
   );
 
   const { isConnected } = useWebSocket({ onMessage });
+
+  // P1-2: F5 hybrid auto-reset (dev-only — off by default in production)
+  // beforeunload sets a sessionStorage flag so that when the page reconnects
+  // within 5s we know it was a refresh and can auto-reset context.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem("paw_refresh_at", Date.now().toString());
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   return { isConnected };
 }

@@ -23,6 +23,7 @@ setup(
         "silero-vad",
         "faster-whisper",
         "edge-tts",
+        "opencc-python-reimplemented",
     ],
     zip_safe=True,
     maintainer="Nuralem Abizov",

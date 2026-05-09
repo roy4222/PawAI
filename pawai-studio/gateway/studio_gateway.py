@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Empty, String
 
 from asr_client import resample_to_wav16k, transcribe
 
@@ -47,9 +47,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".." / "speech_proc
 from intent_classifier import IntentClassifier
 
 # ── Config ───────────────────────────────────────────────────────
+import os
+
 PORT = 8080
 ASR_URL = "http://127.0.0.1:8001/v1/audio/transcriptions"
 STATIC_DIR = Path(__file__).parent / "static"
+
+# P1-3: ASR 簡→繁 — enable by default; set PAWAI_ENABLE_S2TWP=false to disable
+ENABLE_S2TWP = os.getenv("PAWAI_ENABLE_S2TWP", "true").lower() == "true"
 
 QOS_EVENT = QoSProfile(
     reliability=ReliabilityPolicy.RELIABLE,
@@ -168,6 +173,9 @@ class GatewayNode(Node):
         )
         self.text_input_pub = self.create_publisher(
             String, "/brain/text_input", QOS_EVENT
+        )
+        self._reset_pub = self.create_publisher(
+            Empty, "/brain/reset_context", 10
         )
 
         # Subscribers — ROS2 → browser
@@ -347,6 +355,11 @@ class GatewayNode(Node):
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
         self.text_input_pub.publish(msg)
+
+    def publish_reset_context(self) -> None:
+        """P1-2: Publish Empty to /brain/reset_context to clear conversation state."""
+        self._reset_pub.publish(Empty())
+        self.get_logger().info("Published reset_context to /brain/reset_context")
 
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
@@ -555,6 +568,15 @@ async def post_text_input(payload: TextInputPayload):
     return {"ok": True, "request_id": request_id}
 
 
+@app.post("/api/reset")
+async def post_reset():
+    """P1-2: Clear conversation context — resets ConversationMemory + cancels PendingConfirm."""
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    node.publish_reset_context()
+    return {"ok": True}
+
+
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────
 
 @app.websocket("/ws/events")
@@ -601,6 +623,9 @@ async def ws_text(ws: WebSocket):
             if not text:
                 await ws.send_json({"error": "empty_text", "published": False})
                 continue
+            if ENABLE_S2TWP:
+                from text_normalization import to_traditional_tw
+                text = to_traditional_tw(text)
             session_id = str(uuid.uuid4())[:8]
             started = time.monotonic()
             match = classifier.classify(text)
@@ -659,6 +684,9 @@ async def ws_speech(ws: WebSocket):
                 # 2. ASR
                 asr_result = await asyncio.to_thread(transcribe, wav16k, ASR_URL)
                 text = asr_result["text"].strip()
+                if ENABLE_S2TWP:
+                    from text_normalization import to_traditional_tw
+                    text = to_traditional_tw(text)
                 asr_latency = asr_result["latency_ms"]
                 print(f"[gateway] ASR result: text={text!r} latency={asr_latency}ms", flush=True)
 
