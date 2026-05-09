@@ -157,11 +157,50 @@ full_pcm = b"".join(ok_parts)
 
 **收益**：Roy 知道狗講過啥、Brain 全可觀測；不用聽 Jetson 喇叭憑記憶 debug
 
-**P1-2 Context reset on refresh**
-- **`conversation_graph_node`**（不是 brain_node）訂 `/brain/reset_context` topic（std_msgs/Empty）→ 呼叫 `self._memory.clear()` + 清 `_seen_sessions`
-- `studio_gateway` 加 `/api/reset` POST endpoint → publish 該 topic
-- 前端 `use-websocket.ts` connect 時呼叫 `/api/reset`
-- 收益：頁面重整就是新對話，不會混淆
+**P1-2 Context reset on refresh — 手動按鈕為主 + F5 hybrid（Roy 5/9 brainstorm）**
+
+**已實證 2 個非預期**：
+1. **brain memory 全局單例**：`ConversationMemory` 在 `conversation_graph_node` 唯一例，多 ws client（筆電 + 手機 + 大螢幕）共用同一 deque，沒 per-session 隔離。F5 一台會清全 brain
+2. **F5 vs 網路抖動 use-websocket.ts 無法區分**：都是 `close → 3s reconnect`。純 ws onopen 自動 reset 會被網路抖斷誤觸
+
+**設計：手動按鈕為主 + F5 hybrid auto-detect**
+
+**Frontend（`pawai-studio/frontend/`）**
+1. ChatPanel header 加「新對話」按鈕 → `fetch('/api/reset', {method: 'POST'})` + 清前端 messages 陣列
+2. F5 hybrid auto-detect（區分 F5 vs 網路抖動）：
+   ```ts
+   // 在 layout.tsx 或 _app.tsx
+   window.addEventListener('beforeunload', () => {
+     sessionStorage.setItem('paw_refresh_at', Date.now().toString())
+   })
+   // 在 use-websocket.ts ws.onopen
+   const refreshAt = sessionStorage.getItem('paw_refresh_at')
+   if (refreshAt && Date.now() - parseInt(refreshAt) < 5000) {
+     fetch('/api/reset', {method: 'POST'})
+     sessionStorage.removeItem('paw_refresh_at')
+   }
+   ```
+   - 真 F5 → flag < 5s → 自動 reset ✅
+   - 網路抖斷 → 沒 flag（beforeunload 沒觸發）→ 不 reset ✅
+
+**Gateway（`pawai-studio/server/studio_gateway.py`）**
+3. 新增 `POST /api/reset` endpoint → publish `/brain/reset_context`（std_msgs/Empty）→ 回 `{ok: true}`
+
+**Brain（兩個 node 都訂同一 topic）**
+4. `conversation_graph_node` 訂 `/brain/reset_context` → `self._memory.clear()` + `self._seen_sessions.clear()`
+5. `brain_node` 訂同 topic → `self._pending_confirm.cancel("page_reset")`
+6. **不清 `_active_plans` / `_state.attention`**（多 tab 友善 + demo 中不打斷正在做的動作）
+
+**多 tab 行為（明確標註，使用者要知道）**
+- demo 期：F5 一台會清全 brain（所有 device 對話一起重置）— 因 brain memory 全局
+- 推薦展示前的 `[新對話]` 按鈕由 demo 操作員按，避免奶奶/教授看到對話突然斷
+- demo 後 P1-2.5（可選）：改 per-session memory（每 ws client 獨立 deque + session_token），那時 F5 只清自己
+
+**業界對照**
+- ChatGPT / Claude Web 都**不**在 refresh 時 reset context，反而保留更友善
+- PawAI 場景特殊（demo + 開發測試），auto-reset on F5 是 trade-off — 因此用 sessionStorage flag 嚴格區分而非無條件清
+
+**收益**：開發測試 F5 自動清乾淨；demo 期手動按鈕完全可控；網路抖動不誤觸
 
 **P1-3 ASR 簡→繁 OpenCC**
 - 加依賴 `uv pip install opencc`（s2twp 簡→繁台灣）
