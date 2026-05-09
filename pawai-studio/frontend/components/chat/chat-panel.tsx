@@ -80,8 +80,6 @@ export function ChatPanel() {
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
 
-  const lastTtsText = useStateStore((s) => s.lastTtsText);
-  const lastTtsAt = useStateStore((s) => s.lastTtsAt);
   const ttsMessages = useStateStore((s) => s.ttsMessages);
   const latestSkillResult = useStateStore((s) => s.brainResults[0]);
   const {
@@ -438,7 +436,7 @@ export function ChatPanel() {
                 <div className="min-w-0 flex-1">
                   <div className={cn("rounded-2xl border px-4 py-3 text-[15px] leading-relaxed", bubbleClassName)}>
                     {msg.variant === "spontaneous" && !msg.source && (
-                      <span className="mr-1 opacity-60">⏰</span>
+                      <span className="mr-1 opacity-60" aria-label="自發訊息" role="img">⏰</span>
                     )}
                     {msg.text}
                   </div>
