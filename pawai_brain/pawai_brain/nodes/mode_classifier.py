@@ -12,6 +12,9 @@ import re
 from typing import Final
 
 # Patterns ordered by priority (safety checked first)
+# 5/9 review: regex broadened — "介紹一下" / "介紹一下你自己" / "自我介紹"
+# / "介紹一下 PawAI" all previously missed and fell to chat mode (then got
+# capability JSON injected → feature-list answer).
 MODE_PATTERNS: Final[list[tuple[str, str]]] = [
     (
         "safety",
@@ -19,11 +22,18 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
     ),
     (
         "identity",
-        r"你是誰|你叫什麼|介紹.*自己|你誰啊|你是\s*AI",
+        # Order: most specific first
+        r"你是誰|你叫什麼|你叫啥|你誰啊|你是\s*AI"
+        r"|自我介紹|介紹.{0,5}(自己|你|妳|PawAI|paw\s*ai)"
+        r"|介紹一下"  # bare "介紹一下" — chat continuation, still identity-flavoured
+        r"|你會做(自我介紹|介紹)",
     ),
     (
         "capability_question",
-        r"你會什麼|你會啥|有什麼功能|能做什麼|會做啥|有哪些能力|功能有哪些",
+        r"你會(什麼|啥|哪些|做什麼|做啥)"
+        r"|(有|你有)(什麼|哪些)(功能|能力|技能)"
+        r"|能做(什麼|啥)"
+        r"|功能有(哪些|什麼)",
     ),
     (
         "action_request",

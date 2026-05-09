@@ -19,11 +19,21 @@ from pawai_brain.nodes.mode_classifier import classify_mode
     ("你是誰？", "identity"),
     ("介紹一下你自己", "identity"),
     ("你叫什麼", "identity"),
+    # 5/9 review additions: previously fell to chat → got capability JSON
+    ("介紹一下", "identity"),
+    ("自我介紹", "identity"),
+    ("介紹一下 PawAI", "identity"),
+    ("介紹一下你", "identity"),
+    ("你叫啥", "identity"),
     # Capability question
     ("你會什麼？", "capability_question"),
     ("有什麼功能", "capability_question"),
     ("能做什麼", "capability_question"),
     ("你有哪些能力", "capability_question"),
+    # 5/9 review additions
+    ("你會啥", "capability_question"),
+    ("你會哪些", "capability_question"),
+    ("功能有哪些", "capability_question"),
     # Action request
     ("扭一下", "action_request"),
     ("伸個懶腰", "action_request"),

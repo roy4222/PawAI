@@ -424,7 +424,14 @@ class ConversationGraphNode(Node):
         if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
             parts.append(f"[眼前的人] {ws['current_speaker']}")
 
-        # 1D: lazy inject CAPABILITIES.md + capability_context only when needed
+        # 1D: lazy inject CAPABILITIES.md + capability_context ONLY for explicit
+        # capability/action modes. chat / identity / safety modes do NOT see
+        # the skill JSON in their prompt — that's the issue 2 root cause: every
+        # turn LLM seeing 17-skill JSON pulls it into "tool listing" persona,
+        # making "介紹一下" come back as a feature catalog.
+        #
+        # capability_context still flows through graph state (skill_policy_gate
+        # v2 reads from state.capability_context, not from rendered prompt).
         cap = state.get("capability_context") or {}
         if mode in ("capability_question", "action_request"):
             if self._capabilities_md:
@@ -437,16 +444,7 @@ class ConversationGraphNode(Node):
                     "recent_skill_results": list(cap.get("recent_skill_results") or []),
                 }
                 parts.append("[能力 runtime] " + json.dumps(cap_payload, ensure_ascii=False))
-        elif cap:
-            # chat / safety / identity: still emit capability_context
-            # so skill_policy_gate v2 can work downstream (prompt stays lean)
-            compact_caps = _compact_capabilities(cap)
-            cap_payload = {
-                "capabilities": compact_caps,
-                "limits": list(cap.get("limits") or []),
-                "recent_skill_results": list(cap.get("recent_skill_results") or []),
-            }
-            parts.append("[能力] " + json.dumps(cap_payload, ensure_ascii=False))
+        # else: chat / identity / safety — DELIBERATELY no capability inject.
 
         if mode == "identity":
             parts.append(
