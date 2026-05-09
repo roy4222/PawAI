@@ -685,7 +685,7 @@ class BrainNode(Node):
         if self._world.snapshot().tts_playing:
             return
         # Gate 4: attention must be IDLE (no active person)
-        if self._attention.state != AttentionState.IDLE:
+        if self._attention_state_snapshot() != AttentionState.IDLE:
             return
         # Gate 5: max per hour cap (count recent_idle_phrases timestamps —
         # we use a separate per-hour ring? simplest: count idle_max_per_hour
@@ -973,7 +973,7 @@ class BrainNode(Node):
         #   3. not pending_confirm (middle of gesture confirmation flow)
         #   4. not tts_playing (TTS currently speaking — don't interrupt mid-SAY)
         snap = self._world.snapshot()
-        if self._attention.state != AttentionState.ENGAGED:
+        if self._attention_state_snapshot() != AttentionState.ENGAGED:
             return  # IDLE / NOTICED / INTERACTING — stay quiet
         if self._has_active_skill_or_sequence():
             return
