@@ -1,4 +1,4 @@
-"""Tests for ConversationGraphNode — persona loader + _build_user_message.
+"""Tests for ConversationGraphNode — persona loader + _build_user_message + face state.
 
 Test helper _build_test_node uses object.__new__ + monkeypatching to avoid
 starting a real ROS2 node (Roy review #6).
@@ -39,6 +39,9 @@ def _build_test_node(llm_persona_file: str = "", capabilities_md: str = ""):
 
     # Attributes set by _load_persona (initialise defaults)
     node._capabilities_md = capabilities_md
+
+    # 1H: face identity tracking (default — same as __init__ sets)
+    node._recent_face_identity = ("unknown", 0.0)
 
     # Call _load_persona to set _system_prompt + _capabilities_md
     if llm_persona_file:
@@ -249,3 +252,50 @@ def test_build_user_message_omits_speaker_when_absent():
     }
     msg = _build_user_message(state)
     assert "[眼前的人]" not in msg
+
+
+# ---------------------------------------------------------------------------
+# Task 8 (1H) — face state subscription + current_speaker tracking
+# ---------------------------------------------------------------------------
+
+class _FakeMsg:
+    def __init__(self, data):
+        self.data = data
+
+
+def test_on_face_state_updates_recent_identity():
+    """/state/perception/face msg with known name updates _recent_face_identity."""
+    node = _build_test_node()
+    # Simulate face state payload with a known person
+    payload = {
+        "stamp": time.time(),
+        "face_count": 1,
+        "tracks": [{"stable_name": "Roy", "mode": "stable", "sim": 0.8}],
+    }
+    node._on_face_state(_FakeMsg(json.dumps(payload)))
+    name, ts = node._recent_face_identity
+    assert name == "Roy"
+    assert time.time() - ts < 1.0
+
+
+def test_on_face_state_ignores_unknown():
+    """/state/perception/face with all unknown tracks does not update _recent_face_identity."""
+    node = _build_test_node()
+    # Preset with a known person
+    node._recent_face_identity = ("Roy", time.time() - 1.0)
+    payload = {
+        "stamp": time.time(),
+        "face_count": 1,
+        "tracks": [{"stable_name": "unknown", "mode": "hold"}],
+    }
+    node._on_face_state(_FakeMsg(json.dumps(payload)))
+    # Should not overwrite Roy with unknown
+    name, _ = node._recent_face_identity
+    assert name == "Roy"
+
+
+def test_on_face_state_handles_bad_json():
+    """Bad JSON in face state → no crash."""
+    node = _build_test_node()
+    node._on_face_state(_FakeMsg("not-json"))
+    assert node._recent_face_identity[0] == "unknown"  # default unchanged

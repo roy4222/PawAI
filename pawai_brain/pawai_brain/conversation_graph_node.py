@@ -235,6 +235,7 @@ class ConversationGraphNode(Node):
 
         # Wire module-level node hooks
         world_state_builder_node.set_world_provider(lambda: self._world_snapshot)
+        world_state_builder_node.set_speaker_provider(lambda: self._recent_face_identity)
         capability_builder_node.configure(
             registry=registry,
             skill_result_provider=self._skill_results.recent,
@@ -262,6 +263,14 @@ class ConversationGraphNode(Node):
         # P1-2: context reset — clear ConversationMemory on page refresh / new-conversation
         self.create_subscription(
             Empty, "/brain/reset_context", self._on_reset_context, 10
+        )
+
+        # 1H: face state subscription for current_speaker context injection
+        # Subscribes /state/perception/face (8 Hz JSON from face_identity_node).
+        # Maintains _recent_face_identity; world_state_builder writes current_speaker.
+        self._recent_face_identity: tuple[str, float] = ("unknown", 0.0)
+        self.create_subscription(
+            String, "/state/perception/face", self._on_face_state, 10
         )
 
         self._graph = build_graph()
@@ -656,6 +665,25 @@ class ConversationGraphNode(Node):
         """P1-2: Clear ConversationMemory when browser requests a context reset."""
         self._memory.clear()
         self.get_logger().info("ConversationMemory cleared by /brain/reset_context")
+
+    def _on_face_state(self, msg: String) -> None:
+        """1H: /state/perception/face (8 Hz) — track most stable known person.
+
+        Payload: {"stamp": float, "face_count": int, "tracks": [...]}
+        Track: {"stable_name": str, "mode": "stable"|"hold", ...}
+
+        Pick first track with stable_name != 'unknown'; update _recent_face_identity.
+        """
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        tracks = payload.get("tracks") or []
+        for track in tracks:
+            name = str(track.get("stable_name") or "unknown")
+            if name and name != "unknown":
+                self._recent_face_identity = (name, time.time())
+                return
 
     def _publish_error_trace(self, session_id: str, detail: str) -> None:
         payload = TracePayload(
