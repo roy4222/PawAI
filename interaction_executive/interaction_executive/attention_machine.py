@@ -148,6 +148,16 @@ class AttentionMachine:
         if self._state != new_state:
             self._state = new_state
             self._state_since = now
+            # 5/9 review: centrally clear face timestamps on IDLE transition.
+            # Prevents flicker bypass — without this, when face briefly drops
+            # in NOTICED/ENGAGED/INTERACTING then returns, _face_first_seen_ts
+            # stale value makes stable_duration look huge, allowing premature
+            # NOTICED→ENGAGED. Clearing only on IDLE transitions keeps the
+            # within-state behaviour intact.
+            if new_state == AttentionState.IDLE:
+                self._face_first_seen_ts = None
+                self._face_last_seen_ts = None
+                self._dwell_start_ts = None
 
     def _update_face_timestamps(self, now: float, face_visible: bool) -> None:
         if face_visible:

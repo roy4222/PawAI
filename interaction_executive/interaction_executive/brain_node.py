@@ -584,13 +584,25 @@ class BrainNode(Node):
             active_plan = self._state.active_plan is not None
             speech_intent = self._attention_speech_this_tick
             self._attention_speech_this_tick = False  # consume
-        self._attention.tick(
-            now=now,
-            face_visible=face_visible,
-            distance_m=distance_m,
-            active_plan=active_plan,
-            speech_intent=speech_intent,
-        )
+            # 5/9 review: attention.tick mutates state — keep inside lock so
+            # any reader using _attention_state_snapshot() sees consistent value.
+            self._attention.tick(
+                now=now,
+                face_visible=face_visible,
+                distance_m=distance_m,
+                active_plan=active_plan,
+                speech_intent=speech_intent,
+            )
+
+    def _attention_state_snapshot(self) -> "AttentionState":
+        """Thread-safe snapshot of current attention state for gating decisions.
+
+        5/9 review: callers in _on_face/_on_object/etc. previously read
+        self._attention.state without lock — race against _tick_attention's
+        mutation. This helper takes self._lock to ensure consistent read.
+        """
+        with self._lock:
+            return self._attention.state
 
     def _emit_with_cooldown(
         self,
@@ -684,15 +696,20 @@ class BrainNode(Node):
             if self._state.unknown_face_first_seen is None:
                 self._state.unknown_face_first_seen = now
             elif (now - self._state.unknown_face_first_seen) >= self.unknown_face_accumulate_s:
-                # D-3: stranger_alert gates on NOTICED+ (attention.state != IDLE).
-                # Option B: require face accumulated 3s (existing logic) AND NOTICED+.
-                # This prevents stranger_alert from firing when face just flickered
-                # without proper attention engagement.  Safety is preserved because
-                # NOTICED is reached after only face_stable_s=0.5s — essentially
-                # instantaneous; the additional guard only blocks split-second ghost
-                # detections that never reach stable attention.
-                if not self._in_cooldown("stranger_alert", 30.0) and \
-                        self._attention.state != AttentionState.IDLE:
+                # 5/9 review: stranger_alert had only NOTICED+ + 3s gate. That allowed it
+                # to ALERT-priority preempt active wiggle / pending confirm / TTS playback —
+                # exactly the bug Roy hit on smoke. Add same guards as greet_known_person:
+                # not active skill, not pending confirm, not currently speaking.
+                # Safety override path (fallen / stop) is unchanged — that goes through
+                # SafetyLayer hard_rule, not this branch.
+                attention_state = self._attention_state_snapshot()
+                if (
+                    not self._in_cooldown("stranger_alert", 30.0)
+                    and attention_state != AttentionState.IDLE
+                    and not self._has_active_skill_or_sequence()
+                    and self._pending_confirm.state != ConfirmState.PENDING
+                    and not self._world.snapshot().tts_playing
+                ):
                     self._mark_cooldown("stranger_alert")
                     self._emit(
                         build_plan(
@@ -710,11 +727,15 @@ class BrainNode(Node):
         # This fixes "路過比 OK 被打招呼" — person must be close + dwelling, not
         # just walking past.
         if not stable or self._has_active_skill_or_sequence() \
-                or self._pending_confirm.state == ConfirmState.PENDING:
+                or self._pending_confirm.state == ConfirmState.PENDING \
+                or self._world.snapshot().tts_playing:
+            # 5/9 review: also block during TTS to avoid mid-sentence interrupt.
             return
-        if self._attention.state != AttentionState.ENGAGED and \
-                self._attention.state != AttentionState.INTERACTING:
-            return  # person just passing by — don't greet yet
+        # 5/9 review: greet_known_person is ENGAGED-only (NOT INTERACTING).
+        # When already INTERACTING (skill running / speech intent active),
+        # firing greet causes SAY interrupt. spec P2-1 originally said ENGAGED only.
+        if self._attention_state_snapshot() != AttentionState.ENGAGED:
+            return  # person just passing by, or already mid-interaction
         cooldown_key = f"greet_known_person:{identity}"
         if self._in_cooldown(cooldown_key, 20.0):
             return
