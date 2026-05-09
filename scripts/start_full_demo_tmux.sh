@@ -214,12 +214,13 @@ if [[ "$CONVERSATION_ENGINE" == "langgraph" ]]; then
   echo "[8/10] Starting pawai_brain.conversation_graph_node (langgraph primary)..."
   tmux send-keys -t "$SESSION:llm" \
     "$ROS_SETUP && ros2 launch pawai_brain pawai_conversation_graph.launch.py \
-      llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
       openrouter_gemini_model:=google/gemini-3-flash-preview \
       openrouter_request_timeout_s:=4.0 \
       openrouter_overall_budget_s:=5.0 \
       llm_max_tokens:=2000 \
       chat_history_max_turns:=5" Enter
+  # llm_persona_file omitted: launch default = personas/v1 directory (Branch B 5/9)
+  # Fallback to legacy single-file: append llm_persona_file:=tools/llm_eval/persona.txt
 else
   echo "[8/10] Starting llm_bridge_node (legacy fallback)..."
   tmux send-keys -t "$SESSION:llm" \
