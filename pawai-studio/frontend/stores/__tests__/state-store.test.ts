@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useStateStore } from "../state-store";
-import type { TtsMessage } from "../state-store";
 
 describe("ttsMessages ring buffer", () => {
   beforeEach(() => {
