@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useEventStore } from "@/stores/event-store";
 import { useStateStore } from "@/stores/state-store";
@@ -37,6 +37,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
+  const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
   const updateCapability = useStateStore((s) => s.updateCapability);
   const { evaluateEvent } = useLayoutManager();
 
@@ -94,7 +95,17 @@ export function useEventStream(): UseEventStreamResult {
         }
         case "tts":
           if ("text" in data) {
+            // 既有 updateTts 維持（其他 panel 用 lastTtsText）
             updateTts(data.text as string);
+
+            // P1-1b：append 到 ttsMessages 讓 ChatPanel 全部顯示
+            appendTtsMessage({
+              id: event.id || `tts-${Date.now()}`,
+              text: data.text as string,
+              timestamp: Date.now(),
+              origin: (data.origin as string) || "tts",
+              source: data.source as string | undefined,
+            });
           }
           break;
         case "capability":
@@ -130,12 +141,24 @@ export function useEventStream(): UseEventStreamResult {
       updateSystemHealth,
       updateObjectState,
       updateTts,
+      appendTtsMessage,
       updateCapability,
       evaluateEvent,
     ]
   );
 
   const { isConnected } = useWebSocket({ onMessage });
+
+  // P1-2: F5 hybrid auto-reset (dev-only — off by default in production)
+  // beforeunload sets a sessionStorage flag so that when the page reconnects
+  // within 5s we know it was a refresh and can auto-reset context.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem("paw_refresh_at", Date.now().toString());
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   return { isConnected };
 }

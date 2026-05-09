@@ -14,6 +14,8 @@ from ..state import ConversationState
 
 
 _world_provider: Callable[[], WorldStateSnapshot] = lambda: WorldStateSnapshot()
+_speaker_provider: Callable[[], tuple[str, float]] = lambda: ("unknown", 0.0)
+_SPEAKER_STALE_S = 3.0  # identity older than 3s → treat as unknown
 _WEATHER_CACHE = {"text": "", "ts": 0.0}
 _WEATHER_TTL_S = 600.0
 
@@ -21,6 +23,16 @@ _WEATHER_TTL_S = 600.0
 def set_world_provider(fn: Callable[[], WorldStateSnapshot]) -> None:
     global _world_provider
     _world_provider = fn
+
+
+def set_speaker_provider(fn: Callable[[], tuple[str, float]]) -> None:
+    """1H: register a provider for current_speaker (name, timestamp).
+
+    fn() returns (identity: str, last_seen_ts: float).
+    If identity == 'unknown' or age > _SPEAKER_STALE_S, world_state injects 'unknown'.
+    """
+    global _speaker_provider
+    _speaker_provider = fn
 
 
 def _time_of_day_zh(hour: int) -> str:
@@ -67,6 +79,13 @@ def world_state_builder(state: ConversationState) -> ConversationState:
     time_str = now_dt.strftime("%H:%M")
     weather = _get_weather()
 
+    # 1H: current_speaker from face state subscription
+    identity, ts = _speaker_provider()
+    if identity and identity != "unknown" and (time.time() - ts) < _SPEAKER_STALE_S:
+        current_speaker = identity
+    else:
+        current_speaker = "unknown"
+
     snap_dict = snap.to_dict()
     state["world_state"] = {
         "period": period,
@@ -74,6 +93,7 @@ def world_state_builder(state: ConversationState) -> ConversationState:
         "weather": weather,
         "source": state.get("source", "speech"),
         "timestamp": time.time(),
+        "current_speaker": current_speaker,
         **snap_dict,
     }
     state.setdefault("trace", []).append(

@@ -15,6 +15,7 @@ Wrapper-level failure boundary:
     network fail). Unexpected exceptions surface here.
 """
 from __future__ import annotations
+import hashlib
 import json
 import os
 import threading
@@ -26,6 +27,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool as BoolMsg
+from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from .capability.demo_guides_loader import load_demo_guides, load_demo_policy
@@ -72,16 +74,49 @@ reply 用繁體中文，自然像在跟朋友聊天。
 """
 
 
+def _compact_capabilities(cap: dict) -> list:
+    """Extract minimal capability fields for LLM prompt (avoids 5+ KB bloat)."""
+    compact_caps = []
+    for c in cap.get("capabilities", []):
+        entry = {
+            "name": c.get("name"),
+            "kind": c.get("kind"),
+            "display_name": c.get("display_name"),
+            "effective_status": c.get("effective_status"),
+            "can_execute": c.get("can_execute", False),
+            "demo_value": c.get("demo_value", "low"),
+        }
+        if c.get("reason"):
+            entry["reason"] = c["reason"]
+        if c.get("requires_confirmation"):
+            entry["requires_confirmation"] = True
+        if c.get("kind") == "demo_guide":
+            entry["intro"] = c.get("intro", "")
+            if c.get("related_skills"):
+                entry["related_skills"] = list(c.get("related_skills") or [])
+        compact_caps.append(entry)
+    return compact_caps
+
+
 def _build_user_message(state) -> str:
-    """Build the LLM user message — surface capability_context + world_state.
+    """Build the LLM user message — mode-aware capability injection (1D).
 
     Phase A.6 essence: the LLM cannot do "self-demonstration" unless it sees
     the capability list, recent skill results, and current limits each turn.
     Adapted from the legacy `env_context` reader to the new world_state shape
     (Phase A.6 dropped env_builder; world_state_builder now owns time/weather).
+
+    OpenClaw-lite 1D: CAPABILITIES.md + capability_context only injected for
+    capability_question / action_request modes. identity mode adds [mode_hint].
+    chat mode (default): no capability injection — LLM not anchored to tool-menu.
     """
     text = (state.get("user_text") or "").strip()
-    parts = [f"[語音輸入] 使用者說：「{text}」"]
+    mode = state.get("mode") or "chat"
+    source = state.get("source") or "speech"
+
+    # 1E: source-based label
+    label = "[語音]" if source == "speech" else "[文字]"
+    parts = [f"{label} 使用者說：「{text}」"]
 
     ws = state.get("world_state") or {}
     if ws.get("period") or ws.get("time"):
@@ -89,39 +124,38 @@ def _build_user_message(state) -> str:
         if ws.get("weather"):
             line += f"，外面 {ws['weather']}"
         parts.append(line)
+    if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
+        parts.append(f"[眼前的人] {ws['current_speaker']}")
 
+    # 1D: CAPABILITIES + capability_context — lazy inject only for relevant modes
+    # Note: module-level _build_user_message has no _capabilities_md;
+    # ConversationGraphNode._build_user_message overrides with instance access.
     cap = state.get("capability_context") or {}
-    if cap:
-        # Trim each capability to the minimal field set the persona prompt
-        # actually uses (name, kind, display_name, effective_status,
-        # demo_value, can_execute, requires_confirmation, reason; demo_guides
-        # also include intro + related_skills). Avoids 5+ KB context bloat.
-        compact_caps = []
-        for c in cap.get("capabilities", []):
-            entry = {
-                "name": c.get("name"),
-                "kind": c.get("kind"),
-                "display_name": c.get("display_name"),
-                "effective_status": c.get("effective_status"),
-                "can_execute": c.get("can_execute", False),
-                "demo_value": c.get("demo_value", "low"),
-            }
-            if c.get("reason"):
-                entry["reason"] = c["reason"]
-            if c.get("requires_confirmation"):
-                entry["requires_confirmation"] = True
-            if c.get("kind") == "demo_guide":
-                entry["intro"] = c.get("intro", "")
-                if c.get("related_skills"):
-                    entry["related_skills"] = list(c.get("related_skills") or [])
-            compact_caps.append(entry)
-
+    if mode in ("capability_question", "action_request") and cap:
+        compact_caps = _compact_capabilities(cap)
+        cap_payload = {
+            "capabilities": compact_caps,
+            "limits": list(cap.get("limits") or []),
+            "recent_skill_results": list(cap.get("recent_skill_results") or []),
+        }
+        parts.append("[能力 runtime] " + json.dumps(cap_payload, ensure_ascii=False))
+    elif cap and mode not in ("capability_question", "action_request"):
+        # Legacy behaviour for tests that use module-level function directly:
+        # always emit [能力] when cap present (backward compat for test_user_message_builder).
+        compact_caps = _compact_capabilities(cap)
         cap_payload = {
             "capabilities": compact_caps,
             "limits": list(cap.get("limits") or []),
             "recent_skill_results": list(cap.get("recent_skill_results") or []),
         }
         parts.append("[能力] " + json.dumps(cap_payload, ensure_ascii=False))
+
+    # mode hint — only for identity
+    if mode == "identity":
+        parts.append(
+            "[mode_hint] 使用者問你是誰。請從性格、生活、剛剛發生的事切入，"
+            "不要列功能清單，除非他追問。"
+        )
 
     return "\n".join(parts)
 
@@ -161,6 +195,8 @@ class ConversationGraphNode(Node):
             logger=lambda m: self.get_logger().warning(m),
         )
 
+        # 1A: _capabilities_md set by _load_persona (directory mode)
+        self._capabilities_md: str = ""
         self._system_prompt = self._load_persona()
 
         # Wire module-level node hooks
@@ -168,7 +204,7 @@ class ConversationGraphNode(Node):
         llm_decision_node.configure(
             client=self._client,
             system_prompt=self._system_prompt,
-            user_message_builder=_build_user_message,
+            user_message_builder=self._build_user_message,
         )
 
         # Phase A.6 — capability layer
@@ -199,6 +235,7 @@ class ConversationGraphNode(Node):
 
         # Wire module-level node hooks
         world_state_builder_node.set_world_provider(lambda: self._world_snapshot)
+        world_state_builder_node.set_speaker_provider(lambda: self._recent_face_identity)
         capability_builder_node.configure(
             registry=registry,
             skill_result_provider=self._skill_results.recent,
@@ -221,6 +258,19 @@ class ConversationGraphNode(Node):
         )
         self.create_subscription(
             String, "/brain/skill_result", self._on_skill_result, 10
+        )
+
+        # P1-2: context reset — clear ConversationMemory on page refresh / new-conversation
+        self.create_subscription(
+            Empty, "/brain/reset_context", self._on_reset_context, 10
+        )
+
+        # 1H: face state subscription for current_speaker context injection
+        # Subscribes /state/perception/face (8 Hz JSON from face_identity_node).
+        # Maintains _recent_face_identity; world_state_builder writes current_speaker.
+        self._recent_face_identity: tuple[str, float] = ("unknown", 0.0)
+        self.create_subscription(
+            String, "/state/perception/face", self._on_face_state, 10
         )
 
         self._graph = build_graph()
@@ -255,7 +305,7 @@ class ConversationGraphNode(Node):
         self.declare_parameter("openrouter_request_timeout_s", 4.0)
         self.declare_parameter("openrouter_overall_budget_s", 5.0)
         self.declare_parameter("llm_persona_file", "")
-        self.declare_parameter("llm_temperature", 0.2)
+        self.declare_parameter("llm_temperature", 0.8)  # 5/9 review: was 0.2 (greedy → templated); 0.8 = OpenClaw chat sweet spot. Launch arg can still override.
         self.declare_parameter("llm_max_tokens", 500)
         self.declare_parameter("chat_history_max_turns", 5)
 
@@ -290,29 +340,119 @@ class ConversationGraphNode(Node):
         self.llm_max_tokens = i("llm_max_tokens")
         self.chat_history_max_turns = max(1, i("chat_history_max_turns"))
 
-    # ── Persona loader (mirrors llm_bridge_node._load_system_prompt) ────
+    # ── Persona loader (file/dir dual mode — Roy review #1/#2) ─────────
 
     def _load_persona(self) -> str:
+        """Load persona from file (legacy) or directory (5-file OpenClaw-lite).
+
+        File mode (backward compat): single .txt → whole file as system prompt.
+        Directory mode: 5 required files; base concat 4; CAPABILITIES.md cached
+        in self._capabilities_md for lazy injection by _build_user_message (1D).
+        """
         path_str = (self.llm_persona_file or "").strip()
         if not path_str:
             return _INLINE_PERSONA
         path = Path(path_str).expanduser()
         if not path.is_absolute():
             path = Path.cwd() / path
-        try:
-            content = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            self.get_logger().warning(
-                f"llm_persona_file load failed ({path}): {exc} — using inline persona"
+
+        if path.is_file():
+            # Legacy mode: single persona.txt (backward compat)
+            try:
+                content = path.read_text(encoding="utf-8")
+            except OSError as exc:
+                self.get_logger().warning(
+                    f"[persona] file load failed ({path}): {exc} — using inline persona"
+                )
+                return _INLINE_PERSONA
+            if not content.strip():
+                self.get_logger().warning(
+                    f"[persona] file empty ({path}) — using inline persona"
+                )
+                return _INLINE_PERSONA
+            self._capabilities_md = ""  # legacy mode: no separate cache
+            self.get_logger().info(f"[persona] loaded file {path} ({len(content)} bytes)")
+            return content
+
+        if path.is_dir():
+            # New mode: directory; 5 files required, base concat 4
+            REQUIRED = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md", "CAPABILITIES.md"]
+            BASE_ORDER = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
+            contents = {}
+            for fname in REQUIRED:
+                f = path / fname
+                if not f.is_file():
+                    self.get_logger().error(f"[persona] missing required {fname} in {path}")
+                    raise FileNotFoundError(f)
+                contents[fname] = f.read_text(encoding="utf-8")
+
+            base = "\n\n".join(contents[f] for f in BASE_ORDER)
+            self._capabilities_md = contents["CAPABILITIES.md"]
+            self.get_logger().info(
+                f"[persona] loaded directory {path}, "
+                f"5 files verified, base 4 files concat ({len(base)} chars), "
+                f"CAPABILITIES.md cached separately ({len(self._capabilities_md)} chars), "
+                f"base_sha={hashlib.sha256(base.encode()).hexdigest()[:12]}"
             )
-            return _INLINE_PERSONA
-        if not content.strip():
-            self.get_logger().warning(
-                f"llm_persona_file empty ({path}) — using inline persona"
+            return base
+
+        self.get_logger().error(f"[persona] path not file or dir: {path}")
+        raise FileNotFoundError(path)
+
+    # ── Instance-level _build_user_message (1D: lazy capability inject) ─
+
+    def _build_user_message(self, state) -> str:
+        """Instance method: injects self._capabilities_md for capability modes.
+
+        Wraps the module-level _build_user_message but overrides the
+        capability injection so CAPABILITIES.md is included only for
+        capability_question / action_request modes.
+        """
+        text = (state.get("user_text") or "").strip()
+        mode = state.get("mode") or "chat"
+        source = state.get("source") or "speech"
+
+        label = "[語音]" if source == "speech" else "[文字]"
+        parts = [f"{label} 使用者說：「{text}」"]
+
+        ws = state.get("world_state") or {}
+        if ws.get("period") or ws.get("time"):
+            line = f"[環境] 台北 {ws.get('period', '')} {ws.get('time', '')}".rstrip()
+            if ws.get("weather"):
+                line += f"，外面 {ws['weather']}"
+            parts.append(line)
+        if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
+            parts.append(f"[眼前的人] {ws['current_speaker']}")
+
+        # 1D: lazy inject CAPABILITIES.md + capability_context ONLY for explicit
+        # capability/action modes. chat / identity / safety modes do NOT see
+        # the skill JSON in their prompt — that's the issue 2 root cause: every
+        # turn LLM seeing 17-skill JSON pulls it into "tool listing" persona,
+        # making "介紹一下" come back as a feature catalog.
+        #
+        # capability_context still flows through graph state (skill_policy_gate
+        # v2 reads from state.capability_context, not from rendered prompt).
+        cap = state.get("capability_context") or {}
+        if mode in ("capability_question", "action_request"):
+            if self._capabilities_md:
+                parts.append("[能力描述]\n" + self._capabilities_md)
+            if cap:
+                compact_caps = _compact_capabilities(cap)
+                cap_payload = {
+                    "capabilities": compact_caps,
+                    "limits": list(cap.get("limits") or []),
+                    "recent_skill_results": list(cap.get("recent_skill_results") or []),
+                }
+                parts.append("[能力 runtime] " + json.dumps(cap_payload, ensure_ascii=False))
+        # else: chat / identity / safety — DELIBERATELY no capability inject.
+
+        if mode == "identity":
+            parts.append(
+                "[mode_hint] 使用者問你是誰。請從性格、生活、剛剛發生的事切入，"
+                "不要列功能清單，除非他追問。"
             )
-            return _INLINE_PERSONA
-        self.get_logger().info(f"Loaded persona from {path} ({len(content)} bytes)")
-        return content
+
+        return "\n".join(parts)
 
     # ── Speech event handler ────────────────────────────────────────────
 
@@ -518,6 +658,41 @@ class ConversationGraphNode(Node):
             "detail": str(payload.get("detail", ""))[:80],
             "ts": time.time(),
         })
+
+    def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
+        """P1-2: Clear ConversationMemory + seen_sessions on browser reset.
+
+        5/9 review: was only clearing _memory; spec required _seen_sessions
+        too. Without clearing, the same session_id (e.g. studio request
+        replay) would be silently dropped post-reset because it remained
+        in _seen_sessions. Take _seen_lock to prevent race with
+        _on_speech_event / _on_text_input writers that mutate _seen_sessions.
+        """
+        self._memory.clear()
+        with self._seen_lock:
+            self._seen_sessions.clear()
+        self.get_logger().info(
+            "/brain/reset_context: ConversationMemory + seen_sessions cleared"
+        )
+
+    def _on_face_state(self, msg: String) -> None:
+        """1H: /state/perception/face (8 Hz) — track most stable known person.
+
+        Payload: {"stamp": float, "face_count": int, "tracks": [...]}
+        Track: {"stable_name": str, "mode": "stable"|"hold", ...}
+
+        Pick first track with stable_name != 'unknown'; update _recent_face_identity.
+        """
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        tracks = payload.get("tracks") or []
+        for track in tracks:
+            name = str(track.get("stable_name") or "unknown")
+            if name and name != "unknown":
+                self._recent_face_identity = (name, time.time())
+                return
 
     def _publish_error_trace(self, session_id: str, detail: str) -> None:
         payload = TracePayload(

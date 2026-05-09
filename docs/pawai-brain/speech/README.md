@@ -104,6 +104,44 @@ echo gate 阻止 ASR 自激（total 1.5s）
 
 **P1 未做（demo 後再評估）**：parallel→serial chunk synthesis + 前文最後 5 字當 hint。要犧牲 latency 換 cross-chunk 語氣連續性。
 
+### 5/9 補充：TTS dual-route + audio_format/served_by 重構（issue 1 partial）
+
+5/8 evening Roy 抓出 quality lane 從未觸發 — 原本 `tts_callback` 單軌走 OpenRouter Gemini chain，短句/safety 都走 6-7s 雲端鏈，user 體感都是「google 小姐 + 慢」。5/9 PR #55 + #57 雙軌路由：
+
+- **Fast lane**：`edge-tts → Piper`（<2s 首音；safety keyword + 短句 + 無 emotional tag）
+- **Quality lane**：`OpenRouter Gemini → edge-tts → Piper`（情緒 / 長句；ElevenLabs 待 spike GO 後加在鏈頭）
+- **路由邏輯**（`_should_use_fast_lane(text, threshold)`）：
+  1. safety keyword 命中（`停|停止|不要動|別動|小心|警告|危險|stop`）→ **永遠** fast lane
+  2. 含 emotional audio tag（`[playful]/[excited]/[whispers]/[worried]/[sighs]/[curious]/[laughs]/[thinking]/[gentle]/[happy]/[sad]/[shy]`）→ **強制** quality lane
+  3. effective_length（去 audio tag + punctuation 後 CJK 字 + 英文 word 計數）≤ `tts_fast_lane_threshold` (default 12) → fast lane
+  4. 否則 → quality lane
+
+**audio_format/served_by 修法**（PR #55）：原本 `_play_on_robot` 用 `self.config.provider == TTSProvider.PIPER ? WAV : MP3` 判格式 → fallback chain 從 Gemini 跌到 Piper 時，Piper WAV 被當 MP3 decode → pydub error。改：每個 provider class 加 `output_format: AudioFormat`，chain loop 在選中成功 provider 時記 `_last_served_format`，`_play_on_robot` 用實際 served format。
+
+**ROS params**：
+- `tts_dual_route_enabled` (default True)
+- `tts_fast_lane_threshold` (default 12)
+
+**ElevenLabs spike**（issue 1 完整解的 P1）：spike script 在 `tools/tts_spike/elevenlabs_mini.py`，dev-log 模板 `docs/pawai-brain/dev-logs/2026-05-XX-elevenlabs-spike-mini.md`。Roy 自跑（API key + 挑 voice ID + 聽 15 mp3 + 評分），GO 後再 PR 把 ElevenLabs 加進 quality lane chain 頭。
+
+### 5/9 補充：ASR 簡→繁 OpenCC s2twp（issue 6）
+
+ASR provider（SenseVoice / Whisper / Qwen Cloud）無 zh-TW 選項，輸出含簡體。三個入口注入 `to_traditional_tw()`（`opencc-python-reimplemented` lazy import + `s2twp.json` config）：
+
+| 入口 | 檔案 | 觸發路徑 |
+|---|---|---|
+| 1. 實機 mic | `speech_processor/speech_processor/stt_intent_node.py:1100` `_publish_asr_result` 前 | USB mic → ASR → 繁中 → publish `/event/speech_intent_recognized` |
+| 2. Studio mic | `pawai-studio/gateway/studio_gateway.py` `/ws/speech` handler 約 L627 | Browser mic → SenseVoice cloud → 繁中 → 同上 |
+| 3. Studio chat | `pawai-studio/gateway/studio_gateway.py` `/api/text_input` POST handler | Studio chat panel typing → 繁中 → publish `/brain/text_input` |
+
+兩份 helper（避免 cross-package import 陷阱）：
+- `speech_processor/speech_processor/text_normalization.py`
+- `pawai-studio/gateway/text_normalization.py`
+
+**ROS param**：`enable_s2twp` (default True) + env `PAWAI_ENABLE_S2TWP`。
+
+依賴：`opencc-python-reimplemented` 已加進 `speech_processor/setup.py` 和 `pawai-studio/gateway/requirements.txt`。Jetson 用前先 `pip install --user opencc-python-reimplemented` 確認。
+
 ## 輸入/輸出
 
 | Topic | 方向 | 說明 |

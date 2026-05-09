@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, Mic, PawPrint, Sparkles, Square } from "lucide-react";
+import { ArrowUp, Mic, PawPrint, RotateCcw, Sparkles, Square } from "lucide-react";
 import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { AudioVisualizer } from "@/components/chat/audio-visualizer";
@@ -24,6 +24,9 @@ interface AIMessage {
   type: "ai";
   text: string;
   timestamp: string;
+  // P1-1c/d：樣式分類
+  variant?: "pending" | "spontaneous";
+  source?: string; // skill_say | chat_reply | say_canned | undefined
 }
 
 interface VoiceMessage {
@@ -46,6 +49,24 @@ function formatTime(date: Date): string {
 }
 
 /**
+ * P1-1d + Phase 2-mini：依 source / variant 回傳 AI bubble className。
+ * skill_say → 綠 / say_canned → 橙 / chat_reply or pending → 一般灰 / spontaneous-no-source → 淡灰
+ */
+function getBubbleClassName(msg: AIMessage): string {
+  if (msg.source === "skill_say") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-100";
+  }
+  if (msg.source === "say_canned") {
+    return "border-orange-500/30 bg-orange-500/10 text-orange-100";
+  }
+  if (msg.source === "chat_reply" || msg.variant === "pending") {
+    return "border-slate-600/40 bg-slate-700/30 text-slate-100";
+  }
+  // spontaneous（無 source）— 淡灰 + 時鐘圖示由 JSX 加
+  return "border-slate-700/30 bg-slate-800/20 text-slate-300 opacity-90";
+}
+
+/**
  * ChatPanel — chat-first redesign (commit step G).
  *
  * Renders ONLY normal user / assistant / voice chat bubbles + the input
@@ -59,8 +80,7 @@ export function ChatPanel() {
   const [inputText, setInputText] = useState("");
   const [isThinking, setIsThinking] = useState(false);
 
-  const lastTtsText = useStateStore((s) => s.lastTtsText);
-  const lastTtsAt = useStateStore((s) => s.lastTtsAt);
+  const ttsMessages = useStateStore((s) => s.ttsMessages);
   const latestSkillResult = useStateStore((s) => s.brainResults[0]);
   const {
     isRecording,
@@ -72,8 +92,11 @@ export function ChatPanel() {
     stopRecording,
   } = useAudioRecorder();
 
+  // pendingRequestIdRef：管 isThinking + speech intent 配對 + timeout（不再 gate display）
   const pendingRequestIdRef = useRef<string | null>(null);
   const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // P1-1c：防止 ttsMessages 重複 append
+  const lastSeenTtsIdRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevVoiceResultRef = useRef(voiceResult);
@@ -92,24 +115,46 @@ export function ChatPanel() {
     };
   }, []);
 
-  // TTS reply → AI bubble (only when pending).
+  // P1-1c：TTS reply → AI bubble（監聽 ttsMessages 全部 append，不再只 gate pending）
   useEffect(() => {
-    if (lastTtsAt && lastTtsText && pendingRequestIdRef.current) {
+    if (ttsMessages.length === 0) return;
+
+    // 找出 lastSeen 之後所有尚未顯示的 message
+    const lastSeenIdx = lastSeenTtsIdRef.current
+      ? ttsMessages.findLastIndex((m) => m.id === lastSeenTtsIdRef.current)
+      : -1;
+    const newMessages = ttsMessages.slice(lastSeenIdx + 1);
+
+    if (newMessages.length === 0) return;
+
+    // pending 配對的當一般灰，spontaneous 當淡灰
+    const wasPending = pendingRequestIdRef.current !== null;
+
+    setMessages((prev) => [
+      ...prev,
+      ...newMessages.map((m) => ({
+        id: m.id,
+        type: "ai" as const,
+        text: m.text,
+        timestamp: formatTime(new Date()),
+        variant: (wasPending ? "pending" : "spontaneous") as "pending" | "spontaneous",
+        source: m.source,
+      })),
+    ]);
+
+    // 更新 lastSeen
+    lastSeenTtsIdRef.current = ttsMessages[ttsMessages.length - 1].id;
+
+    // 若有 pending request → 第一條 TTS 視為配對成功，清掉 pending（取消 isThinking）
+    if (pendingRequestIdRef.current) {
       pendingRequestIdRef.current = null;
       if (pendingTimeoutRef.current) {
         clearTimeout(pendingTimeoutRef.current);
         pendingTimeoutRef.current = null;
       }
       setIsThinking(false);
-      const aiMsg: AIMessage = {
-        id: `ai-${Date.now()}`,
-        type: "ai",
-        text: lastTtsText,
-        timestamp: formatTime(new Date()),
-      };
-      setMessages((prev) => [...prev, aiMsg]);
     }
-  }, [lastTtsAt, lastTtsText]);
+  }, [ttsMessages]);
 
   // Voice result → add as voice message + enter pending.
   useEffect(() => {
@@ -137,6 +182,18 @@ export function ChatPanel() {
       }, 8000);
     }
   }, [voiceResult]);
+
+  // P1-2: New conversation — clear local messages + POST /api/reset to clear global context.
+  const handleNewConversation = useCallback(async () => {
+    const ok = window.confirm(
+      "將清除目前所有對話記憶，包括其他開啟的 Studio 視窗。確定？"
+    );
+    if (!ok) return;
+    await fetch(`${getGatewayHttpUrl()}/api/reset`, { method: "POST" });
+    setMessages([]);
+    useStateStore.setState({ ttsMessages: [] });
+    lastSeenTtsIdRef.current = null;
+  }, []);
 
   // Auto-resize textarea.
   const adjustTextareaHeight = useCallback(() => {
@@ -327,7 +384,19 @@ export function ChatPanel() {
   // Conversation view — bubble stream + bottom composer.
   return (
     <div className="flex h-full flex-col">
-      <BrainStatusPill />
+      <div className="flex items-center justify-between">
+        <BrainStatusPill />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleNewConversation}
+          title="重置全局對話記憶（所有 device 共用）"
+          aria-label="新對話"
+          className="mr-2 h-8 w-8 text-muted-foreground hover:text-foreground"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
@@ -379,6 +448,8 @@ export function ChatPanel() {
               );
             }
             // AI message — left, transparent + thin outline.
+            // P1-1d + Phase 2-mini：source 三色 + variant 樣式分類
+            const bubbleClassName = getBubbleClassName(msg);
             return (
               <div key={msg.id} className="flex gap-3">
                 <div className="flex shrink-0 items-start pt-0.5">
@@ -387,13 +458,10 @@ export function ChatPanel() {
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div
-                    className="rounded-2xl border px-4 py-3 text-[15px] leading-relaxed"
-                    style={{
-                      borderColor: "var(--bubble-ai-border)",
-                      color: "var(--bubble-ai-fg)",
-                    }}
-                  >
+                  <div className={cn("rounded-2xl border px-4 py-3 text-[15px] leading-relaxed", bubbleClassName)}>
+                    {msg.variant === "spontaneous" && !msg.source && (
+                      <span className="mr-1 opacity-60" aria-label="自發訊息" role="img">⏰</span>
+                    )}
                     {msg.text}
                   </div>
                 </div>

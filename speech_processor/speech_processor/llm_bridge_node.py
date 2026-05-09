@@ -199,7 +199,7 @@ class LlmBridgeNode(Node):
         self.declare_parameter("llm_endpoint", "http://140.136.155.5:8000/v1/chat/completions")
         self.declare_parameter("llm_model", "Qwen/Qwen2.5-7B-Instruct")
         self.declare_parameter("llm_timeout", 15.0)
-        self.declare_parameter("llm_temperature", 0.2)
+        self.declare_parameter("llm_temperature", 0.8)  # 5/9 review: was 0.2 (greedy → templated); 0.8 matches conversation_graph_node default. Launch arg overrides.
         self.declare_parameter("llm_max_tokens", 80)
         self.declare_parameter("intent_event_topic", "/event/speech_intent_recognized")
         self.declare_parameter("face_event_topic", "/event/face_identity")

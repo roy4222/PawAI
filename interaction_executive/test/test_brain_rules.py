@@ -5,6 +5,7 @@ import pytest
 import rclpy
 from std_msgs.msg import String
 
+from interaction_executive.attention_machine import AttentionState
 from interaction_executive.brain_node import BrainNode
 from interaction_executive.skill_contract import PriorityClass, SkillResultStatus
 
@@ -87,6 +88,32 @@ def _latest(brain):
     return brain._captured_proposals[-1]
 
 
+def _prime_attention_engaged(brain) -> None:
+    """Drive AttentionMachine to ENGAGED state using fake-clock ticks.
+
+    D-2/D-3: greet_known_person and object_remark now require ENGAGED attention.
+    Tests that need to trigger these skills must call this first.
+
+    Timeline (default thresholds: face_stable_s=0.5, dwell_s=1.5):
+      t=0.0 → IDLE, face appears, dwell starts
+      t=0.6 → NOTICED (face stable 0.6s >= 0.5s), dwell continues
+      t=2.5 → ENGAGED (dwell 1.9s >= 1.5s)
+    """
+    am = brain._attention
+    am.tick(now=0.0, face_visible=True, distance_m=1.0, active_plan=False)
+    am.tick(now=0.6, face_visible=True, distance_m=1.0, active_plan=False)   # → NOTICED
+    am.tick(now=2.5, face_visible=True, distance_m=1.0, active_plan=False)   # → ENGAGED
+    assert am.state == AttentionState.ENGAGED, f"Expected ENGAGED, got {am.state}"
+
+
+def _prime_attention_noticed(brain) -> None:
+    """Drive AttentionMachine to NOTICED state (face stable, not yet close/dwelling)."""
+    am = brain._attention
+    am.tick(now=0.0, face_visible=True, distance_m=2.5, active_plan=False)
+    am.tick(now=0.6, face_visible=True, distance_m=2.5, active_plan=False)   # → NOTICED
+    assert am.state == AttentionState.NOTICED, f"Expected NOTICED, got {am.state}"
+
+
 def test_speech_stop_hard_rule(brain):
     brain._on_speech_intent(_msg({"transcript": "請停一下", "session_id": "s-stop"}))
     plan = _latest(brain)
@@ -133,6 +160,8 @@ def test_gesture_wave_acknowledges(brain):
 
 
 def test_known_face_greets_stable_identity(brain):
+    # D-3: greet_known_person now requires ENGAGED attention state.
+    _prime_attention_engaged(brain)
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "greet_known_person"
@@ -140,6 +169,8 @@ def test_known_face_greets_stable_identity(brain):
 
 
 def test_unknown_face_stable_triggers_stranger_alert(brain):
+    # D-3: stranger_alert requires NOTICED+ attention state (Option B).
+    _prime_attention_noticed(brain)
     brain._on_face(_msg({"identity": "unknown"}))
     brain._state.unknown_face_first_seen -= 0.06
     brain._on_face(_msg({"identity": "unknown"}))
@@ -310,7 +341,11 @@ def test_pose_fallen_uses_name_when_available(brain):
 
 
 def test_object_detected_triggers_object_remark(brain):
-    """Production payload format (objects[] array) with colour preamble + special suffix."""
+    """Production payload format (objects[] array) with colour preamble + special suffix.
+
+    D-3: object_remark now requires ENGAGED attention state.
+    """
+    _prime_attention_engaged(brain)
     brain._on_object(_msg({
         "stamp": 1.0,
         "event_type": "object_detected",
@@ -322,7 +357,11 @@ def test_object_detected_triggers_object_remark(brain):
 
 
 def test_object_legacy_flat_payload_still_works(brain):
-    """Legacy/test format (flat dict) — backwards-compat with existing call sites."""
+    """Legacy/test format (flat dict) — backwards-compat with existing call sites.
+
+    D-3: object_remark now requires ENGAGED attention state.
+    """
+    _prime_attention_engaged(brain)
     brain._on_object(_msg({"label": "laptop", "color": "blue"}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "object_remark"
@@ -330,6 +369,8 @@ def test_object_legacy_flat_payload_still_works(brain):
 
 
 def test_object_unknown_color_drops_color_preamble(brain):
+    # D-3: need ENGAGED for object_remark to emit
+    _prime_attention_engaged(brain)
     brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
     plan = _latest(brain)
     assert plan["steps"][0]["args"]["text"] == "看到杯子了，你要喝水嗎？"
@@ -556,7 +597,12 @@ def test_chat_candidate_with_sit_along_proposal_executes(brain):
     assert [p["selected_skill"] for p in plans] == ["chat_reply", "sit_along"]
 
 
-def test_chat_candidate_with_greet_known_person_proposal_executes(brain):
+def test_chat_candidate_with_greet_known_person_proposal_now_trace_only(brain):
+    """1G: LLM proposing greet_known_person → trace_only, not direct execute.
+
+    Face stable detection already handles greet_known_person. Letting LLM also
+    propose execute caused interruptions during 'walk over to gesture OK' flow.
+    """
     _feed_speech(brain, "向 Roy 打招呼", "s-greet")
     _feed_chat_candidate(brain, {
         "session_id": "s-greet",
@@ -566,7 +612,14 @@ def test_chat_candidate_with_greet_known_person_proposal_executes(brain):
         "engine": "langgraph",
     })
     plans = _drain_proposals(brain)
-    assert [p["selected_skill"] for p in plans] == ["chat_reply", "greet_known_person"]
+    # Only chat_reply plan is emitted (greet goes to trace_only, not plan)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    # Verify trace emitted with accepted_trace_only (stage=skill_gate)
+    traces = _drain_traces(brain)
+    assert any(
+        t.get("status") == "accepted_trace_only"
+        for t in traces
+    )
 
 
 def test_chat_candidate_with_careful_remind_proposal_executes(brain):

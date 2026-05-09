@@ -155,6 +155,74 @@ def test_mini_e2e_studio_button_self_introduce(brain, executive):
     # and the COMPLETED handler clears it.
 
 
+# ---------------------------------------------------------------------------
+# Task 7 — SAY dispatch envelope: source field
+# ---------------------------------------------------------------------------
+
+
+def test_say_dispatch_includes_source_in_envelope(executive):
+    """SAY step with args.source publishes JSON envelope including source field."""
+    from interaction_executive.skill_contract import ExecutorKind, SkillStep
+
+    step = SkillStep(
+        executor=ExecutorKind.SAY,
+        args={"text": "我來扭給你看", "source": "skill_say", "input_origin": "studio_text"},
+    )
+
+    captured: list[str] = []
+    executive._pub_tts.publish = lambda msg: captured.append(msg.data)
+
+    executive._dispatch_step(step)
+
+    assert len(captured) == 1
+    envelope = json.loads(captured[0])
+    assert envelope["text"] == "我來扭給你看"
+    assert envelope["source"] == "skill_say"
+    assert envelope["input_origin"] == "studio_text"
+
+
+def test_say_dispatch_source_only_no_input_origin(executive):
+    """SAY step with source but no input_origin still publishes JSON envelope."""
+    from interaction_executive.skill_contract import ExecutorKind, SkillStep
+
+    step = SkillStep(
+        executor=ExecutorKind.SAY,
+        args={"text": "嗨", "source": "skill_say"},
+    )
+
+    captured: list[str] = []
+    executive._pub_tts.publish = lambda msg: captured.append(msg.data)
+
+    executive._dispatch_step(step)
+
+    assert len(captured) == 1
+    envelope = json.loads(captured[0])
+    assert envelope["text"] == "嗨"
+    assert envelope["source"] == "skill_say"
+    assert "input_origin" not in envelope
+
+
+def test_say_dispatch_plain_text_no_source_no_input_origin(executive):
+    """SAY step without source AND without input_origin publishes plain text (backward compat)."""
+    from interaction_executive.skill_contract import ExecutorKind, SkillStep
+
+    step = SkillStep(
+        executor=ExecutorKind.SAY,
+        args={"text": "嗨"},
+    )
+
+    captured: list[str] = []
+    executive._pub_tts.publish = lambda msg: captured.append(msg.data)
+
+    executive._dispatch_step(step)
+
+    assert len(captured) == 1
+    assert captured[0] == "嗨"  # plain text, no JSON
+
+
+# ---------------------------------------------------------------------------
+
+
 def test_mini_e2e_motion_step_dry_runs_without_webrtc(executive):
     """MOTION step succeeds via dry_run path when WebRtcReq is unavailable."""
     # Build a tiny SAY+MOTION plan.

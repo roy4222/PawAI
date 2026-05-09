@@ -12,6 +12,7 @@ from langgraph.graph import StateGraph, END
 
 from .state import ConversationState
 from .nodes.input_normalizer import input_normalizer
+from .nodes.mode_classifier import classify_mode
 from .nodes.safety_gate import safety_gate
 from .nodes.world_state_builder import world_state_builder
 from .nodes.capability_builder import capability_builder
@@ -28,10 +29,22 @@ def _route_after_safety(state: ConversationState) -> str:
     return "output" if state.get("safety_hit") else "world_state"
 
 
+def _mode_classifier_node(state: ConversationState) -> ConversationState:
+    """1C OpenClaw-lite: classify user intent mode (safety / identity / capability_question / action_request / chat)."""
+    state["mode"] = classify_mode(state.get("user_text", ""))
+    state.setdefault("trace", []).append({
+        "stage": "mode_classifier",
+        "status": "ok",
+        "detail": state["mode"],
+    })
+    return state
+
+
 def build_graph():
     g = StateGraph(ConversationState)
 
     g.add_node("input", input_normalizer)
+    g.add_node("mode_classifier", _mode_classifier_node)
     g.add_node("safety_gate", safety_gate)
     g.add_node("world_state", world_state_builder)
     g.add_node("capability", capability_builder)
@@ -44,7 +57,8 @@ def build_graph():
     g.add_node("trace", trace_emitter)
 
     g.set_entry_point("input")
-    g.add_edge("input", "safety_gate")
+    g.add_edge("input", "mode_classifier")  # 1C: mode_classifier between input and safety_gate
+    g.add_edge("mode_classifier", "safety_gate")
     g.add_conditional_edges(
         "safety_gate",
         _route_after_safety,
