@@ -116,9 +116,11 @@ MOTION_NAME_MAP: dict[str, int] = {
     "content": 1020,
     "balance_stand": 1002,
     "stretch": 1017,
-    # 5/8 [#wiggle-api-id-typo]: 1029 是 Scrape（拜拜）。WiggleHips 是 1033。
-    # 5/8 evening user 比 thumbs_up→OK confirm 後狗做拜拜不是扭屁股 → 修對應。
-    "wiggle_hip": 1033,
+    # 5/8 [#wiggle-api-id-typo]: 1029=Scrape（拜拜）, 1033=WiggleHips。
+    # 5/9 evening 實機驗：firmware v1.1.7 silent-ignore 1033。
+    # 直接 pub /webrtc_req 試 1020/1028/1029，Roy 看 1020 (Content) 視覺像「扭」。
+    # contract name 保持 wiggle / wiggle_hip，只改 api_id 對應 → 1020。
+    "wiggle_hip": 1020,
     "scrape": 1029,
 }
 
