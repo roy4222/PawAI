@@ -178,3 +178,102 @@ def test_text_chunk_max_plus_one():
     assert "".join(chunks) == text
     for c in chunks:
         assert len(c) <= TtsNode.CHUNK_MAX_CHARS
+
+
+# ── P0-1: All-or-nothing chunk synthesis (TTSProvider_OpenRouterGemini) ────
+# These tests verify that any chunk failure → entire synthesize() returns None
+# (to trigger provider chain fallback), instead of silent-skipping failed
+# chunks and concatenating partial output.
+
+
+def _make_gemini_provider():
+    """Construct a TTSProvider_OpenRouterGemini with dummy config.
+    Sets _api_key directly to bypass OPENROUTER_KEY env check.
+    Avoids ROS node init — only the provider class is under test.
+    Skips cleanly when ROS env is absent (e.g. pre-commit hook env).
+    """
+    import os
+    import pytest
+    os.environ.setdefault("OPENROUTER_KEY", "test-dummy-key")
+
+    try:
+        from speech_processor.tts_node import (
+            TTSConfig,
+            TTSProvider_OpenRouterGemini,
+        )
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"tts_node requires ROS env: {exc}")
+
+    config = TTSConfig(api_key="dummy")
+    provider = TTSProvider_OpenRouterGemini(config)
+    # Ensure _api_key is non-empty so synthesize() doesn't early-return.
+    provider._api_key = "test-dummy-key"
+    return provider
+
+
+def test_partial_chunk_failure_returns_none():
+    """Any chunk failure → entire synthesize returns None for fallback chain.
+
+    P0-1: prevents '念一念跳到結尾' by ensuring partial results are not
+    concatenated and returned to the caller when some chunks fail.
+    """
+    from unittest.mock import patch
+
+    provider = _make_gemini_provider()
+
+    # Patch _timed_chunk so chunk[0] succeeds, chunk[1] fails.
+    # Text produces exactly 2 chunks (CHUNK_MAX_CHARS + 1 chars → hard-cut at 40,
+    # remainder 1 char = second chunk).
+    side_effects = [
+        (b"chunk0_pcm", 0.1),
+        (None, 0.2),          # failure — this chunk returns None
+    ]
+    call_count = [0]
+
+    def fake_timed_chunk(text):
+        result = side_effects[call_count[0]]
+        call_count[0] += 1
+        return result
+
+    # Use a text long enough to produce exactly 2 chunks.
+    long_text = "一" * (TtsNode.CHUNK_MAX_CHARS + 1)
+
+    with patch.object(provider, "_timed_chunk", side_effect=fake_timed_chunk):
+        result = provider.synthesize(long_text)
+
+    assert result is None, (
+        "Partial chunk failure must return None to trigger fallback chain, "
+        f"but got {result!r}"
+    )
+
+
+def test_all_chunks_success_returns_wav():
+    """All chunks succeed → WAV bytes returned (non-None, non-empty).
+
+    P0-1 regression guard: the all-or-nothing change must not break the
+    success path — full_pcm concatenation and WAV wrapping must still work.
+    """
+    from unittest.mock import patch
+
+    provider = _make_gemini_provider()
+
+    side_effects = [
+        (b"\x00\x01" * 10, 0.1),   # chunk0 PCM
+        (b"\x02\x03" * 10, 0.1),   # chunk1 PCM
+    ]
+    call_count = [0]
+
+    def fake_timed_chunk(text):
+        result = side_effects[call_count[0]]
+        call_count[0] += 1
+        return result
+
+    # Text long enough to produce exactly 2 chunks.
+    long_text = "一" * (TtsNode.CHUNK_MAX_CHARS + 1)
+
+    with patch.object(provider, "_timed_chunk", side_effect=fake_timed_chunk):
+        result = provider.synthesize(long_text)
+
+    assert result is not None, "All chunks succeeded but synthesize() returned None"
+    # Result should be a WAV file (starts with RIFF header).
+    assert result[:4] == b"RIFF", f"Expected WAV RIFF header, got {result[:4]!r}"
