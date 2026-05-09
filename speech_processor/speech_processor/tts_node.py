@@ -711,10 +711,17 @@ SAFETY_KEYWORDS: re.Pattern = re.compile(
     re.IGNORECASE,
 )
 
-FAST_LANE_THRESHOLD: int = 30  # effective char/word units
+FAST_LANE_THRESHOLD: int = 12  # effective char/word units (5/9 review: was 30 — too high, LLM short answers all fell to edge-tts)
+
+# Audio tags that signal emotional / story content → force quality lane regardless of length.
+# (Issue 1 fix: short emotional sentences like "[playful] 嗨～" should NOT use edge-tts robotic voice.)
+QUALITY_LANE_AUDIO_TAGS: frozenset[str] = frozenset({
+    "excited", "curious", "playful", "worried", "whispers", "laughs", "sighs", "thinking",
+    "gentle", "happy", "sad", "shy",
+})
 
 # Regex to strip audio-tag markup like [playful], [excited] before counting.
-_AUDIO_TAG_RE_LANE: re.Pattern = re.compile(r"\[\w+\]")
+_AUDIO_TAG_RE_LANE: re.Pattern = re.compile(r"\[(\w+)\]")
 
 # Chinese / English punctuation that doesn't count as content.
 _PUNCT_RE: re.Pattern = re.compile(r"[，。！？：；、,.!?:;\s]")
@@ -761,15 +768,30 @@ def _compute_effective_length(text: str) -> int:
     return cjk_count + en_words_count
 
 
+def _has_quality_lane_audio_tag(text: str) -> bool:
+    """Return True if text contains an emotional audio tag → force quality lane.
+
+    This overrides length-based routing because short emotional sentences
+    (e.g. "[playful] 嗨～") sound terrible in edge-tts robotic voice.
+    Safety/stop keywords still take precedence (handled before this check).
+    """
+    matches = _AUDIO_TAG_RE_LANE.findall(text)
+    return any(tag.lower() in QUALITY_LANE_AUDIO_TAGS for tag in matches)
+
+
 def _should_use_fast_lane(text: str, threshold: int = FAST_LANE_THRESHOLD) -> bool:
     """Return True when fast lane (edge-tts → Piper) should handle ``text``.
 
-    Fast lane is used when:
-    - Text contains a safety/stop keyword (always fast, overrides length), OR
-    - Effective text length ≤ ``threshold`` (default 30 units).
+    Decision priority:
+    1. Safety/stop keyword present → ALWAYS fast lane (override everything).
+    2. Emotional audio tag (e.g. [excited]/[playful]) → quality lane for voice fidelity.
+    3. Effective length > threshold → quality lane (long content = quality investment).
+    4. Otherwise (short, plain) → fast lane.
     """
     if SAFETY_KEYWORDS.search(text):
         return True
+    if _has_quality_lane_audio_tag(text):
+        return False
     return _compute_effective_length(text) <= threshold
 
 
@@ -914,7 +936,7 @@ class EnhancedTTSNode(Node):
         )
         self.declare_parameter(
             "tts_fast_lane_threshold",
-            _env_int("TTS_FAST_LANE_THRESHOLD", 30),
+            _env_int("TTS_FAST_LANE_THRESHOLD", 12),  # 5/9 review: was 30 — too high
         )
 
     def _load_configuration(self) -> TTSConfig:
