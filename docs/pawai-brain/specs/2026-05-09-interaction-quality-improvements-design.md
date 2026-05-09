@@ -116,17 +116,56 @@ full_pcm = b"".join(ok_parts)
 - 加 launch arg `asr_output_locale: zh-TW` 預設
 - 收益：Studio + brain context 全是繁體，台灣語感對齊
 
-**P1-4 Persona/launch 完整載入修正**
-- 確認 `pawai_conversation_graph.launch.py` 預設 `llm_persona_file` 指向 `tools/llm_eval/persona.txt` 絕對路徑
-- 若空，落到 inline 6 行 — 改成 ERROR 而非 silent fallback
-- 加開機 log：`[persona] loaded from /path, 185 lines, sha=...`
-- 收益：永遠跑完整 persona，回覆有生氣
+**P1-4 LLM persona 不死板 — 保守版 A（Roy 5/9 brainstorm 確認）**
 
-**P1-5 persona 補 wiggle/OK 主動提案規則**
-- 編輯 `tools/llm_eval/persona.txt` 加明確 rule：
-  > 當使用者要求「扭一扭 / 搖一下 / 比 OK 就動 / 來個可愛動作」時，**必須**輸出 `{"skill": "wiggle", "reply": "[playful] 好啊！比個 OK 我就扭給你看 ✨"}`，不可只講話不出 skill。
-- 加 5 個 few-shot examples
-- 收益：「比 OK 就扭一扭」鏈式調用真正打通（系統其實已支援，缺 LLM 配合）
+**已實證根因**：
+- `pawai_conversation_graph.launch.py:20-22` `llm_persona_file` 預設 `default_value=""`
+- 空字串落回 `conversation_graph_node.py:67-72` 6 行 inline persona（176 字元 vs 完整 11.5KB / 6940 tokens）
+- **但**：`scripts/start_full_demo_tmux.sh:217` **已正確傳** `llm_persona_file:=...persona.txt`
+- 真正問題：`scripts/start_pawai_brain_tmux.sh:15` 還在啟舊 `llm_bridge_node`，不是 conversation_graph_node — 這條路徑會 silent 用 inline persona
+
+**1A 立即做（半天，必做）**
+- 修 `pawai_conversation_graph.launch.py` 預設 → `tools/llm_eval/persona.txt` 絕對路徑
+- 修 `conversation_graph_node._load_persona()` — missing/empty 改 ERROR raise 而非 silent fallback
+- 修 `scripts/start_pawai_brain_tmux.sh` 切到 conversation_graph_node 路徑，移除 llm_bridge_node
+- 加開機 log：`[persona] loaded /path, N lines, sha=...`
+
+**1B 同日做（半天，輕量重排）**
+- **不拆檔**（拆檔風險高、validator/repair 都要動）；單檔 `persona.txt` 內部重排成 OpenClaw 式 5 層：
+  ```
+  ## Identity (誰、靈魂 70/20/10)
+  ## Style Rules (hard constraints — 不說「我是 AI」、字數上限、語氣分布)
+  ## Skill Policy (17 skills + 觸發條件 + 主動提案規則)
+  ## Few-shot Examples (12 → 16-20 個，補：奶奶/陌生人語氣、主動 wiggle、silent reply)
+  ## Runtime Instructions (audio tag、JSON schema、capability_context 用法)
+  ```
+- 補 wiggle/OK 主動提案 rule + 5 個 few-shot：
+  > 當使用者要求「扭一扭 / 搖一下 / 比 OK 就動 / 來個可愛動作」時，**必須**輸出 `{"skill": "wiggle", "reply": "[playful] 好啊！比個 OK 我就扭給你看"}`，不可只講話不出 skill
+- **不**硬規則「句尾汪/嗚」（避免幼兒化、尷尬重複）；改寫成「**偶爾、低頻、只在 playful 情緒**」guideline
+- 注入順序：穩定區（identity/rules/skills/examples）在前，volatile（runtime/memory/face_state）在後 — prefix-cache 友善
+
+**1C 同日做（半天，A/B eval）**
+- launch 加 `llm_model` + `llm_temperature` arg（已有但需驗）
+- 用 `tools/llm_eval/` 框架跑 30 round 4 組對照：
+  - Gemini-3 + temp 0.2（baseline）
+  - Gemini-3 + temp 0.6
+  - DeepSeek-V4 + temp 0.2
+  - DeepSeek-V4 + temp 0.6
+- 評分維度：persona 維持力、JSON schema 命中率、skill 提案率、中文自然度、延遲
+- 結論決定主線
+
+**1D 同日做（半天）— current_speaker 注入**
+- `_build_user_message()` 從 face_state 抓最近 1 秒 identity → 加 `current_speaker: Roy / 奶奶 / 陌生人 / unknown`
+- persona few-shot 加對應 examples（對奶奶溫柔慢、對 Roy 俏皮快、對陌生人禮貌試探）
+- face_state 不可得時 fallback `unknown`，prompt 不報錯
+
+**明確不做（demo 前風險）**
+- ❌ Reply Tags `<say><skill>` schema 改造（動 validator + repair + skill_gate，太深）
+- ❌ persona.txt 拆 4 檔（IDENTITY/RULES/SKILLS/EXAMPLES 多檔）— 留 demo 後
+- ❌ Claude Opus 4.7 / GPT-5.5 試點（成本高、延遲不確定、GPT-5.5 官方未列）
+- ❌ 完整 OpenClaw 8 種 hook 系統化
+
+**預期收益**：互動自然度 5/10 → 7-8/10；不誘人感大幅改善；wiggle/OK 主動鏈式打通
 
 ### Wave 2 — P2 互動品質升級（5/12-5/13）
 
