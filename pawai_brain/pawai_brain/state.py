@@ -40,6 +40,9 @@ class ConversationState(TypedDict, total=False):
     proposed_args: dict
     proposal_reason: str
 
+    # ── Conversation mode (set by mode_classifier node, 1C OpenClaw-lite) ──
+    mode: str  # safety / identity / capability_question / action_request / chat (default)
+
     # ── Trace accumulation (each node may append) ─────────────────────
     trace: list[dict[str, Any]]
 
