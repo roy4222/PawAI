@@ -37,6 +37,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
+  const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
   const updateCapability = useStateStore((s) => s.updateCapability);
   const { evaluateEvent } = useLayoutManager();
 
@@ -94,7 +95,17 @@ export function useEventStream(): UseEventStreamResult {
         }
         case "tts":
           if ("text" in data) {
+            // 既有 updateTts 維持（其他 panel 用 lastTtsText）
             updateTts(data.text as string);
+
+            // P1-1b：append 到 ttsMessages 讓 ChatPanel 全部顯示
+            appendTtsMessage({
+              id: event.id || `tts-${Date.now()}`,
+              text: data.text as string,
+              timestamp: Date.now() / 1000,
+              origin: (data.origin as string) || "tts",
+              source: data.source as string | undefined,
+            });
           }
           break;
         case "capability":
@@ -130,6 +141,7 @@ export function useEventStream(): UseEventStreamResult {
       updateSystemHealth,
       updateObjectState,
       updateTts,
+      appendTtsMessage,
       updateCapability,
       evaluateEvent,
     ]
