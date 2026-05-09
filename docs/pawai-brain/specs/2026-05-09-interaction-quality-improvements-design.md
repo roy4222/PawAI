@@ -573,7 +573,8 @@ t=1.5  椅子 → object_remark 又插嘴 ⚠️
    - 計中文字 + 英文 word（中文 1 char = 1 unit、英文 1 word = 1 unit）
 
 2. safety / stop / alert / confirm prompt → 永遠 fast lane
-   （source 標籤之後 P1-1 Phase 2 可拿到；demo 前用 keyword: stop|小心|警告|先不動 短路）
+   （source 標籤之後 P1-1 Phase 2 可拿到；demo 前用 keyword 短路：
+    `停|停止|不要動|先不要動|別動|小心|警告|危險|stop` — 中文「停」是核心 demo 指令必收）
 
 3. effective_length <= 30 → fast lane
    effective_length > 30 → quality lane
@@ -585,11 +586,33 @@ edge-tts → Piper
 ```
 **不繞 ElevenLabs / Gemini**（雲端 latency 漂高會破壞「馬上回」體感）。Piper 本機保底，edge-tts fail 直接退 Piper。
 
-**Quality lane**（長句重音色）：
+**Quality lane**（長句重音色）— **依 Spike-Mini 結果二選一**：
+
 ```
-ElevenLabs (eleven_flash_v2_5) → OpenRouter Gemini → edge-tts → Piper
+Mini GO（主路線）：
+  ElevenLabs (eleven_flash_v2_5) → OpenRouter Gemini → edge-tts → Piper
+
+Mini NO-GO（fallback 路線）：
+  Gemini native (P2-2-fallback) / OpenRouter Gemini → edge-tts → Piper
+  └─ Gemini native 通則為主軌；不通則 OpenRouter Gemini 維持原樣
 ```
-雲端優先取情緒；ElevenLabs fail 退 OpenRouter Gemini，再退 edge / Piper 保底。「一定有聲音」可靠性 + 音色品質兼顧。
+
+實作者注意：Mini NO-GO 時 ElevenLabs **不要**保留在主鏈當 fallback 第二位（音色 / latency 沒過就別繞了，直接砍）。
+
+**Provider format 跟著實際 served_by**（Roy 5/9 review #1 — High）：
+
+`tts_node._play_on_robot(audio_data)` 目前 L1185 用 `self.config.provider` 判 MP3/WAV，**雙軌 + fallback chain 後這個假設會壞**（例如 quality lane fallback 到 Piper 出 WAV，仍被當 MP3 decode）。
+
+設計補丁（P2-3 必須含）：
+
+1. Provider class 都加 `output_format: AudioFormat` 屬性（`elevenlabs` / `openrouter_gemini` / `edge_tts` = MP3、`piper` = WAV）
+2. `synthesize()` 回傳 `(audio_bytes, served_by_format)` tuple，或在 provider chain 跑完後 tts_callback 記下 `last_served_format`
+3. `_play_on_robot()` 改吃 `served_by_format` 而非 `self.config.provider`
+4. 單元測試覆蓋：fast lane fallback edge→piper、quality lane fallback elevenlabs→gemini→edge→piper，每段 assert format 對
+
+**閾值演進**：
+- demo 前：30 字（spec 預設，保互動速度）
+- ElevenLabs 短句 spike 確認穩定 < 2s 後（demo 後）：可降到 20 字 或 改 source metadata routing（依 P1-1 Phase 2 進度）
 
 **閾值演進**：
 - demo 前：30 字（spec 預設，保互動速度）
@@ -787,15 +810,21 @@ launch arg `idle_mode:=off`（預設）；展示時 `idle_mode:=demo`；env var 
 
 主分支 `main` 不長 trunk-based；建議：
 
+**依賴順序**（必須串行）：
 1. **`fix/tts-silent-skip`** — P0-1 + P0-2，半天，merge 即上 Jetson 驗
 2. **`feat/studio-full-chat`** — P1-1，1 天
 3. **`feat/context-reset`** — P1-2，半天
 4. **`feat/asr-tw`** — P1-3，半天
-5. **`fix/persona-load`** — P1-4 + P1-5（同改 persona.txt + launch），半天
+5. **`fix/persona-load`** — P1-4，半天
 6. **`feat/attention-policy`** — P2-1，1 天
-7. **`spike/elevenlabs-tts-mini`** — P2-2a，5/11 半天，**不上 Megaphone**，純驗音色 + latency；GO 才進 Spike-Real
+
+**並行 / gate（Roy 5/9 review #3）**：
+7. **`spike/elevenlabs-tts-mini`** — P2-2a，**可與上述 P0/P1 並行**，**最晚 5/11 完成**。半天工，只動 spike 工作目錄（不動主鏈），不擋 attention-policy / Studio chat 進度。**ElevenLabs Mini 是 quality lane 決策 gate，必須在 P2-3 開工前出結果**。
 8. **`spike/elevenlabs-tts-real`** — P2-2b，5/12 半天，僅 Mini GO 後執行；含 Megaphone + Go2 實機
-9. **`feat/tts-dual-route`** — P2-3，半天（依 P2-2 結果決定 quality lane 主軌）。Mini NO-GO → 退而做 `spike/gemini-native-tts` 並 quality lane 主軌改 Gemini native
+9. **`feat/tts-dual-route`** — P2-3，半天，**依 P2-2a 結果決定 quality lane 主軌**：
+   - Mini GO → 主軌 ElevenLabs，鏈 `ElevenLabs → OpenRouter Gemini → edge-tts → Piper`
+   - Mini NO-GO → 退而做 `spike/gemini-native-tts`，主軌改 Gemini native，鏈 `Gemini native → OpenRouter Gemini → edge-tts → Piper`（**不**在 Mini NO-GO 時把 ElevenLabs 留鏈中）
+   - P2-3 必須含 audio_format / served_by 重構（見 P2-3 Provider format 補丁）
 9. **`feat/idle-mode`** — P3-1，1-2 天
 
 每支 PR 都跑：`pytest 61/61` + Jetson colcon build + 手動 demo flow 5 句驗。
