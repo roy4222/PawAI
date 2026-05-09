@@ -1048,8 +1048,10 @@ tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 stu
 | Skill 名稱 | api_id | 參數 | 說明 | 安全等級 |
 |-----------|--------|------|------|----------|
 | `Hello` | 1016 | `"1016"` | 揮手打招呼 | 安全 |
-| `BalanceStand` | 1002 | `"1002"` | 平衡站立 | 安全 |
-| `Sit` | 1009 | `"1009"` | 坐下 | 安全 |
+| `StandUp` | 1004 | `"1004"` | 站直 | 安全 |
+| `StandDown` | 1005 | `"1005"` | 蹲低 / 趴低（**Go2 SDK 沒有真正全趴下，1005 是最低姿勢**） | 安全 |
+| `BalanceStand` | 1002 | `"1002"` | 平衡站立（高姿） | 安全 |
+| `Sit` | 1009 | `"1009"` | 半坐姿 | 安全 |
 | `RiseSit` | 1010 | `"1010"` | 起身 | 安全 |
 | `StopMove` | 1003 | `"1003"` | 停止移動 | 安全 |
 
@@ -1058,9 +1060,11 @@ tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 stu
 | Skill 名稱 | api_id | 說明 | 安全等級 |
 |-----------|--------|------|----------|
 | `Stretch` | 1017 | 伸展 | 中等 |
-| `Content` | 1020 | 開心/滿足 | 安全 |
+| `Content` | 1020 | 開心/滿足；**`wiggle` skill 走這個**（1033 firmware 不支援） | 安全 |
 | `FingerHeart` | 1036 | 比心 | 安全 |
-| `WiggleHips` | 1033 | 搖屁股 | 安全 |
+| `WiggleHips` | 1033 | 搖屁股 — **Go2 firmware v1.1.7 silent-ignore，不可用**。`wiggle` skill 內部映射改走 `Content` (1020) | ⚠️ 不可用 |
+| `Scrape` | 1029 | 拜拜 / 撥地 | 安全 |
+| `Pose` | 1028 | 擺姿勢 | 安全 |
 
 ### 6.3 高風險動作（禁止使用）
 

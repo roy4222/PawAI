@@ -1,7 +1,61 @@
 # 專案狀態
 
-**最後更新**：2026-05-09 evening（互動品質改善 8 issue 全主線落地 + 4 P0 audit fix；待 Jetson smoke 驗收）
+**最後更新**：2026-05-09 night（Jetson smoke 完成 + branch `fix/demo-motion-and-chat-polish` 5 commit；尚未 push）
 **硬底線**：5/18 期末 demo（9 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/9 night 進度（origin/main d7a35ab 首次 Jetson smoke + 4 polish fix branch）
+
+5/9 evening 把 origin/main d7a35ab（含 PR #51-65 全合）首次 deploy 到 Jetson 實機 smoke。Round 1 走完 8 issue + Round 2 補 4 個動作層 / UX polish + Round A/B/C 回歸測 + Round D 誤觸觀察。Go2 沒電後收工。
+
+### 主線 4 P0 hotfix（commit `756aeb0` on main）
+
+| Bug | Root cause | 修法 |
+|---|---|---|
+| A reset 沒清 speaker | `_recent_face_identity` 沒清 + face callback 立即寫回 | conversation_graph_node._on_reset_context 加清 face identity + 5s suppress window |
+| C Studio 簡→繁 frontend 沒顯示 | `chat-panel.tsx:217` echo 用戶原文不等 backend 轉換 | gateway return converted text + frontend update bubble |
+| OpenCC API name | `OpenCC("s2twp.json")` lib append `.json` → `s2twp.json.json` FileNotFoundError，silent fallback 原文 | 改 `OpenCC("s2twp")`，兩處 helper（gateway + speech_processor） |
+| B wiggle balance_stand | wiggle motion step 缺前置 stand | skill_contract.py wiggle steps 加 balance_stand step（後續 G 證實仍需 1033 → 1020 fallback） |
+
+從 PR #52 起 ASR 簡→繁三入口都 silent fail（OpenCC API typo），這次才被抓到。
+
+### Branch `fix/demo-motion-and-chat-polish` 4 個動作層 / UX polish（5 commit，未 push）
+
+| Commit | 修法 |
+|---|---|
+| `87e2d5d` | J ChatPanel stick-to-bottom（30px tolerance + scroll listener，user scroll up 不被新訊息打斷） |
+| `c7de5ee` | H sit_along motion sit (1009) → stand_down (1005)；I 新 stand SkillContract（5 file 改：skill_contract + brain_node 兩 allowlist + persona CAPABILITIES + EXAMPLES + 兩 test 檔） |
+| `f296429` | G wiggle motion 1033 (WiggleHips) → 1020 (Content) — Go2 firmware v1.1.7 silent-ignore 1033，直接 pub /webrtc_req 試 1029/1020/1028 確認 1020 視覺像「扭」 |
+| `bb0290e` `b3c4cc1` | docs/mission/demo完成清單.md 5/9 evening + Round A/B/C 結果 |
+
+### Round 3 回歸測試結果（5/9 night Jetson 實機）
+
+| Round | 步驟 | 結果 |
+|---|---|---|
+| A motion fix | wiggle×3 + stand 兩路徑 + sit_along | ✅ 全 PASS（brain log `confirmed_via_ok`，Roy 觀察「都有做動作」） |
+| B Stop / Safety | wave_hello + sit_along 動作中 stop | ✅ 2/2 PROPOSAL stop_move（intent_classifier 75% / 50%） |
+| C Confirm skills | stretch 第一次 + 15s cooldown 後第二次 | ✅ 全 PASS |
+| D 誤觸抑制 | 對話中物體入鏡 | ✅ 1500 行 log **0 個 `object_remark` proposal**（attention guard + 60s dedup 雙保險生效） |
+
+### 新增觀察 / Backlog（不擋 demo）
+
+- **Face 誤識別 Roy → grama**：`/state/perception/face` `stable_name=grama sim=0.57`，導致 LLM 全程稱「阿嬤」。可能 face_db reference 接近，需重抓 Roy reference 或改話術。Demo 一人場景不擋。
+- **Self_introduce 中 object_remark 漏接**：5/9 evening 第二輪重現「看到黑色椅子了」插自介；下次 session 加 attention.state log 取證。
+- **TTS 跳段（睡前故事中段漏一句）**：Gemini chunk all-or-nothing 顯示 ok 但播放漏。tts_node 加 debug WAV save 取證再修。
+- **TTS 廣東腔**：Despina voice 相同文字 cache hit 壞 audio。當下清 cache (`e3faba93`+`54040645`) fresh synth 後 Roy 接受。voice 選型 spike 列 backlog。
+- **雙 SAY (chat_reply + skill_say)**：PR #65 source 標籤 by design，UX 怪但不擋 demo。
+- **Compound skill request**：「站起來並打招呼」LLM 只挑一個 skill — OUTPUT.md 「一次最多提議一個 skill」by design，已在清單 §11 SKIP→C。
+- **wiggle safety_requirements**：`["depth_clear", "robot_stable"]` 偶發 blocked_by_safety（`depth_not_clear_for_motion`，可能 transient_local 漏接）；1020 Content 不需 depth_clear，可考慮拿掉，待場地驗。
+- **USB 喇叭斷線**：5/9 evening `aplay -l` 一度看不到 CD002-AUDIO；XL4015 供電風險，demo 當天獨立電源。
+
+### Carry-over（5/10）
+
+1. push branch `fix/demo-motion-and-chat-polish` + Roy laptop frontend (chat-panel.tsx) 同步策略確認
+2. face_db 處理（重抓 Roy reference 或保留 grama 用 demo 話術）
+3. Round E 五功能個別成功率（face/gesture/pose/object，~15 min 家裡可做）
+4. 5/12-13 場地：導航避障 / 30 min 連續 / 躺平 fallen / 推車誤判
+5. 取證任務：TTS 跳段 debug save、self_introduce attention 漏接、廣東腔 voice 選型 spike
 
 ---
 
