@@ -98,11 +98,32 @@ full_pcm = b"".join(ok_parts)
 
 ### Wave 1 — P1 互動骨架補完（5/10-5/12）
 
-**P1-1 Studio ChatPanel 顯示所有 utterance**
-- `chat-panel.tsx` 改成監聽全部 TTS event，不只配對 pending request
-- 加 source 標記區分：`user_speech` / `llm_reply` / `say_canned` / `idle_chatter`
-- `state-store.ts` 加 `messages` 陣列保留所有 robot utterance
-- 收益：Roy 知道狗講過啥、Brain 全可觀測
+**P1-1 Studio ChatPanel 顯示所有 utterance（純前端起步 + 漸進升級）**
+
+**已實證根因**：`chat-panel.tsx:96-112` 只在 `pendingRequestIdRef.current` 存在時把 `lastTtsText` append 進 messages。所有自動觸發 TTS（say_canned / stranger_alert / object_remark / greet / event_action_bridge gesture-pose-fall / route_runner / skill 中間 SAY step）全被丟掉。
+
+**8 個 `/tts` publisher 沒一個帶 source metadata**：IE-node / event_action_bridge × 3（gesture/pose/fall）/ llm_bridge / intent_tts_bridge / route_runner — `/tts` msg type 是 `std_msgs/String` 純文字（少數含 JSON envelope 但只帶 input_origin）。
+
+**Phase 1（demo 前必做，1 小時）— 純前端改，0 ROS2 動作**
+1. `state-store.ts`：`lastTtsText` / `lastTtsAt` 改成 `ttsMessages: { id, text, timestamp }[]`，**ring buffer max 200 條**避免 spam scroll 爆
+2. `use-event-stream.ts`：`case "tts"` → `appendTtsMessage()`（不是 updateTts）
+3. `chat-panel.tsx`：**移除 `pendingRequestIdRef` 檢查**，所有 tts event 都進 messages 陣列
+4. 樣式：user 右藍氣泡 / LLM reply 左灰氣泡 / 自動觸發左淡灰 + 時鐘圖標（先不分 canned/skill_say/alert，純前端無 metadata）
+
+**Phase 2（demo 後可選，再 1 小時）— source metadata 漸進升級**
+1. IE-node `_dispatch_step` SAY 時 `/tts` JSON envelope 加 `source: skill_say|canned|alert`
+2. gateway `_on_tts_msg` parse JSON envelope，broadcast 帶 `origin` 欄位
+3. event_action_bridge 改 JSON envelope 同上
+4. ChatPanel CSS 細分 source（skill_say 綠 / canned 橙 / alert 紅）
+5. **保留**純文字 backward compat（合約 §5.2 雙模化）
+
+**風險：spam scroll**
+- 路過 5 物體 + 多人入鏡 → 1 分鐘 30+ 條訊息
+- 緩解：依賴 P2-1 attention policy（only ENGAGED 才 emit）自然降量
+- 前端 ring buffer 200 條 + auto-trim 防爆
+- 加 filter UI（toggle 顯示 user_speech / llm_reply / auto_trigger）— Phase 2 可選
+
+**收益**：Roy 知道狗講過啥、Brain 全可觀測；不用聽 Jetson 喇叭憑記憶 debug
 
 **P1-2 Context reset on refresh**
 - **`conversation_graph_node`**（不是 brain_node）訂 `/brain/reset_context` topic（std_msgs/Empty）→ 呼叫 `self._memory.clear()` + 清 `_seen_sessions`
