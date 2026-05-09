@@ -15,17 +15,22 @@
 
 ## 1. 範圍：3 件事
 
-### 1.1 P0：YOLOv8n vs YOLO26n benchmark
+> **命名澄清**（review 5 fix）：本 spec 的 P0/P1/P2 是 **object 子系統內部優先級**，**不等於 demo 前必做**。整份 Spec 4 都在 demo 後做（見 Index 規劃）。
+> - **Phase 1（post-demo P0）** = 子系統內優先項
+> - **Phase 2（post-demo P1）** = 子系統內次優先
+> - **Phase 3（post-demo P2）** = 進階探索
+
+### 1.1 Phase 1（post-demo P0）：YOLOv8n vs YOLO26n benchmark
 - 大物件（椅子、桌子、人）+ 小物件（杯子、書、瓶子、手機）
 - 距離：1m / 2m / 3m
 - 指標：mAP / 小物件 recall / FPS / GPU% / RAM
 
-### 1.2 P0：顏色辨識
+### 1.2 Phase 1（post-demo P0）：顏色辨識
 - 現況：HSV 簡單判別，「咖啡色椅子」常誤判
 - 改：YOLO bbox 內取 RGB 中位數 → KMeans cluster → 對應 11 種色名（紅/橙/黃/綠/藍/紫/粉/白/黑/灰/咖啡）
 - 物體 cooldown 30 分鐘（同 object + 同 color）
 
-### 1.3 P2：室內資料集（進階，demo 後再評估）
+### 1.3 Phase 3（post-demo P2）：室內資料集（進階，demo 後再評估）
 - COCO 80 class 對「家裡」覆蓋不足（鑰匙、遙控器、藥盒）
 - 候選資料集：Open Images / Objects365 / 自蒐
 - 風險：fine-tune 時間 + GPU 預算 + Jetson TRT 重新編
@@ -88,30 +93,30 @@ def extract_color(frame, bbox) -> str:
 
 ## 5. 驗收
 
-### P0
+### Phase 1（post-demo P0）
 - YOLOv8n vs YOLO26n：>10% 差異才考慮升級
 - 小物件 (<10cm) recall ≥60%
 - 顏色 top-1 ≥75%（11 色測試）
 - FPS ≥6（debug_image）
 - GPU% ≤95%（cooperative with face/pose）
 
-### P2（demo 後）
+### Phase 3（post-demo P2）
 - 室內資料集：家裡 10 個常見物件 detect rate ≥70%
 
 ---
 
-## 6. 實作分階段（demo 後）
+## 6. 實作分階段（**全部在 demo 後**）
 
-| Phase | 內容 | 工時 |
-|---|---|---|
-| 1 | benchmark framework 加 object_candidates.yaml | 0.5d |
-| 2 | YOLOv8n / YOLO26n / YOLO11n 三向跑 | 1d |
-| 3 | 顏色 pipeline + KMeans + LAB mapping | 1d |
-| 4 | object_remark 變體池 + cooldown（共用 Spec 1）| 0.5d |
-| 5 | 驗收 + decision report | 0.5d |
-| 6 | (P2) 室內資料集評估（不一定做）| 3-5d |
+| Phase | 步驟 | 內容 | 工時 |
+|---|---|---|---|
+| Phase 1 (P0) | 1 | benchmark framework 加 object_candidates.yaml | 0.5d |
+| Phase 1 (P0) | 2 | YOLOv8n / YOLO26n / YOLO11n 三向跑 | 1d |
+| Phase 1 (P0) | 3 | 顏色 pipeline + KMeans + LAB mapping | 1d |
+| Phase 1 (P0) | 4 | object_remark 變體池 + cooldown（共用 Spec 1）| 0.5d |
+| Phase 1 (P0) | 5 | 驗收 + decision report | 0.5d |
+| Phase 3 (P2) | 6 | 室內資料集評估（不一定做）| 3-5d |
 
-**P0 總計**：3.5 天
+**Phase 1 總計**：3.5 天（demo 後 sprint 2 啟動）
 
 ---
 

@@ -42,7 +42,7 @@ Demo 主軸對應：
 
 ### 3.1 角色目標
 - PawAI 不再像功能列表：知道自己「是誰、住哪、有靈魂」
-- PawAI 知道專案目標：為長者陪伴與家庭互動 demo 設計
+- PawAI 知道專案目標：**多模態感知融合的具身互動機器狗** —— 看懂、理解、決策、行動
 - PawAI 知道自己能力：語音、臉、手勢、姿勢、物體/安全 五大功能
 - PawAI 能主動引導：「我可以示範揮手 / OK 確認 / 陪你坐下 / 提醒小心」
 - PawAI 能被追問深入：評審問「再說一個你會的」可自然接話
@@ -60,7 +60,8 @@ Demo 主軸對應：
 ## 4. 非目標（Non-Goals）— 嚴格排除
 
 ❌ **以下這份 spec 不做**：
-- `output.skills: list` / 2-skill composition / JSON schema 動土
+- **LLM output JSON schema 改動**（仍維持 `{"reply": str, "skill": str|null, "args": {}}`）
+- `output.skills: list` / 2-skill composition
 - ReAct loop / 完整 OpenClaw 9 層 / Bootstrap Hook 系統
 - LangGraph 節點增 / 改 / 刪
 - nav_capability 整合 / follow mode / 跟隨
@@ -69,6 +70,13 @@ Demo 主軸對應：
 - YOLOv8n vs yolo26n benchmark（→ Spec 4）
 - Studio scroll 重做（→ Spec 6）
 - 換更聰明的模型（A+ 後再決定）
+
+✅ **以下是 internal contract change（不算動 LLM schema，但仍需小心）**：
+- `SkillPlan` dataclass 加 `source_llm_reply: str | None`
+- `/brain/proposal` ROS topic JSON 加 `source_llm_reply` 欄位（向後相容：舊版讀取為 None）
+- `interaction_executive_node._dispatch_step` call site 改造（傳入 active plan，不只 step）
+
+這些是 brain ↔ executive 之間的**內部** contract，不影響 LLM prompt / output schema、不影響 Studio gateway WebSocket schema。
 
 ---
 
@@ -112,7 +120,7 @@ Demo 主軸對應：
 - 看得懂姿勢（站 / 坐 / 跌倒）
 - 認得家裡的東西（杯子、椅子、書）
 - 守護：陌生人靠近會提醒、跌倒會關心
-- 自己在房間裡走（SLAM + Nav2 + 動態避障）
+- **基礎導航**：在場地條件允許時可以自己在房間裡走（SLAM + Nav2，配合 reactive_stop 反應式停障）
 
 # 我的個性主軸（demo 答辯版）
 
@@ -129,6 +137,7 @@ Demo 主軸對應：
 
 # 還在學的（不要假裝會）
 
+- 動態避障繞行（看到障礙會停，但要繞開還在學）
 - 自己跟著主人到處走（跟隨）
 - 自己巡邏家裡（自主巡邏）
 - 帶東西過來（我沒有手）
@@ -178,7 +187,7 @@ output: {"reply": "[playful] 好啊！我先跟你打個招呼？", "skill": "wa
 output: {"reply": "[curious] 嗯～你比個 OK，我可以扭一下給你看。", "skill": "wiggle", "args": {}}
 
 使用者：這個專題在做什麼
-output: {"reply": "[thinking] Roy 把我設計成可以陪長輩在家裡的小狗。我會認人、聽你說話，也會看你的姿勢。", "skill": "chat_reply", "args": {}}
+output: {"reply": "[thinking] Roy 把我做成多模態的小狗，我能看懂你、聽懂你、認得家裡的東西，還會自己在房間裡走。", "skill": "chat_reply", "args": {}}
 
 使用者：你會跟著我走嗎
 output: {"reply": "[sighs] 那個我還在學，現在還不太會跟。", "skill": "chat_reply", "args": {}}
@@ -320,8 +329,23 @@ def _plan_from_dict(self, payload: dict) -> SkillPlan:
 
 #### 6.2.4 executive._dispatch_say_step 看欄位
 
+**call site 改造**（review 3 fix）：現在 `_dispatch_step()` 只拿 `step`，不知道 active plan。要改成傳入 plan + step_idx，讓 SAY dispatcher 能看到 `plan.source_llm_reply` 與「這是第幾個 SAY step」。
+
 ```python
-def _dispatch_say_step(self, plan: SkillPlan, step: SkillStep, step_idx: int) -> str:
+# 改前（interaction_executive_node.py）
+def _dispatch_step(self, step: SkillStep) -> None:
+    if step.executor == ExecutorKind.SAY:
+        self._publish_tts(step.args["text"])
+    ...
+
+# 改後
+def _dispatch_step(self, plan: SkillPlan, step: SkillStep, step_idx: int) -> None:
+    if step.executor == ExecutorKind.SAY:
+        text = self._resolve_say_text(plan, step, step_idx)
+        self._publish_tts(text)
+    ...
+
+def _resolve_say_text(self, plan: SkillPlan, step: SkillStep, step_idx: int) -> str:
     # 第一個 SAY step 且 plan 帶 LLM reply → 覆蓋
     if step_idx == self._first_say_idx(plan) and plan.source_llm_reply:
         return plan.source_llm_reply
@@ -330,6 +354,38 @@ def _dispatch_say_step(self, plan: SkillPlan, step: SkillStep, step_idx: int) ->
     if not text:
         text = self._pick_from_pool(plan.selected_skill)
     return text
+
+def _first_say_idx(self, plan: SkillPlan) -> int:
+    for i, s in enumerate(plan.steps):
+        if s.executor == ExecutorKind.SAY:
+            return i
+    return -1
+```
+
+**queue worker 對應**（同檔案）：
+```python
+# queue worker 拿到 active plan + step_idx 一起 dispatch
+self._dispatch_step(self._active_plan, step, step_idx)
+```
+
+#### 6.2.4b SkillPlan.build_plan 工廠函式支援 source_llm_reply
+
+`skill_contract.py:build_plan` 加 keyword-only 參數：
+
+```python
+def build_plan(
+    skill_name: str,
+    args: dict,
+    *,
+    source: str = "rule",
+    reason: str = "",
+    source_llm_reply: str | None = None,  # ← 新增
+) -> SkillPlan:
+    contract = SKILL_REGISTRY[skill_name]
+    return SkillPlan(
+        ...,
+        source_llm_reply=source_llm_reply,
+    )
 ```
 
 #### 6.2.5 brain_node._on_chat_candidate 邏輯（review 4 fix）
@@ -473,13 +529,32 @@ executive 收到 plan
 
 **收尾 SAY 簡化版**（demo 前若雙 LLM call 來不及）：直接砍最後 SAY step，保留 1 個 LLM 開場 + 4 motion 即可。
 
-### 7.3 觸發路徑
+### 7.3 觸發路徑（review 4 fix：精準分流）
 
-| 觸發 | 處理 |
-|---|---|
-| 語音「介紹一下你自己」 | mode_classifier → identity → **走 chat_reply**（5/5 後規則已移除）|
-| Studio button: self_introduce | brain → emit self_introduce plan（**改後的 motion-only 版**）|
-| 評審追問「展示一下完整自介」 | LLM 主動 propose self_introduce skill |
+| 觸發 | LLM reply？ | source_llm_reply | 處理 |
+|---|---|---|---|
+| 語音「介紹一下你自己」 | ✅ 有 | LLM reply 灌入 | mode_classifier → identity → 走 chat_reply（**不觸發 self_introduce skill**，5/5 後規則已移除）|
+| 評審追問「展示一下完整自介」 | ✅ 有 | LLM reply 灌入 | LLM 主動 propose self_introduce skill；reply 灌進 plan 第一個 SAY |
+| **Studio button: self_introduce** | ❌ 沒有 | None | brain → emit self_introduce plan；第一個 SAY step `text_pool` fallback（**不要假設有 LLM reply**） |
+| Rule trigger（保留 for hidden）| ❌ 沒有 | None | 同上：用 text_pool |
+
+**關鍵設計**（review 4 fix）：
+- self_introduce skill_contract 的第一個 SAY step **必須有 fallback text_pool**（5-8 條變體），不能空字串
+- 不假設「所有 self_introduce 都有 LLM reply」 — Studio button 路徑不過 LLM
+- _dispatch_step 看到 `source_llm_reply == None` → 走 text_pool fallback；看到非空 → 用 LLM reply
+- 不應該為了「Studio button 也有 LLM reply」去額外發 LLM call（複雜度暴漲，demo 風險）
+
+**self_introduce text_pool 範例**：
+```python
+[
+    "[excited] 嗨！我是 PawAI～",
+    "[playful] 大家好！讓我自我介紹一下。",
+    "[curious] 哈囉～我是 PawAI，住在這個家裡。",
+    "[whispers] 嗨...我來打個招呼。",
+    "[excited] 哈嘍！我是 PawAI，看我會做什麼。",
+    "[playful] 嘿！讓我表演給你看～",
+]
+```
 
 ---
 
@@ -512,7 +587,7 @@ executive 收到 plan
 
 - 「會說『還在學』」：問跟隨/巡邏 → reply 自承不會
 - 「主動引導」：問「展示」→ LLM 提 motion skill 不只是說
-- 「知道專案目標」：問「這個專題做什麼」→ 提到「Roy / 長者陪伴 / demo」
+- 「知道專案目標」：問「這個專題做什麼」→ 提到「Roy / 多模態感知融合 / 看懂理解決策行動」
 
 ---
 
@@ -541,7 +616,7 @@ A+ 跑完 10 prompt + 質性 → 看是否需要換模型：
 - 確認 chat_reply 雙 SAY 沒有現有 regression 案例
 
 ### Phase 1（1 天）— Persona 6 檔
-- 新建 `MISSION.md`（**多模態具身互動定位**，不是長者陪伴）
+- 新建 `MISSION.md`（**多模態具身互動定位**，禁出現長者/長輩/老人/陪伴字眼）
 - 改 `IDENTITY.md` L24-27
 - 改 `EXAMPLES.md` 5 個 identity + 補 5 條 self-showcase
 - 改 `OUTPUT.md` L21/L30/L35

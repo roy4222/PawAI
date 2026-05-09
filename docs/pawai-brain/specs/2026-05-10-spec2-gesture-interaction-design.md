@@ -65,17 +65,28 @@ P0：**Palm / Fist / Index / OK / Thumb / Peace**
 `gesture_recognizer_backend.py:53` 已有 6 種 enum：`Closed_Fist / Open_Palm / Pointing_Up / Thumb_Up / Thumb_Down / Victory / ILoveYou` + `None`
 
 對應到本 spec 9 種：
-| Spec gesture | MediaPipe label | 狀態 |
-|---|---|---|
-| Palm | Open_Palm | ✅ |
-| Fist | Closed_Fist | ✅ |
-| Index | Pointing_Up | ✅ |
-| OK | (無原生，需手部 keypoint 規則)| ⚠️ 需驗證 |
-| Thumb | Thumb_Up | ✅ |
-| Peace | Victory | ✅ |
-| Circle | (無，需動態) | ❌ |
-| Wave | (無，需動態) | ❌ |
-| ComeHere | (無，需動態) | ❌ |
+| Spec gesture | MediaPipe label | 狀態 | 風險 |
+|---|---|---|---|
+| Palm | Open_Palm | ✅ | 低 |
+| Fist | Closed_Fist | ✅ | 低 |
+| Index | Pointing_Up | ✅ | 中（指東西誤觸）|
+| **OK** | **(無原生 enum)** | **⚠️ 需 keypoint rule** | **高（review 6 fix）** |
+| Thumb | Thumb_Up | ✅ | 低 |
+| Peace | Victory | ✅ | 低 |
+| Circle | (無，需動態) | ❌ | — |
+| Wave | (無，需動態) | ❌ | — |
+| ComeHere | (無，需動態) | ❌ | — |
+
+**OK 手勢風險說明**（review 6 fix）：
+- MediaPipe Gesture Recognizer **沒有原生 OK 類別**，需要用 hand_landmarks keypoint 規則自行判斷（拇指 + 食指指尖距離 + 其他 3 指伸直）
+- 規則式判定 → confidence 不像原生 6 類那麼穩定
+- 5/8 evening 已測 11 events 7 個 confidence=1.0，但 sample 量小、距離單一
+- 風險場景：
+  - 手部遮擋一半 → keypoint 抖動 → 偽 OK
+  - 手指彎曲狀態（自然休息）→ 偽 OK
+  - 距離 >2.5m 時 keypoint 精度下降
+- **緩解**：confidence ≥0.95 + 持續 3 frames + 不在 PendingConfirm 中 dedup
+- **demo fallback**：若 OK 偽觸發率太高，**改回語音「OK」確認**作為備援
 
 ### 3.2 已有 skill mapping
 `brain_node.py:541` `_GESTURE_CONFIRM`：`thumbs_up → wiggle` / `peace → stretch`
