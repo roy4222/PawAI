@@ -225,11 +225,49 @@ full_pcm = b"".join(ok_parts)
 
 **收益**：開發測試 F5 自動清乾淨（flag 開）；demo 期手動完全可控（flag 關）；網路抖動兩種模式都不誤觸
 
-**P1-3 ASR 簡→繁 OpenCC**
-- 加依賴 `uv pip install opencc`（s2twp 簡→繁台灣）
-- 掛點：`asr_client.py` 出口（return text 前）統一轉繁
-- 加 launch arg `asr_output_locale: zh-TW` 預設
-- 收益：Studio + brain context 全是繁體，台灣語感對齊
+**P1-3 ASR 簡→繁 OpenCC（Roy 5/9 研究後落地）**
+
+**已實證根因**：3 條 ASR provider chain 全硬編 `language="zh"`，無 zh-TW 選項
+- `asr_client.py:48` cloud（QwenASRProvider HTTP `language="zh"`）
+- `stt_intent_node.py:631` SenseVoiceLocalProvider（sherpa-onnx int8）
+- `stt_intent_node.py:209/242` WhisperLocalProvider（faster-whisper / openai-whisper）
+- **FunASR SenseVoice 無 zh-TW 選項**（只支援 `["zh", "en", "yue", "ja", "ko"]`）
+- **Whisper 混訓簡繁，無法保證**
+
+**最佳掛點：stt_intent_node `_publish_asr_result` 前（行 1100-1108）**
+
+候選 5 點分析：
+- ❌ ASR provider 各自轉（3 處改、分散）
+- ✅ **`stt_intent_node` publish 前單點轉**（最小改動，3 條 path 統一處理）
+- ❌ Brain entry（職責增重 + 不能繞過 stt_intent → speech_event 路徑）
+- ❌ Gateway 出口（brain context 還是簡體）
+- ❌ Frontend（brain memory + LLM 推理基於簡體）
+
+**套件**：`opencc-python-reimplemented`（純 Python，ARM64 wheel 齊全，無 C 編譯風險）
+
+**Config**：`s2twp` — 簡→繁台灣 + 片語替換（「網絡」→「網路」、「程序」→「程式」、「鼠標」→「滑鼠」）
+
+**改動清單**
+1. `speech_processor/setup.py` 加依賴 `opencc-python-reimplemented`（uv pip install 驗證）
+2. `speech_processor/speech_processor/stt_intent_node.py`：
+   - import opencc
+   - `__init__` 加 `self._opencc_converter = opencc.OpenCC("s2twp.json") if self._enable_s2twp else None`
+   - 新增 `_convert_to_trad(text: str) -> str` 方法（OpenCC 失敗 → fallback 原文）
+   - `_publish_asr_result` 前（行 1100）：`transcript = self._convert_to_trad(transcript)`
+3. `speech_processor/config/speech_processor.yaml` 加 `enable_s2twp: true` 預設
+4. launch arg `enable_s2twp` 透傳
+
+**邊緣案例**（OpenCC s2twp 原生處理）
+- 中英混雜「OK 我搖一下」→ 跳過英文 ✅
+- 數字/標點「10:30」「3+5」→ 直通 ✅
+- SenseVoice `<|zh|>` 標記 → 已在 `stt_intent_node:324` 移除（不需動）
+- 繁→簡→繁迴圈 → 不會發生（ASR 從不輸出繁體）
+
+**性能影響**：< 1ms（50 字內），E2E 無感
+
+**為何不放 sensevoice_server.py**：cloud server 在 RTX 8000 共用其他服務；改 server 端涉及部署協調。客戶端轉乾淨單一責任
+
+**收益**：Studio + brain memory + LLM context 全繁體；s2twp 帶來台灣詞彙風格自動對齊（網路 / 程式 / 滑鼠）
 
 **P1-4 LLM persona 不死板 — 保守版 A（Roy 5/9 brainstorm 確認）**
 
