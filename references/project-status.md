@@ -1,7 +1,64 @@
 # 專案狀態
 
-**最後更新**：2026-05-09 night（Jetson smoke 完成 + branch `fix/demo-motion-and-chat-polish` 5 commit；尚未 push）
-**硬底線**：5/18 期末 demo（9 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-10 night（demo-quality 6-spec roadmap 落地 + Spec 1 A+ 通過 14 點 review）
+**硬底線**：5/18 期末 demo（8 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/10 進度（demo-quality roadmap：6 spec + Spec 1 14 點 review fix）
+
+5/10 全天文件工作日：把 demo 前剩餘 6 天的工作拆成 6 個 spec，並把 Spec 1（LLM Naturalness A+）打磨到可進 implementation plan 的狀態。今天 7 個 commit 全是 docs，無程式碼變更。
+
+### 6-Spec roadmap（`docs/pawai-brain/specs/2026-05-10-*`）
+
+| Spec | 主題 | demo 前 | 狀態 |
+|---|---|---|---|
+| **1 LLM Naturalness A+** | 講話、自我介紹、知道自己 | ✅ 主軸 | 14 點 review fix 全部 pass，可進 plan |
+| 2 Gesture Interaction | 9 種手勢 mapping | 靜態 6 種（若有時間）| draft，OK 標高風險（無原生 enum）|
+| 3 Pose Interaction | 7 種姿勢 + 跌倒人臉融合 | demo 後 | draft |
+| 4 Object Perception | YOLOv8n vs YOLO26n + 顏色 | demo 後 Phase 1/2/3 | draft |
+| 5 Navigation Roadmap | SLAM/Nav2 P0 + P1-P3 | P0 主軸（5/13 場地測）| draft |
+| 6 Studio UX Polish | scroll / 五功能視角 / demo 操作面板 | P0 驗證（可能砍）| draft |
+
+### Spec 1 A+ 核心契約
+
+> **LLM 說話，SkillContract 做動作。SkillContract 的 SAY 只在沒有 LLM reply 時 fallback。**
+
+範圍鎖定：
+- ✅ Persona 6 檔（4 改 + 新 `MISSION.md`，含 Roy 重定位**多模態感知融合具身互動機器狗 / 看懂理解決策行動**）
+- ✅ SAY 解綁（SkillPlan 加 `source_llm_reply` field + ROS proposal JSON 透傳 + executive `_resolve_say_text` 三段邏輯）
+- ✅ executor-side `SAY_TEXT_POOLS` 變體池（落在 `interaction_executive_node.py`，不污染 SkillContract registry schema）
+- ✅ `_on_chat_candidate` 三分支精準化（accepted / needs_confirm / rejected-cooldown-blocked）
+- ✅ 4 個優先 skill：self_introduce / wave_hello / greet_known_person / object_remark
+- ✅ A+ 完成後跑 10-prompt benchmark 才決定是否換模型（不先換 Gemini）
+- ❌ **不**動 LLM 輸出 JSON schema、**不**動 LangGraph 11 節點、**不**動 PendingConfirm signature、**不**做 2-skill list / composition、**不**換模型
+
+### Spec 1 review 累計 14 點 fix（4 輪迭代）
+
+| 輪 | 點數 | 主題 |
+|---|---|---|
+| 1 | 4 | mission positioning / loader 6 檔 / source_llm_reply ROS round-trip / skill_gate fallback |
+| 2 | 6 | 長者殘留 / nav overclaim / contract precision / self_introduce 雙路徑 / Spec 4 命名 / Spec 2 OK 風險 |
+| 3 | 4 | needs_confirm 三分支 / schema 用語 / module-level build_plan / text_pool 落點選定 |
+| 4 | 4 | 路徑 B SkillContract 矛盾 / 摘要殘留 / PendingConfirm 不擴簽名 / 路徑 B template |
+
+### 7 commit（5/10 day）
+
+```
+f55a25f docs(spec): add Spec 1 LLM naturalness / self-showcase A+ design
+8376c7b docs(spec): clarify 10-prompt benchmark methodology
+87afd83 docs(spec1): apply 4 review fixes — mission/loader/roundtrip/skill_gate
+fbaefc3 docs(specs): add Spec 2-6 + roadmap index
+ce20096 docs(spec1+2+4): apply 6 review fixes
+1a6fbdb docs(spec1): apply 4 more review fixes — needs_confirm/schema/build_plan/pool
+45c342a docs(spec1): apply 4 final review fixes — text_pool location consistency
+```
+
+### 明天（5/11）
+
+- 進 `writing-plans` 寫 Spec 1 implementation plan（Phase 0-6 拆 commit/file 級）
+- 由 Spec 1 §10 + §12 入口帶
+- Spec 2-6 各自獨立進 plan，不依賴 Spec 1
 
 ---
 
