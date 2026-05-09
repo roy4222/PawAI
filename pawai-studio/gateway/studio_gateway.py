@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Empty, String
 
 from asr_client import resample_to_wav16k, transcribe
 
@@ -173,6 +173,9 @@ class GatewayNode(Node):
         )
         self.text_input_pub = self.create_publisher(
             String, "/brain/text_input", QOS_EVENT
+        )
+        self._reset_pub = self.create_publisher(
+            Empty, "/brain/reset_context", 10
         )
 
         # Subscribers — ROS2 → browser
@@ -352,6 +355,11 @@ class GatewayNode(Node):
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
         self.text_input_pub.publish(msg)
+
+    def publish_reset_context(self) -> None:
+        """P1-2: Publish Empty to /brain/reset_context to clear conversation state."""
+        self._reset_pub.publish(Empty())
+        self.get_logger().info("Published reset_context to /brain/reset_context")
 
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
@@ -558,6 +566,15 @@ async def post_text_input(payload: TextInputPayload):
     }
     node.publish_text_input(msg)
     return {"ok": True, "request_id": request_id}
+
+
+@app.post("/api/reset")
+async def post_reset():
+    """P1-2: Clear conversation context — resets ConversationMemory + cancels PendingConfirm."""
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    node.publish_reset_context()
+    return {"ok": True}
 
 
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────

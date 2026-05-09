@@ -26,6 +26,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool as BoolMsg
+from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from .capability.demo_guides_loader import load_demo_guides, load_demo_policy
@@ -221,6 +222,11 @@ class ConversationGraphNode(Node):
         )
         self.create_subscription(
             String, "/brain/skill_result", self._on_skill_result, 10
+        )
+
+        # P1-2: context reset — clear ConversationMemory on page refresh / new-conversation
+        self.create_subscription(
+            Empty, "/brain/reset_context", self._on_reset_context, 10
         )
 
         self._graph = build_graph()
@@ -518,6 +524,11 @@ class ConversationGraphNode(Node):
             "detail": str(payload.get("detail", ""))[:80],
             "ts": time.time(),
         })
+
+    def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
+        """P1-2: Clear ConversationMemory when browser requests a context reset."""
+        self._memory.clear()
+        self.get_logger().info("ConversationMemory cleared by /brain/reset_context")
 
     def _publish_error_trace(self, session_id: str, detail: str) -> None:
         payload = TracePayload(

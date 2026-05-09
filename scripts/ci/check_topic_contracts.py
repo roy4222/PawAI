@@ -132,6 +132,8 @@ INTERNAL_TOPICS = {
     "/state/obstacle/lidar_alive",
     # PawAI Brain MVS (Phase 0+ internal)
     "/brain/chat_candidate",
+    # P1-2 context reset — internal signal, not in frozen public contract
+    "/brain/reset_context",
     # Test observer internal
     "/speech_test_observer/round_meta_req",
     "/speech_test_observer/round_meta_ack",

@@ -11,6 +11,7 @@ from typing import Any
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
+from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from .pending_confirm import (
@@ -171,6 +172,9 @@ class BrainNode(Node):
             String, "/brain/skill_request", self._on_skill_request, _RELIABLE_10
         )
         self.create_subscription(String, "/brain/skill_result", self._on_skill_result, _RELIABLE_10)
+
+        # P1-2: context reset — cancel PendingConfirm on page refresh / new-conversation
+        self.create_subscription(Empty, "/brain/reset_context", self._on_reset_context, _RELIABLE_10)
 
         self._brain_state_timer = self.create_timer(0.5, self._publish_brain_state)
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
@@ -885,6 +889,17 @@ class BrainNode(Node):
                     if status == SkillResultStatus.BLOCKED_BY_SAFETY.value:
                         plan["accepted"] = False
                     break
+
+    def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
+        """P1-2: Cancel PendingConfirm when browser requests a context reset.
+
+        Active plans and attention state are preserved — we only cancel any
+        in-progress confirmation flow that the user is walking away from.
+        """
+        with self._lock:
+            if self._pending_confirm.state == ConfirmState.PENDING:
+                self._pending_confirm.cancel(reason="page_reset")
+                self.get_logger().info("PendingConfirm cancelled by /brain/reset_context")
 
     def _publish_brain_state(self) -> None:
         snap = self._world.snapshot()
