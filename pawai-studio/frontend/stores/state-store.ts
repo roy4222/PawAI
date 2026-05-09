@@ -17,6 +17,14 @@ import type {
   ConversationTracePayload,
 } from "@/contracts/types";
 
+export interface TtsMessage {
+  id: string;
+  text: string;
+  timestamp: number;
+  origin: string;
+  source?: string; // skill_say | chat_reply | say_canned | undefined
+}
+
 interface StateStore {
   faceState: FaceState | null;
   speechState: SpeechState | null;
@@ -30,6 +38,7 @@ interface StateStore {
   objectState: ObjectState | null;
   lastTtsText: string | null;
   lastTtsAt: number | null;
+  ttsMessages: TtsMessage[];
   capability: CapabilityState;
   planMode: PlanMode;
 
@@ -44,6 +53,7 @@ interface StateStore {
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
   updateTts: (text: string) => void;
+  appendTtsMessage: (msg: TtsMessage) => void;
   updateCapability: (name: keyof CapabilityState, value: CapabilityTriState) => void;
   setPlanMode: (mode: PlanMode) => void;
 }
@@ -61,6 +71,7 @@ export const useStateStore = create<StateStore>((set) => ({
   objectState: null,
   lastTtsText: null,
   lastTtsAt: null,
+  ttsMessages: [],
   capability: { nav_ready: "unknown", depth_clear: "unknown" },
   planMode: "A",
 
@@ -84,6 +95,19 @@ export const useStateStore = create<StateStore>((set) => ({
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),
   updateTts: (text) => set({ lastTtsText: text, lastTtsAt: Date.now() }),
+  appendTtsMessage: (msg) =>
+    set((state) => {
+      // dedup by id
+      if (state.ttsMessages.some((m) => m.id === msg.id)) {
+        return state;
+      }
+      // ring buffer max 200
+      const next = [...state.ttsMessages, msg];
+      if (next.length > 200) {
+        return { ttsMessages: next.slice(next.length - 200) };
+      }
+      return { ttsMessages: next };
+    }),
   updateCapability: (name, value) =>
     set((state) => ({ capability: { ...state.capability, [name]: value } })),
   setPlanMode: (mode) => set({ planMode: mode }),
