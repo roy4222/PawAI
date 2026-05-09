@@ -255,8 +255,14 @@ LLM 提案 skill 後 → executive 跑 SAY step → **跳過 LLM reply** → 永
 
 ### 6.2 解綁設計（最小侵入）
 
-**原則**：**不動 JSON schema、不動 LangGraph、不動 SkillContract registry 結構**。
-只在 brain → executive 路徑加一層 `llm_reply_text` 透傳。
+**原則**（review 2 fix 精準化）：
+- **不動 LLM 輸出 JSON schema**（仍 `{"reply", "skill", "args"}`）
+- **不動 LangGraph 節點結構**（11 個 node 不增不改不刪）
+- **會擴充 internal contract**：
+  - `SkillPlan` dataclass 加 `source_llm_reply` field
+  - `/brain/proposal` ROS JSON 加 `source_llm_reply` 欄位（向後相容）
+  - `_dispatch_step` call site 改成 `(plan, step, step_idx)`
+  - 新增 SAY fallback `text_pool` 機制（落在 executive node，不污染 SkillContract registry schema —— 見 §6.3）
 
 #### 路徑 A：LLM 提案 skill 走的路徑
 
@@ -266,16 +272,17 @@ LLM JSON: {"reply": "[playful] 嘿 Roy！", "skill": "wave_hello"}
 brain_node._on_chat_candidate
    1. 讀 proposed_skill="wave_hello"、reply="[playful] 嘿 Roy！"
    2. 檢查 allowlist / cooldown / mode_gate / pending_confirm
-   3. 分支：
-      a. skill 可執行 / needs_confirm → emit skill plan（含 source_llm_reply），**不 emit 獨立 chat_reply**
-      b. skill rejected / cooldown / blocked → 仍 emit chat_reply plan（避免使用者完全沒聽到 reply）
-      c. skill 為 None / 空 → 走原本 chat_reply 路徑
-        ↓
+   3. 三分支（精準版見 §6.2.5）：
+      a. accepted → emit skill plan（含 source_llm_reply），**不另發 chat_reply**
+      b. needs_confirm → emit chat_reply（用 LLM reply 當邀請語氣）+ PendingConfirm，**不** emit motion plan
+      c. rejected / cooldown / blocked → 仍 emit chat_reply 避免靜音
+      d. skill 為 None / chat_reply → 走原本 chat_reply 路徑
+        ↓ (a 路徑)
 SkillPlan(wave_hello, source_llm_reply="[playful] 嘿 Roy！")
         ↓ /brain/proposal (JSON)
 executive 收到 wave_hello
    - _plan_from_dict() 還原 source_llm_reply
-   - _dispatch_say_step 看到 source_llm_reply 非空 → 第一個 SAY step 用此 text 取代
+   - _resolve_say_text 看到 source_llm_reply 非空 → 第一個 SAY step 用此 text 取代
    - 仍然執行 motion step
 ```
 
@@ -388,32 +395,63 @@ def build_plan(
     )
 ```
 
-#### 6.2.5 brain_node._on_chat_candidate 邏輯（review 4 fix）
+#### 6.2.5 brain_node._on_chat_candidate 邏輯（review 1 + 3 fix）
 
-**精準流程**（不能讓使用者靜音）：
+**修正關鍵**（review 1）：`needs_confirm` 不能跟 `accepted` 同分支。`needs_confirm` 必須先讓使用者聽到「比 OK 我就扭」邀請語氣（用 LLM reply 當提示），**不**先 emit motion plan；等 OK 才 build 真正 skill plan。
 
-```
-proposed_skill = chat_candidate.skill
-reply_text = chat_candidate.reply
+**精準三分支流程**：
 
-# Step 1: 沒 skill or skill 是 chat_reply → 原路徑
+```python
+# brain_node._on_chat_candidate (precise pseudocode)
+proposed_skill = chat_candidate.get("skill")
+proposed_args = chat_candidate.get("args", {})
+reply_text = chat_candidate.get("reply", "")
+
+# === Step 1: 沒 skill or skill 是 chat_reply → 原路徑 ===
 if not proposed_skill or proposed_skill == "chat_reply":
-    emit_chat_reply(reply_text)
+    self._emit_chat_reply(reply_text)
     return
 
-# Step 2: 檢查 skill 是否可執行
+# === Step 2: 檢查 skill gate ===
 gate_result = self._check_skill_gate(proposed_skill)
 # gate_result ∈ {"accepted", "needs_confirm", "rejected", "cooldown", "blocked"}
 
-# Step 3: 分支
-if gate_result in ("accepted", "needs_confirm"):
-    # skill 可走 → reply 跟著 skill plan，不獨立 emit
-    plan = self._build_plan(proposed_skill, source_llm_reply=reply_text)
+# === Step 3: 三分支 ===
+if gate_result == "accepted":
+    # skill 可直接執行 → reply 灌進 plan，不另發 chat_reply
+    plan = build_plan(  # ← review 3 fix：是 module-level build_plan，不是 self._build_plan
+        proposed_skill,
+        args=proposed_args,
+        source="llm_proposal",
+        reason=f"llm_proposal:{proposed_skill}",
+        session_id=session_id,
+        source_llm_reply=reply_text,
+    )
     self._emit_proposal(plan)
+
+elif gate_result == "needs_confirm":
+    # review 1 fix: 不 emit motion plan
+    # 1) 用 LLM reply 當邀請語氣 chat_reply（「好啊，比個 OK 我就扭給你看」）
+    # 2) 註冊 PendingConfirm，等 OK gesture / 語音
+    # 3) 真正 motion plan 在 OK confirmed 後才 build
+    self._emit_chat_reply(reply_text, note=f"awaiting_ok:{proposed_skill}")
+    self._pending_confirm.request_confirm(
+        skill=proposed_skill,
+        args=proposed_args,
+        post_confirm_reply=None,  # demo 後可擴充：confirm 後再講一句
+        timeout_s=30.0,
+    )
+    # ↑ OK 收到時，PendingConfirm 觸發 _on_ok_confirmed → build_plan(source="rule:confirmed_via_ok")
+    #   那條路徑因為已過 LLM，没有現成 reply → fallback 到 text_pool（見 §6.3）
+
 elif gate_result in ("rejected", "cooldown", "blocked"):
     # skill 走不了 → 仍 emit chat_reply 避免靜音
     self._emit_chat_reply(reply_text, note=f"skill_gate:{gate_result}")
 ```
+
+**對應 PendingConfirm 端**（現有機制，本 spec 不改其核心）：
+- `request_confirm()` 簽名加 optional `post_confirm_reply: str | None`（為 Phase B 預留，A+ 不用）
+- OK confirmed → `_on_ok_confirmed` 走 `source="rule:confirmed_via_ok"`，無 LLM reply → executive `_resolve_say_text` 看 `source_llm_reply == None` → 走 `text_pool` fallback
 
 #### 6.2.6 round-trip 測試（review 3 fix 驗收）
 
@@ -461,7 +499,97 @@ executive 收到 plan
 - 看時段加 prefix：早上 / 午後 / 晚上
 - 看 `name` 識別：`grama` 用溫柔變體子集
 
-### 6.3 SAY 解綁範圍清單
+### 6.3 SAY fallback text_pool 落點（review 4 fix）
+
+**選定方案**：`text_pool` 落在 `interaction_executive_node.py` 內建 dict，**不污染** SkillContract registry schema。
+
+理由：
+- SkillContract 已是穩定 contract（27 entries 都 typed dataclass）。加 `text_pool` 欄位需改 dataclass + 27 entry 全部 audit
+- `text_pool` 是「runtime SAY 多變體選擇」，本質屬於 executor 端職責，不是 skill 定義
+- 改動範圍可控：一個 dict + 一個 helper function
+
+**落點實作**：
+
+```python
+# interaction_executive/interaction_executive/interaction_executive_node.py
+
+# Skill name → SAY fallback variants
+SAY_TEXT_POOLS: dict[str, list[str]] = {
+    "self_introduce": [
+        "[excited] 嗨！我是 PawAI～",
+        "[playful] 大家好！讓我自我介紹一下。",
+        "[curious] 哈囉～我是 PawAI，住在這個家裡。",
+        "[whispers] 嗨...我來打個招呼。",
+        "[excited] 哈嘍！我是 PawAI，看我會做什麼。",
+        "[playful] 嘿！讓我表演給你看～",
+    ],
+    "wave_hello": [
+        "[excited] 嗨！", "嗨～", "[playful] 哈嘍！", "[curious] 嗨～在嗎",
+        "[playful] 哈嘍～", "嗨喲！",
+    ],
+    "wiggle": [
+        "[playful] 看我扭一下！", "[excited] 來囉～", "[playful] 扭扭扭～",
+        "[curious] 這樣可愛嗎", "[playful] 扭給你看！",
+    ],
+    "stretch": [
+        "[sighs] 伸個懶腰～", "[playful] 來伸展一下", "[sighs] 嗯～舒服",
+        "[whispers] 慢慢伸...", "[playful] 看我伸~",
+    ],
+    "sit_along": [
+        "[playful] 我也趴下來陪你", "[gentle] 我陪你一起", "[whispers] 我陪你坐～",
+        "[playful] 一起趴一下！", "[gentle] 我也累了，一起",
+    ],
+    "stand": [
+        "[excited] 好，我站起來！", "[playful] 來囉～", "[excited] 站給你看！",
+        "[playful] 好啦好啦，我站直", "好喔～站起來",
+    ],
+    "careful_remind": [
+        "[worried] 小心一點喔", "[gentle] 你要不要小心一下", "[worried] 慢一點啦",
+        "[gentle] 注意安全喔", "[worried] 不要受傷～",
+    ],
+}
+
+# Per-(skill, name) variants for templated skills
+GREET_KNOWN_PERSON_POOL: dict[str, list[str]] = {
+    "roy": [...],
+    "grama": [...],
+    "_default": [...],
+}
+
+OBJECT_REMARK_POOL: dict[str, list[str]] = {  # per object class
+    "cup": [...], "bottle": [...], "book": [...], "chair": [...],
+    "_default": [...],
+}
+
+class InteractionExecutiveNode:
+    def __init__(self, ...):
+        ...
+        self._text_pool_history: dict[str, deque] = {}  # per-skill recent N
+
+    def _resolve_say_text(self, plan: SkillPlan, step: SkillStep, step_idx: int) -> str:
+        # 1. 第一個 SAY step 且有 LLM reply → 用 LLM reply
+        if step_idx == self._first_say_idx(plan) and plan.source_llm_reply:
+            return plan.source_llm_reply
+        # 2. step args 有具體 text → 用 step text
+        text = step.args.get("text", "")
+        if text:
+            return text
+        # 3. 否則 fallback 到 SAY_TEXT_POOLS
+        return self._pick_from_pool(plan.selected_skill, plan)
+
+    def _pick_from_pool(self, skill_name: str, plan: SkillPlan) -> str:
+        pool = SAY_TEXT_POOLS.get(skill_name, ["..."])  # default 一個 placeholder
+        history = self._text_pool_history.setdefault(skill_name, deque(maxlen=3))
+        # 排除最近 3 次
+        candidates = [t for t in pool if t not in history] or pool
+        chosen = random.choice(candidates)
+        history.append(chosen)
+        return chosen
+```
+
+**SkillContract 對應改動**：6 個 skill 的第一個 SAY step `text=""`（讓 `_resolve_say_text` 走 fallback）。`SkillContract.steps` schema **不變**。
+
+### 6.4 SAY 解綁範圍清單
 
 | Skill | 現況 SAY | 改法 |
 |---|---|---|
@@ -539,9 +667,9 @@ executive 收到 plan
 | Rule trigger（保留 for hidden）| ❌ 沒有 | None | 同上：用 text_pool |
 
 **關鍵設計**（review 4 fix）：
-- self_introduce skill_contract 的第一個 SAY step **必須有 fallback text_pool**（5-8 條變體），不能空字串
+- self_introduce skill_contract 的第一個 SAY step `text=""`，由 `_resolve_say_text` fallback 到 `SAY_TEXT_POOLS["self_introduce"]`（**§6.3 落點**：在 executive node 內建 dict，不污染 SkillContract schema）
 - 不假設「所有 self_introduce 都有 LLM reply」 — Studio button 路徑不過 LLM
-- _dispatch_step 看到 `source_llm_reply == None` → 走 text_pool fallback；看到非空 → 用 LLM reply
+- `_resolve_say_text` 看到 `source_llm_reply == None` 且 `step.args["text"] == ""` → 走 `SAY_TEXT_POOLS` fallback；看到非空 → 用 LLM reply
 - 不應該為了「Studio button 也有 LLM reply」去額外發 LLM call（複雜度暴漲，demo 風險）
 
 **self_introduce text_pool 範例**：
@@ -690,21 +818,28 @@ A+ 跑完 10 prompt + 質性 → 看是否需要換模型：
 ### Executive
 - `interaction_executive/interaction_executive/skill_contract.py`
   - `SkillPlan` dataclass 加 `source_llm_reply: str | None = None` field
-  - 6 skill 的 SAY 改 fallback pool（wave_hello / sit_along / stand / wiggle / stretch / careful_remind）
-  - `greet_known_person.text_pool` 10-15 條
-  - `object_remark` per-class 變體池
-  - `self_introduce` 重構
+  - **module-level** `build_plan(...)` 工廠函式加 keyword-only `source_llm_reply` 參數
+  - 6 skill 的第一個 SAY step `text=""`（讓 executive fallback 到 SAY_TEXT_POOLS）：
+    `wave_hello` / `sit_along` / `stand` / `wiggle` / `stretch` / `careful_remind`
+  - `self_introduce` 重構（雙 SAY step `text=""`）
+  - `greet_known_person` `text_template` 保留為 fallback；新池在 executive node
+  - `object_remark` 同上
 - `interaction_executive/interaction_executive/brain_node.py:271` `_plan_to_dict`：
-  - 序列化加 `source_llm_reply`
+  - 序列化加 `source_llm_reply`（向後相容：舊版讀為 None）
 - `interaction_executive/interaction_executive/brain_node.py:418` `_on_chat_candidate`：
-  - 加 skill_gate check（accepted/needs_confirm vs rejected/cooldown/blocked）
-  - skill 可執行 → reply 灌進 plan，**不**獨立 emit chat_reply
-  - skill 不可執行 → 仍 emit chat_reply（避免靜音 fallback）
-  - rule 觸發路徑變體池選擇邏輯
+  - **三分支精準化**（review 1 fix）：
+    - `accepted` → emit skill plan（含 source_llm_reply），不另發 chat_reply
+    - `needs_confirm` → emit chat_reply（LLM reply 當邀請語氣）+ `_pending_confirm.request_confirm()`，**不** emit motion plan
+    - `rejected/cooldown/blocked` → 仍 emit chat_reply 避免靜音
+  - 用 module-level `build_plan(..., source_llm_reply=reply_text)`，**不是** `self._build_plan`
 - `interaction_executive/interaction_executive/interaction_executive_node.py:251` `_plan_from_dict`：
   - 還原 `source_llm_reply`
-- `interaction_executive/interaction_executive/interaction_executive_node.py` `_dispatch_say_step`：
-  - 看 `plan.source_llm_reply`，第一個 SAY step 用 LLM reply 覆蓋；空 → 用 step text 或 text_pool fallback
+- `interaction_executive/interaction_executive/interaction_executive_node.py` 新增（review 4 fix）：
+  - `SAY_TEXT_POOLS: dict[str, list[str]]` module dict（6 skill 各 5-8 條變體）
+  - `GREET_KNOWN_PERSON_POOL`（per name）+ `OBJECT_REMARK_POOL`（per class）
+  - `_resolve_say_text(plan, step, step_idx)` 三段邏輯（LLM reply / step text / pool fallback）
+  - `_pick_from_pool()` + `_text_pool_history` deque(maxlen=3) 避免最近 3 次重複
+  - `_dispatch_step(plan, step, step_idx)` call site 改造（queue worker 配合）
 
 ### Test
 - `pawai_brain/test/test_persona_load.py`（驗 MISSION.md 載入 + 6 files / base 5 log）
