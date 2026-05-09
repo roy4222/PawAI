@@ -519,7 +519,7 @@ git commit -m "feat(brain): 1C conversation mode classifier (5 modes)
 Rule-based classifier (no LLM call): safety / identity /
 capability_question / action_request / chat (default).
 
-Inserted as graph node between input_normalizer and safety_gate.
+Inserted as graph node between input and safety_gate.
 state.mode flows to _build_user_message (Task 4) for lazy inject.
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
@@ -1017,7 +1017,8 @@ output: {"reply": "[curious] 嗨～你是新朋友嗎？", "skill": "wave_hello"
 
 ```bash
 git add pawai_brain/pawai_brain/conversation_graph_node.py \
-        pawai_brain/pawai_brain/world_state_builder.py \
+        pawai_brain/pawai_brain/nodes/world_state_builder.py \
+        pawai_brain/pawai_brain/capability/world_snapshot.py \
         pawai_brain/personas/v1/EXAMPLES.md \
         pawai_brain/test/
 git commit -m "feat(brain): 1H current_speaker injection from face state
