@@ -1,8 +1,8 @@
 "use client";
 
 // Rate-limit config for spontaneous TTS (P1-1 spam scroll prevention)
-// Bypass: chat_reply (pending user reply) / skill_say (active skill SAY steps)
-const RATE_LIMIT_BYPASS = new Set(["chat_reply", "skill_say"]);
+// Bypass: chat_reply (pending user reply) / skill_say (active skill SAY) / say_canned (LLM/OpenRouter fallback)
+const RATE_LIMIT_BYPASS = new Set(["chat_reply", "skill_say", "say_canned"]);
 const RATE_LIMIT_WINDOW_MS = 5000;
 
 import { create } from "zustand";

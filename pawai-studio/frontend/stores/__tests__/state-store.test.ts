@@ -85,6 +85,13 @@ describe("ttsMessages rate-limit", () => {
     expect(useStateStore.getState().ttsMessages).toHaveLength(3);
   });
 
+  it("never rate-limits say_canned (LLM/OpenRouter fallback replies)", () => {
+    const append = useStateStore.getState().appendTtsMessage;
+    append({ id: "1", text: "我聽不太懂", timestamp: 1000000, origin: "tts", source: "say_canned" });
+    append({ id: "2", text: "再說一次好嗎", timestamp: 1000500, origin: "tts", source: "say_canned" });
+    expect(useStateStore.getState().ttsMessages).toHaveLength(2);
+  });
+
   it("rate-limits no-source spontaneous (alert/object_remark/greet)", () => {
     const append = useStateStore.getState().appendTtsMessage;
     append({ id: "1", text: "陌生人警示", timestamp: 1000000, origin: "tts" });
