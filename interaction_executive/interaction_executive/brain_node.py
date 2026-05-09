@@ -449,14 +449,17 @@ class BrainNode(Node):
         "stretch",
     })
     LLM_PROPOSAL_EXECUTE = {
+        # Bucket 1 — execute (direct)
         "show_status": "execute",
-        "self_introduce": "trace_only",
         "wave_hello": "execute",
         "sit_along": "execute",
-        "greet_known_person": "execute",
         "careful_remind": "execute",
+        # Bucket 2 — confirm (needs OK gesture)
         "wiggle": "confirm",
         "stretch": "confirm",
+        # Bucket 3 — trace_only (LLM can mention, system does not fire motion)
+        "self_introduce": "trace_only",
+        "greet_known_person": "trace_only",  # 1G: was execute; face stable detection handles greet
     }
 
     # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2):

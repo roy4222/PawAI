@@ -556,7 +556,12 @@ def test_chat_candidate_with_sit_along_proposal_executes(brain):
     assert [p["selected_skill"] for p in plans] == ["chat_reply", "sit_along"]
 
 
-def test_chat_candidate_with_greet_known_person_proposal_executes(brain):
+def test_chat_candidate_with_greet_known_person_proposal_now_trace_only(brain):
+    """1G: LLM proposing greet_known_person → trace_only, not direct execute.
+
+    Face stable detection already handles greet_known_person. Letting LLM also
+    propose execute caused interruptions during 'walk over to gesture OK' flow.
+    """
     _feed_speech(brain, "向 Roy 打招呼", "s-greet")
     _feed_chat_candidate(brain, {
         "session_id": "s-greet",
@@ -566,7 +571,14 @@ def test_chat_candidate_with_greet_known_person_proposal_executes(brain):
         "engine": "langgraph",
     })
     plans = _drain_proposals(brain)
-    assert [p["selected_skill"] for p in plans] == ["chat_reply", "greet_known_person"]
+    # Only chat_reply plan is emitted (greet goes to trace_only, not plan)
+    assert [p["selected_skill"] for p in plans] == ["chat_reply"]
+    # Verify trace emitted with accepted_trace_only (stage=skill_gate)
+    traces = _drain_traces(brain)
+    assert any(
+        t.get("status") == "accepted_trace_only"
+        for t in traces
+    )
 
 
 def test_chat_candidate_with_careful_remind_proposal_executes(brain):
