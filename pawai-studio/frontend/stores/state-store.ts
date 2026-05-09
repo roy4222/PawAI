@@ -1,5 +1,10 @@
 "use client";
 
+// Rate-limit config for spontaneous TTS (P1-1 spam scroll prevention)
+// Bypass: chat_reply (pending user reply) / skill_say (active skill SAY steps)
+const RATE_LIMIT_BYPASS = new Set(["chat_reply", "skill_say"]);
+const RATE_LIMIT_WINDOW_MS = 5000;
+
 import { create } from "zustand";
 import type {
   FaceState,
@@ -101,6 +106,27 @@ export const useStateStore = create<StateStore>((set) => ({
       if (state.ttsMessages.some((m) => m.id === msg.id)) {
         return state;
       }
+
+      // rate-limit: spontaneous (no source or unspecified spontaneous source)
+      // bypass: chat_reply (pending reply) / skill_say (active skill SAY)
+      const isBypass = msg.source != null && RATE_LIMIT_BYPASS.has(msg.source);
+      if (!isBypass) {
+        const sourceKey = msg.source ?? "spontaneous";
+        // reverse loop: 找最後一個同 source 的 message
+        let recentSame: TtsMessage | undefined;
+        for (let i = state.ttsMessages.length - 1; i >= 0; i--) {
+          const m = state.ttsMessages[i];
+          if ((m.source ?? "spontaneous") === sourceKey) {
+            recentSame = m;
+            break;
+          }
+        }
+        if (recentSame != null && msg.timestamp - recentSame.timestamp < RATE_LIMIT_WINDOW_MS) {
+          // silently drop
+          return state;
+        }
+      }
+
       // ring buffer max 200
       const next = [...state.ttsMessages, msg];
       if (next.length > 200) {

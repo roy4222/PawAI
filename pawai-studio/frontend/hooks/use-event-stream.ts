@@ -102,7 +102,7 @@ export function useEventStream(): UseEventStreamResult {
             appendTtsMessage({
               id: event.id || `tts-${Date.now()}`,
               text: data.text as string,
-              timestamp: Date.now() / 1000,
+              timestamp: Date.now(),
               origin: (data.origin as string) || "tts",
               source: data.source as string | undefined,
             });
