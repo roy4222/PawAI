@@ -576,7 +576,7 @@ async def post_text_input(payload: TextInputPayload):
         "created_at": time.time(),
     }
     node.publish_text_input(msg)
-    return {"ok": True, "request_id": request_id}
+    return {"ok": True, "request_id": request_id, "text": text}
 
 
 @app.post("/api/reset")

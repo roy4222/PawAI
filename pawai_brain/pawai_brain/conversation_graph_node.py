@@ -269,6 +269,10 @@ class ConversationGraphNode(Node):
         # Subscribes /state/perception/face (8 Hz JSON from face_identity_node).
         # Maintains _recent_face_identity; world_state_builder writes current_speaker.
         self._recent_face_identity: tuple[str, float] = ("unknown", 0.0)
+        # P1-2 fix: after /brain/reset_context, suppress face→speaker writeback
+        # for a short window so a fresh "新對話" really feels like a new session
+        # even though Roy is still in front of the camera.
+        self._speaker_suppress_until: float = 0.0
         self.create_subscription(
             String, "/state/perception/face", self._on_face_state, 10
         )
@@ -671,8 +675,11 @@ class ConversationGraphNode(Node):
         self._memory.clear()
         with self._seen_lock:
             self._seen_sessions.clear()
+        self._recent_face_identity = ("unknown", 0.0)
+        self._speaker_suppress_until = time.time() + 5.0
         self.get_logger().info(
-            "/brain/reset_context: ConversationMemory + seen_sessions cleared"
+            "/brain/reset_context: memory + seen_sessions + face_identity cleared "
+            "(speaker suppressed for 5s)"
         )
 
     def _on_face_state(self, msg: String) -> None:
@@ -687,6 +694,8 @@ class ConversationGraphNode(Node):
             payload = json.loads(msg.data)
         except (json.JSONDecodeError, TypeError):
             return
+        if time.time() < self._speaker_suppress_until:
+            return  # P1-2 fix: post-reset suppress window
         tracks = payload.get("tracks") or []
         for track in tracks:
             name = str(track.get("stable_name") or "unknown")

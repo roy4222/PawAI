@@ -252,6 +252,21 @@ export function ChatPanel() {
         body: JSON.stringify({ text, request_id: requestId }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      // Bug C fix: gateway runs s2twp on the text; reflect the converted form
+      // in the user bubble so 簡體 input shows as 繁體 immediately.
+      const data = (await response.json().catch(() => null)) as
+        | { text?: string }
+        | null;
+      const converted = data?.text;
+      if (typeof converted === "string" && converted && converted !== text) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === userMsg.id && m.type === "user"
+              ? { ...m, text: converted }
+              : m,
+          ),
+        );
+      }
     } catch {
       // Network / gateway error — clear pending state and show error inline.
       if (pendingRequestIdRef.current === requestId) {

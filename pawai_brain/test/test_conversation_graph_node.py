@@ -42,6 +42,8 @@ def _build_test_node(llm_persona_file: str = "", capabilities_md: str = ""):
 
     # 1H: face identity tracking (default — same as __init__ sets)
     node._recent_face_identity = ("unknown", 0.0)
+    # P1-2 fix: speaker suppress window after /brain/reset_context
+    node._speaker_suppress_until = 0.0
 
     # Call _load_persona to set _system_prompt + _capabilities_md
     if llm_persona_file:

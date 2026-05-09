@@ -281,6 +281,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         name="wiggle",
         steps=[
             SkillStep(ExecutorKind.SAY, {"text": "[playful] 看我扭一下！"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "balance_stand"}),
             SkillStep(ExecutorKind.MOTION, {"name": "wiggle_hip"}),
         ],
         priority_class=PriorityClass.SKILL,
