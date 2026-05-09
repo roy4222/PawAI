@@ -130,19 +130,78 @@ full_pcm = b"".join(ok_parts)
 - 修 `scripts/start_pawai_brain_tmux.sh` 切到 conversation_graph_node 路徑，移除 llm_bridge_node
 - 加開機 log：`[persona] loaded /path, N lines, sha=...`
 
-**1B 同日做（半天，輕量重排）**
-- **不拆檔**（拆檔風險高、validator/repair 都要動）；單檔 `persona.txt` 內部重排成 OpenClaw 式 5 層：
-  ```
-  ## Identity (誰、靈魂 70/20/10)
-  ## Style Rules (hard constraints — 不說「我是 AI」、字數上限、語氣分布)
-  ## Skill Policy (17 skills + 觸發條件 + 主動提案規則)
-  ## Few-shot Examples (12 → 16-20 個，補：奶奶/陌生人語氣、主動 wiggle、silent reply)
-  ## Runtime Instructions (audio tag、JSON schema、capability_context 用法)
-  ```
-- 補 wiggle/OK 主動提案 rule + 5 個 few-shot：
-  > 當使用者要求「扭一扭 / 搖一下 / 比 OK 就動 / 來個可愛動作」時，**必須**輸出 `{"skill": "wiggle", "reply": "[playful] 好啊！比個 OK 我就扭給你看"}`，不可只講話不出 skill
-- **不**硬規則「句尾汪/嗚」（避免幼兒化、尷尬重複）；改寫成「**偶爾、低頻、只在 playful 情緒**」guideline
-- 注入順序：穩定區（identity/rules/skills/examples）在前，volatile（runtime/memory/face_state）在後 — prefix-cache 友善
+**1B 同日做（半天，輕量重排 + LLM 4 桶白名單）**
+
+**Roy 5/9 brainstorm 修正**：issue 3「LLM 不主動鏈式」**不是單一 bug**，是「LLM 可提案集合」與「persona 教提案」沒對齊。先做 4 桶分類 + persona few-shot + eval validation。
+
+**1B-1 LLM 可提案 4 桶白名單**
+
+| 桶 | Skill | LLM 提案 | mode | 行為 |
+|---|---|---|---|---|
+| **Bucket 1: 直接執行** | `wave_hello` / `sit_along` / `careful_remind` / `show_status` | ✅ | execute | LLM output skill → 直接做 |
+| **Bucket 2: 需 OK confirm** | `wiggle` / `stretch` | ✅ | confirm | LLM output skill → PendingConfirm → OK 手勢 → 執行 |
+| **Bucket 3: 只說明不執行** | `greet_known_person` / `object_remark` / `stranger_alert` / `fallen_alert` / `nav_*` | ⚠️ trace_only | trace | LLM 可講「我能認識你」但不主動 emit；觸發走 face/object/pose 自動鏈 |
+| **Bucket 4: 禁止** | `dance` / `follow_me` / `follow_person` / `go_to_named_place` / `nav_demo_point` / `approach_person` | ❌ | n/a | LLM 提案被 skill_gate block；persona 教婉拒 |
+
+**對 `LLM_PROPOSABLE_SKILLS` 的影響**（`skill_policy_gate.py:18-27`）：
+- **移除** `greet_known_person`（從 execute → trace_only；改由 face stable 觸發更合理）
+- 保留 wave_hello / sit_along / show_status / careful_remind（execute）
+- 保留 wiggle / stretch（confirm）
+- 保留 self_introduce（trace_only — 已是 trace mode，現況維持）
+- nav_demo_point / approach_person 移到 Bucket 4 直到場地驗
+
+**1B-2 persona 內部重排成 OpenClaw 式 5 層**（不拆檔）：
+```
+## Identity (誰、靈魂 70/20/10)
+## Style Rules (hard constraints — 不說「我是 AI」、字數上限、語氣分布)
+## Skill Policy (4 桶白名單 + 觸發條件 + skill 欄位必填規則)
+## Few-shot Examples (12 → 18-22 個，每個可提案 skill ≥ 3 case + 負例)
+## Runtime Instructions (audio tag、JSON schema、capability_context 用法)
+```
+
+**1B-3 persona few-shot 補**（每個可提案 skill ≥ 3 case + 負例）：
+
+**正例 wiggle（≥ 3 case）**：
+```
+使用者：扭一下
+output: {"reply": "[playful] 好啊！比個 OK 我就扭給你看", "skill": "wiggle", "args": {}}
+
+使用者：你會什麼可愛動作
+output: {"reply": "[curious] 我會扭屁股呀～比個 OK 就扭給你看", "skill": "wiggle", "args": {}}
+
+使用者：比 OK 會怎樣 / 比 OK 我就扭一扭
+output: {"reply": "[excited] 比 OK 我就扭給你看", "skill": "wiggle", "args": {}}
+```
+
+**正例 stretch（≥ 3 case）**：
+```
+使用者：伸個懶腰
+output: {"reply": "[playful] 好喔～比個 OK 我就伸個懶腰", "skill": "stretch", "args": {}}
+
+使用者：你想不想動一下
+output: {"reply": "[curious] 想動！比個 OK 我來伸展一下", "skill": "stretch", "args": {}}
+
+使用者：給我看伸展
+output: {"reply": "[playful] 好啊！比個 OK 我就伸給你看", "skill": "stretch", "args": {}}
+```
+
+**負例（避免過度提案）**：
+```
+使用者：不要動 / 別扭了
+output: {"reply": "[gentle] 好喔～我不動了", "skill": "chat_reply", "args": {}}
+
+使用者：停 / 緊急停
+（safety_gate keyword 短路，不進 LLM；但 persona 留註提醒）
+
+使用者：跳舞 / 後空翻
+output: {"reply": "[thinking] 那個對我來說太難了啦...", "skill": "chat_reply", "args": {}}
+```
+
+**1B-4 不**硬規則「句尾汪/嗚」（避免幼兒化、尷尬重複）；改寫成「**偶爾、低頻、只在 playful 情緒**」guideline
+
+**1B-5 注入順序**：穩定區（identity/rules/skills/examples）在前，volatile（runtime/memory/face_state）在後 — prefix-cache 友善
+
+**驗收硬條件**：每個 LLM 可提案 skill **必須有 ≥ 3 prompt eval case**，否則只修「扭一扭」這句、換個說法又壞。1C 的 eval suite 加 case：每 skill × 3 變體 × 4 模型/temperature 組合
 
 **1C 同日做（半天，A/B eval）**
 
