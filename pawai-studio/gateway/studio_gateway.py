@@ -47,9 +47,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".." / "speech_proc
 from intent_classifier import IntentClassifier
 
 # ── Config ───────────────────────────────────────────────────────
+import os
+
 PORT = 8080
 ASR_URL = "http://127.0.0.1:8001/v1/audio/transcriptions"
 STATIC_DIR = Path(__file__).parent / "static"
+
+# P1-3: ASR 簡→繁 — enable by default; set PAWAI_ENABLE_S2TWP=false to disable
+ENABLE_S2TWP = os.getenv("PAWAI_ENABLE_S2TWP", "true").lower() == "true"
 
 QOS_EVENT = QoSProfile(
     reliability=ReliabilityPolicy.RELIABLE,
@@ -601,6 +606,9 @@ async def ws_text(ws: WebSocket):
             if not text:
                 await ws.send_json({"error": "empty_text", "published": False})
                 continue
+            if ENABLE_S2TWP:
+                from text_normalization import to_traditional_tw
+                text = to_traditional_tw(text)
             session_id = str(uuid.uuid4())[:8]
             started = time.monotonic()
             match = classifier.classify(text)
@@ -659,6 +667,9 @@ async def ws_speech(ws: WebSocket):
                 # 2. ASR
                 asr_result = await asyncio.to_thread(transcribe, wav16k, ASR_URL)
                 text = asr_result["text"].strip()
+                if ENABLE_S2TWP:
+                    from text_normalization import to_traditional_tw
+                    text = to_traditional_tw(text)
                 asr_latency = asr_result["latency_ms"]
                 print(f"[gateway] ASR result: text={text!r} latency={asr_latency}ms", flush=True)
 

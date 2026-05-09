@@ -492,6 +492,7 @@ class SttIntentNode(Node):
         self.declare_parameter("intent_topic", "/intent")
         self.declare_parameter("asr_result_topic", "/asr_result")
         self.declare_parameter("text_input_topic", "/speech/text_input")
+        self.declare_parameter("enable_s2twp", True)
 
         self.declare_parameter("qwen_asr.base_url", "")
         self.declare_parameter("qwen_asr.api_key", "")
@@ -544,6 +545,7 @@ class SttIntentNode(Node):
         self.intent_topic = str(self.get_parameter("intent_topic").value)
         self.asr_result_topic = str(self.get_parameter("asr_result_topic").value)
         self.text_input_topic = str(self.get_parameter("text_input_topic").value)
+        self._enable_s2twp = bool(self.get_parameter("enable_s2twp").value)
 
         self.qwen_base_url = str(self.get_parameter("qwen_asr.base_url").value)
         self.qwen_api_key = str(self.get_parameter("qwen_asr.api_key").value)
@@ -978,6 +980,9 @@ class SttIntentNode(Node):
                 return
 
             transcript = transcript_result.text.strip()
+            if self._enable_s2twp:
+                from speech_processor.text_normalization import to_traditional_tw
+                transcript = to_traditional_tw(transcript)
             self._last_provider = transcript_result.provider
             self._last_transcript = transcript
             self._publish_asr_result(
@@ -1070,6 +1075,9 @@ class SttIntentNode(Node):
         if not text:
             return
 
+        if self._enable_s2twp:
+            from speech_processor.text_normalization import to_traditional_tw
+            text = to_traditional_tw(text)
         session_id = self._new_session_id(prefix="txt")
         self._last_provider = "text_fallback"
         self._last_transcript = text

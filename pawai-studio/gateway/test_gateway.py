@@ -266,3 +266,48 @@ class TestPayloadSchema:
             assert field in payload, f"Missing field: {field}"
         assert payload["event_type"] == "intent_recognized"
         assert payload["source"] == "web_bridge"
+
+
+class TestTextNormalizationGateway:
+    """Integration tests for P1-3 s2twp in gateway text_normalization."""
+
+    def test_basic_conversion(self):
+        """「网络」→「網路」 when OpenCC is available."""
+        sys.path.insert(0, str(Path(__file__).parent))
+        try:
+            from opencc import OpenCC  # noqa: F401
+        except ImportError:
+            pytest.skip("opencc not installed")
+        # Reset module state
+        import text_normalization as tn
+        tn._converter = None
+        result = tn.to_traditional_tw("网络")
+        assert result == "網路", f"Expected 網路, got {result!r}"
+
+    def test_empty_passthrough(self):
+        """Empty string returns immediately."""
+        sys.path.insert(0, str(Path(__file__).parent))
+        import text_normalization as tn
+        result = tn.to_traditional_tw("")
+        assert result == ""
+
+    def test_opencc_unavailable_fallback(self):
+        """When OpenCC is absent, original text is returned."""
+        sys.path.insert(0, str(Path(__file__).parent))
+        import text_normalization as tn
+        tn._converter = False
+        result = tn.to_traditional_tw("网络")
+        assert result == "网络"
+        tn._converter = None  # restore for other tests
+
+    def test_convert_error_fallback(self):
+        """When converter.convert() raises, original text is returned."""
+        sys.path.insert(0, str(Path(__file__).parent))
+        from unittest.mock import MagicMock
+        import text_normalization as tn
+        bad = MagicMock()
+        bad.convert.side_effect = RuntimeError("fail")
+        tn._converter = bad
+        result = tn.to_traditional_tw("网络")
+        assert result == "网络"
+        tn._converter = None  # restore
