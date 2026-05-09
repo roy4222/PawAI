@@ -614,10 +614,6 @@ Mini NO-GO（fallback 路線）：
 - demo 前：30 字（spec 預設，保互動速度）
 - ElevenLabs 短句 spike 確認穩定 < 2s 後（demo 後）：可降到 20 字 或 改 source metadata routing（依 P1-1 Phase 2 進度）
 
-**閾值演進**：
-- demo 前：30 字（spec 預設，保互動速度）
-- ElevenLabs 短句 spike 確認穩定 < 2s 後（demo 後）：可降到 20 字 或 改 source metadata routing（依 P1-1 Phase 2 進度）
-
 **收益**：60%+ 對話走 fast lane（edge-tts 1-2s）；長句走 ElevenLabs Flash v2.5（首音目標 < 4s）取雪寶感；跳句由 P0-1 all-or-nothing fallback 永久消失
 
 ### Wave 3 — P3 加分項（5/14 之後或 demo 後）
