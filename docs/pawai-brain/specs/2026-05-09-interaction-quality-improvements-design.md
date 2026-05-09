@@ -105,7 +105,7 @@ full_pcm = b"".join(ok_parts)
 - 收益：Roy 知道狗講過啥、Brain 全可觀測
 
 **P1-2 Context reset on refresh**
-- `brain_node` 加 `/brain/reset_context` topic（std_msgs/Empty）→ 呼叫 `ConversationMemory.clear()` + 清 `_seen_sessions`
+- **`conversation_graph_node`**（不是 brain_node）訂 `/brain/reset_context` topic（std_msgs/Empty）→ 呼叫 `self._memory.clear()` + 清 `_seen_sessions`
 - `studio_gateway` 加 `/api/reset` POST endpoint → publish 該 topic
 - 前端 `use-websocket.ts` connect 時呼叫 `/api/reset`
 - 收益：頁面重整就是新對話，不會混淆
@@ -145,19 +145,35 @@ full_pcm = b"".join(ok_parts)
 - 注入順序：穩定區（identity/rules/skills/examples）在前，volatile（runtime/memory/face_state）在後 — prefix-cache 友善
 
 **1C 同日做（半天，A/B eval）**
-- launch 加 `llm_model` + `llm_temperature` arg（已有但需驗）
-- 用 `tools/llm_eval/` 框架跑 30 round 4 組對照：
-  - Gemini-3 + temp 0.2（baseline）
-  - Gemini-3 + temp 0.6
-  - DeepSeek-V4 + temp 0.2
-  - DeepSeek-V4 + temp 0.6
+
+**主線決策**：**短期主線仍用 Gemini**，DeepSeek 作候選測試。不直接換主線 — 避免把 prompt 載入問題和模型問題混在一起。30 round eval 結果若 DeepSeek 在「自然度 + JSON 穩定 + skill 提案率 + 延遲」明顯贏，再切。
+
+**現有 launch arg**：只有 `openrouter_gemini_model` / `openrouter_deepseek_model`，**沒有 primary_model arg**。client 行為固定先打 gemini fallback deepseek。A/B 測試方式：
+- Gemini 主線：用現有預設
+- DeepSeek 試切主線：`openrouter_gemini_model:=deepseek/deepseek-v4-flash` 暫時把主 slot 換成 DeepSeek（**這是 hack，正式做法在 1E**）
+- temperature：launch arg 已有 `temperature` (見 `pawai_conversation_graph.launch.py:40`)，從 0.2 → 0.6 A/B
+
+**1E（可選後續）**：若 1C 結果支持換主線，新增 `primary_model` arg + 改 `OpenRouterClient` 動態切主備，再正式切
+
+**eval 4 組對照**（用 `tools/llm_eval/`）：
+- Gemini-3 + temp 0.2（baseline）
+- Gemini-3 + temp 0.6
+- DeepSeek-V4（暫切主） + temp 0.2
+- DeepSeek-V4（暫切主） + temp 0.6
 - 評分維度：persona 維持力、JSON schema 命中率、skill 提案率、中文自然度、延遲
-- 結論決定主線
+- 結論決定 demo 前是否值得做 1E 切主線
 
 **1D 同日做（半天）— current_speaker 注入**
-- `_build_user_message()` 從 face_state 抓最近 1 秒 identity → 加 `current_speaker: Roy / 奶奶 / 陌生人 / unknown`
-- persona few-shot 加對應 examples（對奶奶溫柔慢、對 Roy 俏皮快、對陌生人禮貌試探）
-- face_state 不可得時 fallback `unknown`，prompt 不報錯
+
+**現況檢查**：`conversation_graph_node` **目前沒訂閱 face topic**，`WorldStateSnapshot` 也沒有 face identity field。完整實作步驟：
+
+1. `conversation_graph_node` 新增 ROS subscription：`/state/perception/face`（face_perception 已發 10Hz JSON）
+2. 在 node 內維護 `_recent_face_identity: tuple[str, float]`（identity, timestamp），on_face_msg callback 更新；超過 3s 視為 unknown
+3. `WorldStateSnapshot` (`world_state_builder.py`) 加 `current_speaker: str` field
+4. `world_state_builder()` 從 node 注入的 _recent_face_identity 抓最近 1s 內 identity，超時 fallback `"unknown"`
+5. `_build_user_message()` user payload 加 `current_speaker: Roy / grama / unknown`
+6. persona.txt 1B 重排時補對應 few-shot：對 Roy 俏皮快、對 grama 溫柔慢、對 unknown 禮貌試探
+7. face_state 不可得（face_perception 未啟）時整段 silent omit，prompt 不報錯不夾 unknown 字串
 
 **明確不做（demo 前風險）**
 - ❌ Reply Tags `<say><skill>` schema 改造（動 validator + repair + skill_gate，太深）
