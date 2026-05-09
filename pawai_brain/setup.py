@@ -15,6 +15,7 @@ setup(
         (f"share/{package_name}", ["package.xml"]),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
         (f"share/{package_name}/config", glob("config/*.yaml")),
+        (f"share/{package_name}/personas/v1", glob("personas/v1/*.md")),  # 1A: OpenClaw-lite persona files
     ],
     install_requires=[
         "setuptools",

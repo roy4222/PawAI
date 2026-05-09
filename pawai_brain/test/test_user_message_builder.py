@@ -187,6 +187,6 @@ def test_message_full_payload_has_three_sections():
         "capability_context": _capability_context(),
     }
     msg = _build_user_message(state)
-    assert "[語音輸入]" in msg
+    assert "使用者說：" in msg  # label is [語音] or [文字] per 1E source-based label
     assert "[環境]" in msg
     assert "[能力]" in msg
