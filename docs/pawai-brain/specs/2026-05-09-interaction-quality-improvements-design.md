@@ -91,10 +91,16 @@ full_pcm = b"".join(ok_parts)
 - 不立刻移除 chunking（整段一次送可能 timeout），保留並行但失敗就整段 fallback
 - 預期：**跳句立即消失**；首音延遲不變（後續 P2 處理）
 
-**P0-2 Gateway /tts JSON envelope parse**
-- 確認 `studio_gateway.py` `_on_tts_msg()` 是否正確抽 reply_text 出來給 ChatPanel
-- 若 ChatPanel 收到 JSON 字串而非純文字，這裡修
-- 預期：Studio 不再顯示原始 JSON
+**P0-2 Gateway `/tts` JSON envelope parse（P1-1 前置必要）**
+
+**為何排 P0**：合約 §5.2 規定 `/tts` 雙模化（純文字 OR JSON envelope `{text, input_origin}`），目前 `studio_gateway._on_tts_msg()` L298-306 用 `msg.data.strip()` 當純文字處理 — JSON envelope 會直接被當文字塞進 ChatPanel，使用者看到整段 `{"text":"...","input_origin":"studio_text"}` 字串。
+
+**改法**（gateway 側 ~10 行）：
+1. `studio_gateway._on_tts_msg`：先嘗試 `json.loads(msg.data)`，成功且有 `text` field → 用 envelope.text + 帶 `origin = envelope.input_origin or "tts"`
+2. parse 失敗或非 dict → 純文字 fallback（向後相容）
+3. `build_tts_event(text, origin)` 帶上 origin 給 frontend
+
+**預期**：Studio 不再顯示原始 JSON；P1-1 前端可放心 append
 
 ### Wave 1 — P1 互動骨架補完（5/10-5/12）
 
@@ -104,16 +110,38 @@ full_pcm = b"".join(ok_parts)
 
 **8 個 `/tts` publisher 沒一個帶 source metadata**：IE-node / event_action_bridge × 3（gesture/pose/fall）/ llm_bridge / intent_tts_bridge / route_runner — `/tts` msg type 是 `std_msgs/String` 純文字（少數含 JSON envelope 但只帶 input_origin）。
 
-**Phase 1（demo 前必做，1 小時）— 純前端改，0 ROS2 動作**
-1. `state-store.ts`：`lastTtsText` / `lastTtsAt` 改成 `ttsMessages: { id, text, timestamp }[]`，**ring buffer max 200 條**避免 spam scroll 爆
-2. `use-event-stream.ts`：`case "tts"` → `appendTtsMessage()`（不是 updateTts）
-3. `chat-panel.tsx`：**移除 `pendingRequestIdRef` 檢查**，所有 tts event 都進 messages 陣列
-4. 樣式：user 右藍氣泡 / LLM reply 左灰氣泡 / 自動觸發左淡灰 + 時鐘圖標（先不分 canned/skill_say/alert，純前端無 metadata）
+**前置依賴**：P0-2 Gateway `/tts` envelope parse 必須先做，不然 ChatPanel 顯示 JSON 字串。
+
+**Phase 1（demo 前必做，1 小時）— 4 步精準改動**
+
+**P1-1a state-store 加 ttsMessages 陣列**
+- `state-store.ts`：保留 `lastTtsText` / `lastTtsAt`（其他 panel 還用），**新增** `ttsMessages: { id, text, timestamp, origin }[]`
+- ring buffer max 200 條，超過 shift 最舊
+- 用 `id` 欄位做 dedup key（PawAIEvent.id）— 防 React effect 重跑造成重複 bubble
+
+**P1-1b ChatPanel 監聽 ttsMessages 全部 append**
+- `chat-panel.tsx`：監聽 `ttsMessages` 變動 → 把新 message append 成 PawAI bubble
+- 用 `lastSeenTtsIdRef` 記住最後處理的 event id；只 append 比 lastSeen 新的
+- `use-event-stream.ts`：`case "tts"` → `appendTtsMessage({id, text, timestamp, origin})`，不要動 updateTts
+
+**P1-1c pendingRequestIdRef 角色重新定義**
+- **不刪 pendingRequestIdRef**！它仍然要管：
+  - `isThinking` 狀態（user 送 chat → 等 reply 期間）
+  - timeout / 失敗處理
+  - speech intent 配對
+- 改變的只是「是否顯示 TTS」這條判斷 — 從「pending 才顯示」變「永遠顯示」
+- pending 中收到的 TTS 仍可額外觸發 isThinking=false，但不再 gate display
+
+**P1-1d 樣式區分 pending vs spontaneous**
+- pending TTS（user 剛問 → 配對的 reply）→ 一般 PawAI 灰氣泡
+- 非 pending TTS（自動觸發 / spontaneous utterance）→ **淡灰氣泡 + 小時鐘圖標**
+- 不需要後端 source metadata，純看「當下有沒有 pendingRequestId」分類
+- demo 後 P1-1 Phase 2 拿到 origin 欄位再細分 skill_say/canned/alert
 
 **Phase 2（demo 後可選，再 1 小時）— source metadata 漸進升級**
 1. IE-node `_dispatch_step` SAY 時 `/tts` JSON envelope 加 `source: skill_say|canned|alert`
-2. gateway `_on_tts_msg` parse JSON envelope，broadcast 帶 `origin` 欄位
-3. event_action_bridge 改 JSON envelope 同上
+2. event_action_bridge 改 JSON envelope 同上
+3. gateway 已會 parse（P0-2 已做）→ broadcast 帶 source 欄位
 4. ChatPanel CSS 細分 source（skill_say 綠 / canned 橙 / alert 紅）
 5. **保留**純文字 backward compat（合約 §5.2 雙模化）
 
@@ -122,6 +150,10 @@ full_pcm = b"".join(ok_parts)
 - 緩解：依賴 P2-1 attention policy（only ENGAGED 才 emit）自然降量
 - 前端 ring buffer 200 條 + auto-trim 防爆
 - 加 filter UI（toggle 顯示 user_speech / llm_reply / auto_trigger）— Phase 2 可選
+
+**避免兩個坑**（Roy 5/9 抓出）：
+1. ❌ 不用 P0-2 直接做 P1-1 → ChatPanel 顯示整段 JSON 字串
+2. ❌ 用「length 比較」或 useEffect 重跑 append → 同 TTS event 重複氣泡（用 event id dedup 解）
 
 **收益**：Roy 知道狗講過啥、Brain 全可觀測；不用聽 Jetson 喇叭憑記憶 debug
 
