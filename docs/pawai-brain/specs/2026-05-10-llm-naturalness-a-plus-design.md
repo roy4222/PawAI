@@ -379,11 +379,11 @@ executive 收到 plan
 
 ### 8.1 跑法
 
-跑兩次 baseline：
-- **改前 baseline**（current main `4fd148c`）
-- **A+ 改後**（feature branch）
+兩輪跑：
+- **Baseline 輪**：current main `4fd148c`，存 `tools/llm_eval/baseline_2026-05-10.md`
+- **A+ 輪**：feature branch `spec1/llm-naturalness-a-plus`，存 `tools/llm_eval/spec1_a_plus_2026-05-15.md`
 
-每 prompt 跑 3 次取代表性 reply（消除 temperature 0.8 隨機性）。
+每 prompt 跑 3 次取代表性 reply（消除 temperature 0.8 隨機性）。Diff 用人工比對 + 結構化 pass/fail 表。
 
 ### 8.2 prompt 表
 
