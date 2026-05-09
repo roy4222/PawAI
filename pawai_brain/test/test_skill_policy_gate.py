@@ -88,8 +88,8 @@ def test_allowlist_matches_spec():
     """Sync check: keep allowlist aligned with brain_node.LLM_PROPOSABLE_SKILLS."""
     assert LLM_PROPOSABLE_SKILLS == frozenset({
         "show_status", "self_introduce",
-        "wave_hello", "sit_along", "greet_known_person", "careful_remind",
-        "wiggle", "stretch",
+        "wave_hello", "sit_along", "stand", "greet_known_person",
+        "careful_remind", "wiggle", "stretch",
     })
 
 

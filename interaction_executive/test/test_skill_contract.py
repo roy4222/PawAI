@@ -29,6 +29,7 @@ EXPECTED_ACTIVE = {
     "wiggle",
     "stretch",
     "sit_along",
+    "stand",
     "careful_remind",
     "greet_known_person",
     "stranger_alert",
@@ -49,8 +50,8 @@ EXPECTED_RETIRED = {"acknowledge_gesture"}
 
 
 def test_registry_total_count():
-    # spec §4.1 表格寫 26 為 typo；實際列出 17+5+4+1 = 27
-    assert len(SKILL_REGISTRY) == 27
+    # 18 active (added stand 5/9 evening) + 5 hidden + 4 disabled + 1 retired = 28
+    assert len(SKILL_REGISTRY) == 28
 
 
 def test_active_bucket_matches_inventory():

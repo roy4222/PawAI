@@ -20,6 +20,7 @@ LLM_PROPOSABLE_SKILLS: frozenset[str] = frozenset({
     "self_introduce",
     "wave_hello",
     "sit_along",
+    "stand",
     "greet_known_person",
     "careful_remind",
     "wiggle",

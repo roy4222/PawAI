@@ -510,6 +510,7 @@ class BrainNode(Node):
         "self_introduce",
         "wave_hello",
         "sit_along",
+        "stand",
         "greet_known_person",
         "careful_remind",
         "wiggle",
@@ -520,6 +521,7 @@ class BrainNode(Node):
         "show_status": "execute",
         "wave_hello": "execute",
         "sit_along": "execute",
+        "stand": "execute",
         "careful_remind": "execute",
         # Bucket 2 — confirm (needs OK gesture)
         "wiggle": "confirm",

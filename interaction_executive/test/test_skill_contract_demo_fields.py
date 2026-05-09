@@ -29,20 +29,19 @@ def test_all_27_skills_have_valid_demo_value():
             f"{name}: invalid demo_value {contract.demo_value!r}"
 
 
-def test_all_27_skills_have_display_name():
+def test_all_skills_have_display_name():
     for name, contract in SKILL_REGISTRY.items():
         assert contract.display_name, f"{name}: empty display_name"
 
 
 def test_baseline_distribution_matches_spec_section_11():
-    """5/18 baseline classification per spec §11."""
+    """5/18 baseline classification per spec §11. 5/9 evening: +stand (available_execute)."""
     counts = {}
     for contract in SKILL_REGISTRY.values():
         counts[contract.demo_status_baseline] = counts.get(contract.demo_status_baseline, 0) + 1
 
-    # available_execute should include stop_move (special) — total 9 with stop_move
-    # 8 listed + stop_move = 9
-    assert counts.get("available_execute") == 9
+    # available_execute: original 9 (incl. stop_move) + stand = 10
+    assert counts.get("available_execute") == 10
     assert counts.get("available_confirm") == 2
     assert counts.get("explain_only") == 5
     assert counts.get("studio_only") == 1
