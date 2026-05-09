@@ -3,8 +3,76 @@
 > **用途:** 今日 fail-map / 5/13–14 場地測試 / 5/18 Demo 前驗收
 > **建議使用方式:** 一項一項勾，失敗記錄原因、trace/topic、是否可重現
 > **撰寫日期:** 2026/05/07
-> **最後更新:** 2026/05/08 evening（八階段在家驗收 + 三個 fix commit + Jetson 整合驗證）
+> **最後更新:** 2026/05/09 evening（8 issue 落地實機驗收 + branch `fix/demo-motion-and-chat-polish` 4 個 commit）
 > **標記:** `[x] PASS` / `FAIL→A:BLOCKER` / `FAIL→B:OBS` / `SKIP→C` / `[ ]` 待測
+
+---
+
+## 5/9 evening 進度（互動品質 8 issue 落地 + 4 個 demo polish fix）
+
+### Round 1：origin/main d7a35ab 首次實機 smoke（PR #51-65 全合）
+
+對 Roy 5/9 brainstorm 的 8 個問題實機驗收：
+
+| Issue | 結果 | 備註 |
+|---|---|---|
+| 1 TTS 音色雙軌 | ⚠️ 部分 | edge_tts/Gemini 雙軌通；ElevenLabs spike script 有但未進主鏈（demo 不接） |
+| 2 LLM 死板 | ✅ PASS | OpenClaw-lite persona 5 檔生效，回覆自然，「我餓了」回「我又沒有手可以拿東西給你吃」 |
+| 3 LLM 主動調 skill | ✅ PASS | 「站好一點」LLM propose stand；wiggle 邀請語明確（比 OK 我就扭給你看） |
+| 4 重複物體/打招呼 | ✅ PASS | AttentionMachine + dedup 都生效，自介中途仍偶見 object_remark（attention 漏接，已列 backlog L） |
+| 5 Studio 顯示每句 | ✅ PASS | 每句 SAY 都進 ChatPanel |
+| 6 ASR 簡→繁 | ✅ PASS | curl /api/text_input 驗，「我饿了，给我点东西吃」→「我餓了，給我點東西吃」 |
+| 7 reset 重刷上下文 | ✅ PASS | 「新對話」5 秒內問「我叫什麼名字」→「咦？你是新朋友嗎？」(Bug A 已修：原本 face callback 立即寫回 speaker identity) |
+| 8 idle 待機動作 | ✅ MVP 落地 | default OFF，demo 不主動觸發 |
+
+### Round 1 抓到 + 修好的 4 個 P0 hotfix（commit `756aeb0` on main）
+
+1. **Bug A reset 沒清 speaker identity** — `_recent_face_identity` 沒清 + face callback 寫回 → 修法：reset 同時清 face identity + 加 5s suppress window
+2. **Bug C Studio 簡→繁 frontend 沒顯示** — `chat-panel.tsx:217` 直接 echo 用戶原文不等 backend 轉換 → 修法：gateway return converted text，frontend update bubble
+3. **Bonus: OpenCC API name 修錯** — `OpenCC("s2twp.json")` 自 PR #52 起 silent fail（lib append `.json` → `s2twp.json.json` FileNotFoundError），3 條 ASR 簡→繁入口全部沒生效 → 改 `OpenCC("s2twp")`
+4. **Bug B wiggle 缺 balance_stand 前置** — 5/8 evening carry-over → 加 balance_stand step（仍不夠，見 Round 2）
+
+---
+
+### Round 2：第二輪實機，發現 6 個動作層 + UX 問題（branch `fix/demo-motion-and-chat-polish`）
+
+| 觀察 | 結果 | Branch fix |
+|---|---|---|
+| §3.1 wave_hello (1016) | ✅ PASS | — |
+| §3.1 sit_along | ⚠️ 動作錯（半坐 1009，Roy 要全趴下）| **H** 改 stand_down (1005) + 話術改「趴下來陪你」 |
+| §3.1 careful_remind / show_status | ✅ PASS（TTS only） | — |
+| §3.1 stand 意圖 | ❌ FAIL → ✅ | **I** intent_classifier 有「站起來」識別，缺 SkillContract entry → 加 stand skill (5 file 改動：skill_contract + brain_node 兩 allowlist + persona CAPABILITIES + EXAMPLES) |
+| §3.2 wiggle confirm | ❌ → ✅ | **G** Go2 firmware v1.1.7 silent-ignore 1033 (WiggleHips)。直接 pub /webrtc_req 試 1029(Scrape 拜拜)/1020(Content)/1028(Pose)，Roy 確認 1020 視覺像「扭」→ MOTION_NAME_MAP wiggle_hip 1033→1020 |
+| §3.4 後空翻/跳舞 | ✅ PASS | LLM 婉拒，0 motion |
+| §6 Studio UI scroll | ❌ FAIL → ✅ | **J** 訊息一多強制拉底，scroll up 看舊訊息會被打斷 → stick-to-bottom 模式（30px tolerance + scroll listener） |
+| TTS 廣東話腔 | ⚠️ 部分解 | 不是 fallback，是 Despina 同段文字的壞 cache 命中。清 cache (`e3faba93..` + `54040645..`) 後 fresh synth 接受。voice 選型仍列 backlog |
+| TTS 跳段（睡前故事漏「在架子上輕輕呼吸的聲音」）| ⚠️ 重現 | 取證任務，**不在本 branch**：tts_node 加 debug WAV save 取證後再修 |
+| Self_introduce 中途 object_remark | ⚠️ 重現 | attention 漏接，**取證任務不在本 branch**：可能 SAY in flight 不算 active_plan |
+| 雙 SAY (chat_reply + skill_say) | ⚠️ 重現 | by design (PR #65 source 標籤)，**P2 demo 後再決定** |
+
+### Round 2 commit（branch `fix/demo-motion-and-chat-polish`）
+
+| Commit | 修法 |
+|---|---|
+| `87e2d5d` | fix(studio): chat-panel stick-to-bottom (issue 9) |
+| `c7de5ee` | feat(skills): sit_along → StandDown + add stand skill (issue 10 + sit posture) |
+| `f296429` | fix(skills): wiggle motion 1033 → 1020 (Content) — firmware bypass |
+
+WSL pytest 375 / 375 pass（4 個 skill registry count test 同步更新）。
+
+### Round 2 backlog（demo 前可能還要碰的）
+
+- **TTS 跳段** — 加 debug WAV save，分辨「合成漏」vs「Go2 播放掉音」
+- **Self_introduce attention 漏接** — 取證 attention.state 變化序列
+- **TTS 廣東腔** — voice 選型 spike（ElevenLabs / Gemini Aoede/Charon）— 下次 session
+- **雙 SAY** — demo 觀感真的吵才修
+- **Demo 話術同步** — sit_along「全趴下」要改說「趴下 / 蹲下」
+- **wiggle safety_requirements** — 1020 Content 不需 depth_clear，可能可拿掉避免偶發 blocked_by_safety（要 Roy 場地確認再改）
+
+### USB 喇叭斷線（5/9 evening 中途遭遇）
+
+`aplay -l` 一度看不到 CD002-AUDIO（card 0 消失）→ tts_node `aplay` exit 1。Roy 重插 USB 後恢復。
+**Demo 當天**：USB 喇叭應接獨立電源，避免 XL4015 供電中途斷電（已在 memory project_jetson_power_issue.md）。
 
 ---
 
