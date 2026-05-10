@@ -1,7 +1,46 @@
 # 專案狀態
 
-**最後更新**：2026-05-10 deep night（demo readiness 重構：5/12 晚移交學校 → 5/11-12 並行 5 條工作流 + Brain Minimum + Nav burndown + Mac/網路集中設定）
-**硬底線**：5/18 期末 demo（8 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-11 night（Brain freeze v1 + E.Mac/Network pre-stage 完成 + Nav burndown B1-B4 過、B5 訊號通但 motion 階段發現 reactive_stop 設計缺陷）
+**硬底線**：5/18 期末 demo（7 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/11：Brain freeze + E pre-stage + Nav B1-B5 上機
+
+### Brain Minimum：A 全綠、freeze tag v1（commits `3b6a68d`/`46d53b6`/`c0c8de8`/`bf76a85`/`0612c31`）
+
+- ✅ MISSION.md 落檔（含尋物敘事 + 兩支柱），`_load_persona` 從 5 檔改 6 檔（IDENTITY → MISSION → STYLE → OUTPUT → EXAMPLES → CAPABILITIES，CAPABILITIES 仍 lazy）
+- ✅ IDENTITY/EXAMPLES/OUTPUT/CAPABILITIES 4 檔依 spec §5.2-5.5 改完，5 處 self_introduce → chat_reply 解綁、新增 5 條 self-showcase few-shot
+- ✅ tools/llm_eval `gemini` alias + temp 對齊 runtime（gemini-3-flash-preview, 0.8）
+- ✅ 最終 eval 15 prompts → 13/15 hit ≥4 軸 (gate 12/15) → **PASS**，本地 tag `brain-freeze-v1` 在 `0612c31`（未 push）
+- ⚠️ 兩個 skill 幻覺（come_to_user / move_one_step）排到 `brain-hotfix-N1` 候選，demo 不會用到不阻擋
+
+### E.Mac/Network pre-stage：完成（commits `b1e3c01`/`cee1a9d`）
+
+- ✅ `pawai-studio/gateway/studio_gateway.py:53` ASR_URL 改 `os.getenv("PAWAI_ASR_URL", ...)`，PORT 也改 env
+- ✅ `scripts/start_nav2_amcl_demo_tmux.sh` MAP_YAML、`scripts/build_map.sh` MAP_DIR、`pawai-studio/start.sh` GATEWAY_PORT 全 env override
+- ✅ `pawai-studio/start-live.sh` 8 處 8080 → `${GATEWAY_PORT}`
+- ✅ `config/school_demo.env` + `.example` 落檔，硬檢查 JETSON_IP/GATEWAY_HOST 至少一個必填，LLM_HOST/ASR_HOST 拆出讓 Jetson tunnel vs 直連雲端可切
+- ✅ `pawai-studio/start-school-live.sh` Mac wrapper（GATEWAY_HOST 必填、ping + curl /health pre-check、失敗給 Jetson 啟動指令提示）
+- 6 項本機驗證全綠（語法、env 硬檢查、env load、MAP fallback、Mac wrapper hard-fail、studio_gateway env 生效）
+- ⏳ N1-N6 連通驗證 + 三模式 smoke 留 5/12 PM（需 Mac + 手機熱點）
+
+### Nav Burndown：B1-B4 全綠、B5 訊號通但 motion 階段撞牆
+
+詳見 [`nav-root-cause-burndown.md §4`](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md)。
+
+- B1 LiDAR ✅ 11.98 Hz / 1800 pts / 94% valid / 單 publisher（`/scan_rplidar`，避免 `/scan` 雙 publisher 衝突）
+- B2 D435 ✅ color 30 Hz / aligned_depth 30 Hz / 98% valid / 中心 ROI 1.11m vs LiDAR 180° 1.18m（兩感測器交叉驗證一致）
+- B3 TF ✅ `base_link→laser` yaw=180° 正確（LiDAR 反裝補償）
+- B4 cmd_vel/mux ❌ → ✅ **修完通過**：發現 driver `_on_cmd_vel` 對 zero 仍走 `Move {x:0}` (api_id=1008)，被 Go2 sport mode 忽略 → Go2 走過頭 2m。Fix 加 `IRobotController.send_stop_move_command()` (api_id=1003 StopMove) + 1 Hz dedupe 防 reactive 10 Hz spam 撐爆 WebRTC DC buffer。Unit test 11 條全綠。Round 2 重測 3 次質心位移≈0.8m（理論 0.75m）✅。
+- B5 reactive_stop ☑ partial：訊號鏈通了（sllidar + TF + reactive_stop safety_only + foxglove + mux + driver），danger zone 真的鎖死 Go2。**但 motion 測試發現兩個 reactive_stop 設計缺陷**（撞到 1.5m 處障礙）：(1) `danger<0.6m` 對 Go2 機身太近，LiDAR 看到 0.6m 時機鼻已是 0.2m → 必撞；(2) safety_only 在 clear zone 完全不發訊號 → 「停↔全速」二元切換沒漸進減速。**修法 5/12+**：danger 0.6→1.2m / slow 0.45 m/s 漸進 / hysteresis / 長遠做 base_link projection。
+- ⏳ B6 AMCL + B7 goto 0.3/0.5m 留 5/12（reactive_stop 修法落地後再做 motion）
+
+### 5/12 任務調整
+
+原本 5/12 PM 要做的：A final eval + freeze、E 連通驗證、B6/B7 motion、C/D smoke。
+**5/11 提前消化**：A freeze、E pre-stage、B1-B4 全部、B5 訊號層。
+**5/12 重排**：reactive_stop 修法 → B5 motion 重測 → B6/B7（如果 Go2 物理狀態 OK）→ C/D smoke + N1-N6 連通驗證 → 設備清點 → 19:00 freeze → 20:00 移交。
 
 ---
 

@@ -215,11 +215,11 @@ ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative "{di
 
 | 項 | 結論 | 備註 / 根因 |
 |---|---|---|
-| B1 LiDAR | ☐ pass / ☐ fail | |
-| B2 D435 | ☐ pass / ☐ fail | |
-| B3 TF/front | ☐ pass / ☐ fail | |
-| B4 cmd_vel/mux | ☐ pass / ☐ fail | |
-| B5 reactive_stop | ☐ pass / ☐ fail | |
+| B1 LiDAR | ☑ pass | 5/10 上機：錯誤 bring-up 時 `/scan` 有 `sllidar_node` + `go2_pointcloud_to_laserscan` 雙 publisher；清掉後用 `scripts/start_scan_only_tmux.sh` 正式重跑，只有 `/scan_rplidar`，publisher=1，hz≈11.8，`scan_health_check.py --duration 5` PASS、無 phantom。LiDAR 硬體 OK；後續一律用 `/scan_rplidar`，避免 `/scan` 衝突。 |
+| B2 D435 | ☑ pass | 5/10 上機：`ros2 launch realsense2_camera rs_launch.py enable_color:=true enable_depth:=true align_depth.enable:=true pointcloud.enable:=false`；topic 為 `/camera/camera/color/image_raw` 與 `/camera/camera/aligned_depth_to_color/image_raw`。color≈29.95Hz、aligned depth≈29.2-29.9Hz。D435 硬體與 aligned depth pipeline OK。 |
+| B3 TF/front | ☑ pass | 5/10 上機：`base_link -> laser` 可解，x=0.175 z=0.18 yaw≈180deg；補 `base_link -> camera_link` static TF 後，`base_link -> camera_link` 與 `base_link -> camera_color_frame` 都可解。座標鏈 OK。Foxglove 紙箱目視方位仍需現場確認。 |
+| B4 cmd_vel/mux | ☑ fail → ☑ **fix-and-pass** | 5/11 上機 round 1：ROS chain 通（`/cmd_vel_joy` 0.5 → `twist_mux` → `/cmd_vel` 0.5 → `go2_driver_node._on_cmd_vel` → WebRTC sport request），Go2 實際有走。**但停止異常：發 0 後仍走約 2m**，差點撞。根因：`RobotControlService.handle_cmd_vel()` 對 near-zero 仍走 `send_movement_command()` → `api_id=1008 Move {x:0,y:0,z:0}`，但 Go2 sport mode 忽略 \|x\|<MIN_X (0.5 m/s) 的 Move，繼續執行最後一個有效 Move 直到 sport timeout (~2-3s)。**Fix**：`handle_cmd_vel` post-deadband zero 時改走新增的 `IRobotController.send_stop_move_command()` (`api_id=1003 StopMove`)，並加 1 Hz dedupe 防止 reactive_stop 10 Hz spam 撐爆 WebRTC DC buffer（B5 round 1 觀測到 bufferedAmount 86KB+ 持續長）。Round 2 重測：0.5 m/s × 1.5s pulse → 0 stop，3 次測試 Go2 質心位移≈0.8m（理論 0.75m）→ ✅ pass。Driver log 確認「0.5 → Move 1008 / 0 → StopMove 1003」routing 正確。Unit test 11 條覆蓋 routing + dedupe 全綠。 |
+| B5 reactive_stop | ☑ partial — 訊號通、未做 motion 驗收 | 5/11 上機：sllidar (`/scan_rplidar` 11.98 Hz, single publisher) + `base_link→laser` static TF (yaw=180°) + `reactive_stop_node` (safety_only mode, danger<0.6m, slow<1.0m, front_offset=+180°) + foxglove_bridge `ws://192.168.0.222:8765` 全跑通。danger zone 鎖死時 `/cmd_vel_obstacle` 持續發 0 @10Hz、`/state/reactive_stop/status` 報 active=true、mux 用 obstacle priority 200 蓋掉 teleop priority 100、Go2 站著不動 → 訊號鏈完整。但 motion 階段觀察到嚴重缺陷：(1) `danger<0.6m` 對 Go2 機身太近 — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞；(2) safety_only mode 在 clear zone 完全不發訊號 → mux 切換變「停 ↔ 全速」二元，沒漸進減速。實測一次後 Go2 撞到 1.5m 處障礙物。後續 motion 驗收延後到修法落地後。**修法**（5/12+）：danger 0.6→1.2m / slow 1.0→1.8m、safety_only 也要在 slow zone 發 0.45 m/s（漸進）、加 hysteresis 防 boundary 抖動、長期做 base_link projection（用 TF 算機鼻距離）。 |
 | B6 AMCL | ☐ pass / ☐ fail | |
 | B7 goto 0.3m | ☐ ≥4/5 / ☐ <4/5 | |
 | B7 goto 0.5m | ☐ ≥3/5 / ☐ <3/5 | |

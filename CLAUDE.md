@@ -447,6 +447,14 @@ Go2 內建 LiDAR 導航不可行（覆蓋率 18%），D435 避障因鏡頭角度
 
 Megaphone API (4001/4003/4002) **可正常播放**，之前判定「失效」是因為 payload 格式錯誤。正確格式：chunk_size=4096、payload 含 `current_block_size` 欄位、DataChannel msg type 為 `"req"`（不是 `"msg"`）。詳見語音模組 README。
 
+### Go2 sport mode：cmd_vel = 0 不會停車（5/11 B4 burndown 發現）
+
+Go2 sport mode 對 `Move (api_id=1008)` 有 `MIN_X = 0.50 m/s` 門檻 — `Move {x:0,y:0,z:0}` 會被 silently 忽略，Go2 繼續執行最後一個有效 Move 直到 sport timeout (~2-3s)。**driver `RobotControlService.handle_cmd_vel` 已修為**：post-deadband zero 改走 `send_stop_move_command` (`api_id=1003 StopMove`)，非零才走 `send_movement_command` (1008)。同時加 1 Hz dedupe 避免 `reactive_stop_node` 10 Hz spam StopMove 撐爆 WebRTC DataChannel buffer（觀測過 86KB+ backlog）。Routing 規則的權威 unit test 在 `go2_robot_sdk/test/test_robot_control_service.py`（11 條全綠）。
+
+### reactive_stop danger threshold 對 Go2 機身太近（5/11 B5 burndown）
+
+`reactive_stop_node` 預設 `danger<0.6m`、`slow<1.0m` 是 LiDAR 視距，**未考慮 Go2 機身佔用** — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞。另外 `safety_only=true` 在 clear zone 完全不發訊號 → mux 在 obstacle 移開瞬間直接切「停 → 全速」，沒漸進減速。修法在 `docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4` B5 列。任何 nav motion 測試前確認此項已修。
+
 ### 多 driver instance 殘留
 
 `ros2 launch` 啟動後，`killall python3` 只殺 launch parent，C++ 子 process（robot_state_publisher、pointcloud、joy 等）會殘留。下次 launch 會再生一組，導致多 instance 搶 WebRTC 連線和 topic。**必須用 `pkill -9 go2_driver; pkill -9 robot_state; pkill -9 pointcloud; pkill -9 joy_node; pkill -9 teleop; pkill -9 twist_mux` 逐一清除。**
