@@ -15,10 +15,14 @@ set -euo pipefail
 
 SESSION="${SESSION:-pawai_brain}"
 WORKSPACE="${WORKSPACE:-$HOME/newLife/elder_and_dog}"
-SOURCE_CMD="source /opt/ros/humble/setup.zsh && cd $WORKSPACE && source install/setup.zsh"
+# 語義：ROS setup / cd / install/setup.zsh 任一失敗整段失敗；.env 不存在沒事；
+# .env 存在但內容壞掉會失敗（合理）。用 if-fi 表達 .env optional，避免 `|| true`
+# 包到 ROS setup 把錯誤吞掉。
+SOURCE_CMD="source /opt/ros/humble/setup.zsh && cd $WORKSPACE && source install/setup.zsh && { if [[ -f $WORKSPACE/.env ]]; then set -a; source $WORKSPACE/.env; set +a; fi; }"
 
 # Resolve install/share path for persona directory; fallback to source path for dev
-PERSONA_DIR="${PERSONA_DIR:-$WORKSPACE/install/share/pawai_brain/personas/v1}"
+# ROS2 colcon Python data_files 真實路徑：install/<pkg>/share/<pkg>/...
+PERSONA_DIR="${PERSONA_DIR:-$WORKSPACE/install/pawai_brain/share/pawai_brain/personas/v1}"
 if [ ! -d "$PERSONA_DIR" ]; then
   # Dev fallback: source tree (before colcon build)
   PERSONA_DIR="$WORKSPACE/pawai_brain/personas/v1"
