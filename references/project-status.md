@@ -1,7 +1,84 @@
 # 專案狀態
 
-**最後更新**：2026-05-11 deep night（Brain freeze + E pre-stage + Nav B5 撞牆深度 audit + reactive_stop 4-mode 狀態機落地 + 4 review fix）
-**硬底線**：5/18 期末 demo（7 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-12 night（Nav B5 motion 全綠 + B0 launch.py mux bug fix + B1 nav2_params tuning + cone narrowing 探索 + nav stack 隱性 bug 浮現）
+**硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/12 night：Demo 最低目標 3/3 全打勾 + 加分目標 cone 探索（nav stack 浮現新 bug）
+
+### Demo 最低目標 — 全部打勾 ✅✅✅
+
+| 項目 | 狀態 | 證據 |
+|---|:-:|---|
+| 展示 SLAM / Nav2 基本能力 | ✅ | nav_capability stack 36 node 全跑、AMCL active、map 載入、`/capability/nav_ready=true` |
+| 能在安全距離內移動 | ✅ | `goto_relative 0.3m` → 實走 0.2998m，誤差 0.2mm |
+| 遇到障礙物能停下 | ✅ | `goto 0.5m` 走 0.41m 在 danger 0.81m 停下、`reactive_stop_active=true`、Go2 未撞 |
+
+5/11 撞牆事件後第一次 clean motion。**5/11 1.1m danger 在 0.81m 觸發停車，比舊 0.6m 早 0.21m，B0 設計成功**。
+
+### 兩個落地的 bug fix
+
+**B0 launch.py mux bug**（commit `2ce02fa`）：
+T3 hold_brake smoke 發現 `/cmd_vel_obstacle` 0 subscriber、`twist_mux` 不在 node list — 即使 Roy 5/11 review #1 (`d804a58`) 已切到 `robot.launch.py`，mux 仍因被綁在 `with_teleop` flag 上而 disable。
+修法：`mux` 拆出獨立 `DeclareLaunchArgument`（default true），`twist_mux` Node `condition=IfCondition(with_mux)`。修完 hold_brake / progressive / fallback 三 script 全 work。
+
+**B1 nav2_params 5/12 tuning**（commit `e881b7e`）：
+- `local_costmap.obstacle_max_range` 1.8 → 3.0
+- `raytrace_max_range` 2.0 → 3.5（業界慣例 raytrace ≥ obstacle）
+- `inflation_radius` 0.30 → 0.45（配合 reactive danger 1.1m + Go2 機鼻 ~0.5m）
+- footprint 不動（CLAUDE.md 規則 + 等 T6/T8 卡尺）
+- detour profile 不對齊（5/3 窄場景 tuning 是有意保留）
+- ⚠️ motion validation 結果：見「nav stack 浮現 bug」段
+
+### Cone 探索（窄 cone Plan A，未通過完整驗證）
+
+3 個 Explore subagent 並行調查（本地 reactive code / 本地 detour profile / 業界 best practice）後得出：
+- ❌ `front_arc_deg` 不在 `_on_param_change` callback 列表 → **runtime `param set` 改不了**，必須重啟 reactive_stop_node
+- ❌ `start_nav_capability_demo_tmux_detour.sh` 已存在但有 4 個 bug：用舊 `safety_only:=true` (auto-promote 成 hold_brake → 鎖死 nav)、`danger=0.40` 不安全、yaml 沒同步 5/12 main、D435 mount TF 沒精校
+- ⚠️ 業界共識（Nav2 docs / 5 GitHub repo）：collision_monitor / DWB / planner **三層分工互不衝突**因為作用在不同時間尺度
+
+實際試了：
+- 重啟 reactive_stop with `front_arc_deg=15.0` → cone 從 ±30° 縮成 ±15° ✅ 生效
+- 但 ±15° 中央仍偵測到 1.03m 處 36cm 寬障礙（真實家具或 Roy 自身）→ Roy 移開後 zone clear
+- 發 `goto_relative 1.0` → **Goal accepted 但 10s no_progress, ABORTED, actual_distance=0.0**
+- nav lifecycle 全 active、`/cmd_vel = 0 @ 10Hz` 來自 mux default、**`/cmd_vel_nav` 無 publisher**（controller_server 完全沒發 cmd_vel）
+- `clear_entirely_local/global_costmap` service 也不解
+
+**疑似 root cause**（demo 前需查）：
+- 5/12 inflation 0.30→0.45 改後 planner 在某些 pose 算不出 valid path？
+- 或 `nav_action_server_node` 內部 dispatch 邏輯有 bug（goal accepted 但沒 forward 給 bt_navigator/NavigateToPose action）？
+- 或 AMCL pose 漂移與 costmap 不一致？
+
+### 5/12 night follow-up（5/13 場測前必查）
+
+| # | Item | 級別 | 預估 |
+|:-:|---|:-:|:-:|
+| F1 | reactive_stop `_on_param_change` 加 `front_arc_deg` 處理 | P1 | 30 min |
+| F2 | `start_nav_capability_demo_tmux_detour.sh` 4 bug fix（safety_only→progressive、danger 0.4→1.1、yaml sync、D435 TF）| P1 | 1.5h |
+| F3 | `nav2_params_detour.yaml` 同步 5/12 main 改動或加 NOTE 說明 | P1 | 30 min |
+| F4 | D435 mount TF 卡尺精校 | P2 demo 後 | 1h |
+| F5 | 業界 nav2_collision_monitor 評估遷移 | P2 demo 後 | 6-8h |
+| F6 | `nav_capability` 腳本 `NAV_PARAMS` env override | P1 | 15 min |
+| **F7** | **🔴 nav_action_server no_progress_timeout root cause 調查**（goal accept 但 controller 完全不發 cmd_vel）| **P0 場測前必修** | 2-3h |
+
+**Plan A research 落檔**：`/home/roy422/.claude/plans/graceful-twirling-cloud.md`（含 3 subagent findings 詳細）
+
+### Stack state at end of session
+
+- Jetson nav-cap-demo session 已 cleanup（tmux server gone、0 procs）
+- Go2 在 hold_brake mode 切完才 cleanup
+- 兩個 commit 已 push：`2ce02fa` launch fix + `e881b7e` nav2_params
+
+### 5/13 任務（學校場地）
+
+P0 必做：
+1. F7 nav_action_server bug 調查（不修無法跑任何 motion demo）
+2. 學校場地重建圖（home_living_room_v8 是家裡的）
+3. 重新 /initialpose、smoke 三 script
+4. T6 卡尺機鼻、F4 D435 TF（如果有時間）
+
+驗收：能跑 goto_relative 0.5m × 5 / goto_relative 1.0m × 3 連續成功 + 障礙停車場景 × 2
 
 ---
 
