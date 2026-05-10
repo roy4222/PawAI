@@ -69,12 +69,29 @@
 - **5 個 nav2 lifecycle 不一定要全 active**：amcl + map_server active 即 Go2 可動；controller_server / planner_server / bt_navigator / behavior_server 第二次 `lifecycle get` 可能 hang（service competing），實際都活著
 
 ### Reactive stop
+
+#### 🚨 Architecture-critical: safety_only=true 永遠 publish 0 — release 沒有 auto-resume gate
+
+> **故事化（5/11 B5 撞牆 root case）**：
+>
+> 1. 障礙物進 danger zone → reactive_stop 發 `/cmd_vel_obstacle=0` → mux priority 200 蓋 teleop priority 100 → Go2 站著不動 ✅
+> 2. 障礙物移開 → 在舊版本（2026-05-11 前）：`safety_only=true` 在 clear/slow zone **完全沉默**
+> 3. mux 0.5s timeout → 切回次優先 → 仍在發 `0.5 m/s` 的 `/cmd_vel_joy`（teleop）接管 → Go2 全速衝出 → 撞 1.5m 處障礙物
+>
+> **5/11 B0.1 fix（commit `4ec8350`）**：reactive_stop_node `safety_only=true` 模式現在**任何 zone 都 publish 0**，永遠 hold mux priority 200。**clear 是「解除煞車」不是「安全恢復」**。操作員必須：
+>
+> - **kill teleop publisher**（不允許 hot-publish 0.5 m/s 在 `/cmd_vel_joy`）
+> - 或**主動發新 nav goal**（`/nav/goto_relative` etc.）
+>
+> 不會自動恢復前進 — 這是 feature 不是 bug。
+
 - **/cmd_vel QoS 是 RELIABLE**（go2_driver_node 訂閱端）— reactive_stop_node 已用 RELIABLE
 - **/scan_rplidar QoS 是 BEST_EFFORT**（sllidar publisher）— reactive_stop_node 訂閱端用 BEST_EFFORT
 - **第一筆 cmd_vel = 0 warmup**：避免與 Go2 driver 已啟動的 stand mode 衝突
-- **Hysteresis 3 frame 防抖**：danger → 非 danger 需連 3 frame 確認才解除
-- **v8 mount yaw=π 必須設 `front_offset_rad: 3.14159`**（5/1 撞紙箱事件、commit `e3270da` 修）— `compute_front_min_distance` 寫死「laser 0° = Go2 前方」、yaw=π 後不對、需用 offset 補正。`scripts/start_nav_capability_demo_tmux.sh` 與 `start_reactive_stop_tmux.sh` 已加 `-p front_offset_rad:=3.14159`，自寫 launch 命令也要加
-- **`/nav/pause` 只有 route_runner_node 接、`nav_action_server`（serving `/nav/goto_relative`）沒接**（5/1 發現 BUG #2，待修）— 只有 `/nav/run_route` 才能完整觸發 reactive_stop 的 pause/resume。送 goto_relative 時 reactive_stop 透過 `/cmd_vel_obstacle=0` mux priority 200 強制停車，但 obstacle 移除後不會自動 continue（5/13 demo 前必修）
+- **Hysteresis frame 防抖**：danger → 非 danger 需連 N frame 確認（5/11 B0.4 從 3 → 5，≈0.5s @ 10Hz）
+- **Threshold（5/11 B0.3 enlarged）**：`danger_distance_m=1.1` / `slow_distance_m=1.7`（LiDAR 視距）。改前是 0.6/1.0，但 LiDAR 安在 base_link+0.175m、Go2 機鼻在 base_link+~0.40m → LiDAR 看到 0.6m 時機鼻只剩 0.2m → 加反應時間必撞。新值給 ~0.7m 機鼻 buffer
+- **v8 mount yaw=π 必須設 `front_offset_rad: 3.14159`**（5/1 撞紙箱事件、commit `e3270da` 修）— `compute_front_min_distance` 寫死「laser 0° = Go2 前方」、yaw=π 後不對、需用 offset 補正。`scripts/start_nav_capability_demo_tmux.sh` 與 `start_reactive_stop_tmux.sh` 已加 `-p front_offset_rad:=3.14159`，自寫 launch 命令也要加。**注意此 param 與 base_link→laser TF yaw 是雙重套用設計**（兩段 frame convention 獨立補正、實務上兩個都填 π 才對）— 改 mount 角度時兩處都要改
+- **`/nav/pause` 只有 route_runner_node 接、`nav_action_server`（serving `/nav/goto_relative`）沒接**（5/1 發現 BUG #2，5/11 B0.1 fix 後不再 demo blocker — release gate 已用 always-publish-0 取代 nav/resume 機制）— 只有 `/nav/run_route` 才能完整觸發 reactive_stop 的 pause/resume，但即使 nav/resume 沒接，操作員也可以 explicit 重發 nav goal 達到同效果
 
 ### 環境 / 部署
 - **Jetson 供電升級至 2464 升降壓恒壓恒流模組**（4/29 night）— XL4015 在 Go2 運行下 4/29 16:30-17:30 跳電 3 次（10 分鐘內），換 2464 後（35W 自然散熱、過流/過壓/過溫多重保護）穩定。Memory `project_jetson_power_issue.md` 已更新。
