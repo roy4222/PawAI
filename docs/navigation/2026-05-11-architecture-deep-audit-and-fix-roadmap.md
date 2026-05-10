@@ -10,9 +10,17 @@
 
 ## 0. TL;DR
 
-**撞牆不是單一 bug，是 6 層設計缺陷疊加**。最快「修一件解 80%」的選項：**Nav2 local_costmap.obstacle_max_range 從 1.8m 拉到 2.5-3.0m**（`go2_robot_sdk/config/nav2_params.yaml:231`）。
+> ⚠️ **2026-05-11 night errata（Roy 訂正）**：原版本把「修一件解 80%」放在 Nav2 obstacle_max_range，方向錯。1.5m 仍在 Nav2 1.8m 視距內，**那不是主因**。**真正主因 = reactive_stop release gate 漏洞**（clear zone 沉默 → mux 0.5s timeout → 控制權還給仍在發 0.5 m/s 的 `/cmd_vel_joy` teleop）。修法路線見 §6（已重排）。
 
-但只修這一條只解掉 Nav2 視野盲區，沒解掉 reactive_stop 的「clear zone 沉默 → mux timeout → teleop 接管」漏洞，也沒解掉 0.6m danger threshold 對 Go2 機身太近的問題。**完整 demo 級修法見 §6**。
+**撞牆不是單一 bug，是多層設計缺陷疊加**。修法 P0 順序（按 Roy 5/11 night 訂正）：
+
+1. **Release gate** — reactive_stop 在 clear/slow zone 也持續發 0（不要沉默），讓 mux 不 timeout 把控制權還給舊命令
+2. **Test discipline** — kill teleop publisher，不允許 0.5 m/s hot-publish
+3. **Threshold enlarge**（保守）：`danger 0.6→1.1m / slow 1.0→1.7m`（LiDAR 視距）—**不是 audit 原版寫的縮小到 0.5m**（方向相反）
+4. Nav2 `obstacle_max_range 1.8→3.0` 是 enhancement，不是 P0 主因（1.5m 仍在 1.8m 內）
+5. D435 主線整合留 demo 後（detour profile 5/03 spec 已存在）
+
+完整 6 層缺陷見 §1.2，分層修法見 §6。
 
 ---
 
@@ -34,7 +42,10 @@ t=86.5s mux 0.5s timeout → 切 teleop priority 100
         Go2 driver 收到 0.5 → Move (1008) → Go2 開始走
 t=86-91s Go2 全速 0.5 m/s 走，朝前方 1.5m 處的障礙物
         Nav2 不在這條路徑（teleop 直接穿過 mux）
-        但即使 Nav2 在路徑：local_costmap.obstacle_max_range=1.8m，看不到 1.5m+ 障礙
+        ⚠️ 原 audit 寫「Nav2 obstacle_max_range=1.8m 看不到 1.5m+ 障礙」是錯的：
+        1.5m 仍在 1.8m 視距內，Nav2 看得到。但本次 mux 走 teleop 不走 nav，
+        Nav2 視野範圍跟撞牆無關。把 obstacle_max_range 拉大是 enhancement、
+        不是 P0 修法。
 t=91s   reactive_stop zone slow (front_min=0.97m)，但 safety_only 不在 slow 發訊號
         Go2 繼續全速
 t=92s   zone 振盪 slow ↔ clear（sensor noise）
@@ -47,41 +58,52 @@ t=93s   zone slow → danger (front_min=0.57m)
 撞
 ```
 
-### 1.2 撞牆 6 層原因（全部都要修才完整）
+### 1.2 撞牆缺陷層級（Roy 5/11 訂正後）
 
 | # | 層 | 缺陷 | 嚴重度 |
 |:---:|---|---|:---:|
-| 1 | reactive_stop | safety_only 在 clear zone 完全沉默 → mux timeout 後沒人擋 | **demo 致命** |
-| 2 | reactive_stop | 沒有 resume ramp / hold — 二元切換「停 → 全速」 | **demo 致命** |
-| 3 | reactive_stop | danger=0.6m 是 D435 ROI 時代沿用，沒對 Go2 機械尺寸 (機鼻在 base_link 前 ~0.40m) 校準 | **demo 致命** |
-| 4 | reactive_stop | 沒 slow zone 漸進減速（safety_only 連 slow 也不發） | **demo 級** |
-| 5 | Nav2 | local_costmap.obstacle_max_range=1.8m，遠小於 RPLIDAR 8m 視距 → controller 對 1.8m+ 障礙視而不見 | **demo 致命** |
-| 6 | Nav2 | D435 完全沒整合進 obstacle_layer，只當 Bool gate；近距盲區（LiDAR 看不到的腳邊低物）無人管 | **demo 級** |
+| 1 | reactive_stop | safety_only 在 clear/slow zone 完全沉默 → mux 0.5s timeout 後 teleop priority 100 接管，舊 0.5 m/s 自動恢復 | **🔴 demo 致命（真主因）** |
+| 2 | reactive_stop | clear 是「解除煞車」不是「安全恢復」— 沒有「需要重新確認新命令」的 gate | **🔴 demo 致命（真主因）** |
+| 3 | reactive_stop | danger=0.6m 對 Go2 機身太近（LiDAR 視距，機鼻在 base_link 前 ~0.40m）。**修法應 enlarge 到 1.1-1.2m**（保守 demo 安全），不是縮小 | **demo 級** |
+| 4 | test protocol | B5 測試時 `/cmd_vel_joy` 持續 hot-publish 0.5 m/s — clear 後立刻接管。test 紀律問題、不只是代碼 | **demo 致命（協議級）** |
+| 5 | Nav2 | local_costmap.obstacle_max_range=1.8m vs RPLIDAR 8m 視距 — **enhancement 不是主因**（1.5m 仍在 1.8m 內、Nav2 看得到，且本次 mux 走 teleop 不走 nav） | **demo 級 enhancement** |
+| 6 | Nav2 | D435 主線未進 obstacle_layer。**detour profile** 已在 `2026-05-03-d435-rplidar-fusion-detour.md` 設計 `/scan_d435 + d435_scan` 配置，但非 demo 主線 | **demo 級 enhancement** |
 
-「demo 致命」= 不修 5/18 demo 不能上場。
-「demo 級」= 不修 demo 會有看得到的不穩定但能 hack 過。
+「demo 致命」= 不修 demo 不能上 nav 段。
+「demo 級 enhancement」= demo 後做、不是這次撞牆主因。
+
+**Roy 訂正前的版本錯誤地把 #5（Nav2 視距）標為 demo 致命**，實際它跟今天撞牆無關。今天撞牆的真因鎖在 #1 + #2 + #4。
 
 ---
 
 ## 2. 文件層 root cause（為什麼今天才發現）
 
-來自 subagent 1 的歷史考古：
+來自 subagent 1 + 2 的歷史考古（Roy 5/11 訂正後）：
 
 ```
-2026-03-25  D435 ROI 方案定案 → danger=0.6m / slow=1.0m（D435 規格邊界）
-2026-04-14  決定加買 RPLIDAR
+2026-03-25  D435 ROI 方案定案 → stop_threshold=0.8m / slow_threshold=1.5m
+            （reactive_stop_research.md L344-345 / 451-452 親自確認）
+            注意：不是後來的 0.6/1.0
+2026-04-14  決定加買 RPLIDAR（D435 鏡頭角度限制上機全失敗，4/3 停用）
 2026-04-24  RPLIDAR 到貨 → 架構翻案：D435 ROI 改 RPLIDAR + cartographer + Nav2
-            ⚠️ 沿用了 0.6m / 1.0m 閾值，沒對新感測器 + 新 mount + Go2 機鼻位置重算
+            ⚠️ 此時 reactive_stop_node.py 預設值改成 danger=0.6m / slow=1.0m
+               — 無 decision log、無 commit message 解釋為何從 0.8/1.5 改 0.6/1.0
+            ⚠️ 沒對新感測器 + 新 mount（LiDAR 反裝 yaw=π）+ Go2 機鼻位置重算
 2026-05-01  capability gate 上線 → safety_only mode 假設只配 teleop
-            ⚠️ 沒考慮 Nav2 整合後 clear zone 的「誰負責漸進減速」
+            ⚠️ 沒考慮 Nav2 / teleop 持續 publish 場景下 clear zone 沉默的後果
+2026-05-03  detour profile 設計（`2026-05-03-d435-rplidar-fusion-detour.md`）
+            含 `/scan_d435 + d435_scan` Phase 1/2 配置 — 但「不接 main local_costmap」
+            是明確設計（CLAUDE.md「D435 是 safety gate，不接進 Nav2 local costmap」）
 2026-05-10  demo spec freeze → P0 nav 進入主舞台
-            ⚠️ 沒人 review 過去設計參數是否仍適用
+            ⚠️ 沒人 review「safety_only clear zone 沉默 + teleop hot-publish 後果」
 2026-05-11  撞牆
 ```
 
-**流程 bug**：每次架構翻案沒做「過去設計參數是否仍適用」的 audit。
+**流程 bug**：每次架構翻案沒做「舊參數是否仍適用 + 上下游語境是否變了」的 audit。
 
-`docs/navigation/CLAUDE.md` 5/1 寫過「safety_only=true ... clear zone 會 0.60 m/s shadow nav」，但被當成工程細節，沒升等成「設計缺陷」。
+`docs/navigation/CLAUDE.md` 5/1 寫過「safety_only ... clear zone shadow nav」警告，但被當成工程細節，沒升等成「demo 致命設計缺陷」。
+
+**0.6/1.0 真正源頭 verdict（subagent 1 考古結論）**：⭐⭐ 推測為 4/24 RPLIDAR 整合時隨手改值，無記錄、無 review。**不是 3/25 D435 ROI 方案的繼承**（那邊明確是 0.8/1.5）。
 
 ---
 
@@ -110,7 +132,9 @@ t=93s   zone slow → danger (front_min=0.57m)
 │  ├ 發 /capability/depth_clear (Bool, 5Hz, latched)   │
 │  └ fail-closed: false if frame_age > 1.0s            │
 │                                                       │
-│ ⚠️ D435 完全沒進 Nav2 costmap！只當 capability gate   │
+│ ⚠️ D435 主線未進 Nav2 costmap（明確設計）              │
+│   detour profile 已在 2026-05-03 spec 設計            │
+│   `/scan_d435 + d435_scan` 但 demo 後再落地           │
 └──────────────────────────────────────────────────────┘
             ↓
 ┌─ Nav2 stack ─────────────────────────────────────────┐
@@ -209,82 +233,110 @@ local_costmap:
 
 ---
 
-## 5. 修法路線圖
+## 5. 修法路線圖（2026-05-11 night Roy 訂正後）
 
-### Tier 0 — 5/12 早 AM 必修（demo 致命）
+> ⚠️ **重要：reactive_stop 永遠只發 0、不發任何正速度**。
+> `/cmd_vel_obstacle` priority **200**（高於 teleop 100 / nav 10）= **主動命令通道**，不是被動限速。
+> 在 slow zone 發 0.2 m/s 等於「主動命令 Go2 走 0.2 m/s」— 不是「限制」。
+> 因此 reactive_stop 的工作是「鎖死前進」直到上游主動清掉舊命令或重發新命令。
 
-| # | 修法 | 檔案 | 工時 |
-|:-:|---|---|:-:|
-| **T0.1** | reactive_stop clear/slow 也低頻發 cmd_vel（防 mux timeout）| `reactive_stop_node.py:185-197` | 30 min |
-| **T0.2** | danger 0.6→0.50m（緊急停），slow 1.0→0.85m，加 slowdown_ratio | `reactive_stop_node.py:51-58` + 啟動 script | 30 min |
-| **T0.3** | 加 hysteresis + resume hold 1.5s + velocity ramp 0.5s | `reactive_stop_node.py` 新 logic | 1.5h |
-| **T0.4** | local_costmap.obstacle_max_range 1.8→3.0m（與 RPLIDAR 視距一致）| `nav2_params.yaml:231` | 5 min + 實機驗 |
-| **T0.5** | clear_debounce_frames 3→5 + 改時間門檻 0.5s | `reactive_stop_node.py:62` | 15 min |
-| **T0.6** | 修法落地後重測 B5 motion，確認新閾值在 0.2 m/s 慢速也安全 | Jetson 實機 | 1h |
-
-T0 全部 ~4 小時。**做完才能 motion 測**。
-
-### Tier 1 — 5/12 PM / 5/13 場測前（demo 級）
+### B0 — Critical Path（5/12 早 AM 必修，~3h，做完才能 motion 重測）
 
 | # | 修法 | 檔案 | 工時 |
 |:-:|---|---|:-:|
-| T1.1 | D435 啟動 `depth_to_laserscan` 或 PointCloud2 → 加進 obstacle_layer 第二個 observation source | 新 launch + `nav2_params.yaml` | 2-3h |
-| T1.2 | base_link → laser TF 精量到 ±0.01m（卡尺 + 地圖對齊驗證） | TF static publisher | 1h |
-| T1.3 | front_offset_rad 改名 `laser_to_physical_front_rad` + docstring 註明跟 TF yaw 的關係 | `reactive_stop_node.py:56-58` + `lidar_geometry.py` | 30 min |
-| T1.4 | DWB min_vel_x 確認 ≥0.45 + footprint 改成實際 0.65×0.30 | `nav2_params.yaml` | 30 min |
-| T1.5 | Nav2 inflation_radius 0.30→0.45（Go2 半徑 0.35 + 0.10 buffer） | `nav2_params.yaml` | 5 min + 實機 |
-| T1.6 | reactive_stop status 加診斷欄位（clear_streak / hysteresis_timer） | `reactive_stop_node.py` | 30 min |
+| **B0.1** | **Release gate（hold 0）**：clear/slow zone 持續 publish `Twist(0)` 到 `/cmd_vel_obstacle`（仍 priority 200），讓 mux 不 0.5s timeout 把控制權交還給 teleop。reactive_stop 在任何 zone 都只發 0，永不發正速度 | `reactive_stop_node._tick()` | 45 min |
+| **B0.2** | **Teleop 殘留 protocol**：B5 motion 測試 protocol 寫死「測試前必 kill `/cmd_vel_joy` publisher」，改用「人工發單個短脈衝命令」模擬 nav goal | `nav-root-cause-burndown.md §B5 protocol` | 15 min docs |
+| **B0.3** | **Threshold enlarge（保守）**：`danger 0.6→1.1m` / `slow 1.0→1.7m`（LiDAR 視距）。給 Go2 機鼻 + 反應時間 + 慣性 buffer。**方向是 enlarge，不是縮小** | `reactive_stop_node.py:51-52` 預設 + `scripts/start_*_tmux.sh` 啟動 param | 15 min |
+| **B0.4** | **Hysteresis / hold timer**：clear_debounce 從 frame count(3) 改時間門檻 0.5s + 出 zone hold 1.0-1.5s 才升級。`/cmd_vel_obstacle` 在 clear zone 仍持續發 0，避免抖動 | `reactive_stop_node.py:62, 174-179` | 30 min |
+| **B0.5** | **慢速 + 人工 e-stop test protocol**：B5 motion 重測用 `0.15-0.2 m/s` 慢速、單脈衝命令、e-stop / Ctrl-C 隨手 | docs only | 15 min |
+| **B0.6** | Unit tests 覆蓋 release gate（所有 zone 持續發 0）+ hysteresis（時間門檻）+ threshold（1.1/1.7）。仿 `test_robot_control_service.py` 11 條 mock controller pattern | `go2_robot_sdk/test/test_reactive_stop_release_gate.py` 新 | 45 min |
 
-### Tier 2 — Demo 後
+**B0 不做**（嚴格）：
+- ❌ reactive_stop 發任何正速度（即使是 0.2 m/s 限速也不行）
+- ❌ velocity ramp（reactive_stop 沒這責任，ramp 是 nav controller 的工作）
+- ❌ 自動「障礙清除後恢復前進」邏輯
+
+### B1 — Demo readiness（5/12 PM / 5/13 場測前，~3h）
+
+> ⚠️ **B1.1 不是剛剛撞牆主因**（1.5m 在 1.8m 內、Nav2 看得到，且本次 mux 走 teleop 不走 nav）。**enhancement，不要排在 release gate 前**。
+
+| # | 修法 | 檔案 | 工時 |
+|:-:|---|---|:-:|
+| B1.1 | local_costmap.obstacle_max_range 1.8→3.0（與 RPLIDAR 8m 視距更接近，提早規劃繞行；**enhancement**）| `nav2_params.yaml:231` | 5 min + 實機 |
+| B1.2 | inflation_radius 0.30→0.45（Go2 半徑 0.35 + 0.10 buffer） | `nav2_params.yaml` | 5 min |
+| B1.3 | Footprint 改實際 0.65×0.30 | `nav2_params.yaml` | 5 min |
+| B1.4 | base_link → laser TF 精量到 ±0.01m（卡尺 + Foxglove `/scan_rplidar` 對齊驗證） | static TF launch | 1h |
+| B1.5 | front_offset_rad 改名 `laser_to_physical_front_rad` + docstring 註明跟 TF yaw=π 的雙重套用關係 | `reactive_stop_node.py:56-58` + `lidar_geometry.py:20-22` | 30 min |
+| B1.6 | reactive_stop status JSON 加診斷欄位（clear_streak / hysteresis_timer / since_last_zone_change） | `reactive_stop_node._tick_status()` | 30 min |
+
+### B2 — Demo 後
 
 | # | 修法 |
 |:-:|---|
-| T2.1 | 切換到 Nav2 collision_monitor（Stop/Slowdown/Approach 三 polygon），棄用自製 reactive_stop |
-| T2.2 | base_link projection — 用 TF 算「機鼻到障礙物」距離，自適應 mount 改變 |
-| T2.3 | STVL spatio-temporal voxel layer 取代 VoxelLayer（對 RealSense 更穩） |
-| T2.4 | 動態障礙跟蹤（temporal tracking + Kalman），降低 zone bouncing |
+| B2.1 | D435 detour profile 從 spec 落地（按 `2026-05-03-d435-rplidar-fusion-detour.md` Phase 1 → 2，加進 main local_costmap）|
+| B2.2 | base_link projection — 用 TF 算「機鼻到障礙物」距離，threshold 改成機鼻距離（自適應 mount 改變） |
+| B2.3 | 切換到 Nav2 collision_monitor（業界標準三 polygon Stop/Slowdown/Approach），棄用自製 reactive_stop |
+| B2.4 | STVL spatio-temporal voxel layer 取代 VoxelLayer（對 RealSense motion blur 更穩） |
+| B2.5 | 動態障礙物跟蹤（temporal tracking + Kalman），降低 zone bouncing |
+
+### B3 — 流程性修法（避免下次架構翻案再踩同樣坑）
+
+| # | 修法 |
+|:-:|---|
+| B3.1 | `docs/navigation/CLAUDE.md` 把「safety_only clear zone shadow nav」升等成 architecture-critical 段落，故事化描述「障礙清除時會發生：(1) reactive_stop 沉默 (2) mux timeout (3) teleop 全速」 |
+| B3.2 | nav 相關 spec 任何 threshold 改動必填「decision log」段（防 0.6/1.0 那種無記錄漂移） |
+| B3.3 | 架構翻案 SOP checklist：每次翻案必跑「舊參數是否仍適用 + 上下游語境是否變」audit |
 
 ---
 
-## 6. 5/12 早 AM 落地計畫（給 Roy 直接執行）
+## 6. 5/12 早 AM 落地計畫（Roy 訂正後）
 
 ```bash
-# Step 1: 拿這份 audit 上 Jetson
-~/sync once
+# Step 0: 看 working tree 狀態（不要直接 pull）
+cd /home/roy422/newLife/elder_and_dog
+git status
+# 確認沒有殘留要先處理（68fe29b 的 safety-fix-plan、burndown.md drift）
 
-# Step 2: 改 reactive_stop_node.py（T0.1 + T0.2 + T0.3 + T0.5）
-#   - safety_only mode：clear 也發 0（低頻 1Hz refresh，避免完全沉默）
-#   - slow zone 發 slow_speed=0.20 m/s（or 0 if MIN_X 限制）
-#   - resume_hold_sec=1.5, resume_ramp_sec=0.5
-#   - clear_debounce 改時間門檻 0.5s
+# Step 1: 改 reactive_stop_node.py
+#   B0.1 release gate：safety_only=true 時 ALL zone 都發 Twist(0)，不只 danger
+#   B0.3 threshold：danger 0.6→1.1m, slow 1.0→1.7m
+#   B0.4 hysteresis：clear_debounce 改時間門檻 0.5s + clear zone hold 1.0-1.5s
+#   B1.5 front_offset_rad 改名 + docstring（順手做）
+#   B1.6 status JSON 加 clear_streak / hysteresis_timer
 
-# Step 3: 改 nav2_params.yaml（T0.4 + T1.5）
-#   - local_costmap obstacle_max_range: 1.8 → 3.0
-#   - inflation_radius: 0.30 → 0.45
-
-# Step 4: 改啟動 script danger/slow params
+# Step 2: 改啟動 script danger/slow params
 #   start_reactive_stop_tmux.sh + start_nav_capability_demo_tmux.sh
-#   -p danger_distance_m:=0.50 -p slow_distance_m:=0.85
+#   -p danger_distance_m:=1.1 -p slow_distance_m:=1.7
 
-# Step 5: Jetson rebuild
-ssh jetson-nano "cd ~/elder_and_dog && colcon build --packages-select go2_robot_sdk"
+# Step 3: 寫 unit tests 跑綠
+#   go2_robot_sdk/test/test_reactive_stop_release_gate.py
 
-# Step 6: B5 motion 重測（先用 0.2 m/s 慢速，不是 0.5）
-#   驗收順序：danger 鎖死 → 移開 → hold 1.5s → ramp 0→0.2 → 再放回 → 立即停
+# Step 4: Jetson rebuild
+~/sync once && ssh jetson-nano "cd ~/elder_and_dog && colcon build --packages-select go2_robot_sdk"
+
+# Step 5: B5 motion 重測（**先 kill teleop publisher**，用 0.15-0.2 m/s 慢速）
+#   核心驗收：移開物體後，reactive_stop 仍持續發 0、Go2 不會自動恢復前進
+#   只有手動發 nav goal 才會走
+
+# Step 6（B1）：改 nav2_params.yaml
+#   B1.1 local_costmap obstacle_max_range: 1.8 → 3.0（enhancement）
+#   B1.2 inflation_radius: 0.30 → 0.45
+#   B1.3 footprint 改 0.65×0.30
 ```
 
 **5/13 場測前必過的驗收**：
 - (a) reactive_stop danger 鎖死 100%（10 次中 0 次穿過）
-- (b) clear → resume 速度 ramp 可見（不是一次跳到 0.5）
-- (c) Nav2 看得到 3m 外障礙（Foxglove 看 local_costmap inflation 範圍對）
-- (d) 連續 30 秒在有障礙環境跑不撞
+- (b) **kill teleop + 移開物體**：Go2 不會自動恢復前進（核心修法驗收）
+- (c) **不 kill teleop + 移開物體**：reactive_stop 仍蓋住 teleop 0.5、Go2 不撞（safety net）
+- (d) 連續 30 秒在有障礙環境跑不撞、無 mux timeout 切換到 teleop 的 log
 
 ---
 
 ## 7. 與其他文件的關係
 
-- **取代**：`docs/navigation/CLAUDE.md` 中關於 reactive_stop 參數的舊敘述（5/1 「safety_only ... clear zone 會 shadow nav」需更新成 5/11 audit 結論）
-- **取代**：`docs/navigation/research/2026-03-25-reactive-obstacle-avoidance.md` §4.4 的 0.6m/1.0m 閾值
+- **取代**：`docs/navigation/CLAUDE.md` 中關於 reactive_stop 參數的舊敘述（5/1 「safety_only ... clear zone 會 shadow nav」需 B3.1 升等成 architecture-critical）
+- **與 `docs/navigation/research/2026-03-25-reactive-obstacle-avoidance.md` 關係**：3/25 文件用的是 `stop_threshold=0.8 / slow_threshold=1.5`（原始 D435 ROI 方案）；4/24 RPLIDAR 整合時改成 `0.6 / 1.0` 無 decision log。本檔 B0.3 把它再 enlarge 回 `1.1 / 1.7`（保守 demo 安全）
+- **與 `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md` 關係**：detour profile（`/scan_d435 + d435_scan`）已設計，但 demo 期不啟用、demo 後 B2.1 才落地
 - **被引用於**：`docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4 B5`、`references/project-status.md`
 - **未影響**：`docs/contracts/interaction_contract.md`（topic 沒變）、`docs/mission/`（專案方向沒變）
 
@@ -299,15 +351,24 @@ ssh jetson-nano "cd ~/elder_and_dog && colcon build --packages-select go2_robot_
 
 ---
 
-## 9. 結論
+## 9. 結論（Roy 5/11 night 訂正後）
 
 今天「導航避障到底是不是空間問題」的答案：
 
-**不是。今天抓到 6 層真系統設計缺陷，跟空間無關**。學校大空間能掩蓋部分問題（更多反應時間），但 reactive_stop / mux / Nav2 / D435 的結構性漏洞還在，demo 上場仍會撞。
+**不是。但也不是 Nav2 視野不夠遠**。真正主因是 **reactive_stop release gate 漏洞** — clear zone 沉默後 mux 0.5s timeout，把控制權還給仍在發 0.5 m/s 的 `/cmd_vel_joy`，「clear 不是安全恢復、只是解除煞車」。
 
-**5/12 早 AM 必須做完 Tier 0 六項才能繼續 B5 motion 測試**。Tier 1 在 5/12-5/13 場測前完成。Tier 2 留 demo 後。
+學校大空間能給更多反應時間（緩解 #3 threshold 過近），但 #1 + #2 + #4 的 release gate / test discipline 漏洞**換到大空間還在**，demo 上場仍會撞。
 
-如果 5/12 中午 Tier 0 沒做完 → demo 走降級路徑（reactive_stop 單獨 demo / 純靜態 demo），不上 nav。
+**5/12 早 AM 必須做完 B0 六項才能繼續 B5 motion 測試**：
+- B0.1 release gate（reactive_stop 在所有 zone 都發 0）
+- B0.2 + B0.5 test discipline（kill teleop、慢速、單脈衝）
+- B0.3 threshold enlarge（1.1 / 1.7 保守值）
+- B0.4 hysteresis（時間門檻 + 出 zone hold）
+- B0.6 unit tests
+
+B1 在 5/12-5/13 場測前完成。B2 留 demo 後。B3 流程性修法非阻塞但 5/12 內要寫進 docs。
+
+如果 5/12 中午 B0 沒做完 → demo 走降級路徑（reactive_stop 單獨 demo / 純靜態 demo），不上 nav。
 
 ---
 
