@@ -1,13 +1,13 @@
 # 專案狀態
 
-**最後更新**：2026-05-10 night（demo-quality 6-spec roadmap 落地 + Spec 1 A+ 通過 14 點 review）
+**最後更新**：2026-05-10 night（demo-quality 6-spec roadmap 落地 + Spec 1 A+ 通過 14 點 review + Spec 6 P0 完成：Studio composer absolute layout 重構）
 **硬底線**：5/18 期末 demo（8 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
 
 ---
 
 ## 5/10 進度（demo-quality roadmap：6 spec + Spec 1 14 點 review fix）
 
-5/10 全天文件工作日：把 demo 前剩餘 6 天的工作拆成 6 個 spec，並把 Spec 1（LLM Naturalness A+）打磨到可進 implementation plan 的狀態。今天 7 個 commit 全是 docs，無程式碼變更。
+5/10 全天文件工作日（白天 7 commit 全 docs）+ 晚上 Spec 6 P0 從「驗證 5/9 fix」演化成「Studio composer 重構」（2 commit，一個 plan、一個程式碼）。共 9 commit。把 demo 前剩餘 6 天的工作拆成 6 個 spec，並把 Spec 1（LLM Naturalness A+）打磨到可進 implementation plan 的狀態。
 
 ### 6-Spec roadmap（`docs/pawai-brain/specs/2026-05-10-*`）
 
@@ -18,7 +18,7 @@
 | 3 Pose Interaction | 7 種姿勢 + 跌倒人臉融合 | demo 後 | draft |
 | 4 Object Perception | YOLOv8n vs YOLO26n + 顏色 | demo 後 Phase 1/2/3 | draft |
 | 5 Navigation Roadmap | SLAM/Nav2 P0 + P1-P3 | P0 主軸（5/13 場地測）| draft |
-| 6 Studio UX Polish | scroll / 五功能視角 / demo 操作面板 | P0 驗證（可能砍）| draft |
+| 6 Studio UX Polish | scroll / 五功能視角 / demo 操作面板 | ✅ P0 完成（5/10 night composer 重構）| P1/P2 demo 後 |
 
 ### Spec 1 A+ 核心契約
 
@@ -42,7 +42,7 @@
 | 3 | 4 | needs_confirm 三分支 / schema 用語 / module-level build_plan / text_pool 落點選定 |
 | 4 | 4 | 路徑 B SkillContract 矛盾 / 摘要殘留 / PendingConfirm 不擴簽名 / 路徑 B template |
 
-### 7 commit（5/10 day）
+### 9 commit（5/10 全天）
 
 ```
 f55a25f docs(spec): add Spec 1 LLM naturalness / self-showcase A+ design
@@ -52,7 +52,26 @@ fbaefc3 docs(specs): add Spec 2-6 + roadmap index
 ce20096 docs(spec1+2+4): apply 6 review fixes
 1a6fbdb docs(spec1): apply 4 more review fixes — needs_confirm/schema/build_plan/pool
 45c342a docs(spec1): apply 4 final review fixes — text_pool location consistency
+de07a05 docs(plans): add Spec 1 full plan + Spec 2/5/6 lightweight plans/checklists
+fdd5c93 fix(studio): composer absolute-bottom layout (ChatGPT-like)
 ```
+
+### 5/10 night 補充：Spec 6 P0 = Studio composer 重構
+
+預計「5–10 分鐘驗證 5/9 fix」→ 實際耗 ~3 小時，因為驗 4 case 時暴露了**比 scroll 更深層**的 layout bug：composer 被訊息推離 viewport 底部。
+
+- **5/9 stick-to-bottom (`87e2d5d`) 在原 issue 不重現**，4/4 case pass
+- 但 composer layout：`flex h-full flex-col` + `shrink-0` 不夠穩，textarea auto-grow / skill strip toggle 都會微跳
+- 嘗試 `flex-col overflow-hidden` + `min-h-0` + `behavior:"auto"` + `isAutoScrollingRef` 鎖只解部分症狀
+- 最後改 ChatGPT-like 架構（`fdd5c93`）：
+  - 抽 `components/chat/composer.tsx`（純 view）
+  - ChatPanel root 改 `relative h-full overflow-hidden`
+  - 三層：header（normal flow）/ scroll area（`absolute inset-x-0` + 動態 top/bottom）/ composer bar（`absolute bottom-0 z-20`）
+  - `ResizeObserver` 量 headerH/composerBarH 寫 useState，初始 44/96
+  - z-20 < DevButton z-30 < Sheet z-40/50（dev-button.tsx:22 已驗證）
+- ✅ npm run lint：只剩 dev-button.tsx 一條 pre-existing rules-of-hooks（與本次無關）
+- ✅ npm run build：TypeScript clean，12 pages 全 generate
+- 詳細設計 plan：`~/.claude/plans/subagent-pawai-studio-frontend-vectorized-bunny.md`
 
 ### 明天（5/11）
 

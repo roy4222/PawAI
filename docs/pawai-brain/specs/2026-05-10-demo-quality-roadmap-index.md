@@ -24,7 +24,7 @@ PawAI 不是長者陪伴專案。是**多模態感知融合的具身互動機器
 | 3 | Pose Interaction | 7 種姿勢 + 跌倒人臉融合 | — | ✅ 全部 | 中（誤觸）| [spec3](./2026-05-10-spec3-pose-interaction-design.md) |
 | 4 | Object Perception | YOLOv8n vs YOLO26n + 顏色 | — | ✅ 全部 | 低 | [spec4](./2026-05-10-spec4-object-perception-design.md) |
 | 5 | Navigation Roadmap | SLAM/Nav2/招手/尋物/巡邏/跟隨 | P0 SLAM 主軸 | P1-P3 | 高 | [spec5](./2026-05-10-spec5-navigation-roadmap.md) |
-| 6 | Studio UX Polish | scroll / 五功能視角 / 操作面板 | P0 驗證（可能砍）| P1+P2 | 低 | [spec6](./2026-05-10-spec6-studio-ux-polish.md) |
+| 6 | Studio UX Polish | scroll / 五功能視角 / 操作面板 | ✅ P0 完成（5/10 night composer 重構）| P1+P2 | 低 | [spec6](./2026-05-10-spec6-studio-ux-polish.md) |
 
 ---
 
@@ -47,8 +47,11 @@ PawAI 不是長者陪伴專案。是**多模態感知融合的具身互動機器
    - Palm / Fist / Index 對應 skill
    - OK gesture 驗證（PendingConfirm 已用）
 
-4. **Spec 6 P0 scroll 驗證**（0.5 天）
-   - 5/9 fix 重現測試 → 無 → 砍此項
+4. ~~**Spec 6 P0 scroll 驗證**~~（5/10 night 完成 ✅）
+   - 5/9 stick-to-bottom fix 確認在原 issue 不重現
+   - 但發現新 layout bug：composer 被訊息推離 viewport 底
+   - 已重構為 ChatGPT-like absolute-bottom（commit `fdd5c93`）
+   - 詳見 [Spec 6 plan](../plans/2026-05-10-spec6-scroll-verification-checklist.md) §10 結論
 
 ---
 

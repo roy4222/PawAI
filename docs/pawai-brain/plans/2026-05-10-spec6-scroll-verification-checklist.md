@@ -1,10 +1,10 @@
 # Spec 6 — Studio Scroll 重現驗證 Checklist
 
-> **Status**: ready-to-verify
+> **Status**: ✅ COMPLETED 2026-05-10 night
 > **Date**: 2026-05-10
 > **依據**：[Spec 6](../specs/2026-05-10-spec6-studio-ux-polish.md) §3
-> **Fix commit**：`87e2d5d` (5/9 evening) — chat-panel.tsx:116
-> **預期工時**：5–10 分鐘
+> **Fix commits**：`87e2d5d` (5/9 evening, scroll behaviour) + `fdd5c93` (5/10 night, layout 重構)
+> **實際工時**：~3 小時（原估 5–10 分鐘，因發現新 layout bug 升級為 composer 重構）
 > **執行者**：Roy
 > **目的**：確認 5/9 fix 是否解決 scroll 跳動問題；無重現 → P0 砍掉、Spec 6 P1/P2 留 demo 後
 
@@ -56,22 +56,32 @@ console.log('distance to bottom:', el.scrollHeight - el.scrollTop - el.clientHei
 
 ---
 
-## 4. 結果記錄
+## 4. 結果記錄（5/10 night 實測）
 
 | Case | Pass / Fail | 備註 |
 |------|:-----------:|------|
-| C1 | | |
-| C2 | | |
-| C3 | | |
-| C4 | | |
+| C1 | ✅ Pass | 連發訊息會自動滾到底（5/9 fix work） |
+| C2 | ✅ Pass | 上滑後不被新訊息強拉回（5/9 fix work） |
+| C3 | ✅ Pass | 同 C2 |
+| C4 | ✅ Pass | 滑回底部後 stick-to-bottom 恢復 |
 
-**結論**（驗證後填）：
-- [ ] 4/4 通過 → Spec 6 P0 完成、本檢查項砍。Spec 6 P1/P2 留 demo 後。
-- [ ] 有 fail → 開 `docs/pawai-brain/plans/2026-05-10-spec6-scroll-fix-plan.md`，記錄 fail case + 修法假設。
+**5/9 stick-to-bottom fix 在原 issue 不重現** — 但測試過程中暴露**另一個更深層的 layout bug**：composer（輸入框）會被訊息推離 viewport 底部、發長訊息有空白 catch-up。
+
+### 衍生工作（已完成）
+
+5/10 一連串嘗試 → 最後改為 composer 重構：
+- 抽 `components/chat/composer.tsx`（純 view component）
+- ChatPanel conversation view 重組為 `relative h-full overflow-hidden` + absolute layout（header / scroll / composer-bar 三層）
+- ResizeObserver 動態量 headerH / composerBarH，scroll area 用 inline `style={{ top, bottom }}` 鉗制
+- z-index：composer z-20 < DevButton z-30 < Sheet z-40/50
+
+Commit：`fdd5c93 fix(studio): composer absolute-bottom layout (ChatGPT-like)`
+詳細設計 plan：`/home/roy422/.claude/plans/subagent-pawai-studio-frontend-vectorized-bunny.md`
 
 ---
 
-## 5. 後續
+## 5. 結論
 
-- 若通過：在 [demo-quality roadmap index](../specs/2026-05-10-demo-quality-roadmap-index.md) 標 Spec 6 P0 ✅，焦點移回 Spec 1。
-- 若不通過：補小 plan 後再決定是否 demo 前修（看 fail 嚴重程度）。
+✅ **Spec 6 P0 完成**。但範圍從「驗證 5/9 fix」升級為「composer layout 重構」。
+Spec 6 P1（五功能 sidebar）/ P2（demo 操作面板）按原計畫留 demo 後。
+焦點移回 Spec 1（5/11 起 P0 + P1）。

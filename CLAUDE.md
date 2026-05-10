@@ -148,7 +148,8 @@ ssh -f -N -L 8001:localhost:8001 -L 8000:localhost:8000 $USER@<server>
 # 從 repo 根目錄一鍵啟動
 bash pawai-studio/start.sh
 # → http://localhost:3000/studio
-# → Mock Server: http://localhost:8001
+# → Mock Server: http://localhost:8080
+# → WebSocket:   ws://localhost:8080/ws/events
 ```
 
 ### 快速驗證 TTS → Go2 播放
