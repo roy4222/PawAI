@@ -322,23 +322,23 @@ ros2 param set /reactive_stop_node mode released
 
 ### 🔴 P0 — 5/12 早 AM 必做（demo blocker）
 
-| # | Todo | Owner | 預估 | Dependency |
+| # | Todo | Owner | 狀態 | Note |
 |:-:|---|---|:-:|---|
-| T1 | 處理 working tree drift（burndown.md M / safety-fix-plan D / start_pawai_brain_tmux.sh M） | Roy | 15 min | Step 0b 決定 (a/b/c) |
-| T2 | `~/sync once` + Jetson `colcon build --packages-select go2_robot_sdk` | Roy | 10 min | T1 |
-| T3 | 跑 `start_reactive_stop_safety_hold_tmux.sh`（hold_brake 鎖死驗證）3 場景 | Roy | 30 min | T2 |
-| T4 | runtime `ros2 param set mode released` 驗證釋放 + 後續 nav goal pass | Roy | 15 min | T3 |
-| T5 | 跑 `start_nav_capability_demo_tmux.sh`（progressive）+ goto_relative 0.3m | Roy | 30 min | T2 |
-| T6 | 量 `base_link → 機鼻` 距離（卡尺，更新 `base_to_nose_x` 預估值） | Roy | 10 min | (none) |
+| T1 | 處理 working tree drift | Roy | ✅ | 5/11 commit `019d61d` / `5a7c309` 收掉 |
+| T2 | `~/sync once` + Jetson `colcon build` | Roy/Claude | ✅ | 5/12 night, build 3.06s |
+| T3 | hold_brake script smoke 3 場景 | Roy/Claude | ✅ | mux topology 通、`/cmd_vel` 10Hz 全 0、發現 launch.py mux bug 並修 (`2ce02fa`) |
+| T4 | runtime `mode=released` 驗證 | Roy/Claude | ✅ | 釋放後 nobody publish、Go2 不暴衝、zone tracking 仍活著 |
+| T5 | nav_capability progressive + goto 0.3m | Roy/Claude | ✅ | actual_distance=0.2998m 誤差 0.2mm + 障礙停車驗收（在 0.81m 進 danger 停下、Go2 未撞）|
+| T6 | 卡尺量 base_link → 機鼻 | Roy | ⏳ | 5/13 場測前做 |
 
 ### 🟠 P1 — 5/12 PM / 5/13 場測前
 
-| # | Todo | Owner | 預估 |
+| # | Todo | Owner | 狀態 |
 |:-:|---|---|:-:|
-| T7 | B1.1-1.3 nav2_params.yaml（obstacle_max_range / inflation / footprint） | Claude + Roy | 30 min code + 30 min 實機驗 |
-| T8 | B1.4 base_link → laser TF 精量到 ±0.01m（卡尺 + Foxglove `/scan_rplidar` 對齊）| Roy | 1h |
-| T9 | B6 AMCL 場測（home / 學校場地）| Roy | 1h |
-| T10 | B7 goto 0.3m / 0.5m motion 測試 | Roy | 1h |
+| T7 | B1.1-1.3 nav2_params.yaml | Claude | ✅ commit `e881b7e`（obstacle 1.8→3.0、raytrace 2.0→3.5、inflation 0.30→0.45。footprint deferred to T8）|
+| T8 | B1.4 base_link → laser TF 精量 | Roy | ⏳ 5/13 場測前 |
+| T9 | B6 AMCL 場測 | Roy | ⏳ 5/13 學校場地 |
+| T10 | B7 goto 0.3m / 0.5m motion | Roy/Claude | ✅ 0.3m 通、0.5m 通（觸發 reactive 停車）；1.0m 5/12 night ❌ no_progress_timeout（見 §10）|
 
 ### 🟡 P2 — Demo 後（5/19+）
 
@@ -447,3 +447,136 @@ d804a58 fix(reactive_stop): 4 review fixes (5/11 night Roy mode redesign review)
 ---
 
 **End of Nav 避障深度研究 — 2026-05-11 deep night**
+
+---
+
+## 10. 5/12 落地 + 新發現（追記）
+
+> **追記日期**：2026-05-12 night
+> **status**：5/12 重大里程碑（demo 最低目標 3/3 全打勾）+ 1 個 latent bug 浮現待 5/13 修
+
+### 10.1 落地總結
+
+**Demo 最低目標 3/3 全打勾**（5/11 撞牆事件後第一次乾淨 motion）：
+
+| 項目 | 證據 | 位置 |
+|---|---|---|
+| 展示 SLAM / Nav2 基本能力 | nav_capability stack 36 node 全跑、AMCL/map_server/controller/planner/bt 全 active | T5 topology check |
+| 能在安全距離內移動 | `goto_relative 0.3m` → actual_distance=0.2998m，誤差 0.2mm | goal `b030a303...` SUCCEEDED |
+| 遇到障礙物能停下 | `goto 0.5m` 走 0.41m 在 obstacle_distance=0.81m 進 danger 停下、`reactive_stop_active=true`、Go2 未撞 | goal `78669a78...` Roy 移開後仍卡 0.94m 1m^36cm 物 → cancel |
+
+**5/11 1.1m danger 在 0.81m 觸發停車**，比 5/11 撞牆當時舊 0.6m 早 0.21m → **B0 4-mode 重設計成功**。
+
+### 10.2 5/12 兩個 commit
+
+#### `2ce02fa` fix(launch): split twist_mux from teleop flag (B0 隱性 bug)
+
+**怎麼發現**：T3 hold_brake smoke 跑完發現 `/cmd_vel_obstacle` Subscription count=0、`twist_mux` 不在 `ros2 node list` — reactive 發 0 但無人 sub、hold_brake 完全不生效。
+
+**Root cause**：`robot.launch.py:460` 把 `twist_mux` Node 綁在 `with_teleop` flag 上。safety_hold + nav_capability 兩個 script 都 `teleop:=false`（為了避免 teleop_twist_joy hot-publisher 干擾）→ **mux 也被一起 disable**。
+
+**Roy 5/11 review #1 (`d804a58`)** 想修這個但只動 script（從 `ros2 run go2_driver` 切 `robot.launch.py`），假設 launch 會帶 mux 起來；實際 launch arg 耦合才是真 bug。
+
+**修法**：
+```
++ DeclareLaunchArgument("mux", default_value="true", ...)
+- twist_mux Node condition=IfCondition(with_teleop)
++ twist_mux Node condition=IfCondition(with_mux)
+```
+
+修完 hold_brake / progressive 兩 mode 都驗證通過，topology 完整。
+
+#### `e881b7e` tune(nav2): B1.1+B1.2 obstacle/raytrace/inflation enlarge
+
+5/12 早 AM Plan B1 落地（research §5 B1）：
+- `local_costmap.obstacle_layer.scan.obstacle_max_range`: 1.8 → 3.0
+- `raytrace_max_range`: 2.0 → 3.5（業界慣例 raytrace ≥ obstacle）
+- `inflation_radius`: 0.30 → 0.45（配 reactive danger 1.1m + Go2 機鼻 ~0.5m）
+- `footprint`: 不動（CLAUDE.md 規則 + 等 T6/T8 卡尺）
+- `nav2_params_detour.yaml`: 不對齊（5/3 窄場景 detour 是有意保留）
+
+**motion 驗證狀態**：0.3m / 0.5m 通；1.0m 5/12 night ❌（見 §10.4）
+
+### 10.3 加分目標 cone 縮窄探索（不通過）
+
+Roy 提出兩個延伸：
+1. ±30° front cone 太容易卡住側邊家具（5/12 night 實測 0.94m 卡 3+ 分鐘）
+2. 想試靜態繞行避障（demo 加分目標）
+
+3 個 Explore subagent 並行調查（本地 reactive code / 本地 detour profile / 業界 best practice）— **詳細 findings 落檔於 `~/.claude/plans/graceful-twirling-cloud.md`**。重點：
+
+#### 推翻原計畫的 fact
+
+- ❌ **`front_arc_deg` 不能 runtime `param set`** — `_on_param_change` callback (`reactive_stop_node.py:173-197`) 只認 `enable_nav_pause` / `safety_only` / `mode`，不認 `front_arc_deg`。改 cone 必須**重啟 reactive_stop_node**。
+- ❌ **`start_nav_capability_demo_tmux_detour.sh` 已存在但有 4 個 bug**：
+  1. 用舊 `safety_only:=true` → auto-promote 成 `hold_brake` mode → **nav 完全動不了**（與 detour 目的矛盾）
+  2. `danger=0.40m` → 比 5/11 audit 認定的 1.1m 安全值低 65%，5/11 撞牆風險回來
+  3. `nav2_params_detour.yaml` 沒同步 5/12 main 改動（仍 obstacle 1.8 / inflation 0.20）
+  4. D435 mount TF 仍是 5/2 hardcoded `(0.30, 0, 0.20)` 沒精校
+- ⚠️ **業界共識（Nav2 docs + 5 GitHub repo）**：collision_monitor / DWB / planner **三層分工互不衝突**因為作用在不同時間尺度。我們自製 reactive 之所以衝突是因為「永遠優先 mux 200」太強
+
+#### Plan A（最小風險）執行結果
+
+- ✅ 重啟 reactive_stop with `front_arc_deg=15.0` → cone 從 ±30° 縮成 ±15° 生效
+- ✅ Cone narrowing 對 5/11 撞牆防護**零降級**（5/11 障礙在 0° 正前方，仍在 ±15° 內被擋）
+- ⚠️ ±15° 中央仍偵測到 1.03m 處 36cm 寬障礙（真實家具 / 物體 / 人）— Roy 移開後 zone clear、`/state/reactive_stop/status` 看到 `danger → slow → clear`
+- ❌ 發 `goto_relative 1.0` → **Goal accepted, 10s no_progress, ABORTED, actual_distance=0.0**（見 §10.4）
+
+### 10.4 🔴 P0 Demo Blocker — F7 nav_action_server no_progress
+
+**症狀**（goal `e72b4d23...`）：
+- nav lifecycle 全 active（amcl/map_server/controller/planner/bt 都 active [3]）
+- `/capability/nav_ready=true` / `/capability/depth_clear=true` / `/state/nav/paused=false`
+- AMCL covariance 0.156 / 0.138（well within 0.45 threshold）
+- Goal accepted，nav_action_server 算出 goal pose `(0.97, -0.98, -1.05)`
+- 10s 內 Go2 完全不動（end_pose=accept_pose），ABORTED with `no_progress_timeout`
+- `/cmd_vel = 0 @ 10Hz`（mux default，**因為沒人 publish 任何 input**）
+- `/cmd_vel_nav` topic 完全無 publisher — **controller_server 根本沒發 cmd_vel**
+- `clear_entirely_local/global_costmap` service 也不解
+
+**疑似 root cause（5/13 場測前必查）**：
+- (a) 5/12 inflation 0.30→0.45 後 planner 在某些 pose 算不出 valid path → 但為何 controller_server 不 log？
+- (b) `nav_action_server_node` 內部 dispatch 邏輯 bug — goal 雖 accept 但沒 forward 給 `/navigate_to_pose` action
+- (c) AMCL pose 與物理 pose 漂移 → costmap 認為 Go2 在 lethal cell，planner refuse
+- (d) Stack 跑 30+ min 後某 node 進 stale state（DDS / costmap subscriber dropped）
+
+**5/13 學校場地必修排序**：
+1. **F7 first**：先驗 fresh stack（重新 colcon build + restart）能否 motion → 排除 (d) stale state
+2. 若仍失敗 → 加 controller_server log verbose、看 BehaviorTree blackboard
+3. 若 fresh stack 通 → 暫時不解，但加 monitor 防 30 min stale
+
+### 10.5 6 個 Follow-up（追加到 §6 P3）
+
+| # | Item | 級別 | 預估 | 觸發點 |
+|:-:|---|:-:|:-:|---|
+| F1 | reactive_stop `_on_param_change` 加 `front_arc_deg` 處理（runtime 即可改） | P1 demo 後 | 30 min | 今天卡在不能 runtime set |
+| F2 | `start_nav_capability_demo_tmux_detour.sh` 4 bug fix（safety_only→progressive、danger 0.4→1.1、yaml sync、D435 TF）| P1 demo 後 | 1.5h | 5/12 subagent 揭出 |
+| F3 | `nav2_params_detour.yaml` 同步 5/12 main 改動或加 NOTE 說明 | P1 demo 後 | 30 min | drift 風險 |
+| F4 | D435 mount TF 卡尺精校（替換 5/2 hardcoded `(0.30, 0, 0.20)`）| P2 demo 後 | 1h | F2 dependency |
+| F5 | 業界 nav2_collision_monitor 評估遷移（取代自製 reactive_stop）| P2 demo 後 | 6-8h | 業界共識 |
+| F6 | `nav_capability` 腳本加 `NAV_PARAMS` env override（向後相容）| P1 demo 後 | 15 min | F2 dependency |
+| **F7** | **🔴 nav_action_server no_progress_timeout root cause**（goal accept 但 controller 不發 cmd_vel）| **P0 demo blocker** | 2-3h | 5/12 night 浮現 |
+
+### 10.6 5/12 night audit/code review reflections
+
+**Lessons learned**：
+
+1. **B0 launch.py mux bug 是 5/11 night Roy review #1 沒修到根的二級錯誤** — Roy 改 script 切 `robot.launch.py` 但沒驗 launch arg 耦合 → 5/11 night unit test 全綠但 topology 在實機 broken。教訓：launch arg coupling check 應該進 preflight script。
+
+2. **3 subagent 並行 deep dive 又一次救我** — 原本「runtime cone set + detour profile 直切」計畫一拍腦袋執行可能會：（a）改不了 cone（runtime 不認）（b）切 detour 變 hold_brake → demo 完全當機。subagent 揭 bug 在 30 min 內、avoidance 1+ hour 災難。pattern 值得固化。
+
+3. **Nav stack 浮現的 F7 bug 是「stack 跑久了」的 stale 跡象** — controller_server alive 但完全不發 cmd_vel = DDS 層或 BT 層的某個 listener dropped。5/13 fresh restart 應該回正，但 demo 當天若 stack 跑很久（demo flow 預期 30+ min 連續），會撞同樣的牆。**P0 必修 OR 必加 watchdog**。
+
+### 10.7 5/12 night commits 全鏈（3 個 nav）
+
+```
+859f4f3 docs(nav): sync 5/12 night progress — demo 最低目標 3/3 + nav stack 隱性 bug
+e881b7e tune(nav2): B1.1+B1.2 obstacle/raytrace/inflation enlarge (motion test pending)
+2ce02fa fix(launch): split twist_mux from teleop flag (5/12 T3 hold_brake bug)
+```
+
+5/12 全天 nav 工作量：T2-T5 完成、T7 完成、cone 探索（Plan A 部分通過、F7 bug 浮現）、3 subagent deep dive、~15 個 SSH iteration、~7h 實機 work。
+
+---
+
+**End of Nav 避障深度研究 — 5/12 night 追記**

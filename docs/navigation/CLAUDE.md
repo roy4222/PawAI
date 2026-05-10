@@ -116,6 +116,32 @@ zone 離 danger 時不發 `/nav/resume`（mux 仍鎖死，發 resume 會造成 n
 - **v8 mount yaw=π 必須設 `front_offset_rad: 3.14159`**（5/1 撞紙箱事件、commit `e3270da` 修）— `compute_front_min_distance` 寫死「laser 0° = Go2 前方」、yaw=π 後不對、需用 offset 補正。`scripts/start_nav_capability_demo_tmux.sh` 與 `start_reactive_stop_tmux.sh` 已加 `-p front_offset_rad:=3.14159`，自寫 launch 命令也要加。**注意此 param 與 base_link→laser TF yaw 是雙重套用設計**（兩段 frame convention 獨立補正、實務上兩個都填 π 才對）— 改 mount 角度時兩處都要改
 - **`/nav/pause` 只有 route_runner_node 接、`nav_action_server`（serving `/nav/goto_relative`）沒接**（5/1 發現 BUG #2，5/11 B0.1 fix 後不再 demo blocker — release gate 已用 always-publish-0 取代 nav/resume 機制）— 只有 `/nav/run_route` 才能完整觸發 reactive_stop 的 pause/resume，但即使 nav/resume 沒接，操作員也可以 explicit 重發 nav goal 達到同效果
 
+#### 5/12 night 落地與新發現（demo 最低目標 3/3 + 1 個 demo blocker）
+
+**Demo 最低目標全打勾 ✅✅✅**：goto 0.3m 通（誤差 0.2mm）、障礙在 0.81m 進 danger 停下 (B0 1.1m threshold 比 5/11 舊 0.6m 早 0.21m 觸發)、SLAM/Nav2 stack 36 node 全跑。詳細見 [`research/2026-05-11-nav-avoidance-deep-research.md` §10`](research/2026-05-11-nav-avoidance-deep-research.md)。
+
+**B0 launch.py mux flag bug 修法**（commit `2ce02fa`）：
+`robot.launch.py` 之前把 `twist_mux` Node 綁在 `with_teleop` flag 上 → safety_hold / nav_capability script 用 `teleop:=false` 會連 mux 一起 disable，hold_brake 完全不生效（`/cmd_vel_obstacle` 0 sub）。修法把 `mux` 拆出獨立 `DeclareLaunchArgument`（default true）。今後**自寫 launch 命令時，如果要 `teleop:=false` 但保留 reactive 控制權，不需要明示 `mux:=true`（已是 default）；只有故意全停 mux 才用 `mux:=false`**。
+
+**B1 nav2_params 5/12 tuning**（commit `e881b7e`）：
+- `local_costmap.obstacle_max_range`: 1.8 → 3.0（給 nav 更早看到障礙）
+- `raytrace_max_range`: 2.0 → 3.5（業界慣例 raytrace ≥ obstacle）
+- `inflation_radius`: 0.30 → 0.45（配 reactive danger 1.1m + Go2 機鼻 ~0.5m）
+- footprint 不動（CLAUDE.md 規則 + 等 T6/T8 卡尺）
+- `nav2_params_detour.yaml` 不對齊（5/3 窄場景 detour 是有意保留）
+
+**🔴 Demo blocker F7（5/13 場測前必查）**：
+nav_action_server `goto_relative` accept goal 後 10s `no_progress_timeout` ABORT、Go2 完全不動、`/cmd_vel_nav` 沒人 publish。lifecycle 全 active、costmap clear 也不解。疑似 (a) inflation 0.45 後 planner 在某些 pose 算不出 path、(b) nav_action_server dispatch bug、(c) AMCL drift、(d) stack 跑 30+ min stale state。**5/13 fresh restart 第一件事就是試 motion**，若 fresh stack 通則暫時不解 + 加 watchdog；若仍失敗則 verbose log + BT blackboard 查。
+
+**reactive_stop 4-mode 速查補充**：`front_arc_deg`（front cone 半角度，default 30°）**不在 `_on_param_change` callback** — runtime `ros2 param set` 改不了，**必須重啟 node** 才能改 cone 寬度。同樣不接受 runtime 改的 param：`front_offset_rad`、`danger_distance_m`、`slow_distance_m`。
+
+**`start_nav_capability_demo_tmux_detour.sh` 不要直接用**（5/12 subagent audit 發現 4 bug）：
+1. 用舊 `safety_only:=true` → auto-promote 成 `hold_brake` → nav 完全動不了（與 detour 目的矛盾）
+2. `danger=0.40m` 比 5/11 audit 認定的 1.1m 安全值低 65%，撞牆風險回來
+3. `nav2_params_detour.yaml` 沒同步 5/12 main 改動
+4. D435 mount TF 仍是 5/2 hardcoded `(0.30, 0, 0.20)` 沒精校
+跑 detour 前要先修 F2-F4 (見 research §10.5)。
+
 ### 環境 / 部署
 - **Jetson 供電升級至 2464 升降壓恒壓恒流模組**（4/29 night）— XL4015 在 Go2 運行下 4/29 16:30-17:30 跳電 3 次（10 分鐘內），換 2464 後（35W 自然散熱、過流/過壓/過溫多重保護）穩定。Memory `project_jetson_power_issue.md` 已更新。
 - **ros2 daemon 偶爾 sync 慢**：剛啟動的 publisher，topic hz 第一次抓不到很正常，等 5-10s 重試
