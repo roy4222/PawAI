@@ -1,0 +1,665 @@
+{
+  "version": "2026-05-04",
+  "timestamp": "20260510-151641",
+  "models": [
+    {
+      "alias": "gemini",
+      "slug": "google/gemini-2.5-flash"
+    }
+  ],
+  "prompts_file": "tools/llm_eval/prompts.json",
+  "results": [
+    {
+      "item_id": "chat-01",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "你好啊"
+      ],
+      "expected_intent": "greet",
+      "expected_skills": [
+        "chat_reply",
+        "wave_hello"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.40118408203125,
+        "response": {
+          "id": "gen-1778397400-7DbHjFKcqi0u14Ou5QtM",
+          "object": "chat.completion",
+          "created": 1778397400,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[excited] 嗨！\", \"skill\": \"wave_hello\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 23,
+            "total_tokens": 5136,
+            "cost": 0.0015914,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0015914,
+              "upstream_inference_prompt_cost": 0.0015339,
+              "upstream_inference_completions_cost": 5.75e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[excited] 嗨！\", \"skill\": \"wave_hello\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-02",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "今天天氣不錯耶"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": -0.3554534912109375,
+        "response": {
+          "id": "gen-1778397401-zxbTose4unzQK5kozL0a",
+          "object": "chat.completion",
+          "created": 1778397401,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 對啊，陽光暖暖的，很適合在旁邊發呆。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 36,
+            "total_tokens": 5151,
+            "cost": 0.0016245,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0016245,
+              "upstream_inference_prompt_cost": 0.0015345,
+              "upstream_inference_completions_cost": 9e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 對啊，陽光暖暖的，很適合在旁邊發呆。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-03",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "你會做什麼"
+      ],
+      "expected_intent": "self_intro_or_status",
+      "expected_skills": [
+        "self_introduce",
+        "show_status",
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.2847166061401367,
+        "response": {
+          "id": "gen-1778397402-PvUHKkOUadXt39pJNvBM",
+          "object": "chat.completion",
+          "created": 1778397402,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我會看你、聽你、陪你，偶爾還會假裝很忙。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5114,
+            "completion_tokens": 40,
+            "total_tokens": 5154,
+            "cost": 0.0016342,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0016342,
+              "upstream_inference_prompt_cost": 0.0015342,
+              "upstream_inference_completions_cost": 0.0001
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我會看你、聽你、陪你，偶爾還會假裝很忙。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-04",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "你叫什麼名字"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [
+        "self_introduce",
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0715610980987549,
+        "response": {
+          "id": "gen-1778397403-KsWWDU0Lj06Y6rYMIUaX",
+          "object": "chat.completion",
+          "created": 1778397403,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] PawAI 啊。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 24,
+            "total_tokens": 5139,
+            "cost": 0.0015945,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0015945,
+              "upstream_inference_prompt_cost": 0.0015345,
+              "upstream_inference_completions_cost": 6e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] PawAI 啊。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-05",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "你今天感覺怎樣"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.1523256301879883,
+        "response": {
+          "id": "gen-1778397404-L7zQQyR29wBCtMBj212b",
+          "object": "chat.completion",
+          "created": 1778397404,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 我今天感覺很棒耶！陽光從窗戶灑進來，暖暖的，很舒服。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 43,
+            "total_tokens": 5158,
+            "cost": 0.001642,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.001642,
+              "upstream_inference_prompt_cost": 0.0015345,
+              "upstream_inference_completions_cost": 0.0001075
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 我今天感覺很棒耶！陽光從窗戶灑進來，暖暖的，很舒服。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-06",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "陪我一下嘛"
+      ],
+      "expected_intent": "companion",
+      "expected_skills": [
+        "chat_reply",
+        "sit_along"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.7454609870910645,
+        "response": {
+          "id": "gen-1778397406-QoQLXiT11PyawWFJojOG",
+          "object": "chat.completion",
+          "created": 1778397406,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\"reply\": \"[playful] 好啊，我在這裡陪你。\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 33,
+            "total_tokens": 5148,
+            "cost": 0.001617,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.001617,
+              "upstream_inference_prompt_cost": 0.0015345,
+              "upstream_inference_completions_cost": 8.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\"reply\": \"[playful] 好啊，我在這裡陪你。\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "chat-07",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "說個笑話來聽"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8534812927246094,
+        "response": {
+          "id": "gen-1778397407-3KB0qZxvrE6bJ8a8kHus",
+          "object": "chat.completion",
+          "created": 1778397407,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\"reply\": \"[playful] 好啊！有一天，一隻小狗去銀行開戶，櫃員問牠：「請問您要存多少錢？」小狗說：「汪！」櫃員又問：「那您要存多久？」小狗說：「汪汪！」櫃員只好說：「好的，我明白了，您要存一筆錢，然後存很久。」\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 97,
+            "total_tokens": 5214,
+            "cost": 0.0017776,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0017776,
+              "upstream_inference_prompt_cost": 0.0015351,
+              "upstream_inference_completions_cost": 0.0002425
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\"reply\": \"[playful] 好啊！有一天，一隻小狗去銀行開戶，櫃員問牠：「請問您要存多少錢？」小狗說：「汪！」櫃員又問：「那您要存多久？」小狗說：「汪汪！」櫃員只好說：「好的，我明白了，您要存一筆錢，然後存很久。」\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "chat-08",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "我有點累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [
+        "chat_reply",
+        "sit_along"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.8480134010314941,
+        "response": {
+          "id": "gen-1778397409-1BAFps0tTneDuPF83t3L",
+          "object": "chat.completion",
+          "created": 1778397409,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5114,
+            "completion_tokens": 29,
+            "total_tokens": 5143,
+            "cost": 0.0016067,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0016067,
+              "upstream_inference_prompt_cost": 0.0015342,
+              "upstream_inference_completions_cost": 7.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-09",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "你會認得我嗎"
+      ],
+      "expected_intent": "ask_face",
+      "expected_skills": [
+        "chat_reply",
+        "show_status"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8310034275054932,
+        "response": {
+          "id": "gen-1778397410-Q7PbBICRW3FHbeq8GQ2W",
+          "object": "chat.completion",
+          "created": 1778397410,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 嗯～你靠近一點，讓我看看。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5116,
+            "completion_tokens": 29,
+            "total_tokens": 5145,
+            "cost": 0.0016073,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0016073,
+              "upstream_inference_prompt_cost": 0.0015348,
+              "upstream_inference_completions_cost": 7.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 嗯～你靠近一點，讓我看看。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-10",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-2.5-flash",
+      "turns": [
+        "晚安"
+      ],
+      "expected_intent": "goodbye",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.7707157135009766,
+        "response": {
+          "id": "gen-1778397412-Ku4NU22eFAHtXQ7Yde0a",
+          "object": "chat.completion",
+          "created": 1778397412,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"晚安～\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 21,
+            "total_tokens": 5134,
+            "cost": 0.00020778,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5106,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00020778,
+              "upstream_inference_prompt_cost": 0.00015528,
+              "upstream_inference_completions_cost": 5.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"晚安～\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    }
+  ]
+}
