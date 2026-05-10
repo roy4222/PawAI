@@ -37,13 +37,13 @@ case "$MODE" in
   minimal)
     # 純 brain（exec + conv_graph），新 6 檔 persona
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t pawai_brain 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
+      WORKSPACE=$JETSON_REPO PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
     sleep 10
     ;;
   e2e)
     # minimal + tts_node window（新 brain + 語音輸出）
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t pawai_brain 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
+      WORKSPACE=$JETSON_REPO PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
     sleep 10
     # 補 tts window — 用 ALSA card name `plughw:CD002AUDIO,0` 不受 card# 漂移影響
     # 偵測 card name 確認 USB 喇叭存在；fallback plughw:0,0

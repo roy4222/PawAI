@@ -28,6 +28,13 @@ if [ ! -d "$PERSONA_DIR" ]; then
   PERSONA_DIR="$WORKSPACE/pawai_brain/personas/v1"
 fi
 
+# 5/12: OpenRouter primary / fallback model slugs (mirror start_full_demo_tmux.sh).
+# Override one-liner:
+#   PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_pawai_brain_tmux.sh
+# Decision: docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md
+PAWAI_LLM_MODEL="${PAWAI_LLM_MODEL:-openai/gpt-5.4-mini}"
+PAWAI_LLM_FALLBACK_MODEL="${PAWAI_LLM_FALLBACK_MODEL:-google/gemini-3-flash-preview}"
+
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 tmux new-session -d -s "$SESSION" -n brain "$SOURCE_CMD; \
@@ -37,7 +44,9 @@ tmux new-session -d -s "$SESSION" -n brain "$SOURCE_CMD; \
 # Replaces: ros2 run speech_processor llm_bridge_node --ros-args -p output_mode:=brain
 tmux new-window -t "$SESSION" -n conv_graph "$SOURCE_CMD; \
   ros2 launch pawai_brain pawai_conversation_graph.launch.py \
-    llm_persona_file:=$PERSONA_DIR; bash"
+    llm_persona_file:=$PERSONA_DIR \
+    openrouter_gemini_model:=$PAWAI_LLM_MODEL \
+    openrouter_deepseek_model:=$PAWAI_LLM_FALLBACK_MODEL; bash"
 
 tmux new-window -t "$SESSION" -n event_bridge_off "$SOURCE_CMD; \
   ros2 launch vision_perception event_action_bridge.launch.py \
