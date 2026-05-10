@@ -30,7 +30,11 @@ RESULTS_DIR = ROOT / "results"
 # OpenRouter model slug mapping (alias → real slug).
 # Verified against /api/v1/models on 2026-05-04.
 MODEL_ALIASES: dict[str, str] = {
-    "gemini": "google/gemini-2.5-flash",         # $0.30/$2.50 per M (stable)
+    # 2026-05-11 update: gemini alias 對齊 runtime（pawai_brain/launch L44 /
+    # llm_client.py / start_full_demo_tmux.sh 都用 gemini-3-flash-preview），
+    # 不要再用 2.5-flash — Brain Minimum freeze gate 必須跟 demo 同模型才有效。
+    "gemini": "google/gemini-3-flash-preview",   # runtime default ($0.30/$2.50 per M)
+    "gemini-25": "google/gemini-2.5-flash",      # legacy 2.5；保留作 A/B 比較
     "deepseek": "deepseek/deepseek-v4-flash",    # $0.14/$0.28 per M (reasoning model)
     "qwen": "qwen/qwen3.6-flash",                # $0.25/$1.50 per M (online candidate)
     "qwen-plus": "qwen/qwen3.6-plus",            # $0.325/$1.95 per M (offline-only,
@@ -82,12 +86,14 @@ def call_openrouter(
 
     # max_tokens=500 因為 deepseek/qwen 是 reasoning model，會先吃 reasoning_tokens
     # 再生 content，200 不夠（finish_reason=length 截斷）。
+    # 2026-05-11: temperature 0.8 對齊 runtime（launch L60 預設 0.8 / OpenClaw chat 0.7-1.0）。
+    # 之前 0.6 會讓 eval 結果偏保守、跟 demo 行為不一致。如要 A/B 比較舊 0.6 行為可手動覆寫。
     body = json.dumps(
         {
             "model": model_slug,
             "messages": messages,
             "max_tokens": 500,
-            "temperature": 0.6,
+            "temperature": 0.8,
         }
     ).encode("utf-8")
     req = urllib.request.Request(

@@ -4,7 +4,7 @@ Usage:
   ros2 launch pawai_brain pawai_conversation_graph.launch.py
 
   Override persona dir (default: install/share/pawai_brain/personas/v1):
-  llm_persona_file:=/path/to/personas/v1  (directory mode, 5 files)
+  llm_persona_file:=/path/to/personas/v1  (directory mode, 6 files incl. MISSION.md)
   llm_persona_file:=/path/to/persona.txt  (legacy single-file mode)
 
 Override any ROS param via launch arg:
@@ -34,8 +34,9 @@ def generate_launch_description() -> LaunchDescription:
             "llm_persona_file",
             default_value=default_persona_dir,
             description=(
-                "Path to persona file (legacy .txt) or directory (5 files: "
-                "IDENTITY/STYLE/OUTPUT/EXAMPLES/CAPABILITIES). "
+                "Path to persona file (legacy .txt) or directory "
+                "(6 files: IDENTITY/MISSION/STYLE/OUTPUT/EXAMPLES/CAPABILITIES; "
+                "MISSION.md added 2026-05-10 Brain Minimum). "
                 "Default: install/share/pawai_brain/personas/v1"
             ),
         ),
