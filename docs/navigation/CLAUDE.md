@@ -70,20 +70,43 @@
 
 ### Reactive stop
 
-#### 🚨 Architecture-critical: safety_only=true 永遠 publish 0 — release 沒有 auto-resume gate
+#### 🚨 Architecture-critical: reactive_stop 4-mode 狀態機（5/11 night 重設計）
 
 > **故事化（5/11 B5 撞牆 root case）**：
 >
 > 1. 障礙物進 danger zone → reactive_stop 發 `/cmd_vel_obstacle=0` → mux priority 200 蓋 teleop priority 100 → Go2 站著不動 ✅
-> 2. 障礙物移開 → 在舊版本（2026-05-11 前）：`safety_only=true` 在 clear/slow zone **完全沉默**
+> 2. 障礙物移開 → 舊版本：`safety_only=true` 在 clear/slow zone **完全沉默**
 > 3. mux 0.5s timeout → 切回次優先 → 仍在發 `0.5 m/s` 的 `/cmd_vel_joy`（teleop）接管 → Go2 全速衝出 → 撞 1.5m 處障礙物
+
+**5/11 night 4-mode 狀態機**（取代 binary `safety_only`）：
+
+| mode | 行為 | 使用場景 | 啟動腳本 |
+|---|---|---|---|
+| `hold_brake` | 永遠 publish 0 到 `/cmd_vel_obstacle` | B5 stop 驗證 / demo emergency hold | `start_reactive_stop_safety_hold_tmux.sh` |
+| `progressive` | danger=0, slow/clear 沉默 | nav 主驅動（必 kill teleop） | `start_nav_capability_demo_tmux.sh` |
+| `released` | 不 publish，LiDAR + zone 仍更新 | 操作員手動釋放給 nav | runtime `ros2 param set` |
+| `disabled` | 完全 off | 全停 reactive 影響 | runtime `ros2 param set` |
+| `""`（標稱）| standalone fallback (0/slow/normal) | nav stack 不在的 demo 備援 | `start_reactive_stop_tmux.sh` |
+
+> **重要：mode 切換是釋放策略，不是 release gate**
 >
-> **5/11 B0.1 fix（commit `4ec8350`）**：reactive_stop_node `safety_only=true` 模式現在**任何 zone 都 publish 0**，永遠 hold mux priority 200。**clear 是「解除煞車」不是「安全恢復」**。操作員必須：
+> `hold_brake` 永久鎖死 mux priority 200 — nav goal 不會穿過 mux。要讓 Go2 走必須：
 >
-> - **kill teleop publisher**（不允許 hot-publish 0.5 m/s 在 `/cmd_vel_joy`）
-> - 或**主動發新 nav goal**（`/nav/goto_relative` etc.）
+> 1. `ros2 param set /reactive_stop_node mode released`（或 `disabled`）
+> 2. `pkill -f teleop_twist_keyboard`（清掉殘留 hot-publisher）
+> 3. 主動發新 nav goal（`/nav/goto_relative` etc.）
 >
-> 不會自動恢復前進 — 這是 feature 不是 bug。
+> 上面三步缺一個 Go2 都不會走。
+
+**運維 SOP**：
+
+- 純 B5 stop 驗證 → `start_reactive_stop_safety_hold_tmux.sh`（hold_brake）
+- Nav demo（含 reactive 止損）→ `start_nav_capability_demo_tmux.sh`（progressive）+ 嚴格 kill teleop
+- Nav demo（無 reactive 干擾）→ runtime 切 `mode=disabled` 後發 nav goal
+- 三個啟動腳本互斥使用，不能同跑（cmd_vel_obstacle / cmd_vel 雙 publisher 衝突）
+
+**`enable_nav_pause` 在 hold_brake mode 下的修正**（5/11 night Roy review fix）：
+zone 離 danger 時不發 `/nav/resume`（mux 仍鎖死，發 resume 會造成 nav state vs 實際輸出矛盾）。`/nav/pause` 仍照發（保險）。要釋放 nav 必須先切 mode。
 
 - **/cmd_vel QoS 是 RELIABLE**（go2_driver_node 訂閱端）— reactive_stop_node 已用 RELIABLE
 - **/scan_rplidar QoS 是 BEST_EFFORT**（sllidar publisher）— reactive_stop_node 訂閱端用 BEST_EFFORT

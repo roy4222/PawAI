@@ -67,17 +67,22 @@ tmux send-keys -t "$SESSION:robot" \
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
-echo "[5/9] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, ALWAYS 0; B0.1 5/11 fix)"
-# safety_only=true: ALWAYS publishes 0 regardless of zone (5/11 B5 撞牆 fix).
-# This holds mux priority 200 forever, preventing 0.5s timeout from handing
-# /cmd_vel back to stale teleop / nav. Operator MUST kill teleop and send
-# fresh nav goal to make Go2 move (clear is 解除煞車, not 安全恢復).
-# Thresholds: danger=1.1m / slow=1.7m (LiDAR frame, enlarged from 0.6/1.0
-# on 5/11 — Go2 nose at base_link+0.40m, 0.6m LiDAR = 0.2m nose = guaranteed
-# crash). See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md
+echo "[5/9] reactive_stop_node (mode=progressive → /cmd_vel_obstacle; nav 可驅動)"
+# mode=progressive: danger 發 0、slow/clear 沉默讓 nav (priority 10) 透過
+# mux timeout 接管。⚠️ 使用前提：**必 kill teleop publisher**（demo discipline），
+# 不允許 hot-publish 到 /cmd_vel_joy。否則 mux 0.5s timeout 後 teleop 100 會贏
+# 過 nav 10，再現 5/11 撞牆事件。
+#
+# 若要 B5 safety 驗證（純停車測試、nav 不需驅動）：改用獨立的
+# scripts/start_reactive_stop_safety_hold_tmux.sh（mode=hold_brake，永久鎖死
+# mux 200，nav 不可驅動 — 與本 script 互斥）。
+#
+# Thresholds: danger=1.1m / slow=1.7m（LiDAR 視距，5/11 B0.3 enlarged）。
+# 完整 4-mode 設計見 reactive_stop_node.py module docstring 與
+# docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
-    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true -p front_offset_rad:=3.14159 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7" Enter
+    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p mode:=progressive -p front_offset_rad:=3.14159 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7" Enter
 sleep 3
 
 echo "[6/9] nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)"

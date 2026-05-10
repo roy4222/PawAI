@@ -1,39 +1,41 @@
-"""Reactive Stop Node — RPLIDAR 反應式停障。
+"""Reactive Stop Node — RPLIDAR 反應式停障，4-mode state machine。
 
 訂閱 /scan_rplidar、發布 cmd_vel @ 10Hz（topic 由 cmd_vel_topic param 決定）。
 
-Two operating modes:
+Modes（透過 ROS param `mode`，runtime 可切換）：
 
-  Standalone fallback (default; safety_only=false, cmd_vel_topic=/cmd_vel):
-    Drive Go2 directly. Always publish:
-      danger    → 0.0
-      slow      → slow_speed (0.45)
-      normal    → normal_speed (0.60)
-    For demo backup when nav stack is down.
+  **`hold_brake`** — 永遠 publish 0（permanent brake）
+      用途：B5 safety 驗證、demo emergency hold。
+      副作用：mux priority 200 永遠贏，nav/teleop 都驅不動 Go2。
+      操作員必須主動切 `released` / `disabled` mode 才能讓 Go2 走。
+      cmd_vel_topic=/cmd_vel_obstacle 必填（依賴 mux 200）。
 
-  Safety mode (safety_only=true, cmd_vel_topic=/cmd_vel_obstacle):
-    **ALWAYS publish 0** to keep mux priority 200 alive. This prevents the
-    0.5s mux timeout from handing control back to stale teleop / nav cmd_vel
-    that may still be hot-publishing at e.g. 0.5 m/s.
+  **`progressive`** — danger 發 0、slow/clear 沉默
+      用途：搭配 nav stack（priority 10）做漸進避障。
+      ⚠️ 已知 mux timeout 風險：clear 後 0.5s 內若 teleop priority 100 還在
+      hot-publish，會接管 — 必須搭配「kill teleop / 用 nav goal 不用
+      hot-publisher」demo discipline。對應 5/11 B0 fix 前行為。
 
-      ANY zone → 0.0  (mux priority 200 永遠蓋住 teleop 100 / nav 10)
+  **`released`** — 不 publish 但 LiDAR + zone state 仍更新
+      用途：操作員主動釋放給 nav 接管。zone 狀態仍在 status JSON 顯示。
+      切回 `hold_brake` / `progressive` 才會重新介入控制。
 
-    Why ALWAYS-0 (not "silent in clear"): On 5/11 B5 burndown Go2 walked into
-    a 1.5m obstacle because reactive_stop went silent on clear, mux 0.5s
-    timeout, and the still-hot-publishing /cmd_vel_joy=0.5 took over. With
-    always-0 the operator MUST actively kill teleop or send a fresh nav goal
-    to make Go2 move — clear is "解除煞車" not "安全恢復前進".
+  **`disabled`** — 完全 off，不 publish 也不更新 zone
+      用途：全停 reactive_stop 影響，連 LiDAR processing 都跳過。
 
-    Tradeoff: nav (priority 10) cannot drive Go2 while reactive_stop is up
-    in safety_only mode. Demo operator must explicitly disable reactive_stop
-    or configure mux differently when nav is the desired driver. Acceptable
-    for demo because we're focused on safety, not autonomy depth.
+Standalone fallback（mode="" or unset, safety_only=false legacy）：
+  reactive_stop 直接驅動 Go2（nav stack 不在時的 demo 備援）。發 0 / slow /
+  normal 三段速。cmd_vel_topic=/cmd_vel。
+
+Backwards compat：`safety_only=True` 等於 mode="hold_brake" 自動 promote。
 
 Phase 7.2 bridge: enable_nav_pause=true → zone transitions trigger /nav/{pause,resume}.
+  ⚠️ 在 `hold_brake` mode 下不發 /nav/resume — 因為 nav 仍被 mux 鎖死，發
+  resume 會造成 nav state 與實際 mux 輸出矛盾（5/11 night Roy review fix）。
 Phase 7-bugfix #5: also publish /state/reactive_stop/status JSON for state_broadcaster.
 
-5/11 B5 burndown fix: see
-docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.
+5/11 B5 burndown 完整 audit + 修法路線圖：
+docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
 """
 import json
 import math
@@ -90,12 +92,18 @@ class ReactiveStopNode(Node):
         self.declare_parameter("enable", True)
         self.declare_parameter("cmd_vel_topic", "/cmd_vel_obstacle")
         self.declare_parameter("enable_nav_pause", False)
-        # safety_only=true: ALWAYS publish 0 (5/11 B5 burndown fix).
-        # Previously slow/clear were silent → mux 0.5s timeout handed control
-        # back to stale teleop/nav. Now mux priority 200 is held forever
-        # while reactive_stop is up; operator must explicitly disable to allow
-        # nav/teleop. See top-of-file docstring for tradeoff.
+        # safety_only=true 是 backwards-compat alias，等同 mode="hold_brake"。
+        # 推薦直接用 mode param（5/11 night Roy review fix — release gate 不是
+        # 永久 brake，需要明確 mode 區分）。
         self.declare_parameter("safety_only", False)
+        # Mode：4-state machine（5/11 night redesign）
+        #   "hold_brake"  - 永遠 publish 0（B5 safety / demo emergency）
+        #   "progressive" - danger=0, slow/clear silent（搭配 nav，需 teleop discipline）
+        #   "released"    - 不 publish 但 LiDAR + zone 仍更新（操作員主動釋放）
+        #   "disabled"    - 完全 off
+        #   ""（預設）    - standalone fallback（reactive 直接驅動 Go2）
+        # safety_only=True 會在 init 時 promote 到 "hold_brake" 維持向後相容。
+        self.declare_parameter("mode", "")
 
         self._danger_m = self.get_parameter("danger_distance_m").value
         self._slow_m = self.get_parameter("slow_distance_m").value
@@ -113,6 +121,21 @@ class ReactiveStopNode(Node):
         cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
         self._enable_nav_pause = self.get_parameter("enable_nav_pause").value
         self._safety_only = self.get_parameter("safety_only").value
+        # Mode resolution: explicit `mode` param wins; safety_only=True promotes
+        # to "hold_brake"; otherwise empty → standalone fallback.
+        explicit_mode = self.get_parameter("mode").value
+        if explicit_mode:
+            self._mode = explicit_mode
+        elif self._safety_only:
+            self._mode = "hold_brake"
+        else:
+            self._mode = ""  # standalone fallback
+        valid_modes = ("hold_brake", "progressive", "released", "disabled", "")
+        if self._mode not in valid_modes:
+            self.get_logger().warn(
+                f"unrecognized mode={self._mode!r}, falling back to 'hold_brake' for safety"
+            )
+            self._mode = "hold_brake"
         self.create_subscription(LaserScan, scan_topic, self._on_scan, QOS_SCAN)
         self._cmd_pub = self.create_publisher(Twist, cmd_vel_topic, QOS_CMD)
         # Phase 7-bugfix #5: status JSON for state_broadcaster to consume
@@ -138,10 +161,9 @@ class ReactiveStopNode(Node):
         self._last_zone_change_t = time.monotonic()  # B1.6 status diagnostics
         self._warmup_sent = False
 
-        mode = "safety_only (ALWAYS publish 0 — hold mux priority 200)" if self._safety_only \
-               else "standalone (always publish 0/slow/normal)"
+        mode_label = self._mode if self._mode else "standalone (legacy)"
         self.get_logger().info(
-            f"reactive_stop_node started — mode={mode}; "
+            f"reactive_stop_node started — mode={mode_label}; "
             f"danger<{self._danger_m}m, slow<{self._slow_m}m, "
             f"normal={self._normal_speed} slow_speed={self._slow_speed}, "
             f"front=±{math.degrees(self._front_half_rad):.0f}° (offset={math.degrees(self._front_offset):+.0f}°), timeout={self._lidar_timeout}s; "
@@ -157,8 +179,20 @@ class ReactiveStopNode(Node):
                 )
             elif p.name == "safety_only":
                 self._safety_only = bool(p.value)
+                # Promote to mode="hold_brake" if safety_only flipped True
+                if self._safety_only and self._mode in ("", "progressive"):
+                    self._mode = "hold_brake"
                 self.get_logger().info(
-                    f"safety_only runtime override -> {self._safety_only}"
+                    f"safety_only runtime override -> {self._safety_only} (mode={self._mode!r})"
+                )
+            elif p.name == "mode":
+                new_mode = str(p.value)
+                if new_mode not in ("hold_brake", "progressive", "released", "disabled", ""):
+                    self.get_logger().warn(f"reject invalid mode={new_mode!r}")
+                    continue
+                self._mode = new_mode
+                self.get_logger().info(
+                    f"mode runtime override -> {self._mode!r}"
                 )
         return SetParametersResult(successful=True)
 
@@ -175,35 +209,43 @@ class ReactiveStopNode(Node):
 
     def _tick(self):
         if not self.get_parameter("enable").value:
-            # Disabled — publish 0 in standalone (driver expects regular cmd_vel)
-            # but stay silent in safety_only (don't shadow nav).
-            if not self._safety_only:
-                self._publish(0.0)
+            # `enable=false` runtime override — same as mode=disabled
+            return
+
+        # Mode "disabled" / "released" — early exit (no LiDAR processing for
+        # disabled; released still updates zone via _on_scan but doesn't publish).
+        if self._mode == "disabled":
             return
 
         # Warmup applies only to standalone mode (Go2 sport handshake settle).
-        # safety_only: no warmup needed — nav stack handles its own driver handshake.
-        if not self._warmup_sent and not self._safety_only:
+        # Other modes: no warmup needed — driver handles its own handshake or
+        # operator orchestrates manually.
+        if not self._warmup_sent and self._mode == "":
             self._publish(0.0)
             self._warmup_sent = True
             return
-        self._warmup_sent = True  # also flip in safety_only so guard is consistent
+        self._warmup_sent = True  # flip for non-standalone modes too
 
-        # Emergency stop on LiDAR timeout — publish 0 in BOTH modes (genuine override)
+        # Emergency stop on LiDAR timeout — publish 0 in EVERY active mode
+        # (genuine safety override regardless of mode). Skip in released/disabled
+        # since those explicitly relinquish control.
         if self._last_scan_time == 0.0 or (time.monotonic() - self._last_scan_time) > self._lidar_timeout:
             self._update_zone("emergency")
-            self._publish(0.0)
+            if self._mode != "released":
+                self._publish(0.0)
             return
 
         instant = self._classify(self._front_min_dist)
 
         # Hysteresis: only clear danger after N consecutive non-danger frames.
-        # During hysteresis countdown we still want to keep stopping in BOTH modes
-        # (we are still effectively in danger).
+        # During hysteresis countdown we still want to keep stopping (we are
+        # still effectively in danger). hold_brake / progressive both publish 0
+        # here; standalone publishes 0; released doesn't publish.
         if self._zone == "danger" and instant != "danger":
             self._clear_streak += 1
             if self._clear_streak < self._clear_needed:
-                self._publish(0.0)
+                if self._mode != "released":
+                    self._publish(0.0)
                 return
             self._clear_streak = 0
         else:
@@ -211,12 +253,13 @@ class ReactiveStopNode(Node):
 
         self._update_zone(instant)
 
-        # Publish gate decision delegated to pure helper for testability.
-        # safety_only=True → ALWAYS 0 (B0.1 release gate fix, 5/11 B5 burndown).
-        # standalone → 0 / slow / normal by zone.
-        vel = decide_velocity(instant, self._safety_only,
+        # Publish gate delegated to pure helper. decide_velocity returns:
+        #   - float (0.0 / slow_speed / normal_speed) → publish that
+        #   - None → don't publish (silent)
+        vel = decide_velocity(instant, self._mode,
                               self._slow_speed, self._normal_speed)
-        self._publish(vel)
+        if vel is not None:
+            self._publish(vel)
 
     def _publish(self, vx: float):
         cmd = Twist()
@@ -233,9 +276,10 @@ class ReactiveStopNode(Node):
             "reactive_stop_active": self._zone in ("danger", "emergency"),
             "nav_paused": self._nav_paused,
             "enable_nav_pause": self._enable_nav_pause,
-            # B1.6 diagnostic fields (5/11 burndown follow-up)
-            "safety_only": self._safety_only,
-            "always_publishing_zero": self._safety_only,  # B0.1 indicator
+            # B1.6 diagnostic fields (5/11 burndown follow-up + 5/11 night mode redesign)
+            "mode": self._mode if self._mode else "standalone",
+            "safety_only_legacy": self._safety_only,  # backwards-compat indicator
+            "publishes_zero_continuously": self._mode == "hold_brake",  # mux 200 lock indicator
             "danger_threshold_m": self._danger_m,
             "slow_threshold_m": self._slow_m,
             "clear_streak": self._clear_streak,
@@ -258,10 +302,15 @@ class ReactiveStopNode(Node):
         self._maybe_call_nav_pause(prev, zone)
 
     def _maybe_call_nav_pause(self, prev_zone: str, now_zone: str) -> None:
-        """When enable_nav_pause, call /nav/pause on entering danger and /nav/resume on leaving."""
+        """When enable_nav_pause, call /nav/pause on entering danger and /nav/resume on leaving.
+
+        ⚠️ 5/11 night Roy review fix：在 `hold_brake` mode 下 nav 仍被 mux 鎖死，
+        所以發 /nav/resume 會造成 nav state（已 resume）vs 實際輸出（仍被 reactive
+        鎖 0）矛盾。`hold_brake` mode 下只發 /nav/pause（保險），不發 /nav/resume。
+        """
         if not self._enable_nav_pause:
             return
-        # Entering danger from any non-danger zone (init/clear/slow/emergency)
+        # Entering danger — pause nav (always safe, regardless of mode)
         if now_zone == "danger" and prev_zone != "danger" and not self._nav_paused:
             if self._pause_client.service_is_ready():
                 self._pause_client.call_async(Trigger.Request())
@@ -269,16 +318,22 @@ class ReactiveStopNode(Node):
                 self.get_logger().info("triggered /nav/pause (obstacle danger)")
             else:
                 self.get_logger().debug("/nav/pause service not ready; skipping pause call")
-        # Leaving danger to a *safe* zone (slow / clear).
-        # Explicitly NOT resuming on emergency or init — emergency means LiDAR is dead,
-        # which is unsafe for nav to continue; init is a startup transient (only seen
-        # before _tick runs).
+        # Leaving danger — resume nav, BUT skip if hold_brake (mux still locked)
         elif prev_zone == "danger" and now_zone in ("slow", "clear") and self._nav_paused:
+            if self._mode == "hold_brake":
+                self.get_logger().info(
+                    "obstacle cleared but mode=hold_brake → NOT calling /nav/resume "
+                    "(would create nav state vs mux output mismatch). Operator must "
+                    "switch mode=released or disabled to release reactive_stop, then "
+                    "send fresh nav goal."
+                )
+                # Keep _nav_paused = True until operator releases — reflects reality
+                return
             if self._resume_client.service_is_ready():
                 self._resume_client.call_async(Trigger.Request())
                 self._nav_paused = False
                 self.get_logger().info(
-                    f"triggered /nav/resume (obstacle cleared, now_zone={now_zone})"
+                    f"triggered /nav/resume (obstacle cleared, now_zone={now_zone}, mode={self._mode!r})"
                 )
             else:
                 self.get_logger().debug("/nav/resume service not ready; skipping resume call")

@@ -63,32 +63,56 @@ def classify_zone(distance_m, danger_m, slow_m):
     return "clear"
 
 
-def decide_velocity(zone, safety_only, slow_speed, normal_speed):
-    """reactive_stop publish 決策（B0.1 release gate fix）。
+def decide_velocity(zone, mode, slow_speed, normal_speed):
+    """reactive_stop publish 決策 — 4 mode 狀態機。
 
-    safety_only=True：**任何 zone 都回 0**，目的是讓 mux priority 200 永遠
-    壓住 teleop/nav，避免 5/11 B5 撞牆事件 — clear zone 沉默 → mux 0.5s
-    timeout → 舊 /cmd_vel_joy=0.5 m/s 自動恢復前進。
+    Mode 設計（5/11 B0 → 5/11 night 訂正）：
 
-    safety_only=False（standalone fallback）：依 zone 發 0 / slow / normal。
-    這是給 nav stack 不在的 demo 備援用，reactive_stop 直接驅動 Go2。
+    **`hold_brake`** — 永遠 publish 0（permanent brake）
+        用途：B5 safety 驗證、demo emergency hold。
+        副作用：mux priority 200 永遠贏，nav/teleop 都驅不動 Go2。
+        操作員必須主動 disable 或切 mode 才能讓 Go2 走。
+        對應原 5/11 B0.1 `safety_only=True` 行為。
+
+    **`progressive`** — danger 發 0、slow/clear 沉默
+        用途：搭配 nav stack（nav 走 priority 10）做漸進避障。
+        ⚠️ 已知 mux timeout 風險：clear 後 0.5s 內若 teleop 還在 hot-publish
+        0.5 m/s 會接管。**搭配 demo discipline「kill teleop / 用 nav goal
+        而非 hot-publish」必須嚴格執行**。對應 5/11 B0 fix 前行為。
+
+    **`released`** — 不 publish 但 LiDAR + zone state 仍更新
+        用途：操作員主動釋放給 nav 接管。zone 仍在 status JSON 顯示。
+        切回 hold_brake / progressive 才會重新介入控制。
+
+    **`disabled`** — 不 publish、不更新 zone
+        用途：完全 off，連 LiDAR processing 都跳過。
+
+    Standalone fallback（`safety_only=False` legacy 行為）：
+        為了向後相容，傳 mode="" 或 None 時走 standalone — 依 zone 發
+        0/slow/normal。reactive_stop 直接驅動 Go2，nav stack 不在時用。
 
     Args:
         zone: "danger" / "slow" / "clear" / "emergency" / "init"
-        safety_only: True = mux mode（永遠發 0）；False = standalone（依 zone）
-        slow_speed: standalone slow zone 速度（m/s）
+        mode: "hold_brake" / "progressive" / "released" / "disabled" / ""
+        slow_speed: standalone / progressive 的 slow zone 速度（m/s）
         normal_speed: standalone clear zone 速度（m/s）
 
     Returns:
-        velocity (m/s) — reactive_stop 該 publish 到 /cmd_vel_obstacle 或 /cmd_vel 的 linear.x
+        Optional[float] — velocity (m/s) 或 None（None = 不 publish）
 
-    See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.1.
+    See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.
     """
-    if safety_only:
+    if mode in ("disabled", "released"):
+        return None  # caller skips publish
+    if mode == "hold_brake":
         return 0.0
+    if mode == "progressive":
+        if zone in ("danger", "emergency"):
+            return 0.0
+        return None  # slow/clear silent — nav 接管
+    # mode == "" or unrecognized → standalone fallback (legacy behavior)
     if zone in ("danger", "emergency"):
         return 0.0
     if zone == "slow":
         return slow_speed
-    # clear / init / unknown → normal forward
     return normal_speed

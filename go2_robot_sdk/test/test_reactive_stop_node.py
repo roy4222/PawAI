@@ -239,18 +239,22 @@ class TestReactiveStopNodeSourceContract:
         assert 'declare_parameter("safety_only", False)' in src
 
     def test_safety_only_gate_in_tick(self):
-        """_tick must delegate publish decision to decide_velocity (B0.1 fix).
+        """_tick must delegate publish decision to decide_velocity (5/11 B0 + 5/11 night mode redesign).
 
-        Updated 5/11 B0.1: previous behavior was "silent in slow/clear" which
-        caused mux 0.5s timeout to hand control back to stale teleop. Now
-        safety_only=True ALWAYS publishes 0 via decide_velocity helper.
+        Evolution:
+        - 5/11 fix-前: _tick had "silent in slow/clear" branch (mux timeout bug)
+        - 5/11 B0.1: changed to "always publish 0" via decide_velocity (still in _tick)
+        - 5/11 night: introduced 4-mode state machine (hold_brake / progressive /
+          released / disabled / standalone). decide_velocity dispatches by mode.
+
+        Now we verify _tick uses mode-based decide_velocity helper.
         """
         src = self._read_source()
-        assert "self._safety_only" in src
-        # New routing: _tick calls decide_velocity (pure helper), which encodes
-        # safety_only → always 0 logic. Direct routing in _tick was removed.
+        assert "self._safety_only" in src  # backwards-compat alias still present
         assert "decide_velocity" in src
-        assert "ALWAYS publish 0" in src or "always_publishing_zero" in src
+        # 4-mode state machine should be referenced by name
+        assert "hold_brake" in src
+        assert "progressive" in src
 
     def test_emergency_publishes_in_both_modes(self):
         """Emergency stop on LiDAR timeout must publish 0 even in safety_only."""

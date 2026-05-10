@@ -12,11 +12,17 @@
 #   - Nav2 demo 失敗時的 fallback
 #   - 純展示 RPLIDAR 雷達避障基礎防護
 #
-# 行為：
-#   - 前方 ±30°、d < 0.6m → cmd_vel = 0（stop）
-#   - 0.6m ≤ d < 1.0m → cmd_vel = 0.45（slow）
-#   - d ≥ 1.0m → cmd_vel = 0.60（normal）
+# Mode: standalone fallback（reactive_stop 直接驅動 Go2，nav 不在）
+# 行為（5/11 B0.3 thresholds enlarged）：
+#   - 前方 ±30°、d < 1.1m → cmd_vel = 0（stop）
+#   - 1.1m ≤ d < 1.7m → cmd_vel = 0.45（slow）
+#   - d ≥ 1.7m → cmd_vel = 0.60（normal）
 #   - LiDAR 中斷 > 1s → emergency stop
+#
+# ⚠️ 與其他 reactive_stop 模式的差異（5/11 night 4-mode 重設計）：
+#   - 本 script (standalone) — 直接控制 Go2，cmd_vel_topic=/cmd_vel
+#   - mode=progressive 在 start_nav_capability_demo_tmux.sh — nav 主驅動 + reactive 止損
+#   - mode=hold_brake 在 start_reactive_stop_safety_hold_tmux.sh — B5 純停車驗證
 set -euo pipefail
 
 SESSION="reactive-stop"
