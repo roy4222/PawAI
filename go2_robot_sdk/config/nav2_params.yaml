@@ -194,6 +194,9 @@ controller_server:
       RotateToGoal.slowing_factor: 2.0
       RotateToGoal.lookahead_time: -1.0
 
+# NOTE: nav2_params_detour.yaml 是 5/3 為窄場景繞行 demo 設計的獨立 profile
+#       （inflation 0.20 < main 0.30 給 DWB 繞行空間 + D435 fusion）。
+#       兩者**不對齊**，detour 是有意的窄場景 tuning，落地排到 B2.1 demo 後。
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -226,15 +229,20 @@ local_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 2.0   # P0 Nav: 從 3.5 降到 2.0，避免窗外遠距散射污染 costmap
+          # 5/12 B1.1 (research §5 B1): 2.0 → 3.5（demo 場地大空間，給 RPLIDAR 8m 視程更多 raytrace 清除距離）
+          # raytrace ≥ obstacle 是業界慣例，否則 raytrace 邊界外 cells 不會被清掉
+          raytrace_max_range: 3.5
           raytrace_min_range: 0.0
-          obstacle_max_range: 1.8   # P0 Nav: 從 3.0 降到 1.8，只看近距離真實障礙
+          # 5/12 B1.1 (research §5 B1): 1.8 → 3.0（5/11 撞牆 audit 後給 nav 更早看到障礙）
+          obstacle_max_range: 3.0
           obstacle_min_range: 0.0
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.0
-        inflation_radius: 0.30   # 5/2 v0 動態避障保守第一刀：0.25 → 0.30（多 5cm 緩衝，避免大甩）
+        # 5/12 B1.2 (research §5 B1): 0.30 → 0.45（給 Go2 機鼻 ~0.5m + planner buffer，配合 reactive_stop danger 1.1m）
+        inflation_radius: 0.45
+        # ⏳ footprint deferred 到 T6/T8 卡尺 + TF 精量後再改（CLAUDE.md 規則 + 避免窄通道變不可通行）
 
 global_costmap:
   global_costmap:
