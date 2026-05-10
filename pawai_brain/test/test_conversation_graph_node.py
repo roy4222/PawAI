@@ -74,12 +74,16 @@ def test_load_persona_legacy_file_mode(tmp_path):
     assert node._capabilities_md == ""
 
 
-def test_load_persona_directory_mode_5_files(tmp_path):
-    """Directory mode: 5 files required, base concat 4, CAPABILITIES cached separately."""
+def test_load_persona_directory_mode_6_files(tmp_path):
+    """Directory mode: 6 files required (incl. MISSION.md), base concat 5, CAPABILITIES cached separately.
+
+    MISSION.md added 2026-05-10 (Spec 1 Brain Minimum) — 專案定位 + 雙支柱 + 自主尋物敘事。
+    """
     persona_dir = tmp_path / "personas" / "v1"
     persona_dir.mkdir(parents=True)
     for fname, content in [
         ("IDENTITY.md", "id_content"),
+        ("MISSION.md", "mission_content"),
         ("STYLE.md", "style_content"),
         ("OUTPUT.md", "output_content"),
         ("EXAMPLES.md", "examples_content"),
@@ -89,6 +93,7 @@ def test_load_persona_directory_mode_5_files(tmp_path):
 
     node = _build_test_node(llm_persona_file=str(persona_dir))
     assert "id_content" in node._system_prompt
+    assert "mission_content" in node._system_prompt  # MISSION must be in base
     assert "style_content" in node._system_prompt
     assert "output_content" in node._system_prompt
     assert "examples_content" in node._system_prompt
@@ -101,10 +106,41 @@ def test_load_persona_directory_mode_missing_file_raises(tmp_path):
     persona_dir = tmp_path / "personas" / "v1"
     persona_dir.mkdir(parents=True)
     (persona_dir / "IDENTITY.md").write_text("id", encoding="utf-8")
-    # Missing STYLE / OUTPUT / EXAMPLES / CAPABILITIES
+    # Missing MISSION / STYLE / OUTPUT / EXAMPLES / CAPABILITIES
 
     with pytest.raises(FileNotFoundError):
         _build_test_node(llm_persona_file=str(persona_dir))
+
+
+def test_load_persona_directory_mode_missing_mission_raises(tmp_path):
+    """Missing MISSION.md specifically → FileNotFoundError. Guards against regression to 5-file mode."""
+    persona_dir = tmp_path / "personas" / "v1"
+    persona_dir.mkdir(parents=True)
+    # 5 files (old layout) — should NOT pass anymore
+    for fname in ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md", "CAPABILITIES.md"]:
+        (persona_dir / fname).write_text("x", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError):
+        _build_test_node(llm_persona_file=str(persona_dir))
+
+
+def test_load_persona_mission_after_identity_in_base(tmp_path):
+    """MISSION.md must come right after IDENTITY.md in base concat order."""
+    persona_dir = tmp_path / "personas" / "v1"
+    persona_dir.mkdir(parents=True)
+    for fname, content in [
+        ("IDENTITY.md", "MARK_IDENTITY"),
+        ("MISSION.md", "MARK_MISSION"),
+        ("STYLE.md", "MARK_STYLE"),
+        ("OUTPUT.md", "MARK_OUTPUT"),
+        ("EXAMPLES.md", "MARK_EXAMPLES"),
+        ("CAPABILITIES.md", "MARK_CAP"),
+    ]:
+        (persona_dir / fname).write_text(content, encoding="utf-8")
+
+    node = _build_test_node(llm_persona_file=str(persona_dir))
+    sp = node._system_prompt
+    assert sp.index("MARK_IDENTITY") < sp.index("MARK_MISSION") < sp.index("MARK_STYLE")
 
 
 def test_load_persona_fallback_on_bad_file(tmp_path):

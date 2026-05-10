@@ -379,9 +379,10 @@ class ConversationGraphNode(Node):
             return content
 
         if path.is_dir():
-            # New mode: directory; 5 files required, base concat 4
-            REQUIRED = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md", "CAPABILITIES.md"]
-            BASE_ORDER = ["IDENTITY.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
+            # New mode: directory; 6 files required, base concat 5
+            # MISSION.md added 2026-05-10 (Spec 1 Brain Minimum) — 專案定位 + 雙支柱 + 自主尋物敘事
+            REQUIRED = ["IDENTITY.md", "MISSION.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md", "CAPABILITIES.md"]
+            BASE_ORDER = ["IDENTITY.md", "MISSION.md", "STYLE.md", "OUTPUT.md", "EXAMPLES.md"]
             contents = {}
             for fname in REQUIRED:
                 f = path / fname
@@ -394,7 +395,7 @@ class ConversationGraphNode(Node):
             self._capabilities_md = contents["CAPABILITIES.md"]
             self.get_logger().info(
                 f"[persona] loaded directory {path}, "
-                f"5 files verified, base 4 files concat ({len(base)} chars), "
+                f"6 files verified, base 5 files concat ({len(base)} chars), "
                 f"CAPABILITIES.md cached separately ({len(self._capabilities_md)} chars), "
                 f"base_sha={hashlib.sha256(base.encode()).hexdigest()[:12]}"
             )
