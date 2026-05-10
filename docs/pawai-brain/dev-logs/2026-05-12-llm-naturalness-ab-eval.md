@@ -1,21 +1,36 @@
-# LLM 自然度 4-Model A/B Eval — 2026-05-12
+# LLM 自然度 8-Model A/B Eval — 2026-05-12
 
 > **目的**：較急問題 #1 — Gemini-3-Flash 死板感是否值得換模型
-> **方法**：4 模型 × 12 demo-focused prompts = 48 calls
-> **結果檔**：`tools/llm_eval/results/2026-05-12-demo-focused-ab.json`
-> **跑法**：`set -a; source .env; set +a; python3 tools/llm_eval/run_eval.py --prompts tools/llm_eval/prompts_demo_focused.json --models gemini,deepseek,opus,gpt --output ...`
+> **方法**：兩輪 A/B，共 8 模型 × 12 demo-focused prompts
+> **結果檔**：
+> - Round 1 (大模型): `tools/llm_eval/results/2026-05-12-demo-focused-ab.json` — gemini / deepseek / opus / gpt-5.5
+> - Round 2 (小模型): `tools/llm_eval/results/2026-05-12-demo-focused-ab-round2-small.json` — gemini / sonnet / haiku / gpt-mini / gpt-nano
+> **最終決策**：**`openai/gpt-5.4-mini`** 升級 demo live 主線（round 2 後改判，取代 round 1 推的 opus）
 
-## Latency
+## TL;DR
 
-| 模型 | P50 | P95 | min | max | mean | tokens out 總計 |
+> Round 1 結論「Opus 主線」**不對**：Opus 質量好但 cost $1.44/12-call 80× mini，且大模型 demo 互動不需要那麼貴。
+> Round 2 試小版本後發現 **gpt-5.4-mini 是真正甜蜜點** — P50 1.16s（最快、比 opus 快 35%）+ 質量穩定 + 沒 JSON 格式 bug + cost $0.018/12-call。
+> **切換實作**：default `openai/gpt-5.4-mini` (primary) + `google/gemini-3-flash-preview` (fallback)，env override `PAWAI_LLM_MODEL` 一行切回。
+
+## Latency（合併 round 1 + round 2，共 8 模型）
+
+| 模型 | P50 | P95 | mean | tokens out | cost (12-call) | 結論 |
 |---|---|---|---|---|---|---|
-| **opus** ⭐ | **1.59s** | 3.44s | 1.23 | 3.44 | **1.82** | 811 |
-| gemini | 1.83s | 3.15s | 1.51 | 3.15 | 1.90 | 583 |
-| gpt | 3.88s | 6.17s | 2.33 | 6.17 | 4.06 | 1528 |
-| deepseek | 3.64s | **34.22s** ❌ | 1.81 | 34.22 | 8.97 | 1756 |
+| **gpt-mini** ⭐ | **1.16s** | 2.74 | 1.40 | 600 | **$0.018** | **🥇 升級主線** |
+| gpt-nano | 1.11s | 3.32 | 1.37 | 712 | $0.004 | ⚠ 漏 audio tag → 砍 |
+| haiku | 1.51s | 2.73 | 1.68 | 939 | $0.090 | ⚠ markdown fence → 砍 |
+| opus | 1.59s | 3.44 | 1.82 | 811 | $1.445 | 🥈 高展示用、太貴不上 live |
+| gemini | 1.89s | 3.10 | 1.97 | 1156 | $0.040 | 🥉 fallback backup |
+| sonnet | 2.93s | 7.59 | 3.17 | 791 | $0.268 | ✗ 慢、貴又沒勝出 |
+| deepseek | 3.64s | **34.22s** ❌ | 8.97 | 1756 | $0.009 | ✗ reasoning 慢尾 |
+| gpt-5.5 | 3.88s | 6.17 | 4.06 | 1528 | $0.361 | offline 文案產生用 |
 
-**意外發現**：Anthropic Opus 的 P50 **比 Gemini-3-Flash 還快**（1.59s vs 1.83s）。
-Deepseek-V4 是 reasoning model，P95 慢尾 34s 完全不能 live demo。
+**關鍵發現**：
+1. **小模型反而比大模型快**（gpt-mini P50 1.16s 贏 opus 1.59s）
+2. **Anthropic Opus 反而比 Gemini-3-Flash 快**（1.59s vs 1.89s）— 但成本 80×
+3. **Deepseek/Sonnet/Haiku/Nano 各有 demo 殺手 bug**（慢尾 / markdown / 漏 audio tag）
+4. 只有 **gpt-mini** 三維度（速度、成本、質量、格式穩定）全部過關
 
 ## 成本（per 12 calls）
 
@@ -73,59 +88,101 @@ Deepseek-V4 是 reasoning model，P95 慢尾 34s 完全不能 live demo。
 | opus | 4 | 4.5 | 4 | 3.5 | **4.0** |
 | **gpt** | **4.5** | 4 | **5** | **5** | **4.6** |
 
-## 結論與決策建議
+## 結論與決策建議（最終 — round 2 後改判）
 
-### 強推：Demo 主線升級為 **Opus 4.7**
+### 🥇 升級 demo 主線為 **`openai/gpt-5.4-mini`**
 
 | 理由 | 數據 |
 |---|---|
-| P50 比 Gemini 快 13% | 1.59s vs 1.83s |
-| 質感平均勝 1.5 分 | 4.0 vs 2.5 |
-| 自動換 skill 避免重複 | demo-host-02 stretch vs wiggle |
-| 短答狗腔對 demo 互動最對味 | demo-trick-01「才不是～」 |
-| 成本可接受 | $3.6 per 60-min demo session |
+| P50 比 Gemini 快 39% | 1.16s vs 1.89s |
+| P50 比 Opus 還快 27% | 1.16s vs 1.59s |
+| 成本是 Opus 的 1/80 | $0.018 vs $1.445 / 12-call |
+| 質量穩定，無 JSON 格式 bug | (haiku markdown / nano 漏 tag 都不會) |
+| 故事原創有溫度 | 「陽光慢慢爬過來，照到牠的鼻子。牠本來想睡」|
+| Context 對得到 | 「外面多雲，感覺很適合待在家裡晃一晃」|
 
-**換法**：
-```python
-# pawai_brain/launch/pawai_conversation_graph.launch.py
-# 加 launch arg llm_model_slug，default="anthropic/claude-opus-4.7"
-# 同時更新 conversation_graph_node._build_openrouter_config 讓它讀 param
+### 🥈 備援 `google/gemini-3-flash-preview`
+
+當 OpenAI/OpenRouter 抽風時切回。已 baseline，便宜穩定。
+
+### 高品質離線稿產生：`openai/gpt-5.5` 或 `anthropic/claude-opus-4.7`
+
+跑一次離線生成 30-50 條候選 reply 存進 EXAMPLES.md / canned fallback。
+
+### 砍
+
+| 模型 | 砍原因 |
+|---|---|
+| `deepseek/deepseek-v4-flash` | P95 34s reasoning 慢尾 |
+| `anthropic/claude-haiku-4.5` | markdown fence 包 JSON（4/12 prompts）|
+| `anthropic/claude-sonnet-4.6` | 慢一倍、貴又無明顯勝出 |
+| `openai/gpt-5.4-nano` | 漏 audio tag（4/12 prompts），TTS 失情感 |
+
+---
+
+## Round 1 → Round 2 路徑（為什麼改判）
+
+**Round 1（4 大模型）**先測 gemini / deepseek / opus / gpt-5.5。  
+原推 Opus 主線（speed champion + 質量勝），但 cost $3.6 / 60-min demo 偏高、且大模型對 demo 規模 overkill。
+
+User 提議「試小版本」→ **Round 2** 加 sonnet / haiku / gpt-mini / gpt-nano。  
+結果意外 — gpt-mini 三維度全勝大模型，是真正甜蜜點。
+
+教訓：**先試小版本是對的**。LLM A/B 的初期不該預設「大就是好」，先跑小再 fallback 大。
+
+---
+
+## 切換實作（已落地）
+
+### 改了哪 4 處
+
+| 檔 | 改動 |
+|---|---|
+| `pawai_brain/pawai_brain/llm_client.py:57-58` | `OpenRouterConfig.gemini_model = "openai/gpt-5.4-mini"` (primary), `deepseek_model = "google/gemini-3-flash-preview"` (fallback) — 註解標清 slot 是 legacy |
+| `pawai_brain/pawai_brain/conversation_graph_node.py:309-310` | `declare_parameter` default 對齊 |
+| `pawai_brain/launch/pawai_conversation_graph.launch.py:43-55` | `DeclareLaunchArgument` default 對齊 + 加 description |
+| `scripts/start_full_demo_tmux.sh` | 加 `PAWAI_LLM_MODEL` / `PAWAI_LLM_FALLBACK_MODEL` env 變數，3 處 launch args 改讀變數 |
+
+### Env 一行 override（demo 當天可切）
+
+```bash
+# 切回 gemini 主線（OpenRouter OpenAI down 時）
+PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
+
+# 改用 opus 高品質模式（demo 重要 turn 試）
+PAWAI_LLM_MODEL=anthropic/claude-opus-4.7 bash scripts/start_full_demo_tmux.sh
+
+# launch arg 直接傳（手動測試）
+ros2 launch pawai_brain pawai_conversation_graph.launch.py \
+  openrouter_gemini_model:=anthropic/claude-opus-4.7
 ```
 
-### GPT-5.5：作為「自介稿 + fallback 話術產生器」（offline 用）
+### Param 命名 legacy 注意
 
-質量最高（4.6/5），但 4s P50 對 live demo 偏慢，互動會卡。
-最佳用途：跑一次離線生成 30-50 條候選 reply 存進 EXAMPLES.md / persona / canned fallback，平時 live 跑 Opus。
-
-### Deepseek-V4-Flash：砍
-
-reasoning model 慢尾 P95 34s，rote 程度與 Gemini 同級，無上線價值。
-
-### Gemini-3-Flash：留作 cost-floor backup
-
-當 OpenRouter Anthropic / OpenAI 都 down 時的最後 fallback。CP 值最高（$0.02 per 12 calls）但 demo 質量明顯弱。
+ROS param `openrouter_gemini_model` 是 **primary slot**（不是字面 Gemini）。
+ROS param `openrouter_deepseek_model` 是 **fallback slot**（不是字面 DeepSeek）。
+為了 demo 前不打破 launch arg 與既有 caller，5/12 沒 rename，僅改 default + 加註解。
+**Demo 後 backlog**：rename 成 `openrouter_primary_model` / `openrouter_fallback_model`。
 
 ## 待人工確認
 
-我這份是看 raw output 的主觀評分。要嚴謹（特別是「是否要切主線」這種大決策），建議跑：
+我這份是看 raw output 的主觀評分。要嚴謹建議跑：
 
 ```bash
-python3 tools/llm_eval/score.py tools/llm_eval/results/2026-05-12-demo-focused-ab.json
-# 互動式問你 4 軸 × 48 = 共 ~10 分鐘
+python3 tools/llm_eval/score.py tools/llm_eval/results/2026-05-12-demo-focused-ab-round2-small.json
+# 互動式問你 4 軸 × 60 = 共 ~12 分鐘
 ```
 
-打分後再看 `--report` summary，與本文質性結論交叉驗證。
+打分後再看 `--report` summary 與本文質性結論交叉驗證。
 
-## 跟著要做的事（如果決定切 Opus）
+## 還沒做的事
 
-1. `conversation_graph_node.py` 加 `llm_model_slug` ROS param
-2. `pawai_conversation_graph.launch.py` 加同名 launch arg, default `anthropic/claude-opus-4.7`
-3. `start_pawai_brain_tmux.sh` / `start_full_demo_tmux.sh` 加環變或 launch arg pass-through
-4. Jetson smoke：60s 自介 × 5 看 latency 在 Jetson tunnel 條件下是否仍 ≤2s
-5. 預算閥：給 OpenRouter key 設月 budget cap（避免 demo 失控費用）
-6. **不換 prompt cache 假設** — Opus 跟 Gemini cache 機制不同，第一輪 latency 可能有差，要實測
+1. **Jetson smoke**: 60s 自介 × 5 看 gpt-5.4-mini 在 Jetson tunnel 條件下是否仍 P50 ≤ 1.5s
+2. **預算閥**: 給 OpenRouter key 設月 budget cap（避免 demo 失控費用）
+3. **Prompt cache 實測**: gpt-mini cache 機制可能跟 Gemini 不同，第一輪 latency 要看
+4. **Offline 文案產生**: 用 GPT-5.5 / Opus 跑一次 30-50 條候選 reply 存進 EXAMPLES.md
 
 ## 答辯準備
 
-被問「為什麼換 Opus」時可以講：
-> 我們對 4 個 demo-focused prompt 跑了 48 call A/B（Gemini-3-Flash baseline / DeepSeek-V4-Flash / GPT-5.5 / Claude Opus 4.7）。Opus 在 P50 latency（1.59s vs Gemini 1.83s）、自然度、角色一致性、自動換 skill 避免重複等四個面向勝出，且 cost 在可接受範圍內。Deepseek 因 reasoning 慢尾 P95 34s 不適合 live。GPT 質量最高但延遲過高，留作 offline 文案生成。
+被問「為什麼換 gpt-5.4-mini」時可以講：
+> 我們對 8 個 OpenRouter 模型跑了兩輪 demo-focused A/B（共 108 calls）。Round 1 比 4 個大模型（Gemini / DeepSeek / Opus / GPT-5.5），Round 2 比 4 個小版本（Sonnet / Haiku / GPT-mini / GPT-nano）。最終 gpt-5.4-mini 在三個維度勝出 — P50 1.16s 比 Gemini 快 39% 也比 Opus 快 27%、cost $0.018/12-call 是 Opus 的 1/80、質量穩定無 JSON 格式 bug。Deepseek/Sonnet/Haiku/Nano 各有 demo 殺手 bug（reasoning 慢尾 / markdown fence / 漏 audio tag）所以淘汰。Gemini 留作 cost-floor 備援，env 一行可切回。
