@@ -1,6 +1,69 @@
 # 專案進度快照
 
-> 最後更新：2026-05-09 evening（互動品質改善 8 issue 主線落地 + 4 P0 audit fix；待 Jetson smoke 驗收）
+> 最後更新：2026-05-12 night（**brain-freeze-v2** 落地 + LLM 主線切 gpt-5.4-mini + TTS gemini Despina + 5/12 nav burndown demo 最低目標 3/3 通過）
+
+## 2026-05-12 — brain-freeze-v2 + Jetson live + 5 較急問題收尾
+
+### 本日 8 brain commits + 3 tags
+
+```
+e5fdc0a feat(brain): persona demo-host follow-up + skill demo mode (brain-hotfix-N2)
+c285b60 fix(tts): strip OPENROUTER_KEY for openrouter_gemini provider (brain-hotfix-N1)
+778739f feat(scripts): propagate PAWAI_LLM_MODEL env through brain-studio-lane
+cc24619 docs(runbook): add demo fallback script for 5/18 demo
+60e4e84 docs(llm-eval): expand A/B log with round-2 small-model results
+2fd4aec feat(brain): switch live LLM primary to gpt-5.4-mini, gemini fallback
+4f509d5 tools(llm_eval): add demo-focused 4-model A/B harness
+320d4d0 feat(brain+vision): cover demo gesture and fall-alert painpoints
+```
+
+Tags: `brain-freeze-v2` (49ecac7) → `brain-hotfix-N1` (c285b60 TTS strip) → `brain-hotfix-N2` (e5fdc0a persona host)
+
+### 較急問題清單（測試功能清單 v2）對應狀態
+
+| # | 較急問題 | 狀態 |
+|---|---|---|
+| 1 | LLM 模糊不主動 | **主線換 `openai/gpt-5.4-mini`**（8-model A/B 後決策）+ persona demo-host 補強（強制具體 skill 名 + 結尾邀請）+ mode_classifier 補「可以做什麼」「會什麼動作」變體 |
+| 2 | 手勢 6 靜態 + 3 動態 | 6 靜態全到 mapping（palm→pause / fist→mute / index→listen / ok→confirm / thumbs_up→wiggle / peace→stretch / wave→hello）；circle / come_here 標 demo 後 |
+| 3 | 姿勢 7 種 + 跌倒人名 | 7 enum 齊；fallen_alert SAY 模板 → "偵測到 {name} 跌倒，請注意安全"；name 從 brain 30s face cache 注入；bridge audible disabled (避免雙播) |
+| 4 | 物體 yolo26n vs 8n + 顏色 | 主線 yolo26n + HSV 12 色 (5/6 凍結 schema v2.5)；A/B 標 demo 後 |
+| 5 | 導航避障空間問題 | 5/12 nav burndown demo 最低目標 3/3 通過（goto 0.3m、reactive_stop danger 1.1m 1 次煞停、SLAM/Nav2 stack 36 node 全跑）。詳見 `docs/navigation/research/2026-05-11-nav-avoidance-deep-research.md §10` |
+
+### LLM A/B benchmark（8-model）
+
+| Model | P50 | P95 | cost (12-call) | verdict |
+|---|---|---|---|---|
+| **gpt-5.4-mini** ⭐ | **1.16s** | 2.74 | $0.018 | live primary |
+| gpt-nano | 1.11 | 3.32 | $0.004 | 漏 audio tag → 砍 |
+| haiku-4.5 | 1.51 | 2.73 | $0.090 | markdown fence → 砍 |
+| opus-4.7 | 1.59 | 3.44 | $1.445 | offline only |
+| gemini-3-flash | 1.89 | 3.10 | $0.040 | fallback backup |
+| sonnet-4.6 | 2.93 | 7.59 | $0.268 | 砍 |
+| deepseek-v4 | 3.64 | **34.22** | $0.009 | 砍 (慢尾) |
+| gpt-5.5 | 3.88 | 6.17 | $0.361 | offline 文案 |
+
+### Jetson 5/12 night live test 結果
+
+- Brain stack full demo 13 windows / 20 nodes 全活
+- 60s 自介 ×5：4/5 captured (Round 1 lost = ros2 CLI discovery race，Studio gateway path 無此問題)，**P50 1.85s** Jetson tunnel
+- Reply 自然原創、context-aware（「外面又悶又濕」/「悶悶的」/「悶濕」/「晚上有點悶熱」每輪不重複）
+- Fallback env override 真的 propagate（`PAWAI_LLM_MODEL=google/gemini-3-flash-preview` 切回後 Gemini reply 3.80s + 自然「偷看外面的雲，厚厚的好像棉花糖」）
+- TTS gemini Despina 真的播從 USB CD002-AUDIO ✅
+- Bug fix: `.env` CRLF → `OPENROUTER_KEY` 含 `\r` → TTS Authorization header 500 → `.strip()` 修復
+
+### 5/12 night Roy 反饋 → hotfix-N2
+
+實機聊天後 Roy 抓出 LLM 還是「模糊、不講具體 skill 名、講完不問下一步」。N2 修：
+- STYLE.md 移除「不要每句結尾拋問題」一刀切
+- CAPABILITIES.md 改「明確問則講具體 skill 名稱」+ 補完整 7 領域真實能力清單
+- MISSION.md Demo 主軸加「我是 host 不是 chatbot」+ 強制具體 skill 名稱
+- EXAMPLES.md +6 demo-host follow-up few-shot
+- mode_classifier 補「可以做什麼/會什麼動作/有什麼動作/具體有哪些」regex
+- brain-studio-lane skill 加 `demo` mode = `full + --studio` 一鍵全開（5 perception + brain + Studio frontend）
+
+待驗收：5/13 sync + rebuild + 重 smoke 看 N2 改動是否生效（5/12 night SSH 連線異常停下，persona 已 commit 但未上 Jetson）
+
+---
 
 ## 2026-05-09 — Roy 8 issue 互動品質改善（13 PR merged）
 

@@ -8,10 +8,10 @@
 
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Phase 0.5 Cut 1 上線**：chat_candidate 升級成 SkillProposal contract（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`），brain_node 端 `LLM_PROPOSABLE_SKILLS = {show_status, self_introduce}` allowlist 把關 |
-| 版本/決策 | **LLM locked**: `google/gemini-3-flash-preview` (OpenRouter) ／ **TTS locked**: `google/gemini-3.1-flash-tts-preview` (OpenRouter, Despina voice)；ASR 用 SenseVoice cloud；fallback chain 完整保留作離線/網路斷線備援。Phase 0.5 spec: `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` |
-| 完成度 | 93% |
-| 最後驗證 | 2026-05-06 night（Phase 0.5 Cut 1 + 5 perception demo + nav2-amcl demo 真機錄完，brain trace 三態 accepted/accepted_trace_only/rejected_not_allowed 全部視覺驗證） |
+| 狀態 | **brain-freeze-v2 (5/12)**：LLM 8-model A/B 後切 `openai/gpt-5.4-mini`、TTS dual-route gemini Despina；env override `PAWAI_LLM_MODEL=...` 一行切回 |
+| 版本/決策 | **LLM primary**: `openai/gpt-5.4-mini` (OpenRouter, P50 1.16s local / 1.85s Jetson tunnel) ／ **fallback**: `google/gemini-3-flash-preview` ／ **TTS quality lane**: `google/gemini-3.1-flash-tts-preview` (Despina) — fast lane (≤12 字 / 無 audio tag) 走 edge_tts；ASR 用 SenseVoice cloud。決策 log: [`docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md`](../dev-logs/2026-05-12-llm-naturalness-ab-eval.md) |
+| 完成度 | 95% (brain-freeze-v2 落地) |
+| 最後驗證 | 2026-05-12 night Jetson smoke：60s 自介 ×5 (4/5 captured, P50 1.85s, replies 自然有 follow-up)；fallback env override 切 Gemini 真的生效；TTS gemini Despina 真的播 ✅ |
 | 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
 | 測試 | `python3 -m pytest speech_processor/test/ -v` |
 

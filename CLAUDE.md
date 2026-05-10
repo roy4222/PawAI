@@ -126,14 +126,29 @@ ros2 run speech_processor tts_node --ros-args -p provider:=piper \
   -p playback_method:=datachannel
 ```
 
-### 語音 + LLM 主線（2026-03-29 更新：SenseVoice ASR 三級 fallback）
+### 語音 + LLM 主線（5/12 brain-freeze-v2: gpt-5.4-mini + gemini TTS Despina）
 
 ```bash
-# 一鍵啟動（推薦）— SenseVoice cloud ASR + edge-tts + USB 外接設備
+# 一鍵啟動 demo (推薦) — 5 perception + brain + Studio frontend
+bash .claude/skills/brain-studio-lane/scripts/start.sh demo
+
+# 或直接全功能 13-window tmux (Jetson)
+bash scripts/start_full_demo_tmux.sh
+
+# 主線 LLM = openai/gpt-5.4-mini (P50 ~1.85s Jetson tunnel)
+# 主線 TTS = openrouter_gemini Despina (quality lane >12 字 / audio tag) → edge_tts (fast lane)
+
+# Env override 一行切回 (demo 當天 OpenAI down 用)
+PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
+TTS_PROVIDER=edge_tts bash scripts/start_full_demo_tmux.sh
+
+# 完全離線模式
+LLM_ENDPOINT="http://127.0.0.1:1/" TTS_PROVIDER=piper \
+  ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]' \
+  bash scripts/start_full_demo_tmux.sh
+
+# 純語音 e2e（不啟 perception/Go2，dev 用）
 bash scripts/start_llm_e2e_tmux.sh
-# 全離線模式（Piper TTS）：TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
-# 只用本地 ASR（不需 tunnel）：
-# ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]' bash scripts/start_llm_e2e_tmux.sh
 
 # SSH tunnel（Cloud ASR + Cloud LLM）
 ssh -f -N -L 8001:localhost:8001 -L 8000:localhost:8000 $USER@<server>
