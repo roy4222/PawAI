@@ -112,6 +112,12 @@ class Go2NodeFactory:
             DeclareLaunchArgument(
                 "teleop", default_value="true", description="Launch teleoperation"
             ),
+            # 5/12: mux 從 teleop flag 拆出獨立 — safety_hold / nav_capability 要關 teleop
+            # 但仍需 mux 才能讓 reactive_stop /cmd_vel_obstacle (priority 200) 接到 driver。
+            # 之前 teleop:=false 會連 twist_mux 一起關，導致 hold_brake 不生效（5/12 T3 發現）。
+            DeclareLaunchArgument(
+                "mux", default_value="true", description="Launch twist_mux multiplexer (default true; needed for reactive_stop / nav even when teleop:=false)"
+            ),
             DeclareLaunchArgument(
                 "mcp_mode",
                 default_value="false",
@@ -431,6 +437,7 @@ class Go2NodeFactory:
         use_sim_time = LaunchConfiguration("use_sim_time", default="false")
         with_joystick = LaunchConfiguration("joystick", default="true")
         with_teleop = LaunchConfiguration("teleop", default="true")
+        with_mux = LaunchConfiguration("mux", default="true")
 
         return [
             # Joystick node
@@ -457,7 +464,9 @@ class Go2NodeFactory:
                 package="twist_mux",
                 executable="twist_mux",
                 output="screen",
-                condition=IfCondition(with_teleop),
+                # 5/12 fix: 改 with_mux（從 with_teleop 拆出）
+                # 原 bug：teleop:=false 會連 twist_mux 一起關，hold_brake 不生效
+                condition=IfCondition(with_mux),
                 parameters=[
                     {"use_sim_time": use_sim_time},
                     self.config.config_paths["twist_mux"],
