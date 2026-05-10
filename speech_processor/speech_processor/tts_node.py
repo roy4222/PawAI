@@ -497,9 +497,13 @@ class TTSProvider_OpenRouterGemini:
         self.voice = config.openrouter_gemini_voice
         self.model = config.openrouter_gemini_model
         self.timeout = float(config.openrouter_gemini_timeout_s)
-        self._api_key = os.getenv("OPENROUTER_KEY", "") or os.getenv(
-            "OPENROUTER_API_KEY", ""
-        )
+        # 5/12: .strip() guards against CRLF (\r\n) line endings in .env files
+        # which leak \r into the Authorization header → "Invalid return character
+        # or leading space in header" 500 from urllib3. Mirror conv_graph
+        # llm_client.resolve_openrouter_key behaviour.
+        self._api_key = (
+            os.getenv("OPENROUTER_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")
+        ).strip()
         if not self._api_key:
             _logger.warning(
                 "OPENROUTER_KEY not set — TTSProvider_OpenRouterGemini will "
