@@ -51,8 +51,10 @@ echo "[4/4] reactive_stop_node (standalone fallback — publishes /cmd_vel direc
 # 此 script 是 nav2-amcl 失敗時的 standalone fallback，不啟 twist_mux 也不啟 nav_capability。
 # reactive_stop_node 預設 cmd_vel_topic=/cmd_vel_obstacle (跟 nav stack 同跑時用 mux)，
 # 但 standalone 模式下 driver 訂 /cmd_vel，必須覆寫 param 讓 reactive 直發 /cmd_vel。
+# safety_only=false（default）：standalone 會發 0 / slow_speed 0.45 / normal_speed 0.60 三段
+# 給 driver — 反應式 forward control。Threshold danger=1.1m / slow=1.7m（5/11 B0.3 enlarge）。
 tmux new-window -t "$SESSION" -n reactive
-tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=/cmd_vel -p front_offset_rad:=3.14159" Enter
+tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=/cmd_vel -p front_offset_rad:=3.14159 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7" Enter
 sleep 2
 
 echo ""
@@ -63,11 +65,12 @@ echo "  ros2 topic hz /scan_rplidar          # ~10 Hz (sllidar)"
 echo "  ros2 topic hz /cmd_vel               # ~10 Hz (reactive_stop_node)"
 echo "  ros2 topic echo /cmd_vel --once      # check linear.x value"
 echo ""
-echo "驗收 4 場景:"
-echo "  1. Go2 站客廳前方 2m 空地 → cmd_vel.linear.x ≈ 0.60"
-echo "  2. 人走到 Go2 前方 80cm → cmd_vel.linear.x = 0"
-echo "  3. 人退開到 1.5m → cmd_vel.linear.x ≈ 0.60"
-echo "  4. 拔 RPLIDAR USB → 1s 內 cmd_vel.linear.x = 0"
+echo "驗收 4 場景（threshold danger=1.1m / slow=1.7m，B0.3 5/11 enlarged）:"
+echo "  1. Go2 站客廳前方 2m 空地 → cmd_vel.linear.x ≈ 0.60（clear）"
+echo "  2. 人走到 Go2 前方 1.0m → cmd_vel.linear.x = 0（danger）"
+echo "  3. 人退開到 1.5m → cmd_vel.linear.x ≈ 0.45（slow）"
+echo "  4. 人退開到 2m → cmd_vel.linear.x ≈ 0.60（clear）"
+echo "  5. 拔 RPLIDAR USB → 1s 內 cmd_vel.linear.x = 0（emergency）"
 echo ""
 echo "Demo 中關閉 reactive (留 stand mode):"
 echo "  ros2 param set /reactive_stop_node enable false"

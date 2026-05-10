@@ -12,17 +12,28 @@ Two operating modes:
     For demo backup when nav stack is down.
 
   Safety mode (safety_only=true, cmd_vel_topic=/cmd_vel_obstacle):
-    ONLY publish when actively safety-overriding. Stay silent in slow/clear
-    so mux priority 10 (nav) isn't perpetually shadowed by priority 200
-    (obstacle). Without this, nav never reaches the driver.
+    **ALWAYS publish 0** to keep mux priority 200 alive. This prevents the
+    0.5s mux timeout from handing control back to stale teleop / nav cmd_vel
+    that may still be hot-publishing at e.g. 0.5 m/s.
 
-      danger    → 0.0   (mux priority 200 hijacks nav)
-      emergency → 0.0   (LiDAR timeout — same)
-      slow      → DON'T PUBLISH (let nav controller handle)
-      clear     → DON'T PUBLISH (let nav controller handle)
+      ANY zone → 0.0  (mux priority 200 永遠蓋住 teleop 100 / nav 10)
+
+    Why ALWAYS-0 (not "silent in clear"): On 5/11 B5 burndown Go2 walked into
+    a 1.5m obstacle because reactive_stop went silent on clear, mux 0.5s
+    timeout, and the still-hot-publishing /cmd_vel_joy=0.5 took over. With
+    always-0 the operator MUST actively kill teleop or send a fresh nav goal
+    to make Go2 move — clear is "解除煞車" not "安全恢復前進".
+
+    Tradeoff: nav (priority 10) cannot drive Go2 while reactive_stop is up
+    in safety_only mode. Demo operator must explicitly disable reactive_stop
+    or configure mux differently when nav is the desired driver. Acceptable
+    for demo because we're focused on safety, not autonomy depth.
 
 Phase 7.2 bridge: enable_nav_pause=true → zone transitions trigger /nav/{pause,resume}.
 Phase 7-bugfix #5: also publish /state/reactive_stop/status JSON for state_broadcaster.
+
+5/11 B5 burndown fix: see
+docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.
 """
 import json
 import math
@@ -37,7 +48,11 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-from go2_robot_sdk.lidar_geometry import classify_zone, compute_front_min_distance
+from go2_robot_sdk.lidar_geometry import (
+    classify_zone,
+    compute_front_min_distance,
+    decide_velocity,
+)
 
 QOS_SCAN = QoSProfile(depth=5, reliability=ReliabilityPolicy.BEST_EFFORT)
 QOS_CMD = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
@@ -48,25 +63,38 @@ class ReactiveStopNode(Node):
         super().__init__("reactive_stop_node")
 
         self.declare_parameter("scan_topic", "/scan_rplidar")
-        self.declare_parameter("danger_distance_m", 0.6)
-        self.declare_parameter("slow_distance_m", 1.0)
+        # 5/11 B5 burndown fix: thresholds enlarged from 0.6/1.0 to 1.1/1.7
+        # because previous values were LiDAR-frame distances (LiDAR mounted
+        # base_link+0.175m); Go2 nose at base_link+~0.40m, so LiDAR at 0.6m
+        # = nose at 0.2m + 0.5m/s × 0.3s reaction → guaranteed collision.
+        # New 1.1m gives ~0.7m nose buffer for braking + body inertia.
+        # See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.3.
+        self.declare_parameter("danger_distance_m", 1.1)
+        self.declare_parameter("slow_distance_m", 1.7)
         self.declare_parameter("slow_speed", 0.45)
         self.declare_parameter("normal_speed", 0.60)
         self.declare_parameter("front_arc_deg", 30.0)
         # v8 mount yaw=π → laser frame 0° = Go2 後方；要 detect Go2 前方需設 π。
         # 預設 0（傳統 mount：laser 0° = Go2 前方）。向後相容。
+        # 5/11 B1.5 note: this param 與 base_link→laser TF yaw 是雙重套用設計,
+        # 兩者必須一致（TF yaw=π 時此 param 也設 π）。改 mount 角度時兩處都要改。
+        # See lidar_geometry.compute_front_min_distance docstring.
         self.declare_parameter("front_offset_rad", 0.0)
         self.declare_parameter("range_min_m", 0.10)
         self.declare_parameter("range_max_m", 8.0)
         self.declare_parameter("lidar_timeout_s", 1.0)
-        self.declare_parameter("clear_debounce_frames", 3)
+        # 5/11 B0.4: bumped 3 → 5 frames (~0.5s @ 10Hz) for stability against
+        # boundary jitter at 1.1m danger threshold (sensor noise zone).
+        self.declare_parameter("clear_debounce_frames", 5)
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("enable", True)
         self.declare_parameter("cmd_vel_topic", "/cmd_vel_obstacle")
         self.declare_parameter("enable_nav_pause", False)
-        # safety_only=true → only publish on danger/emergency; let nav control normally.
-        # Mandatory when cmd_vel_topic=/cmd_vel_obstacle (mux priority 200) to avoid
-        # perma-shadowing nav (priority 10) with reactive's normal_speed forward command.
+        # safety_only=true: ALWAYS publish 0 (5/11 B5 burndown fix).
+        # Previously slow/clear were silent → mux 0.5s timeout handed control
+        # back to stale teleop/nav. Now mux priority 200 is held forever
+        # while reactive_stop is up; operator must explicitly disable to allow
+        # nav/teleop. See top-of-file docstring for tradeoff.
         self.declare_parameter("safety_only", False)
 
         self._danger_m = self.get_parameter("danger_distance_m").value
@@ -104,19 +132,20 @@ class ReactiveStopNode(Node):
 
         self._last_scan_time = 0.0
         self._front_min_dist = float("inf")
-        self._zone = "init"  # init / danger / slow / clear
+        self._zone = "init"  # init / danger / slow / clear / emergency
         self._clear_streak = 0
         self._last_zone_logged = ""
+        self._last_zone_change_t = time.monotonic()  # B1.6 status diagnostics
         self._warmup_sent = False
 
-        mode = "safety_only (publish only on danger/emergency)" if self._safety_only \
+        mode = "safety_only (ALWAYS publish 0 — hold mux priority 200)" if self._safety_only \
                else "standalone (always publish 0/slow/normal)"
         self.get_logger().info(
             f"reactive_stop_node started — mode={mode}; "
             f"danger<{self._danger_m}m, slow<{self._slow_m}m, "
             f"normal={self._normal_speed} slow_speed={self._slow_speed}, "
             f"front=±{math.degrees(self._front_half_rad):.0f}° (offset={math.degrees(self._front_offset):+.0f}°), timeout={self._lidar_timeout}s; "
-            f"publish_topic={cmd_vel_topic}"
+            f"publish_topic={cmd_vel_topic}, clear_debounce={self._clear_needed} frames"
         )
 
     def _on_param_change(self, params):
@@ -182,19 +211,12 @@ class ReactiveStopNode(Node):
 
         self._update_zone(instant)
 
-        # Publish gate by mode:
-        # - standalone: always publish (0 / slow / normal) so driver gets cmd_vel
-        # - safety_only: ONLY publish 0 on danger; stay silent in slow/clear so
-        #                mux timeout (0.5s) lets nav (priority 10) through
-        if instant == "danger":
-            self._publish(0.0)
-        elif self._safety_only:
-            # slow / clear in safety mode — say nothing
-            return
-        elif instant == "slow":
-            self._publish(self._slow_speed)
-        else:
-            self._publish(self._normal_speed)
+        # Publish gate decision delegated to pure helper for testability.
+        # safety_only=True → ALWAYS 0 (B0.1 release gate fix, 5/11 B5 burndown).
+        # standalone → 0 / slow / normal by zone.
+        vel = decide_velocity(instant, self._safety_only,
+                              self._slow_speed, self._normal_speed)
+        self._publish(vel)
 
     def _publish(self, vx: float):
         cmd = Twist()
@@ -204,12 +226,20 @@ class ReactiveStopNode(Node):
 
     def _tick_status(self):
         d = self._front_min_dist
+        now = time.monotonic()
         payload = {
             "zone": self._zone,
             "obstacle_distance": float(d) if math.isfinite(d) else None,
             "reactive_stop_active": self._zone in ("danger", "emergency"),
             "nav_paused": self._nav_paused,
             "enable_nav_pause": self._enable_nav_pause,
+            # B1.6 diagnostic fields (5/11 burndown follow-up)
+            "safety_only": self._safety_only,
+            "always_publishing_zero": self._safety_only,  # B0.1 indicator
+            "danger_threshold_m": self._danger_m,
+            "slow_threshold_m": self._slow_m,
+            "clear_streak": self._clear_streak,
+            "since_last_zone_change_sec": round(now - self._last_zone_change_t, 2),
         }
         msg = String()
         msg.data = json.dumps(payload)
@@ -223,6 +253,7 @@ class ReactiveStopNode(Node):
             d_str = f"{d:.2f}m" if math.isfinite(d) else "inf"
             self.get_logger().info(f"zone: {self._last_zone_logged or 'init'} → {zone} (front_min={d_str})")
             self._last_zone_logged = zone
+            self._last_zone_change_t = time.monotonic()  # B1.6: track for status diagnostics
         # Phase 7.2: bridge zone transitions to /nav/pause /nav/resume
         self._maybe_call_nav_pause(prev, zone)
 

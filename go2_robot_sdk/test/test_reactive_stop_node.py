@@ -239,11 +239,18 @@ class TestReactiveStopNodeSourceContract:
         assert 'declare_parameter("safety_only", False)' in src
 
     def test_safety_only_gate_in_tick(self):
-        """_tick must gate slow/clear publish on _safety_only."""
+        """_tick must delegate publish decision to decide_velocity (B0.1 fix).
+
+        Updated 5/11 B0.1: previous behavior was "silent in slow/clear" which
+        caused mux 0.5s timeout to hand control back to stale teleop. Now
+        safety_only=True ALWAYS publishes 0 via decide_velocity helper.
+        """
         src = self._read_source()
-        # Safety-only branch returns without publishing in slow/clear
         assert "self._safety_only" in src
-        assert "say nothing" in src or "stay silent" in src or "ONLY publish" in src
+        # New routing: _tick calls decide_velocity (pure helper), which encodes
+        # safety_only → always 0 logic. Direct routing in _tick was removed.
+        assert "decide_velocity" in src
+        assert "ALWAYS publish 0" in src or "always_publishing_zero" in src
 
     def test_emergency_publishes_in_both_modes(self):
         """Emergency stop on LiDAR timeout must publish 0 even in safety_only."""

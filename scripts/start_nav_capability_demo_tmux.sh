@@ -67,14 +67,17 @@ tmux send-keys -t "$SESSION:robot" \
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
-echo "[5/9] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, only 0 on danger)"
-# safety_only=true is REQUIRED when feeding mux (priority 200). Without it,
-# clear/slow zones would publish 0.45/0.60 m/s and shadow nav (priority 10)
-# permanently — Go2 would drive forward at reactive's normal_speed instead of
-# obeying nav.
+echo "[5/9] reactive_stop_node (safety_only mode → /cmd_vel_obstacle, ALWAYS 0; B0.1 5/11 fix)"
+# safety_only=true: ALWAYS publishes 0 regardless of zone (5/11 B5 撞牆 fix).
+# This holds mux priority 200 forever, preventing 0.5s timeout from handing
+# /cmd_vel back to stale teleop / nav. Operator MUST kill teleop and send
+# fresh nav goal to make Go2 move (clear is 解除煞車, not 安全恢復).
+# Thresholds: danger=1.1m / slow=1.7m (LiDAR frame, enlarged from 0.6/1.0
+# on 5/11 — Go2 nose at base_link+0.40m, 0.6m LiDAR = 0.2m nose = guaranteed
+# crash). See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
-    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true -p front_offset_rad:=3.14159" Enter
+    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p safety_only:=true -p front_offset_rad:=3.14159 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7" Enter
 sleep 3
 
 echo "[6/9] nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)"
