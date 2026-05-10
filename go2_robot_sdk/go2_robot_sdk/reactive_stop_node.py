@@ -332,9 +332,21 @@ class ReactiveStopNode(Node):
             if self._resume_client.service_is_ready():
                 self._resume_client.call_async(Trigger.Request())
                 self._nav_paused = False
-                self.get_logger().info(
-                    f"triggered /nav/resume (obstacle cleared, now_zone={now_zone}, mode={self._mode!r})"
-                )
+                # 5/11 night Roy review #3: progressive mode resume 後 mux 仍可能
+                # 把控制權給 hot-publishing teleop（priority 100）而不是 nav (10)。
+                # 留明顯 warning 提醒 demo 操作員確認 /cmd_vel_joy 沒 hot-publisher。
+                if self._mode == "progressive":
+                    self.get_logger().warn(
+                        f"/nav/resume called (mode=progressive) — ⚠️ if teleop or "
+                        f"external publisher is hot-publishing /cmd_vel_joy, mux "
+                        f"priority 100 will silently win over nav (10). Verify with: "
+                        f"`ros2 topic info /cmd_vel_joy`. Demo discipline: kill any "
+                        f"teleop publisher before nav goal."
+                    )
+                else:
+                    self.get_logger().info(
+                        f"triggered /nav/resume (obstacle cleared, now_zone={now_zone}, mode={self._mode!r})"
+                    )
             else:
                 self.get_logger().debug("/nav/resume service not ready; skipping resume call")
 

@@ -5,8 +5,13 @@
 # 拓撲（4 windows，與 nav2-amcl / nav_capability 互斥）：
 #   tf            base_link → laser static TF
 #   sllidar       RPLIDAR /scan_rplidar
-#   driver        Go2 driver
+#   robot         robot.launch.py（含 driver + twist_mux，**禁 teleop + joystick + nav**）
 #   reactive      reactive_stop_node mode=hold_brake → /cmd_vel_obstacle @ 10Hz
+#
+# ⚠️ 修法 5/11 night Roy review #1：之前版本用 `ros2 run go2_driver_node` 直接跑沒
+# twist_mux，/cmd_vel_obstacle 沒人 subscribe → hold_brake 不生效。改用
+# robot.launch.py（含 mux）+ teleop:=false joystick:=false（避免 cmd_vel_joy
+# hot-publish 干擾驗證）。
 #
 # Mode = hold_brake（5/11 night 設計）：
 #   - **永遠 publish 0** 到 /cmd_vel_obstacle（priority 200）
@@ -46,12 +51,15 @@ tmux send-keys -t "$SESSION:sllidar" \
     "$ROS_SETUP && ros2 run sllidar_ros2 sllidar_node --ros-args -p serial_port:=/dev/rplidar -p serial_baudrate:=256000 -p frame_id:=laser -p angle_compensate:=true -p scan_mode:=Standard -r /scan:=/scan_rplidar" Enter
 sleep 2
 
-echo "[3/4] go2_driver_node (minimal — no sport mode handshake)"
-tmux new-window -t "$SESSION" -n driver
-tmux send-keys -t "$SESSION:driver" \
-    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 run go2_robot_sdk go2_driver_node --ros-args -p robot_ip:=$ROBOT_IP -p conn_type:=webrtc -p enable_lidar:=false -p decode_lidar:=false -p publish_raw_voxel:=false -p minimal_state_topics:=true -p enable_video:=false" Enter
-echo "  Waiting 8s for WebRTC handshake..."
-sleep 8
+echo "[3/4] robot.launch.py (driver + twist_mux, NO teleop/joystick/nav)"
+# 必須啟 robot.launch.py 才能拿到 twist_mux —— 之前直接 ros2 run go2_driver_node
+# 漏 mux，導致 reactive 發 /cmd_vel_obstacle 沒人接、hold_brake 不生效。
+# teleop:=false joystick:=false 避免 cmd_vel_joy hot-publish 干擾 hold_brake 驗證。
+tmux new-window -t "$SESSION" -n robot
+tmux send-keys -t "$SESSION:robot" \
+    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=false slam:=false rviz2:=false foxglove:=false enable_tts:=false decode_lidar:=false teleop:=false joystick:=false" Enter
+echo "  Waiting 12s for WebRTC + mux + driver up..."
+sleep 12
 
 echo "[4/4] reactive_stop_node (mode=hold_brake → /cmd_vel_obstacle, ALWAYS 0)"
 # hold_brake: ALWAYS publishes 0 regardless of zone — permanent brake.
@@ -70,7 +78,10 @@ echo "Sanity:"
 echo "  ros2 topic hz /scan_rplidar             # ~10 Hz (sllidar)"
 echo "  ros2 topic hz /cmd_vel_obstacle         # ~10 Hz (reactive @ hold_brake)"
 echo "  ros2 topic echo /cmd_vel_obstacle --once  # linear.x = 0 always"
+echo "  ros2 topic echo /cmd_vel --once         # mux output, linear.x = 0 (obstacle 200 wins)"
 echo "  ros2 topic echo /state/reactive_stop/status --once  # mode=hold_brake"
+echo "  ros2 topic info /cmd_vel_joy            # 應無 publisher（teleop disabled）"
+echo "  ros2 topic info /cmd_vel_obstacle -v    # 應 1 publisher (reactive) + 1 subscriber (twist_mux)"
 echo ""
 echo "B5 safety verification 驗收 4 場景（mode=hold_brake）:"
 echo "  1. 物體放 Go2 前 1.0m（danger zone）→ /cmd_vel_obstacle.x = 0"

@@ -256,14 +256,30 @@ class TestReactiveStopNodeSourceContract:
         assert "hold_brake" in src
         assert "progressive" in src
 
-    def test_emergency_publishes_in_both_modes(self):
-        """Emergency stop on LiDAR timeout must publish 0 even in safety_only."""
+    def test_emergency_behavior_per_mode(self):
+        """Emergency (LiDAR timeout) behavior should differ by mode (5/11 night redesign).
+
+        Active modes (hold_brake / progressive / standalone) → publish 0.
+        Passive modes (released / disabled) → don't publish (no LiDAR to gate on).
+
+        Verify via decide_velocity directly (behavioral test, not source string).
+        """
+        from lidar_geometry import decide_velocity  # type: ignore
+        # Active modes: emergency → 0.0
+        for active_mode in ("hold_brake", "progressive", ""):
+            v = decide_velocity("emergency", active_mode, 0.45, 0.60)
+            assert v == 0.0, f"mode={active_mode!r} emergency should publish 0, got {v}"
+        # Passive modes: emergency → None (don't publish)
+        for passive_mode in ("released", "disabled"):
+            v = decide_velocity("emergency", passive_mode, 0.45, 0.60)
+            assert v is None, f"mode={passive_mode!r} emergency should NOT publish, got {v}"
+
+        # Source-level guarantee: _tick still has emergency-zone path for active modes
         src = self._read_source()
-        # Look for the emergency block; ensure it publishes BEFORE any safety_only check
         em_idx = src.find('self._update_zone("emergency")')
         assert em_idx > 0
-        # The next _publish after that label should be unconditional
-        post = src[em_idx:em_idx + 200]
+        # Within ~500 chars after emergency label, _tick should have logic to publish 0
+        post = src[em_idx:em_idx + 500]
         assert "self._publish(0.0)" in post
 
 

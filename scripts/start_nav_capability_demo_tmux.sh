@@ -63,7 +63,11 @@ sleep 4
 echo "[4/9] robot.launch.py (driver + Nav2 wrapper + AMCL + mux + teleop)"
 tmux new-window -t "$SESSION" -n robot
 tmux send-keys -t "$SESSION:robot" \
-    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=true slam:=false map:=$MAP rviz2:=false foxglove:=false enable_tts:=false decode_lidar:=false" Enter
+    "$ROS_SETUP && export ROBOT_IP=$ROBOT_IP && ros2 launch go2_robot_sdk robot.launch.py nav2:=true slam:=false map:=$MAP rviz2:=false foxglove:=false enable_tts:=false decode_lidar:=false teleop:=false joystick:=false" Enter
+# teleop:=false joystick:=false (5/11 night Roy review #2): 預設啟動會 launch
+# teleop_twist_joy + joy_node，會 hot-publish /cmd_vel_joy 蓋過 nav (priority
+# 100 > 10)。disable 是 demo 安全的硬性要求 — 如果操作員需要 manual control，
+# 用 ros2 topic pub --once 單脈衝命令，不要用 hot-publisher。
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
