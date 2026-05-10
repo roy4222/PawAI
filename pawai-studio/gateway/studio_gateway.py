@@ -49,8 +49,14 @@ from intent_classifier import IntentClassifier
 # ── Config ───────────────────────────────────────────────────────
 import os
 
-PORT = 8080
-ASR_URL = "http://127.0.0.1:8001/v1/audio/transcriptions"
+PORT = int(os.getenv("GATEWAY_PORT", "8080"))
+# E.Mac/School pre-stage 2026-05-11: ASR_URL 改 env override 避免學校 Mac → Jetson
+# 時 127.0.0.1 指 Mac 自己。沿用 PAWAI_ENABLE_S2TWP（line 57）env-aware pattern。
+# 主環變 PAWAI_ASR_URL，向下相容 ASR_URL。
+ASR_URL = os.getenv(
+    "PAWAI_ASR_URL",
+    os.getenv("ASR_URL", "http://127.0.0.1:8001/v1/audio/transcriptions"),
+)
 STATIC_DIR = Path(__file__).parent / "static"
 
 # P1-3: ASR 簡→繁 — enable by default; set PAWAI_ENABLE_S2TWP=false to disable

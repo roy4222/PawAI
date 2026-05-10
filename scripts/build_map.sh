@@ -11,7 +11,8 @@
 set -euo pipefail
 
 MAP_NAME="${1:-home_living_room}"
-MAP_DIR="/home/jetson/maps"
+# E.Mac/School pre-stage 2026-05-11: MAP_DIR env override（學校 Jetson 可能用不同路徑）
+MAP_DIR="${MAP_DIR:-/home/jetson/maps}"
 OUTPUT_PATH="${MAP_DIR}/${MAP_NAME}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

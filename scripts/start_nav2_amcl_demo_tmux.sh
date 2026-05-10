@@ -24,8 +24,9 @@ set -euo pipefail
 SESSION="nav2-amcl"
 ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh && source ~/elder_and_dog/install/setup.zsh"
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
-MAP_YAML="/home/jetson/maps/home_living_room_v8.yaml"
-NAV2_PARAMS="$HOME/elder_and_dog/go2_robot_sdk/config/nav2_params.yaml"
+# E.Mac/School pre-stage 2026-05-11: 雙層 fallback — MAP_YAML（精確）→ MAP（跟 nav_capability 共用）→ default
+MAP_YAML="${MAP_YAML:-${MAP:-/home/jetson/maps/home_living_room_v8.yaml}}"
+NAV2_PARAMS="${NAV2_PARAMS:-$HOME/elder_and_dog/go2_robot_sdk/config/nav2_params.yaml}"
 
 echo "=== Nav2 AMCL Demo Session (v3.7) ==="
 tmux kill-session -t "$SESSION" 2>/dev/null || true
