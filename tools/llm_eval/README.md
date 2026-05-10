@@ -67,9 +67,10 @@ python tools/llm_eval/score.py results/20260504-220000.json --report
 
 `run_eval.py:MODEL_ALIASES`：
 
-| alias | OpenRouter slug（placeholder） |
+| alias | OpenRouter slug |
 |---|---|
-| gemini | google/gemini-2.5-flash |
+| gemini | google/gemini-3-flash-preview *（runtime default — 對齊 launch L44 / llm_client.py / start_full_demo_tmux.sh）* |
+| gemini-25 | google/gemini-2.5-flash *（legacy；保留作 A/B 比較）* |
 | deepseek | deepseek/deepseek-chat |
 | qwen | qwen/qwen3-235b-a22b-thinking-2507 |
 
