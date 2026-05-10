@@ -3,7 +3,7 @@
 #
 # 三種模式：
 #   1. live   — 連接 Jetson 上的真 gateway（Tailscale 或本機 LAN）
-#   2. mock   — 啟本機 mock_server (port 8080)，frontend 對它打 API
+#   2. mock   — 啟本機 mock_server (port ${GATEWAY_PORT:-8080})，frontend 對它打 API
 #   3. auto   (預設) — 先試 Jetson gateway，失敗自動切 mock
 #
 # Usage:
@@ -11,6 +11,7 @@
 #   bash pawai-studio/start-live.sh --live             # 強制 live（要 Jetson 起來）
 #   bash pawai-studio/start-live.sh --mock             # 強制 mock（本機開發/測試）
 #   GATEWAY_HOST=192.168.123.100 bash pawai-studio/start-live.sh --live
+#   GATEWAY_PORT=8090 bash pawai-studio/start-live.sh --mock      # 換 port
 
 set -euo pipefail
 
@@ -89,18 +90,18 @@ sleep 1
 BACK_PID=""
 if [ "$MODE" = "mock" ]; then
   need_python_deps
-  echo "    啟動 mock_server (port 8080)..."
+  echo "    啟動 mock_server (port ${GATEWAY_PORT})..."
   cd "$BACKEND_DIR"
-  python3 -m uvicorn mock_server:app --port 8080 --host 0.0.0.0 --ws wsproto --log-level warning &
+  python3 -m uvicorn mock_server:app --port "${GATEWAY_PORT}" --host 0.0.0.0 --ws wsproto --log-level warning &
   BACK_PID=$!
   sleep 3
   if ! kill -0 $BACK_PID 2>/dev/null; then
     echo "❌ mock_server 啟動失敗"; exit 1
   fi
-  if ! curl -sf --max-time 2 http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
+  if ! curl -sf --max-time 2 "http://127.0.0.1:${GATEWAY_PORT}/api/health" >/dev/null 2>&1; then
     echo "❌ mock_server 啟動但 /api/health 沒回應"; kill $BACK_PID; exit 1
   fi
-  TOTAL=$(curl -sf http://127.0.0.1:8080/api/skill_registry 2>/dev/null \
+  TOTAL=$(curl -sf "http://127.0.0.1:${GATEWAY_PORT}/api/skill_registry" 2>/dev/null \
     | python3 -c 'import sys,json;print(json.load(sys.stdin)["total"])' 2>/dev/null || echo "?")
   echo "    ✅ mock_server up — /api/skill_registry total=$TOTAL"
 else
@@ -127,7 +128,7 @@ fi
 echo "[4/4] 啟動 Frontend (port 3000)..."
 
 if [ "$MODE" = "mock" ]; then
-  TARGET="http://localhost:8080"
+  TARGET="http://localhost:${GATEWAY_PORT}"
 else
   TARGET="$GATEWAY_URL"
 fi
@@ -165,14 +166,14 @@ if [ "$MODE" = "mock" ]; then
   echo
   echo "  Mock 控制（curl）："
   echo "    觸發 self_introduce:"
-  echo "      curl -X POST http://localhost:8080/mock/scenario/self_introduce"
+  echo "      curl -X POST http://localhost:${GATEWAY_PORT}/mock/scenario/self_introduce"
   echo "    切 Nav Gate 紅燈:"
   echo "      curl -X POST -H 'Content-Type: application/json' \\"
   echo "        -d '{\"name\":\"nav_ready\",\"state\":\"false\"}' \\"
-  echo "        http://localhost:8080/api/capability"
+  echo "        http://localhost:${GATEWAY_PORT}/api/capability"
   echo "    切 Plan B:"
   echo "      curl -X POST -H 'Content-Type: application/json' \\"
-  echo "        -d '{\"mode\":\"B\"}' http://localhost:8080/api/plan_mode"
+  echo "        -d '{\"mode\":\"B\"}' http://localhost:${GATEWAY_PORT}/api/plan_mode"
 fi
 echo
 echo "  停止: Ctrl+C"
