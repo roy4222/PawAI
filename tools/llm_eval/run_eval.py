@@ -39,13 +39,23 @@ MODEL_ALIASES: dict[str, str] = {
     "qwen": "qwen/qwen3.6-flash",                # $0.25/$1.50 per M (online candidate)
     "qwen-plus": "qwen/qwen3.6-plus",            # $0.325/$1.95 per M (offline-only,
                                                   # sample latency 22.89s — too slow for online Brain)
+    # 2026-05-12 added per 測試功能清單 較急 1 — 大模型 A/B 看是否值得換主線
+    "opus": "anthropic/claude-opus-4.7",         # ~$15/$75 per M (top quality, demo polish)
+    "gpt": "openai/gpt-5.5",                     # ~$5/$15 per M (alternative top tier)
 }
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
-def load_prompts(bucket: str | None = None) -> list[dict]:
-    data = json.loads(PROMPTS_FILE.read_text(encoding="utf-8"))
+def load_prompts(bucket: str | None = None, prompts_file: Path | None = None) -> list[dict]:
+    """Load prompt items from JSON. Defaults to PROMPTS_FILE (50-set).
+
+    5/12: prompts_file override added so demo-focused subsets
+    (e.g. prompts_demo_focused.json) can be passed in without editing
+    the canonical 50-set.
+    """
+    src = prompts_file if prompts_file is not None else PROMPTS_FILE
+    data = json.loads(src.read_text(encoding="utf-8"))
     items = data["items"]
     if bucket:
         items = [it for it in items if it["bucket"] == bucket]
@@ -129,7 +139,8 @@ def extract_reply(response: dict) -> str:
 
 
 def run(args: argparse.Namespace) -> int:
-    items = load_prompts(args.bucket)
+    prompts_path = Path(args.prompts).resolve() if args.prompts else None
+    items = load_prompts(args.bucket, prompts_path)
     if args.limit is not None and args.limit > 0:
         items = items[: args.limit]
     persona = load_persona()
@@ -193,8 +204,11 @@ def run(args: argparse.Namespace) -> int:
                     "model_alias": alias,
                     "model_slug": slug,
                     "turns": it["turns"],
-                    "expected_intent": it["expected_intent"],
-                    "expected_skills": it["expected_skills"],
+                    # 5/12: .get() with defaults so demo-focused subsets
+                    # (which only carry expected_intent + criteria) don't
+                    # KeyError. Canonical 50-set still carries both fields.
+                    "expected_intent": it.get("expected_intent", ""),
+                    "expected_skills": it.get("expected_skills", []),
                     "raw": r,
                     "reply": reply,
                     "scores": None,  # filled by score.py
@@ -218,6 +232,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--bucket", default=None, help="Filter to one bucket")
     p.add_argument("--limit", type=int, default=None, help="Cap number of prompt items (cost guard)")
     p.add_argument("--output", default=None, help="Output JSON path")
+    p.add_argument(
+        "--prompts",
+        default=None,
+        help="Override prompts JSON path (e.g. tools/llm_eval/prompts_demo_focused.json). "
+             "Default: tools/llm_eval/prompts.json (50-set).",
+    )
     return p.parse_args()
 
 
