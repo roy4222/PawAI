@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # brain-studio-lane start
-# Usage: bash start.sh <minimal|e2e|full> [--studio]
+# Usage: bash start.sh <minimal|e2e|full|demo> [--studio]
 # 包裝既有 scripts/start_*.sh，補 .env source / WORKSPACE override / studio overlay
+#
+# Modes:
+#   minimal  — exec + conv_graph (純文字測 persona)
+#   e2e      — minimal + tts (帶 TTS 音訊)
+#   full     — go2 + 5 perception + brain + asr/tts/llm + gateway (Jetson tmux 13 windows)
+#   demo     — alias for `full --studio` — Roy 5/12 提的「全 perception + brain + Studio frontend」一鍵
+#              ← 推薦給「我要直接用 PawAI demo」場景
 
 set -uo pipefail
 
@@ -12,9 +19,16 @@ for arg in "$@"; do
   [ "$arg" = "--studio" ] && STUDIO=1
 done
 
-if [[ ! "$MODE" =~ ^(minimal|e2e|full)$ ]]; then
-  echo "❌ usage: start.sh <minimal|e2e|full> [--studio]"
+if [[ ! "$MODE" =~ ^(minimal|e2e|full|demo)$ ]]; then
+  echo "❌ usage: start.sh <minimal|e2e|full|demo> [--studio]"
+  echo "   demo = full + --studio (一鍵全開：5 感知 + brain + Studio frontend)"
   exit 1
+fi
+
+# `demo` mode = full + studio overlay baked in
+if [ "$MODE" = "demo" ]; then
+  MODE="full"
+  STUDIO=1
 fi
 
 JETSON_HOST="${JETSON_HOST:-jetson-nano}"
@@ -65,9 +79,15 @@ case "$MODE" in
     echo "    tts_node 啟在 $SPEAKER_DEVICE"
     ;;
   full)
-    echo "    ⚠️  full mode 用 legacy llm_bridge_node，不是 6 檔 persona brain"
+    # 5/12 update: full mode 走 langgraph engine (CONVERSATION_ENGINE default 已是
+    # langgraph since 2fd4aec)，6 檔 persona brain 也會生效。Stale warning 移除。
+    # TTS_PROVIDER=openrouter_gemini → quality lane 走 Gemini 3.1 Flash TTS Despina
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t demo 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO bash $JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
+      WORKSPACE=$JETSON_REPO \
+      PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' \
+      PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' \
+      TTS_PROVIDER='${TTS_PROVIDER:-openrouter_gemini}' \
+      bash $JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
     sleep 30  # full demo 啟動較久
     ;;
 esac

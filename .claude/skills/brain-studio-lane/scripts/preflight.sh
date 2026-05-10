@@ -14,9 +14,15 @@ for arg in "$@"; do
   [ "$arg" = "--studio" ] && STUDIO=1
 done
 
-if [[ ! "$MODE" =~ ^(minimal|e2e|full)$ ]]; then
-  echo "❌ usage: preflight.sh <minimal|e2e|full> [--studio]"
+if [[ ! "$MODE" =~ ^(minimal|e2e|full|demo)$ ]]; then
+  echo "❌ usage: preflight.sh <minimal|e2e|full|demo> [--studio]"
   exit 1
+fi
+
+# `demo` is alias for `full` with implicit --studio (mirrors start.sh)
+if [ "$MODE" = "demo" ]; then
+  MODE="full"
+  STUDIO=1
 fi
 
 JETSON_HOST="${JETSON_HOST:-jetson-nano}"

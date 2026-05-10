@@ -49,11 +49,21 @@ bash .claude/skills/brain-studio-lane/scripts/cleanup.sh [--handoff nav|none]
 |---|---|---|---|
 | `minimal` | interaction_executive + conversation_graph_node | `scripts/start_pawai_brain_tmux.sh` | 改 persona / few-shot 後純文字 pub `/brain/text_input` 測 |
 | `e2e` | minimal + tts_node | `scripts/start_pawai_brain_tmux.sh` + 補 tts window | 用 Studio chat / 文字輸入測完整 reply→audio |
-| `full` | go2 + camera + face + vision + executive + asr + tts + llm + object + gateway | `scripts/start_full_demo_tmux.sh` | 五功能 demo。⚠️ **此 mode 用 legacy `llm_bridge_node`，不是新 6 檔 persona brain**。Demo 用，新 persona 改動在這個 mode 看不到 |
+| `full` | go2 + camera + face + vision + executive + asr + tts + llm + object + gateway | `scripts/start_full_demo_tmux.sh` | 5 感知 + brain + Studio gateway。**5/12 update**: 走 langgraph + 6 檔 persona（CONVERSATION_ENGINE default 已切），TTS 預設走 openrouter_gemini Despina 美聲 |
+| **`demo`** ⭐ | **`full` + `--studio` 一鍵全開** | 同 `full`，自動加 Studio frontend overlay | **Roy 5/12 提的「直接用 PawAI 互動」一鍵 mode**。涵蓋人臉 / 語音 / 手勢 / 姿勢 / 物體 / Brain × Studio 6 大功能 |
 
-`--studio` overlay：在 Jetson 起 `studio_gateway`（port 8080），在當前環境起 Next.js
+`--studio` overlay：在 Jetson 起 `studio_gateway`（port 8080，full mode 已內建），在當前環境起 Next.js
 frontend（port 3000，被占用自動 fallback 3001/3002）。frontend env `NEXT_PUBLIC_GATEWAY_URL`
 自動指向 Jetson Tailscale IP `100.83.109.89:8080`。
+
+## 推薦：`demo` mode 一鍵流程
+
+當使用者說「開 PawAI」「啟 demo」「全開」「brain studio 一鍵」「我要互動」時：
+```bash
+bash .claude/skills/brain-studio-lane/scripts/start.sh demo
+```
+→ 自動啟動：人臉 / 語音 / 手勢 / 姿勢 / 物體 / Brain × Studio frontend (6 功能)
+→ 不啟動 nav 主動驅動（用 nav-avoidance-lane skill 切 lane）
 
 ## 預設執行流程
 

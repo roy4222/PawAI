@@ -32,8 +32,11 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
         "capability_question",
         r"你會(什麼|啥|哪些|做什麼|做啥)"
         r"|(有|你有)(什麼|哪些)(功能|能力|技能)"
-        r"|能做(什麼|啥)"
-        r"|功能有(哪些|什麼)",
+        r"|(能|可以)做(什麼|啥)"  # 5/12: "可以做什麼" was missing
+        r"|功能有(哪些|什麼)"
+        r"|(會|能|可以)什麼(動作|事|skill)"  # "會什麼動作", "可以什麼動作"
+        r"|有什麼動作"
+        r"|(具體|詳細)(可以|能|有)",  # "具體有哪些", "詳細可以做" — emphasis on detail
     ),
     (
         "action_request",
