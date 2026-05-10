@@ -375,7 +375,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
             SkillStep(ExecutorKind.MOTION, {"name": "stop_move"}),
             SkillStep(
                 ExecutorKind.SAY,
-                {"text_template": "偵測到 {name} 跌倒，請確認是否需要協助"},
+                {"text_template": "偵測到 {name} 跌倒，請注意安全"},
             ),
         ],
         priority_class=PriorityClass.ALERT,

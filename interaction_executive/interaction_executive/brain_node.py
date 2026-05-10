@@ -185,6 +185,12 @@ class BrainNode(Node):
         self._attention_face_visible: bool = False
         self._attention_distance_m: float | None = None
         self._attention_speech_this_tick: bool = False
+        # 5/12: Latest stable face identity for fallen_alert name injection.
+        # _on_face updates when stable + non-unknown; _on_pose fallen reads
+        # to populate skill args["name"] (raw pose payload has no name field).
+        # 30s freshness gate applied at read site.
+        self._last_stable_identity_name: str | None = None
+        self._last_stable_identity_ts: float = 0.0
 
         self._pub_proposal = self.create_publisher(String, "/brain/proposal", _RELIABLE_10)
         self._pub_brain_state = self.create_publisher(
@@ -531,13 +537,21 @@ class BrainNode(Node):
         "greet_known_person": "trace_only",  # 1G: was execute; face stable detection handles greet
     }
 
-    # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2):
-    #   wave         → wave_hello       (low-risk, direct)
-    #   palm         → system_pause     (safety-immediate, direct)
-    #   thumbs_up    → wiggle           (high-risk, request OK confirm)
-    #   peace        → stretch          (high-risk, request OK confirm)
+    # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2;
+    # 2026-05-12 added fist/index per 測試功能清單 6 static gestures):
+    #   wave         → wave_hello         (low-risk, direct)
+    #   palm         → system_pause       (safety-immediate, direct)
+    #   fist         → enter_mute_mode    (mode switch, direct)
+    #   index        → enter_listen_mode  (mode switch, direct)
+    #   thumbs_up    → wiggle             (high-risk, request OK confirm)
+    #   peace        → stretch            (high-risk, request OK confirm)
     #   ok           → consumed by PendingConfirm.tick (no direct skill fire)
-    _GESTURE_DIRECT = {"wave": "wave_hello", "palm": "system_pause"}
+    _GESTURE_DIRECT = {
+        "wave": "wave_hello",
+        "palm": "system_pause",
+        "fist": "enter_mute_mode",
+        "index": "enter_listen_mode",
+    }
     _GESTURE_CONFIRM = {"thumbs_up": "wiggle", "peace": "stretch"}
 
     def _on_gesture(self, msg: String) -> None:
@@ -816,6 +830,12 @@ class BrainNode(Node):
             self._attention_face_visible = face_visible_now
             if face_visible_now:
                 self._attention_distance_m = distance_m
+            # 5/12: Cache stable non-unknown identity for fallen_alert name
+            # injection (raw pose event has no name; bridge audible path
+            # disabled — Brain skill is sole audible path now).
+            if stable and identity and identity != "unknown":
+                self._last_stable_identity_name = identity
+                self._last_stable_identity_ts = time.time()
 
         if not identity:
             self._state.unknown_face_first_seen = None
@@ -895,7 +915,16 @@ class BrainNode(Node):
                 if not self._in_cooldown("fallen_alert", 15.0):
                     self._mark_cooldown("fallen_alert")
                     self._world.set_fallen(True)
-                    name = str(payload.get("name") or payload.get("identity") or "有人").strip()
+                    # 5/12: prefer raw pose payload name; fallback to last
+                    # stable face identity (≤30s freshness); fallback "有人".
+                    raw_name = str(payload.get("name") or payload.get("identity") or "").strip()
+                    if not raw_name:
+                        with self._lock:
+                            cached = self._last_stable_identity_name
+                            cached_age = time.time() - self._last_stable_identity_ts
+                        if cached and cached_age <= 30.0:
+                            raw_name = cached
+                    name = raw_name or "有人"
                     self._emit(
                         build_plan(
                             "fallen_alert",

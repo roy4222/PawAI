@@ -51,13 +51,22 @@ GESTURE_ACTION_MAP = {
     "thumbs_up": {"api_id": _CONTENT, "topic": _SPORT_TOPIC, "tts": "謝謝！"},
 }
 
-# Fall alert → TTS only (no Go2 sport action)
-# 5/8: empty string disables fall TTS broadcast to avoid interrupting
-# conversation on false-positive fallen detections (e.g. carts / chairs).
-# Studio still surfaces the red alert chip via /event/* trace; behaviour
-# only differs on the audible channel. Restore by setting to a non-empty
-# string when the pose_classifier ankle filter and pose buffer reach
-# acceptable false-positive rate.
+# Fall alert → TRACE-ONLY (no /tts publish)
+#
+# 5/12 (post-review): Bridge audible path REMOVED to avoid double-announce.
+# Audible fall TTS now lives ONLY in Brain `fallen_alert` skill (see
+# interaction_executive/skill_contract.py:fallen_alert), which:
+#   - has motion stop_move (Go2 stops first — safety)
+#   - SAY template "偵測到 {name} 跌倒，請注意安全"
+#   - cooldown 15s
+#   - name is injected from brain_node._last_stable_identity_name
+#
+# This bridge handler still LOGS the alert for Studio trace, but does NOT
+# publish /tts. Restoring the bridge audible path requires either disabling
+# the Brain skill or adding cross-path dedup.
+#
+# Empty string keeps the existing _on_fall_alert guard (`if FALL_ALERT_TTS`)
+# short-circuiting cleanly without TypeError.
 FALL_ALERT_TTS = ""
 
 # DEMO BRIDGE — pose → /tts (NO motion). Standing intentionally absent
@@ -262,11 +271,17 @@ class EventActionBridge(Node):
             f"FALL_ALERT received: who={who}, persist={persist}s"
         )
 
-        # Guard: empty FALL_ALERT_TTS (5/8 demo silence) skips TTS publish
-        # to avoid emitting empty /tts payloads that downstream nodes may
-        # log-spam or attempt to synthesise as silence.
+        # 5/12: Bridge audible path disabled (FALL_ALERT_TTS = "").
+        # Audible TTS now lives only in Brain fallen_alert skill to avoid
+        # double-announce. Studio trace still surfaces the alert via the
+        # log warning above + /event/* topics.
         if FALL_ALERT_TTS:
-            self._send_tts(FALL_ALERT_TTS)
+            who_name = who if who and who != "unknown" else "你"
+            try:
+                text = FALL_ALERT_TTS.format(who=who_name)
+            except (KeyError, IndexError):
+                text = FALL_ALERT_TTS
+            self._send_tts(text)
 
     # ------------------------------------------------------------------
     # DEMO BRIDGE — pose → /tts (NO motion; see module docstring)

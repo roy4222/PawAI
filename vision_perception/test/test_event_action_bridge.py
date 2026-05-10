@@ -79,15 +79,23 @@ class TestFallAlertConfig(unittest.TestCase):
 
         assert isinstance(FALL_ALERT_TTS, str)
 
-    def test_fall_alert_tts_demo_silence_default(self):
-        """Demo period: FALL_ALERT_TTS should default to empty string so
-        false-positive fallen detections don't interrupt conversation. Restore
-        to a non-empty string when the pose_classifier ankle filter and pose
-        buffer reach acceptable false-positive rate."""
+    def test_fall_alert_tts_bridge_audible_disabled(self):
+        """5/12 (post-review fix): bridge audible path REMOVED to avoid
+        double-announce with Brain `fallen_alert` skill.
+
+        FALL_ALERT_TTS == "" is the active design — Brain skill is the
+        sole audible path (motion stop_move + SAY "偵測到 {name} 跌倒，請注意安全"
+        with name injected from brain_node._last_stable_identity_name cache).
+
+        Bridge handler still LOGS for Studio trace but skips /tts publish.
+        Restoring requires either disabling Brain skill or adding cross-path
+        dedup.
+        """
         from vision_perception.event_action_bridge import FALL_ALERT_TTS
 
         assert FALL_ALERT_TTS == "", (
-            f"FALL_ALERT_TTS={FALL_ALERT_TTS!r} — demo silence requires empty"
+            f"FALL_ALERT_TTS={FALL_ALERT_TTS!r} — bridge audible must remain "
+            "disabled to avoid double-announce with Brain fallen_alert skill"
         )
 
     def test_pose_tts_map_no_fallen_template_demo_silence(self):

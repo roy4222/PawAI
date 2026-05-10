@@ -74,8 +74,10 @@ interaction_executive_node → Go2 動作
 
 1. **0.5 秒穩定維持**：手勢需穩定維持 **0.5 秒**以上方可觸發（temporal dedup，避免揮過去的偽觸發）
 2. **OK 二次確認**：高風險動作（motion / state-change）識別後，必須再做 👌 OK 手勢進行「最終確認」才會執行；low-risk social skill（如 wave_hello）可直觸不需 OK
-   - 高風險（必過 OK）：`wiggle`、`stretch`、`enter_mute_mode`、`enter_listen_mode`、`follow_me`、`dance`
-   - low-risk（直觸）：`wave_hello`（揮手回應）、`system_pause`（安全 immediate）
+   - 高風險（必過 OK）：`wiggle`、`stretch`、`follow_me`、`dance`
+   - low-risk（直觸）：`wave_hello`（揮手回應）、`system_pause`（palm，安全 immediate）、`enter_mute_mode`（fist，5/12 改 direct fire — mode switch 視為低風險）、`enter_listen_mode`（index，5/12 改 direct fire 同理）
+
+   > **5/12 變更**：`enter_mute_mode` / `enter_listen_mode` 由「必過 OK」改為「direct fire」。原因：mode switch 是顯性使用者意圖，且不涉及 motion 安全性；過 OK 反而拖慢 demo 節奏。實作見 `interaction_executive/interaction_executive/brain_node.py:_GESTURE_DIRECT`。
 3. **操作流程範例**：
    - 步驟 A：對著相機做 ✌️（Peace）持續 0.5 秒
    - 步驟 B：系統鎖定後，做出 👌（OK）持續 0.5 秒
@@ -129,8 +131,8 @@ interaction_executive_node → Go2 動作
 | 手勢 | Brain 觸發 | OK 二次確認 | Go2 ID | TTS / 反饋 | Cooldown |
 |---|---|:---:|:---:|---|:---:|
 | Palm | `system_pause` | ❌ 直觸（安全 immediate）| StopMove (1003) | — | **無** |
-| Fist | `enter_mute_mode`（Hidden）| ✅ | 坐下 + mute | — | 3s |
-| Index | `enter_listen_mode`（Hidden）| ✅ | 站立 + ASR on | — | 3s |
+| Fist | `enter_mute_mode` | ❌ 直觸（5/12 改）| 坐下 + mute | — | 3s |
+| Index | `enter_listen_mode` | ❌ 直觸（5/12 改）| 站立 + ASR on | — | 3s |
 | OK | gate only — 不直觸 skill | — | — | — | — |
 | Thumb | `wiggle` | ✅ | 1033（搖屁股）| 「收到！」 | 3s |
 | Peace | `stretch` | ✅ | 1017（伸懶腰）| — | 3s |
@@ -138,7 +140,7 @@ interaction_executive_node → Go2 動作
 | ComeHere | `follow_me`（Future）| ✅ | 1018 | — | — |
 | Circle | `dance`（Future）| ✅ | — | — | — |
 
-> 5/12 demo Active 5 個（Palm/OK/Thumb/Peace/Wave）— 即「stop / 確認 / 開心 / 放鬆 / 打招呼」5 場手勢互動。Hidden/Future 7 條 keep registry 但 Studio button grayed-out。
+> 5/12 demo Active 7 個（Palm/Fist/Index/OK/Thumb/Peace/Wave）— 即「stop / 靜音 / 監聽 / 確認 / 開心 / 放鬆 / 打招呼」7 場手勢互動（5/12 補 Fist+Index direct fire）。Future 2 條（ComeHere/Circle）keep registry 但 Studio button grayed-out。
 
 ## 下一步
 

@@ -246,6 +246,26 @@ def test_gesture_palm_triggers_system_pause(brain):
     assert plan["selected_skill"] == "system_pause"
 
 
+def test_gesture_fist_triggers_enter_mute_mode(brain):
+    """5/12 (測試功能清單 較急 2): fist gesture enters mute mode.
+
+    Direct fire path (no OK confirm) — mode switch is low-risk.
+    """
+    brain._on_gesture(_msg({"gesture": "fist"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "enter_mute_mode"
+
+
+def test_gesture_index_triggers_enter_listen_mode(brain):
+    """5/12 (測試功能清單 較急 2): index (Pointing_Up) enters listen mode.
+
+    MediaPipe maps Pointing_Up → index (gesture_recognizer_backend.py:52).
+    """
+    brain._on_gesture(_msg({"gesture": "index"}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "enter_listen_mode"
+
+
 def test_gesture_thumbs_up_requests_confirm_not_immediate_wiggle(brain):
     brain._on_gesture(_msg({"gesture": "thumbs_up"}))
     # Should emit a "say_canned" hint asking for OK, NOT wiggle directly.
@@ -338,6 +358,37 @@ def test_pose_fallen_uses_name_when_available(brain):
     plan = _latest(brain)
     say_steps = [s for s in plan["steps"] if s["executor"] == "say"]
     assert "Roy" in say_steps[0]["args"]["text"]
+
+
+def test_pose_fallen_uses_cached_face_identity_when_pose_lacks_name(brain):
+    """5/12: raw pose payload has no name → fall back to last stable face.
+
+    Brain caches stable identity from /event/face_identity (_on_face) and
+    injects into fallen_alert when pose payload lacks name. Audible fall TTS
+    runs ONLY through Brain skill (bridge audible disabled 5/12) — name
+    injection is the only way demo gets "偵測到 Roy 跌倒" instead of "有人".
+    """
+    # Prime cache with stable face
+    brain._on_face(_msg({"identity": "Roy", "identity_stable": True}))
+    # Fallen 2s, no name in pose payload
+    brain._on_pose(_msg({"pose": "fallen"}))
+    brain._state.fallen_first_seen -= 0.06
+    brain._on_pose(_msg({"pose": "fallen"}))
+    plan = _latest(brain)
+    say_steps = [s for s in plan["steps"] if s["executor"] == "say"]
+    assert "Roy" in say_steps[0]["args"]["text"], (
+        f"Expected cached identity 'Roy' in fallen TTS, got: {say_steps[0]['args']['text']!r}"
+    )
+
+
+def test_pose_fallen_falls_back_to_youren_when_no_face_cached(brain):
+    """5/12: no name in pose, no stable face cached → 'have人' fallback."""
+    brain._on_pose(_msg({"pose": "fallen"}))
+    brain._state.fallen_first_seen -= 0.06
+    brain._on_pose(_msg({"pose": "fallen"}))
+    plan = _latest(brain)
+    say_steps = [s for s in plan["steps"] if s["executor"] == "say"]
+    assert "有人" in say_steps[0]["args"]["text"]
 
 
 def test_object_detected_triggers_object_remark(brain):
