@@ -42,11 +42,16 @@ def generate_launch_description() -> LaunchDescription:
         ),
         DeclareLaunchArgument(
             "openrouter_gemini_model",
-            default_value="google/gemini-3-flash-preview",
+            # 5/12 round-2 A/B winner — primary slot. Legacy param name.
+            # Override one-liner: openrouter_gemini_model:=google/gemini-3-flash-preview
+            default_value="openai/gpt-5.4-mini",
+            description="Primary LLM slug (legacy param name 'gemini'). 5/12 default: gpt-5.4-mini.",
         ),
         DeclareLaunchArgument(
             "openrouter_deepseek_model",
-            default_value="deepseek/deepseek-v4-flash",
+            # Fallback slot. 5/12 changed from deepseek-v4-flash (P95 34s slow tail) to gemini.
+            default_value="google/gemini-3-flash-preview",
+            description="Fallback LLM slug (legacy param name 'deepseek'). 5/12 default: gemini-3-flash-preview.",
         ),
         DeclareLaunchArgument(
             "openrouter_request_timeout_s", default_value="4.0",

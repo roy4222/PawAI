@@ -42,6 +42,11 @@ MODEL_ALIASES: dict[str, str] = {
     # 2026-05-12 added per 測試功能清單 較急 1 — 大模型 A/B 看是否值得換主線
     "opus": "anthropic/claude-opus-4.7",         # ~$15/$75 per M (top quality, demo polish)
     "gpt": "openai/gpt-5.5",                     # ~$5/$15 per M (alternative top tier)
+    # 2026-05-12 round 2 — opus 太貴 / gpt-5.5 太慢，試小版本看是否還保留質感
+    "sonnet": "anthropic/claude-sonnet-4.6",     # ~$3/$15 per M (Anthropic mid-tier)
+    "haiku": "anthropic/claude-haiku-4.5",       # ~$1/$5 per M (Anthropic small/fast)
+    "gpt-mini": "openai/gpt-5.4-mini",           # ~$0.25/$2 per M (OpenAI mid)
+    "gpt-nano": "openai/gpt-5.4-nano",           # ~$0.05/$0.40 per M (OpenAI tiny)
 }
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"

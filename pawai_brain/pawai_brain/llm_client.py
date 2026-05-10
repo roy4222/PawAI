@@ -48,8 +48,14 @@ def resolve_openrouter_key(enable_openrouter: bool, env: dict) -> str:
 @dataclass
 class OpenRouterConfig:
     base_url: str = "https://openrouter.ai/api/v1/chat/completions"
-    gemini_model: str = "google/gemini-3-flash-preview"
-    deepseek_model: str = "deepseek/deepseek-v4-flash"
+    # Slot names are legacy from when primary/fallback was literally
+    # Gemini→DeepSeek. Per 5/12 A/B eval
+    # (docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md):
+    #   primary  (gemini_model slot)   → openai/gpt-5.4-mini    P50 1.16s, $0.018/12-call
+    #   fallback (deepseek_model slot) → google/gemini-3-flash-preview  baseline backup
+    # ROS params keep legacy names; override via launch arg or env one-liner.
+    gemini_model: str = "openai/gpt-5.4-mini"
+    deepseek_model: str = "google/gemini-3-flash-preview"
     request_timeout_s: float = 4.0
     overall_budget_s: float = 5.0
     temperature: float = 0.2

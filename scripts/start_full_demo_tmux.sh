@@ -49,6 +49,13 @@ ENABLE_LOCAL_LLM="${ENABLE_LOCAL_LLM:-true}"
 LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/completions}"
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 
+# ── OpenRouter primary / fallback model slugs (5/12 round-2 A/B winner) ──
+# Override one-liner:
+#   PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
+# Demo decision rationale: docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md
+PAWAI_LLM_MODEL="${PAWAI_LLM_MODEL:-openai/gpt-5.4-mini}"
+PAWAI_LLM_FALLBACK_MODEL="${PAWAI_LLM_FALLBACK_MODEL:-google/gemini-3-flash-preview}"
+
 # ── Conversation Engine selection ──
 # langgraph (default): pawai_brain.conversation_graph_node owns /brain/chat_candidate
 # legacy             : speech_processor.llm_bridge_node owns /brain/chat_candidate
@@ -214,7 +221,8 @@ if [[ "$CONVERSATION_ENGINE" == "langgraph" ]]; then
   echo "[8/10] Starting pawai_brain.conversation_graph_node (langgraph primary)..."
   tmux send-keys -t "$SESSION:llm" \
     "$ROS_SETUP && ros2 launch pawai_brain pawai_conversation_graph.launch.py \
-      openrouter_gemini_model:=google/gemini-3-flash-preview \
+      openrouter_gemini_model:=$PAWAI_LLM_MODEL \
+      openrouter_deepseek_model:=$PAWAI_LLM_FALLBACK_MODEL \
       openrouter_request_timeout_s:=4.0 \
       openrouter_overall_budget_s:=5.0 \
       llm_max_tokens:=2000 \
@@ -235,7 +243,7 @@ else
       -p subscribe_face:=false \
       -p output_mode:=brain \
       -p enable_openrouter:=true \
-      -p openrouter_gemini_model:=google/gemini-3-flash-preview \
+      -p openrouter_gemini_model:=$PAWAI_LLM_MODEL \
       -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
       -p max_reply_chars:=0 \
       -p llm_max_tokens:=2000 \

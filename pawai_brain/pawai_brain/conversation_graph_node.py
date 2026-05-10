@@ -304,8 +304,10 @@ class ConversationGraphNode(Node):
             "openrouter_base_url",
             "https://openrouter.ai/api/v1/chat/completions",
         )
-        self.declare_parameter("openrouter_gemini_model", "google/gemini-3-flash-preview")
-        self.declare_parameter("openrouter_deepseek_model", "deepseek/deepseek-v4-flash")
+        # 5/12 round-2 A/B winner: gpt-5.4-mini live primary; gemini fallback.
+        # Param names are legacy slot names — see llm_client.OpenRouterConfig.
+        self.declare_parameter("openrouter_gemini_model", "openai/gpt-5.4-mini")
+        self.declare_parameter("openrouter_deepseek_model", "google/gemini-3-flash-preview")
         self.declare_parameter("openrouter_request_timeout_s", 4.0)
         self.declare_parameter("openrouter_overall_budget_s", 5.0)
         self.declare_parameter("llm_persona_file", "")
