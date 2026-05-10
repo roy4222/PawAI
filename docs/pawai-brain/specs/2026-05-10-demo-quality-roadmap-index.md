@@ -1,9 +1,19 @@
 # Demo-Quality Roadmap — 6 Specs Index
 
-> **Status**: draft
-> **Date**: 2026-05-10
-> **Demo 倒數**: 5/16（剩 6 天）
+> **Status**: superseded by Demo Readiness Master Plan
+> **Date**: 2026-05-10（晚更新：移交日 + Brain Minimum 縮範圍）
+> **Demo**: **5/18 final** ｜ **5/16 dry-run** ｜ **5/12 晚 Go2 移交學校**
 > **Owner**: Roy
+>
+> ⚠️ **5/10 night 重構**：因 5/12 晚 Go2 移交學校，本 roadmap 由 6 spec 改為 1 master + 5 plan：
+> - [`Demo Readiness Master Plan`](../plans/2026-05-10-demo-readiness-master-plan.md)（**主入口**：5/11–5/18 排程 + 依賴）
+> - [`A. Brain Minimum`](../plans/2026-05-10-brain-minimum-checklist.md)（取代 Spec 1 完整版）
+> - [`B. Nav Root-Cause Burndown`](../plans/2026-05-11-nav-root-cause-burndown.md)
+> - [`C. Runtime Fallback`](../plans/2026-05-12-runtime-fallback-readiness.md)
+> - [`D. Audio Readiness`](../plans/2026-05-12-free-conversation-audio-readiness.md)
+> - [`E. Mac × School Network`](../plans/2026-05-12-mac-school-network-readiness.md)
+>
+> 本檔保留作 6 spec 設計背景參考。實際執行請看 Master Plan。
 
 ---
 
@@ -28,30 +38,15 @@ PawAI 不是長者陪伴專案。是**多模態感知融合的具身互動機器
 
 ---
 
-## Demo 前焦點（剩 6 天）
+## Demo 前焦點 — ⚠️ 已取代
 
-### 必做（P0）
-1. **Spec 1 LLM Naturalness A+**（5.5 天）
-   - Persona 6 檔（含新 MISSION.md）
-   - SAY 解綁機制（`source_llm_reply` ROS 透傳）
-   - 4 個優先 skill：self_introduce / wave_hello / greet_known_person / object_remark
-   - 10-prompt benchmark + 模型 A/B 評估
-
-2. **Spec 5 P0 SLAM/Nav2 場地測**（5/13-14）
-   - LM307 場地 goto_relative 1m
-   - reactive_stop 對紙箱
-   - 30 分鐘穩定運行
-
-### 可選（若時間夠）
-3. **Spec 2 P0 靜態手勢**（2 天）
-   - Palm / Fist / Index 對應 skill
-   - OK gesture 驗證（PendingConfirm 已用）
-
-4. ~~**Spec 6 P0 scroll 驗證**~~（5/10 night 完成 ✅）
-   - 5/9 stick-to-bottom fix 確認在原 issue 不重現
-   - 但發現新 layout bug：composer 被訊息推離 viewport 底
-   - 已重構為 ChatGPT-like absolute-bottom（commit `fdd5c93`）
-   - 詳見 [Spec 6 plan](../plans/2026-05-10-spec6-scroll-verification-checklist.md) §10 結論
+> 本節的「Spec 1 5.5 天 / SAY 解綁 / 5/16 剩 6 天」**全部不再執行**。
+>
+> 5/10 night 因 5/12 晚 Go2 移交學校重排，實際執行請看：
+> - [`Demo Readiness Master Plan`](../plans/2026-05-10-demo-readiness-master-plan.md) §3 逐日排程
+> - [`Brain Minimum Checklist`](../plans/2026-05-10-brain-minimum-checklist.md)（取代 Spec 1 完整版）
+>
+> 不要回頭照本節做。本檔只保留作 6 spec 設計背景參考。
 
 ---
 

@@ -1,9 +1,51 @@
 # 專案狀態
 
-**最後更新**：2026-05-10 night（demo-quality 6-spec roadmap 落地 + Spec 1 A+ 通過 14 點 review + Spec 6 P0 完成：Studio composer absolute layout 重構）
-**硬底線**：5/18 期末 demo（8 天）；5/12 晚 → M307；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-10 deep night（demo readiness 重構：5/12 晚移交學校 → 5/11-12 並行 5 條工作流 + Brain Minimum + Nav burndown + Mac/網路集中設定）
+**硬底線**：5/18 期末 demo（8 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
 
 ---
+
+## 5/10 night：Demo Readiness 重構（取代上午的 6-spec roadmap）
+
+下午做完 6-spec + Spec 1 14 點 review 後，晚上發現 4 個新硬限制 → 重組成 1 master + 5 plan：
+
+1. **5/12 晚 Go2 移交學校** → Spec 1 不能拉到 5/15，必須 5/12 中午 freeze
+2. **學校網路陌生 + Mac 當操作端** → 寫死 IP / host / port 全部要抓出（subagent 抓出 27 處，3 P0）
+3. **完全離線 / No-AI / Mac fallback 從沒測過** → 移交前必須三模式各 smoke
+4. **自由對話（不靠 Studio button）+ AirPods 評估從沒做** → 移交前確認 demo 設備
+
+### 6 plan 結構（執行入口）
+
+| 代號 | Plan | 主題 | 視窗 |
+|:---:|---|---|---|
+| **M** | [demo-readiness-master-plan](../docs/pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md) | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
+| **A** | [brain-minimum-checklist](../docs/pawai-brain/plans/2026-05-10-brain-minimum-checklist.md) | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
+| **B** | [nav-root-cause-burndown](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md) | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
+| **C** | [runtime-fallback-readiness](../docs/pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md) | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
+| **D** | [free-conversation-audio-readiness](../docs/pawai-brain/plans/2026-05-12-free-conversation-audio-readiness.md) | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
+| **E** | [mac-school-network-readiness](../docs/pawai-brain/plans/2026-05-12-mac-school-network-readiness.md) | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
+
+### 戰略收斂
+
+- **Demo 形式**：A-led hybrid（60s PawAI 自介 → Roy 帶 3-4 段穩定 → PawAI 接續對話）
+- **尋物策略**：X+（物體辨識 + nav 分段展示 + PawAI 講敘事，不真做閉環）
+- **模型**：不盲換（5/12 中午 ≥8/10 鎖；<8/10 才考慮 demo 10 題 A/B）
+- **Spec 1 縮減**：砍 SAY 解綁、變體池、6 skill 解綁、self_introduce 重構（demo 後 retrospective 後決定）
+- **Nav 主舞台移到學校**：家裡先把 7 項可能性排除到「只剩空間假設」
+
+### subagent 寫死 ref 審計（5/10 night）
+
+掃描 27 處硬寫值，3 處 P0：
+1. `speech_processor/config/speech_processor.yaml:24` ASR URL 寫死
+2. `pawai-studio/gateway/studio_gateway.py:53` ASR_URL 不讀環變
+3. `pawai-studio/gateway/asr_client.py:46` asr_url default 寫死
+
+`ROBOT_IP` / `GATEWAY_HOST` / `MAP` 都已環變 ✅。Foxglove 8765 hardcoded 但 ws URL 動態。
+完整清單見 E plan §3-§4。
+
+---
+
+## 5/10 進度（早午：demo-quality 6-spec roadmap，已被晚上重構覆蓋）
 
 ## 5/10 進度（demo-quality roadmap：6 spec + Spec 1 14 點 review fix）
 

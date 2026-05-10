@@ -1,13 +1,28 @@
 # Spec 1 Writing Plan — LLM Naturalness / Self-Showcase A+
 
-> **Status**: ready-to-execute
-> **Date**: 2026-05-10
-> **依據 spec**：[`2026-05-10-llm-naturalness-a-plus-design.md`](../specs/2026-05-10-llm-naturalness-a-plus-design.md)（14 點 review fix 後版本）
-> **Demo 倒數**：5/16（剩 6 天）
-> **總工時**：5.5 天（含 0.5d buffer）→ 5/15 完成
-> **Branch**：`spec1/llm-naturalness-a-plus`（從 `fix/demo-motion-and-chat-polish` 開）
-> **Owner**：Roy
-> **Plan 用途**：把 spec 拆成可逐步 commit 的任務序列；每 phase 收尾有可執行驗證指令與 stop-the-line checkpoint。
+> ⚠️ **SUPERSEDED 2026-05-10 night**
+>
+> 因 5/12 晚 Go2 移交學校，此 plan **§3-§7 不再執行**。
+> Spec 1 範圍縮減為 Brain Minimum（persona 6 檔 + 10-prompt eval + 60s 自介 freeze）。
+>
+> **接手 plan**：
+> - [`2026-05-10-demo-readiness-master-plan.md`](./2026-05-10-demo-readiness-master-plan.md)（總 orchestration）
+> - [`2026-05-10-brain-minimum-checklist.md`](./2026-05-10-brain-minimum-checklist.md)（取代本 plan §3-§7）
+>
+> 本 plan 保留作 demo 後 Spec 1 完整版恢復的參考底稿。SAY 解綁、變體池、6 skill 解綁、self_introduce 重構等項目移到 demo 後 retrospective 後再決定要不要做。
+
+---
+
+# ⛔ DO NOT EXECUTE — Spec 1 Writing Plan (Archived)
+
+> **Status**: **superseded / archived (2026-05-10 night)**
+> **Reason**: 5/12 晚 Go2 移交學校，此 5.5 天 plan 不再執行
+> **接手**：[`brain-minimum-checklist`](./2026-05-10-brain-minimum-checklist.md) + [`demo-readiness-master-plan`](./2026-05-10-demo-readiness-master-plan.md)
+> **Demo 倒數（archived）**：~~5/16（剩 6 天）~~ → 實際 5/18 final
+> **總工時（archived）**：~~5.5 天~~ → 實際 1.5 天 Brain Minimum
+> **Branch（archived）**：~~`spec1/llm-naturalness-a-plus`~~ → 實際 `spec1/brain-minimum`
+>
+> 本檔保留作 demo 後 Spec 1 完整版恢復的參考底稿。下面所有 §3-§7 phase **不要照做**。
 
 ---
 
