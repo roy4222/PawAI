@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowUp, Mic, PawPrint, RotateCcw, Sparkles, Square } from "lucide-react";
+import { Mic, PawPrint, RotateCcw, Sparkles } from "lucide-react";
 import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
-import { AudioVisualizer } from "@/components/chat/audio-visualizer";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
+import { Composer } from "@/components/chat/composer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import { cn } from "@/lib/utils";
 
@@ -105,10 +104,29 @@ export function ChatPanel() {
   // not yank the viewport back down.
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  // Set true while a programmatic scrollIntoView animation is in-flight,
+  // so its synthetic scroll events don't masquerade as user-initiated scroll
+  // and flip shouldAutoScrollRef to false (which would skip the next message's
+  // auto-scroll when scrollHeight grew faster than scrollTop caught up).
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ChatGPT-like absolute-bottom composer: header + composer bar are absolute-
+  // positioned within ChatPanel's relative root. Scroll area is also absolute,
+  // clamped between their measured heights so messages never collide with bar.
+  // Initials are conservative defaults (avoid first-frame top=0 covering header).
+  const headerRef = useRef<HTMLDivElement>(null);
+  const composerBarRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(44);
+  const [composerBarH, setComposerBarH] = useState(96);
 
   const hasMessages = messages.length > 0;
 
   function handleScrollContainer() {
+    // Ignore scroll events synthesised by our own scrollIntoView call —
+    // otherwise the synthetic events flip shouldAutoScrollRef to false during
+    // the brief window when scrollHeight has grown but scrollTop hasn't yet
+    // caught up, causing the next rapid message to skip auto-scroll.
+    if (isAutoScrollingRef.current) return;
     const el = scrollContainerRef.current;
     if (!el) return;
     // 30px tolerance — within this distance to bottom counts as "stuck".
@@ -117,16 +135,45 @@ export function ChatPanel() {
   }
 
   // Auto-scroll on new messages, but only when user is at/near the bottom.
+  // Instant snap (behavior:"auto") rather than smooth — smooth animation
+  // produces a visible empty area below long messages while scrollTop catches
+  // up to the freshly grown scrollHeight; instant snap eliminates that window.
   useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
+    if (!shouldAutoScrollRef.current) return;
+    isAutoScrollingRef.current = true;
+    bottomRef.current?.scrollIntoView({ behavior: "auto" });
+    if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
+    // Instant scroll completes synchronously, but a few synthetic scroll
+    // events still fire on the next frame; brief lock to swallow them.
+    autoScrollTimerRef.current = setTimeout(() => {
+      isAutoScrollingRef.current = false;
+    }, 100);
   }, [messages, isThinking]);
+
+  // Measure header + composer bar heights so the absolute-positioned scroll
+  // area can clamp top/bottom precisely. Only registers in conversation view —
+  // empty state has no composer bar element and uses a different layout.
+  useEffect(() => {
+    if (!hasMessages) return;
+    const headerEl = headerRef.current;
+    const barEl = composerBarRef.current;
+    if (!headerEl || !barEl) return;
+    const sync = () => {
+      setHeaderH(headerEl.offsetHeight);
+      setComposerBarH(barEl.offsetHeight);
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(headerEl);
+    ro.observe(barEl);
+    return () => ro.disconnect();
+  }, [hasMessages]);
 
   // Cleanup pending timeout on unmount.
   useEffect(() => {
     return () => {
       if (pendingTimeoutRef.current) clearTimeout(pendingTimeoutRef.current);
+      if (autoScrollTimerRef.current) clearTimeout(autoScrollTimerRef.current);
     };
   }, []);
 
@@ -312,79 +359,22 @@ export function ChatPanel() {
     }
   }
 
-  // Composer — text input + mic + send. Used in both empty and conversation views.
-  const composerInput = (
-    <div
-      className={cn(
-        "relative rounded-2xl border transition-all duration-200",
-        isRecording
-          ? "border-red-500/40 shadow-[0_0_0_1px_rgba(239,68,68,0.15)] bg-surface"
-          : "border-border/60 bg-surface focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(124,107,255,0.15)]",
-      )}
-    >
-      <Textarea
-        ref={textareaRef}
-        value={inputText}
-        onChange={(e) => setInputText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={isRecording ? "錄音中..." : "傳送訊息給 PawAI…"}
-        disabled={isThinking || isRecording}
-        rows={1}
-        className={cn(
-          "min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-24",
-          "text-foreground placeholder:text-muted-foreground/50",
-          "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-transparent",
-          "px-4 py-3 text-[15px] leading-relaxed",
-        )}
-      />
-      <Button
-        onClick={() => (isRecording ? stopRecording() : startRecording())}
-        disabled={isThinking || isProcessing}
-        size={isRecording && audioLevels.length > 0 ? "default" : "icon"}
-        className={cn(
-          "absolute bottom-2 transition-all duration-200",
-          isRecording
-            ? "right-12 h-9 px-3 rounded-full bg-red-500 hover:bg-red-600 text-white shadow-sm flex items-center gap-2"
-            : isProcessing
-              ? "right-12 h-9 w-9 rounded-lg bg-amber-500 text-white cursor-wait"
-              : "right-12 h-9 w-9 rounded-lg bg-muted text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground",
-        )}
-        title={isRecording ? "停止錄音" : isProcessing ? "辨識中..." : "語音輸入"}
-      >
-        {isRecording ? (
-          <>
-            <AudioVisualizer levels={audioLevels} isActive={isRecording} />
-            {audioLevels.length === 0 && <Mic className="h-3.5 w-3.5 animate-pulse" />}
-            <Square className="h-3 w-3 shrink-0" />
-          </>
-        ) : (
-          <Mic className="h-4 w-4" />
-        )}
-      </Button>
-      <Button
-        onClick={handleSend}
-        disabled={isThinking || isRecording || !inputText.trim()}
-        size="icon"
-        title="傳送"
-        aria-label="傳送訊息"
-        className={cn(
-          "absolute right-2 bottom-2 h-9 w-9 rounded-lg transition-all duration-200",
-          inputText.trim() && !isRecording
-            ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
-            : "bg-muted text-muted-foreground cursor-not-allowed",
-        )}
-      >
-        <ArrowUp className="h-4 w-4" />
-      </Button>
-      {voiceError && (
-        <div className="absolute -top-7 left-0 right-0 text-center">
-          <span className="text-[11px] text-destructive bg-background/90 px-2 py-0.5 rounded">
-            {voiceError}
-          </span>
-        </div>
-      )}
-    </div>
-  );
+  // Bundle composer props once — passed identically to <Composer /> in both
+  // empty state (centred with hero) and conversation state (absolute bottom).
+  const composerProps = {
+    value: inputText,
+    onChange: setInputText,
+    onSend: handleSend,
+    onKeyDown: handleKeyDown,
+    textareaRef,
+    isThinking,
+    isRecording,
+    isProcessing,
+    audioLevels,
+    startRecording,
+    stopRecording,
+    voiceError,
+  };
 
   // Empty state — minimal hero + composer (no skill buttons / no module strip).
   if (!hasMessages) {
@@ -404,17 +394,27 @@ export function ChatPanel() {
                 有什麼想聊的嗎？
               </p>
             </div>
-            <div className="w-full">{composerInput}</div>
+            <div className="w-full">
+              <Composer {...composerProps} />
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // Conversation view — bubble stream + bottom composer.
+  // Conversation view — ChatGPT-like absolute-bottom composer.
+  // Root is `relative` + `overflow-hidden`. Header sits in normal flow at top.
+  // Scroll area is `absolute` clamped between measured headerH and
+  // composerBarH so messages never collide with composer bar regardless of
+  // textarea growth or skill-strip toggle. Composer bar is `absolute bottom-0
+  // z-20` (below DevButton z-30 and Sheet z-40/50).
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between">
+    <div className="relative h-full overflow-hidden">
+      <div
+        ref={headerRef}
+        className="flex items-center justify-between bg-background"
+      >
         <BrainStatusPill />
         <Button
           variant="ghost"
@@ -430,7 +430,8 @@ export function ChatPanel() {
       <div
         ref={scrollContainerRef}
         onScroll={handleScrollContainer}
-        className="flex-1 overflow-y-auto"
+        className="absolute inset-x-0 overflow-y-auto"
+        style={{ top: headerH, bottom: composerBarH }}
       >
         <div className="mx-auto flex max-w-[var(--chat-max-w)] flex-col gap-3 px-4 md:px-8 py-6">
           {messages.map((msg) => {
@@ -520,35 +521,39 @@ export function ChatPanel() {
           <div ref={bottomRef} />
         </div>
       </div>
-      {latestSkillResult && (
-        <div
-          className="border-t border-border/40 px-4 md:px-8 py-1.5 text-[11px] font-mono text-muted-foreground/80 flex items-center gap-2"
-          aria-live="polite"
-        >
-          <span className="opacity-60">skill:</span>
-          <span className="text-foreground/90">{latestSkillResult.selected_skill}</span>
-          <span
-            className={cn(
-              "rounded px-1.5 py-0.5 text-[10px]",
-              latestSkillResult.status === "completed" || latestSkillResult.status === "step_success"
-                ? "bg-emerald-500/15 text-emerald-300"
-                : latestSkillResult.status === "step_failed" ||
-                    latestSkillResult.status === "aborted" ||
-                    latestSkillResult.status === "blocked_by_safety"
-                  ? "bg-red-500/15 text-red-300"
-                  : "bg-sky-500/15 text-sky-300"
-            )}
+      <div
+        ref={composerBarRef}
+        data-composer-bar
+        className="absolute inset-x-0 bottom-0 z-20 bg-background/80 backdrop-blur-md border-t border-border/40"
+      >
+        {latestSkillResult && (
+          <div
+            className="border-b border-border/40 px-4 md:px-8 py-1.5 text-[11px] font-mono text-muted-foreground/80 flex items-center gap-2"
+            aria-live="polite"
           >
-            {latestSkillResult.status}
-          </span>
-          {latestSkillResult.detail && (
-            <span className="truncate opacity-70">· {latestSkillResult.detail}</span>
-          )}
-        </div>
-      )}
-      <div className="border-t border-border/40">
+            <span className="opacity-60">skill:</span>
+            <span className="text-foreground/90">{latestSkillResult.selected_skill}</span>
+            <span
+              className={cn(
+                "rounded px-1.5 py-0.5 text-[10px]",
+                latestSkillResult.status === "completed" || latestSkillResult.status === "step_success"
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : latestSkillResult.status === "step_failed" ||
+                      latestSkillResult.status === "aborted" ||
+                      latestSkillResult.status === "blocked_by_safety"
+                    ? "bg-red-500/15 text-red-300"
+                    : "bg-sky-500/15 text-sky-300"
+              )}
+            >
+              {latestSkillResult.status}
+            </span>
+            {latestSkillResult.detail && (
+              <span className="truncate opacity-70">· {latestSkillResult.detail}</span>
+            )}
+          </div>
+        )}
         <div className="mx-auto w-full max-w-[var(--chat-max-w)] px-4 md:px-8 py-3">
-          {composerInput}
+          <Composer {...composerProps} />
         </div>
       </div>
     </div>
