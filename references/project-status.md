@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-05-11 night（Brain freeze v1 + E.Mac/Network pre-stage 完成 + Nav burndown B1-B4 過、B5 訊號通但 motion 階段發現 reactive_stop 設計缺陷）
+**最後更新**：2026-05-11 deep night（Brain freeze + E pre-stage + Nav B5 撞牆深度 audit + reactive_stop 4-mode 狀態機落地 + 4 review fix）
 **硬底線**：5/18 期末 demo（7 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
 
 ---
@@ -39,8 +39,44 @@
 ### 5/12 任務調整
 
 原本 5/12 PM 要做的：A final eval + freeze、E 連通驗證、B6/B7 motion、C/D smoke。
-**5/11 提前消化**：A freeze、E pre-stage、B1-B4 全部、B5 訊號層。
-**5/12 重排**：reactive_stop 修法 → B5 motion 重測 → B6/B7（如果 Go2 物理狀態 OK）→ C/D smoke + N1-N6 連通驗證 → 設備清點 → 19:00 freeze → 20:00 移交。
+**5/11 提前消化**：A freeze、E pre-stage、B1-B4 全部、B5 訊號層 + 撞牆深度 audit + reactive_stop 4-mode 重設計。
+**5/12 重排**：Jetson sync + colcon → B5 三 script 各跑一次（hold_brake / progressive 切換驗證）→ B6/B7 → C/D smoke + N1-N6 連通驗證 → 設備清點 → 19:00 freeze → 20:00 移交。
+
+### Nav 撞牆 deep audit + 4-mode 重設計（commits `8ae7faf` `f471ebd` `4ec8350` `f366acd` `0f5a16f` `d804a58`）
+
+詳見 [`docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md`](../docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md)。
+
+**深度調查（3 subagent 並行）**：local docs / local code / 網路 best practice 三線挖掘 → 撞牆是多層設計缺陷疊加，文件層 root cause 是「3 次架構翻案沒做舊參數適用性 audit」（3/25 D435 ROI 0.8/1.5 → 4/24 RPLIDAR 改 0.6/1.0 無 decision log → 5/1 capability gate 沒 review safety_only 語境 → 5/11 撞）。
+
+**Roy 訂正 4 個 audit 事實錯誤**（Phase A `f471ebd`）：1.5m 仍在 Nav2 1.8m 視距內（不是主因）/ danger 應 enlarge 不是縮小 / 0.6/1.0 來源不是 D435 ROI / D435 detour profile 已存在。
+
+**B0 → 4-mode 演進**（5/11 night Roy code review）：原 B0.1「safety_only=True 永遠 publish 0」實質是 permanent brake 不是 release gate；nav_capability 預設啟它會鎖死 nav。重設計成 4-mode 狀態機：
+
+| mode | 行為 | 用途 |
+|---|---|---|
+| `hold_brake` | 永遠 publish 0 | B5 stop 驗證 / emergency hold |
+| `progressive` | danger=0、slow/clear silent | nav 主驅動（必 kill teleop）|
+| `released` | 不 publish、LiDAR 仍更新 | 操作員主動釋放 |
+| `disabled` | 完全 off | 全停 reactive |
+| `""` | standalone (0/slow/normal) | nav 不在的備援 |
+
+**Roy review 4 bug fix**（`d804a58`）：
+1. `start_reactive_stop_safety_hold_tmux.sh`（新建）改用 robot.launch.py 啟 mux（之前沒 mux → hold_brake 不生效）
+2. `start_nav_capability_demo_tmux.sh` 加 `teleop:=false joystick:=false` enforcement（不只註解）
+3. progressive mode resume 加 warn log 提醒 check teleop
+4. `test_emergency_publishes_in_both_modes` 改寫成 `test_emergency_behavior_per_mode`（用 decide_velocity 測 5 mode）
+
+**Threshold 升級**：`danger 0.6→1.1m` / `slow 1.0→1.7m`（5/11 B0.3，給 Go2 機鼻 + 反應時間 buffer，Roy 訂正方向）。
+**Driver fix**（`b9aac4d`）：cmd_vel zero 改走 `StopMove (api_id=1003)` 取代 `Move {x:0}`（後者被 Go2 sport mode 忽略，B4 round 1 撞牆主因）。
+
+**Tests**：`test_reactive_stop_release_gate.py` 新建（42 條 mode-based）+ `test_reactive_stop_node.py` 更新（27 條）= 69 passed。
+
+**Scripts 拆 3 種模式**：
+- `start_reactive_stop_safety_hold_tmux.sh`（新）— hold_brake 純停車驗證
+- `start_nav_capability_demo_tmux.sh`（改）— progressive，nav 可驅動
+- `start_reactive_stop_tmux.sh`（改）— standalone，reactive 直接驅動 Go2
+
+**docs 升等**：`docs/navigation/CLAUDE.md` Reactive stop 段加 architecture-critical 4-mode 故事化敘述 + 釋放 3 步驟（切 mode → kill teleop → 發 nav goal）。
 
 ---
 

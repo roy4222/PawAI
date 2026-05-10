@@ -281,48 +281,90 @@ local_costmap:
 
 ### B3 — 流程性修法（避免下次架構翻案再踩同樣坑）
 
-| # | 修法 |
-|:-:|---|
-| B3.1 | `docs/navigation/CLAUDE.md` 把「safety_only clear zone shadow nav」升等成 architecture-critical 段落，故事化描述「障礙清除時會發生：(1) reactive_stop 沉默 (2) mux timeout (3) teleop 全速」 |
-| B3.2 | nav 相關 spec 任何 threshold 改動必填「decision log」段（防 0.6/1.0 那種無記錄漂移） |
-| B3.3 | 架構翻案 SOP checklist：每次翻案必跑「舊參數是否仍適用 + 上下游語境是否變」audit |
+| # | 修法 | 狀態 |
+|:-:|---|:-:|
+| B3.1 | `docs/navigation/CLAUDE.md` 把「safety_only clear zone shadow nav」升等成 architecture-critical 段落，故事化描述 + 4-mode 表格 + 釋放策略 | ✅ commit `0f5a16f` |
+| B3.2 | nav 相關 spec 任何 threshold 改動必填「decision log」段（防 0.6/1.0 那種無記錄漂移） | ⏳ demo 後 |
+| B3.3 | 架構翻案 SOP checklist：每次翻案必跑「舊參數是否仍適用 + 上下游語境是否變」audit | ⏳ demo 後 |
 
 ---
 
-## 6. 5/12 早 AM 落地計畫（Roy 訂正後）
+### B0 → 4-mode 演進（5/11 night Roy review 重設計）
+
+**B0.1 命名陷阱**：原 B0.1 把 `safety_only=True` 的「always publish 0」叫 release gate，但實質是 permanent brake，**不是釋放閘**。Roy 5/11 night code review 點出 4 個衍生 bug：
+
+| # | Roy review bug | 修法 |
+|:-:|---|---|
+| 1 | nav_capability 主腳本啟 hold_brake → mux priority 200 鎖死 → nav goal 永遠不會穿過 mux | 改 `mode=progressive`（搭配 teleop discipline） |
+| 2 | 註解寫「kill teleop」但腳本透過 `robot.launch.py` 啟 teleop_twist_joy + joy_node | 改加 `teleop:=false joystick:=false` enforcement |
+| 3 | enable_nav_pause 在 hold_brake 下發 /nav/resume → nav state vs mux 矛盾 | hold_brake 下不發 resume；progressive 下發 warn log |
+| 4 | safety_hold script 沒啟 mux → cmd_vel_obstacle 沒人 subscribe → hold_brake 不生效 | 改用 `robot.launch.py teleop:=false joystick:=false`（含 mux）|
+
+**4-mode 狀態機取代 binary safety_only**（commit `0f5a16f` + `d804a58`）：
+
+| mode | 行為 | 用途 | 啟動 script |
+|---|---|---|---|
+| `hold_brake` | 永遠 publish 0 到 /cmd_vel_obstacle | B5 stop 驗證 / demo emergency | `start_reactive_stop_safety_hold_tmux.sh`（**新建**）|
+| `progressive` | danger=0、slow/clear silent | nav 主驅動（必 kill teleop） | `start_nav_capability_demo_tmux.sh`（改）|
+| `released` | 不 publish，LiDAR + zone 仍更新 | 操作員主動釋放 | runtime `ros2 param set` |
+| `disabled` | 完全 off | 全停 reactive 影響 | runtime `ros2 param set` |
+| `""` | standalone（0/slow/normal） | nav 不在的 demo 備援 | `start_reactive_stop_tmux.sh`（改）|
+
+`safety_only=True` 自動 promote 到 `mode=hold_brake` 維持向後相容。
+
+**釋放策略**（取代「主動發新 nav goal」單步驟）：
+1. `ros2 param set /reactive_stop_node mode released` 或 `disabled`
+2. `pkill -f teleop_twist_joy && pkill -f teleop_twist_keyboard`（清殘留 hot-publisher）
+3. 主動發 nav goal（單脈衝命令，不要 `-r` hot-publish）
+4. **三步缺一個 Go2 都不會走**
+
+3 個啟動 script 互斥使用（cmd_vel_obstacle / cmd_vel 雙 publisher 衝突）。
+
+---
+
+## 6. 5/12 早 AM 落地計畫（Roy 訂正 + 4-mode 重設計後）
+
+### 已完成（5/11 night code 全部落地，commits `4ec8350` → `f366acd` → `0f5a16f` → `d804a58`）
+
+- ✅ B0.1 release gate（4-mode state machine 取代「always publish 0」單一邏輯）
+- ✅ B0.3 threshold 1.1 / 1.7
+- ✅ B0.4 hysteresis 5 frames（≈0.5s）
+- ✅ B0.6 unit tests 42 條（69 passed 含既有）
+- ✅ B1.5 lidar_geometry docstring 4-mode + double-yaw 雙重套用警告
+- ✅ B1.6 status JSON 診斷欄位（mode / publishes_zero_continuously / threshold / clear_streak / since_last_zone_change_sec）
+- ✅ scripts 拆 3 種模式（safety_hold / progressive 在 nav_capability / standalone）
+- ✅ docs/navigation/CLAUDE.md B3.1 升等 architecture-critical
+- ✅ Roy review 4 bug fix（mux 啟動、teleop enforce、resume warn、test per-mode）
+
+### 5/12 早 AM 剩餘（~1h）
 
 ```bash
-# Step 0: 看 working tree 狀態（不要直接 pull）
+# Step 0: 處理 working tree 殘留（5/11 沒解的）
 cd /home/roy422/newLife/elder_and_dog
 git status
-# 確認沒有殘留要先處理（68fe29b 的 safety-fix-plan、burndown.md drift）
+# M docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md（drift，待 Roy 決定）
+# D docs/pawai-brain/plans/2026-05-12-reactive-stop-safety-fix-plan.md（68fe29b 創、被刪）
+# 三選一：(a) restore 後合併、(b) 內容 merge 進本 audit / 4-mode 段落、(c) commit 當前狀態
 
-# Step 1: 改 reactive_stop_node.py
-#   B0.1 release gate：safety_only=true 時 ALL zone 都發 Twist(0)，不只 danger
-#   B0.3 threshold：danger 0.6→1.1m, slow 1.0→1.7m
-#   B0.4 hysteresis：clear_debounce 改時間門檻 0.5s + clear zone hold 1.0-1.5s
-#   B1.5 front_offset_rad 改名 + docstring（順手做）
-#   B1.6 status JSON 加 clear_streak / hysteresis_timer
-
-# Step 2: 改啟動 script danger/slow params
-#   start_reactive_stop_tmux.sh + start_nav_capability_demo_tmux.sh
-#   -p danger_distance_m:=1.1 -p slow_distance_m:=1.7
-
-# Step 3: 寫 unit tests 跑綠
-#   go2_robot_sdk/test/test_reactive_stop_release_gate.py
-
-# Step 4: Jetson rebuild
+# Step 1: Sync to Jetson + colcon build
 ~/sync once && ssh jetson-nano "cd ~/elder_and_dog && colcon build --packages-select go2_robot_sdk"
 
-# Step 5: B5 motion 重測（**先 kill teleop publisher**，用 0.15-0.2 m/s 慢速）
-#   核心驗收：移開物體後，reactive_stop 仍持續發 0、Go2 不會自動恢復前進
-#   只有手動發 nav goal 才會走
-
-# Step 6（B1）：改 nav2_params.yaml
-#   B1.1 local_costmap obstacle_max_range: 1.8 → 3.0（enhancement）
-#   B1.2 inflation_radius: 0.30 → 0.45
-#   B1.3 footprint 改 0.65×0.30
+# Step 2: B5 motion 重測（kill teleop / 慢速 / 三 script 各跑一次）
+#   2a. start_reactive_stop_safety_hold_tmux.sh（hold_brake 鎖死驗證）
+#       場景：物體放 0.5m / 1.5m / 拔 USB 三 case，每 case 看 /cmd_vel = 0
+#   2b. ros2 param set /reactive_stop_node mode released（驗證釋放）
+#   2c. start_nav_capability_demo_tmux.sh（progressive 模式）
+#       場景：發 goto_relative 0.3m，物體放/移開，看 zone 與 nav 行為
 ```
+
+### B1 — Demo readiness（5/12 PM 或 5/13 場測前，~1.5h，**enhancement 不是 P0 fix**）
+
+仍需做（不影響 5/12 早 AM B5 重測）：
+
+- B1.1 nav2_params.yaml local_costmap.obstacle_max_range 1.8 → 3.0
+- B1.2 inflation_radius 0.30 → 0.45
+- B1.3 footprint 改 0.65×0.30
+- B1.4 base_link → laser TF 精量到 ±0.01m
 
 **5/13 場測前必過的驗收**：
 - (a) reactive_stop danger 鎖死 100%（10 次中 0 次穿過）
