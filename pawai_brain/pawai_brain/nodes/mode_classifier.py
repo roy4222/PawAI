@@ -3,14 +3,17 @@
 Used by _build_user_message and graph.py to decide whether to inject
 CAPABILITIES.md and capability_context JSON.
 
-Order matters: safety > self_intro_request > identity > capability_question
-             > action_request > chat (default).
+Order matters: safety > self_intro_request > scene_query > identity
+             > capability_question > action_request > chat (default).
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 N4 (2026-05-11): split `self_intro_request` from `identity` — the former
 demands a full demo-host performance with scaffold; the latter is the casual
 "你是誰" terse reply path. Pattern matched BEFORE identity so the more
 specific intent wins.
+N5 (2026-05-11): added `scene_query` — "看到什麼 / 我在幹嘛 / 你猜我"
+must integrate face+pose+gesture+objects into scene description (not just
+list objects). Placed before identity / capability_question.
 """
 from __future__ import annotations
 import re
@@ -42,6 +45,21 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
         r"|完整介紹"
         # "跟教授 demo，你自我介紹一下自己" (from demo objectives doc)
         r"|跟.{0,8}(教授|評審|觀眾).{0,8}demo",
+    ),
+    (
+        "scene_query",
+        # N5: 整合 face+pose+gesture+objects 做場景描述。
+        # 注意：必須排在 capability_question 前，避免 "你會看到什麼" 撞線
+        # （capability_question 要求 "你會" 前綴，不會 match bare "看到什麼"）。
+        r"看到(什麼|啥|哪些東西|哪些)"
+        r"|我.{0,3}(看起來|現在)?在?(幹|做|忙)(什麼|啥|嘛|嗎)"
+        r"|我.{0,3}看起來(是在|像|怎樣)"
+        r"|你.{0,3}覺得我"
+        r"|你.{0,3}猜.{0,5}我"
+        r"|現場.{0,3}(有什麼|是什麼狀況)"
+        r"|這裡.{0,3}有(什麼|啥)"
+        r"|我.{0,3}(站|坐|在站|在坐).{0,5}(嗎|還是)"
+        r"|我.{0,3}是.{0,3}(站|坐).{0,5}(著|還是)",
     ),
     (
         "identity",

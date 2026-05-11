@@ -340,3 +340,81 @@ def test_chat_mode_no_scaffold_no_capability():
     # module-level falls back to legacy [能力] inject; instance method
     # suppresses for chat. The module-level test below verifies that path.
     # Here we only assert scaffold absence.
+
+
+# ── N5-B / N5-C: pose / gesture / scene_query ─────────────────────────────
+
+
+def test_current_pose_injects_zh_translation():
+    ws = _world_state()
+    ws["current_pose"] = {"name": "sitting", "age_s": 2.0}
+    state = {"user_text": "x", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "[最近姿勢]" in msg
+    assert "坐著" in msg
+    assert "2 秒前" in msg
+
+
+def test_current_gesture_injects_zh_translation():
+    ws = _world_state()
+    ws["current_gesture"] = {"name": "ok", "age_s": 4.0}
+    state = {"user_text": "x", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "[最近手勢]" in msg
+    assert "OK" in msg
+    assert "4 秒前" in msg
+
+
+def test_unknown_pose_silently_dropped():
+    """Unknown pose name → no [最近姿勢] line (don't dump raw English)."""
+    ws = _world_state()
+    ws["current_pose"] = {"name": "moonwalking", "age_s": 1.0}
+    state = {"user_text": "x", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "[最近姿勢]" not in msg
+    assert "moonwalking" not in msg
+
+
+def test_no_pose_gesture_when_world_state_lacks_them():
+    state = {"user_text": "x", "world_state": _world_state()}
+    msg = _build_user_message(state)
+    assert "[最近姿勢]" not in msg
+    assert "[最近手勢]" not in msg
+
+
+def test_scene_query_mode_injects_scene_hint():
+    ws = _world_state()
+    ws["current_pose"] = {"name": "sitting", "age_s": 1.0}
+    state = {
+        "user_text": "看到什麼",
+        "mode": "scene_query",
+        "world_state": ws,
+    }
+    msg = _build_user_message(state)
+    assert "[scene_hint]" in msg
+    # scene_hint references the four perception channels
+    assert "整合" in msg or "推論" in msg
+    assert "眼前的人" in msg or "最近姿勢" in msg
+
+
+def test_scene_query_mode_uses_positive_framing():
+    """N4.1 review lesson: no negative-prime phrases in scene_hint either."""
+    state = {
+        "user_text": "我在幹嘛",
+        "mode": "scene_query",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    # No "don't list objects" — say "整合場景描述" positively instead.
+    assert "不是聊天機器人" not in msg
+    assert "長者陪伴" not in msg
+
+
+def test_chat_mode_no_scene_hint():
+    state = {
+        "user_text": "今天天氣好嗎",
+        "mode": "chat",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[scene_hint]" not in msg

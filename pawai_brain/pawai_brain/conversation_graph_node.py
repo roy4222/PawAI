@@ -99,6 +99,60 @@ _OBJECT_COLOR_ZH: dict[str, str] = {
 }
 
 
+# N5-B: gesture / pose Chinese translation. Tables match canonical enums in
+# docs/contracts/interaction_contract.md §4.3 / §4.4. Unknown values → drop.
+_GESTURE_ZH: dict[str, str] = {
+    "wave": "揮手",
+    "stop": "手掌（停止）",
+    "point": "食指",
+    "ok": "OK",
+    "thumbs_up": "大拇指",
+    "thumbs_down": "倒讚",
+    "victory": "勝利手勢",
+    "i_love_you": "我愛你",
+}
+_POSE_ZH: dict[str, str] = {
+    "standing": "站著",
+    "sitting": "坐著",
+    "crouching": "蹲著",
+    "fallen": "跌倒",
+}
+
+
+def _format_current_pose(pose: dict | None) -> str | None:
+    """N5-B: format [最近姿勢] line from world_state.current_pose."""
+    if not isinstance(pose, dict):
+        return None
+    name = pose.get("name")
+    if not isinstance(name, str):
+        return None
+    zh = _POSE_ZH.get(name)
+    if not zh:
+        return None
+    try:
+        age = max(0, int(round(float(pose.get("age_s", 0)))))
+    except (TypeError, ValueError):
+        age = 0
+    return f"{zh}（{age} 秒前）"
+
+
+def _format_current_gesture(gesture: dict | None) -> str | None:
+    """N5-B: format [最近手勢] line from world_state.current_gesture."""
+    if not isinstance(gesture, dict):
+        return None
+    name = gesture.get("name")
+    if not isinstance(name, str):
+        return None
+    zh = _GESTURE_ZH.get(name)
+    if not zh:
+        return None
+    try:
+        age = max(0, int(round(float(gesture.get("age_s", 0)))))
+    except (TypeError, ValueError):
+        age = 0
+    return f"{zh}（{age} 秒前）"
+
+
 def _sanitize_str_list(raw) -> list[str]:
     """N3.1 review #2: only list/tuple inputs survive; elements coerced to
     non-empty stripped strings. Anything else (None, int, dict, object) → []."""
@@ -171,6 +225,18 @@ audio tag 建議：[excited] 開場 → [curious] 中段帶能力 → [playful] 
 """
 
 
+# N5-C: scene_hint — directive for scene_query mode. Positive framing only
+# (N4.1 lesson). Tells the LLM to fuse face+pose+gesture+objects into a scene
+# description with active reasoning, not enumerate objects.
+_SCENE_HINT = """[scene_hint] 使用者問你看到什麼、在幹嘛、或看起來怎樣。請整合 [眼前的人]、[最近姿勢]、[最近手勢]、[最近看到] 這幾條現場資料，描述場景並嘗試推論使用者在做什麼。
+
+例：[眼前的人]=Roy + [最近姿勢]=坐著 + [最近看到]=keyboard / laptop / mouse → 「Roy 坐在桌前，看起來在用電腦」。
+例：[最近姿勢]=站著 + [最近手勢]=OK → 「你站著，剛剛比了 OK，要我做動作嗎？」。
+例：[最近看到]=cup, chair → 「桌上有杯子，旁邊也看到椅子」。
+
+讓描述帶有具身感（你「現在真的看得到」），保持 1-3 句自然口語。"""
+
+
 def _format_demo_session(session: dict | None) -> str | None:
     """N3-B: format [demo] prompt line when demo_session.active is True."""
     if not isinstance(session, dict) or not session.get("active"):
@@ -239,6 +305,16 @@ def _build_user_message(state) -> str:
     if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
         parts.append(f"[眼前的人] {ws['current_speaker']}")
 
+    # N5-B: pose / gesture JIT inject — between 眼前的人 and 最近看到 so the
+    # prompt reads top-down: 環境 → 人 → 姿勢 → 手勢 → 物體. All modes; latest
+    # one only; stale entries already filtered by world_state_builder.
+    pose_line = _format_current_pose(ws.get("current_pose"))
+    if pose_line:
+        parts.append(f"[最近姿勢] {pose_line}")
+    gesture_line = _format_current_gesture(ws.get("current_gesture"))
+    if gesture_line:
+        parts.append(f"[最近手勢] {gesture_line}")
+
     # N3-A: recent_objects JIT inject — all modes (chat / capability / identity)
     # see this because demo §[2:30] 紅杯子段 is chat mode and still needs context.
     objs_line = _format_recent_objects(ws.get("recent_objects"))
@@ -286,6 +362,10 @@ def _build_user_message(state) -> str:
     # N4: full intro scaffold for self_intro_request mode.
     if mode == "self_intro_request":
         parts.append(_INTRO_SCAFFOLD)
+
+    # N5-C: scene_query — integrate face+pose+gesture+objects.
+    if mode == "scene_query":
+        parts.append(_SCENE_HINT)
 
     return "\n".join(parts)
 
@@ -373,9 +453,15 @@ class ConversationGraphNode(Node):
         }
         self._demo_session_lock = threading.Lock()
 
+        # N5-B: gesture / pose latest-one cache (mirror _recent_face_identity).
+        self._recent_gesture: tuple[str, float] = ("none", 0.0)
+        self._recent_pose: tuple[str, float] = ("none", 0.0)
+
         # Wire module-level node hooks
         world_state_builder_node.set_world_provider(lambda: self._world_snapshot)
         world_state_builder_node.set_speaker_provider(lambda: self._recent_face_identity)
+        world_state_builder_node.set_pose_provider(lambda: self._recent_pose)
+        world_state_builder_node.set_gesture_provider(lambda: self._recent_gesture)
         capability_builder_node.configure(
             registry=registry,
             skill_result_provider=self._skill_results.recent,
@@ -407,6 +493,13 @@ class ConversationGraphNode(Node):
         # N3-B: demo segment subscription — external push from Studio / launch script.
         self.create_subscription(
             String, "/brain/demo_segment", self._on_demo_segment, 10
+        )
+        # N5-B: gesture + pose subscriptions feed scene context to prompt.
+        self.create_subscription(
+            String, "/event/gesture_detected", self._on_gesture_detected, 10
+        )
+        self.create_subscription(
+            String, "/event/pose_detected", self._on_pose_detected, 10
         )
 
         # P1-2: context reset — clear ConversationMemory on page refresh / new-conversation
@@ -580,6 +673,14 @@ class ConversationGraphNode(Node):
         if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
             parts.append(f"[眼前的人] {ws['current_speaker']}")
 
+        # N5-B: pose / gesture inject.
+        pose_line = _format_current_pose(ws.get("current_pose"))
+        if pose_line:
+            parts.append(f"[最近姿勢] {pose_line}")
+        gesture_line = _format_current_gesture(ws.get("current_gesture"))
+        if gesture_line:
+            parts.append(f"[最近手勢] {gesture_line}")
+
         # N3-A: recent_objects JIT inject — see module-level _build_user_message
         # for rationale (all modes including chat).
         objs_line = _format_recent_objects(ws.get("recent_objects"))
@@ -626,6 +727,10 @@ class ConversationGraphNode(Node):
         # N4: full intro scaffold for self_intro_request mode.
         if mode == "self_intro_request":
             parts.append(_INTRO_SCAFFOLD)
+
+        # N5-C: scene_query — integrate face+pose+gesture+objects.
+        if mode == "scene_query":
+            parts.append(_SCENE_HINT)
 
         return "\n".join(parts)
 
@@ -820,6 +925,38 @@ class ConversationGraphNode(Node):
         """N3-A: cache recent objects (class+color, 30s window, class-dedup)."""
         self._world_snapshot.apply_object_detected_json(msg.data)
 
+    def _on_gesture_detected(self, msg: String) -> None:
+        """N5-B: cache latest gesture (name, ts). Schema per contract §4.3.
+
+        Payload: {"event_type": "gesture_detected", "gesture": str,
+                  "confidence": float, "hand": str, "stamp": float}
+        Drops malformed payloads silently — graph_node must not crash on
+        upstream noise.
+        """
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(payload, dict):
+            return
+        name = payload.get("gesture")
+        if not isinstance(name, str) or not name.strip():
+            return
+        self._recent_gesture = (name.strip(), time.time())
+
+    def _on_pose_detected(self, msg: String) -> None:
+        """N5-B: cache latest pose (name, ts). Schema per contract §4.4."""
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(payload, dict):
+            return
+        name = payload.get("pose")
+        if not isinstance(name, str) or not name.strip():
+            return
+        self._recent_pose = (name.strip(), time.time())
+
     def _on_demo_segment(self, msg: String) -> None:
         """N3-B: external segment push.
 
@@ -888,6 +1025,9 @@ class ConversationGraphNode(Node):
         with self._seen_lock:
             self._seen_sessions.clear()
         self._recent_face_identity = ("unknown", 0.0)
+        # N5-B: clear gesture/pose cache too — fresh session = fresh scene.
+        self._recent_gesture = ("none", 0.0)
+        self._recent_pose = ("none", 0.0)
         self._speaker_suppress_until = time.time() + 5.0
         # N3-B: reset demo session too — new conversation should start clean.
         with self._demo_session_lock:

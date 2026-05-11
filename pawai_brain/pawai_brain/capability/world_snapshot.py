@@ -10,6 +10,9 @@ from .effective_status import WorldFlags
 
 _OBJECT_RECENT_MAXLEN = 8
 _OBJECT_WINDOW_S = 30.0
+# N5-A: object → prompt gates
+_COLOR_CONFIDENCE_MIN = 0.6  # below → drop color, mention class only
+_OBJECT_EXCLUDE_CLASSES = ("person",)  # face/pose own people; objects must not double-emit
 
 
 class WorldStateSnapshot:
@@ -91,8 +94,22 @@ class WorldStateSnapshot:
                 cls = str(obj.get("class_name") or "").strip()
                 if not cls:
                     continue
+                # N5-A: person excluded — face_identity owns people, object path
+                # must not double-emit ("黑色的人" awkward UX).
+                if cls in _OBJECT_EXCLUDE_CLASSES:
+                    continue
                 color = obj.get("color")
-                color = str(color).strip() if color and color != "Unknown" else None
+                if color and color != "Unknown":
+                    # N5-A: color_confidence gate — below threshold drops color
+                    # entirely (just say 椅子 instead of 藍色的椅子). Demo精準
+                    # > 豐富 — wrong color is worse than no color.
+                    try:
+                        color_conf = float(obj.get("color_confidence", 0.0) or 0.0)
+                    except (TypeError, ValueError):
+                        color_conf = 0.0
+                    color = str(color).strip() if color_conf >= _COLOR_CONFIDENCE_MIN else None
+                else:
+                    color = None
                 existing[cls] = {"class": cls, "color": color, "ts": now}
             # Order: latest ts first.
             sorted_entries = sorted(existing.values(), key=lambda e: e["ts"], reverse=True)

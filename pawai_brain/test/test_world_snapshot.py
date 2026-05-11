@@ -61,7 +61,8 @@ def test_apply_object_detected_single_cup_red():
     payload = {
         "stamp": 12345.0,
         "event_type": "object_detected",
-        "objects": [{"class_name": "cup", "color": "red", "confidence": 0.9, "bbox": [0, 0, 10, 10]}],
+        "objects": [{"class_name": "cup", "color": "red", "color_confidence": 0.8,
+                     "confidence": 0.9, "bbox": [0, 0, 10, 10]}],
     }
     s.apply_object_detected_json(json.dumps(payload))
     objs = s.get_recent_objects()
@@ -77,7 +78,8 @@ def test_apply_object_detected_dedups_by_class():
     for _ in range(5):
         s.apply_object_detected_json(json.dumps({
             "stamp": 0.0, "event_type": "object_detected",
-            "objects": [{"class_name": "chair", "color": "black", "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+            "objects": [{"class_name": "chair", "color": "black", "color_confidence": 0.8,
+                          "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
         }))
     objs = s.get_recent_objects()
     assert len(objs) == 1
@@ -90,8 +92,10 @@ def test_apply_object_detected_multiple_classes_kept():
     s.apply_object_detected_json(json.dumps({
         "stamp": 0.0, "event_type": "object_detected",
         "objects": [
-            {"class_name": "cup", "color": "red", "confidence": 0.9, "bbox": [0, 0, 1, 1]},
-            {"class_name": "chair", "color": "black", "confidence": 0.9, "bbox": [0, 0, 1, 1]},
+            {"class_name": "cup", "color": "red", "color_confidence": 0.8,
+             "confidence": 0.9, "bbox": [0, 0, 1, 1]},
+            {"class_name": "chair", "color": "black", "color_confidence": 0.8,
+             "confidence": 0.9, "bbox": [0, 0, 1, 1]},
         ],
     }))
     objs = s.get_recent_objects()
@@ -133,8 +137,68 @@ def test_to_dict_includes_recent_objects():
     s = WorldStateSnapshot()
     s.apply_object_detected_json(json.dumps({
         "stamp": 0.0, "event_type": "object_detected",
-        "objects": [{"class_name": "cup", "color": "red", "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+        "objects": [{"class_name": "cup", "color": "red", "color_confidence": 0.8,
+                      "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
     }))
     d = s.to_dict()
     assert "recent_objects" in d
     assert d["recent_objects"][0]["class"] == "cup"
+
+
+# ── N5-A: object filters (person exclude + color confidence gate) ─────────
+
+
+def test_person_class_filtered_from_recent_objects():
+    """N5-A: face_identity owns people — object person path must not duplicate."""
+    s = WorldStateSnapshot()
+    s.apply_object_detected_json(json.dumps({
+        "stamp": 0.0, "event_type": "object_detected",
+        "objects": [
+            {"class_name": "person", "color": "black", "color_confidence": 0.9,
+             "confidence": 0.9, "bbox": [0, 0, 1, 1]},
+            {"class_name": "cup", "color": "red", "color_confidence": 0.8,
+             "confidence": 0.9, "bbox": [0, 0, 1, 1]},
+        ],
+    }))
+    objs = s.get_recent_objects()
+    classes = [o["class"] for o in objs]
+    assert "person" not in classes
+    assert "cup" in classes
+
+
+def test_low_color_confidence_drops_color():
+    """N5-A: color_confidence < 0.6 → color None, mention class only."""
+    s = WorldStateSnapshot()
+    s.apply_object_detected_json(json.dumps({
+        "stamp": 0.0, "event_type": "object_detected",
+        "objects": [{"class_name": "tv", "color": "blue", "color_confidence": 0.3,
+                      "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+    }))
+    objs = s.get_recent_objects()
+    assert len(objs) == 1
+    assert objs[0]["class"] == "tv"
+    assert objs[0]["color"] is None
+
+
+def test_high_color_confidence_keeps_color():
+    """N5-A: color_confidence ≥ 0.6 → color preserved."""
+    s = WorldStateSnapshot()
+    s.apply_object_detected_json(json.dumps({
+        "stamp": 0.0, "event_type": "object_detected",
+        "objects": [{"class_name": "tv", "color": "blue", "color_confidence": 0.85,
+                      "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+    }))
+    objs = s.get_recent_objects()
+    assert objs[0]["color"] == "blue"
+
+
+def test_missing_color_confidence_treated_as_zero():
+    """Defensive: missing color_confidence defaults to 0 → drop color."""
+    s = WorldStateSnapshot()
+    s.apply_object_detected_json(json.dumps({
+        "stamp": 0.0, "event_type": "object_detected",
+        "objects": [{"class_name": "tv", "color": "blue",
+                      "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+    }))
+    objs = s.get_recent_objects()
+    assert objs[0]["color"] is None

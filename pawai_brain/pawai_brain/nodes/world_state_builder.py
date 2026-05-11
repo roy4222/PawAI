@@ -15,7 +15,12 @@ from ..state import ConversationState
 
 _world_provider: Callable[[], WorldStateSnapshot] = lambda: WorldStateSnapshot()
 _speaker_provider: Callable[[], tuple[str, float]] = lambda: ("unknown", 0.0)
+# N5-B: pose / gesture latest-one providers, mirror speaker pattern.
+_pose_provider: Callable[[], tuple[str, float]] = lambda: ("none", 0.0)
+_gesture_provider: Callable[[], tuple[str, float]] = lambda: ("none", 0.0)
 _SPEAKER_STALE_S = 3.0  # identity older than 3s → treat as unknown
+_POSE_STALE_S = 10.0    # N5-B: pose changes infrequently — wider window
+_GESTURE_STALE_S = 5.0  # N5-B: gesture is transient — tighter window
 _WEATHER_CACHE = {"text": "", "ts": 0.0}
 _WEATHER_TTL_S = 600.0
 
@@ -33,6 +38,18 @@ def set_speaker_provider(fn: Callable[[], tuple[str, float]]) -> None:
     """
     global _speaker_provider
     _speaker_provider = fn
+
+
+def set_pose_provider(fn: Callable[[], tuple[str, float]]) -> None:
+    """N5-B: register a provider for latest pose (name, timestamp)."""
+    global _pose_provider
+    _pose_provider = fn
+
+
+def set_gesture_provider(fn: Callable[[], tuple[str, float]]) -> None:
+    """N5-B: register a provider for latest gesture (name, timestamp)."""
+    global _gesture_provider
+    _gesture_provider = fn
 
 
 def _time_of_day_zh(hour: int) -> str:
@@ -86,6 +103,19 @@ def world_state_builder(state: ConversationState) -> ConversationState:
     else:
         current_speaker = "unknown"
 
+    # N5-B: pose / gesture providers — same age-filter pattern as speaker.
+    now = time.time()
+    pose_name, pose_ts = _pose_provider()
+    if pose_name and pose_name != "none" and (now - pose_ts) < _POSE_STALE_S:
+        current_pose = {"name": pose_name, "age_s": round(now - pose_ts, 1)}
+    else:
+        current_pose = None
+    gesture_name, gesture_ts = _gesture_provider()
+    if gesture_name and gesture_name != "none" and (now - gesture_ts) < _GESTURE_STALE_S:
+        current_gesture = {"name": gesture_name, "age_s": round(now - gesture_ts, 1)}
+    else:
+        current_gesture = None
+
     snap_dict = snap.to_dict()
     state["world_state"] = {
         "period": period,
@@ -94,16 +124,20 @@ def world_state_builder(state: ConversationState) -> ConversationState:
         "source": state.get("source", "speech"),
         "timestamp": time.time(),
         "current_speaker": current_speaker,
+        "current_pose": current_pose,
+        "current_gesture": current_gesture,
         **snap_dict,
     }
-    # N3-A: trace detail extension — smoke can verify objs/spk arrived without
-    # echoing full prompt. `recent_objects` lives inside snap_dict from to_dict.
+    # N3-A / N5-B: trace detail extension — smoke can verify
+    # objs/spk/pose/gst arrived without echoing full prompt.
     n_objs = len(snap_dict.get("recent_objects") or [])
+    pose_tag = (current_pose or {}).get("name") or "none"
+    gst_tag = (current_gesture or {}).get("name") or "none"
     state.setdefault("trace", []).append(
         {
             "stage": "world_state",
             "status": "ok",
-            "detail": f"{period} {time_str} objs={n_objs} spk={current_speaker}",
+            "detail": f"{period} {time_str} objs={n_objs} spk={current_speaker} pose={pose_tag} gst={gst_tag}",
         }
     )
     return state

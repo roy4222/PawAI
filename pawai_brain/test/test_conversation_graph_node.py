@@ -483,3 +483,71 @@ def test_sanitize_str_list_accepts_tuple():
 
 def test_sanitize_str_list_empty_list():
     assert _sanitize_str_list([]) == []
+
+
+# ---------------------------------------------------------------------------
+# N5-B: gesture / pose callback regression
+# ---------------------------------------------------------------------------
+
+
+def _wire_perception(node) -> None:
+    """Attach gesture/pose attrs that __init__ would normally set."""
+    node._recent_gesture = ("none", 0.0)
+    node._recent_pose = ("none", 0.0)
+
+
+def test_on_gesture_detected_updates_cache():
+    node = _build_test_node()
+    _wire_perception(node)
+    payload = {
+        "event_type": "gesture_detected",
+        "gesture": "ok",
+        "confidence": 0.85,
+        "hand": "right",
+        "stamp": 1000.0,
+    }
+    node._on_gesture_detected(_FakeMsg(json.dumps(payload)))
+    name, ts = node._recent_gesture
+    assert name == "ok"
+    assert ts > 0.0
+
+
+def test_on_pose_detected_updates_cache():
+    node = _build_test_node()
+    _wire_perception(node)
+    payload = {
+        "event_type": "pose_detected",
+        "pose": "sitting",
+        "confidence": 0.9,
+        "track_id": 1,
+        "stamp": 1000.0,
+    }
+    node._on_pose_detected(_FakeMsg(json.dumps(payload)))
+    name, ts = node._recent_pose
+    assert name == "sitting"
+    assert ts > 0.0
+
+
+def test_on_gesture_detected_malformed_json_safe():
+    node = _build_test_node()
+    _wire_perception(node)
+    node._recent_gesture = ("preset", 999.0)
+    node._on_gesture_detected(_FakeMsg("not json"))
+    # malformed → cache untouched
+    assert node._recent_gesture == ("preset", 999.0)
+
+
+def test_on_pose_detected_missing_pose_field_safe():
+    node = _build_test_node()
+    _wire_perception(node)
+    node._recent_pose = ("preset", 999.0)
+    node._on_pose_detected(_FakeMsg(json.dumps({"confidence": 0.9})))
+    assert node._recent_pose == ("preset", 999.0)
+
+
+def test_on_gesture_detected_non_string_gesture_safe():
+    node = _build_test_node()
+    _wire_perception(node)
+    node._recent_gesture = ("preset", 999.0)
+    node._on_gesture_detected(_FakeMsg(json.dumps({"gesture": 42})))
+    assert node._recent_gesture == ("preset", 999.0)

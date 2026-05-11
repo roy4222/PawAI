@@ -26,6 +26,19 @@ from pawai_brain.nodes.mode_classifier import classify_mode
     ("詳細介紹一下你自己", "self_intro_request"),
     ("介紹一下你的功能", "self_intro_request"),
     ("完整介紹", "self_intro_request"),
+    # N5: scene_query — integrate face+pose+gesture+objects to describe scene.
+    ("你看到什麼？", "scene_query"),
+    ("看到什麼", "scene_query"),
+    ("看到啥", "scene_query"),
+    ("我在幹嘛", "scene_query"),
+    ("我在幹嘛？", "scene_query"),
+    ("你覺得我在做什麼", "scene_query"),
+    ("你猜我在做什麼", "scene_query"),
+    ("我看起來像什麼", "scene_query"),
+    ("我看起來怎樣", "scene_query"),
+    ("現場有什麼", "scene_query"),
+    ("這裡有什麼", "scene_query"),
+    ("我現在是站著還是坐著", "scene_query"),
     # Identity (casual "who are you") — terse persona-only path
     ("你是誰？", "identity"),
     ("你叫什麼", "identity"),
@@ -70,8 +83,16 @@ def test_classify_mode_self_intro_beats_identity():
     assert classify_mode("你能完整介紹自己嗎") == "self_intro_request"
 
 
+def test_classify_mode_scene_query_does_not_collide_with_capability():
+    """N5: 'looking what' queries route to scene_query, NOT capability_question.
+    Capability requires '你會' prefix, so '看到什麼' alone safely falls to scene."""
+    assert classify_mode("看到什麼") == "scene_query"
+    # But 'capability_question' still wins for '你會看到X' (你會 prefix).
+    # (Currently no such ambiguous pattern in capability regex — safe.)
+
+
 def test_classify_mode_returns_string():
     result = classify_mode("嗨")
     assert isinstance(result, str)
-    assert result in ("safety", "self_intro_request", "identity",
+    assert result in ("safety", "self_intro_request", "scene_query", "identity",
                        "capability_question", "action_request", "chat")
