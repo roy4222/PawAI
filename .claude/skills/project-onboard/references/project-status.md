@@ -1,6 +1,105 @@
 # 專案進度快照
 
-> 最後更新：2026-05-12 night（**brain-freeze-v2** 落地 + LLM 主線切 gpt-5.4-mini + TTS gemini Despina + 5/12 nav burndown demo 最低目標 3/3 通過）
+> 最後更新：2026-05-11 night（**N3 → N8 demo-host 大幅升級** + scene perception + gesture/fallen 靈敏度 + 對話 gate + audio tag normalize + start.sh self-heal + 30-case 驗收清單）
+
+## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾
+
+### 本日 15 commits + 6 tags
+
+```
+85ac682 docs(runbook): add N8 8-case regression list before Mac migration
+53cbdae fix(brain): N8 three demo polish bugs from 5/11 live log
+0c030a1 docs(runbook): 30-case acceptance checklist before Mac migration
+717a24a feat(vision): N7 fist vote frames + fallen sensitivity
+8d81dd9 feat: N7 fist vote + fallen threshold loosen + lane self-heal
+eb422e9 fix(brain): N6.1 — gesture_gate trace observability + test correctness
+d4c4236 feat(brain): N6 demo polish — conversation gate + P0 spec + audio tag filter
+2b7a981 docs(brain): document N5 scene perception design (after-the-fact)
+0f13d98 fix(brain): N5.1 narrow scene_query 你覺得我 / 你猜我 patterns
+631b98b feat(brain): N5 scene understanding — pose + gesture + scene_query
+f9988bd fix(brain): N4.1 positive-frame scaffold + _sanitize_str_list helper
+afd3fcd feat(brain): N4 self_intro_request scaffold for demo opening
+80ec823 fix(brain): N3.1 demo_segment hardening + TS status union sync
+561d6ab feat(brain): N3 demo-host harness — object context + demo_session + verifier
+e6d667a docs(runbook): freeze backlog + 5min demo script
+```
+
+Tags: `brain-hotfix-N3` → `N4` → `N5` (committed via 631b98b earlier session)
+→ `N5.1` → `N6` → `N7` → `N8` — N3 / N4 / N6 經過 review fix 後 tag 移到最新
+
+### 7-題較急問題對照狀態
+
+| # | 較急問題 | 狀態 | 本日落地 |
+|---|---|---|---|
+| 1 | LLM 模糊不主動 | **解** | N4 `self_intro_request` mode + 5 段 scaffold；N4.1 正向 framing |
+| 2 | 手勢辨識 (6 靜態 + wave 動態) | **解** | N3 既有 mapping；N6 fist/index motion 對齊規格；N7 vote_frames 3→5 + stable_s 0.5→0.3 修 fist 不認 |
+| 3 | 姿勢辨識 (站/坐/跌倒+人名) | **解** | N3 fallen + face cache name；N6 sit_along SAY「會不會太累」；N7 vertical_ratio 0.4→0.45 + ankle 0.7→0.6 |
+| 4 | 物體辨識唸出 | **解** | N3 recent_objects → LLM JIT context；N3 person filter；N3 color_confidence gate |
+| 5 | 導航避障 | 凍結 | 5/12 nav burndown 3/3 已通過；本日 brain-only 收尾 |
+| 6 | Model switcher UI | 凍結 | 用 `PAWAI_LLM_MODEL=` env override；trace model 欄位不順手加（已 llm_decision.detail）|
+| 7 | TTS chain (gemini→edge→piper) | **已實裝** | `tts_node.py:1064-1091` 三層 fallback chain 早在；本日 audio tag normalize 解 whisper 整段語氣鎖 bug |
+
+### N3 ~ N8 元件落地
+
+**N3 demo-host harness**（`561d6ab`）
+- `WorldStateSnapshot._recent_objects` deque(maxlen=8, 30s window, class-dedup)
+- 訂 `/event/object_detected` → JIT inject `[最近看到]` 進 LLM prompt
+- `demo_session` placeholder → real (provider chain + lock，訂 `/brain/demo_segment`)
+- `response_repair` 加 rule-only verifier（too_short / no_specific_skill / no_followup_invitation）
+- Schema：trace stage enum +`verifier`、status enum +`warn`
+
+**N4 self_intro_request scaffold**（`afd3fcd` + `f9988bd` N4.1）
+- mode_classifier 加 `self_intro_request`（demo+介紹 / 詳細介紹 / 完整介紹 / 跟教授 demo），priority > identity
+- `[intro_scaffold]` 5 段：身份 / 專題 / 能力 / grounded 觀察 / 拋下一步
+- N4.1 正向 framing（移除「不要說成長者陪伴」「不是聊天機器人」這類負面 prime）
+- wave_hello SAY 「嗨！」→「嗨～我是 PawAI！很高興認識你～」
+
+**N5 scene understanding**（`631b98b` + `0f13d98` N5.1）
+- `WorldStateSnapshot._last_pose`（永不過期 + age_s）+ `_recent_gestures`（8s window，dedup by gesture+hand）
+- mode_classifier 加 `scene_query`（看到什麼 / 我在幹嘛 / 猜猜我）
+- prompt 注入 `[目前姿勢]` / `[最近姿勢]` / `[歷史姿勢]` 三段 age 措辭 + `[剛剛手勢]` + `[scene_hint]`
+- N5.1 收窄 `你覺得我` / `你猜我` regex 不吃 capability_question
+- spec：`docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md`
+
+**N6 demo polish**（`d4c4236` + `eb422e9` N6.1）
+- conversation-active gate：wave/fist/index 在最近 30s 有 speech/text input 時不 fire（palm safety 例外）
+- N6.1 加 `tts_playing` 第二層 gate + trace `gesture_gate` `blocked` 觀測
+- enter_mute_mode 加 stand_down motion / enter_listen_mode 加 balance_stand motion
+- sit_along SAY「我也趴下來陪你」→「會不會太累，我陪你坐一下」
+- `[whispers]` / `[sighs]` audio tag normalize → `[curious]`（validator + skill SAY + persona EXAMPLES + OUTPUT.md 全清）
+- Schema：trace stage enum +`gesture_gate`
+
+**N7 vision sensitivity + lane self-heal**（`717a24a` + `8d81dd9`）
+- vision_perception.yaml：`gesture_vote_frames` 3→5、`gesture_stable_s` 0.5→0.3（fist 觸發更穩）
+- pose_classifier.py：fallen `vertical_ratio` 0.4→0.45（接住蜷曲跌倒）、`ankle_on_floor` 0.7→0.6（遠景接住）
+- brain-studio-lane start.sh：probe Jetson tmux + local next dev → 自動 cleanup → preflight；`--no-clean` 可跳過
+
+**N8 demo polish 二修**（`53cbdae`）
+- gate 加 `tts_playing` 第二層（防 stale build + race）
+- mode_classifier 拿掉 `跟.*打.*招呼`/`問好`（不再 hijack 走 5 段自介；改 chat → wave_hello path）
+- PendingConfirm 加 `_must_release_ok`（user 手已在 OK 位置時 request_confirm，必須先放開才能再次比 OK 觸發；防 stretch/wiggle 立即觸發）
+
+### 測試狀態（本日落地時）
+
+- pawai_brain：219 → 280 → 245 → 252（變動因為 N5/N5.1 引入新 test）
+- interaction_executive：195 → 230 → 236（gesture gate / pending_confirm release-first）
+- vision_perception：36 (gesture/pose classifier，PYTHONPATH 跑)
+- **Local 全套 495 tests green @ N8 commit**
+
+### Jetson 部署狀態
+
+- N3 ~ N7 全程 ~/sync once + colcon build pawai_brain interaction_executive vision_perception 完成
+- **N8 commit 後 Jetson SSH 短暫 timeout**（5/11 night 17:00+），sync + build 待 Jetson 回穩
+- 開機後跑：`bash .claude/skills/brain-studio-lane/scripts/start.sh demo`（self-heal 自動 cleanup）
+
+### 後續紀律
+
+- **brain 設計接近 freeze** — user 5/11 night 明示「pawai brain 就差不多了，全力衝導航避障」
+- 剩餘 brain 改動需先過 N9 hotfix justification（見 `docs/runbook/demo-frozen-backlog.md`）
+- 8-case regression（N8 後 mandatory）+ 30-case 完整 checklist 在 `docs/runbook/demo-30-case-checklist.md`
+- 通過後搬 Mac，跑 5-case post-Mac smoke 確認跨平台無 regression
+
+---
 
 ## 2026-05-12 — brain-freeze-v2 + Jetson live + 5 較急問題收尾
 
