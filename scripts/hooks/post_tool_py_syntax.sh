@@ -8,7 +8,7 @@
 set -euo pipefail
 
 INPUT="${CLAUDE_TOOL_INPUT:-}"
-REPO_ROOT="/home/roy422/newLife/elder_and_dog"
+REPO_ROOT="${PAWAI_REPO_ROOT:-${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}}"
 FRONTEND_DIR="${REPO_ROOT}/pawai-studio/frontend"
 
 # Extract file_path from tool input
