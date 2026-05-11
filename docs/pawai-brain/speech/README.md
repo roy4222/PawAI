@@ -102,7 +102,29 @@ echo gate 阻止 ASR 自激（total 1.5s）
 - 逗號 fallback 加 explicit `-1` guard：`cut = max([c for c in candidates if c >= 0], default=-1)`，且 `cut >= MIN_SPLIT_CHARS - 1` 才採用，否則硬切到 `CHUNK_MAX_CHARS = 40`
 - 13 個新 unit test 覆蓋邊界（短句 / 跨句 / 全 CJK 無標點 / audio-tag preservation / hard-cut 字元保留）
 
-**P1 未做（demo 後再評估）**：parallel→serial chunk synthesis + 前文最後 5 字當 hint。要犧牲 latency 換 cross-chunk 語氣連續性。
+### 5/11 night 補充：chunk 邊界 silence + 跳句根因鎖定
+
+5/11 night 三輪修法 + 一輪 instrumented diagnosis：
+
+1. **CHUNK_MAX_CHARS 40 → 60、MIN_SPLIT_CHARS 30 → 45**：Google/community 對 Gemini 3.1 Flash TTS 的指引是「長 chunk 比短 chunk voice tone 更一致」，60 仍離 80-char tail-drop 危險區 30%+。200-char 故事 chunk 數 6 → 3-4
+2. **新模組 `pcm_trim.py`**：每 chunk 回傳前去掉 gemini 內部 80-200ms silence padding，保留 80ms（1920 samples @ 24kHz）tail 作為自然呼吸間距。`int16 -32768` overflow 透過 `astype(np.int32)` 處理。`ChunkTrimError` fail-loud：非空 input trim 成空 → 走 provider fallback，避免靜默丟句
+3. **whispers tag 恢復**：N6 morning 把 `[whispers]` normalize → `[curious]` 是過度反應；user 明示在 storytelling / 念詩場景 whisper 是必要的。只保留 `[sighs]` 在 normalize 清單（破壞 demo 節奏）。EXAMPLES.md 睡前故事改用 `[whispers]`
+4. **Phase 1 instrumented diagnosis**（5/11 night 最後一輪）：加 `PAWAI_TTS_DIAG=1` env-gated log，per chunk 印 peak / rms / duration_ms / cut_lead_ms / cut_tail_ms
+
+**5/11 night 跳句根因 = H1 parallel voice drift**（不是 trim / split / tail-drop）：
+
+DIAG log 顯示 3 個並行 chunk 對「同一個 whisper Despina 角色」回來的音量差距 2x：
+
+| Chunk | text_len | peak | rms | duration_ms |
+|-------|---------|------|------|-------|
+| [0] | 69 | 18621 | **782** | 6360 |
+| [1] | 68 | 12240 | **1139** | 6240 |
+| [2] | 37 | 28874 | **1529** | 6240 |
+
+3 chunk 之間 RMS 階梯式跳動（782 → 1139 → 1529）= user 聽到的「越念越大聲、又突然變小」階梯感。
+
+**P1 未做（下輪）**：sequential synthesis（不再 parallel）或 post-synthesis RMS normalize across chunks，或兩者結合。記憶在
+[`memory/project_tts_skip_diagnosis_0511_night.md`](../../../../.claude/projects/-Users-lubaiyu-elder-and-dog/memory/project_tts_skip_diagnosis_0511_night.md)。
 
 ### 5/9 補充：TTS dual-route + audio_format/served_by 重構（issue 1 partial）
 
@@ -373,12 +395,16 @@ LLM_PROPOSAL_EXECUTE = {
 ### TTS chunking（5/6 night 對應 Gemini 3.1 Flash Preview tail-truncation 行為）
 
 `TTSProvider_OpenRouterGemini` 加：
-- `CHUNK_MAX_CHARS = 40`：Gemini Flash TTS Preview 在 ≥ 80 字 input 會隨機砍尾段 25%；40 字以下穩定。
+- `CHUNK_MAX_CHARS = 60`（5/11 night 從 40 bumped；MIN_SPLIT_CHARS=45）：Gemini Flash TTS Preview 在 ≥ 80 字 input 會隨機砍尾段 25%，60 字以下穩定且減半 chunk 邊界數量。
 - `_AUDIO_TAG_RE`：偵測開頭 `[whispers]` / `[playful]` 等，prepend 給每段確保 voice 一致（chunk 2+ 否則回到預設音色）。
 - `ThreadPoolExecutor` parallel synthesize：N 段同時打 OpenRouter `/audio/speech`，wall ≈ 單段時間（不是 N × 單段）。
-- 完整 observability log：`chunks parallel sizes=[..]`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall, Ys audio`。
+- **5/11 night** `pcm_trim.py`：每 chunk concat 前 trim gemini 內部 silence padding（保留 80ms tail）。`ChunkTrimError` 非空 input → silent 時 fail-loud 走 fallback chain。
+- 完整 observability log：`chunks parallel sizes=[..]`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall, Ys audio after trim (saved Xms silence)`。
+- **PAWAI_TTS_DIAG=1**（env-gated）：開額外 per-chunk text preview + peak/rms/duration_ms + per-chunk trim lead/tail ms。預設關，零 overhead。
 
-**仍有未解 issue**：long-form 故事偶爾跳句（兩句講兩句跳）。根因疑似 Gemini docs §限制 4 提到的 prompt classifier 行為（`[whispers]` 沒有 preamble 包覆會被當成模糊指示）。修法 plan: `~/.claude/plans/gemini-api-nifty-rain.md`（Plan A: preamble + retry）。
+**5/11 night 跳句根因鎖定為 H1 parallel voice drift**（chunk 之間 RMS 差 2x），不是 trim/split/tail-drop。
+詳見上面「5/11 night 補充：chunk 邊界 silence + 跳句根因鎖定」段。下輪 fix 走 sequential synthesis 或
+post-synth RMS normalize。
 
 ### Persona（`tools/llm_eval/persona.txt`）
 

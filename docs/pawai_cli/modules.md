@@ -163,6 +163,10 @@ pawai logs brain --lines 500
 | Persona / prompt（`pawai_brain/personas/v1/*.md`） | deploy brain（會 colcon install 進 share/） |
 | 多模組 | `pawai jetson deploy --all`（全 build） |
 
+> 測試請從各 package 目錄執行，例如 `cd speech_processor && python3 -m pytest test -q`。
+> ROS2 workspace 內多個 package 都有 `test/` 目錄，從 repo root 直接指定跨 package test 檔
+> 可能遇到 collection / import 衝突（namespace 重名）。
+
 ---
 
 ## 加新 module

@@ -1,7 +1,67 @@
 # 專案狀態
 
-**最後更新**：2026-05-12 night（Nav B5 motion 全綠 + B0 launch.py mux bug fix + B1 nav2_params tuning + cone narrowing 探索 + nav stack 隱性 bug 浮現）
+**最後更新**：2026-05-11 night（TTS 跳句根因鎖定 H1 parallel voice drift + whispers tag 恢復 + chunking thresholds 60/45 + pcm_trim 80ms tail + PawAI CLI / Mac 搬家整套交付）
 **硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/11 night：TTS 跳句深挖 + PawAI CLI + Mac 搬家
+
+### Mac 搬家 + PawAI CLI 落地
+
+- 從 WSL Roy422 → MacBook M1 完整搬家：Tailscale / SSH key / venv / Studio gateway URL 全部對齊
+- `tools/pawai_cli` MVP 落地：`doctor / status / dev info / jetson deploy / demo start|stop / logs`
+- `start.sh` self-heal：偵測舊 lane → cleanup → preflight；frontend 自動 `npm install` + 寫 `.env.local`
+- doctor 加 platform-aware hints（Mac brew vs Linux apt nodejs npm）+ SSH config 偵測 + frontend 檢查
+- `.env.local.example`（root + frontend）+ frontend gitignore 封堵 pnpm/yarn lockfile + `packageManager: npm@11.4.2`
+- rsync exclude `.venv/`、`node_modules/`、`.next/`、`.ruff_cache/`、`.mypy_cache/`
+- 三份手冊 in `docs/pawai_cli/`：README / troubleshooting / modules（含 pytest 需從 package 目錄跑的提醒）
+- CLI tests 12/12 + 多輪 review fix（SSH config substring 誤判、ssh-copy-id alias、apt nodejs npm、venv 安裝等）
+
+### Brain：`[whispers]` 恢復 + audio tag normalize 收斂
+
+- user 明示故事 / 念詩 / 睡前場景需要 whisper 聲 — N6 morning 把 `[whispers]` normalize → `[curious]` 是過度反應
+- 只保留 `[sighs]` / `[sigh]` 仍 normalize（會破壞 demo 節奏）
+- EXAMPLES.md 睡前故事範例改用 `[whispers]`；OUTPUT.md audio tag 清單加回
+- validator.py + json_validator.py 註解 / docstring 同步
+- `pawai_brain` 26/26 validator test 全綠
+
+### Speech：chunk size bump + pcm_trim silence + Phase 1 diagnostic
+
+三輪修法：
+
+1. `CHUNK_MAX_CHARS 40→60`、`MIN_SPLIT_CHARS 30→45`（離 80-char tail-drop 風險區 30%+，但 chunk 數 6→3-4）
+2. 新模組 `pcm_trim.py`：trim gemini 80-200ms silence padding，保留 80ms tail；`ChunkTrimError` fail-loud 走 fallback；`int16 -32768` overflow 用 `astype(np.int32)` 處理
+3. `PAWAI_TTS_DIAG=1` env-gated per-chunk log（text preview / peak / rms / duration_ms / cut_lead_ms / cut_tail_ms），預設關零 overhead
+
+**跑診斷 → 確定跳句根因 = H1 parallel voice drift**（不是 H2/H3/H4）：
+
+| chunk | text_len | peak | rms | duration_ms |
+|---|---|---|---|---|
+| [0] | 69 | 18621 | **782** | 6360 |
+| [1] | 68 | 12240 | **1139** | 6240 |
+| [2] | 37 | 28874 | **1529** | 6240 |
+
+3 個並行 chunk 對同一個 whisper Despina persona 回來的 RMS 階梯式跳動（782→1139→1529，2x range），peak 也差 2.4x — 這就是「跳句」實質聽到的「越念越大聲又突然變小」。
+
+**下輪 fix 方向（保留為 Phase 2 / N9 plan）**：sequential synthesis 取代 parallel，或 post-synth RMS normalize across chunks。詳見 [`memory/project_tts_skip_diagnosis_0511_night.md`](../.claude/projects/-Users-lubaiyu-elder-and-dog/memory/project_tts_skip_diagnosis_0511_night.md)。
+
+### Speech 動作 / 說話併發（**設計凍結，不執行**）
+
+user 提出希望「念故事時可以一邊搖屁股」。Agent 3 找出 enforcement 在
+`interaction_executive_node._active_step_done()` line 168-175。設計保留為下輪 plan：
+
+- `SkillStep.concurrent_with_tts: bool = False` 新 field
+- `_active_step_done` peek 下一 step，若 concurrent-safe 跳過 tts_playing 等待
+- 只開 `wave_hello / wiggle / stretch` 三個低風險在地動作（user 決議）
+- Go2 sport API 排隊機制 + DataChannel buffer 觀察
+
+### 測試 + Tests 數據
+
+- `speech_processor`：202/202 pass（含 pcm_trim 17 個 + tts_split 24 個 + 既有）
+- `pawai_brain` validator：26/26 pass
+- `tools/pawai_cli`：12/12 pass
+- ROS-required tests（conversation_graph_node 等）Mac 上預期跑不起來（pre-existing 限制）
 
 ---
 
