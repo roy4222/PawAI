@@ -78,16 +78,16 @@ OBJECT_REMARK_DEDUP_S = 60.0
 _IDLE_CANNED: tuple[str, ...] = (
     "[curious] 嗯～好安靜耶。",
     "[playful] 我剛剛看到一隻小蟲耶。",
-    "[whispers] 外面風好大。",
-    "[sighs] 有點想睡覺呢。",
+    "[curious] 外面風好大。",
+    "[curious] 有點想睡覺呢。",
     "[curious] 不知道現在幾點了。",
     "[playful] 來，誰要陪我玩？",
-    "[whispers] 房間有點暗暗的。",
+    "[curious] 房間有點暗暗的。",
     "[curious] 那個杯子放好久了。",
     "[playful] 我自己跟自己玩好了。",
     "[gentle] 今天好好呀。",
     "[thinking] 等等～剛剛在想什麼來著。",
-    "[whispers] 嗨～有人在嗎？",
+    "[curious] 嗨～有人在嗎？",
 )
 def build_object_tts(class_name: str, color: str | None) -> str | None:
     """Compose object_remark TTS string, or None when class is outside the
@@ -191,6 +191,13 @@ class BrainNode(Node):
         # 30s freshness gate applied at read site.
         self._last_stable_identity_name: str | None = None
         self._last_stable_identity_ts: float = 0.0
+
+        # N6: conversation-active gate — only chat input (speech/text) updates
+        # this, NOT face/gesture. Used by _on_gesture to suppress
+        # wave/fist/index auto-fire while user is actively talking, so the
+        # dog doesn't blurt "嗨～我是 PawAI！" or "我在聽" mid-conversation.
+        # Palm (system_pause / safety) is exempt from this gate.
+        self._last_chat_input_ts: float = 0.0
 
         self._pub_proposal = self.create_publisher(String, "/brain/proposal", _RELIABLE_10)
         self._pub_brain_state = self.create_publisher(
@@ -338,6 +345,9 @@ class BrainNode(Node):
 
         # Issue 8: speech is unambiguous user interaction → reset idle clock
         self._touch_user_interaction()
+        # N6: also mark chat-active for gesture gating
+        with self._lock:
+            self._last_chat_input_ts = time.time()
 
         # D-2: Speech intent always advances attention regardless of state.
         # Speech is an explicit engagement signal — flag for next attention tick.
@@ -553,6 +563,11 @@ class BrainNode(Node):
         "index": "enter_listen_mode",
     }
     _GESTURE_CONFIRM = {"thumbs_up": "wiggle", "peace": "stretch"}
+    # N6: gestures that produce social skills (wave/hello) or mode switches
+    # (mute/listen) get suppressed when chat is active in the last 30s.
+    # palm/system_pause is SAFETY and NEVER gated.
+    _CONVERSATION_GATED_GESTURES = frozenset({"wave", "fist", "index"})
+    _CONVERSATION_GATE_S = 30.0
 
     def _on_gesture(self, msg: String) -> None:
         payload = self._load_json(msg)
@@ -581,6 +596,19 @@ class BrainNode(Node):
             return
         if self._check_dedup("gesture", gesture):
             return
+
+        # N6: conversation-active gate — wave / fist / index don't fire
+        # mid-conversation. Palm (safety) bypasses this gate.
+        if gesture in self._CONVERSATION_GATED_GESTURES:
+            with self._lock:
+                last_chat = self._last_chat_input_ts
+            since_chat = time.time() - last_chat
+            if last_chat > 0.0 and since_chat < self._CONVERSATION_GATE_S:
+                self.get_logger().info(
+                    f"[gate] gesture={gesture} suppressed "
+                    f"(chat active {since_chat:.1f}s ago < {self._CONVERSATION_GATE_S}s)"
+                )
+                return
 
         if gesture in self._GESTURE_DIRECT:
             skill = self._GESTURE_DIRECT[gesture]
@@ -1059,6 +1087,9 @@ class BrainNode(Node):
             return
         # Issue 8: Studio text input is unambiguous user interaction → reset idle
         self._touch_user_interaction()
+        # N6: also mark chat-active for gesture gating
+        with self._lock:
+            self._last_chat_input_ts = time.time()
         synthetic = String()
         synthetic.data = json.dumps(
             {

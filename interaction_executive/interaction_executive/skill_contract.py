@@ -163,7 +163,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         name="system_pause",
         steps=[
             SkillStep(ExecutorKind.MOTION, {"name": "stop_move"}),
-            SkillStep(ExecutorKind.SAY, {"text": "[whispers] 我先安靜一下"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 我先安靜一下"}),
         ],
         priority_class=PriorityClass.SAFETY,
         description="System pause: stop motion first, then silence + ignore non-safety triggers.",
@@ -255,7 +255,8 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "sit_along": SkillContract(
         name="sit_along",
         steps=[
-            SkillStep(ExecutorKind.SAY, {"text": "[playful] 我也趴下來陪你"}),
+            # N6: align with demo spec — 「坐下 說：會不會太累」+ Go2 跟著坐下
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 會不會太累，我陪你坐一下"}),
             SkillStep(ExecutorKind.MOTION, {"name": "stand_down"}),
         ],
         priority_class=PriorityClass.SKILL,
@@ -319,7 +320,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "stretch": SkillContract(
         name="stretch",
         steps=[
-            SkillStep(ExecutorKind.SAY, {"text": "[sighs] 伸個懶腰～"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 伸個懶腰～"}),
             SkillStep(ExecutorKind.MOTION, {"name": "stretch"}),
         ],
         priority_class=PriorityClass.SKILL,
@@ -449,7 +450,12 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     # ---- Hidden (registry 內、Studio grayed-out) ----
     "enter_mute_mode": SkillContract(
         name="enter_mute_mode",
-        steps=[SkillStep(ExecutorKind.SAY, {"text": "[whispers] 進入靜音模式"})],
+        steps=[
+            # N6: align with demo spec — Fist「靜音模式：機器狗坐下並關閉聲音」
+            # Go2 has no true lay-flat; StandDown approximates sitting/趴下 posture.
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 進入靜音模式，我先坐下"}),
+            SkillStep(ExecutorKind.MOTION, {"name": "stand_down"}),
+        ],
         priority_class=PriorityClass.SKILL,
         cooldown_s=5.0,
         requires_confirmation=True,
@@ -463,7 +469,13 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     ),
     "enter_listen_mode": SkillContract(
         name="enter_listen_mode",
-        steps=[SkillStep(ExecutorKind.SAY, {"text": "[curious] 我在聽"})],
+        steps=[
+            # N6: align with demo spec — Index「監聽模式：機器狗站立並開啟語音辨識」
+            # balance_stand 對齊「站立」視覺；ASR 一直在跑（vad-less 主線），
+            # 此處 motion 主要是視覺信號告訴 user PawAI 進入專注狀態。
+            SkillStep(ExecutorKind.MOTION, {"name": "balance_stand"}),
+            SkillStep(ExecutorKind.SAY, {"text": "[curious] 我站起來認真聽你說"}),
+        ],
         priority_class=PriorityClass.SKILL,
         cooldown_s=3.0,
         description="Force-open ASR window. Hidden in Phase B Demo.",

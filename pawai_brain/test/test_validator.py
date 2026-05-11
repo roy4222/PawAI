@@ -105,3 +105,57 @@ def test_short_reply_not_flagged():
     # length <= 8 → skip check (legitimate short replies like "好喔" must pass)
     assert looks_truncated("好喔") is None
     assert looks_truncated("我去了") is None
+
+
+# ── N6: normalize_audio_tags ──────────────────────────────────────────────
+
+from pawai_brain.validator import normalize_audio_tags
+
+
+def test_normalize_audio_tags_whispers_to_curious():
+    out = normalize_audio_tags("[whispers] 好喔。從前有一隻小狗。")
+    assert "[whispers]" not in out
+    assert "[curious]" in out
+    assert "好喔。從前有一隻小狗。" in out
+
+
+def test_normalize_audio_tags_sighs_to_curious():
+    out = normalize_audio_tags("[sighs] 那個我還在學")
+    assert "[sighs]" not in out
+    assert "[curious] 那個我還在學" == out
+
+
+def test_normalize_audio_tags_case_insensitive():
+    assert "[curious]" in normalize_audio_tags("[Whispers] hi")
+    assert "[curious]" in normalize_audio_tags("[WHISPERS] hi")
+    assert "[curious]" in normalize_audio_tags("[Sighs] hi")
+
+
+def test_normalize_audio_tags_singular_form():
+    """[whisper] / [sigh] (no s) also normalized."""
+    assert "[curious]" in normalize_audio_tags("[whisper] hi")
+    assert "[curious]" in normalize_audio_tags("[sigh] hi")
+
+
+def test_normalize_audio_tags_keeps_stable_tags():
+    """[excited] / [curious] / [playful] etc must pass through unchanged."""
+    cases = [
+        "[excited] 大家好！",
+        "[curious] 哦？",
+        "[playful] 我搖一下！",
+        "[worried] 你還好嗎？",
+        "[thinking] 嗯～",
+    ]
+    for c in cases:
+        assert normalize_audio_tags(c) == c, f"stable tag mutated: {c}"
+
+
+def test_normalize_audio_tags_multiple_in_one_string():
+    out = normalize_audio_tags("[whispers] 我說 [sighs] 慢慢的")
+    assert "[whispers]" not in out and "[sighs]" not in out
+    assert out.count("[curious]") == 2
+
+
+def test_normalize_audio_tags_empty_safe():
+    assert normalize_audio_tags("") == ""
+    assert normalize_audio_tags(None) is None  # passthrough for None

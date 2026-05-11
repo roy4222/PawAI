@@ -1,5 +1,6 @@
 """BrainNode rule tests for Phase A MVS scenarios."""
 import json
+import time
 
 import pytest
 import rclpy
@@ -231,6 +232,11 @@ def test_active_sequence_blocks_general_skill_but_not_safety(brain):
             }
         )
     )
+    # N6: clear chat-active timestamp so the wave gate doesn't suppress this
+    # particular assertion (this test is verifying sequence-block semantic,
+    # not gate semantic — gate has its own dedicated tests below).
+    with brain._lock:
+        brain._last_chat_input_ts = 0.0
     brain._on_gesture(_msg({"gesture": "wave"}))
     assert _latest(brain)["selected_skill"] == "wave_hello"
 
@@ -704,3 +710,70 @@ def test_chat_candidate_with_stretch_proposal_requests_pending_confirm(brain):
     traces = _drain_traces(brain)
     assert any(t["stage"] == "skill_gate" and t["status"] == "needs_confirm"
                and t["detail"] == "stretch" for t in traces)
+
+
+# ---------------------------------------------------------------------------
+# N6: conversation-active gate — wave/fist/index suppressed mid-conversation
+# ---------------------------------------------------------------------------
+
+
+def test_gesture_wave_suppressed_when_chat_active(brain):
+    """N6: wave gesture skipped if chat happened in last 30s."""
+    # Mark chat as just-active.
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
+    # Clear any prior plan from setup.
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "wave"}))
+    assert brain._latest_plan is None, "wave should have been gated during active chat"
+
+
+def test_gesture_fist_suppressed_when_chat_active(brain):
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "fist"}))
+    assert brain._latest_plan is None
+
+
+def test_gesture_index_suppressed_when_chat_active(brain):
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "index"}))
+    assert brain._latest_plan is None
+
+
+def test_gesture_palm_NOT_gated_safety_always_fires(brain):
+    """N6: palm (system_pause) is SAFETY and must fire even during active chat."""
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "palm"}))
+    plan = _latest(brain)
+    assert plan is not None
+    assert plan["selected_skill"] == "system_pause"
+
+
+def test_gesture_thumbs_up_NOT_gated_confirm_path_unchanged(brain):
+    """N6: gated set is wave/fist/index only. Confirm gestures (thumbs_up/peace)
+    don't auto-fire skills — they enter PendingConfirm. Gate doesn't apply."""
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    # Should still emit the say_canned OK-request (confirm flow).
+    plan = _latest(brain)
+    assert plan is not None
+    assert plan["selected_skill"] == "say_canned"
+
+
+def test_gesture_wave_fires_after_gate_window_expires(brain):
+    """N6: 31s after last chat input, wave should fire."""
+    with brain._lock:
+        brain._last_chat_input_ts = time.time() - 31.0  # 31s ago
+    brain._latest_plan = None
+    brain._on_gesture(_msg({"gesture": "wave"}))
+    plan = _latest(brain)
+    assert plan is not None
+    assert plan["selected_skill"] == "wave_hello"

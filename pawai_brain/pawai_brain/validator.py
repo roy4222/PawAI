@@ -1,4 +1,4 @@
-"""Validator — JSON parse + emoji strip + truncation guard.
+"""Validator — JSON parse + emoji strip + audio-tag normalize + truncation guard.
 
 Copied (with light cleanup) from llm_bridge_node._post_process_reply +
 llm_contract.strip_markdown_fences. Pure functions — no ROS / IO.
@@ -11,6 +11,16 @@ import re
 _EMOJI_RE = re.compile(r"[\U0001f300-\U0001f9ff]")
 _SENTENCE_END = "。！？~~」』）)】."
 _MID_CLAUSE = "，、：；,;"
+
+# N6: TTS provider (openrouter_gemini) doesn't render `[whispers]` / `[sighs]`
+# reliably — entire sentence stays in whisper voice until the end, killing
+# demo pacing. Normalize to stable tags before TTS publish.
+_UNSTABLE_TAG_REPLACEMENTS = {
+    "[whispers]": "[curious]",
+    "[whisper]": "[curious]",
+    "[sighs]": "[curious]",
+    "[sigh]": "[curious]",
+}
 
 
 def strip_markdown_fences(raw: str) -> str:
@@ -46,6 +56,24 @@ def strip_emoji(text: str) -> str:
     Audio-tag tokens like [excited] / [whispers] are kept intact.
     """
     return _EMOJI_RE.sub("", text or "").strip()
+
+
+def normalize_audio_tags(text: str) -> str:
+    """N6: replace TTS-unstable audio tags with stable ones.
+
+    `[whispers]` / `[sighs]` cause openrouter_gemini TTS to lock the entire
+    sentence into that voice mode, ruining demo pacing. Map them to `[curious]`
+    which the same provider handles cleanly. Other tags pass through untouched.
+    Case-insensitive but only matches the bracketed form (won't touch raw text).
+    """
+    if not text:
+        return text
+    out = text
+    for bad, good in _UNSTABLE_TAG_REPLACEMENTS.items():
+        # Case-insensitive: [Whispers] / [WHISPERS] etc.
+        pattern = re.compile(re.escape(bad), re.IGNORECASE)
+        out = pattern.sub(good, out)
+    return out
 
 
 def looks_truncated(reply: str) -> str | None:
