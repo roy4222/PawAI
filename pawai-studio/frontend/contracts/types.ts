@@ -442,6 +442,7 @@ export interface ConversationTracePayload {
     | "json_validate"
     | "repair"
     | "verifier"
+    | "gesture_gate"
     | "skill_gate"
     | "output";
   status:

@@ -608,6 +608,15 @@ class BrainNode(Node):
                     f"[gate] gesture={gesture} suppressed "
                     f"(chat active {since_chat:.1f}s ago < {self._CONVERSATION_GATE_S}s)"
                 )
+                # N6 review fix: also emit trace so Studio Trace Drawer / external
+                # observers see the suppression, not only the local ROS logger.
+                self._emit_trace(
+                    session_id=f"gesture-{int(time.time())}",
+                    engine="brain_node",
+                    stage="gesture_gate",
+                    status="blocked",
+                    detail=f"{gesture}:conversation_active_{since_chat:.1f}s",
+                )
                 return
 
         if gesture in self._GESTURE_DIRECT:

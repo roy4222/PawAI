@@ -714,66 +714,84 @@ def test_chat_candidate_with_stretch_proposal_requests_pending_confirm(brain):
 
 # ---------------------------------------------------------------------------
 # N6: conversation-active gate — wave/fist/index suppressed mid-conversation
+# Review fix: use _captured_proposals / _drain_proposals (fixture pattern),
+# NOT _latest_plan (which doesn't exist on the fixture).
+# Also assert the gesture_gate trace fires so Studio Trace Drawer sees it.
 # ---------------------------------------------------------------------------
+
+
+def _chat_just_active(brain) -> None:
+    with brain._lock:
+        brain._last_chat_input_ts = time.time()
 
 
 def test_gesture_wave_suppressed_when_chat_active(brain):
     """N6: wave gesture skipped if chat happened in last 30s."""
-    # Mark chat as just-active.
-    with brain._lock:
-        brain._last_chat_input_ts = time.time()
-    # Clear any prior plan from setup.
-    brain._latest_plan = None
+    _chat_just_active(brain)
+    _drain_proposals(brain)
+    _drain_traces(brain)
     brain._on_gesture(_msg({"gesture": "wave"}))
-    assert brain._latest_plan is None, "wave should have been gated during active chat"
+    assert _drain_proposals(brain) == [], "wave should have been gated"
+    # Verify the suppression trace landed for Studio observability.
+    traces = _drain_traces(brain)
+    gate_traces = [t for t in traces if t.get("stage") == "gesture_gate"]
+    assert gate_traces, "expected gesture_gate trace entry"
+    assert gate_traces[-1]["status"] == "blocked"
+    assert "wave" in gate_traces[-1]["detail"]
 
 
 def test_gesture_fist_suppressed_when_chat_active(brain):
-    with brain._lock:
-        brain._last_chat_input_ts = time.time()
-    brain._latest_plan = None
+    _chat_just_active(brain)
+    _drain_proposals(brain)
     brain._on_gesture(_msg({"gesture": "fist"}))
-    assert brain._latest_plan is None
+    assert _drain_proposals(brain) == [], "fist should have been gated"
 
 
 def test_gesture_index_suppressed_when_chat_active(brain):
-    with brain._lock:
-        brain._last_chat_input_ts = time.time()
-    brain._latest_plan = None
+    _chat_just_active(brain)
+    _drain_proposals(brain)
     brain._on_gesture(_msg({"gesture": "index"}))
-    assert brain._latest_plan is None
+    assert _drain_proposals(brain) == [], "index should have been gated"
 
 
 def test_gesture_palm_NOT_gated_safety_always_fires(brain):
     """N6: palm (system_pause) is SAFETY and must fire even during active chat."""
-    with brain._lock:
-        brain._last_chat_input_ts = time.time()
-    brain._latest_plan = None
+    _chat_just_active(brain)
+    _drain_proposals(brain)
     brain._on_gesture(_msg({"gesture": "palm"}))
-    plan = _latest(brain)
-    assert plan is not None
-    assert plan["selected_skill"] == "system_pause"
+    proposals = _drain_proposals(brain)
+    assert proposals, "palm must fire even mid-conversation (safety)"
+    assert proposals[-1]["selected_skill"] == "system_pause"
 
 
 def test_gesture_thumbs_up_NOT_gated_confirm_path_unchanged(brain):
     """N6: gated set is wave/fist/index only. Confirm gestures (thumbs_up/peace)
     don't auto-fire skills — they enter PendingConfirm. Gate doesn't apply."""
-    with brain._lock:
-        brain._last_chat_input_ts = time.time()
-    brain._latest_plan = None
+    _chat_just_active(brain)
+    _drain_proposals(brain)
     brain._on_gesture(_msg({"gesture": "thumbs_up"}))
-    # Should still emit the say_canned OK-request (confirm flow).
-    plan = _latest(brain)
-    assert plan is not None
-    assert plan["selected_skill"] == "say_canned"
+    proposals = _drain_proposals(brain)
+    assert proposals, "thumbs_up confirm path must still emit say_canned hint"
+    assert proposals[-1]["selected_skill"] == "say_canned"
 
 
 def test_gesture_wave_fires_after_gate_window_expires(brain):
     """N6: 31s after last chat input, wave should fire."""
     with brain._lock:
-        brain._last_chat_input_ts = time.time() - 31.0  # 31s ago
-    brain._latest_plan = None
+        brain._last_chat_input_ts = time.time() - 31.0
+    _drain_proposals(brain)
     brain._on_gesture(_msg({"gesture": "wave"}))
-    plan = _latest(brain)
-    assert plan is not None
-    assert plan["selected_skill"] == "wave_hello"
+    proposals = _drain_proposals(brain)
+    assert proposals, "wave should fire after 30s window expires"
+    assert proposals[-1]["selected_skill"] == "wave_hello"
+
+
+def test_gesture_wave_fires_when_no_prior_chat(brain):
+    """N6: brand-new session with _last_chat_input_ts=0.0 must not be gated."""
+    with brain._lock:
+        brain._last_chat_input_ts = 0.0
+    _drain_proposals(brain)
+    brain._on_gesture(_msg({"gesture": "wave"}))
+    proposals = _drain_proposals(brain)
+    assert proposals
+    assert proposals[-1]["selected_skill"] == "wave_hello"
