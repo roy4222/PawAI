@@ -447,6 +447,7 @@ export interface ConversationTracePayload {
   status:
     | "ok"
     | "warn"
+    | "hit"
     | "retry"
     | "fallback"
     | "error"
@@ -454,7 +455,9 @@ export interface ConversationTracePayload {
     | "accepted"
     | "accepted_trace_only"
     | "blocked"
-    | "rejected_not_allowed";
+    | "rejected_not_allowed"
+    | "needs_confirm"
+    | "demo_guide";
   detail: string;
   ts: number;
 }

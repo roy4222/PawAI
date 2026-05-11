@@ -785,11 +785,22 @@ class ConversationGraphNode(Node):
             return
         if not isinstance(payload, dict):
             return
+        # Review: `list(...)` on truthy non-iterable (e.g. `1`) raises TypeError
+        # and kills the ROS callback. Guard explicitly + sanitize to str list.
+        shown_raw = payload.get("shown_skills")
+        shown = [str(x).strip() for x in shown_raw if isinstance(x, (str, int, float))] \
+            if isinstance(shown_raw, list) else []
+        candidate_raw = payload.get("candidate_next")
+        candidate = [str(x).strip() for x in candidate_raw if isinstance(x, (str, int, float))] \
+            if isinstance(candidate_raw, list) else []
+        segment = payload.get("current_segment")
+        if segment is not None and not isinstance(segment, str):
+            segment = None  # invalid type → treat as no-segment
         updated = {
             "active": bool(payload.get("active", False)),
-            "current_segment": payload.get("current_segment"),
-            "shown_skills": list(payload.get("shown_skills") or []),
-            "candidate_next": list(payload.get("candidate_next") or []),
+            "current_segment": segment,
+            "shown_skills": shown,
+            "candidate_next": candidate,
         }
         with self._demo_session_lock:
             self._demo_session_state = updated

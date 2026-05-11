@@ -337,3 +337,103 @@ def test_on_face_state_handles_bad_json():
     node = _build_test_node()
     node._on_face_state(_FakeMsg("not-json"))
     assert node._recent_face_identity[0] == "unknown"  # default unchanged
+
+
+# ---------------------------------------------------------------------------
+# N3-B: /brain/demo_segment callback regression
+# ---------------------------------------------------------------------------
+
+import threading
+
+
+def _wire_demo_session(node) -> None:
+    """Attach the demo_session state + lock that __init__ would normally set."""
+    node._demo_session_state = {
+        "active": False,
+        "current_segment": None,
+        "shown_skills": [],
+        "candidate_next": [],
+    }
+    node._demo_session_lock = threading.Lock()
+
+
+def test_on_demo_segment_happy_path():
+    node = _build_test_node()
+    _wire_demo_session(node)
+    payload = {
+        "active": True,
+        "current_segment": "gesture",
+        "shown_skills": ["wiggle"],
+        "candidate_next": ["stretch", "wave"],
+    }
+    node._on_demo_segment(_FakeMsg(json.dumps(payload)))
+    snap = node._snapshot_demo_session()
+    assert snap["active"] is True
+    assert snap["current_segment"] == "gesture"
+    assert snap["shown_skills"] == ["wiggle"]
+    assert snap["candidate_next"] == ["stretch", "wave"]
+
+
+def test_on_demo_segment_truthy_non_iterable_doesnt_crash():
+    """Review fix: shown_skills=1 (truthy non-iterable) used to TypeError on list()."""
+    node = _build_test_node()
+    _wire_demo_session(node)
+    payload = {"active": True, "current_segment": "gesture", "shown_skills": 1, "candidate_next": "nope"}
+    # Must not raise
+    node._on_demo_segment(_FakeMsg(json.dumps(payload)))
+    snap = node._snapshot_demo_session()
+    assert snap["active"] is True
+    # Non-list values fall back to empty list (sanitized)
+    assert snap["shown_skills"] == []
+    assert snap["candidate_next"] == []
+
+
+def test_on_demo_segment_sanitizes_non_string_elements():
+    """Items in shown_skills must be coerced to clean strings."""
+    node = _build_test_node()
+    _wire_demo_session(node)
+    payload = {
+        "active": True,
+        "shown_skills": ["wiggle", 42, "  wave  ", None, {"x": 1}],
+        "candidate_next": [],
+    }
+    node._on_demo_segment(_FakeMsg(json.dumps(payload)))
+    snap = node._snapshot_demo_session()
+    # None and dict dropped; ints stringified; whitespace stripped
+    assert snap["shown_skills"] == ["wiggle", "42", "wave"]
+
+
+def test_on_demo_segment_bad_segment_type_falls_to_none():
+    node = _build_test_node()
+    _wire_demo_session(node)
+    payload = {"active": True, "current_segment": 123, "shown_skills": [], "candidate_next": []}
+    node._on_demo_segment(_FakeMsg(json.dumps(payload)))
+    snap = node._snapshot_demo_session()
+    assert snap["current_segment"] is None
+
+
+def test_on_demo_segment_malformed_json_safe():
+    node = _build_test_node()
+    _wire_demo_session(node)
+    # Preset a known value
+    with node._demo_session_lock:
+        node._demo_session_state["active"] = True
+    node._on_demo_segment(_FakeMsg("not json"))
+    # Malformed payload → no overwrite
+    assert node._snapshot_demo_session()["active"] is True
+
+
+def test_snapshot_demo_session_returns_defensive_copy():
+    """Caller mutating snapshot must NOT affect node's source of truth."""
+    node = _build_test_node()
+    _wire_demo_session(node)
+    payload = {"active": True, "shown_skills": ["wiggle"], "candidate_next": []}
+    node._on_demo_segment(_FakeMsg(json.dumps(payload)))
+    snap = node._snapshot_demo_session()
+    snap["active"] = False
+    snap["shown_skills"].append("HACK")
+    # Second snapshot still pristine
+    snap2 = node._snapshot_demo_session()
+    assert snap2["active"] is True
+    # NB: shallow copy — list mutation will leak through. Test documents
+    # current behaviour; if list aliasing becomes a bug, deepcopy here.
