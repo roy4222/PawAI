@@ -112,11 +112,11 @@ def test_short_reply_not_flagged():
 from pawai_brain.validator import normalize_audio_tags
 
 
-def test_normalize_audio_tags_whispers_to_curious():
+def test_normalize_audio_tags_whispers_passes_through():
+    """5/11 night: [whispers] restored — user wants whisper voice for storytelling."""
     out = normalize_audio_tags("[whispers] 好喔。從前有一隻小狗。")
-    assert "[whispers]" not in out
-    assert "[curious]" in out
-    assert "好喔。從前有一隻小狗。" in out
+    assert "[whispers]" in out
+    assert "[curious]" not in out
 
 
 def test_normalize_audio_tags_sighs_to_curious():
@@ -126,34 +126,36 @@ def test_normalize_audio_tags_sighs_to_curious():
 
 
 def test_normalize_audio_tags_case_insensitive():
-    assert "[curious]" in normalize_audio_tags("[Whispers] hi")
-    assert "[curious]" in normalize_audio_tags("[WHISPERS] hi")
     assert "[curious]" in normalize_audio_tags("[Sighs] hi")
+    assert "[curious]" in normalize_audio_tags("[SIGHS] hi")
 
 
 def test_normalize_audio_tags_singular_form():
-    """[whisper] / [sigh] (no s) also normalized."""
-    assert "[curious]" in normalize_audio_tags("[whisper] hi")
+    """[sigh] (no s) also normalized; [whisper] passes through."""
     assert "[curious]" in normalize_audio_tags("[sigh] hi")
+    assert "[whisper]" in normalize_audio_tags("[whisper] hi")
 
 
 def test_normalize_audio_tags_keeps_stable_tags():
-    """[excited] / [curious] / [playful] etc must pass through unchanged."""
+    """[excited] / [curious] / [playful] / [whispers] etc must pass through unchanged."""
     cases = [
         "[excited] 大家好！",
         "[curious] 哦？",
         "[playful] 我搖一下！",
         "[worried] 你還好嗎？",
         "[thinking] 嗯～",
+        "[whispers] 故事開始了。",
     ]
     for c in cases:
         assert normalize_audio_tags(c) == c, f"stable tag mutated: {c}"
 
 
-def test_normalize_audio_tags_multiple_in_one_string():
+def test_normalize_audio_tags_mixed_only_sighs_normalized():
+    """[whispers] kept, [sighs] still normalized."""
     out = normalize_audio_tags("[whispers] 我說 [sighs] 慢慢的")
-    assert "[whispers]" not in out and "[sighs]" not in out
-    assert out.count("[curious]") == 2
+    assert "[whispers]" in out
+    assert "[sighs]" not in out
+    assert out.count("[curious]") == 1
 
 
 def test_normalize_audio_tags_empty_safe():

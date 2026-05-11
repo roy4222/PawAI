@@ -13,15 +13,21 @@ import re
 
 
 # Gemini Flash TTS Preview drops tail randomly when input ≥ ~80 chars
-# (5/6 evening empirical: 95-char chunks lose 25% of audio). Stay well
-# under that threshold; rely on parallel synthesis to keep latency flat.
-CHUNK_MAX_CHARS: int = 40
+# (5/6 evening empirical: 95-char chunks lose 25% of audio). Original cap
+# 40 was overly conservative — Google/community guidance for Gemini 3.1
+# Flash TTS recommends LONGER chunks for voice-tone consistency.
+#
+# 5/11 night bump: 40 → 60. With a 200-char story this drops parallel
+# chunk count from 6 to 4, halving audible boundary count without
+# approaching the 80-char tail-drop threshold. Re-anchored audio tag
+# per chunk keeps voice consistent across chunks.
+CHUNK_MAX_CHARS: int = 60
 
-# 5/8: prefer sentence-end split once buf hits 30 chars (was //2 = 20).
-# Earlier threshold cut at natural pauses too aggressively, which made
-# cross-chunk Gemini synthesis lose accumulated voice tone (whisper /
-# narrate / story breath all reset on chunk N+1).
-MIN_SPLIT_CHARS: int = 30
+# Sentence-end split threshold also bumped proportionally. Splitting too
+# early at the first period (e.g. "好喔。") makes the first chunk tiny
+# and creates an audible micro-cut. 45 lets short opening sentences ride
+# along with the first clause of the next sentence.
+MIN_SPLIT_CHARS: int = 45
 
 SENTENCE_PUNCT: str = "。！？!?\n"
 

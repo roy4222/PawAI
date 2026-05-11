@@ -41,7 +41,13 @@ from std_msgs.msg import Bool, String, UInt8MultiArray
 from go2_interfaces.msg import WebRtcReq
 
 from speech_processor.audio_tag import strip_audio_tags
+from speech_processor import pcm_trim as _pcm_trim
 from speech_processor import tts_split as _tts_split
+
+# Diagnostic mode for chunk-level TTS investigation. Set PAWAI_TTS_DIAG=1 in
+# the tts_node environment to emit per-chunk text preview / peak / rms /
+# duration_ms log lines. Off by default — zero overhead on normal demo runs.
+_DIAG_TTS: bool = os.environ.get("PAWAI_TTS_DIAG", "") == "1"
 
 
 def _env_str(name: str, default: str) -> str:
@@ -588,7 +594,12 @@ class TTSProvider_OpenRouterGemini:
             pcm = self._synthesize_chunk(chunks[0])
             if pcm is None:
                 return None
-            full_pcm = pcm
+            # Trim gemini's silence padding from single chunks too.
+            full_pcm = _pcm_trim.trim_silence_pcm16(pcm)
+            if not full_pcm:
+                # Fully silent — fall back rather than emit empty audio.
+                _logger.warning("openrouter_gemini: single chunk fully silent after trim")
+                return None
         else:
             t0 = time.monotonic()
             _logger.warning(
@@ -596,6 +607,14 @@ class TTSProvider_OpenRouterGemini:
                 len(chunks),
                 [len(c) for c in chunks],
             )
+            if _DIAG_TTS:
+                preview = [
+                    (c if len(c) <= 60 else f"{c[:40]}…{c[-15:]}")
+                    for c in chunks
+                ]
+                _logger.warning(
+                    "openrouter_gemini DIAG chunks_text=%s", preview,
+                )
             # Fire all chunks in parallel; preserve order via index map.
             results: list[Optional[bytes]] = [None] * len(chunks)
             timings: list[float] = [0.0] * len(chunks)
@@ -625,6 +644,26 @@ class TTSProvider_OpenRouterGemini:
                             latency,
                             len(pcm),
                         )
+                        if _DIAG_TTS:
+                            try:
+                                import numpy as _np
+                                arr = _np.frombuffer(pcm, dtype=_np.int16).astype(_np.int32)
+                                peak = int(_np.abs(arr).max()) if arr.size else 0
+                                rms = (
+                                    int(_np.sqrt(_np.mean(arr.astype(_np.float64) ** 2)))
+                                    if arr.size else 0
+                                )
+                                dur_ms = len(pcm) / (self.sample_rate * 2) * 1000
+                                _logger.warning(
+                                    "openrouter_gemini DIAG chunk[%d] peak=%d rms=%d "
+                                    "duration_ms=%.0f text_len=%d",
+                                    idx, peak, rms, dur_ms, len(chunks[idx]),
+                                )
+                            except Exception as exc:
+                                _logger.warning(
+                                    "openrouter_gemini DIAG chunk[%d] stats failed: %s",
+                                    idx, exc,
+                                )
 
             # All-or-nothing: any chunk failure → fallback chain.
             if any(p is None for p in results):
@@ -635,15 +674,31 @@ class TTSProvider_OpenRouterGemini:
                     len(results),
                 )
                 return None
-            full_pcm = b"".join(results)  # type: ignore[arg-type]
+            # 5/11 night: trim silence padding from each chunk before concat.
+            # Gemini API adds ~80-200ms silence at both ends of every chunk;
+            # raw join produced audible "斷句" gaps in long stories/poems.
+            # See speech_processor.pcm_trim for threshold rationale.
+            raw_join = b"".join(results)  # type: ignore[arg-type]
+            try:
+                full_pcm = _pcm_trim.trim_and_join_chunks(results)  # type: ignore[arg-type]
+            except _pcm_trim.ChunkTrimError as exc:
+                _logger.warning(
+                    "openrouter_gemini: chunk trimmed to silence (%s) — "
+                    "returning None for provider chain fallback",
+                    exc,
+                )
+                return None
+            saved_ms = (len(raw_join) - len(full_pcm)) / (self.sample_rate * 2) * 1000
             wall = time.monotonic() - t0
             _logger.warning(
-                "openrouter_gemini: %d/%d chunks ok in %.2fs wall (max single=%.2fs), %.1fs audio",
+                "openrouter_gemini: %d/%d chunks ok in %.2fs wall (max single=%.2fs), "
+                "%.1fs audio after trim (saved %.0fms silence)",
                 len(results),
                 len(chunks),
                 wall,
                 max(timings),
                 len(full_pcm) / (self.sample_rate * 2),
+                saved_ms,
             )
 
         # Wrap raw PCM (24kHz / 16-bit / mono) in a WAV container.

@@ -5,11 +5,12 @@
 
 # Audio Tag（會被 TTS 用來表現語氣）
 可在 reply 開頭、中間插入下列任一個（不要連用）：
-`[excited]` `[curious]` `[playful]` `[worried]` `[laughs]` `[thinking]` `[gentle]`
+`[excited]` `[curious]` `[playful]` `[worried]` `[laughs]` `[thinking]` `[gentle]` `[whispers]`
 
-> N6（2026-05-11）：`[whispers]` / `[sighs]` 目前在 openrouter_gemini TTS 會
-> 整句鎖在低語/嘆氣聲，破壞 demo 節奏，已從可用清單移除。低語感想表達時
-> 改用 `[gentle]` 或 `[curious]`。
+`[whispers]` 適合說故事 / 念詩 / 睡前場景；其他情境用 `[gentle]` 即可。
+
+> N6 revisited（2026-05-11 night）：`[whispers]` 恢復為可用標籤。
+> `[sighs]` 仍會破壞 TTS 節奏，繼續從清單排除 — 想表達嘆氣感改用 `[gentle]`。
 
 # 輸出格式（嚴格）
 

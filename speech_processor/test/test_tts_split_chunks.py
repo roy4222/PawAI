@@ -41,35 +41,36 @@ def test_short_text_returns_single_chunk():
     assert _split(text) == [text]
 
 
-def test_constants_reflect_5_8_fix():
-    """Sanity check: the 5/8 fix raised the split threshold to 30."""
-    assert TtsNode.MIN_SPLIT_CHARS == 30
-    assert TtsNode.CHUNK_MAX_CHARS == 40
+def test_constants_reflect_5_11_night_bump():
+    """5/11 night: chunk size raised 40→60, split threshold 30→45 to
+    reduce audible boundary count on long stories without approaching
+    gemini's 80-char tail-drop threshold."""
+    assert TtsNode.MIN_SPLIT_CHARS == 45
+    assert TtsNode.CHUNK_MAX_CHARS == 60
 
 
 # ── Bug #1: sentence threshold ──────────────────────────────────────────
 
 
-def test_short_sentence_does_not_force_split_below_30():
+def test_short_sentence_does_not_force_early_split():
     """'好。' at char 4 must NOT split mid-sentence even though it has period.
     Old code split when buf ≥ 20 — this ate natural breath flow."""
     text = "好。今天天氣很不錯，我們可以一起出去走走，好嗎？"
     chunks = _split(text)
-    # First period at index 1 (length 2) is well below MIN_SPLIT_CHARS.
-    # The whole reply is short enough (~24 chars) to be a single chunk.
+    # First period at index 1 is well below MIN_SPLIT_CHARS=45.
+    # Whole reply ~24 chars, single chunk under CHUNK_MAX_CHARS=60.
     assert len(chunks) == 1
     assert chunks[0] == text
 
 
-def test_long_text_splits_on_first_period_after_30_chars():
-    """Period beyond MIN_SPLIT_CHARS should trigger split."""
-    # 31 padding chars (above MIN_SPLIT_CHARS) + period + more content.
-    head = "一" * 31
-    tail = "二" * 20
+def test_long_text_splits_on_first_period_after_threshold():
+    """Period beyond MIN_SPLIT_CHARS=45 should trigger split."""
+    head = "一" * 46                        # 46 chars > MIN_SPLIT_CHARS
+    tail = "二" * 30
     text = f"{head}。{tail}。"
     chunks = _split(text)
     assert len(chunks) >= 2
-    # First chunk ends at the first period (32 chars including 。)
+    # First chunk ends at the first period (47 chars including 。)
     assert chunks[0].endswith("。")
     assert chunks[0].startswith("一")
 
@@ -78,44 +79,37 @@ def test_long_text_splits_on_first_period_after_30_chars():
 
 
 def test_long_text_no_punct_falls_back_to_hard_cut():
-    """All-CJK no-punct text >40 chars → hard-cut at CHUNK_MAX_CHARS,
+    """All-CJK no-punct text > CHUNK_MAX_CHARS → hard-cut at the limit,
     not silently dropped or duplicated."""
-    text = "今天天氣真好我們去散步好不好快樂的一天散步真的很開心對吧"
+    text = "今天天氣真好我們去散步好不好快樂的一天散步真的很開心對吧呀我說真的就是想出去走走啦" * 2
     chunks = _split(text)
-    # No sentence punct, no comma — every chunk should be ≤ 40 chars.
+    assert len(chunks) >= 2
+    # No sentence punct, no comma — every chunk should be ≤ CHUNK_MAX_CHARS.
     for c in chunks:
         assert len(c) <= TtsNode.CHUNK_MAX_CHARS, f"chunk too long: {c!r}"
-    # Reassembled output should equal stripped input (no character loss).
+    # Reassembled output preserves all characters.
     assert "".join(chunks) == text
 
 
 def test_late_comma_used_as_split_point():
-    """Comma at index 29 → cut at 29 (≥ MIN_SPLIT_CHARS-1 = 29).
-    Reaches CHUNK_MAX_CHARS first (no sentence punct), then elif fires
-    and rfind('，') = 29 is used."""
-    # 29 chars + comma at idx 29 + 15 more chars (no period) → triggers
-    # elif at len=40 since no sentence_punct before that.
-    head = "一" * 29
-    mid = "二" * 15
-    text = f"{head}，{mid}"  # length 45 (29 + 1 + 15)
+    """Comma at index ≥ MIN_SPLIT_CHARS-1 → cut at the comma when no
+    sentence-end punct is available before CHUNK_MAX_CHARS."""
+    head = "一" * 44                        # MIN_SPLIT_CHARS-1 = 44
+    mid = "二" * 20
+    text = f"{head}，{mid}"                  # length 65 (44+1+20)
     chunks = _split(text)
     assert len(chunks) >= 2
-    # First chunk ends with the late comma
     assert chunks[0].endswith("，"), f"first chunk={chunks[0]!r}"
 
 
 def test_comma_too_early_falls_to_hard_cut():
-    """Comma at index 4 (way before MIN_SPLIT_CHARS-1=29) must NOT be the
-    cut point. Falls to hard cut at CHUNK_MAX_CHARS=40."""
-    # comma at idx 1, then 50 no-punct chars
-    text = "嗨，" + "一" * 50
+    """Comma at index way before MIN_SPLIT_CHARS-1 must NOT be the cut
+    point. Falls to hard cut at CHUNK_MAX_CHARS."""
+    text = "嗨，" + "一" * 70                # comma at idx 1, 72 chars total
     chunks = _split(text)
-    # The early comma at idx 1 must NOT be the cut point — its position is
-    # below MIN_SPLIT_CHARS-1, so we hard-cut at CHUNK_MAX_CHARS instead.
     assert len(chunks[0]) == TtsNode.CHUNK_MAX_CHARS, (
         f"expected hard cut at {TtsNode.CHUNK_MAX_CHARS}, got len={len(chunks[0])}"
     )
-    # Reassembly preserves all characters (after stripping).
     assert "".join(chunks).replace(" ", "") == text.replace(" ", "")
 
 
@@ -129,10 +123,10 @@ def test_audio_tag_preserved_on_first_chunk():
 
 
 def test_audio_tag_prepended_to_subsequent_chunks():
-    # Body must be long enough to produce ≥ 2 chunks. Period at idx 31
-    # (≥ MIN_SPLIT_CHARS=30) triggers split, then second sentence follows.
-    body_first = "一" * 31 + "。"     # 32 chars, splits here
-    body_second = "二" * 20 + "。"    # 21 chars, second chunk
+    # Body must be long enough to produce ≥ 2 chunks under CHUNK_MAX_CHARS=60.
+    # Period at idx 46 (≥ MIN_SPLIT_CHARS=45) triggers split, then more.
+    body_first = "一" * 46 + "。"     # 47 chars, splits here
+    body_second = "二" * 30 + "。"    # 31 chars, second chunk
     text = f"[whispers] {body_first}{body_second}"
     chunks = _split(text)
     assert len(chunks) >= 2, f"expected ≥2 chunks, got {chunks}"

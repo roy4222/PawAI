@@ -12,12 +12,12 @@ _EMOJI_RE = re.compile(r"[\U0001f300-\U0001f9ff]")
 _SENTENCE_END = "。！？~~」』）)】."
 _MID_CLAUSE = "，、：；,;"
 
-# N6: TTS provider (openrouter_gemini) doesn't render `[whispers]` / `[sighs]`
-# reliably — entire sentence stays in whisper voice until the end, killing
-# demo pacing. Normalize to stable tags before TTS publish.
+# N6 revisited (5/11 night): `[whispers]` is actually GOOD for storytelling
+# and bedtime poems — user requested it back. The original N6 concern
+# (whisper voice locks entire sentence) is acceptable when the model
+# emits it intentionally for narrative content. `[sighs]` stays mapped
+# because it tends to inject silence beats that break demo pacing.
 _UNSTABLE_TAG_REPLACEMENTS = {
-    "[whispers]": "[curious]",
-    "[whisper]": "[curious]",
     "[sighs]": "[curious]",
     "[sigh]": "[curious]",
 }
@@ -59,12 +59,17 @@ def strip_emoji(text: str) -> str:
 
 
 def normalize_audio_tags(text: str) -> str:
-    """N6: replace TTS-unstable audio tags with stable ones.
+    """Replace TTS-unstable audio tags with stable ones.
 
-    `[whispers]` / `[sighs]` cause openrouter_gemini TTS to lock the entire
-    sentence into that voice mode, ruining demo pacing. Map them to `[curious]`
-    which the same provider handles cleanly. Other tags pass through untouched.
-    Case-insensitive but only matches the bracketed form (won't touch raw text).
+    Only `[sighs]` / `[sigh]` are currently normalized → `[curious]` because
+    they inject silence beats that break demo pacing. `[whispers]` USED to
+    be normalized too (N6, 5/11 morning) but was restored 5/11 night —
+    whisper voice is intentionally desirable for storytelling, bedtime
+    poems, and similar narrative content, so we let it through.
+
+    Other audio tags (`[excited]`, `[curious]`, `[playful]`, etc.) pass
+    through untouched. Match is case-insensitive but only the bracketed
+    form (won't touch raw text containing the word).
     """
     if not text:
         return text

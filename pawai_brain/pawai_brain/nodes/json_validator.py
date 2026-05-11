@@ -39,7 +39,8 @@ def json_validator(state: ConversationState) -> ConversationState:
     # Normalise reply field to .reply (validator handles both).
     reply_raw = (parsed.get("reply") or parsed.get("reply_text") or "").strip()
     reply = strip_emoji(reply_raw)
-    # N6: replace TTS-unstable audio tags ([whispers]/[sighs]) before cap/publish
+    # N6 revisited (5/11 night): only [sighs] still normalized; [whispers] kept
+    # because it's useful for storytelling/poems (user-requested).
     reply = normalize_audio_tags(reply)
     reply = cap_length(reply, _DEFAULT_MAX_REPLY_CHARS)
     parsed["reply"] = reply  # canonical key
