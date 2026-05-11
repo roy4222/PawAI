@@ -33,7 +33,6 @@ tts_cache/
 .claude/test_results/*.csv
 .claude/settings.local.json
 .claude/skills/
-!.claude/skills/
 !.claude/skills/jetson-verify/
 !.claude/skills/project-onboard/
 !.claude/skills/update-docs/
