@@ -163,7 +163,32 @@ ssh "$JETSON_HOST" 'tmux ls'
 curl -s "http://${JETSON_TAILSCALE_IP}:8080/health"
 ```
 
-## 8. Offline Fallback Cases
+## 8. PawAI CLI Quickstart
+
+For 5-person campus development, install the MVP CLI:
+
+```bash
+cd ~/newLife/elder_and_dog
+uv pip install -e tools/pawai_cli
+# or: python3 -m pip install -e tools/pawai_cli
+```
+
+Daily workflow:
+
+```bash
+pawai doctor
+pawai status
+pawai dev info gesture
+pawai jetson deploy --module gesture
+pawai demo start
+pawai logs gesture --lines 500
+pawai demo stop
+```
+
+The CLI is a thin wrapper around the existing scripts. It does not replace the
+brain/nav lane scripts and does not enforce a hard lock on the shared Go2.
+
+## 9. Offline Fallback Cases
 
 These are manual procedures for demo-day diagnosis. A one-shot `OFFLINE_MODE=1`
 wrapper is intentionally out of scope for this migration pass.
@@ -224,13 +249,14 @@ Expected: perception, gestures, pose, fallen alert, and motion still work.
 Conversation quality may degrade to short canned replies if RuleBrain is the
 only remaining LLM layer.
 
-## 9. Migration-Day Go/No-Go
+## 10. Migration-Day Go/No-Go
 
 Before leaving WSL as fallback, verify on Mac:
 
 - `ssh jetson-nano 'echo ok'`
 - `git status --short --branch` is clean
 - Claude Code loads project hooks without absolute-path errors
+- `uv pip install -e tools/pawai_cli && pawai doctor`
 - `bash .claude/skills/brain-studio-lane/scripts/start.sh demo` starts
 - Studio opens at `http://localhost:3001/studio`
 - One typed chat request reaches `/brain/chat_candidate`

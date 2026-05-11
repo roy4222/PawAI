@@ -1,0 +1,359 @@
+from __future__ import annotations
+
+import json
+import os
+import platform
+import shutil
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import click
+from dotenv import load_dotenv
+
+from . import __version__, shell
+from .modules import MODULES, existing_docs, get_module
+from .status import print_status
+
+
+def _load_env(root: Path) -> None:
+    load_dotenv(root / ".env")
+    load_dotenv(root / ".env.local", override=True)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.version_option(__version__)
+def cli() -> None:
+    """PawAI development and Jetson orchestration CLI."""
+    _load_env(shell.repo_root())
+
+
+@cli.command()
+@click.option("--verbose", is_flag=True, help="Print extra diagnostic details.")
+def doctor(verbose: bool) -> None:
+    """Validate local environment and Jetson reachability."""
+    root = shell.repo_root()
+    blocking = 0
+    warnings = 0
+
+    def ok(msg: str) -> None:
+        print(f"✓ {msg}")
+
+    def warn(msg: str) -> None:
+        nonlocal warnings
+        warnings += 1
+        print(f"⚠ {msg}")
+
+    def fail(msg: str) -> None:
+        nonlocal blocking
+        blocking += 1
+        print(f"✗ {msg}")
+
+    print("PawAI environment doctor")
+    print("────────────────────────")
+
+    py = sys.version_info
+    if py.major == 3 and py.minor >= 10:
+        ok(f"Python {platform.python_version()}")
+    else:
+        fail(f"Python {platform.python_version()} (need >=3.10)")
+
+    git = shell.run(["git", "--version"], timeout=5)
+    if git.ok:
+        status = shell.run(["git", "status", "--short"], cwd=root, timeout=8)
+        clean = "clean" if status.ok and not status.stdout.strip() else "dirty"
+        ok(f"{git.stdout.strip()} · repo {root} ({clean})")
+    else:
+        fail("git missing")
+
+    if (root / ".env.local").exists():
+        ok(".env.local present")
+    elif (root / ".env").exists():
+        warn(".env.local missing; using .env only")
+    else:
+        warn(".env.local/.env missing")
+
+    ssh = shell.run(shell.ssh_args("echo OK"), timeout=10)
+    if ssh.ok and "OK" in ssh.stdout:
+        ok(f"JETSON_HOST={shell.jetson_host()} reachable")
+    else:
+        fail(f"JETSON_HOST={shell.jetson_host()} unreachable")
+        if verbose:
+            print(ssh.stderr.strip())
+
+    tailscale = shell.run(["tailscale", "status"], timeout=6)
+    if tailscale.ok:
+        ok("Tailscale command works")
+    else:
+        warn("Tailscale command unavailable or logged out")
+
+    robot_ip = os.getenv("ROBOT_IP", "192.168.123.161")
+    ok(f"ROBOT_IP={robot_ip} (not pinged)")
+
+    for bin_name, label, critical in (
+        ("tmux", "tmux", False),
+        ("node", "Node.js", False),
+        ("pnpm", "pnpm", False),
+    ):
+        path = shutil.which(bin_name)
+        if path:
+            ok(f"{label} found")
+        elif critical:
+            fail(f"{label} missing")
+        else:
+            warn(f"{label} missing")
+
+    if os.getenv("OPENROUTER_KEY") or os.getenv("OPENROUTER_API_KEY"):
+        ok("OpenRouter key present")
+    else:
+        warn("OpenRouter key empty; cloud LLM unavailable")
+
+    print(f"\n{blocking} blocking · {warnings} warnings")
+    raise SystemExit(2 if blocking else 0)
+
+
+@cli.command()
+@click.option("--short", is_flag=True, help="Skip ROS node detail.")
+def status(short: bool) -> None:
+    """Show Jetson tmux/ROS/git state."""
+    print_status(short=short)
+
+
+@cli.group()
+def dev() -> None:
+    """Development helpers."""
+
+
+@dev.command("info")
+@click.argument("module")
+@click.option("--open", "open_doc", is_flag=True, help="Open the primary doc with $EDITOR or code.")
+def dev_info(module: str, open_doc: bool) -> None:
+    """Print module ownership, docs, tests, deploy and log hints."""
+    root = shell.repo_root()
+    try:
+        info = get_module(module)
+    except KeyError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    print(f"Module: {info.key} — {info.title}")
+    print("────────────────────────")
+    docs = existing_docs(info, root)
+    if docs:
+        print("Architecture / references:")
+        for doc in docs:
+            print(f"  {doc}")
+    else:
+        print("Architecture: not yet consolidated")
+        print("References:")
+        for doc in info.docs:
+            print(f"  {doc}")
+
+    print("\nPackages:")
+    if info.packages:
+        for pkg in info.packages:
+            print(f"  {pkg}")
+    else:
+        print("  none (non-ROS package)")
+
+    print("\nLocal tests:")
+    for test in info.tests:
+        print(f"  {test}")
+
+    print("\nDeploy:")
+    print(f"  pawai jetson deploy --module {info.key}")
+
+    print("\nLogs:")
+    print(f"  pawai logs {info.key}")
+    for target in info.logs:
+        print(f"  → {target}")
+
+    print("\nGo2 access:")
+    print(f"  {info.go2_access}")
+
+    if info.notes:
+        print("\nNotes:")
+        for note in info.notes:
+            print(f"  - {note}")
+
+    if open_doc:
+        if not docs:
+            raise click.ClickException("no existing doc path to open")
+        target = root / docs[0]
+        editor = os.getenv("EDITOR") or shutil.which("code")
+        if not editor:
+            print(f"\nOpen manually: {target}")
+            return
+        code = shell.stream([editor, str(target)])
+        raise SystemExit(code)
+
+
+@cli.group()
+def jetson() -> None:
+    """Jetson deployment helpers."""
+
+
+@jetson.command()
+@click.option("--module", "module_name", help="Module to deploy.")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
+@click.option("--no-build", is_flag=True, help="Sync only; skip colcon build.")
+@click.option("--no-sync", is_flag=True, help="Build only; skip sync.")
+@click.option("--all", "all_modules", is_flag=True, help="Build all module packages.")
+def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modules: bool) -> None:
+    """Sync whole repo to Jetson and build module package(s)."""
+    root = shell.repo_root()
+    if all_modules:
+        packages = sorted({pkg for info in MODULES.values() for pkg in info.packages})
+        module_key = "all"
+    else:
+        if not module_name:
+            raise click.UsageError("--module is required unless --all is set")
+        try:
+            info = get_module(module_name)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+        packages = list(info.packages)
+        module_key = info.key
+        if not packages and not no_build:
+            raise click.ClickException(f"module {info.key} has no colcon package; use --no-build")
+
+    st = print_status(short=True)
+    if st.has_demo and not yes:
+        if not click.confirm("Demo session is running. Deploy may require restart. Continue?", default=False):
+            raise click.Abort()
+
+    if not no_sync:
+        sync_once = Path.home() / "sync"
+        if sync_once.exists() and os.access(sync_once, os.X_OK):
+            print("Sync: ~/sync once")
+            code = shell.stream([str(sync_once), "once"], cwd=root)
+            if code != 0:
+                raise click.ClickException(f"~/sync once failed with exit code {code}")
+            sync_method = "sync-once"
+        else:
+            print("Sync: rsync whole repo")
+            dest = f"{shell.jetson_host()}:{shell.jetson_repo().rstrip('/')}/"
+            argv = [
+                "rsync",
+                "-az",
+                "--delete",
+                "--exclude=.git/",
+                "--exclude=build/",
+                "--exclude=install/",
+                "--exclude=log/",
+                "--exclude=__pycache__/",
+                "--exclude=.pytest_cache/",
+                f"{root}/",
+                dest,
+            ]
+            code = shell.stream(argv)
+            if code != 0:
+                raise click.ClickException(f"rsync failed with exit code {code}")
+            sync_method = "rsync"
+    else:
+        sync_method = "none"
+
+    if not no_build and packages:
+        pkg_arg = " ".join(packages)
+        print(f"Build: colcon build --packages-select {pkg_arg}")
+        code = shell.stream_remote(
+            f"cd {shell.jetson_repo()} && "
+            "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+            f"colcon build --packages-select {pkg_arg}"
+        )
+        if code != 0:
+            raise click.ClickException(f"colcon build failed with exit code {code}")
+
+    git_sha = shell.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, timeout=5).stdout.strip()
+    payload = {
+        "user": shell.local_identity(),
+        "module": module_key,
+        "packages": packages,
+        "ts": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+        "git_sha": git_sha,
+        "sync_method": sync_method,
+    }
+    remote_json = json.dumps(payload, ensure_ascii=False)
+    shell.run_remote(
+        f"cd {shell.jetson_repo()} && printf '%s\\n' {json.dumps(remote_json)} > .pawai-last-deploy",
+        timeout=8,
+    )
+    print("Deploy complete.")
+    if st.has_demo:
+        print("Tip: restart demo when safe: pawai demo stop && pawai demo start")
+
+
+@cli.group()
+def demo() -> None:
+    """Demo lane controls."""
+
+
+@demo.command("start")
+@click.option("--no-studio", is_flag=True, help="Start full mode without local Studio overlay.")
+@click.option("--brain-only", is_flag=True, help="Start minimal brain stack only.")
+@click.option("-y", "--yes", is_flag=True, help="Skip prompt if demo is already running.")
+def demo_start(no_studio: bool, brain_only: bool, yes: bool) -> None:
+    """Start brain-studio-lane."""
+    root = shell.repo_root()
+    st = print_status(short=True)
+    if st.has_demo and not yes:
+        if click.confirm("Demo already running. Stop it before starting?", default=True):
+            shell.stream(["bash", ".claude/skills/brain-studio-lane/scripts/cleanup.sh"], cwd=root)
+        else:
+            raise click.Abort()
+
+    if brain_only:
+        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "minimal"]
+    elif no_studio:
+        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "full"]
+    else:
+        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "demo"]
+    raise SystemExit(shell.stream(args, cwd=root))
+
+
+@demo.command("stop")
+def demo_stop() -> None:
+    """Stop brain-studio-lane."""
+    root = shell.repo_root()
+    raise SystemExit(shell.stream(["bash", ".claude/skills/brain-studio-lane/scripts/cleanup.sh"], cwd=root))
+
+
+@cli.command()
+@click.argument("module")
+@click.option("--lines", default=500, show_default=True, help="Lines to capture from tmux pane.")
+def logs(module: str, lines: int) -> None:
+    """Capture Jetson tmux logs for a module."""
+    if module == "all":
+        targets = [
+            "demo:face",
+            "demo:vision",
+            "demo:object",
+            "demo:asr",
+            "demo:tts",
+            "demo:llm",
+            "demo:executive",
+            "demo:gateway",
+        ]
+    else:
+        try:
+            targets = list(get_module(module).logs)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    for target in targets:
+        if target.startswith("local:"):
+            path = target.removeprefix("local:")
+            print(f"===== {target} =====")
+            res = shell.run(["tail", "-n", str(lines), path], timeout=5)
+            print(res.stdout or res.stderr)
+            continue
+        print(f"===== {target} =====")
+        cmd = f"tmux capture-pane -p -t {target} -S -{int(lines)} 2>/dev/null || true"
+        res = shell.run_remote(cmd, timeout=12)
+        print(res.stdout.rstrip() or "(no output)")
+
+    print("\nTip: interactive follow:")
+    print(f"  ssh {shell.jetson_host()} 'tmux attach -t demo'")
+
+
+if __name__ == "__main__":
+    cli()
