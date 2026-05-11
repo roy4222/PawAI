@@ -125,7 +125,11 @@ def classify_pose(
     #    to bending. This guard does NOT trigger when bbox_ratio > 1.0
     #    (truly horizontal silhouette) so real fallen-with-spread-arms still
     #    classifies correctly.
-    if trunk_angle > 60 and 0.0 <= vertical_ratio < 0.4:
+    # N7 (2026-05-11): user 反饋「身體接觸地面附近就要觸發跌倒」。vertical_ratio
+    # 上界 0.4→0.45 — 蜷曲跌倒（彎膝、側躺）torso_len 縮短後 vertical_ratio
+    # 偏高（常 0.35-0.45），原 0.4 卡掉真實跌倒；放寬至 0.45 接住這類姿勢，
+    # 同時 ankle_on_floor + torso_visibility 仍守住「坐著」誤判。
+    if trunk_angle > 60 and 0.0 <= vertical_ratio < 0.45:
         # Per-keypoint sanity gate: MediaPipe at awkward viewpoints (akimbo,
         # half-kneel, partial body in frame) often produces hallucinated
         # shoulder/hip positions where shoulders read BELOW hips. We require
@@ -161,10 +165,13 @@ def classify_pose(
             # which we want to alert on. Skip when image_height is unknown
             # (preserve old behaviour for legacy callers / unit tests that
             # don't pass it).
+            # N7 (2026-05-11): floor gate 0.7→0.6 — 遠距 / 上半部入鏡時，
+            # 真實跌倒的腳踝 Y 常落在 0.6-0.7 之間，原 0.7 過嚴；放寬到 0.6
+            # 仍保有「靠近地面」的明確信號（仍 1.5×bbox + visibility 守誤判）。
             ankle_on_floor = True
             if image_height is not None and image_height > 0:
                 ankle_y_ratio = float(ankle[1]) / float(image_height)
-                ankle_on_floor = ankle_y_ratio > 0.7
+                ankle_on_floor = ankle_y_ratio > 0.6
             if not is_deep_bending and ankle_on_floor:
                 bonus = 0.05 if (bbox_ratio is not None and bbox_ratio > 1.0) else 0.0
                 return "fallen", float(min(avg_score + bonus, 1.0))
