@@ -497,8 +497,13 @@ class BrainNode(Node):
             # Reuse the gesture-confirm machinery — LLM's chat_reply already
             # asked the user to OK, so we don't emit an extra say_canned hint
             # (avoids "好啊我搖一下 + 比 OK 我就做 wiggle" double prompt).
+            # N8: pass current gesture so PendingConfirm requires release first
+            # when user's hand is already at OK (prevents instant trigger).
+            with self._lock:
+                cur_gesture = self._state.current_gesture
             self._pending_confirm.request_confirm(
-                proposed_skill, proposed_args, time.time()
+                proposed_skill, proposed_args, time.time(),
+                current_gesture=cur_gesture,
             )
             self.get_logger().info(
                 f"PendingConfirm requested via llm_proposal skill={proposed_skill}"
@@ -597,25 +602,37 @@ class BrainNode(Node):
         if self._check_dedup("gesture", gesture):
             return
 
-        # N6: conversation-active gate — wave / fist / index don't fire
+        # N6/N8: conversation-active gate — wave / fist / index don't fire
         # mid-conversation. Palm (safety) bypasses this gate.
+        # Two independent reasons to block:
+        #   1. recent chat input (speech/text within 30s)
+        #   2. PawAI is currently speaking (tts_playing)
+        # Either suffices — both are defended against because the C2 demo
+        # log shows multiple gestures arriving during/after LLM reply, and
+        # the original `last_chat_input_ts` lone gate failed (most likely
+        # stale-build on Jetson but adding tts_playing as belt-and-suspenders).
         if gesture in self._CONVERSATION_GATED_GESTURES:
             with self._lock:
                 last_chat = self._last_chat_input_ts
             since_chat = time.time() - last_chat
-            if last_chat > 0.0 and since_chat < self._CONVERSATION_GATE_S:
+            chat_active = last_chat > 0.0 and since_chat < self._CONVERSATION_GATE_S
+            tts_playing = bool(self._world.snapshot().tts_playing)
+            if chat_active or tts_playing:
+                reason = []
+                if chat_active:
+                    reason.append(f"chat_{since_chat:.1f}s")
+                if tts_playing:
+                    reason.append("tts_playing")
+                reason_str = ",".join(reason)
                 self.get_logger().info(
-                    f"[gate] gesture={gesture} suppressed "
-                    f"(chat active {since_chat:.1f}s ago < {self._CONVERSATION_GATE_S}s)"
+                    f"[gate] gesture={gesture} suppressed ({reason_str})"
                 )
-                # N6 review fix: also emit trace so Studio Trace Drawer / external
-                # observers see the suppression, not only the local ROS logger.
                 self._emit_trace(
                     session_id=f"gesture-{int(time.time())}",
                     engine="brain_node",
                     stage="gesture_gate",
                     status="blocked",
-                    detail=f"{gesture}:conversation_active_{since_chat:.1f}s",
+                    detail=f"{gesture}:{reason_str}",
                 )
                 return
 

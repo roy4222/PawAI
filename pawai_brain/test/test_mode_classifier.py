@@ -22,7 +22,10 @@ from pawai_brain.nodes.mode_classifier import classify_mode
     ("介紹一下 PawAI", "self_intro_request"),
     ("我現在在跟教授 demo，你自我介紹一下自己", "self_intro_request"),
     ("跟教授介紹一下", "self_intro_request"),
-    ("跟大家打個招呼", "self_intro_request"),
+    # N8 (2026-05-11): 「跟大家/教授打招呼」現在走 chat path（讓 LLM 自然
+    # 問候 + wave_hello），不再強迫走 5 段 self_intro。
+    ("跟大家打個招呼", "chat"),
+    ("跟教授打個招呼", "chat"),
     ("詳細介紹一下你自己", "self_intro_request"),
     ("介紹一下你的功能", "self_intro_request"),
     ("完整介紹", "self_intro_request"),

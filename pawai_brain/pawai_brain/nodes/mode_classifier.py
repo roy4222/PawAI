@@ -36,7 +36,9 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
         # Order matters: most specific first.
         r"自我介紹"
         r"|介紹.{0,3}(自己|你自己|妳自己|PawAI|paw\s*ai)"
-        r"|跟\s*(教授|大家|觀眾|評審).{0,5}(介紹|打.*招呼|問好)"
+        # N8 (2026-05-11): 「跟教授打招呼」應該走 chat → wave_hello path，
+        # 不是 5 段完整自介。從此條 alternative 拿掉 "打.*招呼" / "問好"，只留 "介紹"。
+        r"|跟\s*(教授|大家|觀眾|評審).{0,5}介紹"
         r"|(現在|目前|這邊).{0,8}demo.{0,8}(介紹|展示)"
         r"|(demo|展示).{0,8}你(自己|的)?"
         r"|介紹一下你的(功能|能力|專案)"

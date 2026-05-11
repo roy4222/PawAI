@@ -180,3 +180,62 @@ def test_custom_ok_gesture_works():
     pc.tick(now=100.0, current_gesture="thumbs_up")
     out = pc.tick(now=100.5, current_gesture="thumbs_up")
     assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+# ---------------------------------------------------------------------------
+# N8 (2026-05-11): must_release_ok — guard against hand already at OK at the
+# moment of request_confirm. Without this, stretch/wiggle fires immediately
+# after the LLM proposes them because user's hand was already in OK position.
+# ---------------------------------------------------------------------------
+
+
+def test_request_with_hand_already_at_ok_requires_release(pc):
+    """If hand is at OK when request fires, must transition through non-OK
+    before any OK can count toward the stable window."""
+    # Hand already at OK at request time
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # Tick with continued OK — should NOT confirm even after stable window
+    out = pc.tick(now=0.6, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.PENDING
+
+
+def test_release_then_re_ok_does_confirm(pc):
+    """After release (non-OK gesture), next OK counts normally."""
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # User releases (no gesture)
+    pc.tick(now=0.1, current_gesture=None)
+    # Now re-issue OK, should count
+    pc.tick(now=0.2, current_gesture="ok")
+    out = pc.tick(now=0.8, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+    assert out.skill == "wiggle"
+
+
+def test_request_with_non_ok_hand_does_not_block(pc):
+    """Backward compat: request with hand NOT at OK (or unknown) — old behaviour."""
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="thumbs_up")
+    # First OK starts streak
+    pc.tick(now=0.1, current_gesture="ok")
+    out = pc.tick(now=0.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+def test_request_with_no_current_gesture_arg_works(pc):
+    """Backward compat: callers that don't pass current_gesture get the old path."""
+    pc.request_confirm("wiggle", {}, now=0.0)
+    pc.tick(now=0.1, current_gesture="ok")
+    out = pc.tick(now=0.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+def test_must_release_resets_on_subsequent_request(pc):
+    """A fresh request_confirm should re-evaluate must_release_ok."""
+    # First request with hand at OK
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # User cancels by re-requesting WITHOUT hand at OK
+    pc.request_confirm("stretch", {}, now=1.0, current_gesture=None)
+    # Now OK should count normally
+    pc.tick(now=1.1, current_gesture="ok")
+    out = pc.tick(now=1.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+    assert out.skill == "stretch"

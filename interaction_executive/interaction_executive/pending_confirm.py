@@ -106,8 +106,17 @@ class PendingConfirm:
         skill: str,
         args: dict[str, Any] | None,
         now: float,
+        current_gesture: str | None = None,
     ) -> ConfirmOutcome:
         """Enter Pending state. Replaces any prior pending request.
+
+        N8 (2026-05-11): if user's hand is already in OK position at the
+        moment of request (which happens often after voice commands — hand
+        naturally drifts to a relaxed pose that classifier reads as OK),
+        we MUST require a transition through non-OK before counting
+        toward the stable window. Without this, stretch / wiggle fires
+        immediately after the LLM says "比 OK 我就動" because the hand
+        was already there.
 
         Returns ConfirmOutcome.pending().
         """
@@ -116,6 +125,10 @@ class PendingConfirm:
         self._args = dict(args or {})
         self._started_at = float(now)
         self._ok_stable_since = None
+        # If hand is already at OK, gate-out until user releases.
+        self._must_release_ok = (
+            _normalize_gesture(current_gesture) == self.ok_gesture
+        )
         return ConfirmOutcome.pending()
 
     def cancel(self, reason: str = "manual") -> ConfirmOutcome:
@@ -143,6 +156,10 @@ class PendingConfirm:
         gesture = _normalize_gesture(current_gesture)
 
         if gesture == self.ok_gesture:
+            # N8: if we required a release first (hand was at OK at request
+            # time), stay pending until user actually moves away from OK.
+            if self._must_release_ok:
+                return ConfirmOutcome.pending()
             if self._ok_stable_since is None:
                 self._ok_stable_since = float(now)
             if now - self._ok_stable_since >= self.stable_s:
@@ -159,6 +176,8 @@ class PendingConfirm:
         # mis-classification kills 5/8 confirm flow. Timeout (5s) is the only
         # cancel path — caller can re-emit "搖一下" to restart if user gives up.
         self._ok_stable_since = None
+        # N8: released — next OK can count toward stable window.
+        self._must_release_ok = False
         return ConfirmOutcome.pending()
 
     # ---- internal --------------------------------------------------------
@@ -169,3 +188,4 @@ class PendingConfirm:
         self._args: dict[str, Any] = {}
         self._started_at = 0.0
         self._ok_stable_since: float | None = None
+        self._must_release_ok: bool = False
