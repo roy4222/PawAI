@@ -161,36 +161,70 @@ Recent freeze: 2026-05-11 N7 (vote_frames 3→5, stable_s 0.5→0.3)
 
 **8 個 module 表**（寫進 `modules.py` 常數）：
 
-| Module | Package | Architecture md | Logs target | Go2 access |
+| Module | Package | Docs（primary）| Logs target | Go2 access |
 |--------|---------|----------------|------|---------|
-| `face` | `face_perception` | `face.md` | `demo:face` | none |
-| `speech` | `speech_processor` | `speech.md` | `demo:asr` / `demo:tts` | TTS via Megaphone |
-| `gesture` | `vision_perception` | `gesture.md` | `demo:vision` | indirect (via skills) |
-| `pose` | `vision_perception` | `pose.md` | `demo:vision` | fallen_alert → stop_move |
-| `object` | `object_perception` | `object.md` | `demo:object` | none |
-| `nav` | `go2_robot_sdk` | (nav 文件) | `demo:go2` | **direct motion** |
-| `brain` | `pawai_brain` | `brain.md` | `demo:llm` / `pawai_brain:exec` | via Executive |
-| `studio` | `pawai-studio` | (studio 文件) | local `npm run dev` | none |
+| `face` | `face_perception` | `docs/.../architecture/0511/face.md` | `demo:face` | none |
+| `speech` | `speech_processor` | `docs/.../architecture/0511/speech.md` | `demo:asr` / `demo:tts` | TTS via Megaphone |
+| `gesture` | `vision_perception` | `docs/.../architecture/0511/gesture.md` | `demo:vision` | indirect (via skills) |
+| `pose` | `vision_perception` | `docs/.../architecture/0511/pose.md` | `demo:vision` | fallen_alert → stop_move |
+| `object` | `object_perception` | `docs/.../architecture/0511/object.md` | `demo:object` | none |
+| `nav` | `go2_robot_sdk` | **References fallback** | `demo:go2` | **direct motion** |
+| `brain` | `pawai_brain` | `docs/.../architecture/0511/brain.md` | `demo:llm` / `pawai_brain:exec` | via Executive |
+| `studio` | `pawai-studio` | **References fallback** | local `npm run dev` | none |
+
+**References fallback**（nav / studio 沒有 0511 freeze 版的 architecture md，先用既有文件代替；長篇版 post-demo 再補）：
+
+- `nav`：
+  - `.claude/skills/nav-avoidance-lane/SKILL.md`
+  - `docs/navigation/CLAUDE.md`
+
+- `studio`：
+  - `.claude/skills/brain-studio-lane/SKILL.md`
+  - `.claude/skills/brain-studio-lane/references/runtime-topology.md`
+  - `docs/pawai-brain/studio/README.md`（若存在）
+
+`dev info nav` 輸出範例（fallback 形態）：
+```
+Module: nav — 導航避障
+──────────────────────
+Architecture: not yet consolidated (post-demo follow-up)
+
+References:
+  .claude/skills/nav-avoidance-lane/SKILL.md
+  docs/navigation/CLAUDE.md
+
+Packages:
+  go2_robot_sdk
+
+...
+```
 
 ### 3.4 `pawai jetson deploy --module <module>`
 
-把該 module 對應的 package 推到 Jetson 並 colcon build。**部署前先呼 status check 提醒。**
+把整個 repo 同步到 Jetson（whole-repo sync），但只 colcon build 該 module 對應的 package。**部署前 prompt 提醒 demo 在跑，但不阻擋。**
+
+**為什麼是 whole-repo sync 而非 per-package**：ROS2 workspace 有 cross-package 依賴（`go2_interfaces` message def、共用 personas、frontend contracts、scripts），單 package sync 很容易漏。Sync scope 大、build scope 小，最安全又最快。
 
 **流程**：
-1. 內部呼 `pawai status`（簡短版），警告 demo session 在跑
-2. 若有 demo session：問「現在 deploy 會需要重啟 demo，繼續？(y/N)」
-3. rsync 該 package 上 Jetson（`rsync -avz --delete <package>/ jetson@<host>:$JETSON_REPO/<package>/`）
-4. SSH 上 Jetson 跑 `colcon build --packages-select <package> && source install/setup.zsh`
+1. 內部呼 `pawai status`（簡短版），warn demo session 在跑
+2. 若有 demo session：prompt「現在 deploy 會需要重啟 demo，繼續？(y/N)」；`-y` / `--yes` 跳過
+3. **Sync**（whole repo）：
+   - 優先呼叫 `~/sync once`（如果 user 有設這個 wrapper）
+   - 不存在才 fallback `rsync -avz --delete --exclude=build --exclude=install --exclude=log --exclude=.git . $JETSON_HOST:$JETSON_REPO/`
+4. **Build**（package-scoped）：
+   - SSH 上 Jetson 跑 `cd $JETSON_REPO && colcon build --packages-select <module-packages> && source install/setup.zsh`
+   - `<module-packages>` 從 `modules.py` 查（多數 module 對 1 package，但 vision_perception 同時對應 gesture/pose/object 三個 module）
 5. 寫 `$JETSON_REPO/.pawai-last-deploy`：
    ```json
-   {"user": "roy@mac", "module": "gesture", "package": "vision_perception", "ts": "2026-05-12T19:43:00+08:00", "git_sha": "39c2e48"}
+   {"user": "roy@mac", "module": "gesture", "package": "vision_perception", "ts": "2026-05-12T19:43:00+08:00", "git_sha": "39c2e48", "sync_method": "sync-once"}
    ```
 6. 若 demo 在跑 → 印「重啟提示：`pawai demo stop && pawai demo start`」
 
 **Flag**：
-- `--no-build`：只 rsync 不 colcon
-- `--no-confirm`：跳過 demo session 確認（CI / 信任場景）
-- `--all`：所有 8 個 package（小心用，~3-5 分鐘）
+- `-y` / `--yes`：跳過所有 prompt（CI / 自負其責場景）
+- `--no-build`：只 sync 不 colcon
+- `--no-sync`：只 colcon 不 sync（已知 code 同步，只想重 build）
+- `--all`：所有 8 個 module 對應的 package 都 build（小心，~3-5 分鐘）
 
 ### 3.5 `pawai demo start|stop`
 
@@ -209,16 +243,26 @@ Recent freeze: 2026-05-11 N7 (vote_frames 3→5, stable_s 0.5→0.3)
 - `--no-studio`：只跑 brain + perception，不開 Studio gateway（適合不需要前端的人）
 - `--brain-only`：只跑 brain（最小開銷）
 
-### 3.6 `pawai logs <module>|all [--follow]`
+### 3.6 `pawai logs <module>|all [--lines N]`
 
-把 tmux pane log 撈到本機。
+一次性把 tmux pane log 撈到本機。**MVP 不做 `--follow`**（polling diff 容易吃掉 1.5 天 buffer）。
 
 **實作**：
 - `pawai logs gesture` → `ssh $JETSON_HOST 'tmux capture-pane -p -t demo:vision -S -2000'`
-- `pawai logs all` → 撈所有 demo session 的 pane（5 個主要的）
-- `--follow`：類似 `tail -f`，每 2 秒 capture 一次 diff
+- `pawai logs gesture --lines 500` → `-S -500`（從尾端往回 500 行）
+- `pawai logs all` → 撈所有 demo session 主要 pane（face / vision / object / asr / tts / llm / executive）並各自加 header
+
+**想 follow 的人**：CLI 在結尾印原生指令，使用者自己決定要不要開：
+```
+Tip: to follow logs interactively, run on the Jetson terminal:
+  ssh $JETSON_HOST 'tmux attach -t demo'
+or watch this single pane:
+  ssh $JETSON_HOST 'tmux capture-pane -p -t demo:vision -S -2000'
+```
 
 **Module → tmux target 對應**：見 §3.3 表。
+
+**Phase 2** 才做：`--follow` polling + 高亮 ERROR / WARN line。
 
 ---
 
@@ -295,13 +339,17 @@ CLI 啟動時 `python-dotenv.load_dotenv()` 讀順序：
 ### Day 1 下午（4h）— Jetson 互動
 - [ ] `shell.py` SSH helper（`run_remote()` + error 處理）
 - [ ] `pawai status`（含 tmux ls + ros2 node list + git status + last-deploy）
-- [ ] `pawai logs <module>`（capture-pane）
-- [ ] `pawai logs --follow`（polling 版）
+- [ ] `pawai logs <module>`（一次性 capture-pane + `--lines N`）
+- [ ] `pawai logs all`（多 pane 合併 + header）
 
 ### Day 2 上午（3h）— Deploy + Demo
-- [ ] `pawai jetson deploy --module X`（rsync + colcon + last-deploy 寫入）
+- [ ] `pawai jetson deploy --module X`：
+  - whole-repo sync（優先 `~/sync once`，否則 rsync 排除 build/install/log/.git）
+  - package-scoped colcon build（從 `modules.py` 查 packages）
+  - 寫 `.pawai-last-deploy`
+- [ ] `-y` / `--no-build` / `--no-sync` / `--all` flags
 - [ ] `pawai demo start` / `pawai demo stop`（包既有 bash）
-- [ ] `--no-confirm` / `--no-studio` / `--brain-only` flags
+- [ ] `--no-studio` / `--brain-only` flags
 
 ### Day 2 下午（3h）— 驗收 + 5 人 onboard
 - [ ] WSL 端 5 個指令全跑一遍綠
@@ -354,10 +402,13 @@ pawai demo stop            # 結束（看 status 沒人接力的話）
 
 | 指令 | 描述 | 預估 |
 |------|------|:----:|
+| `pawai logs <module> --follow` | polling diff + ERROR/WARN 高亮 | 0.5 天 |
 | `pawai dev mock <module> [--scenario X]` | 每個 module 真起 mock launch | 1-1.5 天 |
 | `pawai fallback smoke` | 三個離線 case 自動跑 + 出報告 | 0.5 天 |
-| `pawai sync once` | rsync wrapper（不限 module）| 0.3 天 |
-| `pawai jetson build <pkg>` | 只 build 不 deploy | 0.3 天 |
+| `pawai sync once` | 獨立 sync wrapper（不綁 deploy）| 0.3 天 |
+| `pawai jetson build <pkg>` | 跨 module 任意 package build | 0.3 天 |
+| Per-package rsync mode | `deploy --scope package` 只同步該 pkg 目錄 | 0.3 天 |
+| `nav.md` / `studio.md` 長篇 architecture | post-demo 補完 | 1 天 |
 | `pawai env doctor` | 列所有 env + .env 衝突檢查 | 0.5 天 |
 | Tab completion | bash/zsh/fish 自動補全 | 0.5 天 |
 | Telemetry | 5 人使用情況收集 | 1 天 |
@@ -372,7 +423,8 @@ pawai demo stop            # 結束（看 status 沒人接力的話）
 - [ ] `pawai dev info` 8 個 module 都列得出
 - [ ] `pawai dev info gesture --open` 開到 architecture md
 - [ ] `pawai status` 撈到 Jetson tmux + ros2 node + git
-- [ ] `pawai jetson deploy --module brain` 跑通，看到 `.pawai-last-deploy` 寫入
+- [ ] `pawai jetson deploy --module brain` 跑通：whole-repo sync 完 + 只 build `pawai_brain` + `.pawai-last-deploy` 寫入
+- [ ] `pawai jetson deploy --module gesture --no-sync` 跑通（只 build 不 sync）
 - [ ] `pawai demo start` → `pawai logs brain` 看到 conversation_graph_node ready → `pawai demo stop`
 
 ### 10.2 5 人 onboard（5/14 中午）
