@@ -91,6 +91,19 @@ def test_classify_mode_scene_query_does_not_collide_with_capability():
     # (Currently no such ambiguous pattern in capability regex — safe.)
 
 
+def test_classify_mode_scene_query_does_not_eat_planning_questions():
+    """N5.1 review: '你覺得我...' must NOT auto-route to scene_query unless the
+    phrasing is genuinely about the user's current scene/pose/action.
+    Capability / planning / opinion questions should fall to chat (default)."""
+    assert classify_mode("你覺得我該展示哪個功能") != "scene_query"
+    assert classify_mode("你覺得我說得對嗎") != "scene_query"
+    assert classify_mode("你覺得我這個想法怎樣") != "scene_query"
+    # But scene-specific phrasings still route to scene_query:
+    assert classify_mode("你覺得我在做什麼") == "scene_query"
+    assert classify_mode("你覺得我看起來累不累") == "scene_query"
+    assert classify_mode("你覺得我站著舒服嗎") == "scene_query"
+
+
 def test_classify_mode_returns_string():
     result = classify_mode("嗨")
     assert isinstance(result, str)
