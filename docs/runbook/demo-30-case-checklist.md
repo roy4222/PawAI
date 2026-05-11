@@ -103,7 +103,25 @@
 
 ---
 
-## 「上 Mac 後」要重做的 smoke（最低）
+## N8 後 8 case regression（搬 Mac 前必跑）
+
+5/11 night N8 修了 3 個 bug — 跑這 8 題確認沒 regression，**全綠才能搬 Mac**：
+
+| # | 輸入 / 動作 | 預期結果 | 修了哪個 bug |
+|---|------|---------|---|
+| R1 | 「自我介紹」 | 100-180 字完整自介（host 模式） | (regression baseline) |
+| R2 | 「跟教授打個招呼」 | **不再走完整自介**；改 LLM 用 wave_hello 風格短回應 | **N8 bug #2** |
+| R3 | 「你會什麼動作？」 | 列具體 skill 名 | (regression baseline) |
+| R4 | 語音「伸個懶腰」（**先放鬆手**，不在 OK 位置） | LLM 提案 stretch + 講「比 OK」+ **stretch 不立即執行** | **N8 bug #3** |
+| R5 | 接 R4，**比 OK 持 0.5s+** | stretch 真的執行（「[curious] 伸個懶腰～」+ motion） | **N8 bug #3** |
+| R6 | 對話「你會什麼？」LLM reply 中，**立刻比 wave** | wave 被擋；trace `gesture_gate blocked: wave:chat_X.Xs,tts_playing` | **N8 bug #1** |
+| R7 | 對話「你好」LLM reply 中，**立刻比 fist** | fist 被擋；trace 同上格式 | **N8 bug #1** |
+| R8 | 「講個故事」 | 故事內**沒有 `[whispers]`** 整段語氣鎖 | (N6 confirm) |
+
+通過：8/8 全綠 → 搬 Mac
+失敗：對應 bug 重開 N9
+
+
 
 搬 Mac 後跑這 5 題確認跨平台無 regression：
 - A1（自介）
