@@ -21,6 +21,52 @@ def _load_env(root: Path) -> None:
     load_dotenv(root / ".env.local", override=True)
 
 
+def _install_hint_map() -> dict[str, str]:
+    """Per-binary install hint, platform-aware.
+
+    Ubuntu/Debian's Node package is `nodejs` (binary is still `node`), and
+    `npm` is a separate package — using `apt install node` lands the user on
+    the unrelated `node` Amateur Packet Radio package, which is the wrong
+    rabbit hole.
+    """
+    if platform.system() == "Darwin":
+        return {
+            "tmux": "brew install tmux",
+            "node": "brew install node",
+            "npm": "brew install node  # ships npm",
+        }
+    # Linux/WSL — default to apt syntax (most common). Other distros: adapt.
+    return {
+        "tmux": "sudo apt install tmux",
+        "node": "sudo apt install nodejs npm",
+        "npm": "sudo apt install nodejs npm",
+    }
+
+
+def _ssh_config_has_host(cfg_text: str, host: str) -> bool:
+    """Return True if ~/.ssh/config defines a Host block matching `host` exactly.
+
+    Handles:
+      - leading whitespace before `Host`
+      - case-insensitive `Host` keyword
+      - multi-host lines: `Host alpha beta gamma`
+      - wildcard patterns are NOT treated as matches (we want an explicit alias)
+      - commented-out `Host` lines are skipped
+    """
+    target = host.strip()
+    for raw in cfg_text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2 or parts[0].lower() != "host":
+            continue
+        for pattern in parts[1:]:
+            if pattern == target:
+                return True
+    return False
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__)
 def cli() -> None:
@@ -70,14 +116,26 @@ def doctor(verbose: bool) -> None:
         ok(".env.local present")
     elif (root / ".env").exists():
         warn(".env.local missing; using .env only")
+        print("  → cp .env.local.example .env.local  (then fill JETSON_TAILSCALE_IP / OPENROUTER_KEY)")
     else:
         warn(".env.local/.env missing")
+        print("  → cp .env.local.example .env.local")
 
     ssh = shell.run(shell.ssh_args("echo OK"), timeout=10)
     if ssh.ok and "OK" in ssh.stdout:
         ok(f"JETSON_HOST={shell.jetson_host()} reachable")
     else:
         fail(f"JETSON_HOST={shell.jetson_host()} unreachable")
+        ssh_cfg = Path.home() / ".ssh" / "config"
+        host = shell.jetson_host()
+        if ssh_cfg.exists():
+            has_host_block = _ssh_config_has_host(ssh_cfg.read_text(), host)
+            if not has_host_block:
+                print(f"  → no `Host {host}` block in ~/.ssh/config")
+                print("    add one pointing at the Jetson Tailscale IP, or set JETSON_HOST in .env.local")
+            else:
+                print(f"  → ssh-copy-id {host}   # if key not yet authorized")
+                print("  → tailscale up         # if Tailscale offline")
         if verbose:
             print(ssh.stderr.strip())
 
@@ -86,27 +144,49 @@ def doctor(verbose: bool) -> None:
         ok("Tailscale command works")
     else:
         warn("Tailscale command unavailable or logged out")
+        if platform.system() == "Darwin":
+            print("  → open -a Tailscale  (or `brew install --cask tailscale` if missing)")
 
     robot_ip = os.getenv("ROBOT_IP", "192.168.123.161")
     ok(f"ROBOT_IP={robot_ip} (not pinged)")
 
+    install_hint = _install_hint_map()
     for bin_name, label, critical in (
         ("tmux", "tmux", False),
         ("node", "Node.js", False),
-        ("pnpm", "pnpm", False),
+        ("npm", "npm", False),
     ):
         path = shutil.which(bin_name)
         if path:
             ok(f"{label} found")
-        elif critical:
+            continue
+        if critical:
             fail(f"{label} missing")
         else:
             warn(f"{label} missing")
+        hint = install_hint.get(bin_name)
+        if hint:
+            print(f"  → {hint}")
+
+    studio_fe = root / "pawai-studio" / "frontend"
+    if (studio_fe / "node_modules").exists():
+        ok("Studio frontend node_modules present")
+    else:
+        warn("Studio frontend node_modules missing")
+        print(f"  → cd {studio_fe} && npm install   (or let `pawai demo start` auto-install)")
+
+    if (studio_fe / ".env.local").exists():
+        ok("Studio frontend .env.local present")
+    else:
+        warn("Studio frontend .env.local missing")
+        print(f"  → cp {studio_fe}/.env.local.example {studio_fe}/.env.local")
+        print("    (`pawai demo start` will auto-generate from JETSON_TAILSCALE_IP)")
 
     if os.getenv("OPENROUTER_KEY") or os.getenv("OPENROUTER_API_KEY"):
         ok("OpenRouter key present")
     else:
         warn("OpenRouter key empty; cloud LLM unavailable")
+        print("  → set OPENROUTER_KEY in .env.local  (https://openrouter.ai/keys)")
 
     print(f"\n{blocking} blocking · {warnings} warnings")
     raise SystemExit(2 if blocking else 0)
@@ -242,6 +322,12 @@ def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modul
                 "--exclude=log/",
                 "--exclude=__pycache__/",
                 "--exclude=.pytest_cache/",
+                "--exclude=.venv/",
+                "--exclude=node_modules/",
+                "--exclude=.next/",
+                "--exclude=.ruff_cache/",
+                "--exclude=.mypy_cache/",
+                "--exclude=.DS_Store",
                 f"{root}/",
                 dest,
             ]

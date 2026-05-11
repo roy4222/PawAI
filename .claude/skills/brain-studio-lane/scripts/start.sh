@@ -149,18 +149,54 @@ if [ "$STUDIO" = "1" ]; then
   # 往上 4 層才到 repo root（scripts → brain-studio-lane → skills → .claude → repo）
   REPO_ROOT="$(cd "$SKILL_DIR/../../../.." && pwd)"
   FRONTEND_DIR="$REPO_ROOT/pawai-studio/frontend"
-  if [ -d "$FRONTEND_DIR/node_modules" ]; then
-    pkill -f "next.*dev" 2>/dev/null || true
-    sleep 1
-    cd "$FRONTEND_DIR"
-    NEXT_PUBLIC_GATEWAY_URL="http://$JETSON_TAILSCALE_IP:8080" \
-      nohup npm run dev > /tmp/studio_frontend.log 2>&1 &
-    disown
-    sleep 8
-    PORT=$(grep -oE 'http://localhost:[0-9]+' /tmp/studio_frontend.log | head -1 | grep -oE '[0-9]+$' || echo "3000")
-    echo "    ✅ Frontend at http://localhost:$PORT/studio"
+
+  # 1) .env.local 不存在 → 自動從 example 生（替換 Tailscale IP）
+  if [ ! -f "$FRONTEND_DIR/.env.local" ]; then
+    if [ -f "$FRONTEND_DIR/.env.local.example" ]; then
+      sed "s|NEXT_PUBLIC_GATEWAY_HOST=.*|NEXT_PUBLIC_GATEWAY_HOST=$JETSON_TAILSCALE_IP|" \
+        "$FRONTEND_DIR/.env.local.example" > "$FRONTEND_DIR/.env.local"
+      echo "    ✅ 寫入 $FRONTEND_DIR/.env.local (gateway=$JETSON_TAILSCALE_IP)"
+    fi
+  fi
+
+  # 2) node_modules 不存在 → 主動跑 npm install（block 直到完成）
+  if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+    echo "    ⏳ $FRONTEND_DIR/node_modules 不存在，跑 npm install（首次約 2 分鐘）..."
+    if ! (cd "$FRONTEND_DIR" && npm install --no-audit --no-fund > /tmp/studio_npm_install.log 2>&1); then
+      echo "    ❌ npm install 失敗，看 /tmp/studio_npm_install.log"
+      echo "    ⚠️  Jetson stack 已啟動，但 Studio frontend 未起 — 修完 npm install 後可單獨 rerun"
+      exit 1
+    fi
+    echo "    ✅ npm install 完成"
+  fi
+
+  # 3) 起 frontend（用 node_modules/.bin/next 直接呼叫，繞 npm/pnpm wrapper 的 pre-hook）
+  pkill -f "next.*dev" 2>/dev/null || true
+  sleep 1
+  cd "$FRONTEND_DIR"
+  if [ ! -x "$FRONTEND_DIR/node_modules/.bin/next" ]; then
+    echo "    ❌ node_modules/.bin/next 不存在（install 不完整？）"
+    exit 1
+  fi
+  NEXT_PUBLIC_GATEWAY_URL="http://$JETSON_TAILSCALE_IP:8080" \
+    nohup "$FRONTEND_DIR/node_modules/.bin/next" dev > /tmp/studio_frontend.log 2>&1 &
+  disown
+  sleep 8
+  PORT=$(grep -oE 'http://localhost:[0-9]+' /tmp/studio_frontend.log | head -1 | grep -oE '[0-9]+$' || echo "3000")
+
+  # 4) Healthcheck from local — gateway 必須從 Mac browser 端可達
+  GW_LOCAL=$(curl -s --max-time 3 "http://$JETSON_TAILSCALE_IP:8080/health" 2>/dev/null || echo "")
+  if echo "$GW_LOCAL" | grep -q '"status":"ok"'; then
+    echo "    ✅ Gateway reachable from local: http://$JETSON_TAILSCALE_IP:8080"
   else
-    echo "    ⚠️  $FRONTEND_DIR/node_modules 不存在，跳過 frontend（先 npm install）"
+    echo "    ⚠️  Gateway 從本機連不到 http://$JETSON_TAILSCALE_IP:8080 — 檢查 Tailscale + JETSON_TAILSCALE_IP"
+  fi
+
+  # 5) Frontend port probe
+  if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$PORT/studio" --max-time 5 | grep -q "200"; then
+    echo "    ✅ Frontend: http://localhost:$PORT/studio"
+  else
+    echo "    ⚠️  Frontend port $PORT 沒回 200，看 /tmp/studio_frontend.log"
   fi
 fi
 
