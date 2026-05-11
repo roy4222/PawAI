@@ -74,3 +74,81 @@ def test_emits_trace_entry():
     state = {"world_state": {}, "trace": []}
     out = cb_node.capability_builder(state)
     assert any(t["stage"] == "capability" for t in out["trace"])
+
+
+# ── N3-B: demo_session_provider override ──────────────────────────────────
+
+
+def _wire_with_session(session_dict):
+    reg = CapabilityRegistry(skills={}, guides=[])
+    cb_node.configure(
+        registry=reg,
+        skill_result_provider=lambda: [],
+        policy_provider=lambda: {"limits": [], "max_motion_per_turn": 1},
+        demo_session_provider=lambda: session_dict,
+    )
+
+
+def test_demo_session_provider_overrides_placeholder():
+    """When provider returns active session, capability_context reflects it."""
+    _wire_with_session({
+        "active": True,
+        "current_segment": "gesture",
+        "shown_skills": ["wiggle"],
+        "candidate_next": ["stretch"],
+    })
+    state = {"world_state": {}, "trace": []}
+    out = cb_node.capability_builder(state)
+    sess = out["capability_context"]["demo_session"]
+    assert sess["active"] is True
+    assert sess["current_segment"] == "gesture"
+    assert sess["shown_skills"] == ["wiggle"]
+
+
+def test_demo_session_no_provider_falls_back_to_placeholder():
+    """Reconfigure WITHOUT demo_session_provider — must fall back."""
+    reg = CapabilityRegistry(skills={}, guides=[])
+    cb_node.configure(
+        registry=reg,
+        skill_result_provider=lambda: [],
+        policy_provider=lambda: {"limits": [], "max_motion_per_turn": 1},
+        # demo_session_provider intentionally omitted
+    )
+    state = {"world_state": {}, "trace": []}
+    out = cb_node.capability_builder(state)
+    sess = out["capability_context"]["demo_session"]
+    assert sess["active"] is False
+
+
+def test_demo_session_active_extends_trace_detail():
+    _wire_with_session({
+        "active": True, "current_segment": "object",
+        "shown_skills": [], "candidate_next": [],
+    })
+    state = {"world_state": {}, "trace": []}
+    out = cb_node.capability_builder(state)
+    cap_trace = [t for t in out["trace"] if t["stage"] == "capability"][0]
+    assert "demo=object" in cap_trace["detail"]
+
+
+def test_demo_session_inactive_no_demo_in_trace():
+    _wire_with_session({"active": False, "shown_skills": [], "candidate_next": []})
+    state = {"world_state": {}, "trace": []}
+    out = cb_node.capability_builder(state)
+    cap_trace = [t for t in out["trace"] if t["stage"] == "capability"][0]
+    assert "demo=" not in cap_trace["detail"]
+
+
+def test_demo_session_provider_returning_non_dict_falls_back():
+    """Defensive: provider returns None / list → fallback placeholder."""
+    reg = CapabilityRegistry(skills={}, guides=[])
+    cb_node.configure(
+        registry=reg,
+        skill_result_provider=lambda: [],
+        policy_provider=lambda: {"limits": [], "max_motion_per_turn": 1},
+        demo_session_provider=lambda: None,
+    )
+    state = {"world_state": {}, "trace": []}
+    out = cb_node.capability_builder(state)
+    sess = out["capability_context"]["demo_session"]
+    assert sess["active"] is False

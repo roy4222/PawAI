@@ -96,11 +96,14 @@ def world_state_builder(state: ConversationState) -> ConversationState:
         "current_speaker": current_speaker,
         **snap_dict,
     }
+    # N3-A: trace detail extension — smoke can verify objs/spk arrived without
+    # echoing full prompt. `recent_objects` lives inside snap_dict from to_dict.
+    n_objs = len(snap_dict.get("recent_objects") or [])
     state.setdefault("trace", []).append(
         {
             "stage": "world_state",
             "status": "ok",
-            "detail": f"{period} {time_str}",
+            "detail": f"{period} {time_str} objs={n_objs} spk={current_speaker}",
         }
     )
     return state

@@ -86,7 +86,34 @@
 
 > 格式：日期 / tag / 項目 / 理由 / 工時 / smoke 結果
 
-_(空)_
+### 2026-05-11 / `brain-hotfix-N3` / Demo-host harness 補強（Task A+B+C）
+
+**動了什麼**：
+- **Task A**：訂 `/event/object_detected` → `WorldStateSnapshot.recent_objects` → `_build_user_message` 注入 `[最近看到] 紅色的杯子（5 秒前）`。Demo §[2:30] 紅杯子段 LLM 才能即興 contextual 講話。
+- **Task B**：訂 `/brain/demo_segment` → `_demo_session_state` (with lock) → `capability_builder.demo_session_provider` → prompt 注入 `[demo] 段:gesture 已演:wiggle 建議下一步:stretch, wave`。PawAI 才能 demo-host 引導而不重複拋同一個 skill。
+- **Task C**：`response_repair` 加 rule-only verifier — reply 太短 / capability_question 沒提具體 skill（**動態取自 capability_context.capabilities，不 hardcode**）/ demo segment 沒結尾邀請 → trace `stage="verifier" status="warn"`。**永不擋 output**，純觀測供後續 persona 調整。
+
+**為什麼必須現在動（不能等 5/18）**：
+- Demo §[2:30] 紅杯子段在 demo_script.md §4 已標為「劇本反推真缺口」P0 — 沒這個 LLM 講不出「紅色的杯子，是新的嗎？」，紅杯子段直接破功。
+- demo-host 引導是整場 demo 「PawAI 不是 chatbot」的核心 — N2 persona 寫了但 brain 不知道演到哪，引導會打架。
+- Reply verifier 是 Osmani「every mistake becomes a rule」的入口 — 沒 trace 留底，Roy 無從調 persona。
+
+**工時**：~4h（含 33 個新 test，pre-deploy 全綠）
+
+**風險評估**：
+- LangGraph 拓樸不動（11 nodes 不變）
+- Model / TTS / nav 完全不碰
+- `_placeholder_session` 保留為 fallback，未配置 provider 不破舊行為
+- Lock 保 ROS callback × graph worker race
+- Skill name 動態從 capability_context 取，不耦合 SkillContract import
+- 回退方案：`git revert HEAD` 退回 N2 baseline，gpt-5.4-mini + N2 persona 仍可用
+
+**Smoke 結果**：待 5/13 早 Jetson 跑 Smoke A/B/C（見 `docs/runbook/demo_script.md` §4 + plan `to-view-synthetic-sun.md`）
+
+**Schema 變更**：
+- `docs/contracts/interaction_contract.md`：trace stage enum 加 `verifier`、status enum 加 `warn`
+- `pawai-studio/frontend/contracts/types.ts`：同步 union 加 `verifier` / `warn`
+- `pawai_brain/pawai_brain/schemas.py`：TracePayload comment 補列
 
 ---
 

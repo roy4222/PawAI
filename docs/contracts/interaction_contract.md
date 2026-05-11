@@ -889,7 +889,7 @@ Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH
 {
   "session_id": { "type": "string",                              "description": "speech session ID，與 chat_candidate 一致" },
   "engine":     { "type": "string",                              "enum": ["legacy", "langgraph"], "description": "發布來源引擎" },
-  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"], "description": "pipeline 階段（5/7 起 langgraph engine 把 context+env 併進 world_state，並新增 capability stage）" },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "verifier", "skill_gate", "output"], "description": "pipeline 階段（5/7 起 langgraph engine 把 context+env 併進 world_state，並新增 capability stage；5/11 N3 新增 verifier 為 rule-only reply 觀測）" },
   "status":     { "type": "string",                              "description": "階段狀態（見下表）" },
   "detail":     { "type": "string",                              "description": "階段特定訊息（如錯誤原因、skill 名稱、fallback 理由）" },
   "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }
@@ -902,12 +902,13 @@ Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH
 |-------|-----------|------|
 | `input` | `ok` \| `error` | 輸入驗證 |
 | `safety_gate` | `ok` \| `hit` \| `blocked` \| `error` | 安全層檢查；`hit` 為短路命中關鍵字 |
-| `world_state` | `ok` \| `error` | env + perception 狀態快照（5/7 langgraph 引入） |
-| `capability` | `ok` \| `error` | 33 條能力快照組裝（5/7 langgraph 引入；27 SkillContract + 6 DemoGuide） |
+| `world_state` | `ok` \| `error` | env + perception 狀態快照（5/7 langgraph 引入；5/11 N3 detail 加 `objs=N spk=name`） |
+| `capability` | `ok` \| `error` | 33 條能力快照組裝（5/7 langgraph 引入；27 SkillContract + 6 DemoGuide；5/11 N3 detail 加 `demo=segment` 當 demo_session active） |
 | `memory` | `ok` \| `error` | 記憶查詢 |
 | `llm_decision` | `ok` \| `fallback` \| `error` | LLM 調用（失敗 → fallback） |
 | `json_validate` | `ok` \| `retry` \| `error` | JSON 格式驗證 |
 | `repair` | `ok` \| `fallback` \| `error` | JSON 修復（失敗 → fallback） |
+| `verifier` | `warn` | **5/11 N3 新增**：rule-only reply 觀測（reply 太短 / capability_question 沒提具體 skill / demo segment 沒結尾邀請）。**永不影響 repair_failed，不擋 output**，純粹觀測供後續 persona 調整；detail 為 `; ` 分隔的 reason 清單（`too_short` \| `no_specific_skill` \| `no_followup_invitation`） |
 | `skill_gate` | `proposed` \| `accepted` \| `accepted_trace_only` \| `blocked` \| `rejected_not_allowed` \| `needs_confirm` \| `demo_guide` | Brain 的 skill allowlist + safety 檢查；`needs_confirm`/`demo_guide` 為 5/8 langgraph 新增 |
 | `output` | `ok` \| `fallback` \| `error` | 最終輸出（如 publish chat_candidate） |
 
@@ -962,7 +963,7 @@ Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH
 {
   "session_id": { "type": "string" },
   "engine":     { "type": "string",                              "enum": ["legacy", "langgraph", "shadow"] },
-  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "skill_gate", "output"] },
+  "stage":      { "type": "string",                              "enum": ["input", "safety_gate", "world_state", "capability", "memory", "llm_decision", "json_validate", "repair", "verifier", "skill_gate", "output"] },
   "status":     { "type": "string" },
   "detail":     { "type": "string" },
   "ts":         { "type": "float",                               "unit": "seconds (Unix timestamp)" }

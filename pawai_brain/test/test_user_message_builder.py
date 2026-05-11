@@ -190,3 +190,74 @@ def test_message_full_payload_has_three_sections():
     assert "使用者說：" in msg  # label is [語音] or [文字] per 1E source-based label
     assert "[環境]" in msg
     assert "[能力]" in msg
+
+
+# ── N3-A: recent_objects injection ────────────────────────────────────────
+
+
+def test_recent_objects_injects_red_cup_in_chat_mode():
+    """§[2:30] 紅杯子段在 chat mode 也要看到。"""
+    ws = _world_state()
+    ws["recent_objects"] = [{"class": "cup", "color": "red", "age_s": 5.0}]
+    state = {"user_text": "你看到什麼", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "[最近看到]" in msg
+    assert "紅色的杯子" in msg
+
+
+def test_recent_objects_translates_chair_no_color():
+    ws = _world_state()
+    ws["recent_objects"] = [{"class": "chair", "color": None, "age_s": 18.0}]
+    state = {"user_text": "x", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "椅子（18 秒前）" in msg
+    # no color prefix
+    line = [l for l in msg.splitlines() if "[最近看到]" in l][0]
+    assert "色的" not in line  # no "紅色的" / "藍色的" etc when color None
+
+
+def test_recent_objects_skips_unknown_class_silently():
+    """Unknown class_name → not in OBJECT_CLASS_ZH → drop, don't dump raw English."""
+    ws = _world_state()
+    ws["recent_objects"] = [
+        {"class": "elephant", "color": "gray", "age_s": 1.0},  # not in dict
+        {"class": "cup", "color": "red", "age_s": 2.0},
+    ]
+    state = {"user_text": "x", "world_state": ws}
+    msg = _build_user_message(state)
+    assert "[最近看到]" in msg
+    assert "elephant" not in msg
+    assert "杯子" in msg
+
+
+def test_recent_objects_no_inject_when_empty():
+    state = {"user_text": "x", "world_state": _world_state()}  # no recent_objects key
+    msg = _build_user_message(state)
+    assert "[最近看到]" not in msg
+
+
+# ── N3-B: demo_session injection ──────────────────────────────────────────
+
+
+def test_demo_session_active_injects_segment_and_shown():
+    cap = _capability_context()
+    cap["demo_session"] = {
+        "active": True,
+        "current_segment": "gesture",
+        "shown_skills": ["wiggle"],
+        "candidate_next": ["stretch", "wave"],
+    }
+    state = {"user_text": "x", "world_state": _world_state(), "capability_context": cap}
+    msg = _build_user_message(state)
+    assert "[demo]" in msg
+    assert "gesture" in msg
+    assert "wiggle" in msg
+    assert "stretch" in msg
+
+
+def test_demo_session_inactive_no_inject():
+    cap = _capability_context()
+    cap["demo_session"] = {"active": False, "shown_skills": [], "candidate_next": []}
+    state = {"user_text": "x", "world_state": _world_state(), "capability_context": cap}
+    msg = _build_user_message(state)
+    assert "[demo]" not in msg

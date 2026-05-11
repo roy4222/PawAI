@@ -38,6 +38,7 @@ class ChatCandidatePayload:
 #                          blocked | rejected_not_allowed |
 #                          needs_confirm    (← Phase A.6)
 #                          demo_guide       (← Phase A.6)
+#   verifier stage:        warn             (← 2026-05-11 N3, rule-only reply check)
 @dataclass
 class TracePayload:
     """Schema for /brain/conversation_trace entries.
@@ -45,12 +46,14 @@ class TracePayload:
     Mirrors spec §4.2 of conversation-engine-langgraph-design.md.
     """
     session_id: str
-    stage: str       # input | safety_gate | context | env | memory |
-                     # llm_decision | json_validate | repair |
+    stage: str       # input | safety_gate | world_state | capability | memory |
+                     # llm_decision | json_validate | repair | verifier |
                      # skill_gate | output
-    status: str      # ok | retry | fallback | error
+                     # (verifier added 2026-05-11 N3)
+    status: str      # ok | warn | retry | fallback | error
                      # | proposed | accepted | accepted_trace_only
                      # | blocked | rejected_not_allowed | hit
+                     # (warn added 2026-05-11 N3 for verifier stage)
     detail: str
     engine: str = "langgraph"
     ts: float = field(default_factory=time.time)

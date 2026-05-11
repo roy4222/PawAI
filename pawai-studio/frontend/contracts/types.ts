@@ -435,14 +435,18 @@ export interface ConversationTracePayload {
     | "input"
     | "safety_gate"
     | "context"
+    | "world_state"
+    | "capability"
     | "memory"
     | "llm_decision"
     | "json_validate"
     | "repair"
+    | "verifier"
     | "skill_gate"
     | "output";
   status:
     | "ok"
+    | "warn"
     | "retry"
     | "fallback"
     | "error"

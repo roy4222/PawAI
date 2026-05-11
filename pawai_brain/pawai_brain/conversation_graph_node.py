@@ -74,6 +74,79 @@ reply 用繁體中文，自然像在跟朋友聊天。
 """
 
 
+# N3-A: Chinese translation tables for /event/object_detected — duplicated
+# from interaction_executive/brain_node.py to avoid cross-package import
+# (pawai_brain must not depend on interaction_executive). When this dict
+# diverges from brain_node, the canonical source is brain_node — but the
+# duplication is intentional, in line with the package boundary.
+_OBJECT_CLASS_ZH: dict[str, str] = {
+    "cup": "杯子", "bottle": "瓶子", "book": "書",
+    "person": "人", "dog": "狗狗", "cat": "貓咪",
+    "chair": "椅子", "couch": "沙發", "bed": "床",
+    "dining_table": "餐桌", "tv": "電視", "laptop": "筆電",
+    "cell_phone": "手機", "remote": "遙控器", "keyboard": "鍵盤",
+    "mouse": "滑鼠", "backpack": "背包", "handbag": "手提包",
+    "umbrella": "雨傘", "clock": "時鐘", "vase": "花瓶",
+    "potted_plant": "盆栽", "teddy_bear": "玩偶", "scissors": "剪刀",
+    "wine_glass": "酒杯", "fork": "叉子", "knife": "刀子",
+    "spoon": "湯匙", "bowl": "碗", "banana": "香蕉",
+    "apple": "蘋果", "orange": "橘子",
+}
+_OBJECT_COLOR_ZH: dict[str, str] = {
+    "red": "紅色", "orange": "橘色", "yellow": "黃色", "green": "綠色",
+    "cyan": "青色", "blue": "藍色", "purple": "紫色", "pink": "粉紅色",
+    "brown": "咖啡色", "black": "黑色", "white": "白色", "gray": "灰色",
+}
+
+
+def _format_recent_objects(objs: list) -> str | None:
+    """N3-A: format [最近看到] prompt line from world_state.recent_objects.
+
+    objs items: {"class": str, "color": str | None, "age_s": float}
+    Unknown class_name → silently dropped (avoid raw English leaking into prompt).
+    Returns None when nothing usable to display (no inject line at all).
+    """
+    parts: list[str] = []
+    for entry in objs or []:
+        if not isinstance(entry, dict):
+            continue
+        cls = str(entry.get("class") or "").strip()
+        if not cls:
+            continue
+        zh_class = _OBJECT_CLASS_ZH.get(cls)
+        if not zh_class:
+            continue  # Unknown class — skip rather than dump raw English.
+        color = entry.get("color")
+        zh_color = _OBJECT_COLOR_ZH.get(color) if isinstance(color, str) else None
+        try:
+            age_s = max(0, int(round(float(entry.get("age_s", 0)))))
+        except (TypeError, ValueError):
+            age_s = 0
+        if zh_color:
+            parts.append(f"{zh_color}的{zh_class}（{age_s} 秒前）")
+        else:
+            parts.append(f"{zh_class}（{age_s} 秒前）")
+    if not parts:
+        return None
+    # Cap at 3 entries — anything beyond is noise.
+    return "、".join(parts[:3])
+
+
+def _format_demo_session(session: dict | None) -> str | None:
+    """N3-B: format [demo] prompt line when demo_session.active is True."""
+    if not isinstance(session, dict) or not session.get("active"):
+        return None
+    segment = str(session.get("current_segment") or "?").strip() or "?"
+    shown = session.get("shown_skills") or []
+    candidate = session.get("candidate_next") or []
+    parts = [f"段:{segment}"]
+    if shown:
+        parts.append("已演:" + ", ".join(str(s) for s in shown))
+    if candidate:
+        parts.append("建議下一步:" + ", ".join(str(s) for s in candidate))
+    return "　".join(parts)
+
+
 def _compact_capabilities(cap: dict) -> list:
     """Extract minimal capability fields for LLM prompt (avoids 5+ KB bloat)."""
     compact_caps = []
@@ -126,6 +199,18 @@ def _build_user_message(state) -> str:
         parts.append(line)
     if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
         parts.append(f"[眼前的人] {ws['current_speaker']}")
+
+    # N3-A: recent_objects JIT inject — all modes (chat / capability / identity)
+    # see this because demo §[2:30] 紅杯子段 is chat mode and still needs context.
+    objs_line = _format_recent_objects(ws.get("recent_objects"))
+    if objs_line:
+        parts.append(f"[最近看到] {objs_line}")
+
+    # N3-B: demo_session JIT inject — all modes; only when active.
+    cap_for_session = state.get("capability_context") or {}
+    demo_line = _format_demo_session(cap_for_session.get("demo_session"))
+    if demo_line:
+        parts.append(f"[demo] {demo_line}")
 
     # 1D: CAPABILITIES + capability_context — lazy inject only for relevant modes
     # Note: module-level _build_user_message has no _capabilities_md;
@@ -233,6 +318,16 @@ class ConversationGraphNode(Node):
             self.get_logger().error(f"CapabilityRegistry build failed: {exc}")
             registry = CapabilityRegistry(skills={}, guides=guides)
 
+        # N3-B: demo_session state + lock (ROS callback writer × graph worker reader race).
+        # Provider returns defensive copy; mutation through provider can't break the node.
+        self._demo_session_state: dict = {
+            "active": False,
+            "current_segment": None,
+            "shown_skills": [],
+            "candidate_next": [],
+        }
+        self._demo_session_lock = threading.Lock()
+
         # Wire module-level node hooks
         world_state_builder_node.set_world_provider(lambda: self._world_snapshot)
         world_state_builder_node.set_speaker_provider(lambda: self._recent_face_identity)
@@ -240,6 +335,7 @@ class ConversationGraphNode(Node):
             registry=registry,
             skill_result_provider=self._skill_results.recent,
             policy_provider=lambda: policy,
+            demo_session_provider=self._snapshot_demo_session,
         )
 
         # ROS subscribers for world state
@@ -258,6 +354,14 @@ class ConversationGraphNode(Node):
         )
         self.create_subscription(
             String, "/brain/skill_result", self._on_skill_result, 10
+        )
+        # N3-A: object event subscription (mirror /state/perception/face pattern)
+        self.create_subscription(
+            String, "/event/object_detected", self._on_object_detected, 10
+        )
+        # N3-B: demo segment subscription — external push from Studio / launch script.
+        self.create_subscription(
+            String, "/brain/demo_segment", self._on_demo_segment, 10
         )
 
         # P1-2: context reset — clear ConversationMemory on page refresh / new-conversation
@@ -430,6 +534,18 @@ class ConversationGraphNode(Node):
             parts.append(line)
         if ws.get("current_speaker") and ws["current_speaker"] != "unknown":
             parts.append(f"[眼前的人] {ws['current_speaker']}")
+
+        # N3-A: recent_objects JIT inject — see module-level _build_user_message
+        # for rationale (all modes including chat).
+        objs_line = _format_recent_objects(ws.get("recent_objects"))
+        if objs_line:
+            parts.append(f"[最近看到] {objs_line}")
+
+        # N3-B: demo_session inject — all modes, only when active.
+        cap_for_session = state.get("capability_context") or {}
+        demo_line = _format_demo_session(cap_for_session.get("demo_session"))
+        if demo_line:
+            parts.append(f"[demo] {demo_line}")
 
         # 1D: lazy inject CAPABILITIES.md + capability_context ONLY for explicit
         # capability/action modes. chat / identity / safety modes do NOT see
@@ -648,6 +764,41 @@ class ConversationGraphNode(Node):
     def _on_pawai_brain_state(self, msg: String) -> None:
         self._world_snapshot.apply_pawai_brain_state_json(msg.data)
 
+    def _on_object_detected(self, msg: String) -> None:
+        """N3-A: cache recent objects (class+color, 30s window, class-dedup)."""
+        self._world_snapshot.apply_object_detected_json(msg.data)
+
+    def _on_demo_segment(self, msg: String) -> None:
+        """N3-B: external segment push.
+
+        Schema:
+          {"active": bool, "current_segment": str | null,
+           "shown_skills": [str], "candidate_next": [str]}
+
+        All keys optional; unknown keys ignored. Lock guards the write so
+        graph workers reading via _snapshot_demo_session() never see a
+        half-updated dict.
+        """
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        if not isinstance(payload, dict):
+            return
+        updated = {
+            "active": bool(payload.get("active", False)),
+            "current_segment": payload.get("current_segment"),
+            "shown_skills": list(payload.get("shown_skills") or []),
+            "candidate_next": list(payload.get("candidate_next") or []),
+        }
+        with self._demo_session_lock:
+            self._demo_session_state = updated
+
+    def _snapshot_demo_session(self) -> dict:
+        """N3-B: defensive-copy provider for capability_builder."""
+        with self._demo_session_lock:
+            return dict(self._demo_session_state)
+
     def _on_skill_result(self, msg: String) -> None:
         try:
             payload = json.loads(msg.data)
@@ -680,9 +831,17 @@ class ConversationGraphNode(Node):
             self._seen_sessions.clear()
         self._recent_face_identity = ("unknown", 0.0)
         self._speaker_suppress_until = time.time() + 5.0
+        # N3-B: reset demo session too — new conversation should start clean.
+        with self._demo_session_lock:
+            self._demo_session_state = {
+                "active": False,
+                "current_segment": None,
+                "shown_skills": [],
+                "candidate_next": [],
+            }
         self.get_logger().info(
-            "/brain/reset_context: memory + seen_sessions + face_identity cleared "
-            "(speaker suppressed for 5s)"
+            "/brain/reset_context: memory + seen_sessions + face_identity + "
+            "demo_session cleared (speaker suppressed for 5s)"
         )
 
     def _on_face_state(self, msg: String) -> None:
