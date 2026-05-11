@@ -91,28 +91,39 @@
 
 **動機**：Mac path 變 `/Users/roy422/...`，寫死無法跨平台。
 
-**變更**：`.claude/settings.json` 4 條 hook：
-```diff
--"command": "/home/roy422/newLife/elder_and_dog/scripts/hooks/pre_tool_safety.sh"
-+"command": "$CLAUDE_PROJECT_DIR/scripts/hooks/pre_tool_safety.sh"
+**變更**：`.claude/settings.json` 4 條 hook。
+
+現況：
+```json
+"command": "bash /home/roy422/newLife/elder_and_dog/scripts/hooks/pre_tool_safety.sh"
+```
+
+改為（保留 `bash` 前綴 + 路徑加雙引號避免空白炸開 + executable bit 不必要）：
+```json
+"command": "bash \"$CLAUDE_PROJECT_DIR/scripts/hooks/pre_tool_safety.sh\""
 ```
 
 4 條都這樣改：`pre_tool_safety.sh` / `pre_tool_secret_guard.sh` / `post_tool_py_syntax.sh` / `stop_remind_build.sh`。
 
-**驗證**：WSL 端 reload Claude Code session，確認 hook 仍照常觸發（grep 看 hook log）。
-
-`$CLAUDE_PROJECT_DIR` 是 Claude Code 啟動時自動帶入的環境變數，路徑會隨平台變。
+**驗證**：WSL 端 reload Claude Code session，確認 `echo $CLAUDE_PROJECT_DIR` 在 hook 內展開正確（用 `set -x` 加 debug 或臨時 `echo` 到 `/tmp/hook.log`）。若不通則 fallback：把 hook 寫進 `settings.local.json`（在 .gitignore 內）每台機器各自設絕對路徑。
 
 ### 3.3 Critical 寫死路徑修正（B3）
 
 **3.3.1 `scripts/hooks/post_tool_py_syntax.sh:11`**
 
+實際變數名是 `REPO_ROOT`（不是 PROJECT_ROOT），且下游 `FRONTEND_DIR="${REPO_ROOT}/pawai-studio/frontend"` 依賴它。要改的是 `REPO_ROOT` 本身，不是新增變數：
+
 ```diff
--PROJECT_ROOT="/home/roy422/newLife/elder_and_dog"
-+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "$CLAUDE_PROJECT_DIR")"
+-REPO_ROOT="/home/roy422/newLife/elder_and_dog"
++REPO_ROOT="${PAWAI_REPO_ROOT:-${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}}"
+ FRONTEND_DIR="${REPO_ROOT}/pawai-studio/frontend"
 ```
 
-備援：若不在 git 環境內，用 `$CLAUDE_PROJECT_DIR`。
+三層 fallback：
+1. `$PAWAI_REPO_ROOT`（最高優先，給特殊環境逃生用）
+2. `$CLAUDE_PROJECT_DIR`（Claude Code session 內標準路徑）
+3. `git rev-parse --show-toplevel`（非 Claude 環境也能跑）
+4. `pwd`（最後保底）
 
 **3.3.2 `.claude/skills/jetson-verify/scripts/transport.py:27-28`**
 
@@ -153,31 +164,49 @@ git push -u origin main
 
 **Mac 端 setup**（寫進 runbook）：
 
-```bash
-# 注意 Claude Code 的 project memory 目錄編碼方式：
-# WSL:  ~/.claude/projects/-home-roy422-newLife-elder-and-dog/memory/
-# Mac:  ~/.claude/projects/-Users-roy422-newLife-elder-and-dog/memory/
-# 路徑前綴 `-home-` → `-Users-` 是 Claude Code 對絕對路徑的編碼
+Claude Code 的 project memory 目錄名稱跟 repo 實際 cwd path 強綁，是把絕對路徑用 `-` 編碼。所以**不要硬押目錄名**（例如 `-Users-roy422-newLife-elder-and-dog`），實際命名取決於你在 Mac 上 clone elder_and_dog 到哪。
 
-mkdir -p ~/.claude/projects/-Users-roy422-newLife-elder-and-dog
-cd ~/.claude/projects/-Users-roy422-newLife-elder-and-dog
+正確流程：
+
+```bash
+# 1. Mac 端先 clone 主 repo（位置自選，例如 ~/newLife/elder_and_dog）
+mkdir -p ~/newLife && cd ~/newLife
+git clone git@github.com:roy4222/elder_and_dog.git
+cd elder_and_dog
+
+# 2. 用 Claude Code 開一次這個 repo，讓它自動建好 memory 目錄
+claude  # 啟動 Claude Code session 然後 /exit
+
+# 3. 找出 Claude Code 實際建的目錄名
+ls ~/.claude/projects/ | grep -i elder_and_dog
+# 例如可能會看到：-Users-roy422-newLife-elder-and-dog
+#                  或 -Users-roy422-Documents-newLife-elder-and-dog（看你 clone 在哪）
+
+# 4. 把 memory repo clone / rsync 進那個目錄
+cd ~/.claude/projects/<實際目錄名>/
 git clone git@github.com:roy4222/pawai-claude-memory.git memory
 ```
 
-**維護紀律**：memory/ 內變動需定期 `git push`（建議：每天收工前 + 每次大決策後）。
+**維護紀律**：memory/ 內變動需定期 `git push`（建議：每天收工前 + 每次大決策後）。Mac / WSL 兩端要保持同步，否則會 diverge。
 
 ### 3.5 Mac setup runbook（B5）
 
 **新檔**：`docs/runbook/mac-migration-setup.md`
 
 **章節結構**：
-1. **前置**：Homebrew + ros2 humble + tmux + git + gh + Tailscale
-2. **Clone**：兩個 repo（main + memory）
+1. **前置**：Homebrew + git + gh + Tailscale + Claude Code CLI + tmux（可選）+ Node/pnpm（給 Studio 前端用）
+   - ★ **不裝 ROS2**：ROS2 runtime 留在 Jetson 上跑，Mac 只是 dev / SSH 入口。試圖在 macOS 裝 Humble 是死路。
+   - 如果真的想 Mac 跑 ROS2 node（測試用），用 Docker（osrf/ros:humble-desktop）而非 native install
+2. **Clone**：兩個 repo（main + memory，memory 流程見 §3.4）
 3. **Env 設定**：`.env.local` 範例（OPENROUTER_KEY、JETSON_HOST、ROBOT_IP、PAWAI_LLM_MODEL、TTS_PROVIDER）
-4. **SSH key 上 Jetson**：`ssh-copy-id jetson-nano`
-5. **第一次驗證**：跑 `bash .claude/skills/brain-studio-lane/scripts/start.sh demo`，看 12-node graph 是否亮燈
+4. **SSH key 上 Jetson**：`ssh-copy-id $JETSON_HOST` + Tailscale 確認 reachable
+5. **第一次驗證**：透過 SSH 在 Jetson 端跑 `bash .claude/skills/brain-studio-lane/scripts/start.sh demo`，Mac 端只是觸發 + 看 log
 6. **斷網 fallback 三個 case**（見 §4）
-7. **Troubleshooting**：Claude Code memory 目錄編碼、ALSA → CoreAudio 差異、tmux 版本差異
+7. **Troubleshooting**：
+   - Claude Code memory 目錄編碼（依 cwd path 不同名）
+   - macOS 沒 ALSA / CoreAudio 差異（Mac 不直接播音訊，全交給 Go2 Megaphone）
+   - tmux 版本差異（brew 裝的是 3.x，Jetson 是 3.x，相容）
+   - SSH ControlMaster 設定（multiplex 加速 jetson-verify）
 
 ---
 
@@ -197,12 +226,23 @@ ssh -f -N -L 8001:localhost:8001 user@rtx-server
 ### Case B：雲 LLM 掉但 ASR/TTS 還在
 ```bash
 # 場景：OpenRouter 出問題，但 RTX 8000 SSH tunnel 還在、Edge TTS 還能用
-unset OPENROUTER_KEY  # 強制 LLM 走 fallback 鏈
-export TTS_PROVIDER="edge_tts"  # 不走 gemini（需要 OpenRouter）
-# ASR 不動，仍走 qwen_cloud（不依賴 OpenRouter）
+
+# 步驟 0：先查實際在用的 key 變數名稱（可能有 alias）
+grep -E 'OPENROUTER|OPENAI|ANTHROPIC' .env .env.local 2>/dev/null
+
+# 步驟 1：unset 所有 alias，避免漏掉
+unset OPENROUTER_KEY OPENROUTER_API_KEY OPENAI_API_KEY
+# 同時把 .env 內的 key 改成空字串或 comment 掉，否則 source 後又會回來
+
+# 步驟 2：TTS 改 edge_tts（純文字模型，不需要 OpenRouter）
+export TTS_PROVIDER="edge_tts"
+
+# 步驟 3：ASR 不動，仍走 qwen_cloud（不依賴 OpenRouter）
 # LLM 會 fallback 到 vLLM tunnel → Ollama → RuleBrain
 ```
 延遲增加 ~1-3s。功能堪用，audio tag 失效（emotion 沒了）。
+
+**陷阱**：如果 `.env` 還在 shell rc 自動 source，重啟 terminal 後 key 又回來。建議直接編輯 `.env` 把 key 那行 comment 掉。
 
 ### Case C：全離線
 ```bash
@@ -270,7 +310,7 @@ pkill -f "ssh.*8000:localhost"
 |------|:----:|:----:|------|
 | `$CLAUDE_PROJECT_DIR` 在某些 Claude Code 版本不支援 | 低 | 中 | WSL 端 reload session 驗證；不行 fallback 到 settings.local.json overlay |
 | Memory private repo SSH key 未上 Mac → clone 失敗 | 中 | 低 | runbook 第一步先 `ssh -T git@github.com` 驗證 |
-| Mac 端 ros2 humble 安裝麻煩 | 高 | 中 | runbook 註明用 docker / brew tap ros2 / 改裝 Iron 的取捨 |
+| Mac 端誤以為要裝 ROS2 native | 高 | 低 | runbook §1 明寫「不裝 ROS2，runtime 在 Jetson」；想本機跑 node 用 Docker |
 | Demo 當天 Mac 突發問題 | 低 | 高 | WSL 機器作為 fallback 帶到現場，不立即下架 |
 
 ---
