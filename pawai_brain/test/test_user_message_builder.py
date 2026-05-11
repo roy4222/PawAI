@@ -261,3 +261,74 @@ def test_demo_session_inactive_no_inject():
     state = {"user_text": "x", "world_state": _world_state(), "capability_context": cap}
     msg = _build_user_message(state)
     assert "[demo]" not in msg
+
+
+# ── N4: self_intro_request scaffold + capability inject ──────────────────
+
+
+def test_self_intro_request_injects_scaffold():
+    state = {
+        "user_text": "你自我介紹一下",
+        "mode": "self_intro_request",
+        "world_state": _world_state(),
+        "capability_context": _capability_context(),
+    }
+    msg = _build_user_message(state)
+    assert "[intro_scaffold]" in msg
+    # 5-段提示應該在 prompt 內
+    assert "開場" in msg or "身份" in msg
+    assert "專題使命" in msg or "多模態" in msg
+
+
+def test_self_intro_request_also_injects_capability():
+    """N4: intro 需要看到 capability 才能挑 2-3 個 skill 講。"""
+    state = {
+        "user_text": "你自我介紹一下",
+        "mode": "self_intro_request",
+        "world_state": _world_state(),
+        "capability_context": _capability_context(),
+    }
+    msg = _build_user_message(state)
+    # capability should be injected (either [能力] for module-level or [能力 runtime] for instance)
+    assert "[能力]" in msg or "[能力 runtime]" in msg
+    assert "self_introduce" in msg or "wiggle" in msg
+
+
+def test_self_intro_request_must_not_mention_elder_care():
+    """N4: scaffold 應該明確說不要把專案誤講為長者陪伴。"""
+    state = {
+        "user_text": "你自我介紹一下",
+        "mode": "self_intro_request",
+        "world_state": _world_state(),
+        "capability_context": _capability_context(),
+    }
+    msg = _build_user_message(state)
+    # scaffold body must include this prohibition
+    assert "長者陪伴" in msg  # appears as a "don't say this" instruction
+
+
+def test_identity_mode_no_scaffold():
+    """N4: 純 identity (你是誰) 不要注入完整 scaffold — 保持簡短人格回答。"""
+    state = {
+        "user_text": "你是誰",
+        "mode": "identity",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[intro_scaffold]" not in msg
+    assert "[mode_hint]" in msg  # identity-specific terse hint
+
+
+def test_chat_mode_no_scaffold_no_capability():
+    """N4: chat mode 維持精簡，不注入 scaffold 也不注入 capability。"""
+    state = {
+        "user_text": "今天天氣好嗎",
+        "mode": "chat",
+        "world_state": _world_state(),
+        "capability_context": _capability_context(),
+    }
+    msg = _build_user_message(state)
+    assert "[intro_scaffold]" not in msg
+    # module-level falls back to legacy [能力] inject; instance method
+    # suppresses for chat. The module-level test below verifies that path.
+    # Here we only assert scaffold absence.

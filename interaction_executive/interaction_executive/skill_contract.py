@@ -239,7 +239,8 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "wave_hello": SkillContract(
         name="wave_hello",
         steps=[
-            SkillStep(ExecutorKind.SAY, {"text": "[excited] 嗨！"}),
+            # N4: warmed up — pure "嗨！" felt cold next to LLM chat reply.
+            SkillStep(ExecutorKind.SAY, {"text": "[excited] 嗨～我是 PawAI！很高興認識你～"}),
             SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
         ],
         priority_class=PriorityClass.SKILL,

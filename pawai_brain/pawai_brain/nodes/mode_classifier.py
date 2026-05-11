@@ -3,9 +3,14 @@
 Used by _build_user_message and graph.py to decide whether to inject
 CAPABILITIES.md and capability_context JSON.
 
-Order matters: safety > identity > capability_question > action_request > chat (default).
+Order matters: safety > self_intro_request > identity > capability_question
+             > action_request > chat (default).
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
+N4 (2026-05-11): split `self_intro_request` from `identity` — the former
+demands a full demo-host performance with scaffold; the latter is the casual
+"你是誰" terse reply path. Pattern matched BEFORE identity so the more
+specific intent wins.
 """
 from __future__ import annotations
 import re
@@ -21,10 +26,27 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
         r"停|停止|不要動|別動|先不要動|小心|警告|危險|stop",
     ),
     (
+        "self_intro_request",
+        # N4: explicit "please introduce yourself" for demo. Stricter than
+        # `identity` — requires "自我介紹" / explicit 介紹+自己 / demo+介紹 /
+        # 跟大家打個招呼 / 跟教授介紹 / 介紹一下你的功能.
+        # Order matters: most specific first.
+        r"自我介紹"
+        r"|介紹.{0,3}(自己|你自己|妳自己|PawAI|paw\s*ai)"
+        r"|跟\s*(教授|大家|觀眾|評審).{0,5}(介紹|打.*招呼|問好)"
+        r"|(現在|目前|這邊).{0,8}demo.{0,8}(介紹|展示)"
+        r"|(demo|展示).{0,8}你(自己|的)?"
+        r"|介紹一下你的(功能|能力|專案)"
+        r"|詳細(介紹|說明|講)一下(你|自己|你自己)"
+        r"|你是誰.*詳細"
+        r"|完整介紹"
+        # "跟教授 demo，你自我介紹一下自己" (from demo objectives doc)
+        r"|跟.{0,8}(教授|評審|觀眾).{0,8}demo",
+    ),
+    (
         "identity",
         # Order: most specific first
         r"你是誰|你叫什麼|你叫啥|你誰啊|你是\s*AI"
-        r"|自我介紹|介紹.{0,5}(自己|你|妳|PawAI|paw\s*ai)"
         r"|介紹一下"  # bare "介紹一下" — chat continuation, still identity-flavoured
         r"|你會做(自我介紹|介紹)",
     ),

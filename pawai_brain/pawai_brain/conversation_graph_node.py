@@ -132,6 +132,26 @@ def _format_recent_objects(objs: list) -> str | None:
     return "、".join(parts[:3])
 
 
+# N4: intro scaffold injected when mode=self_intro_request. Content based on
+# docs/runbook demo objectives (5/11) — five sections, demo-host voice, with
+# project narrative the LLM must NOT skip (專題 / 七大功能 / 限制誠實).
+# 不照唸；LLM 用自然口吻把 5 件事說完。
+_INTRO_SCAFFOLD = """[intro_scaffold] 你被請求做正式 demo 自我介紹。請按以下 5 段展開，總長 100-180 字，自然口吻不要照唸這份清單：
+
+1. **開場 + 身份**：你是 PawAI，住在 Unitree Go2 身體裡的具身互動 AI。你**不是聊天機器人**，是「看懂、聽懂、理解、決策、行動」的多模態系統。
+
+2. **專題使命**：多模態感知融合 + 具身互動。硬體：Go2 + Jetson Orin Nano + D435 深度攝影機 + RPLIDAR 雷達。**不要說成長者陪伴**（舊定位已 superseded）。
+
+3. **能力概覽**：從 capability_context 挑 2-3 個具體 skill 名來講（不要全列七大功能），自然帶入。可講語音對話 / 認人 / 手勢 / 姿勢（含跌倒偵測）/ 物體辨識 / 導航避障 / Studio 監控 中的 2-3 樣。**誠實區分已完成 / 展示中 / 開發中**，不要把開發中的講成完成。
+
+4. **一個 grounded 觀察**：用 [最近看到]、[眼前的人]、[環境] 的當下資料拉進來一句話。讓評審知道你「現在真的看得到」，不是在背稿。
+
+5. **拋下一步邀請**：例如「你可以跟我說話、對我比手勢、讓我認人、或請我展示一個動作」。或更具體：「你想先看我認手勢、還是看我做一個動作？」
+
+audio tag 建議：[excited] 開場 → [curious] 中段 → [playful] 結尾邀請。
+"""
+
+
 def _format_demo_session(session: dict | None) -> str | None:
     """N3-B: format [demo] prompt line when demo_session.active is True."""
     if not isinstance(session, dict) or not session.get("active"):
@@ -215,8 +235,10 @@ def _build_user_message(state) -> str:
     # 1D: CAPABILITIES + capability_context — lazy inject only for relevant modes
     # Note: module-level _build_user_message has no _capabilities_md;
     # ConversationGraphNode._build_user_message overrides with instance access.
+    # N4: self_intro_request joins capability injection set — LLM needs to see
+    # 17 skills + demo guides to pick 2-3 specific ones for the intro.
     cap = state.get("capability_context") or {}
-    if mode in ("capability_question", "action_request") and cap:
+    if mode in ("capability_question", "action_request", "self_intro_request") and cap:
         compact_caps = _compact_capabilities(cap)
         cap_payload = {
             "capabilities": compact_caps,
@@ -241,6 +263,10 @@ def _build_user_message(state) -> str:
             "[mode_hint] 使用者問你是誰。請從性格、生活、剛剛發生的事切入，"
             "不要列功能清單，除非他追問。"
         )
+
+    # N4: full intro scaffold for self_intro_request mode.
+    if mode == "self_intro_request":
+        parts.append(_INTRO_SCAFFOLD)
 
     return "\n".join(parts)
 
@@ -548,15 +574,18 @@ class ConversationGraphNode(Node):
             parts.append(f"[demo] {demo_line}")
 
         # 1D: lazy inject CAPABILITIES.md + capability_context ONLY for explicit
-        # capability/action modes. chat / identity / safety modes do NOT see
+        # capability/action/intro modes. chat / identity / safety modes do NOT see
         # the skill JSON in their prompt — that's the issue 2 root cause: every
         # turn LLM seeing 17-skill JSON pulls it into "tool listing" persona,
         # making "介紹一下" come back as a feature catalog.
         #
+        # N4: self_intro_request DOES inject (it's a structured performance that
+        # references specific skills via scaffold §3).
+        #
         # capability_context still flows through graph state (skill_policy_gate
         # v2 reads from state.capability_context, not from rendered prompt).
         cap = state.get("capability_context") or {}
-        if mode in ("capability_question", "action_request"):
+        if mode in ("capability_question", "action_request", "self_intro_request"):
             if self._capabilities_md:
                 parts.append("[能力描述]\n" + self._capabilities_md)
             if cap:
@@ -574,6 +603,10 @@ class ConversationGraphNode(Node):
                 "[mode_hint] 使用者問你是誰。請從性格、生活、剛剛發生的事切入，"
                 "不要列功能清單，除非他追問。"
             )
+
+        # N4: full intro scaffold for self_intro_request mode.
+        if mode == "self_intro_request":
+            parts.append(_INTRO_SCAFFOLD)
 
         return "\n".join(parts)
 
