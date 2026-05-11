@@ -294,8 +294,11 @@ def test_self_intro_request_also_injects_capability():
     assert "self_introduce" in msg or "wiggle" in msg
 
 
-def test_self_intro_request_must_not_mention_elder_care():
-    """N4: scaffold 應該明確說不要把專案誤講為長者陪伴。"""
+def test_self_intro_request_uses_positive_framing_only():
+    """N4.1 (review #2): scaffold must NOT contain negative-prime phrases like
+    '長者陪伴' or '聊天機器人'. Those words shown to an LLM tend to leak
+    into the reply (don't-think-of-a-pink-elephant). Use positive direction.
+    """
     state = {
         "user_text": "你自我介紹一下",
         "mode": "self_intro_request",
@@ -303,8 +306,13 @@ def test_self_intro_request_must_not_mention_elder_care():
         "capability_context": _capability_context(),
     }
     msg = _build_user_message(state)
-    # scaffold body must include this prohibition
-    assert "長者陪伴" in msg  # appears as a "don't say this" instruction
+    # Negative-prime phrases must NOT appear in the scaffold.
+    assert "長者陪伴" not in msg, "scaffold leaks negative-prime phrase '長者陪伴'"
+    assert "聊天機器人" not in msg, "scaffold leaks negative-prime phrase '聊天機器人'"
+    # Positive markers we DO want present:
+    assert "具身互動" in msg  # what PawAI IS
+    assert "多模態" in msg  # project framing
+    assert "感知" in msg or "感知融合" in msg  # capability focus
 
 
 def test_identity_mode_no_scaffold():

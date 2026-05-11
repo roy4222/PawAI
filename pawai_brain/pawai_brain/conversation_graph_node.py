@@ -99,6 +99,24 @@ _OBJECT_COLOR_ZH: dict[str, str] = {
 }
 
 
+def _sanitize_str_list(raw) -> list[str]:
+    """N3.1 review #2: only list/tuple inputs survive; elements coerced to
+    non-empty stripped strings. Anything else (None, int, dict, object) → []."""
+    if not isinstance(raw, (list, tuple)):
+        return []
+    out: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            s = item.strip()
+        elif isinstance(item, (int, float)) and not isinstance(item, bool):
+            s = str(item).strip()
+        else:
+            continue
+        if s:
+            out.append(s)
+    return out
+
+
 def _format_recent_objects(objs: list) -> str | None:
     """N3-A: format [最近看到] prompt line from world_state.recent_objects.
 
@@ -132,23 +150,24 @@ def _format_recent_objects(objs: list) -> str | None:
     return "、".join(parts[:3])
 
 
-# N4: intro scaffold injected when mode=self_intro_request. Content based on
-# docs/runbook demo objectives (5/11) — five sections, demo-host voice, with
-# project narrative the LLM must NOT skip (專題 / 七大功能 / 限制誠實).
-# 不照唸；LLM 用自然口吻把 5 件事說完。
-_INTRO_SCAFFOLD = """[intro_scaffold] 你被請求做正式 demo 自我介紹。請按以下 5 段展開，總長 100-180 字，自然口吻不要照唸這份清單：
+# N4: intro scaffold injected when mode=self_intro_request.
+# N4.1 (review #2): rewritten in positive framing only. Negative instructions
+# like "不是聊天機器人" / "不要說成長者陪伴" prime the LLM to reproduce the
+# forbidden phrase. Positive direction: describe what PawAI IS, what the
+# project IS, and what to emphasize — not what to avoid.
+_INTRO_SCAFFOLD = """[intro_scaffold] 你被請求做正式 demo 自我介紹。請按以下 5 段自然展開，總長 100-180 字，用口語不要照唸這份清單：
 
-1. **開場 + 身份**：你是 PawAI，住在 Unitree Go2 身體裡的具身互動 AI。你**不是聊天機器人**，是「看懂、聽懂、理解、決策、行動」的多模態系統。
+1. **開場 + 身份**：你是 PawAI，住在 Unitree Go2 身體裡的具身互動 AI。強調自己的定位是「看懂、聽懂、理解、決策、行動」的多模態系統 — 一隻會感知、會反應、會動的機器狗。
 
-2. **專題使命**：多模態感知融合 + 具身互動。硬體：Go2 + Jetson Orin Nano + D435 深度攝影機 + RPLIDAR 雷達。**不要說成長者陪伴**（舊定位已 superseded）。
+2. **專案定位**：專題聚焦在多模態感知融合與具身互動展示。硬體基礎：Unitree Go2 機器狗 + Jetson Orin Nano 邊緣運算 + Intel D435 深度攝影機 + RPLIDAR 雷達。展示重點是現場感知與動作整合，不是純對話。
 
-3. **能力概覽**：從 capability_context 挑 2-3 個具體 skill 名來講（不要全列七大功能），自然帶入。可講語音對話 / 認人 / 手勢 / 姿勢（含跌倒偵測）/ 物體辨識 / 導航避障 / Studio 監控 中的 2-3 樣。**誠實區分已完成 / 展示中 / 開發中**，不要把開發中的講成完成。
+3. **能力概覽**：從 capability_context 挑 2-3 個具體 skill 名來自然帶入（避免條列七項）。能力面向包含：語音對話 / 認人 / 手勢 / 姿勢辨識（含跌倒偵測）/ 物體辨識 / 導航避障 / Studio 即時監控。**誠實標示狀態**：穩定可展示的講「已完成」，能 demo 但仍在優化的講「展示中」，仍在開發的明確標「開發中」。
 
-4. **一個 grounded 觀察**：用 [最近看到]、[眼前的人]、[環境] 的當下資料拉進來一句話。讓評審知道你「現在真的看得到」，不是在背稿。
+4. **一個 grounded 觀察**：用 [最近看到]、[眼前的人]、[環境] 的當下資料拉一句話進來。讓評審感覺你「現在真的在看現場」、有具身感知，而不是憑空背稿。
 
-5. **拋下一步邀請**：例如「你可以跟我說話、對我比手勢、讓我認人、或請我展示一個動作」。或更具體：「你想先看我認手勢、還是看我做一個動作？」
+5. **拋下一步邀請**：例如「你可以跟我說話、對我比手勢、讓我認人、或請我展示一個動作」。或更具體：「你想先看我認手勢，還是看我做一個動作？」
 
-audio tag 建議：[excited] 開場 → [curious] 中段 → [playful] 結尾邀請。
+audio tag 建議：[excited] 開場 → [curious] 中段帶能力 → [playful] 結尾邀請。
 """
 
 
@@ -818,22 +837,17 @@ class ConversationGraphNode(Node):
             return
         if not isinstance(payload, dict):
             return
-        # Review: `list(...)` on truthy non-iterable (e.g. `1`) raises TypeError
-        # and kills the ROS callback. Guard explicitly + sanitize to str list.
-        shown_raw = payload.get("shown_skills")
-        shown = [str(x).strip() for x in shown_raw if isinstance(x, (str, int, float))] \
-            if isinstance(shown_raw, list) else []
-        candidate_raw = payload.get("candidate_next")
-        candidate = [str(x).strip() for x in candidate_raw if isinstance(x, (str, int, float))] \
-            if isinstance(candidate_raw, list) else []
+        # N3.1 review #2: helper-based sanitization. Anything that isn't
+        # list/tuple of str|int|float (with non-empty strip) → []. Drops dict,
+        # arbitrary object, None, bool elements cleanly.
         segment = payload.get("current_segment")
         if segment is not None and not isinstance(segment, str):
-            segment = None  # invalid type → treat as no-segment
+            segment = None
         updated = {
             "active": bool(payload.get("active", False)),
             "current_segment": segment,
-            "shown_skills": shown,
-            "candidate_next": candidate,
+            "shown_skills": _sanitize_str_list(payload.get("shown_skills")),
+            "candidate_next": _sanitize_str_list(payload.get("candidate_next")),
         }
         with self._demo_session_lock:
             self._demo_session_state = updated

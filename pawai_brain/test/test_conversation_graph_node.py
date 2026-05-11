@@ -437,3 +437,49 @@ def test_snapshot_demo_session_returns_defensive_copy():
     assert snap2["active"] is True
     # NB: shallow copy — list mutation will leak through. Test documents
     # current behaviour; if list aliasing becomes a bug, deepcopy here.
+
+
+# ---------------------------------------------------------------------------
+# N3.1 review #2: _sanitize_str_list helper unit tests
+# ---------------------------------------------------------------------------
+
+from pawai_brain.conversation_graph_node import _sanitize_str_list
+
+
+def test_sanitize_str_list_handles_list_of_strings():
+    assert _sanitize_str_list(["wiggle", "stretch"]) == ["wiggle", "stretch"]
+
+
+def test_sanitize_str_list_strips_whitespace():
+    assert _sanitize_str_list(["  wiggle  ", "stretch"]) == ["wiggle", "stretch"]
+
+
+def test_sanitize_str_list_coerces_int_float():
+    assert _sanitize_str_list([42, 3.14, "x"]) == ["42", "3.14", "x"]
+
+
+def test_sanitize_str_list_drops_bool_dict_none_object():
+    class _Obj:
+        pass
+    assert _sanitize_str_list([True, False, None, {"a": 1}, [1], _Obj(), "ok"]) == ["ok"]
+
+
+def test_sanitize_str_list_drops_empty_strings():
+    assert _sanitize_str_list(["", "   ", "real"]) == ["real"]
+
+
+def test_sanitize_str_list_non_list_inputs_return_empty():
+    """Truthy non-iterable used to TypeError in inline list() call."""
+    assert _sanitize_str_list(1) == []
+    assert _sanitize_str_list("a string") == []  # str is iterable but NOT a list
+    assert _sanitize_str_list({"a": 1}) == []
+    assert _sanitize_str_list(None) == []
+    assert _sanitize_str_list(42.5) == []
+
+
+def test_sanitize_str_list_accepts_tuple():
+    assert _sanitize_str_list(("wiggle", "stretch")) == ["wiggle", "stretch"]
+
+
+def test_sanitize_str_list_empty_list():
+    assert _sanitize_str_list([]) == []
