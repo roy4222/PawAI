@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # brain-studio-lane start
-# Usage: bash start.sh <minimal|e2e|full|demo> [--studio]
+# Usage: bash start.sh <minimal|e2e|full|demo> [--studio] [--no-clean]
 # 包裝既有 scripts/start_*.sh，補 .env source / WORKSPACE override / studio overlay
 #
 # Modes:
@@ -9,19 +9,29 @@
 #   full     — go2 + 5 perception + brain + asr/tts/llm + gateway (Jetson tmux 13 windows)
 #   demo     — alias for `full --studio` — Roy 5/12 提的「全 perception + brain + Studio frontend」一鍵
 #              ← 推薦給「我要直接用 PawAI demo」場景
+#
+# Auto-cleanup（5/11 N6 review）：start.sh 預設先偵測是否有舊 lane 在跑
+# （Jetson tmux session demo/pawai_brain/studio_gw 或本機 frontend next dev）
+# 有的話自動呼叫 cleanup.sh 再進 preflight，省去手動 cleanup 一步。
+# `--no-clean` 跳過自動清理（debug 用：保留舊 state 進入新一輪 preflight）。
 
 set -uo pipefail
 
 MODE="${1:-}"
 STUDIO=0
+AUTO_CLEAN=1
 shift || true
 for arg in "$@"; do
-  [ "$arg" = "--studio" ] && STUDIO=1
+  case "$arg" in
+    --studio)   STUDIO=1 ;;
+    --no-clean) AUTO_CLEAN=0 ;;
+  esac
 done
 
 if [[ ! "$MODE" =~ ^(minimal|e2e|full|demo)$ ]]; then
-  echo "❌ usage: start.sh <minimal|e2e|full|demo> [--studio]"
+  echo "❌ usage: start.sh <minimal|e2e|full|demo> [--studio] [--no-clean]"
   echo "   demo = full + --studio (一鍵全開：5 感知 + brain + Studio frontend)"
+  echo "   --no-clean = 跳過自動 cleanup（debug 用，預設會先清舊 lane）"
   exit 1
 fi
 
@@ -36,6 +46,28 @@ SSH_OPTS="-o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2"
 JETSON_REPO="${JETSON_REPO:-/home/jetson/elder_and_dog}"
 JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── Auto-cleanup（5/11 N6 review）─────────────────────────
+# 偵測是否有舊 lane 殘留：Jetson tmux session demo/pawai_brain/studio_gw 任一
+# 存在，或本機 frontend `next dev` process 在跑。任一命中就呼叫 cleanup.sh。
+if [ "$AUTO_CLEAN" = "1" ]; then
+  echo "═══ 偵測舊 lane 狀態 ═══"
+  JETSON_OLD=$(ssh $SSH_OPTS "$JETSON_HOST" \
+    "tmux ls 2>/dev/null | grep -E '^(demo|pawai_brain|studio_gw|llm-e2e):' | head -3" \
+    2>/dev/null || true)
+  LOCAL_OLD=$(pgrep -f "next.*dev" 2>/dev/null | head -1 || true)
+
+  if [ -n "$JETSON_OLD" ] || [ -n "$LOCAL_OLD" ]; then
+    [ -n "$JETSON_OLD" ] && echo "    🔍 Jetson 殘留 tmux: $(echo "$JETSON_OLD" | tr '\n' ' ')"
+    [ -n "$LOCAL_OLD" ] && echo "    🔍 本機 next dev pid: $LOCAL_OLD"
+    echo "    ⏳ 自動呼叫 cleanup.sh 清掉舊 lane（--no-clean 可跳過）..."
+    bash "$SKILL_DIR/cleanup.sh" --handoff none > /dev/null 2>&1 || true
+    sleep 1
+    echo "    ✅ cleanup 完成"
+  else
+    echo "    ✅ 沒有舊 lane 殘留"
+  fi
+fi
 
 # ── Preflight ──────────────────────────────────────────────
 echo "═══ 跑 preflight ═══"

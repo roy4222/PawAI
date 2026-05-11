@@ -30,8 +30,11 @@ vs `~/newLife/elder_and_dog`）。skill 把這些固化成腳本，搭配 nav-av
 四個 sub-command，全部走 `bash .claude/skills/brain-studio-lane/scripts/{name}.sh`：
 
 ```bash
-# 啟動（mode = minimal | e2e | full，studio 是 overlay flag）
-bash .claude/skills/brain-studio-lane/scripts/start.sh <mode> [--studio]
+# 啟動（mode = minimal | e2e | full | demo；studio / no-clean 是 flag）
+bash .claude/skills/brain-studio-lane/scripts/start.sh <mode> [--studio] [--no-clean]
+# 預設「self-healing」：先偵測 Jetson 是否有 demo/pawai_brain/studio_gw tmux
+# 殘留或本機 next dev 在跑，有就自動跑 cleanup.sh 再 preflight。
+# 想保留舊 lane 狀態 debug，加 --no-clean 跳過自動清理。
 
 # 啟動前檢查（自動被 start.sh 呼叫；也可手動跑）
 bash .claude/skills/brain-studio-lane/scripts/preflight.sh <mode> [--studio]
