@@ -343,3 +343,33 @@ def test_demo_start_force_takes_over(monkeypatch):
         runner.invoke(cli, ["demo", "start", "--force"])
 
     assert released == [1], "Expected lock release on --force takeover"
+
+
+def test_demo_stop_refuses_other_users_lock(monkeypatch):
+    from pawai_cli.lock import Lock
+    other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                 state="running",
+                 start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    released: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=other), \
+         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "stop"])
+    assert released == [], "demo stop must not release another user's lock by default"
+    assert "alice" in result.output.lower()
+
+
+def test_demo_stop_force_releases_other_lock(monkeypatch):
+    from pawai_cli.lock import Lock
+    other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                 state="running",
+                 start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    released: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=other), \
+         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True), \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=0):
+        runner = CliRunner()
+        runner.invoke(cli, ["demo", "stop", "--force"])
+    assert released == [1]
