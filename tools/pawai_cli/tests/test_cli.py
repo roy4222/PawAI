@@ -373,3 +373,16 @@ def test_demo_stop_force_releases_other_lock(monkeypatch):
         runner = CliRunner()
         runner.invoke(cli, ["demo", "stop", "--force"])
     assert released == [1]
+
+
+def test_deploy_prompts_on_active_other_lock(monkeypatch):
+    from pawai_cli.lock import Lock
+    other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                 state="running",
+                 start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=other), \
+         patch("pawai_cli.main._do_rsync_and_build", return_value=0):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["jetson", "deploy", "--module", "brain"], input="c\n")
+    assert "alice" in result.output.lower()

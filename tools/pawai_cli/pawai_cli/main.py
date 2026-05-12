@@ -452,42 +452,16 @@ def jetson() -> None:
     """Jetson deployment helpers."""
 
 
-@jetson.command()
-@click.option("--module", "module_name", help="Module to deploy.")
-@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
-@click.option("--no-build", is_flag=True, help="Sync only; skip colcon build.")
-@click.option("--no-sync", is_flag=True, help="Build only; skip sync.")
-@click.option("--all", "all_modules", is_flag=True, help="Build all module packages.")
-def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modules: bool) -> None:
-    """Sync whole repo to Jetson and build module package(s)."""
-    root = shell.repo_root()
-    if all_modules:
-        packages = sorted({pkg for info in MODULES.values() for pkg in info.packages})
-        module_key = "all"
-    else:
-        if not module_name:
-            raise click.UsageError("--module is required unless --all is set")
-        try:
-            info = get_module(module_name)
-        except KeyError as exc:
-            raise click.ClickException(str(exc)) from exc
-        packages = list(info.packages)
-        module_key = info.key
-        if not packages and not no_build:
-            raise click.ClickException(f"module {info.key} has no colcon package; use --no-build")
-
-    st = print_status(short=True)
-    if st.has_demo and not yes:
-        if not click.confirm("Demo session is running. Deploy may require restart. Continue?", default=False):
-            raise click.Abort()
-
+def _do_rsync_and_build(root: Path, packages: list[str], no_sync: bool, no_build: bool,
+                         module_key: str) -> tuple[int, str]:
+    """Perform rsync and/or colcon build. Returns (exit_code, sync_method)."""
     if not no_sync:
         sync_once = Path.home() / "sync"
         if sync_once.exists() and os.access(sync_once, os.X_OK):
             print("Sync: ~/sync once")
             code = shell.stream([str(sync_once), "once"], cwd=root)
             if code != 0:
-                raise click.ClickException(f"~/sync once failed with exit code {code}")
+                return code, "sync-once"
             sync_method = "sync-once"
         else:
             print("Sync: rsync whole repo")
@@ -513,7 +487,7 @@ def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modul
             ]
             code = shell.stream(argv)
             if code != 0:
-                raise click.ClickException(f"rsync failed with exit code {code}")
+                return code, "rsync"
             sync_method = "rsync"
     else:
         sync_method = "none"
@@ -527,7 +501,64 @@ def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modul
             f"colcon build --packages-select {pkg_arg}"
         )
         if code != 0:
-            raise click.ClickException(f"colcon build failed with exit code {code}")
+            return code, sync_method
+
+    return 0, sync_method
+
+
+@jetson.command()
+@click.option("--module", "module_name", help="Module to deploy.")
+@click.option("-y", "--yes", is_flag=True, help="Skip confirmation prompts.")
+@click.option("--no-build", is_flag=True, help="Sync only; skip colcon build.")
+@click.option("--no-sync", is_flag=True, help="Build only; skip sync.")
+@click.option("--all", "all_modules", is_flag=True, help="Build all module packages.")
+@click.option("--force", is_flag=True, help="Deploy even if another user is in active demo.")
+def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modules: bool,
+           force: bool) -> None:
+    """Sync whole repo to Jetson and build module package(s)."""
+    from .lock import Lock, is_own_lock
+
+    root = shell.repo_root()
+    user = os.environ.get("USER") or shell.local_identity().split("@")[0]
+    host = platform.node()
+
+    if all_modules:
+        packages = sorted({pkg for info in MODULES.values() for pkg in info.packages})
+        module_key = "all"
+    else:
+        if not module_name:
+            raise click.UsageError("--module is required unless --all is set")
+        try:
+            info = get_module(module_name)
+        except KeyError as exc:
+            raise click.ClickException(str(exc)) from exc
+        packages = list(info.packages)
+        module_key = info.key
+        if not packages and not no_build:
+            raise click.ClickException(f"module {info.key} has no colcon package; use --no-build")
+
+    # Lock-aware collision check
+    existing = Lock.read()
+    if existing is not None and existing.state == "running" \
+            and not is_own_lock(existing, user, host) and not force:
+        click.echo(f"⚠ {existing.user}@{existing.host} is running a demo on branch={existing.branch}.")
+        click.echo("Deploying now may overwrite their install.")
+        if yes:
+            click.echo("`-y` does not override another user's demo. Use --force.")
+            sys.exit(2)
+        answer = click.prompt("Continue? [force/cancel]", default="cancel")
+        if not answer.lower().startswith("f"):
+            sys.exit(0)
+
+    st = print_status(short=True)
+    if st.has_demo and not yes and (existing is None or is_own_lock(existing, user, host)):
+        if not click.confirm("Demo session is running. Deploy may require restart. Continue?", default=False):
+            raise click.Abort()
+
+    code, sync_method = _do_rsync_and_build(root=root, packages=packages, no_sync=no_sync,
+                                             no_build=no_build, module_key=module_key)
+    if code != 0:
+        raise click.ClickException(f"deploy failed with exit code {code}")
 
     payload = _build_last_deploy_payload(module=module_key, packages=packages,
                                          sync_method=sync_method)
