@@ -549,34 +549,109 @@ def demo() -> None:
     """Demo lane controls."""
 
 
+def _invoke_start_sh(no_studio: bool, brain_only: bool) -> int:
+    """Thin wrapper for tests — calls existing start.sh path."""
+    args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh"]
+    if brain_only:
+        args.append("minimal")
+    elif no_studio:
+        args.append("full")
+    else:
+        args.append("demo")
+    return shell.stream(args, cwd=shell.repo_root())
+
+
+def _invoke_cleanup_sh() -> int:
+    return shell.stream(
+        ["bash", ".claude/skills/brain-studio-lane/scripts/cleanup.sh"],
+        cwd=shell.repo_root(),
+    )
+
+
+def _current_branch() -> str:
+    r = shell.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
+    return r.stdout.strip() if r.ok else "unknown"
+
+
+def _current_sha_short() -> str:
+    r = shell.run(["git", "rev-parse", "--short", "HEAD"], timeout=5)
+    return r.stdout.strip() if r.ok else ""
+
+
 @demo.command("start")
 @click.option("--no-studio", is_flag=True, help="Start full mode without local Studio overlay.")
 @click.option("--brain-only", is_flag=True, help="Start minimal brain stack only.")
-@click.option("-y", "--yes", is_flag=True, help="Skip prompt if demo is already running.")
-def demo_start(no_studio: bool, brain_only: bool, yes: bool) -> None:
+@click.option("-y", "yes", is_flag=True, help="Skip ordinary confirmation prompts (does NOT override another user's lock).")
+@click.option("--force", "force", is_flag=True, help="Take over another user's demo lock.")
+def demo_start(no_studio: bool, brain_only: bool, yes: bool, force: bool) -> None:
     """Start brain-studio-lane."""
-    root = shell.repo_root()
-    st = print_status(short=True)
-    if st.has_demo and not yes:
-        if click.confirm("Demo already running. Stop it before starting?", default=True):
-            shell.stream(["bash", ".claude/skills/brain-studio-lane/scripts/cleanup.sh"], cwd=root)
-        else:
-            raise click.Abort()
+    from .lock import Lock, is_stale, is_own_lock
 
-    if brain_only:
-        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "minimal"]
-    elif no_studio:
-        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "full"]
-    else:
-        args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh", "demo"]
-    raise SystemExit(shell.stream(args, cwd=root))
+    user = os.environ.get("USER") or shell.local_identity().split("@")[0]
+    host = platform.node()
+    branch = _current_branch()
+    sha = _current_sha_short()
+
+    existing = Lock.read()
+    if existing is not None:
+        if is_own_lock(existing, user, host):
+            click.echo(f"Existing lock is yours ({existing.state}). Restarting demo.")
+            Lock.release()
+        else:
+            stale = is_stale(existing)
+            if stale:
+                click.echo(f"⚠ Stale {stale} lock from {existing.user} (age exceeds threshold).")
+            else:
+                click.echo(f"Another user is in demo: {existing.user}@{existing.host} "
+                           f"branch={existing.branch} state={existing.state}")
+            if not force:
+                if yes:
+                    click.echo("`-y` does not override another user's lock. Use --force to take over.")
+                    sys.exit(2)
+                answer = click.prompt("Take over? [force/cancel]", default="cancel")
+                if not answer.lower().startswith("f"):
+                    sys.exit(0)
+            click.echo(f"--force: clearing {existing.user}'s lock")
+            Lock.release()
+
+    # Acquire starting lock
+    lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting")
+    if lk is None:
+        click.echo("Failed to acquire lock after 3 retries — flock held by another process or remote SSH issue. Investigate before retrying.")
+        sys.exit(2)
+
+    rc = _invoke_start_sh(no_studio=no_studio, brain_only=brain_only)
+    if rc != 0:
+        click.echo("Demo start failed — releasing lock.")
+        Lock.release()
+        sys.exit(rc)
+
+    lk.transition_to("running")
+    click.echo(f"✓ Demo running (lock owner: {user}@{host})")
 
 
 @demo.command("stop")
-def demo_stop() -> None:
+@click.option("--force", is_flag=True, help="Stop another user's demo and release their lock.")
+def demo_stop(force: bool) -> None:
     """Stop brain-studio-lane."""
-    root = shell.repo_root()
-    raise SystemExit(shell.stream(["bash", ".claude/skills/brain-studio-lane/scripts/cleanup.sh"], cwd=root))
+    from .lock import Lock, is_own_lock
+    user = os.environ.get("USER") or shell.local_identity().split("@")[0]
+    host = platform.node()
+
+    existing = Lock.read()
+    if existing is None:
+        click.echo("No demo lock present.")
+        rc = _invoke_cleanup_sh()
+        sys.exit(rc)
+
+    if not is_own_lock(existing, user, host) and not force:
+        click.echo(f"Lock is owned by {existing.user}@{existing.host}. "
+                   f"Use --force to stop their demo.")
+        sys.exit(2)
+
+    rc = _invoke_cleanup_sh()
+    Lock.release()
+    sys.exit(rc)
 
 
 @cli.command()

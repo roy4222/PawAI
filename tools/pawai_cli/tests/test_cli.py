@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from click.testing import CliRunner
+from datetime import datetime, timezone, timedelta
 
 from unittest.mock import patch
 
@@ -292,3 +293,53 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
         # --fix with 'y' — should write detected IP
         runner.invoke(cli, ["doctor", "--fix"], input="y\n")
         assert "100.83.109.89" in env_path.read_text(), "--fix y must write detected IP"
+
+
+# ──────────────── L2 tests ────────────────
+
+def test_demo_start_prompts_on_cross_user_lock(monkeypatch):
+    """If another user holds the lock, demo start prompts (does not silently override)."""
+    from pawai_cli.lock import Lock
+    other_lock = Lock(user="alice", host="alice-mac", branch="feat/x",
+                      sha="abc", state="running",
+                      start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=other_lock):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "start"], input="c\n")  # answer cancel
+    assert "alice" in result.output.lower()
+    assert "force" in result.output.lower() or "cancel" in result.output.lower()
+
+
+def test_demo_start_y_does_not_take_over_other_lock(monkeypatch):
+    """`-y` alone must not steal another user's lock."""
+    from pawai_cli.lock import Lock
+    other_lock = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                      state="running",
+                      start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=other_lock):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "start", "-y"])
+    # Should NOT proceed to starting demo
+    assert result.exit_code != 0 or "alice" in result.output.lower()
+
+
+def test_demo_start_force_takes_over(monkeypatch):
+    """`--force` takes over another user's lock."""
+    from pawai_cli.lock import Lock
+    other_lock = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                      state="running",
+                      start_time=datetime.now(timezone.utc).isoformat())
+    monkeypatch.setenv("USER", "bob")
+    released: list = []
+
+    with patch("pawai_cli.lock.Lock.read", return_value=other_lock), \
+         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=other_lock), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        runner = CliRunner()
+        runner.invoke(cli, ["demo", "start", "--force"])
+
+    assert released == [1], "Expected lock release on --force takeover"
