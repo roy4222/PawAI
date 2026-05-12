@@ -1,7 +1,7 @@
 # 專案狀態
 
-**最後更新**：2026-05-11 night（TTS 跳句根因鎖定 H1 parallel voice drift + whispers tag 恢復 + chunking thresholds 60/45 + pcm_trim 80ms tail + PawAI CLI / Mac 搬家整套交付）
-**硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → 移交學校**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-12 night（Go2 已移交學校 + PawAI CLI 生產化 L1/L2/L3 + project-onboard 對齊 0511 七大功能 + nav capability lane + offline fallback E2E 驗證）
+**硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
 
 ---
 
@@ -139,6 +139,100 @@ P0 必做：
 4. T6 卡尺機鼻、F4 D435 TF（如果有時間）
 
 驗收：能跑 goto_relative 0.5m × 5 / goto_relative 1.0m × 3 連續成功 + 障礙停車場景 × 2
+
+學校第一件事（接 Jetson 螢幕鍵盤 5 分鐘）：
+```bash
+sudo nmcli connection modify "Wired connection 1" ipv4.never-default yes  # Go2 線不搶 default route
+sudo nmcli device wifi connect "學校SSID" password "..."
+pawai doctor                  # 確認 Wi-Fi 連上 + default route=wlan0 + Go2 link 還在
+pawai demo stop               # 清掉 home demo 殘留（pre-lock，會走 brain cleanup）
+pawai jetson deploy --module brain   # 修 install: ? 那行
+pawai demo start              # 重啟拿新 lock
+```
+
+---
+
+## 5/12 day-night：PawAI CLI 生產化 + skills 對齊 0511 + nav capability lane + offline fallback E2E
+
+獨立於 5/12 nav demo 主線，這是「為 5/13 五人共用 Jetson + Go2 場測」的基礎建設整套交付。35+ commits 全 push 到 `origin/main`。
+
+### PawAI CLI L1 / L2 / L3（從 MVP 到生產級）
+
+5/11 night MVP 落地的 `pawai_cli` 今天大改成五人共用安全工具，三層連續 ship：
+
+**L1 — 連得上**（9 commits，含 `775d6ba` checkpoint fix）：
+- `network.py` 加 Tailscale auto-detect（peer hostname `orinnano-super` 預設 hint）+ Jetson 端 topology probes
+- `cache.py` TTL JSON cache 給 `--cache 30`（多人同跑不重打 SSH）
+- doctor 新 flags：`--fix`（prompt 寫 IP）/ `--deep`（live OpenRouter probe）/ `--cache`/ `--expect-demo`
+- Network topology block：local→Tailscale / Jetson internet route / Go2 link / Go2 ping / Gateway 8080
+- `.env.local.example` IP 留空、`JETSON_HOSTNAME_HINT=orin`（對齊真實 Tailscale node）
+- `docs/pawai_cli/team-onboarding.md` 新建（隊友 30 分鐘上手 6 步驟）
+- troubleshooting G/H（Jetson 換網路、Tailscale Sharing）
+
+**L2 — 不撞車**（8 commits，含 `795f130` test fix）：
+- `lock.py` Jetson-side `flock` atomic lock + state machine（`starting → running`）+ 3× retry on transient SSH failure，exit 17 不 retry
+- `Lock` schema：user / host / branch / sha / state / start_time / lane / tmux_session
+- 共用 Jetson 三道閘：demo start collision prompt / demo stop own-lock-only default / deploy collision prompt
+- `-y` vs `--force` 語意分離：`-y` 不能搶別人 lock，`--force` 才能
+- `.pawai-last-deploy` schema 擴 7 欄位（branch / git_sha_full / dirty / packages / deployed_by / deployed_from_host）
+- `pawai status` 新區塊：demo lock owner + branch + state + stale 標記
+- troubleshooting I/J（Go2 Ethernet 直連、Gateway 8080 split diagnosis）
+
+**L3 — 便利**（2 commits）：
+- `pawai docs <module>` 直接路由到 `docs/pawai-brain/architecture/0511/<module>/<module>.md` + aliases (`onboarding` / `contract`)
+- `pawai contract check`（local-first，`--jetson` flag 才走 SSH）
+
+**Tests**：70 passed（從 12 起底擴到 70，新增 `test_network.py` / `test_cache.py` / `test_lock.py` + `test_cli.py` 大量擴張）。
+
+### Nav Capability Lane Handoff（v3 plan 後實作）
+
+新增 `pawai demo start --nav capability` — 啟動完整 nav stack 用安全的 lane handoff：
+
+- Lock schema 加 `lane: str = "brain"` 欄位，舊 JSON 透過 `setdefault` 向後相容
+- `pawai demo stop` 依 lock `lane` 路由：`brain` → `brain-studio-lane/cleanup.sh`、`nav_capability` → `nav-avoidance-lane/cleanup.sh`
+- `--force` takeover **必須先跑舊 lane cleanup**，再 release lock，再 acquire 新 lock — strict on cleanup fail（避免 5/11 撞牆 root cause：teleop hot publisher 殘留）
+- 額外彩蛋：**own-lock restart 也跑 cleanup**（plan 沒要求，多做的安全保險）
+- Invalid mode（`detour` / `fallback` / `amcl` / `mapping` / `bogus`）各有專屬 reject 訊息
+- `--brain-only` + `--nav capability` 互斥
+- `pawai status` 新增 Nav capability 區塊（lane running 時）：tmux / scan_rplidar publishers / nav_ready / depth_clear / reactive_status / `/cmd_vel_joy` publishers count
+- `nav-avoidance-lane/start.sh capability` 啟動前主動 `pkill -9 teleop_twist_joy joy_node`（防 5/11 撞牆 mux priority 100 vs 10 race）
+- healthcheck 加 `[6b] /cmd_vel_joy publisher count = 0` 驗證
+
+**Scope 明確劃線**：本版只啟 stack + 手動 `ros2 action send_goal /nav/goto_relative` 場測；**Brain → NAV executor 仍是 future work**，語音叫狗走不會動。
+
+### project-onboard skill 對齊 0511 七大功能 + Studio 架構文件
+
+`refactor(skill): project-onboard align to 0511 seven modules + studio` + `docs(arch): add 0511/studio freeze-snapshot`：
+
+- references 從 8 個（face/speech/vision-perception/llm-brain/studio/environment/project-status/validation）改成 **11 個**：face / gesture / pose / object / speech / nav / brain / studio / environment / validation / project-status
+- 砍 `vision-perception.md`（gesture/pose 分開）、`llm-brain.md` → 改名 `brain.md`
+- 每個 module reference 是 **80-120 行薄指標**，指向 0511 子文件，不複製內容
+- 新建 `docs/pawai-brain/architecture/0511/studio/` 5 子文件：runtime-flow / frontend-components / gateway-mock-bridge / debug-runbook + root `studio.md`
+- `pawai-cli` skill 已存在（保守版自我發現，靠 `pawai --help` 探活 flags，免每次重 patch）
+
+### Offline Fallback Chain E2E 驗證（`c4a66b2`）
+
+5/12 night 最後一輪實機驗證（4 分鐘 jetson smoke）：
+
+| 層 | 結果 |
+|---|---|
+| LLM primary gpt-5.4-mini | ✅ bad key → fail（預期）|
+| LLM fallback gemini-3-flash | ✅ 同 key 也 fail |
+| Brain `rule:chat_fallback` | ✅ 兩 LLM timeout 自動接 `say_canned` |
+| TTS primary Gemini Despina | ✅ bad key → fail |
+| TTS fallback edge_tts | ✅ 自動接手 + 播放 |
+| TTS final piper | ⚠️ 本輪沒驗到（edge_tts 接住沒拉到底）|
+
+整套 chain 不靠寫死 fallback path，靠 startup chain 自然漂下來。詳見 [`docs/runbook/2026-05-12-offline-fallback-verification.md`](../docs/runbook/2026-05-12-offline-fallback-verification.md)。
+
+**保命話術**留底：[`docs/runbook/demo-fallback-script.md`](../docs/runbook/demo-fallback-script.md)。
+
+### 5/13 場測前 carry-over
+
+- **F7 nav_action_server bug**（5/12 nav demo 那邊已標 P0）— 用 `pawai demo start --nav capability` 啟動後第一輪 `goto_relative 0.3m` 是 acid test
+- **學校 Wi-Fi 未知**：可能擋 OpenRouter / SSH tunnel → 萬一發生走 offline fallback，已驗
+- **Piper final fallback 沒實機驗到底**：edge_tts 先接走了，TTS 三層第三層留疑問
+- **`pawai-cli` skill 對 AI 已可用**：明天進新 session 的 AI 問「怎麼 deploy / 連 Jetson / lock 衝突」會自動觸發 skill 拿到正確 entry point
 
 ---
 

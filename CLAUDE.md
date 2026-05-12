@@ -45,6 +45,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 建構與執行
 
+### PawAI CLI 主入口（5/12 起，五人共用 Jetson 必走）
+
+```bash
+pawai doctor                              # 環境健檢（含 Network topology 區塊）
+pawai status                              # 看 demo lock owner / branch / 網路拓撲
+pawai jetson deploy --module <module>     # rsync + colcon build（含 lock collision prompt）
+pawai demo start                          # 啟 brain demo（registry lock，lane=brain）
+pawai demo start --nav capability         # 啟 nav stack（lane=nav_capability，scope 限手動 action 場測）
+pawai demo stop                           # 依 lock lane 路由 cleanup（只清自己的，--force 才能清別人）
+pawai docs <module>                       # 跳到 0511 架構文件
+pawai contract check                      # 跑 topic schema 驗證
+```
+
+**規矩**：一次只能一人 demo（lock），`-y` ≠ `--force`（前者跳一般 prompt、不能搶 lock；後者才能搶）。完整手冊：[`docs/pawai_cli/README.md`](docs/pawai_cli/README.md)、[`team-onboarding.md`](docs/pawai_cli/team-onboarding.md)、[`troubleshooting.md`](docs/pawai_cli/troubleshooting.md)。
+
 ### 基本建構
 
 ```bash
