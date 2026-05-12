@@ -115,7 +115,7 @@ Rationale: `rsync` excludes `.git/`, so Jetson git state does not reflect what w
 
 - **Only Jetson is shared**, not Go2. Go2 lives on the Jetson↔Go2 Ethernet link at `192.168.123.161` and is reached *through* Jetson.
 - Sharing path: Tailscale console → Jetson node → Share → produce link → distribute to four teammates → each accepts on their own free Tailscale account.
-- IP from teammate's view is the same `100.83.109.89` (Tailscale CGNAT is globally unique within Tailscale infrastructure).
+- IP from teammate's view is **expected to be the same `100.83.109.89`** (Tailscale CGNAT is globally unique within Tailscale infrastructure under normal conditions). Treat this as the expected/current shared-node IP — **do not hardcode**. CLI must always resolve via `tailscale status` auto-detect to tolerate node re-creation, IP reallocation, or share-link reissue.
 - ACL not required for share model (sharee sees only the shared node).
 
 ### Network topology check
@@ -128,8 +128,10 @@ Network topology:
   Jetson internet route:    OK wlan0
   Jetson Go2 link:          OK eth0 192.168.123.X
   Jetson → Go2 ping:        OK 192.168.123.161
-  Gateway 8080:             not running (demo not started)
+  Gateway 8080:             SKIP (no demo running) | OK | FAIL
 ```
+
+**Gateway 8080 severity rule**: this check is **INFO/SKIP by default** (no demo running is expected state, not a failure). It only escalates to **FAIL/red** when `pawai doctor --expect-demo` is passed *or* a lock file shows `state=running`. This prevents `doctor` from looking red before demo starts.
 
 Each line maps to one diagnostic command run on the Jetson via SSH (see `docs/pawai_cli/troubleshooting.md` G/I/J chapters in implementation):
 
@@ -188,7 +190,7 @@ Added flags:
 | Command | Behavior |
 |---|---|
 | `pawai docs <module>` | Print or `$EDITOR`-open `docs/pawai-brain/architecture/0511/<module>/<module>.md`. Aliases: `onboarding` → `docs/pawai_cli/team-onboarding.md`, `contract` → `docs/contracts/interaction_contract.md`. |
-| `pawai contract check` | SSH-runs `scripts/ci/check_topic_contracts.py` on Jetson. If absent, prints fallback instructions explicitly (does **not** silently degrade to opening docs). |
+| `pawai contract check` | **Default: run local** (`python3 scripts/ci/check_topic_contracts.py` against current branch). `--jetson` flag runs it against the deployed copy on Jetson via SSH. Local-first is safer for branch development — Jetson copy may be a stale sync from another teammate. If script absent locally, print explicit fallback instructions (do **not** silently degrade to opening docs). |
 
 **Dropped from earlier brainstorm**: `pawai reset` (too destructive), demo-start panel hints (low-value), `pawai doctor --fast` (out of scope tonight, `--cache` covers re-run speed).
 
@@ -222,7 +224,7 @@ After L1/L2/L3 land, optionally patch skill references to inline the now-real fl
 
 ---
 
-## Documentation Updates (pending)
+## Documentation Updates (pending — ships per layer, see Implementation Order)
 
 ### `docs/pawai_cli/README.md`
 
@@ -265,7 +267,7 @@ Brief daily-flow refresh + add pointer line to `docs/pawai_cli/README.md` as can
 
 ### L1
 
-- `pawai doctor` shows Network topology block at top of output, all green on Roy's machine.
+- `pawai doctor` shows Network topology block at top of output. Gateway 8080 line shows `SKIP (no demo running)` when no demo is running (not red); all other lines green on Roy's machine.
 - `JETSON_HOSTNAME_HINT=not-a-real-host pawai doctor` correctly surfaces Tailscale-found-no-peer red light without touching Roy's real config.
 - `JETSON_HOST=jetson-bad pawai doctor` correctly distinguishes Tailscale-working / SSH-alias-broken.
 - `--fix` writes only after prompt; default never mutates `.env.local`.
@@ -306,7 +308,15 @@ Brief daily-flow refresh + add pointer line to `docs/pawai_cli/README.md` as can
 
 ## Implementation Order (deferred to writing-plans)
 
-This spec stops at design. The implementation plan (created via `superpowers:writing-plans`) will sequence L1 → commit → L2 → commit → L3 → commit → docs updates → commit, with checkpoints between each.
+This spec stops at design. The implementation plan (created via `superpowers:writing-plans`) will interleave code + docs per layer, because **onboarding docs are part of L1/L2 acceptance, not post-L3 cleanup**:
+
+| Layer | Code changes | Doc changes (ship together in same commit set) |
+|---|---|---|
+| **L1** | doctor flags, topology block, `.env.local.example` IP change | `troubleshooting.md` G + H chapters; `team-onboarding.md` steps 1-4; `README.md` doctor flags section |
+| **L2** | demo lock, `.pawai-last-deploy` schema, status warnings | `troubleshooting.md` I + J chapters; `team-onboarding.md` step 5 + team rules; `README.md` lock + branch sections |
+| **L3** | `pawai docs`, `pawai contract check` | `README.md` new command rows; `tools/pawai_cli/README.md` sync |
+
+Each layer commits as code + docs together. Skipping L3 still leaves a usable team — but skipping L1's or L2's docs would leave teammates without onboarding paths.
 
 ---
 
