@@ -1,6 +1,6 @@
 # 專案進度快照
 
-> 最後更新：2026-05-11 night（**N3 → N8 demo-host 大幅升級** + scene perception + gesture/fallen 靈敏度 + 對話 gate + audio tag normalize + start.sh self-heal + 30-case 驗收清單）
+> 最後更新：2026-05-12 night（**離線 fallback chain 實機驗證** + 5/12 brain-freeze-v2 / N3-N8 demo-host）
 
 ## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾
 
@@ -161,6 +161,29 @@ Tags: `brain-freeze-v2` (49ecac7) → `brain-hotfix-N1` (c285b60 TTS strip) → 
 - brain-studio-lane skill 加 `demo` mode = `full + --studio` 一鍵全開（5 perception + brain + Studio frontend）
 
 待驗收：5/13 sync + rebuild + 重 smoke 看 N2 改動是否生效（5/12 night SSH 連線異常停下，persona 已 commit 但未上 Jetson）
+
+### 5/12 night — 離線 fallback chain 實機驗證（Go2 已搬到學校前）
+
+bad OPENROUTER_KEY 模擬雲端掛掉，五句連發走過完整 chain：
+
+| 層 | 結果 |
+|----|------|
+| LLM primary `gpt-5.4-mini` | bad key → fail |
+| LLM fallback `gemini-3-flash-preview` | 同 key → fail |
+| Brain `rule:chat_fallback` rescue | ✅ `chat_candidate_timeout` 後接手 `say_canned`「我聽不太懂」|
+| TTS primary `openrouter_gemini` | bad key → fail |
+| TTS fallback `edge_tts` | ✅ 接手合成 + 播放 |
+| TTS final `piper` | 未觸發（edge_tts 已 catch；要拔網才能驗）|
+
+紀錄：[`docs/runbook/2026-05-12-offline-fallback-verification.md`](../../../docs/runbook/2026-05-12-offline-fallback-verification.md)
+
+副產品（4 個 bug/坑）：
+1. `pawai demo start` 不 forward Mac shell 的 `TTS_PROVIDER` / `ASR_PROVIDER_ORDER`（brain-studio-lane skill default 蓋掉）
+2. `/brain/text_input` 期 JSON `{"text":"..."}` 不接純文字
+3. `ros2 topic pub --once` 跟 RELIABLE subscriber discovery race，要用 `--rate 1 --times 3`
+4. 裸 SSH `faster_whisper` 因 `LD_LIBRARY_PATH` 不繼承會 import 失敗（demo tmux 內 OK）
+
+ASR 三段 fallback inherently 需現場麥克風 — 排明天到場 5 分鐘做。
 
 ---
 
