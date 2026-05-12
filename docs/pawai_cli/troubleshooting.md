@@ -441,3 +441,47 @@ sudo tailscale up   # 引導你登入新帳號
 ### H3. Tailscale free tier 上限
 
 Free Personal tier 可以接受別人的 share node 不佔 user 配額。不需付費。
+
+---
+
+## I. Go2 Ethernet 直連
+
+### I1. `Jetson → Go2 ping: FAIL` 的三種可能
+
+1. Jetson Ethernet 沒插 Go2（看 `Jetson Go2 link` 那行有沒有 `192.168.123.x`）
+2. Jetson Ethernet 被誤拿去接學校網路（看 `Jetson internet route` 是不是 `eth0`）
+3. Go2 沒開機 / cable 鬆脫
+
+### I2. 不要把 Go2 插學校 Wi-Fi
+
+Go2 連到有外網的 Wi-Fi 會自動 OTA 更新韌體。永遠 Ethernet 直連 Jetson 就好。
+
+### I3. Jetson 換網路後 Go2 ping 突然失敗
+
+最常見：Jetson 換 Wi-Fi 後，Ethernet driver 沒重新拿 192.168.123.x。重啟 Jetson 或 `sudo systemctl restart NetworkManager`。
+
+---
+
+## J. Gateway 8080 分流診斷
+
+`pawai doctor` 的 Gateway 8080 行可能顯示：
+
+- `SKIP (no demo running)` — 正常，demo 沒跑時 gateway 不在
+- `OK` — gateway 正常
+- `FAIL` — 只在 `--expect-demo` 或 lock 顯示 running 時才出現
+
+判斷哪一段壞：
+
+```bash
+# 從 Jetson 本機 curl
+ssh jetson 'curl -fsS http://127.0.0.1:8080/health'
+
+# 從你筆電（Tailscale）curl
+curl -fsS http://$JETSON_TAILSCALE_IP:8080/health
+```
+
+| Jetson 本機 | 你筆電 | 診斷 |
+|---|---|---|
+| OK | FAIL | Tailscale 路徑問題（檢查 share / firewall） |
+| FAIL | FAIL | Gateway crashed（看 `pawai logs gateway`） |
+| OK | OK / Browser FAIL | Studio frontend `.env.local` 指錯 host |

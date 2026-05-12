@@ -76,6 +76,41 @@ pawai doctor
 
 紅燈時對照 `docs/pawai_cli/troubleshooting.md` B / G / H 章。
 
-## 5. 第一個任務 — Coming in L2
+## 5. 第一個任務（5 min）
 
-L2 加完 lock 之後本節會補：自己 branch → deploy → demo start → 規矩。
+開自己的 branch：
+
+```bash
+git checkout -b feat/<yourname>-explore
+```
+
+部署你負責的模組：
+
+```bash
+pawai docs <module>             # 先看架構文件
+pawai jetson deploy --module <module>
+```
+
+啟動 demo：
+
+```bash
+pawai demo start
+```
+
+如果看到「Another user is in demo」訊息 — 不要 `--force`，跟對方溝通。
+
+完成後一定要停：
+
+```bash
+pawai demo stop
+```
+
+`pawai status` 隨時查看誰在 demo、用哪個 branch、跑了多久。
+
+## 規矩（明天現場守住）
+
+- **一次只能一個人 `pawai demo start`** — Jetson + Go2 是共用資源
+- **`-y` ≠ `--force`**：`-y` 只跳自己的確認，**不能**蓋別人的 lock；要接手別人 demo 必須 `--force`
+- **`pawai demo stop` 預設只清自己的 lock**；停別人的 demo 用 `--force` 並先告訴對方
+- **deploy 中看到「someone is in demo」prompt → 先溝通**，不要直接 `--force`
+- **stale lock（demo 跑超過 4hr）不會自動清** — `pawai status` 會標 STALE，要清也要確認對方真的不在用

@@ -358,7 +358,42 @@ uv pip install -e tools/pawai_cli --force-reinstall
 
 ---
 
-## 7. 設計理念
+## 7. Lock 機制（多人共用 Jetson）
+
+`$JETSON_REPO/.pawai-demo-lock` 是共用 Jetson 的 single source of truth：
+
+- `state: starting` — `pawai demo start` 已 acquire lock，正在啟動
+- `state: running` — start.sh 跑完，demo 正常運行
+- `pawai demo stop` / start 失敗 — lock 移除
+
+**stale 規則**：
+- `starting` > 10 min → 視為啟動失敗，會 prompt 清掉
+- `running` > 4 hr → 標 `STALE` 在 `pawai status`，**不**自動刪
+
+### `-y` vs `--force`
+
+| Flag | 跳一般 prompt？ | 可以搶別人 lock？ |
+|---|---|---|
+| `-y` | ✅ | ❌ |
+| `--force` | ✅ | ✅ |
+
+`pawai demo start --force` / `pawai demo stop --force` / `pawai jetson deploy --force` 都會搶。
+明天現場接手別人 demo 前**請先溝通**。
+
+### Branch mismatch
+
+`rsync` 不同步 `.git/`，Jetson 上 git 狀態不代表實際跑的 code。`.pawai-last-deploy` 才是 runtime provenance。
+
+`pawai status` 比對：
+- **local branch**（你 checkout 的）
+- **install branch**（`.pawai-last-deploy` 記錄的 deploy 來源）
+- **dirty**（deploy 當下 working tree 是否有未 commit 改動）
+
+不一致時印 `⚠ MISMATCH`。要讓兩邊一致 → 切到對的 branch 再 `pawai jetson deploy --module X`。
+
+---
+
+## 8. 設計理念
 
 - **包裝不取代**：所有重活還是 `scripts/*.sh` 在做，CLI 只負責「正確順序 + 環境 + 提示」
 - **失敗時給 actionable hint**：doctor 不只說「missing」，會給對應的 `brew install` / `cp example`
