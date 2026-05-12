@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from pawai_cli.main import _install_hint_map, _ssh_config_has_host, cli
 from pawai_cli.modules import MODULES, get_module
+from pawai_cli import shell
 
 
 def test_module_table_has_expected_modules() -> None:
@@ -433,3 +434,56 @@ def test_deploy_prompts_on_active_other_lock(monkeypatch):
         runner = CliRunner()
         result = runner.invoke(cli, ["jetson", "deploy", "--module", "brain"], input="c\n")
     assert "alice" in result.output.lower()
+
+
+# ──────────────── L3 tests ────────────────
+
+def test_pawai_docs_brain_resolves_path():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["docs", "brain"])
+    assert "architecture/0511" in result.output
+    assert "brain" in result.output
+    assert result.exit_code == 0
+
+
+def test_pawai_docs_unknown_lists_valid():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["docs", "zzz-not-a-module"])
+    assert result.exit_code != 0
+    assert "brain" in result.output and "face" in result.output  # the list
+
+
+def test_pawai_docs_onboarding_alias():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["docs", "onboarding"])
+    assert "team-onboarding" in result.output
+
+
+def test_contract_check_runs_local_when_script_exists(tmp_path, monkeypatch):
+    # Stage a fake repo root with the contract script
+    script = tmp_path / "scripts/ci/check_topic_contracts.py"
+    script.parent.mkdir(parents=True)
+    script.write_text("import sys; sys.exit(0)")
+    monkeypatch.setenv("PAWAI_REPO_ROOT", str(tmp_path))
+    runner = CliRunner()
+    result = runner.invoke(cli, ["contract", "check"])
+    assert result.exit_code == 0
+
+
+def test_contract_check_explicit_fallback_when_script_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("PAWAI_REPO_ROOT", str(tmp_path))
+    runner = CliRunner()
+    result = runner.invoke(cli, ["contract", "check"])
+    assert result.exit_code != 0
+    assert "check_topic_contracts.py" in result.output
+    assert "interaction_contract.md" in result.output  # explicit fallback ref
+
+
+def test_contract_check_jetson_uses_ssh(monkeypatch):
+    monkeypatch.setenv("PAWAI_REPO_ROOT", "/nonexistent")  # force jetson path
+    with patch("pawai_cli.main.shell.run_remote",
+               return_value=shell.Result(code=0, stdout="ok", stderr="")) \
+         as mocked:
+        runner = CliRunner()
+        runner.invoke(cli, ["contract", "check", "--jetson"])
+    assert mocked.called

@@ -723,5 +723,53 @@ def logs(module: str, lines: int) -> None:
     print(f"  ssh {shell.jetson_host()} 'tmux attach -t demo'")
 
 
+@cli.command("docs")
+@click.argument("target")
+@click.option("--open", "open_doc", is_flag=True, help="Open in $EDITOR.")
+def docs(target: str, open_doc: bool) -> None:
+    """Open architecture / onboarding / contract docs by short name."""
+    from .modules import arch_doc_path, all_doc_targets
+    path = arch_doc_path(target, shell.repo_root())
+    if path is None:
+        click.echo(f"Unknown doc target '{target}'.")
+        click.echo(f"Valid: {' '.join(sorted(all_doc_targets()))}")
+        sys.exit(2)
+
+    click.echo(str(path))
+    if open_doc:
+        editor = os.environ.get("EDITOR", "vi")
+        shell.stream([editor, str(path)])
+
+
+@cli.group("contract")
+def contract() -> None:
+    """Contract / schema checks."""
+
+
+@contract.command("check")
+@click.option("--jetson", is_flag=True, help="Run against Jetson deployed copy instead of local.")
+def contract_check(jetson: bool) -> None:
+    """Run topic contract schema validation."""
+    script_rel = "scripts/ci/check_topic_contracts.py"
+    spec_md = "docs/contracts/interaction_contract.md"
+
+    if jetson:
+        res = shell.run_remote(f"cd {shell.jetson_repo()} && python3 {script_rel}", timeout=30)
+        if res.stdout:
+            click.echo(res.stdout.rstrip())
+        if res.stderr:
+            click.echo(res.stderr.rstrip())
+        sys.exit(res.code)
+
+    local_script = shell.repo_root() / script_rel
+    if not local_script.exists():
+        click.echo(f"✗ Local checker not found: {script_rel}")
+        click.echo(f"  Spec reference: {spec_md}")
+        click.echo(f"  Run on Jetson instead: pawai contract check --jetson")
+        sys.exit(2)
+    rc = shell.stream(["python3", str(local_script)], cwd=shell.repo_root())
+    sys.exit(rc)
+
+
 if __name__ == "__main__":
     cli()

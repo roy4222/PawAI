@@ -125,3 +125,31 @@ def get_module(name: str) -> ModuleInfo:
 
 def existing_docs(module: ModuleInfo, root: Path) -> list[str]:
     return [doc for doc in module.docs if (root / doc).exists()]
+
+
+_DOC_ALIASES: dict[str, str] = {
+    "onboarding": "docs/pawai_cli/team-onboarding.md",
+    "contract": "docs/contracts/interaction_contract.md",
+}
+
+
+def arch_doc_path(name: str, root: Path) -> Path | None:
+    """Map module name to its architecture/0511/<name>/<name>.md (or alias target)."""
+    if name in _DOC_ALIASES:
+        path = root / _DOC_ALIASES[name]
+        return path if path.exists() else None
+
+    # Module: try architecture/0511/<name>/<name>.md, then architecture/0511/<name>.md
+    candidates = [
+        root / f"docs/pawai-brain/architecture/0511/{name}/{name}.md",
+        root / f"docs/pawai-brain/architecture/0511/{name}.md",
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return None
+
+
+def all_doc_targets() -> list[str]:
+    """Names accepted by `pawai docs`."""
+    return list(MODULES.keys()) + list(_DOC_ALIASES.keys())
