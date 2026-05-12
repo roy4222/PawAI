@@ -599,6 +599,53 @@ def _invoke_cleanup_sh() -> int:
     )
 
 
+def _invoke_nav_start_sh() -> int:
+    return shell.stream(
+        ["bash", ".claude/skills/nav-avoidance-lane/scripts/start.sh", "capability"],
+        cwd=shell.repo_root(),
+    )
+
+
+def _invoke_nav_cleanup_sh() -> int:
+    return shell.stream(
+        ["bash", ".claude/skills/nav-avoidance-lane/scripts/cleanup.sh"],
+        cwd=shell.repo_root(),
+    )
+
+
+def _cleanup_for_lock(lock) -> int:
+    if getattr(lock, "lane", "brain") == "nav_capability":
+        return _invoke_nav_cleanup_sh()
+    return _invoke_cleanup_sh()
+
+
+def _validate_nav_mode(nav_mode: str | None, brain_only: bool) -> str | None:
+    if nav_mode is None:
+        return None
+    normalized = nav_mode.strip().lower()
+    if not normalized:
+        return None
+    if brain_only:
+        raise click.UsageError("--nav capability cannot be combined with --brain-only")
+    if normalized == "capability":
+        return "capability"
+    if normalized == "detour":
+        raise click.UsageError(
+            "--nav detour is intentionally unsupported; detour mode is known unstable."
+        )
+    if normalized == "fallback":
+        raise click.UsageError(
+            "--nav fallback is unsupported because standalone reactive_stop is mutually "
+            "exclusive with Nav2/capability."
+        )
+    if normalized in {"amcl", "mapping"}:
+        raise click.UsageError(
+            f"--nav {normalized} is not exposed through pawai demo start; use "
+            ".claude/skills/nav-avoidance-lane/scripts/start.sh directly."
+        )
+    raise click.UsageError("unknown --nav mode. Supported: capability")
+
+
 def _current_branch() -> str:
     r = shell.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
     return r.stdout.strip() if r.ok else "unknown"
@@ -612,11 +659,21 @@ def _current_sha_short() -> str:
 @demo.command("start")
 @click.option("--no-studio", is_flag=True, help="Start full mode without local Studio overlay.")
 @click.option("--brain-only", is_flag=True, help="Start minimal brain stack only.")
+@click.option("--nav", "nav_mode", metavar="MODE",
+              help="Start nav capability lane. First version supports only: capability.")
 @click.option("-y", "yes", is_flag=True, help="Skip ordinary confirmation prompts (does NOT override another user's lock).")
 @click.option("--force", "force", is_flag=True, help="Take over another user's demo lock.")
-def demo_start(no_studio: bool, brain_only: bool, yes: bool, force: bool) -> None:
-    """Start brain-studio-lane."""
+def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
+               yes: bool, force: bool) -> None:
+    """Start brain demo or nav capability lane."""
     from .lock import Lock, is_stale, is_own_lock
+
+    nav_mode = _validate_nav_mode(nav_mode, brain_only)
+    lane = "nav_capability" if nav_mode == "capability" else "brain"
+    tmux_session = "nav-cap-demo" if lane == "nav_capability" else "demo"
+    demo_mode = "nav_capability" if lane == "nav_capability" else (
+        "minimal" if brain_only else "full"
+    )
 
     user = os.environ.get("USER") or shell.local_identity().split("@")[0]
     host = platform.node()
@@ -627,6 +684,10 @@ def demo_start(no_studio: bool, brain_only: bool, yes: bool, force: bool) -> Non
     if existing is not None:
         if is_own_lock(existing, user, host):
             click.echo(f"Existing lock is yours ({existing.state}). Restarting demo.")
+            rc = _cleanup_for_lock(existing)
+            if rc != 0:
+                click.echo("Existing lane cleanup failed — keeping lock for investigation.")
+                sys.exit(rc)
             Lock.release()
         else:
             stale = is_stale(existing)
@@ -642,23 +703,30 @@ def demo_start(no_studio: bool, brain_only: bool, yes: bool, force: bool) -> Non
                 answer = click.prompt("Take over? [force/cancel]", default="cancel")
                 if not answer.lower().startswith("f"):
                     sys.exit(0)
+            click.echo(f"--force: cleaning {existing.user}'s {getattr(existing, 'lane', 'brain')} lane")
+            rc = _cleanup_for_lock(existing)
+            if rc != 0:
+                click.echo("Previous lane cleanup failed — keeping lock for investigation.")
+                sys.exit(rc)
             click.echo(f"--force: clearing {existing.user}'s lock")
             Lock.release()
 
     # Acquire starting lock
-    lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting")
+    lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting",
+                      demo_mode=demo_mode, tmux_session=tmux_session, lane=lane)
     if lk is None:
         click.echo("Failed to acquire lock after 3 retries — flock held by another process or remote SSH issue. Investigate before retrying.")
         sys.exit(2)
 
-    rc = _invoke_start_sh(no_studio=no_studio, brain_only=brain_only)
+    rc = _invoke_nav_start_sh() if lane == "nav_capability" else \
+        _invoke_start_sh(no_studio=no_studio, brain_only=brain_only)
     if rc != 0:
         click.echo("Demo start failed — releasing lock.")
         Lock.release()
         sys.exit(rc)
 
     lk.transition_to("running")
-    click.echo(f"✓ Demo running (lock owner: {user}@{host})")
+    click.echo(f"✓ Demo running (lane: {lane}, lock owner: {user}@{host})")
 
 
 @demo.command("stop")
@@ -680,7 +748,7 @@ def demo_stop(force: bool) -> None:
                    f"Use --force to stop their demo.")
         sys.exit(2)
 
-    rc = _invoke_cleanup_sh()
+    rc = _cleanup_for_lock(existing)
     Lock.release()
     sys.exit(rc)
 

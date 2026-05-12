@@ -336,6 +336,7 @@ def test_demo_start_force_takes_over(monkeypatch):
     released: list = []
 
     with patch("pawai_cli.lock.Lock.read", return_value=other_lock), \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=0) as cleanup, \
          patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True), \
          patch("pawai_cli.lock.Lock.acquire", return_value=other_lock), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
@@ -343,7 +344,38 @@ def test_demo_start_force_takes_over(monkeypatch):
         runner = CliRunner()
         runner.invoke(cli, ["demo", "start", "--force"])
 
+    assert cleanup.called
     assert released == [1], "Expected lock release on --force takeover"
+
+
+def test_demo_start_force_cleans_old_nav_lane_before_takeover(monkeypatch):
+    from pawai_cli.lock import Lock
+
+    other_lock = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                      state="running",
+                      start_time=datetime.now(timezone.utc).isoformat(),
+                      lane="nav_capability", tmux_session="nav-cap-demo")
+    new_lock = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat())
+    calls: list[str] = []
+
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=other_lock), \
+         patch("pawai_cli.main._invoke_nav_cleanup_sh",
+               side_effect=lambda: calls.append("nav_cleanup") or 0), \
+         patch("pawai_cli.lock.Lock.release",
+               side_effect=lambda: calls.append("release") or True), \
+         patch("pawai_cli.lock.Lock.acquire",
+               side_effect=lambda **kwargs: calls.append("acquire") or new_lock), \
+         patch("pawai_cli.main._invoke_start_sh",
+               side_effect=lambda **kwargs: calls.append("brain_start") or 0), \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "start", "--force"])
+
+    assert result.exit_code == 0
+    assert calls[:3] == ["nav_cleanup", "release", "acquire"]
 
 
 def test_demo_stop_refuses_other_users_lock(monkeypatch):
@@ -376,6 +408,28 @@ def test_demo_stop_force_releases_other_lock(monkeypatch):
     assert released == [1]
 
 
+def test_demo_stop_routes_nav_lock_to_nav_cleanup(monkeypatch):
+    from pawai_cli.lock import Lock
+
+    nav_lock = Lock(user="bob", host="bob-mac", branch="x", sha="a",
+                    state="running",
+                    start_time=datetime.now(timezone.utc).isoformat(),
+                    lane="nav_capability", tmux_session="nav-cap-demo")
+    monkeypatch.setenv("USER", "bob")
+    released: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=nav_lock), \
+         patch("pawai_cli.main.platform.node", return_value="bob-mac"), \
+         patch("pawai_cli.main._invoke_nav_cleanup_sh", return_value=0) as nav_cleanup, \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=0) as brain_cleanup, \
+         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "stop"])
+    assert result.exit_code == 0
+    assert nav_cleanup.called
+    assert not brain_cleanup.called
+    assert released == [1]
+
+
 def _reachable_live_status():
     from pawai_cli.status import LiveStatus
 
@@ -393,6 +447,31 @@ def test_status_shows_lock_state(monkeypatch):
         result = runner.invoke(cli, ["status"])
     assert "alice" in result.output.lower()
     assert "running" in result.output.lower()
+
+
+def test_status_shows_nav_capability_block(monkeypatch):
+    from pawai_cli.lock import Lock
+    from pawai_cli.status import NavCapabilityStatus
+
+    lk = Lock(user="alice", host="alice-mac", branch="feat/nav", sha="abc",
+              state="running",
+              start_time=datetime.now(timezone.utc).isoformat(),
+              lane="nav_capability", tmux_session="nav-cap-demo")
+    nav = NavCapabilityStatus(
+        tmux_running=True,
+        scan_publishers="1",
+        nav_ready="data: true",
+        depth_clear="data: true",
+        reactive_status="mode: progressive",
+        cmd_vel_joy_publishers="0",
+    )
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status.Lock.read", return_value=lk), \
+         patch("pawai_cli.status.collect_nav_capability_status", return_value=nav):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status", "--short"])
+    assert "nav capability" in result.output.lower()
+    assert "/cmd_vel_joy publishers: 0" in result.output
 
 
 def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
@@ -434,6 +513,49 @@ def test_deploy_prompts_on_active_other_lock(monkeypatch):
         runner = CliRunner()
         result = runner.invoke(cli, ["jetson", "deploy", "--module", "brain"], input="c\n")
     assert "alice" in result.output.lower()
+
+
+def test_demo_start_nav_capability_invokes_nav_start(monkeypatch):
+    from pawai_cli.lock import Lock
+
+    acquired = Lock(user="bob", host="bob-mac", branch="main", sha="abc",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat(),
+                    lane="nav_capability", tmux_session="nav-cap-demo")
+    acquire_kwargs: dict = {}
+
+    def fake_acquire(**kwargs):
+        acquire_kwargs.update(kwargs)
+        return acquired
+
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.lock.Lock.acquire", side_effect=fake_acquire), \
+         patch("pawai_cli.main._invoke_nav_start_sh", return_value=0) as nav_start, \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0) as brain_start, \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "start", "--nav", "capability"])
+
+    assert result.exit_code == 0
+    assert nav_start.called
+    assert not brain_start.called
+    assert acquire_kwargs["lane"] == "nav_capability"
+    assert acquire_kwargs["tmux_session"] == "nav-cap-demo"
+
+
+def test_demo_start_nav_capability_rejects_brain_only():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["demo", "start", "--nav", "capability", "--brain-only"])
+    assert result.exit_code == 2
+    assert "brain-only" in result.output
+
+
+def test_demo_start_rejects_invalid_nav_modes():
+    runner = CliRunner()
+    for mode in ["detour", "fallback", "amcl", "mapping", "bogus"]:
+        result = runner.invoke(cli, ["demo", "start", "--nav", mode])
+        assert result.exit_code == 2
+        assert "--nav" in result.output
 
 
 # ──────────────── L3 tests ────────────────

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from . import shell
@@ -38,6 +39,20 @@ class LiveStatus:
     def has_demo(self) -> bool:
         return any(line.startswith("demo:") for line in self.tmux.splitlines())
 
+    @property
+    def has_nav_capability(self) -> bool:
+        return any(line.startswith("nav-cap-demo:") for line in self.tmux.splitlines())
+
+
+@dataclass
+class NavCapabilityStatus:
+    tmux_running: bool
+    scan_publishers: str
+    nav_ready: str
+    depth_clear: str
+    reactive_status: str
+    cmd_vel_joy_publishers: str
+
 
 def collect() -> LiveStatus:
     tmux = shell.run_remote("tmux ls 2>/dev/null || true", timeout=10)
@@ -59,6 +74,56 @@ def collect() -> LiveStatus:
     )
     reachable = tmux.code != 127 and tmux.code != 255
     return LiveStatus(tmux.stdout.strip(), ros.stdout.strip(), git.stdout.strip(), last.stdout.strip(), reachable)
+
+
+def _ros_remote(command: str, timeout: int = 6) -> str:
+    result = shell.run_remote(
+        "source /opt/ros/humble/setup.zsh 2>/dev/null; "
+        f"source {shell.jetson_repo()}/install/setup.zsh 2>/dev/null; "
+        f"{command}",
+        timeout=timeout,
+    )
+    if not result.ok:
+        return ""
+    return result.stdout.strip()
+
+
+def _publisher_count(topic: str) -> str:
+    out = _ros_remote(f"ros2 topic info {topic} 2>/dev/null", timeout=5)
+    match = re.search(r"Publisher count:\s*(\d+)", out)
+    return match.group(1) if match else "?"
+
+
+def _bool_topic_once(topic: str) -> str:
+    out = _ros_remote(
+        f"timeout 3 ros2 topic echo {topic} --once 2>/dev/null | "
+        "grep -oE 'data: (true|false)' | head -1",
+        timeout=5,
+    )
+    return out or "no sample"
+
+
+def _reactive_status_once() -> str:
+    out = _ros_remote(
+        "timeout 3 ros2 topic echo /state/reactive_stop/status --once 2>/dev/null | "
+        "head -20",
+        timeout=5,
+    )
+    if not out:
+        return "no sample"
+    compact = " ".join(line.strip() for line in out.splitlines() if line.strip())
+    return compact[:180]
+
+
+def collect_nav_capability_status(tmux_output: str) -> NavCapabilityStatus:
+    return NavCapabilityStatus(
+        tmux_running=any(line.startswith("nav-cap-demo:") for line in tmux_output.splitlines()),
+        scan_publishers=_publisher_count("/scan_rplidar"),
+        nav_ready=_bool_topic_once("/capability/nav_ready"),
+        depth_clear=_bool_topic_once("/capability/depth_clear"),
+        reactive_status=_reactive_status_once(),
+        cmd_vel_joy_publishers=_publisher_count("/cmd_vel_joy"),
+    )
 
 
 def print_status(short: bool = False) -> LiveStatus:
@@ -129,8 +194,21 @@ def print_status(short: bool = False) -> LiveStatus:
         suffix = f" [STALE {stale}]" if stale else ""
         print(f"  owner: {lk.user}@{lk.host}")
         print(f"  branch: {lk.branch}")
+        print(f"  lane: {getattr(lk, 'lane', 'brain')}")
+        print(f"  tmux: {getattr(lk, 'tmux_session', 'demo')}")
         print(f"  state: {lk.state}{suffix}")
         print(f"  started: {lk.start_time}")
+
+    nav_running = st.has_nav_capability or (lk is not None and getattr(lk, "lane", "brain") == "nav_capability")
+    if nav_running:
+        nav = collect_nav_capability_status(st.tmux)
+        print("\nNav capability:")
+        print(f"  tmux nav-cap-demo: {'running' if nav.tmux_running else 'missing'}")
+        print(f"  /scan_rplidar publishers: {nav.scan_publishers}")
+        print(f"  /capability/nav_ready: {nav.nav_ready}")
+        print(f"  /capability/depth_clear: {nav.depth_clear}")
+        print(f"  /state/reactive_stop/status: {nav.reactive_status}")
+        print(f"  /cmd_vel_joy publishers: {nav.cmd_vel_joy_publishers}")
 
     # Branch mismatch
     last = _read_last_deploy_remote()
