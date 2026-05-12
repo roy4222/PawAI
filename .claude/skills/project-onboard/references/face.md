@@ -1,93 +1,60 @@
-# 人臉辨識 Reference
+# 人臉辨識（face_perception）
 
-> 最後更新：2026-03-18
-> 狀態：**USABLE** — Jetson smoke passed 2026-03-18（D435 + state/event/debug_image 全通）
+## 這個模組是什麼
 
-## 模組定位
+Layer 2 感知模組，負責人臉偵測（YuNet）、識別（SFace cosine）、IOU 追蹤、深度估計。
+它是 PawAI 的「眼」— 決定誰在畫面裡，讓 Brain 的 world_state_builder 知道當前說話者是誰（`current_speaker`）。
+10Hz 持續發布 `/state/perception/face`，觸發式發布 `/event/face_identity`（4 種 event_type）。
 
-**P0 核心功能**，純本地推理，無雲端依賴。負責人臉偵測、追蹤、身份識別、深度估計。
-
-## 權威文件
+## 0511 權威文件
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/perception/face/README.md` | 故障排除與啟動指南 |
-| `docs/contracts/interaction_contract.md` §3.1, §4.1-4.2 | ROS2 topic schema（v2.1） |
-| `docs/pawai-brain/studio/event-schema.md` §1.2, §2.1 | Studio 前端 event/state schema |
+| `docs/pawai-brain/architecture/0511/face/face.md` | 主總覽 + 架構圖 + 0511 freeze 快照 |
+| `docs/pawai-brain/architecture/0511/face/face-recognition-tracking.md` | YuNet + SFace pipeline + IOU tracker 細節 |
+| `docs/pawai-brain/architecture/0511/face/face-runtime-flow.md` | D435 → YuNet → SFace → 追蹤 → ROS2 publish 完整 flow |
+| `docs/pawai-brain/architecture/0511/face/face-brain-executive-integration.md` | 與 Brain world_state_builder 的整合（current_speaker 注入）|
+| `docs/pawai-brain/architecture/0511/face/face-registration-debug-runbook.md` | 人臉註冊流程 + 現場 debug checklist |
 
-## 技術棧
-
-| 組件 | 技術 | 備註 |
-|------|------|------|
-| 偵測器 | YuNet (ONNX) | **必須用 legacy 版**，2023mar 在 Jetson OpenCV 4.5.4 崩潰 |
-| 識別器 | SFace (ONNX) | 128 維 cosine similarity |
-| 深度攝影機 | Intel RealSense D435 | RGB-D aligned |
-| 人臉資料庫 | SFace embeddings pickle | `/home/jetson/face_db/model_sface.pkl` |
-
-## 核心程式
+## 核心程式檔案
 
 | 檔案 | 用途 |
 |------|------|
-| `scripts/face_identity_infer_cv.py` | 主推理腳本（CLI 驅動） |
-| `scripts/face_identity_enroll_cv.py` | 人臉註冊工具 |
+| `face_perception/face_perception/face_identity_node.py` | 主 ROS2 節點（YuNet + SFace + IOU tracker + publish）|
+| `face_perception/config/face_perception.yaml` | 模型路徑、閾值、Jetson 路徑設定 |
+| `face_perception/launch/face_perception.launch.py` | 一鍵 launch（含 D435 camera）|
+| `scripts/start_face_identity_tmux.sh` | tmux 一鍵啟動（D435 + face_identity_node + foxglove）|
 
-## ROS2 介面
+## 關鍵 ROS2 topic / event
 
-**State**：`/state/perception/face`（10 Hz）
-```json
-{
-  "stamp": 1773926400.789,
-  "face_count": 1,
-  "tracks": [{
-    "track_id": 1, "stable_name": "Roy", "sim": 0.42,
-    "distance_m": 1.25, "bbox": [100, 150, 200, 280], "mode": "stable"
-  }]
-}
-```
-
-**Event**：`/event/face_identity`（觸發式，4 種 event_type）
-
-| event_type | 觸發條件 |
-|-----------|----------|
-| `track_started` | 新 track_id 首次出現 |
-| `identity_stable` | Hysteresis 穩定化達標（stable_hits=3） |
-| `identity_changed` | 同 track_id 的 stable_name 變更 |
-| `track_lost` | 連續 max_misses 幀未匹配 |
+| Topic | 方向 | 內容 |
+|-------|------|------|
+| `/state/perception/face` | face_identity_node → | 10Hz JSON，face_count + tracks[]（FaceState）|
+| `/event/face_identity` | face_identity_node → | 觸發式 4 種 event_type（track_started / identity_stable / identity_changed / track_lost）|
+| `/face_identity/debug_image` | face_identity_node → | 可視化 debug image（Foxglove Image panel, ~6.6Hz）|
 
 ## 已知陷阱
 
-- YuNet **必須用 legacy 版本**（Jetson OpenCV 4.5.4 限制）
-- 人臉資料庫必須在 `/home/jetson/face_db/`，結構為 `{person_name}/*.png`
-- Hysteresis 穩定化需 ~0.3 秒（3 幀確認 + 置信度遲滯 0.35/0.25）
-- 不可同時跑多個 `face_identity_infer_cv.py`（相機裝置忙碌）
-- `distance_m` 可能為 null（超出深度範圍）
+- **YuNet 版本**：必須用 2023mar（`face_detection_yunet_2023mar.onnx`），legacy 版本在 Jetson OpenCV 4.5.4 崩潰
+- **人臉資料庫路徑**：`/home/jetson/face_db/{name}/*.png`，SFace embeddings pickle 需事先建立
+- **距離估計 null**：D435 深度超出範圍時 `distance_m` 為 null，不要假設一定有值
+- **不可並行多個 instance**：`face_identity_infer_cv.py` 或 node 搶占 D435 相機資源
+- **QoS 設定**：D435 camera 用 BEST_EFFORT，state/event publish 用 RELIABLE VOLATILE（3/23 已修）
+- **int32 序列化 bug**：`to_bbox()` 回傳 np.int32，json.dumps 不認識 → 必須轉 Python int（3/18 修）
 
-## 啟動流程（Jetson）
-
-```bash
-# Terminal A：相機
-ros2 launch realsense2_camera rs_launch.py \
-  depth_module.profile:=640x480x30 rgb_camera.profile:=640x480x30 align_depth.enable:=true
-
-# Terminal B：人臉辨識
-python3 scripts/face_identity_infer_cv.py \
-  --db-dir /home/jetson/face_db \
-  --yunet-model /home/jetson/face_models/face_detection_yunet_2023mar.onnx \
-  --sface-model /home/jetson/face_models/face_recognition_sface_2021dec.onnx \
-  --publish-fps 8 --no-publish-compare-image --headless
-```
-
-## 驗證
+## 開發入口
 
 ```bash
-ros2 topic echo /state/perception/face    # 應有 10Hz JSON
-ros2 topic echo /event/face_identity      # 走近 → track_started → identity_stable → 離開 → track_lost
+# 一鍵啟動（推薦）
+bash scripts/start_face_identity_tmux.sh
+
+# 手動啟動
+ros2 launch face_perception face_perception.launch.py
+
+# 驗證
+ros2 topic echo /state/perception/face     # 10Hz JSON
+ros2 topic echo /event/face_identity       # 走近 → track_started → identity_stable
+
+# 清理
+bash scripts/clean_face_env.sh --all
 ```
-
-## 當前狀態
-
-- 偵測 + 追蹤 + 識別 MVP 穩定
-- state/event topic 已對齊 interaction_contract v2.1
-- QoS 已修正（RELIABLE → BEST_EFFORT for D435 camera，3/23）
-- YuNet default 已從 legacy 改為 2023mar（3/25）
-- `face_perception` ROS2 package 已完成，Clean Architecture 重構為中期目標
