@@ -46,6 +46,40 @@ def _install_hint_map() -> dict[str, str]:
     }
 
 
+def _build_last_deploy_payload(module: str, packages: list[str], sync_method: str) -> dict:
+    """Construct the .pawai-last-deploy JSON payload with full provenance.
+
+    Captures: who deployed, from which host, current branch, full+short SHA,
+    dirty flag, module alias, resolved package list, sync method, timestamp.
+    """
+    root = shell.repo_root()
+    branch_r = shell.run(["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
+    sha_r = shell.run(["git", "-C", str(root), "rev-parse", "HEAD"], timeout=5)
+    porcelain = shell.run(["git", "-C", str(root), "status", "--porcelain"], timeout=5)
+
+    branch = branch_r.stdout.strip() if branch_r.ok else "unknown"
+    sha_full = sha_r.stdout.strip() if sha_r.ok else ""
+    sha_short = sha_full[:7] if sha_full else ""
+    dirty = bool(porcelain.stdout.strip()) if porcelain.ok else False
+
+    identity = shell.local_identity()
+    deployed_by = identity.split("@")[0]
+    deployed_from_host = identity.split("@")[-1] if "@" in identity else ""
+
+    return {
+        "deployed_by": deployed_by,
+        "deployed_from_host": deployed_from_host,
+        "branch": branch,
+        "git_sha": sha_short,
+        "git_sha_full": sha_full,
+        "dirty": dirty,
+        "module": module,
+        "packages": packages,
+        "when": datetime.now(timezone.utc).isoformat(),
+        "sync_method": sync_method,
+    }
+
+
 def _patch_env_local(path: Path, key: str, value: str) -> None:
     """In-place replace or append `KEY=value` line in .env.local. Idempotent."""
     if not path.exists():
@@ -495,15 +529,11 @@ def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modul
         if code != 0:
             raise click.ClickException(f"colcon build failed with exit code {code}")
 
-    git_sha = shell.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, timeout=5).stdout.strip()
-    payload = {
-        "user": shell.local_identity(),
-        "module": module_key,
-        "packages": packages,
-        "ts": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
-        "git_sha": git_sha,
-        "sync_method": sync_method,
-    }
+    payload = _build_last_deploy_payload(module=module_key, packages=packages,
+                                         sync_method=sync_method)
+    # Keep legacy fields for backwards compat
+    payload["user"] = shell.local_identity()
+    payload["ts"] = payload["when"]
     remote_json = json.dumps(payload, ensure_ascii=False)
     shell.run_remote(
         f"cd {shell.jetson_repo()} && printf '%s\\n' {json.dumps(remote_json)} > .pawai-last-deploy",

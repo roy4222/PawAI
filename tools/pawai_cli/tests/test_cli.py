@@ -256,6 +256,22 @@ def test_doctor_cache_second_invocation_fast(monkeypatch, tmp_path):
     assert len(call_count) == 1, f"Expected 1 real call, got {len(call_count)}"
 
 
+def test_last_deploy_payload_has_new_fields(monkeypatch, tmp_path):
+    """Verify the JSON written to .pawai-last-deploy includes new schema fields."""
+    from pawai_cli.main import _build_last_deploy_payload
+    payload = _build_last_deploy_payload(module="brain", packages=["pawai_brain"],
+                                          sync_method="rsync")
+    assert "deployed_by" in payload
+    assert "deployed_from_host" in payload
+    assert "branch" in payload
+    assert "git_sha" in payload
+    assert "git_sha_full" in payload
+    assert "dirty" in payload
+    assert "module" in payload
+    assert "packages" in payload
+    assert isinstance(payload["dirty"], bool)
+
+
 def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
     env_path = tmp_path / ".env.local"
     env_path.write_text("JETSON_TAILSCALE_IP=100.99.99.99\n")
