@@ -65,6 +65,10 @@ def jetson_repo() -> str:
     return env("JETSON_REPO", "/home/jetson/elder_and_dog")
 
 
+def jetson_hostname_hint() -> str:
+    return env("JETSON_HOSTNAME_HINT", "jetson")
+
+
 def ssh_args(command: str) -> list[str]:
     return [
         "ssh",

@@ -100,3 +100,15 @@ def test_deploy_requires_module_unless_all() -> None:
 
     assert result.exit_code != 0
     assert "--module is required unless --all is set" in result.output
+
+
+def test_jetson_hostname_hint_env(monkeypatch):
+    from pawai_cli import shell
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "orin")
+    assert shell.jetson_hostname_hint() == "orin"
+
+
+def test_jetson_hostname_hint_default(monkeypatch):
+    from pawai_cli import shell
+    monkeypatch.delenv("JETSON_HOSTNAME_HINT", raising=False)
+    assert shell.jetson_hostname_hint() == "jetson"
