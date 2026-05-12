@@ -102,6 +102,8 @@ pawai demo stop                    # 6) 收工
 | [`pawai demo start`](#demo-start) | 啟動 brain-studio-lane（Jetson tmux + 本機 Studio） |
 | [`pawai demo stop`](#demo-stop) | 清掉 demo session |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
+| [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
+| [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
 
 ---
 
@@ -283,6 +285,32 @@ pawai logs all --lines 1000      # 抓全部 demo pane
 ```bash
 ssh jetson 'tmux attach -t demo'
 ```
+
+---
+
+### docs
+
+```bash
+pawai docs brain          # → docs/pawai-brain/architecture/0511/brain/brain.md
+pawai docs face           # → architecture/0511/face.md
+pawai docs gesture        # → architecture/0511/gesture/gesture.md
+pawai docs onboarding     # → docs/pawai_cli/team-onboarding.md
+pawai docs contract       # → docs/contracts/interaction_contract.md
+pawai docs brain --open   # 用 $EDITOR 開
+```
+
+Unknown target → 印列表 + exit 2。
+
+---
+
+### contract
+
+```bash
+pawai contract check          # 本機 branch 跑 scripts/ci/check_topic_contracts.py
+pawai contract check --jetson # 透過 SSH 在 Jetson deployed copy 跑
+```
+
+預設 local-first 是為了驗證**你目前 branch** 的契約一致性 — Jetson 上的 install 可能是別人的 stale sync。
 
 ---
 

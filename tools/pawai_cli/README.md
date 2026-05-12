@@ -21,16 +21,22 @@ python3 -m pip install -e tools/pawai_cli
 ```bash
 pawai doctor
 pawai status
-pawai dev info gesture
-pawai jetson deploy --module gesture
+pawai docs <module>
+pawai jetson deploy --module <module>
 pawai demo start
-pawai logs gesture --lines 500
 pawai demo stop
+pawai logs <module> --lines 200
 ```
 
 ## Modules
 
 `face`, `speech`, `gesture`, `pose`, `object`, `nav`, `brain`, `studio`.
+
+## Canonical Docs
+
+Full manual: `docs/pawai_cli/README.md`
+Troubleshooting: `docs/pawai_cli/troubleshooting.md`
+Team onboarding: `docs/pawai_cli/team-onboarding.md`
 
 ## Notes
 
