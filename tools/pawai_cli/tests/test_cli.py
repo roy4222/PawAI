@@ -111,7 +111,7 @@ def test_jetson_hostname_hint_env(monkeypatch):
 def test_jetson_hostname_hint_default(monkeypatch):
     from pawai_cli import shell
     monkeypatch.delenv("JETSON_HOSTNAME_HINT", raising=False)
-    assert shell.jetson_hostname_hint() == "jetson"
+    assert shell.jetson_hostname_hint() == "orin"
 
 
 def test_doctor_warns_on_tailscale_ip_mismatch(monkeypatch, tmp_path):
@@ -132,6 +132,7 @@ def test_doctor_warns_when_no_jetson_peer(monkeypatch):
     with patch("pawai_cli.network.find_jetson_peer", return_value=None):
         runner = CliRunner()
         result = runner.invoke(cli, ["doctor"])
+    assert result.exit_code != 0
     assert "share link" in result.output.lower() or "tailscale" in result.output.lower()
 
 
@@ -171,6 +172,24 @@ def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
         result = runner.invoke(cli, ["doctor"])
 
     assert "ethernet" in result.output.lower() or "go2" in result.output.lower()
+
+
+def test_doctor_expect_demo_gateway_fail_is_blocking(monkeypatch):
+    """When demo is expected, Gateway 8080 down must make doctor fail."""
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
+         patch("pawai_cli.network.jetson_go2_link",
+               return_value={"iface": "eth0", "ip": "192.168.123.51/24"}), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=True), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="FAIL"):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor", "--expect-demo"])
+
+    assert result.exit_code != 0
+    assert "Gateway 8080: FAIL" in result.output
 
 
 import json as _json

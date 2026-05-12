@@ -57,7 +57,7 @@ $EDITOR .env.local
 `.env.local` 需要填的：
 - `OPENROUTER_KEY` — 跟 Roy 拿
 - `JETSON_TAILSCALE_IP` — **留空**（CLI 會自動從 tailscale status 偵測）
-- `JETSON_HOSTNAME_HINT` — 預設 `jetson` 即可；如果你的 share node hostname 不同，改成符合的關鍵字
+- `JETSON_HOSTNAME_HINT` — 預設 `orin` 即可；Roy 的 shared Jetson 目前叫 `orinnano-super`，SSH alias 仍是 `jetson`
 
 ## 4. doctor 應該全綠（5 min）
 
@@ -66,7 +66,7 @@ pawai doctor
 ```
 
 預期看到：
-- `== Tailscale ==` 區塊：`✓ Tailscale peer 'jetson' online=true ip=100.83.109.89`
+- `== Tailscale ==` 區塊：`✓ Tailscale peer 'orinnano-super' online=true ip=100.83.109.89`
 - `== Network topology ==` 區塊：
   - `✓ local → Jetson Tailscale: OK 100.83.109.89`
   - `✓ Jetson internet route: wlan0`（**不能是 eth0**，否則 Go2 線被搶用）

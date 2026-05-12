@@ -66,7 +66,7 @@ def jetson_repo() -> str:
 
 
 def jetson_hostname_hint() -> str:
-    return env("JETSON_HOSTNAME_HINT", "jetson")
+    return env("JETSON_HOSTNAME_HINT", "orin")
 
 
 def ssh_args(command: str) -> list[str]:

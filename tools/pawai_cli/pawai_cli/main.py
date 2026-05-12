@@ -147,12 +147,13 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
     emit("────────────────────────")
 
     # == Tailscale ==
-    hint = shell.env("JETSON_HOSTNAME_HINT", "jetson")
+    hint = shell.jetson_hostname_hint()
     env_ip = os.environ.get("JETSON_TAILSCALE_IP", "").strip()
 
     emit("== Tailscale ==")
     peer = network.find_jetson_peer(hint=hint)
     if peer is None:
+        blocking += 1
         emit(f"  ✗ no Tailscale peer hostname matches '{hint}'")
         emit(f"    → ask Roy for the share link and accept it in your Tailscale account")
         emit(f"    → or set JETSON_HOSTNAME_HINT in .env.local if your share node has a different hostname")
@@ -184,14 +185,19 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
 
     iface = network.jetson_internet_iface()
     if iface is None:
+        if peer is not None:
+            blocking += 1
         emit("  ✗ Jetson internet route: probe failed")
     elif iface == "eth0":
+        warnings += 1
         emit(f"  ⚠ Jetson internet route: {iface} (Ethernet appears to be uplink — Go2 link may be lost)")
     else:
         emit(f"  ✓ Jetson internet route: {iface}")
 
     go2_link = network.jetson_go2_link()
     if go2_link is None:
+        if peer is not None:
+            blocking += 1
         emit("  ✗ Jetson Go2 link: no 192.168.123.x interface (Ethernet to Go2 not connected)")
     else:
         emit(f"  ✓ Jetson Go2 link: {go2_link['iface']} {go2_link['ip']}")
@@ -202,12 +208,15 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
     elif network.jetson_ping_go2(robot_ip_topo):
         emit(f"  ✓ Jetson → Go2 ping: OK {robot_ip_topo}")
     else:
+        blocking += 1
         emit(f"  ✗ Jetson → Go2 ping: FAIL {robot_ip_topo}")
 
     lock_state = None  # L2 will populate this from lock module
     gw_status = network.gateway_8080_status(expect_demo=expect_demo, lock_state=lock_state)
     icon = {"OK": "✓", "SKIP": "ℹ", "FAIL": "✗"}.get(gw_status, "?")
     detail = "" if gw_status != "SKIP" else " (no demo running)"
+    if gw_status == "FAIL":
+        blocking += 1
     emit(f"  {icon} Gateway 8080: {gw_status}{detail}")
 
     py = sys.version_info
