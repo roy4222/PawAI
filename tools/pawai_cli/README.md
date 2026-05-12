@@ -24,6 +24,7 @@ pawai status
 pawai docs <module>
 pawai jetson deploy --module <module>
 pawai demo start
+pawai demo start --nav capability  # nav stack bringup + manual action field test
 pawai demo stop
 pawai logs <module> --lines 200
 ```
@@ -42,6 +43,7 @@ Team onboarding: `docs/pawai_cli/team-onboarding.md`
 
 - `deploy` syncs the whole repo, then builds only the selected module package.
 - `status` is advisory; it warns about active sessions but does not enforce a lock.
+- `demo start --nav capability` is not voice navigation; it starts the nav stack for manual `/nav/goto_relative` tests.
 - `dev info` is informational only. It does not start mock processes in MVP.
 
 ## Troubleshooting

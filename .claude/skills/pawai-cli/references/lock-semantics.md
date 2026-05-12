@@ -17,6 +17,15 @@ Expected states:
 - `starting`: `demo start` has reserved the Jetson but startup is not complete.
 - `running`: demo startup completed and this user owns the active demo session.
 
+Expected lane metadata:
+
+- `lane=brain`, `tmux_session=demo`: brain/full perception demo.
+- `lane=nav_capability`, `tmux_session=nav-cap-demo`: navigation capability field test.
+
+When taking over with `--force`, the old lane must be cleaned before the lock is
+released and the new lane is acquired. Deleting only the lock can leave a Go2
+driver, D435, teleop, or nav process alive.
+
 Expected stale policy:
 
 - `starting` older than 10 minutes: likely failed startup; prompt before clearing.

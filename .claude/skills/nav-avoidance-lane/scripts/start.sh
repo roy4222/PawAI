@@ -14,6 +14,15 @@ SSH_OPTS="-o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2"
 JETSON_REPO="${JETSON_REPO:-/home/jetson/elder_and_dog}"
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# capability mode must start with no teleop hot publisher. If a previous brain
+# or manual session left teleop_twist_joy / joy_node alive, mux priority 100
+# would beat nav priority 10 after obstacle timeout.
+if [ "$MODE" = "capability" ]; then
+  echo "═══ 清理 teleop/joy hot publisher（capability safety）═══"
+  ssh $SSH_OPTS "$JETSON_HOST" "pkill -9 -f teleop_twist_joy 2>/dev/null; \
+    pkill -9 -f joy_node 2>/dev/null" 2>/dev/null || true
+fi
+
 # ── Preflight ──────────────────────────────────────────────
 echo "═══ 跑 preflight ═══"
 if ! bash "$SKILL_DIR/preflight.sh" "$MODE"; then

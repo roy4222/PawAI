@@ -109,7 +109,8 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 - **Go2**：直接動作（cmd_vel → WebRTC）
 - **備註**：架構文件尚未集中，目前用 lane reference
 
-> Demo mode 預設不啟動 nav stack；要跑導航避障獨立用 `bash scripts/start_nav_capability_demo_tmux.sh`，
+> Demo mode 預設不啟動 nav stack；導航避障場測用 `pawai demo start --nav capability`。
+> 這只代表 nav stack bringup + 手動 `/nav/goto_relative` 測試，不代表 Brain 語音導航已接通。
 > 詳見 [nav-avoidance-lane skill](../../.claude/skills/nav-avoidance-lane/SKILL.md)。
 
 ---

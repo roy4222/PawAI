@@ -233,7 +233,8 @@ build log 直接 stream 到本機。
 pawai demo start             # 預設 = full + Studio overlay（推薦）
 pawai demo start --no-studio # full mode 但不開本機 Studio
 pawai demo start --brain-only # 只起 brain（minimal mode，無 perception）
-pawai demo start -y          # demo 已在跑時，自動 stop 後 restart
+pawai demo start --nav capability # 起導航避障 capability stack（手動 action 場測）
+pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 ```
 
 預設模式做的事：
@@ -256,6 +257,39 @@ pawai demo start -y          # demo 已在跑時，自動 stop 後 restart
 ✅ Frontend: http://localhost:3000/studio
 ```
 
+#### Nav capability mode
+
+`pawai demo start --nav capability` 走
+`.claude/skills/nav-avoidance-lane/scripts/start.sh capability`。它會啟：
+
+- RPLIDAR `/scan_rplidar`
+- D435 aligned depth + `/capability/depth_clear`
+- Go2 driver + Nav2 / AMCL / twist_mux
+- `reactive_stop_node mode=progressive`
+- `nav_capability` 6 nodes
+
+這個模式的 scope 是 **nav stack bringup + 手動 ROS2 action 場測**，不是 Brain 語音導航：
+
+- ✅ 手動 `ros2 action send_goal /nav/goto_relative ...`
+- ❌ 語音說「往前走」讓 Go2 移動（Executive NAV executor 尚未實作）
+- ❌ 沒有場地 map 時自動導航
+- ❌ detour / fallback / amcl / mapping 透過 `pawai demo start`
+
+到新場地不要直接用家裡 map `/home/jetson/maps/home_living_room_v8.yaml`。先照
+[`nav-field-runbook.md`](../pawai-brain/architecture/0511/nav/nav-field-runbook.md)
+建圖或確認場地 map，再跑 capability。
+
+第一個移動測試只做短距離：
+
+```bash
+ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative \
+  "{distance: 0.3, yaw_offset: 0.0, max_speed: 0.0}"
+```
+
+如果 goal accepted 但 Go2 不動，照 `nav-field-runbook.md` 的 F7 Debug 查
+`/cmd_vel_nav`、mux priority、Nav2 lifecycle。`pawai status` 只顯示 raw nav
+topic，不把 WorldState 衍生欄位當 safety truth。
+
 ---
 
 ### demo stop
@@ -264,7 +298,10 @@ pawai demo start -y          # demo 已在跑時，自動 stop 後 restart
 pawai demo stop
 ```
 
-呼叫 `.claude/skills/brain-studio-lane/scripts/cleanup.sh`，清掉 Jetson tmux + 本機 frontend。
+依 lock 裡的 `lane` 呼叫對應 cleanup：
+
+- `lane=brain`（或舊 lock 無 lane）→ `.claude/skills/brain-studio-lane/scripts/cleanup.sh`
+- `lane=nav_capability` → `.claude/skills/nav-avoidance-lane/scripts/cleanup.sh`
 
 ---
 
@@ -392,6 +429,8 @@ uv pip install -e tools/pawai_cli --force-reinstall
 
 - `state: starting` — `pawai demo start` 已 acquire lock，正在啟動
 - `state: running` — start.sh 跑完，demo 正常運行
+- `lane: brain | nav_capability` — stop / force takeover 用來選正確 cleanup
+- `tmux_session: demo | nav-cap-demo` — status 顯示與現場 debug 用
 - `pawai demo stop` / start 失敗 — lock 移除
 
 **stale 規則**：

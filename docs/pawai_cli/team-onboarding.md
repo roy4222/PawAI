@@ -107,6 +107,36 @@ pawai demo stop
 
 `pawai status` 隨時查看誰在 demo、用哪個 branch、跑了多久。
 
+### 導航避障場測（只有負責 nav 的人跑）
+
+`pawai demo start --nav capability` 會啟完整 nav capability stack，但它只代表
+「Nav2 / RPLIDAR / D435 / reactive_stop / nav_capability 已起來」。它**不**代表
+語音可以叫 Go2 走；Brain → NAV executor 還沒接。
+
+到學校或新場地時，不要直接用家裡 map：
+
+```text
+/home/jetson/maps/home_living_room_v8.yaml
+```
+
+先照
+[`docs/pawai-brain/architecture/0511/nav/nav-field-runbook.md`](../pawai-brain/architecture/0511/nav/nav-field-runbook.md)
+建圖或確認 school map，再跑：
+
+```bash
+pawai demo start --nav capability
+```
+
+第一個移動測試只做 0.3m：
+
+```bash
+ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative \
+  "{distance: 0.3, yaw_offset: 0.0, max_speed: 0.0}"
+```
+
+如果 goal accepted 但 Go2 不動，不要硬加距離。照 nav field runbook 的 F7 Debug
+查 `/cmd_vel_nav`、mux priority、Nav2 lifecycle。
+
 ## 規矩（明天現場守住）
 
 - **一次只能一個人 `pawai demo start`** — Jetson + Go2 是共用資源
@@ -114,3 +144,4 @@ pawai demo stop
 - **`pawai demo stop` 預設只清自己的 lock**；停別人的 demo 用 `--force` 並先告訴對方
 - **deploy 中看到「someone is in demo」prompt → 先溝通**，不要直接 `--force`
 - **stale lock（demo 跑超過 4hr）不會自動清** — `pawai status` 會標 STALE，要清也要確認對方真的不在用
+- **nav capability 是手動 action 場測，不是語音導航 demo** — 不要對外說 Brain 已能導航

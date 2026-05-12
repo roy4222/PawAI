@@ -65,6 +65,17 @@ else
   echo "—  topic 不存在（非 capability mode 預期）"
 fi
 
+# ── /cmd_vel_joy hot publisher（capability safety）─────────
+echo -n "[6b] /cmd_vel_joy publisher count = 0 ... "
+JOY_PUBS=$(ros "ros2 topic info /cmd_vel_joy 2>/dev/null | grep -oE 'Publisher count: [0-9]+' | grep -oE '[0-9]+' | head -1" || echo "")
+JOY_PUBS="${JOY_PUBS:-0}"
+if [ "$JOY_PUBS" = "0" ]; then
+  echo "✅"
+else
+  echo "❌ $JOY_PUBS publisher(s) → teleop hot publisher 會蓋過 Nav2 /cmd_vel_nav"
+  FAILS=$((FAILS+1))
+fi
+
 # ── /cartographer_node（mapping）───────────────────────────
 echo -n "[7] cartographer_node alive ... "
 if ros "ros2 node list 2>/dev/null | grep -q 'cartographer_node'"; then
