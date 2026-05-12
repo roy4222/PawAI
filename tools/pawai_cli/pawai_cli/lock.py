@@ -30,6 +30,7 @@ class Lock:
     start_time: str  # ISO 8601 with tz
     demo_mode: str = "full"
     tmux_session: str = "demo"
+    lane: str = "brain"
 
     @classmethod
     def read(cls) -> Optional["Lock"]:
@@ -42,13 +43,16 @@ class Lock:
         except json.JSONDecodeError:
             return None
         try:
+            data.setdefault("lane", "brain")
+            data.setdefault("tmux_session", "demo")
             return cls(**data)
         except TypeError:
             return None
 
     @classmethod
     def acquire(cls, user: str, host: str, branch: str, sha: str,
-                state: str = "starting") -> Optional["Lock"]:
+                state: str = "starting", demo_mode: str = "full",
+                tmux_session: str = "demo", lane: str = "brain") -> Optional["Lock"]:
         """Atomically write a lock if absent.
 
         Exit code semantics from the remote `flock` command:
@@ -58,7 +62,8 @@ class Lock:
         """
         now = datetime.now(timezone.utc).isoformat()
         lk = cls(user=user, host=host, branch=branch, sha=sha,
-                 state=state, start_time=now)
+                 state=state, start_time=now, demo_mode=demo_mode,
+                 tmux_session=tmux_session, lane=lane)
         payload = json.dumps(asdict(lk)).replace("'", "'\\''")
         cmd = (
             f"flock -n {LOCK_FLOCK_PATH} -c '"

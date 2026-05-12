@@ -27,6 +27,17 @@ def test_lock_read_parses_json():
     assert lk is not None
     assert lk.user == "alice"
     assert lk.state == "running"
+    assert lk.lane == "brain"
+    assert lk.tmux_session == "demo"
+
+
+def test_lock_read_defaults_old_json_without_lane_or_tmux():
+    payload = '{"user":"alice","state":"running","branch":"main","start_time":"2026-05-13T08:00:00+08:00","host":"alice-mac","sha":"abc"}'
+    with patch("pawai_cli.lock.shell.run_remote", return_value=_ok(payload)):
+        lk = Lock.read()
+    assert lk is not None
+    assert lk.lane == "brain"
+    assert lk.tmux_session == "demo"
 
 
 def test_is_stale_starting_over_10min():
@@ -89,3 +100,29 @@ def test_acquire_succeeds_on_second_try(monkeypatch):
     result = Lock.acquire(user="u", host="h", branch="b", sha="s")
     assert result is not None
     assert result.user == "u"
+
+
+def test_acquire_accepts_nav_lane_metadata(monkeypatch):
+    from pawai_cli.shell import Result
+
+    commands: list[str] = []
+
+    def stub(cmd, timeout=None):
+        commands.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    result = Lock.acquire(
+        user="u",
+        host="h",
+        branch="b",
+        sha="s",
+        demo_mode="nav_capability",
+        tmux_session="nav-cap-demo",
+        lane="nav_capability",
+    )
+    assert result is not None
+    assert result.lane == "nav_capability"
+    assert result.tmux_session == "nav-cap-demo"
+    assert "nav_capability" in commands[0]
+    assert "nav-cap-demo" in commands[0]
