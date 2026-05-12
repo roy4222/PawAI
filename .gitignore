@@ -32,17 +32,29 @@ tts_cache/
 ## Claude Code
 .claude/test_results/*.csv
 .claude/settings.local.json
-.claude/skills/
+.claude/skills/*
 !.claude/skills/jetson-verify/
+!.claude/skills/jetson-verify/**
 !.claude/skills/project-onboard/
+!.claude/skills/project-onboard/**
 !.claude/skills/update-docs/
+!.claude/skills/update-docs/**
 !.claude/skills/jetson-deploy/
+!.claude/skills/jetson-deploy/**
 !.claude/skills/jetson-status/
+!.claude/skills/jetson-status/**
 !.claude/skills/brain-studio-lane/
+!.claude/skills/brain-studio-lane/**
 !.claude/skills/nav-avoidance-lane/
+!.claude/skills/nav-avoidance-lane/**
 !.claude/skills/demo-preflight/
+!.claude/skills/demo-preflight/**
 !.claude/skills/reviewer/
+!.claude/skills/reviewer/**
 !.claude/skills/ros2-test-suite/
+!.claude/skills/ros2-test-suite/**
+!.claude/skills/pawai-cli/
+!.claude/skills/pawai-cli/**
 
 ## Package-level coverage (legacy paths)
 go2_robot_sdk/.coverage
