@@ -112,3 +112,24 @@ def test_jetson_hostname_hint_default(monkeypatch):
     from pawai_cli import shell
     monkeypatch.delenv("JETSON_HOSTNAME_HINT", raising=False)
     assert shell.jetson_hostname_hint() == "jetson"
+
+
+def test_doctor_warns_on_tailscale_ip_mismatch(monkeypatch, tmp_path):
+    """If .env.local IP differs from auto-detected, doctor must surface mismatch."""
+    monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")  # wrong on purpose
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor"])
+
+    assert "mismatch" in result.output.lower() or "100.83.109.89" in result.output
+
+
+def test_doctor_warns_when_no_jetson_peer(monkeypatch):
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "not-a-real-host")
+    with patch("pawai_cli.network.find_jetson_peer", return_value=None):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor"])
+    assert "share link" in result.output.lower() or "tailscale" in result.output.lower()

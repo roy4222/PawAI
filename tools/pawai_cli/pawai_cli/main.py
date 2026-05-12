@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import platform
 import shutil
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,6 +46,24 @@ def _install_hint_map() -> dict[str, str]:
     }
 
 
+def _patch_env_local(path: Path, key: str, value: str) -> None:
+    """In-place replace or append `KEY=value` line in .env.local. Idempotent."""
+    if not path.exists():
+        path.write_text(f"{key}={value}\n")
+        return
+    lines = path.read_text().splitlines()
+    found = False
+    for i, line in enumerate(lines):
+        stripped = line.lstrip("# ").strip()
+        if stripped.startswith(f"{key}=") or stripped.startswith(f"# {key}="):
+            lines[i] = f"{key}={value}"
+            found = True
+            break
+    if not found:
+        lines.append(f"{key}={value}")
+    path.write_text("\n".join(lines) + "\n")
+
+
 def _ssh_config_has_host(cfg_text: str, host: str) -> bool:
     """Return True if ~/.ssh/config defines a Host block matching `host` exactly.
 
@@ -75,28 +96,119 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--verbose", is_flag=True, help="Print extra diagnostic details.")
-def doctor(verbose: bool) -> None:
+@click.option("--verbose", is_flag=True, help="Print SSH stderr details on failure.")
+@click.option("--expect-demo", is_flag=True, help="Treat Gateway 8080 down as FAIL (default: SKIP).")
+@click.option("--fix", is_flag=True, help="Prompt to write detected Tailscale IP into .env.local.")
+@click.option("--deep", is_flag=True, help="Run live OpenRouter API call.")
+@click.option("--cache", "cache_seconds", type=int, default=0,
+              help="Cache result for N seconds.")
+def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_seconds: int) -> None:
     """Validate local environment and Jetson reachability."""
+    from . import network
+    from .cache import DoctorCache
+
     root = shell.repo_root()
+
+    cache = None
+    if cache_seconds > 0:
+        cache_dir = Path(os.environ.get("PAWAI_CACHE_DIR",
+                                        os.path.expanduser("~/.cache/pawai")))
+        cache = DoctorCache(cache_dir / "doctor.json", ttl_seconds=cache_seconds)
+        cached = cache.read()
+        if cached is not None:
+            click.echo(cached.get("output", ""))
+            click.echo(f"(cached result, age <{cache_seconds}s — run without --cache to refresh)")
+            return
+
+    buf = io.StringIO() if cache is not None else None
+
+    def emit(line: str = "") -> None:
+        click.echo(line)
+        if buf is not None:
+            buf.write(line + "\n")
+
     blocking = 0
     warnings = 0
 
     def ok(msg: str) -> None:
-        print(f"✓ {msg}")
+        emit(f"✓ {msg}")
 
     def warn(msg: str) -> None:
         nonlocal warnings
         warnings += 1
-        print(f"⚠ {msg}")
+        emit(f"⚠ {msg}")
 
     def fail(msg: str) -> None:
         nonlocal blocking
         blocking += 1
-        print(f"✗ {msg}")
+        emit(f"✗ {msg}")
 
-    print("PawAI environment doctor")
-    print("────────────────────────")
+    emit("PawAI environment doctor")
+    emit("────────────────────────")
+
+    # == Tailscale ==
+    hint = shell.env("JETSON_HOSTNAME_HINT", "jetson")
+    env_ip = os.environ.get("JETSON_TAILSCALE_IP", "").strip()
+
+    emit("== Tailscale ==")
+    peer = network.find_jetson_peer(hint=hint)
+    if peer is None:
+        emit(f"  ✗ no Tailscale peer hostname matches '{hint}'")
+        emit(f"    → ask Roy for the share link and accept it in your Tailscale account")
+        emit(f"    → or set JETSON_HOSTNAME_HINT in .env.local if your share node has a different hostname")
+    else:
+        detected_ip = peer["ip"]
+        emit(f"  ✓ Tailscale peer '{peer['hostname']}' online={peer['online']} ip={detected_ip}")
+        if env_ip and env_ip != detected_ip:
+            emit(f"  ⚠ JETSON_TAILSCALE_IP={env_ip} but Tailscale reports {detected_ip} (mismatch)")
+            emit(f"    → run `pawai doctor --fix` to update .env.local")
+            if fix:
+                answer = click.prompt(
+                    f"\nUpdate JETSON_TAILSCALE_IP in .env.local from {env_ip} to {detected_ip}?",
+                    default="n", show_default=True,
+                )
+                if answer.lower().startswith("y"):
+                    _patch_env_local(Path(shell.repo_root()) / ".env.local",
+                                     "JETSON_TAILSCALE_IP", detected_ip)
+                    emit(f"  ✓ wrote JETSON_TAILSCALE_IP={detected_ip} to .env.local")
+        elif not env_ip:
+            emit(f"  ℹ JETSON_TAILSCALE_IP unset — CLI will use detected {detected_ip}")
+
+    # == Network topology ==
+    emit("\n== Network topology ==")
+
+    if peer is None:
+        emit("  ✗ local → Jetson Tailscale: no peer found (see Tailscale section above)")
+    else:
+        emit(f"  ✓ local → Jetson Tailscale: OK {peer['ip']}")
+
+    iface = network.jetson_internet_iface()
+    if iface is None:
+        emit("  ✗ Jetson internet route: probe failed")
+    elif iface == "eth0":
+        emit(f"  ⚠ Jetson internet route: {iface} (Ethernet appears to be uplink — Go2 link may be lost)")
+    else:
+        emit(f"  ✓ Jetson internet route: {iface}")
+
+    go2_link = network.jetson_go2_link()
+    if go2_link is None:
+        emit("  ✗ Jetson Go2 link: no 192.168.123.x interface (Ethernet to Go2 not connected)")
+    else:
+        emit(f"  ✓ Jetson Go2 link: {go2_link['iface']} {go2_link['ip']}")
+
+    robot_ip_topo = shell.env("ROBOT_IP", "192.168.123.161")
+    if go2_link is None:
+        emit(f"  ✗ Jetson → Go2 ping: skipped (no Go2 link)")
+    elif network.jetson_ping_go2(robot_ip_topo):
+        emit(f"  ✓ Jetson → Go2 ping: OK {robot_ip_topo}")
+    else:
+        emit(f"  ✗ Jetson → Go2 ping: FAIL {robot_ip_topo}")
+
+    lock_state = None  # L2 will populate this from lock module
+    gw_status = network.gateway_8080_status(expect_demo=expect_demo, lock_state=lock_state)
+    icon = {"OK": "✓", "SKIP": "ℹ", "FAIL": "✗"}.get(gw_status, "?")
+    detail = "" if gw_status != "SKIP" else " (no demo running)"
+    emit(f"  {icon} Gateway 8080: {gw_status}{detail}")
 
     py = sys.version_info
     if py.major == 3 and py.minor >= 10:
@@ -116,10 +228,10 @@ def doctor(verbose: bool) -> None:
         ok(".env.local present")
     elif (root / ".env").exists():
         warn(".env.local missing; using .env only")
-        print("  → cp .env.local.example .env.local  (then fill JETSON_TAILSCALE_IP / OPENROUTER_KEY)")
+        emit("  → cp .env.local.example .env.local  (then fill OPENROUTER_KEY)")
     else:
         warn(".env.local/.env missing")
-        print("  → cp .env.local.example .env.local")
+        emit("  → cp .env.local.example .env.local")
 
     ssh = shell.run(shell.ssh_args("echo OK"), timeout=10)
     if ssh.ok and "OK" in ssh.stdout:
@@ -131,13 +243,13 @@ def doctor(verbose: bool) -> None:
         if ssh_cfg.exists():
             has_host_block = _ssh_config_has_host(ssh_cfg.read_text(), host)
             if not has_host_block:
-                print(f"  → no `Host {host}` block in ~/.ssh/config")
-                print("    add one pointing at the Jetson Tailscale IP, or set JETSON_HOST in .env.local")
+                emit(f"  → no `Host {host}` block in ~/.ssh/config")
+                emit("    add one pointing at the Jetson Tailscale IP, or set JETSON_HOST in .env.local")
             else:
-                print(f"  → ssh-copy-id {host}   # if key not yet authorized")
-                print("  → tailscale up         # if Tailscale offline")
+                emit(f"  → ssh-copy-id {host}   # if key not yet authorized")
+                emit("  → tailscale up         # if Tailscale offline")
         if verbose:
-            print(ssh.stderr.strip())
+            emit(ssh.stderr.strip())
 
     tailscale = shell.run(["tailscale", "status"], timeout=6)
     if tailscale.ok:
@@ -145,7 +257,7 @@ def doctor(verbose: bool) -> None:
     else:
         warn("Tailscale command unavailable or logged out")
         if platform.system() == "Darwin":
-            print("  → open -a Tailscale  (or `brew install --cask tailscale` if missing)")
+            emit("  → open -a Tailscale  (or `brew install --cask tailscale` if missing)")
 
     robot_ip = os.getenv("ROBOT_IP", "192.168.123.161")
     ok(f"ROBOT_IP={robot_ip} (not pinged)")
@@ -164,31 +276,56 @@ def doctor(verbose: bool) -> None:
             fail(f"{label} missing")
         else:
             warn(f"{label} missing")
-        hint = install_hint.get(bin_name)
-        if hint:
-            print(f"  → {hint}")
+        install_hint_val = install_hint.get(bin_name)
+        if install_hint_val:
+            emit(f"  → {install_hint_val}")
 
     studio_fe = root / "pawai-studio" / "frontend"
     if (studio_fe / "node_modules").exists():
         ok("Studio frontend node_modules present")
     else:
         warn("Studio frontend node_modules missing")
-        print(f"  → cd {studio_fe} && npm install   (or let `pawai demo start` auto-install)")
+        emit(f"  → cd {studio_fe} && npm install   (or let `pawai demo start` auto-install)")
 
     if (studio_fe / ".env.local").exists():
         ok("Studio frontend .env.local present")
     else:
         warn("Studio frontend .env.local missing")
-        print(f"  → cp {studio_fe}/.env.local.example {studio_fe}/.env.local")
-        print("    (`pawai demo start` will auto-generate from JETSON_TAILSCALE_IP)")
+        emit(f"  → cp {studio_fe}/.env.local.example {studio_fe}/.env.local")
+        emit("    (`pawai demo start` will auto-generate from JETSON_TAILSCALE_IP)")
 
     if os.getenv("OPENROUTER_KEY") or os.getenv("OPENROUTER_API_KEY"):
         ok("OpenRouter key present")
     else:
         warn("OpenRouter key empty; cloud LLM unavailable")
-        print("  → set OPENROUTER_KEY in .env.local  (https://openrouter.ai/keys)")
+        emit("  → set OPENROUTER_KEY in .env.local  (https://openrouter.ai/keys)")
 
-    print(f"\n{blocking} blocking · {warnings} warnings")
+    if deep:
+        emit("\n== Deep checks (--deep) ==")
+        key = os.environ.get("OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY")
+        if not key:
+            emit("  ✗ OPENROUTER_KEY not set")
+        else:
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/models",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    if r.status == 200:
+                        emit("  ✓ OpenRouter API reachable, key authorized")
+                    else:
+                        emit(f"  ✗ OpenRouter API returned status {r.status}")
+            except urllib.error.HTTPError as exc:
+                emit(f"  ✗ OpenRouter HTTP {exc.code}: {exc.reason}")
+            except Exception as exc:
+                emit(f"  ✗ OpenRouter API call failed: {exc}")
+
+    emit(f"\n{blocking} blocking · {warnings} warnings")
+
+    if cache is not None and buf is not None:
+        cache.write({"output": buf.getvalue()})
+
     raise SystemExit(2 if blocking else 0)
 
 
