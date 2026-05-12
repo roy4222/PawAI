@@ -133,3 +133,41 @@ def test_doctor_warns_when_no_jetson_peer(monkeypatch):
         runner = CliRunner()
         result = runner.invoke(cli, ["doctor"])
     assert "share link" in result.output.lower() or "tailscale" in result.output.lower()
+
+
+def test_doctor_topology_block_printed(monkeypatch):
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
+         patch("pawai_cli.network.jetson_go2_link",
+               return_value={"iface": "eth0", "ip": "192.168.123.51/24"}), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=True), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="SKIP"):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor"])
+
+    out = result.output
+    assert "Network topology" in out
+    assert "Jetson Tailscale" in out
+    assert "Jetson internet route" in out and "wlan0" in out
+    assert "Jetson Go2 link" in out and "eth0" in out
+    assert "Jetson → Go2 ping" in out
+    assert "Gateway 8080" in out and "SKIP" in out
+
+
+def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
+    """If Jetson internet route uses eth0 (likely Go2 link stolen for uplink), warn."""
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value="eth0"), \
+         patch("pawai_cli.network.jetson_go2_link", return_value=None), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=False), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="SKIP"):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor"])
+
+    assert "ethernet" in result.output.lower() or "go2" in result.output.lower()
