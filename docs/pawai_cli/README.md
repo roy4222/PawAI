@@ -128,6 +128,35 @@ pawai doctor --verbose # SSH 失敗時印出 stderr 細節
 
 **Exit code**：`0`（綠）/ `2`（有 blocking）。CI 友善。
 
+### doctor flags
+
+| Flag | Effect |
+|---|---|
+| (none) | full check, no API calls, no file writes |
+| `--fix` | prompt to write detected Tailscale IP into `.env.local` |
+| `--deep` | one OpenRouter API call to verify key |
+| `--cache 30` | cache result for 30s (avoids 5-person waiting on same SSH probes) |
+| `--expect-demo` | treat Gateway 8080 down as FAIL instead of SKIP |
+| `--verbose` | print SSH stderr on failure |
+
+### Network topology block
+
+`pawai doctor` prints a topology summary near the top:
+
+```
+== Network topology ==
+  ✓ local → Jetson Tailscale: OK 100.83.109.89
+  ✓ Jetson internet route: wlan0
+  ✓ Jetson Go2 link: eth0 192.168.123.X/24
+  ✓ Jetson → Go2 ping: OK 192.168.123.161
+  ℹ Gateway 8080: SKIP (no demo running)
+```
+
+Reading guide:
+- `Jetson internet route: eth0` → **warning** — Ethernet likely hijacked for school uplink, Go2 link lost
+- `Jetson Go2 link: ✗` → Go2 Ethernet not connected to Jetson
+- `Gateway 8080: SKIP` → expected when no demo running; only red if `--expect-demo` or active demo lock
+
 ---
 
 ### status

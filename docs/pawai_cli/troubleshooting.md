@@ -386,3 +386,58 @@ ls scripts/start_*.sh scripts/clean_*.sh
 
 `pawai jetson deploy` 會優先用 `~/sync once`（如果存在且 executable），
 否則 fallback 到內建 rsync。內建 rsync exclude 已涵蓋 cache 目錄，多數情況不需要自訂腳本。
+
+---
+
+## G. Jetson 換網路
+
+### G1. Jetson 從家裡搬到學校 — 我該擔心什麼？
+
+短答：
+- **Tailscale IP `100.83.109.89` 通常不變** — 跨網路一致
+- **Jetson 本地 LAN/Wi-Fi IP 會變** — 但 CLI 不依賴它
+- **Go2 IP 應該不變** — 還是 `192.168.123.161`，前提是 Jetson↔Go2 Ethernet 線還插著
+
+最容易壞的事情：**Jetson 的 Ethernet 被拔去插學校網路**，導致 Go2 link 不見。
+
+`pawai doctor` 的 Network topology 區塊會在這時翻紅：
+- `Jetson internet route: eth0` ← ⚠ Ethernet 變成 uplink
+- `Jetson Go2 link: no 192.168.123.x interface` ← ✗ Go2 線沒接
+
+**修法**：學校用 **Wi-Fi 上網**，Ethernet 保留給 Go2。
+
+### G2. Tailscale Reconnecting
+
+開機/換網路後 30s-2min 內，doctor 可能短暫紅燈。等 60s 再跑：
+
+```bash
+sleep 60 && pawai doctor
+```
+
+### G3. 學校 Wi-Fi 擋 outbound
+
+學校網路偶爾擋 SSH (22) 或 outbound HTTP — 表現是 SenseVoice tunnel / OpenRouter 連不到。
+fallback：用 local ASR / local TTS（`ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]'`）。
+
+---
+
+## H. Tailscale Sharing
+
+### H1. 我接受 share link 後 `tailscale status` 看不到 Jetson
+
+- 確認你接受 share 時用的是你自己的 Tailscale 帳號（不是 Roy 的）
+- 跑 `tailscale up`
+- 重新點 share link
+
+### H2. 同一台筆電換 Tailscale 帳號
+
+如果你先前裝 Tailscale 用了不同帳號：
+
+```bash
+sudo tailscale logout
+sudo tailscale up   # 引導你登入新帳號
+```
+
+### H3. Tailscale free tier 上限
+
+Free Personal tier 可以接受別人的 share node 不佔 user 配額。不需付費。
