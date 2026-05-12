@@ -375,12 +375,19 @@ def test_demo_stop_force_releases_other_lock(monkeypatch):
     assert released == [1]
 
 
+def _reachable_live_status():
+    from pawai_cli.status import LiveStatus
+
+    return LiveStatus(tmux="", ros_nodes="", git="", last_deploy="", reachable=True)
+
+
 def test_status_shows_lock_state(monkeypatch):
     from pawai_cli.lock import Lock
     lk = Lock(user="alice", host="alice-mac", branch="feat/x", sha="abc",
               state="running",
               start_time=datetime.now(timezone.utc).isoformat())
-    with patch("pawai_cli.status.Lock.read", return_value=lk):
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status.Lock.read", return_value=lk):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "alice" in result.output.lower()
@@ -394,7 +401,8 @@ def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
         "module": "brain", "packages": ["pawai_brain"],
         "when": "2026-05-13T08:00:00+00:00", "sync_method": "rsync",
     }
-    with patch("pawai_cli.status._read_last_deploy_remote", return_value=last_deploy), \
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status._read_last_deploy_remote", return_value=last_deploy), \
          patch("pawai_cli.status._current_branch", return_value="feat/new"):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
@@ -407,7 +415,8 @@ def test_status_shows_stale_running_warning(monkeypatch):
     old = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
     lk = Lock(user="alice", host="h", branch="b", sha="s",
               state="running", start_time=old)
-    with patch("pawai_cli.status.Lock.read", return_value=lk):
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status.Lock.read", return_value=lk):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "stale" in result.output.lower()
