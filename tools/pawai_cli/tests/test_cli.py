@@ -171,3 +171,89 @@ def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
         result = runner.invoke(cli, ["doctor"])
 
     assert "ethernet" in result.output.lower() or "go2" in result.output.lower()
+
+
+import json as _json
+
+
+def test_doctor_default_does_not_call_openrouter(monkeypatch):
+    calls: list = []
+
+    def fake_urlopen(req, **kwargs):
+        calls.append(getattr(req, "full_url", str(req)))
+        class R:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        return R()
+
+    monkeypatch.setenv("OPENROUTER_KEY", "fake")
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    with patch("pawai_cli.network.find_jetson_peer", return_value=None), \
+         patch("pawai_cli.main.urllib.request.urlopen", side_effect=fake_urlopen):
+        runner = CliRunner()
+        runner.invoke(cli, ["doctor"])
+    assert calls == [], "Default doctor must not call OpenRouter API"
+
+
+def test_doctor_deep_calls_openrouter(monkeypatch):
+    posted: list = []
+
+    class FakeResp:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, **kwargs):
+        url = getattr(req, "full_url", str(req))
+        posted.append(url)
+        return FakeResp()
+
+    monkeypatch.setenv("OPENROUTER_KEY", "fake")
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    with patch("pawai_cli.network.find_jetson_peer", return_value=None), \
+         patch("pawai_cli.main.urllib.request.urlopen", side_effect=fake_urlopen):
+        runner = CliRunner()
+        runner.invoke(cli, ["doctor", "--deep"])
+    assert any("openrouter" in u.lower() for u in posted)
+
+
+def test_doctor_cache_second_invocation_fast(monkeypatch, tmp_path):
+    monkeypatch.setenv("PAWAI_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+
+    call_count: list = []
+
+    def slow_find(hint):
+        call_count.append(1)
+        return None
+
+    with patch("pawai_cli.network.find_jetson_peer", side_effect=slow_find):
+        runner = CliRunner()
+        runner.invoke(cli, ["doctor", "--cache", "30"])
+        runner.invoke(cli, ["doctor", "--cache", "30"])
+
+    # Second call should hit cache → only one real probe
+    assert len(call_count) == 1, f"Expected 1 real call, got {len(call_count)}"
+
+
+def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
+    env_path = tmp_path / ".env.local"
+    env_path.write_text("JETSON_TAILSCALE_IP=100.99.99.99\n")
+    monkeypatch.setenv("PAWAI_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
+        runner = CliRunner()
+        # Default — should NOT mutate
+        runner.invoke(cli, ["doctor"])
+        assert "100.99.99.99" in env_path.read_text(), "Default doctor must not mutate .env.local"
+
+        # --fix with 'n' answer — should not mutate
+        runner.invoke(cli, ["doctor", "--fix"], input="n\n")
+        assert "100.99.99.99" in env_path.read_text(), "Declined --fix must not mutate"
+
+        # --fix with 'y' — should write detected IP
+        runner.invoke(cli, ["doctor", "--fix"], input="y\n")
+        assert "100.83.109.89" in env_path.read_text(), "--fix y must write detected IP"
