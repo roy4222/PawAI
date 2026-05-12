@@ -4,6 +4,26 @@ import json
 from dataclasses import dataclass
 
 from . import shell
+from .lock import Lock, is_stale
+
+
+def _read_last_deploy_remote() -> dict | None:
+    remote_path = f"{shell.jetson_repo()}/.pawai-last-deploy"
+    result = shell.run_remote(
+        f"cat {remote_path} 2>/dev/null",
+        timeout=5,
+    )
+    if not result.ok or not result.stdout.strip():
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def _current_branch() -> str:
+    r = shell.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
+    return r.stdout.strip() if r.ok else "unknown"
 
 
 @dataclass
@@ -98,6 +118,32 @@ def print_status(short: bool = False) -> LiveStatus:
         print("\nHeads-up:")
         for item in heads:
             print(f"  ⚠ {item}")
+
+    # Demo lock
+    lk = Lock.read()
+    print("\nDemo lock:")
+    if lk is None:
+        print("  (none)")
+    else:
+        stale = is_stale(lk)
+        suffix = f" [STALE {stale}]" if stale else ""
+        print(f"  owner: {lk.user}@{lk.host}")
+        print(f"  branch: {lk.branch}")
+        print(f"  state: {lk.state}{suffix}")
+        print(f"  started: {lk.start_time}")
+
+    # Branch mismatch
+    last = _read_last_deploy_remote()
+    if last is not None:
+        local_branch = _current_branch()
+        install_branch = last.get("branch", "?")
+        dirty_flag = " (dirty)" if last.get("dirty") else ""
+        print("\nBranch state:")
+        print(f"  local:   {local_branch}")
+        print(f"  install: {install_branch}{dirty_flag}")
+        if local_branch != install_branch:
+            print(f"  ⚠ MISMATCH — running install is from {install_branch}, you have {local_branch} checked out")
+
     return st
 
 

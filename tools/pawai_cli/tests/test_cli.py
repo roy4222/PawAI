@@ -375,6 +375,44 @@ def test_demo_stop_force_releases_other_lock(monkeypatch):
     assert released == [1]
 
 
+def test_status_shows_lock_state(monkeypatch):
+    from pawai_cli.lock import Lock
+    lk = Lock(user="alice", host="alice-mac", branch="feat/x", sha="abc",
+              state="running",
+              start_time=datetime.now(timezone.utc).isoformat())
+    with patch("pawai_cli.status.Lock.read", return_value=lk):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status"])
+    assert "alice" in result.output.lower()
+    assert "running" in result.output.lower()
+
+
+def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
+    last_deploy = {
+        "deployed_by": "alice", "branch": "feat/old",
+        "git_sha": "111", "git_sha_full": "1" * 40, "dirty": False,
+        "module": "brain", "packages": ["pawai_brain"],
+        "when": "2026-05-13T08:00:00+00:00", "sync_method": "rsync",
+    }
+    with patch("pawai_cli.status._read_last_deploy_remote", return_value=last_deploy), \
+         patch("pawai_cli.status._current_branch", return_value="feat/new"):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status"])
+    assert "mismatch" in result.output.lower() or "feat/old" in result.output
+
+
+def test_status_shows_stale_running_warning(monkeypatch):
+    from pawai_cli.lock import Lock
+    from datetime import timedelta
+    old = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+    lk = Lock(user="alice", host="h", branch="b", sha="s",
+              state="running", start_time=old)
+    with patch("pawai_cli.status.Lock.read", return_value=lk):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status"])
+    assert "stale" in result.output.lower()
+
+
 def test_deploy_prompts_on_active_other_lock(monkeypatch):
     from pawai_cli.lock import Lock
     other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
