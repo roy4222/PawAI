@@ -122,7 +122,7 @@ def _run_tailscale_status_json() -> Optional[str]:
     if shutil.which("tailscale") is None:
         return None
     result = shell.run(["tailscale", "status", "--json"], timeout=5)
-    if result.returncode != 0:
+    if not result.ok:
         return None
     return result.stdout
 
@@ -190,8 +190,8 @@ from pawai_cli.network import (
 from pawai_cli.shell import Result
 
 
-def _result(stdout: str = "", returncode: int = 0) -> Result:
-    return Result(args=[], stdout=stdout, stderr="", returncode=returncode)
+def _result(stdout: str = "", code: int = 0) -> Result:
+    return Result(code=code, stdout=stdout, stderr="")
 
 
 def test_jetson_internet_iface_reads_default_route():
@@ -267,7 +267,7 @@ def jetson_internet_iface() -> Optional[str]:
     Parses `ip route get 8.8.8.8` output. The format is `8.8.8.8 dev <iface> src <ip>`.
     """
     result = shell.run_remote("ip route get 8.8.8.8", timeout=5)
-    if result.returncode != 0:
+    if not result.ok:
         return None
     m = re.search(r"\bdev\s+(\S+)", result.stdout)
     return m.group(1) if m else None
@@ -279,7 +279,7 @@ def jetson_go2_link() -> Optional[dict]:
     Parses `ip -br addr` output. Lines look like `eth0 UP 192.168.123.51/24`.
     """
     result = shell.run_remote("ip -br addr", timeout=5)
-    if result.returncode != 0:
+    if not result.ok:
         return None
     for line in result.stdout.splitlines():
         parts = line.split()
@@ -295,7 +295,7 @@ def jetson_go2_link() -> Optional[dict]:
 def jetson_ping_go2(robot_ip: str) -> bool:
     """True if Jetson can ping the Go2 IP within 2 seconds."""
     result = shell.run_remote(f"ping -c 1 -W 2 {robot_ip}", timeout=5)
-    return result.returncode == 0
+    return result.ok
 
 
 def gateway_8080_status(expect_demo: bool, lock_state: Optional[str]) -> str:
@@ -310,7 +310,7 @@ def gateway_8080_status(expect_demo: bool, lock_state: Optional[str]) -> str:
         "curl -fsS --max-time 3 http://127.0.0.1:8080/health",
         timeout=5,
     )
-    if result.returncode == 0:
+    if result.ok:
         return "OK"
     return "FAIL" if demo_expected else "SKIP"
 ```
@@ -633,13 +633,10 @@ Then inside the function, after the Tailscale block from L1-5, before the existi
 ```python
     click.echo("\n== Network topology ==")
 
-    # Probe each link. None means probe failed / N/A.
     if peer is None:
-        click.echo("  ✗ local → Jetson Tailscale: cannot run, no peer (see Tailscale section)")
-        # Skip rest; remote probes will all fail
-        return  # NOTE: keep this temporary; later tasks add more checks below
-
-    click.echo(f"  ✓ local → Jetson Tailscale: OK {peer['ip']}")
+        click.echo("  ✗ local → Jetson Tailscale: no peer found (see Tailscale section above)")
+    else:
+        click.echo(f"  ✓ local → Jetson Tailscale: OK {peer['ip']}")
 
     iface = network.jetson_internet_iface()
     if iface is None:
@@ -670,19 +667,15 @@ Then inside the function, after the Tailscale block from L1-5, before the existi
     click.echo(f"  {icon} Gateway 8080: {gw_status}{detail}")
 ```
 
-Remove the temporary `return` once you confirm the test passes — leave it in for now so other doctor logic below isn't run yet.
-
 - [ ] **Step 4: Run tests, verify pass**
 
 Run: `python3 -m pytest tools/pawai_cli/tests/test_cli.py -v -k topology`
 Expected: 2 tests PASS
 
-- [ ] **Step 5: Remove temporary return, run full doctor manually**
-
-Edit `main.py`: remove the `return` after the early Tailscale-peer-None branch (it was just to keep early tests isolated). Then:
+- [ ] **Step 5: Manual full run**
 
 Run: `pawai doctor`
-Expected: full output prints, ending with Network topology block above other sections (not crashing).
+Expected: full output prints, Network topology block appears, no crashes regardless of peer state.
 
 - [ ] **Step 6: Commit**
 
@@ -710,17 +703,18 @@ import json as _json
 def test_doctor_default_does_not_call_openrouter(monkeypatch):
     calls: list = []
 
-    def fake_post(*a, **k):
-        calls.append(1)
+    def fake_urlopen(req, **kwargs):
+        calls.append(getattr(req, "full_url", str(req)))
         class R:
-            status_code = 200
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
         return R()
 
     monkeypatch.setenv("OPENROUTER_KEY", "fake")
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
     with patch("pawai_cli.network.find_jetson_peer", return_value=None), \
-         patch("pawai_cli.main.requests.get", side_effect=fake_post), \
-         patch("pawai_cli.main.requests.post", side_effect=fake_post):
+         patch("pawai_cli.main.urllib.request.urlopen", side_effect=fake_urlopen):
         runner = CliRunner()
         runner.invoke(cli, ["doctor"])
     assert calls == [], "Default doctor must not call OpenRouter API"
@@ -730,17 +724,19 @@ def test_doctor_deep_calls_openrouter(monkeypatch):
     posted: list = []
 
     class FakeResp:
-        status_code = 200
-        text = '{"data": []}'
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
 
-    def fake_get(url, **kwargs):
+    def fake_urlopen(req, **kwargs):
+        url = getattr(req, "full_url", str(req))
         posted.append(url)
         return FakeResp()
 
     monkeypatch.setenv("OPENROUTER_KEY", "fake")
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
     with patch("pawai_cli.network.find_jetson_peer", return_value=None), \
-         patch("pawai_cli.main.requests.get", side_effect=fake_get):
+         patch("pawai_cli.main.urllib.request.urlopen", side_effect=fake_urlopen):
         runner = CliRunner()
         runner.invoke(cli, ["doctor", "--deep"])
     assert any("openrouter" in u.lower() for u in posted)
@@ -826,7 +822,7 @@ In `doctor` function, after Tailscale block but **only inside `if deep:`** branc
                 click.echo(f"  ✗ OpenRouter API call failed: {exc}")
 ```
 
-Update the test in Step 1 accordingly — replace `patch("pawai_cli.main.requests.get", ...)` with `patch("pawai_cli.main.urllib.request.urlopen", ...)` and have the side effect record the URL passed in the `Request` object.
+Tests in Step 1 already patch `pawai_cli.main.urllib.request.urlopen`. No further test changes needed.
 
 - [ ] **Step 4: Implement `--cache` integration**
 
@@ -1168,11 +1164,11 @@ from pawai_cli.shell import Result
 
 
 def _ok(stdout: str = "") -> Result:
-    return Result(args=[], stdout=stdout, stderr="", returncode=0)
+    return Result(code=0, stdout=stdout, stderr="")
 
 
 def _fail() -> Result:
-    return Result(args=[], stdout="", stderr="", returncode=1)
+    return Result(code=1, stdout="", stderr="")
 
 
 def test_lock_read_returns_none_when_absent():
@@ -1208,6 +1204,47 @@ def test_is_stale_fresh_running_not_stale():
     lk = Lock(user="x", host="h", branch="b", sha="s", state="running",
               start_time=fresh.isoformat(), demo_mode="full", tmux_session="demo")
     assert is_stale(lk) is None
+
+
+def test_acquire_no_retry_on_exit_17(monkeypatch):
+    """exit 17 means lock exists; do not retry."""
+    from pawai_cli.shell import Result
+    calls: list = []
+    def stub(cmd, timeout=None):
+        calls.append(cmd)
+        return Result(code=17, stdout="", stderr="")
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    monkeypatch.setattr("pawai_cli.lock.time.sleep", lambda s: None)
+    result = Lock.acquire(user="u", host="h", branch="b", sha="s")
+    assert result is None
+    assert len(calls) == 1, f"Expected 1 call (no retry on 17), got {len(calls)}"
+
+
+def test_acquire_retries_on_transient_failure(monkeypatch):
+    """Non-17 non-zero exit code → retry up to 3× total."""
+    from pawai_cli.shell import Result
+    calls: list = []
+    def stub(cmd, timeout=None):
+        calls.append(cmd)
+        return Result(code=1, stdout="", stderr="flock contention")
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    monkeypatch.setattr("pawai_cli.lock.time.sleep", lambda s: None)
+    result = Lock.acquire(user="u", host="h", branch="b", sha="s")
+    assert result is None
+    assert len(calls) == 3, f"Expected 3 attempts on transient failure, got {len(calls)}"
+
+
+def test_acquire_succeeds_on_second_try(monkeypatch):
+    """If first attempt is transient failure, second succeeds → lock returned."""
+    from pawai_cli.shell import Result
+    sequence = [Result(code=1, stdout="", stderr=""), Result(code=0, stdout="", stderr="")]
+    def stub(cmd, timeout=None):
+        return sequence.pop(0)
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    monkeypatch.setattr("pawai_cli.lock.time.sleep", lambda s: None)
+    result = Lock.acquire(user="u", host="h", branch="b", sha="s")
+    assert result is not None
+    assert result.user == "u"
 ```
 
 - [ ] **Step 2: Run, verify fail**
@@ -1222,6 +1259,7 @@ Expected: FAIL (module not found)
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import Optional
@@ -1255,7 +1293,7 @@ class Lock:
     def read(cls) -> Optional["Lock"]:
         """Read lock from Jetson via SSH; return None if absent or malformed."""
         result = shell.run_remote(f"cat {_remote_lock_path()} 2>/dev/null", timeout=5)
-        if result.returncode != 0 or not result.stdout.strip():
+        if not result.ok or not result.stdout.strip():
             return None
         try:
             data = json.loads(result.stdout)
@@ -1269,22 +1307,33 @@ class Lock:
     @classmethod
     def acquire(cls, user: str, host: str, branch: str, sha: str,
                 state: str = "starting") -> Optional["Lock"]:
-        """Atomically write a lock if absent. Returns the lock on success, None if held."""
+        """Atomically write a lock if absent.
+
+        Exit code semantics from the remote `flock` command:
+        - 0  → wrote new lock (success)
+        - 17 → lock file already exists (someone holds it; do NOT retry)
+        - other non-zero → flock contention or transient SSH failure; retry up to 3× with 2s backoff
+        """
         now = datetime.now(timezone.utc).isoformat()
         lk = cls(user=user, host=host, branch=branch, sha=sha,
                  state=state, start_time=now)
         payload = json.dumps(asdict(lk)).replace("'", "'\\''")
-        # flock -n acquires non-blocking; mv ensures atomic publish
         cmd = (
             f"flock -n {LOCK_FLOCK_PATH} -c '"
             f"if [ -f {_remote_lock_path()} ]; then exit 17; fi; "
             f"printf %s '\\''{payload}'\\'' > {_remote_lock_path()}.tmp && "
             f"mv {_remote_lock_path()}.tmp {_remote_lock_path()}'"
         )
-        result = shell.run_remote(cmd, timeout=10)
-        if result.returncode == 0:
-            return lk
-        return None  # 17 = EEXIST equivalent; any non-zero = could not acquire
+        for attempt in range(3):
+            result = shell.run_remote(cmd, timeout=10)
+            if result.code == 0:
+                return lk
+            if result.code == 17:
+                return None  # someone owns the lock — do not retry
+            # transient: flock contention or SSH hiccup → backoff and retry
+            if attempt < 2:
+                time.sleep(2)
+        return None  # exhausted retries
 
     def transition_to(self, new_state: str) -> bool:
         """Update state field on existing lock. Caller must own it."""
@@ -1298,12 +1347,12 @@ class Lock:
             f"printf %s '\\''{payload}'\\'' > {_remote_lock_path()}.tmp && "
             f"mv {_remote_lock_path()}.tmp {_remote_lock_path()}'"
         )
-        return shell.run_remote(cmd, timeout=10).returncode == 0
+        return shell.run_remote(cmd, timeout=10).ok
 
     @classmethod
     def release(cls) -> bool:
         result = shell.run_remote(f"rm -f {_remote_lock_path()}", timeout=5)
-        return result.returncode == 0
+        return result.ok
 
 
 def is_stale(lk: Lock) -> Optional[str]:
@@ -1387,10 +1436,10 @@ def _build_last_deploy_payload(module: str, packages: list[str], sync_method: st
     sha_r = shell.run(["git", "-C", str(root), "rev-parse", "HEAD"], timeout=5)
     porcelain = shell.run(["git", "-C", str(root), "status", "--porcelain"], timeout=5)
 
-    branch = branch_r.stdout.strip() if branch_r.returncode == 0 else "unknown"
-    sha_full = sha_r.stdout.strip() if sha_r.returncode == 0 else ""
+    branch = branch_r.stdout.strip() if branch_r.ok else "unknown"
+    sha_full = sha_r.stdout.strip() if sha_r.ok else ""
     sha_short = sha_full[:7] if sha_full else ""
-    dirty = bool(porcelain.stdout.strip()) if porcelain.returncode == 0 else False
+    dirty = bool(porcelain.stdout.strip()) if porcelain.ok else False
 
     return {
         "deployed_by": shell.local_identity().split("@")[0],
@@ -1529,7 +1578,7 @@ def demo_start(no_studio: bool, brain_only: bool, yes: bool, force: bool) -> Non
     # Acquire starting lock
     lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting")
     if lk is None:
-        click.echo("Failed to acquire lock (another process holds flock). Retry in a few seconds.")
+        click.echo("Failed to acquire lock after 3 retries — flock held by another process or remote SSH issue. Investigate before retrying.")
         sys.exit(2)
 
     rc = _invoke_start_sh(no_studio=no_studio, brain_only=brain_only)
@@ -1556,12 +1605,12 @@ def _invoke_start_sh(no_studio: bool, brain_only: bool) -> int:
 
 def _current_branch() -> str:
     r = shell.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
-    return r.stdout.strip() if r.returncode == 0 else "unknown"
+    return r.stdout.strip() if r.ok else "unknown"
 
 
 def _current_sha_short() -> str:
     r = shell.run(["git", "rev-parse", "--short", "HEAD"], timeout=5)
-    return r.stdout.strip() if r.returncode == 0 else ""
+    return r.stdout.strip() if r.ok else ""
 ```
 
 - [ ] **Step 4: Run, verify pass**
@@ -1798,11 +1847,12 @@ from .lock import Lock, is_stale
 
 def _read_last_deploy_remote() -> dict | None:
     from . import shell
+    remote_path = f"{shell.jetson_repo()}/.pawai-last-deploy"
     result = shell.run_remote(
-        "cat $JETSON_REPO/.pawai-last-deploy 2>/dev/null",
+        f"cat {remote_path} 2>/dev/null",
         timeout=5,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if not result.ok or not result.stdout.strip():
         return None
     import json
     try:
@@ -1814,7 +1864,7 @@ def _read_last_deploy_remote() -> dict | None:
 def _current_branch() -> str:
     from . import shell
     r = shell.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], timeout=5)
-    return r.stdout.strip() if r.returncode == 0 else "unknown"
+    return r.stdout.strip() if r.ok else "unknown"
 ```
 
 Inside `print_status`, after existing sections, add:
@@ -2194,7 +2244,7 @@ def test_contract_check_explicit_fallback_when_script_missing(tmp_path, monkeypa
 def test_contract_check_jetson_uses_ssh(monkeypatch):
     monkeypatch.setenv("PAWAI_REPO_ROOT", "/nonexistent")  # force jetson path
     with patch("pawai_cli.main.shell.run_remote",
-               return_value=shell.Result(args=[], stdout="ok", stderr="", returncode=0)) \
+               return_value=shell.Result(code=0, stdout="ok", stderr="")) \
          as mocked:
         runner = CliRunner()
         runner.invoke(cli, ["contract", "check", "--jetson"])
@@ -2220,7 +2270,7 @@ def contract_check(jetson: bool) -> None:
     spec_md = "docs/contracts/interaction_contract.md"
 
     if jetson:
-        rc = shell.stream_remote(f"cd $JETSON_REPO && python3 {script_rel}")
+        rc = shell.stream_remote(f"cd {shell.jetson_repo()} && python3 {script_rel}")
         sys.exit(rc)
 
     local_script = shell.repo_root() / script_rel
