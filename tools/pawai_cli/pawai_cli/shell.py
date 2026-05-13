@@ -37,9 +37,9 @@ def run(argv: Iterable[str], cwd: Path | None = None, timeout: int | None = None
         return Result(127, "", str(exc))
 
 
-def stream(argv: Iterable[str], cwd: Path | None = None) -> int:
+def stream(argv: Iterable[str], cwd: Path | None = None, env: dict | None = None) -> int:
     try:
-        return subprocess.call(list(argv), cwd=str(cwd) if cwd else None)
+        return subprocess.call(list(argv), cwd=str(cwd) if cwd else None, env=env)
     except OSError as exc:
         print(f"ERROR: {exc}")
         return 127

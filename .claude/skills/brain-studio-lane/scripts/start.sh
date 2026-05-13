@@ -44,8 +44,22 @@ fi
 JETSON_HOST="${JETSON_HOST:-jetson-nano}"
 SSH_OPTS="-o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2"
 JETSON_REPO="${JETSON_REPO:-/home/jetson/elder_and_dog}"
-JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"
+if [ -z "${JETSON_TAILSCALE_IP:-}" ]; then
+  echo "✗ JETSON_TAILSCALE_IP is unset" >&2
+  echo "  → set it in .env.local, or run via: pawai demo start" >&2
+  echo "  → CLI auto-detects via Tailscale; bare bash invocation must export it first" >&2
+  exit 2
+fi
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Values below are embedded into SSH command strings. Use bash-safe quoting so
+# .env.local values containing spaces, quotes, JSON, or shell metacharacters
+# survive the remote shell parse as data, not code.
+SAFE_JETSON_REPO=$(printf %q "$JETSON_REPO")
+SAFE_PAWAI_LLM_MODEL=$(printf %q "${PAWAI_LLM_MODEL:-}")
+SAFE_PAWAI_LLM_FALLBACK_MODEL=$(printf %q "${PAWAI_LLM_FALLBACK_MODEL:-}")
+SAFE_TTS_PROVIDER=$(printf %q "${TTS_PROVIDER:-openrouter_gemini}")
+SAFE_ASR_PROVIDER_ORDER=$(printf %q "${ASR_PROVIDER_ORDER:-}")
 
 # ── Auto-cleanup（5/11 N6 review）─────────────────────────
 # 偵測是否有舊 lane 殘留：Jetson tmux session demo/pawai_brain/studio_gw 任一
@@ -83,13 +97,21 @@ case "$MODE" in
   minimal)
     # 純 brain（exec + conv_graph），新 6 檔 persona
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t pawai_brain 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
+      WORKSPACE=$SAFE_JETSON_REPO \
+      PAWAI_LLM_MODEL=$SAFE_PAWAI_LLM_MODEL \
+      PAWAI_LLM_FALLBACK_MODEL=$SAFE_PAWAI_LLM_FALLBACK_MODEL \
+      ASR_PROVIDER_ORDER=$SAFE_ASR_PROVIDER_ORDER \
+      bash $SAFE_JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
     sleep 10
     ;;
   e2e)
     # minimal + tts_node window（新 brain + 語音輸出）
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t pawai_brain 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' bash $JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
+      WORKSPACE=$SAFE_JETSON_REPO \
+      PAWAI_LLM_MODEL=$SAFE_PAWAI_LLM_MODEL \
+      PAWAI_LLM_FALLBACK_MODEL=$SAFE_PAWAI_LLM_FALLBACK_MODEL \
+      ASR_PROVIDER_ORDER=$SAFE_ASR_PROVIDER_ORDER \
+      bash $SAFE_JETSON_REPO/scripts/start_pawai_brain_tmux.sh > /dev/null 2>&1"
     sleep 10
     # 補 tts window — 用 ALSA card name `plughw:CD002AUDIO,0` 不受 card# 漂移影響
     # 偵測 card name 確認 USB 喇叭存在；fallback plughw:0,0
@@ -115,11 +137,12 @@ case "$MODE" in
     # langgraph since 2fd4aec)，6 檔 persona brain 也會生效。Stale warning 移除。
     # TTS_PROVIDER=openrouter_gemini → quality lane 走 Gemini 3.1 Flash TTS Despina
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t demo 2>/dev/null; \
-      WORKSPACE=$JETSON_REPO \
-      PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' \
-      PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' \
-      TTS_PROVIDER='${TTS_PROVIDER:-openrouter_gemini}' \
-      bash $JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
+      WORKSPACE=$SAFE_JETSON_REPO \
+      PAWAI_LLM_MODEL=$SAFE_PAWAI_LLM_MODEL \
+      PAWAI_LLM_FALLBACK_MODEL=$SAFE_PAWAI_LLM_FALLBACK_MODEL \
+      TTS_PROVIDER=$SAFE_TTS_PROVIDER \
+      ASR_PROVIDER_ORDER=$SAFE_ASR_PROVIDER_ORDER \
+      bash $SAFE_JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
     sleep 30  # full demo 啟動較久
     ;;
 esac

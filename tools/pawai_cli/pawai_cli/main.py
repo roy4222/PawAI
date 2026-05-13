@@ -495,6 +495,10 @@ def _do_rsync_and_build(root: Path, packages: list[str], no_sync: bool, no_build
                 "-az",
                 "--delete",
                 "--exclude=.git/",
+                "--exclude=.env",
+                "--exclude=.env.*",
+                "--exclude=.env.local",
+                "--exclude=.ssh/",
                 "--exclude=build/",
                 "--exclude=install/",
                 "--exclude=log/",
@@ -613,7 +617,21 @@ def _invoke_start_sh(no_studio: bool, brain_only: bool) -> int:
         args.append("full")
     else:
         args.append("demo")
-    return shell.stream(args, cwd=shell.repo_root())
+    return shell.stream(args, cwd=shell.repo_root(), env=_build_demo_env())
+
+
+def _build_demo_env() -> dict:
+    """Compose env for start.sh and inject detected Tailscale IP when possible."""
+    env = os.environ.copy()
+    if not env.get("JETSON_TAILSCALE_IP"):
+        try:
+            from . import network
+            peer = network.find_jetson_peer(hint=shell.jetson_hostname_hint())
+            if peer and peer.get("online") and peer.get("ip"):
+                env["JETSON_TAILSCALE_IP"] = peer["ip"]
+        except Exception:
+            pass
+    return env
 
 
 def _invoke_cleanup_sh() -> int:

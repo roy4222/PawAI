@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from click.testing import CliRunner
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 from unittest.mock import patch
 
@@ -588,6 +589,66 @@ def test_deploy_prompts_on_active_other_lock(monkeypatch):
         runner = CliRunner()
         result = runner.invoke(cli, ["jetson", "deploy", "--module", "brain"], input="c\n")
     assert "alice" in result.output.lower()
+
+
+def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path):
+    """rsync invocation must include repo-relative excludes for secrets."""
+    from pawai_cli import main as cli_main
+    from pawai_cli.shell import Result
+
+    captured_argv = []
+
+    def fake_stream(argv, cwd=None, env=None):
+        captured_argv.append(list(argv))
+        return 0
+
+    with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
+         patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.jetson_host", return_value="jetson"), \
+         patch("pawai_cli.main.shell.jetson_repo", return_value="/home/jetson/elder_and_dog"), \
+         patch("pathlib.Path.home", return_value=tmp_path):
+        code, method = cli_main._do_rsync_and_build(
+            root=Path("/tmp/repo"),
+            packages=[],
+            no_sync=False,
+            no_build=True,
+            module_key="brain",
+        )
+
+    assert code == 0
+    assert method == "rsync"
+    rsync_argv = next((a for a in captured_argv if a and a[0] == "rsync"), None)
+    assert rsync_argv is not None, f"no rsync invocation seen: {captured_argv}"
+    excludes = [arg for arg in rsync_argv if arg.startswith("--exclude=")]
+    required = {
+        "--exclude=.env",
+        "--exclude=.env.*",
+        "--exclude=.env.local",
+        "--exclude=.ssh/",
+    }
+    missing = required - set(excludes)
+    assert not missing, f"missing rsync excludes: {missing}"
+
+
+def test_invoke_start_sh_injects_jetson_tailscale_ip(monkeypatch):
+    """demo start wrapper should pass JETSON_TAILSCALE_IP to start.sh env."""
+    from pawai_cli import main as cli_main
+
+    captured_env = {}
+
+    def fake_stream(argv, cwd=None, env=None):
+        captured_env.update(env or {})
+        return 0
+
+    monkeypatch.delenv("JETSON_TAILSCALE_IP", raising=False)
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
+         patch("pawai_cli.network.find_jetson_peer", return_value=peer):
+        assert cli_main._invoke_start_sh(no_studio=False, brain_only=False) == 0
+
+    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.83.109.89"
 
 
 def test_demo_start_nav_capability_invokes_nav_start(monkeypatch):
