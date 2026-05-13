@@ -1230,19 +1230,28 @@ Edit `.claude/skills/brain-studio-lane/scripts/start.sh` lines 117-122. Current 
       bash $JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
 ```
 
-Replace with (adds `ASR_PROVIDER_ORDER` line — that was the missing var per 5/12 night log; everything else stays):
+Replace with (uses `printf %q` for shell-safe quoting; adds `ASR_PROVIDER_ORDER`):
 
 ```bash
+    # Phase 1 item 4: safe-quote env values that may contain single quotes,
+    # spaces, or shell metacharacters (e.g., ASR_PROVIDER_ORDER='["x","y"]').
+    SAFE_PAWAI_LLM_MODEL=$(printf %q "${PAWAI_LLM_MODEL:-}")
+    SAFE_PAWAI_LLM_FALLBACK_MODEL=$(printf %q "${PAWAI_LLM_FALLBACK_MODEL:-}")
+    SAFE_TTS_PROVIDER=$(printf %q "${TTS_PROVIDER:-openrouter_gemini}")
+    SAFE_ASR_PROVIDER_ORDER=$(printf %q "${ASR_PROVIDER_ORDER:-}")
+
     ssh $SSH_OPTS "$JETSON_HOST" "tmux kill-session -t demo 2>/dev/null; \
       WORKSPACE=$JETSON_REPO \
-      PAWAI_LLM_MODEL='${PAWAI_LLM_MODEL:-}' \
-      PAWAI_LLM_FALLBACK_MODEL='${PAWAI_LLM_FALLBACK_MODEL:-}' \
-      TTS_PROVIDER='${TTS_PROVIDER:-openrouter_gemini}' \
-      ASR_PROVIDER_ORDER='${ASR_PROVIDER_ORDER:-}' \
+      PAWAI_LLM_MODEL=$SAFE_PAWAI_LLM_MODEL \
+      PAWAI_LLM_FALLBACK_MODEL=$SAFE_PAWAI_LLM_FALLBACK_MODEL \
+      TTS_PROVIDER=$SAFE_TTS_PROVIDER \
+      ASR_PROVIDER_ORDER=$SAFE_ASR_PROVIDER_ORDER \
       bash $JETSON_REPO/scripts/start_full_demo_tmux.sh > /dev/null 2>&1 &"
 ```
 
-Repeat the same single-line addition in any other SSH demo-launch block in start.sh (search via grep):
+`printf %q` produces a bash-safe representation that survives one re-evaluation (which SSH does when the remote bash parses the command string). Bare `'${VAR:-}'` is **not** safe for `.env.local`-sourced values that may contain `'` or `$`.
+
+Repeat the same `SAFE_*` extraction + substitution in any other SSH demo-launch block in start.sh (search via grep):
 
 ```bash
 grep -n "TTS_PROVIDER=" .claude/skills/brain-studio-lane/scripts/start.sh
@@ -1373,9 +1382,9 @@ python3 -m pytest tools/pawai_cli/tests/test_lock.py -v -k "release_only_removes
 # expect: AttributeError (Lock has no release_if_owned)
 ```
 
-- [ ] **Step 3: Implement `Lock.release_if_owned()`**
+- [ ] **Step 3: Implement `Lock.release_if_owned()` — injection-safe via env vars**
 
-Edit `tools/pawai_cli/pawai_cli/lock.py`. After the existing `release()` method (line 99-102), add:
+Edit `tools/pawai_cli/pawai_cli/lock.py`. Add `import shlex` at the top (next to existing imports) if not already present. After the existing `release()` method (line 99-102), add:
 
 ```python
     @classmethod
@@ -1385,51 +1394,42 @@ Edit `tools/pawai_cli/pawai_cli/lock.py`. After the existing `release()` method 
         Returns True if the lock was successfully removed (or was already absent).
         Returns False if a different owner holds the lock.
 
-        Uses remote flock + python3 inline script for race-safe ownership check.
+        Injection-safe: `user`, `host`, and `lock_path` are passed to the remote
+        shell as `shlex.quote`-protected env vars; the python3 script reads them
+        from os.environ so no value is ever string-interpolated into a shell or
+        Python source.
         """
         lock_path = _remote_lock_path()
-        py_check = (
-            "import json, os, sys; "
-            f"p='{lock_path}'; "
-            "exit(0) if not os.path.exists(p) else None; "
-            "d=json.load(open(p)); "
-            f"sys.exit(0 if (d.get('user')=='{user}' and d.get('host')=='{host}') else 17)"
+        py_script = (
+            "import json, os, sys\n"
+            "p = os.environ['LOCK_FILE']\n"
+            "if not os.path.exists(p):\n"
+            "    sys.exit(0)\n"
+            "d = json.load(open(p))\n"
+            "if d.get('user') == os.environ['EXPECT_USER'] "
+            "and d.get('host') == os.environ['EXPECT_HOST']:\n"
+            "    os.remove(p)\n"
+            "    sys.exit(0)\n"
+            "sys.exit(17)\n"
         )
         cmd = (
-            f"flock -n {LOCK_FLOCK_PATH} -c '"
-            f"python3 -c \"{py_check}\" && rm -f {lock_path}"
-            f"'"
+            f"EXPECT_USER={shlex.quote(user)} "
+            f"EXPECT_HOST={shlex.quote(host)} "
+            f"LOCK_FILE={shlex.quote(lock_path)} "
+            f"flock -n {shlex.quote(LOCK_FLOCK_PATH)} "
+            f"python3 -c {shlex.quote(py_script)}"
         )
         result = shell.run_remote(cmd, timeout=10)
-        if result.code == 0:
-            return True
-        # code 17 = owner mismatch; other non-zero = transient
-        return False
-```
-
-**Default to the first variant above** (inline `python3 -c "..." && rm -f`). It's smaller and avoids nested heredoc-style quoting. Only fall back to the multi-step bash variant below if Step 6 smoke test reveals shell-quoting issues on the real Jetson:
-
-```python
-    # Fallback variant — use only if the inline variant fails on Jetson quoting:
-    @classmethod
-    def release_if_owned(cls, user: str, host: str) -> bool:
-        lock_path = _remote_lock_path()
-        script = f"""
-flock -n {LOCK_FLOCK_PATH} bash -c '
-LOCK_FILE={lock_path}
-if [ ! -f $LOCK_FILE ]; then exit 0; fi
-OWNER=$(python3 -c "import json; print(json.load(open(\\"$LOCK_FILE\\"))[\\"user\\"])" 2>/dev/null)
-HOST=$(python3 -c "import json; print(json.load(open(\\"$LOCK_FILE\\"))[\\"host\\"])" 2>/dev/null)
-if [ "$OWNER" = "{user}" ] && [ "$HOST" = "{host}" ]; then
-  rm -f $LOCK_FILE
-  exit 0
-fi
-exit 17
-'
-"""
-        result = shell.run_remote(script, timeout=10)
+        # code 0 = removed (or was absent); 17 = owner mismatch;
+        # other non-zero = flock contention / SSH transient
         return result.code == 0
 ```
+
+This pattern:
+- `shlex.quote(user)` produces safe POSIX shell-quoted string even if `user` contains `'`, `"`, `;`, `$`, `\`, etc.
+- `shlex.quote(py_script)` protects the multi-line script body the same way.
+- Python script reads from `os.environ` — values never go through string interpolation.
+- Even if a malicious teammate later writes a lock file with `"user": "'; rm -rf /; #"`, this code cannot be tricked: the value is compared as a Python string, never executed.
 
 - [ ] **Step 4: Wire `demo_stop` to use `release_if_owned`**
 
@@ -1504,23 +1504,46 @@ python3 -m pytest tools/pawai_cli/tests/test_lock.py -v
 # expect: all green (incl. 2 new ones)
 ```
 
-- [ ] **Step 6: Real-Jetson smoke test**
+- [ ] **Step 6: Real-Jetson smoke test (precondition + backup/restore)**
 
 ```bash
+# Precondition: refuse to run if a teammate's lock exists.
+EXISTING=$(ssh jetson "cat /home/jetson/elder_and_dog/.pawai-demo-lock 2>/dev/null" || true)
+if [ -n "$EXISTING" ]; then
+  echo "✗ Lock already present on Jetson. Skipping destructive smoke."
+  echo "  Inspect:  pawai status"
+  echo "  Owner:    $(echo "$EXISTING" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get(\"user\",\"?\")+\"@\"+d.get(\"host\",\"?\"))' 2>/dev/null || echo unparsable)"
+  echo "  Re-run smoke once the lock is released."
+  exit 1
+fi
+
 # 1. Acquire a lock then verify own-stop works without --force
 pawai demo start
 sleep 5
 pawai demo stop
 # expect: clean stop, no --force needed, no "Lock is owned by" message
 
-# 2. Verify the safety: simulate other-user lock manually
+# 2. Verify the safety: simulate other-user lock manually.
+# (Precondition above ensures we won't clobber a real teammate lock.)
 ssh jetson 'cat > /home/jetson/elder_and_dog/.pawai-demo-lock <<EOF
-{"schema_version":1,"user":"alice","host":"alice-mac","branch":"main","sha":"abc","state":"running","start_time":"2026-05-13T10:00:00+00:00","demo_mode":"full","tmux_session":"demo","lane":"brain"}
+{"schema_version":1,"user":"smoke-test-alice","host":"smoke-test-host","branch":"main","sha":"abc","state":"running","start_time":"2026-05-13T10:00:00+00:00","demo_mode":"full","tmux_session":"demo","lane":"brain"}
 EOF'
 pawai demo stop  # WITHOUT --force
-# expect: "Lock is owned by alice@alice-mac. Use --force to stop their demo." + exit 2
-ssh jetson 'rm /home/jetson/elder_and_dog/.pawai-demo-lock'  # cleanup test fixture
+# expect: "Lock is owned by smoke-test-alice@smoke-test-host. Use --force to stop their demo." + exit 2
+
+# Cleanup test fixture — only remove if it still has our smoke marker
+ssh jetson '
+LOCK=/home/jetson/elder_and_dog/.pawai-demo-lock
+if [ -f "$LOCK" ] && grep -q "smoke-test-alice" "$LOCK"; then
+  rm "$LOCK"
+  echo "✓ smoke fixture removed"
+else
+  echo "⚠ lock changed during smoke; not removing"
+fi
+'
 ```
+
+The `smoke-test-alice` / `smoke-test-host` markers are deliberately unlikely to collide with a real user. Cleanup verifies the marker before deletion — protects against a race where a real lock landed during the test window.
 
 - [ ] **Step 7: Run full test suite**
 
@@ -1755,34 +1778,38 @@ grep -n "next.*dev" .claude/skills/brain-studio-lane/scripts/cleanup.sh
 
 If `pkill -f "next.*dev"` appears, replace with the PID-file kill block (same as Step 3 above) and ensure `PIDFILE_FRONTEND="/tmp/pawai-frontend.pid"` is defined near top.
 
-- [ ] **Step 6: Smoke test**
+- [ ] **Step 6: Smoke test (no-network decoy)**
 
 ```bash
-# Start a decoy "next dev" in another shell:
-(cd /tmp && mkdir -p decoy-next && cd decoy-next && cat > package.json <<EOF
-{"name":"decoy","scripts":{"dev":"sleep 999"}}
-EOF
-npx --yes next dev 2>/dev/null &) || true
-# (Or just: while true; do sleep 60; done & with a renamed comm — easier)
-sleep 2
+# Spawn a decoy whose argv matches "next dev" pattern, no network/install needed.
+# `exec -a` sets argv[0]; the process is a plain sleep so it's safe and offline.
+bash -c 'exec -a "next dev decoy" sleep 999' &
 DECOY_PID=$!
-ps aux | grep -E "next.*dev|decoy" | grep -v grep
+sleep 1
 
-# Start pawai demo (which used to pkill -f "next.*dev")
+# Verify the decoy is alive and argv matches the dangerous pattern
+ps -p $DECOY_PID -o pid,command
+pgrep -af "next.*dev" | grep -F "$DECOY_PID" \
+  && echo "✓ decoy in place" \
+  || { echo "✗ decoy didn't register; aborting smoke"; kill -9 $DECOY_PID 2>/dev/null; exit 1; }
+
+# Start pawai demo (would previously pkill -f "next.*dev" → kills decoy)
 pawai demo start
 sleep 5
 
 # Verify decoy survived
 if kill -0 $DECOY_PID 2>/dev/null; then
-  echo "✓ decoy survived (PID-file kill works)"
+  echo "✓ decoy survived (PID-file kill works correctly)"
 else
-  echo "✗ decoy was killed (regression)"
+  echo "✗ decoy was killed (regression — Item 10 fix not in effect)"
 fi
 
 # Cleanup
 pawai demo stop
 kill -9 $DECOY_PID 2>/dev/null
 ```
+
+`exec -a "next dev decoy" sleep 999` runs `sleep` but sets its argv[0] to `next dev decoy`, so `pgrep -f "next.*dev"` matches it without requiring Node or npm. Zero network, zero install, fully deterministic. The PID is captured directly from `$!` (no subshell wrapping) so `$DECOY_PID` is reliable.
 
 - [ ] **Step 7: Run full test suite**
 
