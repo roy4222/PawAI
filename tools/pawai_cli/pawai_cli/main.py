@@ -126,7 +126,10 @@ def _ssh_config_has_host(cfg_text: str, host: str) -> bool:
 @click.version_option(__version__)
 def cli() -> None:
     """PawAI development and Jetson orchestration CLI."""
-    _load_env(shell.repo_root())
+    from . import platform as _plat
+    root = shell.repo_root()
+    _plat.assert_supported(root)
+    _load_env(root)
 
 
 @cli.command()
@@ -179,6 +182,17 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
 
     emit("PawAI environment doctor")
     emit("────────────────────────")
+
+    # == Platform ==
+    from . import platform as _plat
+    pinfo = _plat.detect()
+    repo_err = _plat.check_repo_path(pinfo, root)
+    emit("== Platform ==")
+    if pinfo.supported and repo_err is None:
+        ok(f"Platform: {pinfo.kind}")
+    else:
+        fail(f"Platform: {pinfo.reason or pinfo.kind}{' + ' + repo_err if repo_err else ''}")
+    emit("")
 
     # == Tailscale ==
     hint = shell.jetson_hostname_hint()
