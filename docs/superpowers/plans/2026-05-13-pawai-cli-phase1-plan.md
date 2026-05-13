@@ -1257,7 +1257,22 @@ Repeat the same `SAFE_*` extraction + substitution in any other SSH demo-launch 
 grep -n "TTS_PROVIDER=" .claude/skills/brain-studio-lane/scripts/start.sh
 ```
 
-For each occurrence (likely one per mode: full / demo / e2e), add the same `ASR_PROVIDER_ORDER='${ASR_PROVIDER_ORDER:-}' \` line right after `TTS_PROVIDER`.
+For each occurrence (likely one per mode: full / demo / e2e), use the same safe-quote pattern:
+
+```bash
+SAFE_PAWAI_LLM_MODEL=$(printf %q "${PAWAI_LLM_MODEL:-}")
+SAFE_PAWAI_LLM_FALLBACK_MODEL=$(printf %q "${PAWAI_LLM_FALLBACK_MODEL:-}")
+SAFE_TTS_PROVIDER=$(printf %q "${TTS_PROVIDER:-openrouter_gemini}")
+SAFE_ASR_PROVIDER_ORDER=$(printf %q "${ASR_PROVIDER_ORDER:-}")
+
+# ...inside the SSH command string...
+PAWAI_LLM_MODEL=$SAFE_PAWAI_LLM_MODEL \
+PAWAI_LLM_FALLBACK_MODEL=$SAFE_PAWAI_LLM_FALLBACK_MODEL \
+TTS_PROVIDER=$SAFE_TTS_PROVIDER \
+ASR_PROVIDER_ORDER=$SAFE_ASR_PROVIDER_ORDER \
+```
+
+Do **not** add `ASR_PROVIDER_ORDER='${ASR_PROVIDER_ORDER:-}'`; that is the unsafe form this task is replacing.
 
 **Note:** Task 6 already wires `_build_demo_env()` in the CLI to read `os.environ` (which includes `.env.local` parsed values). So setting `ASR_PROVIDER_ORDER` in `.env.local` will reach start.sh, which will pass it to Jetson via this line.
 
@@ -1507,43 +1522,59 @@ python3 -m pytest tools/pawai_cli/tests/test_lock.py -v
 - [ ] **Step 6: Real-Jetson smoke test (precondition + backup/restore)**
 
 ```bash
-# Precondition: refuse to run if a teammate's lock exists.
-EXISTING=$(ssh jetson "cat /home/jetson/elder_and_dog/.pawai-demo-lock 2>/dev/null" || true)
-if [ -n "$EXISTING" ]; then
-  echo "✗ Lock already present on Jetson. Skipping destructive smoke."
-  echo "  Inspect:  pawai status"
-  echo "  Owner:    $(echo "$EXISTING" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get(\"user\",\"?\")+\"@\"+d.get(\"host\",\"?\"))' 2>/dev/null || echo unparsable)"
-  echo "  Re-run smoke once the lock is released."
-  exit 1
-fi
-
 # 1. Acquire a lock then verify own-stop works without --force
 pawai demo start
 sleep 5
 pawai demo stop
 # expect: clean stop, no --force needed, no "Lock is owned by" message
 
-# 2. Verify the safety: simulate other-user lock manually.
-# (Precondition above ensures we won't clobber a real teammate lock.)
-ssh jetson 'cat > /home/jetson/elder_and_dog/.pawai-demo-lock <<EOF
+# 2. Verify the safety: atomically acquire a smoke-test lock fixture.
+# This refuses to overwrite a teammate's real lock.
+ssh jetson '
+LOCK=/home/jetson/elder_and_dog/.pawai-demo-lock
+FLOCK=/tmp/pawai-demo-lock.flock
+flock -n "$FLOCK" bash -c '"'"'
+  LOCK=/home/jetson/elder_and_dog/.pawai-demo-lock
+  if [ -f "$LOCK" ]; then
+    echo "✗ Lock already present on Jetson. Skipping destructive smoke."
+    echo "  Inspect: pawai status"
+    python3 - "$LOCK" <<PY 2>/dev/null || true
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+print("  Owner:   " + d.get("user", "?") + "@" + d.get("host", "?"))
+PY
+    exit 17
+  fi
+  cat > "$LOCK" <<EOF
 {"schema_version":1,"user":"smoke-test-alice","host":"smoke-test-host","branch":"main","sha":"abc","state":"running","start_time":"2026-05-13T10:00:00+00:00","demo_mode":"full","tmux_session":"demo","lane":"brain"}
-EOF'
+EOF
+'"'"'
+' || {
+  echo "Smoke fixture not acquired; re-run after lock is released."
+  exit 1
+}
 pawai demo stop  # WITHOUT --force
 # expect: "Lock is owned by smoke-test-alice@smoke-test-host. Use --force to stop their demo." + exit 2
 
-# Cleanup test fixture — only remove if it still has our smoke marker
+# Cleanup test fixture — only remove if it still has our smoke marker,
+# and do the check+remove under the same remote flock.
 ssh jetson '
 LOCK=/home/jetson/elder_and_dog/.pawai-demo-lock
-if [ -f "$LOCK" ] && grep -q "smoke-test-alice" "$LOCK"; then
-  rm "$LOCK"
-  echo "✓ smoke fixture removed"
-else
-  echo "⚠ lock changed during smoke; not removing"
-fi
+FLOCK=/tmp/pawai-demo-lock.flock
+flock -n "$FLOCK" bash -c '"'"'
+  LOCK=/home/jetson/elder_and_dog/.pawai-demo-lock
+  if [ -f "$LOCK" ] && grep -q "smoke-test-alice" "$LOCK"; then
+    rm "$LOCK"
+    echo "✓ smoke fixture removed"
+  else
+    echo "⚠ lock changed during smoke; not removing"
+  fi
+'"'"'
 '
 ```
 
-The `smoke-test-alice` / `smoke-test-host` markers are deliberately unlikely to collide with a real user. Cleanup verifies the marker before deletion — protects against a race where a real lock landed during the test window.
+The `smoke-test-alice` / `smoke-test-host` markers are deliberately unlikely to collide with a real user. Fixture write and cleanup both run under the same Jetson-side flock used by the CLI, so this smoke cannot overwrite a real teammate lock between precondition and write.
 
 - [ ] **Step 7: Run full test suite**
 
