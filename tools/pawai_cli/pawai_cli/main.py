@@ -641,6 +641,26 @@ def _invoke_cleanup_sh() -> int:
     )
 
 
+@cli.group()
+def health() -> None:
+    """Subsystem health checks."""
+
+
+@health.command("brain")
+def health_brain() -> None:
+    """Run brain-studio-lane healthcheck against Jetson."""
+    script = (
+        shell.repo_root() / ".claude" / "skills" / "brain-studio-lane" /
+        "scripts" / "healthcheck.sh"
+    )
+    if not script.exists():
+        raise click.ClickException(f"healthcheck script not found: {script}")
+    env = _build_demo_env()
+    env["JETSON_HOST"] = shell.jetson_host()
+    rc = shell.stream(["bash", str(script)], cwd=shell.repo_root(), env=env)
+    sys.exit(rc)
+
+
 def _invoke_nav_start_sh() -> int:
     return shell.stream(
         ["bash", ".claude/skills/nav-avoidance-lane/scripts/start.sh", "capability"],
@@ -775,7 +795,7 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
 @click.option("--force", is_flag=True, help="Stop another user's demo and release their lock.")
 def demo_stop(force: bool) -> None:
     """Stop brain-studio-lane."""
-    from .lock import Lock, is_own_lock
+    from .lock import Lock, is_own_lock, is_stale
     user = os.environ.get("USER") or shell.local_identity().split("@")[0]
     host = platform.node()
 
@@ -791,7 +811,13 @@ def demo_stop(force: bool) -> None:
         sys.exit(2)
 
     rc = _cleanup_for_lock(existing)
-    Lock.release()
+    if force and not is_own_lock(existing, user, host):
+        Lock.release()
+    else:
+        if is_own_lock(existing, user, host) and is_stale(existing):
+            click.echo(f"Reclaiming your own stale {existing.state} lock (started {existing.start_time}).")
+        if not Lock.release_if_owned(user=existing.user, host=existing.host):
+            click.echo("⚠ Lock release skipped — another process holds the flock or lock changed.")
     sys.exit(rc)
 
 

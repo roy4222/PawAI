@@ -478,13 +478,57 @@ def test_demo_stop_routes_nav_lock_to_nav_cleanup(monkeypatch):
          patch("pawai_cli.main.platform.node", return_value="bob-mac"), \
          patch("pawai_cli.main._invoke_nav_cleanup_sh", return_value=0) as nav_cleanup, \
          patch("pawai_cli.main._invoke_cleanup_sh", return_value=0) as brain_cleanup, \
-         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True):
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "stop"])
     assert result.exit_code == 0
     assert nav_cleanup.called
     assert not brain_cleanup.called
-    assert released == [1]
+    assert released == [("bob", "bob-mac")]
+
+
+def test_demo_stop_own_stale_lock_releases_without_force(monkeypatch):
+    from pawai_cli.lock import Lock
+
+    own_stale = Lock(
+        user="lubaiyu", host="Roy422deMacBook-Pro.local",
+        branch="main", sha="abc1234",
+        state="running",
+        start_time=(datetime.now(timezone.utc) - timedelta(hours=5)).isoformat(),
+        demo_mode="full", tmux_session="demo", lane="brain",
+    )
+
+    with patch("pawai_cli.lock.Lock.read", return_value=own_stale), \
+         patch("pawai_cli.lock.Lock.release_if_owned", return_value=True) as mock_rel, \
+         patch("pawai_cli.main._cleanup_for_lock", return_value=0), \
+         patch("pawai_cli.main.platform.node", return_value="Roy422deMacBook-Pro.local"):
+        monkeypatch.setenv("USER", "lubaiyu")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["demo", "stop"])
+
+    assert result.exit_code == 0
+    assert "Reclaiming your own stale" in result.output
+    mock_rel.assert_called_once_with(user="lubaiyu", host="Roy422deMacBook-Pro.local")
+
+
+def test_health_brain_passes_jetson_host_env():
+    captured_env = {}
+
+    def fake_stream(argv, cwd=None, env=None):
+        captured_env.update(env or {})
+        return 0
+
+    with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
+         patch("pawai_cli.main.shell.jetson_host", return_value="jetson"), \
+         patch("pawai_cli.network.find_jetson_peer",
+               return_value={"hostname": "jetson", "ip": "100.83.109.89", "online": True}):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["health", "brain"])
+
+    assert result.exit_code == 0
+    assert captured_env.get("JETSON_HOST") == "jetson"
+    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.83.109.89"
 
 
 def _reachable_live_status():

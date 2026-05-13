@@ -51,6 +51,7 @@ if [ -z "${JETSON_TAILSCALE_IP:-}" ]; then
   exit 2
 fi
 SKILL_DIR="$(cd "$(dirname "$0")" && pwd)"
+PIDFILE_FRONTEND="/tmp/pawai-frontend.pid"
 
 # Values below are embedded into SSH command strings. Use bash-safe quoting so
 # .env.local values containing spaces, quotes, JSON, or shell metacharacters
@@ -69,7 +70,15 @@ if [ "$AUTO_CLEAN" = "1" ]; then
   JETSON_OLD=$(ssh $SSH_OPTS "$JETSON_HOST" \
     "tmux ls 2>/dev/null | grep -E '^(demo|pawai_brain|studio_gw|llm-e2e):' | head -3" \
     2>/dev/null || true)
-  LOCAL_OLD=$(pgrep -f "next.*dev" 2>/dev/null | head -1 || true)
+  LOCAL_OLD=""
+  if [ -f "$PIDFILE_FRONTEND" ]; then
+    CANDIDATE=$(cat "$PIDFILE_FRONTEND" 2>/dev/null || true)
+    if [ -n "$CANDIDATE" ] && kill -0 "$CANDIDATE" 2>/dev/null; then
+      LOCAL_OLD="$CANDIDATE"
+    else
+      rm -f "$PIDFILE_FRONTEND"
+    fi
+  fi
 
   if [ -n "$JETSON_OLD" ] || [ -n "$LOCAL_OLD" ]; then
     [ -n "$JETSON_OLD" ] && echo "    🔍 Jetson 殘留 tmux: $(echo "$JETSON_OLD" | tr '\n' ' ')"
@@ -194,7 +203,15 @@ if [ "$STUDIO" = "1" ]; then
   fi
 
   # 3) 起 frontend（用 node_modules/.bin/next 直接呼叫，繞 npm/pnpm wrapper 的 pre-hook）
-  pkill -f "next.*dev" 2>/dev/null || true
+  if [ -f "$PIDFILE_FRONTEND" ]; then
+    OLD_PID=$(cat "$PIDFILE_FRONTEND" 2>/dev/null || true)
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+      kill "$OLD_PID" 2>/dev/null || true
+      sleep 1
+      kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE_FRONTEND"
+  fi
   sleep 1
   cd "$FRONTEND_DIR"
   if [ ! -x "$FRONTEND_DIR/node_modules/.bin/next" ]; then
@@ -203,6 +220,7 @@ if [ "$STUDIO" = "1" ]; then
   fi
   NEXT_PUBLIC_GATEWAY_URL="http://$JETSON_TAILSCALE_IP:8080" \
     nohup "$FRONTEND_DIR/node_modules/.bin/next" dev > /tmp/studio_frontend.log 2>&1 &
+  echo $! > "$PIDFILE_FRONTEND"
   disown
   sleep 8
   PORT=$(grep -oE 'http://localhost:[0-9]+' /tmp/studio_frontend.log | head -1 | grep -oE '[0-9]+$' || echo "3000")

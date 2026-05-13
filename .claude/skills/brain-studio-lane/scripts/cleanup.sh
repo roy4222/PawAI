@@ -20,12 +20,26 @@ done
 
 JETSON_HOST="${JETSON_HOST:-jetson-nano}"
 SSH_OPTS="-o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2"
+PIDFILE_FRONTEND="/tmp/pawai-frontend.pid"
 
 echo "═══ brain-studio-lane cleanup (handoff=$HANDOFF) ═══"
 
 # ── 殺 frontend (local) ────────────────────────────────────
 echo "[1] 殺 frontend (next dev) ..."
-pkill -f "next.*dev" 2>/dev/null && echo "    ✅ frontend killed" || echo "    — 沒在跑"
+if [ -f "$PIDFILE_FRONTEND" ]; then
+  OLD_PID=$(cat "$PIDFILE_FRONTEND" 2>/dev/null || true)
+  if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+    kill "$OLD_PID" 2>/dev/null || true
+    sleep 1
+    kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
+    echo "    ✅ frontend killed (pid=$OLD_PID)"
+  else
+    echo "    — pidfile stale"
+  fi
+  rm -f "$PIDFILE_FRONTEND"
+else
+  echo "    — 沒在跑"
+fi
 
 # ── 殺 brain tmux + studio_gw + tts_node ──────────────────
 echo "[2] 殺 Jetson tmux sessions ..."

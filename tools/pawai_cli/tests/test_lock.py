@@ -126,3 +126,38 @@ def test_acquire_accepts_nav_lane_metadata(monkeypatch):
     assert result.tmux_session == "nav-cap-demo"
     assert "nav_capability" in commands[0]
     assert "nav-cap-demo" in commands[0]
+
+
+def test_release_if_owned_removes_matching_owner(monkeypatch):
+    commands: list[str] = []
+
+    def stub(cmd, timeout=None):
+        commands.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    assert Lock.release_if_owned(user="alice", host="alice-mac") is True
+    assert "EXPECT_USER=alice" in commands[0]
+    assert "EXPECT_HOST=alice-mac" in commands[0]
+    assert "python3 -c" in commands[0]
+
+
+def test_release_if_owned_refuses_owner_mismatch(monkeypatch):
+    def stub(cmd, timeout=None):
+        return Result(code=17, stdout="", stderr="not owner")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    assert Lock.release_if_owned(user="alice", host="alice-mac") is False
+
+
+def test_release_if_owned_quotes_user_and_host(monkeypatch):
+    commands: list[str] = []
+
+    def stub(cmd, timeout=None):
+        commands.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    assert Lock.release_if_owned(user="a' ; echo bad", host="h$(echo bad)") is True
+    assert "EXPECT_USER='a'\"'\"' ; echo bad'" in commands[0]
+    assert "EXPECT_HOST='h$(echo bad)'" in commands[0]

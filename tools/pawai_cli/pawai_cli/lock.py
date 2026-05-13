@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
@@ -100,6 +101,31 @@ class Lock:
     def release(cls) -> bool:
         result = shell.run_remote(f"rm -f {_remote_lock_path()}", timeout=5)
         return result.ok
+
+    @classmethod
+    def release_if_owned(cls, user: str, host: str) -> bool:
+        """Atomically remove the remote lock only if user/host still match."""
+        lock_path = _remote_lock_path()
+        py_script = (
+            "import json, os, sys\n"
+            "p = os.environ['LOCK_FILE']\n"
+            "if not os.path.exists(p):\n"
+            "    sys.exit(0)\n"
+            "d = json.load(open(p))\n"
+            "if d.get('user') == os.environ['EXPECT_USER'] "
+            "and d.get('host') == os.environ['EXPECT_HOST']:\n"
+            "    os.remove(p)\n"
+            "    sys.exit(0)\n"
+            "sys.exit(17)\n"
+        )
+        cmd = (
+            f"EXPECT_USER={shlex.quote(user)} "
+            f"EXPECT_HOST={shlex.quote(host)} "
+            f"LOCK_FILE={shlex.quote(lock_path)} "
+            f"flock -n {shlex.quote(LOCK_FLOCK_PATH)} "
+            f"python3 -c {shlex.quote(py_script)}"
+        )
+        return shell.run_remote(cmd, timeout=10).code == 0
 
 
 def is_stale(lk: Lock) -> Optional[str]:
