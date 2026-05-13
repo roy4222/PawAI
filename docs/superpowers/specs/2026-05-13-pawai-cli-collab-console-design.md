@@ -141,7 +141,7 @@ Detection lives in `tools/pawai_cli/pawai_cli/platform.py` (new file, ~50 LOC). 
 Every command supports three output modes:
 
 - **Default (terminal)**: human-readable, color-aware (respect `NO_COLOR=1` env per no-color.org), uses `✓/⚠/✗` glyphs.
-- **`--json`**: stable schema per command, documented in `docs/pawai_cli/json-schemas.md`. Adds `schema_version` top-level. (Phase 4 deliverable for full coverage; Phase 1 only requires `doctor` / `status --short`.)
+- **`--json`**: stable schema per command, documented in `docs/pawai_cli/json-schemas.md`. Adds `schema_version` top-level. **Phase 4 deliverable; Phase 1 does not ship any `--json` output.**
 - **`--quiet`**: only error output, exit code is canonical. Suitable for CI / scripts.
 
 **Exit code convention** (kubectl-style):
@@ -192,12 +192,13 @@ Each phase is independently shippable with its own writing-plans-generated imple
 
 ### Phase 1 — On-site Firefighting (deadline 2026-05-16, ~2 days)
 
-10 items, all directly tied to today's session pain or imminent collaboration risk. None require schema migration; all are forward-compatible with later phases.
+11 items (item 0 = platform gate foundation, items 1-10 = today's seam bugs). None require schema migration; all are forward-compatible with later phases.
 
 | # | Item | Files | Effort | Validates |
 |---|------|-------|--------|-----------|
+| 0 | New `pawai_cli/platform.py` (~50 LOC) implementing I1 detection (`assert_supported()`); wire as first call in every command entry point; add doctor section "Platform: …" as item #1 in doctor output. Unit tests for the 5 detection branches (Darwin / Linux native / WSL2 / WSL1 / Windows native) + `/mnt/c` path check. | new `pawai_cli/platform.py`, `main.py` entry guards, `tests/test_platform.py` | 1.5 h | Foundational invariant; prevents future cp950-class platform bugs from landing |
 | 1 | `doctor` Gateway severity wires `Lock.read().state`: if `running` lock present and 8080 down → FAIL (not SKIP) | `main.py:248` (gateway_8080_status), `main.py:doctor()` | 30 min | Today's `Gateway 8080: SKIP (no demo running)` mis-state |
-| 2 | rsync exclude `.env.local`, `.env`, `~/.ssh/*` from deploy | `main.py:469` (jetson_deploy rsync args), or wrapper script | 20 min | Prevents secret leak to Jetson |
+| 2 | rsync exclude `.env`, `.env.*`, `.env.local`, `.ssh/` from deploy. Home-dir SSH keys are outside repo scope (rsync only sees the repo tree); pattern is repo-relative on purpose. | `main.py:469` (jetson_deploy rsync args), or wrapper script | 20 min | Prevents secret leak to Jetson |
 | 3 | `pawai demo start` propagates `JETSON_TAILSCALE_IP` → studio frontend, no hardcoded fallback | `brain-studio-lane/scripts/start.sh`, `main.py:demo_start` | 1 h | Today's 5/12 night carry-over bug (start.sh hardcoded `100.83.109.89`) |
 | 4 | `pawai demo start` forwards `TTS_PROVIDER` / `ASR_PROVIDER_ORDER` to Jetson tmux | `brain-studio-lane/scripts/start.sh` (env propagation block) | 1 h | 5/12 night offline-fallback verification bug |
 | 5 | `pawai status --short` skips `ros2 node list` (avoid daemon cache lie) | `status.py:print_status`, plumb `--short` to skip ROS section | 45 min | Today's "20 phantom nodes after stop" |
@@ -214,13 +215,13 @@ Each phase is independently shippable with its own writing-plans-generated imple
 - `pawai net` / `pawai setup` (Phase 3)
 - `pawai debug bundle` (Phase 4)
 
-Phase 1 **does** introduce: `pawai_cli/platform.py` for I1 platform gate (otherwise items 1-10 ride on already-supported platforms and platform gate becomes Phase 2 — but we want the gate early to avoid more cp950-class bugs landing).
+Platform gate is item 0 above — explicitly budgeted, not silently added.
 
 ### Phase 2 — Multi-Person Collaboration Formalization (~3-4 days, after Phase 1)
 
 - Lock schema migration to v1 (current schema → adds `lock_id`, `operation`, `expires_at`, `ttl_seconds`, `reason`).
 - `pawai lock {status, release, reclaim, force --reason "..." [--lock-id]}` subcommands.
-- Audit log writer (`/Users/jetson/elder_and_dog/.pawai-audit.log`).
+- Audit log writer at `$JETSON_REPO/.pawai-audit.log` (per Open Question #1 default; on current Jetson resolves to `/home/jetson/elder_and_dog/.pawai-audit.log`).
 - `pawai deploy plan --module <name>`: dry-run preview (local sha/branch/dirty, Jetson sha/branch, package list, build needed?, demo lock owner).
 - Branch mismatch in deploy → require explicit `--allow-mismatch` confirm.
 
@@ -248,13 +249,13 @@ Phase 1 **does** introduce: `pawai_cli/platform.py` for I1 platform gate (otherw
 
 Suggested order minimizes lock conflicts during landing:
 
-1. Platform gate file + first-line check (touches few existing files)
+1. **Item 0** — platform gate (foundation; everything below assumes it's in)
 2. **Items 7, 1, 5** — pure detection bugs in doctor/status (small, surgical)
 3. **Items 2, 3, 4** — deploy/start.sh changes (security + env propagation)
 4. **Items 6, 8, 10** — lock + healthcheck + start.sh kill (touches lock.py, healthcheck.sh)
 5. **Item 9** — docs drift
 
-Each item lands in its own commit. Phase 1 estimate: ~8 hours total wall clock, fits 2 working days with testing & teammate verification.
+Each item lands in its own commit. Phase 1 estimate: **~9-10 hours total wall clock** (item 0 = 1.5h foundation + items 1-10 = ~8h), fits 2 working days with testing & teammate verification.
 
 ---
 
@@ -293,7 +294,8 @@ Each item lands in its own commit. Phase 1 estimate: ~8 hours total wall clock, 
 
 **Local sources**:
 - Today's session full transcript (Jetson Wi-Fi recovery + 10 seam bugs surfaced)
-- 2-agent research reports (local audit + industry CLI patterns) — referenced in §Context
+- Industry CLI patterns research report: `docs/research/2026-05-13-cli-ux-best-practices.md` (608 lines, covers Terraform locking / Flutter doctor / WSL detection / Click vs Typer / debug bundle redaction)
+- Local CLI audit report (from parallel Explore agent) — captured in §Context tables; not separately filed
 - Prior MVP spec: `docs/superpowers/specs/2026-05-12-pawai-cli-mvp-design.md`
 - Prior team-prep spec: `docs/superpowers/specs/2026-05-12-pawai-cli-team-prep-design.md`
 - Current CLI source: `tools/pawai_cli/pawai_cli/`
