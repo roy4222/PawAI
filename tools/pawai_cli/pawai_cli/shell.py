@@ -27,8 +27,10 @@ def run(argv: Iterable[str], cwd: Path | None = None, timeout: int | None = None
             text=True,
             capture_output=True,
             timeout=timeout,
+            encoding="utf-8",
+            errors="replace",
         )
-        return Result(proc.returncode, proc.stdout, proc.stderr)
+        return Result(proc.returncode, proc.stdout or "", proc.stderr or "")
     except subprocess.TimeoutExpired as exc:
         return Result(124, exc.stdout or "", exc.stderr or f"timeout after {timeout}s")
     except OSError as exc:
@@ -48,7 +50,7 @@ def repo_root() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     res = run(["git", "rev-parse", "--show-toplevel"], timeout=5)
-    if res.ok and res.stdout.strip():
+    if res.ok and res.stdout and res.stdout.strip():
         return Path(res.stdout.strip()).resolve()
     return Path.cwd().resolve()
 
