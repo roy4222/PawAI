@@ -1,6 +1,8 @@
 # PawAI 新隊友 30 分鐘上手
 
-> Steps 5 + 規矩 在 L2 之後補。今天先到 doctor 全綠。
+> 支援 macOS / Linux native / WSL2 Ubuntu。不要在 Windows PowerShell、CMD、
+> Git Bash、WSL1，或 WSL `/mnt/c/...` repo 直接跑 `pawai`；CLI 會擋下這些
+> 環境，避免 rsync/flock/tmux 行為不一致。
 
 ## 0. 你需要什麼
 
@@ -56,8 +58,10 @@ $EDITOR .env.local
 
 `.env.local` 需要填的：
 - `OPENROUTER_KEY` — 跟 Roy 拿
-- `JETSON_TAILSCALE_IP` — **留空**（CLI 會自動從 tailscale status 偵測）
-- `JETSON_HOSTNAME_HINT` — 預設 `orin` 即可；Roy 的 shared Jetson 目前叫 `orinnano-super`，SSH alias 仍是 `jetson`
+- `JETSON_TAILSCALE_IP` — 可留空讓 CLI 從 `tailscale status` 偵測；如果 doctor
+  找不到 peer 但你知道 IP，就填 `100.83.109.89`
+- `JETSON_HOSTNAME_HINT` — 預設 `orin`；如果 share hostname 不匹配，就填
+  `orinnano-super`
 
 ## 4. doctor 應該全綠（5 min）
 
@@ -106,6 +110,13 @@ pawai demo stop
 ```
 
 `pawai status` 隨時查看誰在 demo、用哪個 branch、跑了多久。
+趕時間只要看 lock/branch/tmux 時用：
+
+```bash
+pawai status --short
+```
+
+`--short` 不會遠端呼叫 `ros2 node list`，所以不會被 ROS daemon cache 誤導。
 
 ### 導航避障場測（只有負責 nav 的人跑）
 
@@ -141,7 +152,10 @@ ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative \
 
 - **一次只能一個人 `pawai demo start`** — Jetson + Go2 是共用資源
 - **`-y` ≠ `--force`**：`-y` 只跳自己的確認，**不能**蓋別人的 lock；要接手別人 demo 必須 `--force`
-- **`pawai demo stop` 預設只清自己的 lock**；停別人的 demo 用 `--force` 並先告訴對方
+- **`pawai demo stop` 預設只清自己的 lock**；自己的 stale lock 不需要 `--force`
+- **停別人的 demo 用 `--force` 並先告訴對方**；Phase 1 還沒有 `--reason` audit prompt，不要把 `--force` 當快速鍵
 - **deploy 中看到「someone is in demo」prompt → 先溝通**，不要直接 `--force`
 - **stale lock（demo 跑超過 4hr）不會自動清** — `pawai status` 會標 STALE，要清也要確認對方真的不在用
+- **secrets 只留本機 `.env.local`** — `pawai jetson deploy` 會排除 `.env` / `.env.*` / `.env.local` / `.ssh/`
+- **brain stack 起來後可跑 `pawai health brain`** — 它比手打 healthcheck 少踩 SSH alias / IP env 的坑
 - **nav capability 是手動 action 場測，不是語音導航 demo** — 不要對外說 Brain 已能導航

@@ -46,6 +46,23 @@ brew install --cask tailscale     # 用來 SSH 上 Jetson
 sudo apt install tmux nodejs npm
 ```
 
+### 支援平台
+
+支援：
+
+- macOS native
+- Linux native
+- WSL2 Ubuntu（repo 放在 Linux filesystem，例如 `~/elder_and_dog`）
+
+不支援：
+
+- Windows PowerShell / CMD / Git Bash native
+- WSL1
+- WSL2 但 repo 放在 `/mnt/c/...`、`/mnt/d/...` 這類 Windows filesystem
+
+原因很務實：CLI 會用到 `ssh`、`rsync`、`flock`、`tmux`、`bash`、`/tmp` 與 Unix
+permission semantics。純 Windows native 會在 deploy/demo lock 上出現不可預期行為。
+
 ### 第一次設定 .env.local
 
 ```bash
@@ -101,6 +118,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai jetson deploy`](#jetson-deploy) | rsync 整個 repo + colcon build 指定模組 |
 | [`pawai demo start`](#demo-start) | 啟動 brain-studio-lane（Jetson tmux + 本機 Studio） |
 | [`pawai demo stop`](#demo-stop) | 清掉 demo session |
+| [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
@@ -118,6 +136,7 @@ pawai doctor --verbose # SSH 失敗時印出 stderr 細節
 
 檢查項目：
 
+- 平台是否為 macOS / Linux / WSL2；Windows native、WSL1、`/mnt/c` repo 會被擋
 - Python ≥ 3.10
 - git + repo 狀態（dirty/clean）
 - `.env.local` 是否存在；缺就提示 `cp .env.local.example .env.local`
@@ -165,7 +184,7 @@ Reading guide:
 
 ```bash
 pawai status         # 完整輸出（tmux + ROS nodes + git + last deploy）
-pawai status --short # 跳過 ROS node 細節
+pawai status --short # 跳過 ROS node list，適合快速看 lock/branch/tmux
 ```
 
 讀 Jetson 上的：
@@ -176,6 +195,9 @@ pawai status --short # 跳過 ROS node 細節
 **Heads-up 區**會警告：
 - demo 正在跑，deploy 要先 stop
 - 上次 deploy 的人不是你（多人協作場景）
+
+`--short` 不會 SSH 到 Jetson 跑 `ros2 node list`，所以適合 demo 剛停、ROS daemon cache
+還沒刷新時看真實 tmux/lock/deploy 狀態。
 
 > ⚠️ **race**：`pawai demo start` 剛回來時，Jetson tmux 可能還沒 spawn，馬上跑 status
 > 會看到 `tmux: none`，等 10–20 秒再跑即可。
@@ -211,9 +233,11 @@ pawai jetson deploy --module brain -y          # 跳過 confirm
 
 **Sync 邏輯**：
 1. 如果你家 `~/sync` 是 executable（個人化 wrapper），用它
-2. 否則用內建 rsync，自動 exclude：`.git/`、`build/`、`install/`、`log/`、
-   `__pycache__/`、`.pytest_cache/`、`.venv/`、`node_modules/`、`.next/`、
+2. 否則用內建 rsync，自動 exclude：`.git/`、`.env`、`.env.*`、`.env.local`、
+   `.ssh/`、`build/`、`install/`、`log/`、`__pycache__/`、`.pytest_cache/`、`.venv/`、`node_modules/`、`.next/`、
    `.ruff_cache/`、`.mypy_cache/`、`.DS_Store`
+
+Secrets 只留本機 `.env.local`，不會被 deploy 推到 Jetson。
 
 **Build 邏輯**：在 Jetson 上跑 `colcon build --packages-select <模組對應的 packages>`，
 build log 直接 stream 到本機。
@@ -244,7 +268,7 @@ pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 4. 本機 frontend：
    - 缺 `.env.local` → 從 `.env.local.example` 自動生成（替換 `JETSON_TAILSCALE_IP`）
    - 缺 `node_modules` → 自動跑 `npm install`
-   - 用 `node_modules/.bin/next dev` 啟動，繞 npm/pnpm wrapper 的 pre-hook
+   - 用 `node_modules/.bin/next dev` 啟動，並寫 `/tmp/pawai-frontend.pid`
 5. Healthcheck：
    - 從本機 curl `http://$JETSON_TAILSCALE_IP:8080/health`
    - 從本機 probe `http://localhost:3000/studio` 是否 200
@@ -256,6 +280,9 @@ pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 ✅ Gateway reachable from local: http://100.83.109.89:8080
 ✅ Frontend: http://localhost:3000/studio
 ```
+
+`JETSON_TAILSCALE_IP` 必須存在。CLI 會先嘗試從 `tailscale status` 自動偵測並注入；
+如果直接手動跑 `start.sh` 或偵測失敗，腳本會明確 fail，不再 fallback 到寫死 IP。
 
 #### Nav capability mode
 
@@ -302,6 +329,21 @@ pawai demo stop
 
 - `lane=brain`（或舊 lock 無 lane）→ `.claude/skills/brain-studio-lane/scripts/cleanup.sh`
 - `lane=nav_capability` → `.claude/skills/nav-avoidance-lane/scripts/cleanup.sh`
+
+Brain cleanup 只會關閉 `/tmp/pawai-frontend.pid` 指向的本機 frontend，不會用
+`pkill -f "next.*dev"` 掃掉隊友其他 Next.js 專案。
+
+---
+
+### health brain
+
+```bash
+pawai health brain
+```
+
+跑 `.claude/skills/brain-studio-lane/scripts/healthcheck.sh`，但由 CLI 注入
+`JETSON_HOST` 與 `JETSON_TAILSCALE_IP`，避免 healthcheck 寫死 hostname 或缺 env。
+Demo 跑起來後用它確認 Gateway 8080、Studio frontend、Jetson tmux 與 brain stack。
 
 ---
 
@@ -436,6 +478,8 @@ uv pip install -e tools/pawai_cli --force-reinstall
 **stale 規則**：
 - `starting` > 10 min → 視為啟動失敗，會 prompt 清掉
 - `running` > 4 hr → 標 `STALE` 在 `pawai status`，**不**自動刪
+- 自己留下的 stale lock 可由 `pawai demo stop` owner-aware 清掉，不需要 `--force`
+- 別人的 lock 即使 stale，也要先溝通；確認對方不在用後才 `--force`
 
 ### `-y` vs `--force`
 

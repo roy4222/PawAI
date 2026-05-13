@@ -186,7 +186,11 @@ pawai demo stop
 ```
 
 The CLI is a thin wrapper around the existing scripts. It does not replace the
-brain/nav lane scripts and does not enforce a hard lock on the shared Go2.
+brain/nav lane scripts, but it now enforces a Jetson-side demo lock at
+`$JETSON_REPO/.pawai-demo-lock`. `pawai demo start`, `pawai demo stop`, and
+deploy collision checks read that lock before touching the shared Go2/Jetson
+runtime. Own stale locks can be cleaned with `pawai demo stop`; stopping or
+taking over another person's demo requires `--force` and prior communication.
 
 ## 9. Offline Fallback Cases
 
