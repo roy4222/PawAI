@@ -54,14 +54,18 @@ class NavCapabilityStatus:
     cmd_vel_joy_publishers: str
 
 
-def collect() -> LiveStatus:
+def collect(short: bool = False) -> LiveStatus:
     tmux = shell.run_remote("tmux ls 2>/dev/null || true", timeout=10)
-    ros = shell.run_remote(
-        "source /opt/ros/humble/setup.zsh 2>/dev/null; "
-        f"source {shell.jetson_repo()}/install/setup.zsh 2>/dev/null; "
-        "ros2 node list 2>/dev/null || true",
-        timeout=12,
-    )
+    if short:
+        ros_nodes = ""
+    else:
+        ros = shell.run_remote(
+            "source /opt/ros/humble/setup.zsh 2>/dev/null; "
+            f"source {shell.jetson_repo()}/install/setup.zsh 2>/dev/null; "
+            "ros2 node list 2>/dev/null || true",
+            timeout=12,
+        )
+        ros_nodes = ros.stdout.strip()
     git = shell.run_remote(
         f"cd {shell.jetson_repo()} && "
         "printf 'log=' && git log -1 --format='%h|%ci|%s' 2>/dev/null && "
@@ -73,7 +77,7 @@ def collect() -> LiveStatus:
         timeout=8,
     )
     reachable = tmux.code != 127 and tmux.code != 255
-    return LiveStatus(tmux.stdout.strip(), ros.stdout.strip(), git.stdout.strip(), last.stdout.strip(), reachable)
+    return LiveStatus(tmux.stdout.strip(), ros_nodes, git.stdout.strip(), last.stdout.strip(), reachable)
 
 
 def _ros_remote(command: str, timeout: int = 6) -> str:
@@ -127,7 +131,7 @@ def collect_nav_capability_status(tmux_output: str) -> NavCapabilityStatus:
 
 
 def print_status(short: bool = False) -> LiveStatus:
-    st = collect()
+    st = collect(short=short)
     host = shell.jetson_host()
     print(f"PawAI live status @ {host}")
     print("────────────────────────────")

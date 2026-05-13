@@ -207,7 +207,13 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
         emit(f"    → or set JETSON_HOSTNAME_HINT in .env.local if your share node has a different hostname")
     else:
         detected_ip = peer["ip"]
-        emit(f"  ✓ Tailscale peer '{peer['hostname']}' online={peer['online']} ip={detected_ip}")
+        if not peer.get("online", False):
+            blocking += 1
+            emit(f"  ✗ Tailscale peer '{peer['hostname']}' is offline ip={detected_ip}")
+            emit("    → on Jetson: sudo tailscale up   (peer may be logged out)")
+            emit("    → or check Jetson Wi-Fi / internet route")
+        else:
+            emit(f"  ✓ Tailscale peer '{peer['hostname']}' online=True ip={detected_ip}")
         if env_ip and env_ip != detected_ip:
             emit(f"  ⚠ JETSON_TAILSCALE_IP={env_ip} but Tailscale reports {detected_ip} (mismatch)")
             emit(f"    → run `pawai doctor --fix` to update .env.local")
@@ -228,6 +234,8 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
 
     if peer is None:
         emit("  ✗ local → Jetson Tailscale: no peer found (see Tailscale section above)")
+    elif not peer.get("online", False):
+        emit("  ✗ local → Jetson Tailscale: peer offline (see Tailscale section above)")
     else:
         emit(f"  ✓ local → Jetson Tailscale: OK {peer['ip']}")
 
@@ -259,7 +267,9 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
         blocking += 1
         emit(f"  ✗ Jetson → Go2 ping: FAIL {robot_ip_topo}")
 
-    lock_state = None  # L2 will populate this from lock module
+    from .lock import Lock as _Lock
+    active_lock = _Lock.read()
+    lock_state = active_lock.state if active_lock is not None else None
     gw_status = network.gateway_8080_status(expect_demo=expect_demo, lock_state=lock_state)
     icon = {"OK": "✓", "SKIP": "ℹ", "FAIL": "✗"}.get(gw_status, "?")
     detail = "" if gw_status != "SKIP" else " (no demo running)"

@@ -160,6 +160,62 @@ def test_doctor_topology_block_printed(monkeypatch):
     assert "Gateway 8080" in out and "SKIP" in out
 
 
+def test_doctor_treats_offline_tailscale_peer_as_fail(monkeypatch):
+    """When Tailscale peer is matched but online=False, doctor must fail."""
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    offline_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": False}
+
+    with patch("pawai_cli.network.find_jetson_peer", return_value=offline_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value=None), \
+         patch("pawai_cli.network.jetson_go2_link", return_value=None), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=False), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="SKIP"), \
+         patch("pawai_cli.shell.run") as mock_run:
+        from pawai_cli.shell import Result
+
+        mock_run.return_value = Result(code=0, stdout="git version 2.40", stderr="")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor", "--cache", "0"])
+
+    assert result.exit_code != 0
+    assert "offline" in result.output.lower()
+    assert "tailscale up" in result.output or "internet route" in result.output.lower()
+
+
+def test_doctor_gateway_fails_when_running_lock_and_8080_down(monkeypatch):
+    """If a running lock exists and Gateway 8080 is down, severity is FAIL."""
+    from pawai_cli.lock import Lock
+
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    fake_lock = Lock(
+        user="alice", host="alice-mac", branch="main", sha="abc1234",
+        state="running",
+        start_time="2026-05-13T10:00:00+00:00",
+        demo_mode="full", tmux_session="demo", lane="brain",
+    )
+    online_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    with patch("pawai_cli.network.find_jetson_peer", return_value=online_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
+         patch(
+             "pawai_cli.network.jetson_go2_link",
+             return_value={"iface": "eth0", "ip": "192.168.123.51/24"},
+         ), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=True), \
+         patch("pawai_cli.lock.Lock.read", return_value=fake_lock), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="FAIL") as mock_gw, \
+         patch("pawai_cli.shell.run") as mock_run:
+        from pawai_cli.shell import Result
+
+        mock_run.return_value = Result(code=0, stdout="git version 2.40\nOK", stderr="")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["doctor", "--cache", "0"])
+
+    assert result.exit_code != 0
+    assert "Gateway 8080: FAIL" in result.output
+    assert mock_gw.call_args.kwargs["lock_state"] == "running"
+
+
 def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
     """If Jetson internet route uses eth0 (likely Go2 link stolen for uplink), warn."""
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
@@ -500,6 +556,25 @@ def test_status_shows_stale_running_warning(monkeypatch):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "stale" in result.output.lower()
+
+
+def test_status_short_skips_ros_node_list_ssh_call():
+    """status --short must not invoke `ros2 node list` over SSH."""
+    from pawai_cli import status as status_mod
+    from pawai_cli.shell import Result
+
+    calls = []
+
+    def fake_run_remote(cmd, timeout=None):
+        calls.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    with patch("pawai_cli.status.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.status.Lock.read", return_value=None):
+        status_mod.collect(short=True)
+
+    ros_calls = [c for c in calls if "ros2 node list" in c]
+    assert ros_calls == [], f"unexpected ros2 calls under --short: {ros_calls}"
 
 
 def test_deploy_prompts_on_active_other_lock(monkeypatch):
