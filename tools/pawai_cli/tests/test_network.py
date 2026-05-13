@@ -149,7 +149,8 @@ def test_wifi_list_returns_none_on_ssh_fail():
 def test_wifi_status_composes_from_three_sources():
     conn_out = "LM306:wlp1s0:802-11-wireless\nWired connection 1:eno1:802-3-ethernet\n"
     addr_out = "    inet 192.168.0.113/24 brd 192.168.0.255 scope global wlp1s0\n"
-    route_out = "default via 192.168.0.1 dev wlp1s0 proto dhcp metric 600\n"
+    # ip route get 8.8.8.8 — kernel's actually-selected route, single line
+    route_out = "8.8.8.8 via 192.168.0.1 dev wlp1s0 src 192.168.0.113 uid 1000\n"
 
     calls = []
 
@@ -159,7 +160,7 @@ def test_wifi_status_composes_from_three_sources():
             return _result(conn_out, 0)
         if "ip -4 addr show" in cmd:
             return _result(addr_out, 0)
-        if "ip route show default" in cmd:
+        if "ip route get 8.8.8.8" in cmd:
             return _result(route_out, 0)
         return _result("", 1)
 
@@ -172,6 +173,32 @@ def test_wifi_status_composes_from_three_sources():
     assert st.ip == "192.168.0.113"
     assert st.default_route_via_wifi is True
     assert len(calls) == 3
+
+
+def test_wifi_status_route_via_ethernet_when_kernel_picks_eno1():
+    """If `ip route get 8.8.8.8` picks eno1 even though wifi is up,
+    default_route_via_wifi must be False (catches Go2 wired stealing default)."""
+    conn_out = "LM306:wlp1s0:802-11-wireless\nWired connection 1:eno1:802-3-ethernet\n"
+    addr_out = "    inet 192.168.0.113/24 brd 192.168.0.255 scope global wlp1s0\n"
+    # Kernel picked eno1 despite Wi-Fi being up (lower metric on Go2 wired)
+    route_out = "8.8.8.8 via 192.168.123.1 dev eno1 src 192.168.123.10 uid 1000\n"
+
+    def fake_run_remote(cmd, timeout=None):
+        if "connection show --active" in cmd:
+            return _result(conn_out, 0)
+        if "ip -4 addr show" in cmd:
+            return _result(addr_out, 0)
+        if "ip route get 8.8.8.8" in cmd:
+            return _result(route_out, 0)
+        return _result("", 1)
+
+    with patch("pawai_cli.network.shell.run_remote", side_effect=fake_run_remote):
+        st = wifi_status()
+
+    assert st is not None
+    assert st.ssid == "LM306"
+    assert st.iface == "wlp1s0"
+    assert st.default_route_via_wifi is False
 
 
 def test_wifi_status_returns_no_wifi_when_no_wireless_active():

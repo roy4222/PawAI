@@ -809,7 +809,9 @@ def test_net_wifi_list_invokes_network_function():
     assert "✓" in result.output  # in_use marker
 
 
-def test_net_wifi_connect_prompts_for_password_and_passes_through():
+def test_net_wifi_connect_shows_current_status_and_confirms():
+    from pawai_cli.network import WifiStatus
+
     captured = {}
 
     def fake_connect(ssid, password):
@@ -817,22 +819,96 @@ def test_net_wifi_connect_prompts_for_password_and_passes_through():
         captured["password"] = password
         return True, f"✓ Connected to '{ssid}'."
 
-    with patch("pawai_cli.network.wifi_connect", side_effect=fake_connect):
+    current = WifiStatus(ssid="OldNet", iface="wlp1s0", ip="10.0.0.5",
+                         default_route_via_wifi=True)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_connect", side_effect=fake_connect):
         runner = CliRunner()
+        # confirm "y" + password "secret-pw"
         result = runner.invoke(cli, ["net", "wifi", "connect", "LM306"],
-                               input="secret-pw\n")
+                               input="y\nsecret-pw\n")
     assert result.exit_code == 0
     assert captured == {"ssid": "LM306", "password": "secret-pw"}
+    # Current-state disclosure must appear
+    assert "OldNet" in result.output
+    assert "drop SSH" in result.output
     # Password must not appear in CLI output (hide_input=True)
     assert "secret-pw" not in result.output
 
 
-def test_net_wifi_connect_propagates_failure_exit_code():
-    with patch("pawai_cli.network.wifi_connect",
-               return_value=(False, "✗ Wi-Fi password rejected")):
+def test_net_wifi_connect_aborts_on_no_confirm():
+    from pawai_cli.network import WifiStatus
+
+    current = WifiStatus(ssid="OldNet", iface="wlp1s0", ip="10.0.0.5",
+                         default_route_via_wifi=True)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_connect") as mock_connect:
         runner = CliRunner()
         result = runner.invoke(cli, ["net", "wifi", "connect", "LM306"],
+                               input="n\n")
+    assert result.exit_code == 0
+    assert "Aborted" in result.output
+    mock_connect.assert_not_called()
+
+
+def test_net_wifi_connect_yes_flag_skips_confirm():
+    from pawai_cli.network import WifiStatus
+
+    current = WifiStatus(ssid="OldNet", iface="wlp1s0", ip="10.0.0.5",
+                         default_route_via_wifi=True)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_connect",
+               return_value=(True, "✓ Connected to 'LM306'.")) as mock_connect:
+        runner = CliRunner()
+        result = runner.invoke(
+            cli, ["net", "wifi", "connect", "LM306", "--yes"],
+            input="secret-pw\n",
+        )
+    assert result.exit_code == 0
+    mock_connect.assert_called_once()
+
+
+def test_net_wifi_connect_propagates_failure_exit_code():
+    from pawai_cli.network import WifiStatus
+
+    current = WifiStatus(ssid=None, iface=None, ip=None,
+                         default_route_via_wifi=False)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_connect",
+               return_value=(False, "✗ Wi-Fi password rejected")):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "connect", "LM306", "-y"],
                                input="bad\n")
     assert result.exit_code == 1
     assert "rejected" in result.output
+
+
+def test_net_wifi_forget_warns_when_deleting_active_profile():
+    from pawai_cli.network import WifiStatus
+
+    current = WifiStatus(ssid="LM306", iface="wlp1s0", ip="192.168.0.113",
+                         default_route_via_wifi=True)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_forget") as mock_forget:
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "forget", "LM306"],
+                               input="n\n")
+    assert result.exit_code == 0
+    assert "CURRENTLY ACTIVE" in result.output
+    assert "strand" in result.output.lower()
+    mock_forget.assert_not_called()
+
+
+def test_net_wifi_forget_proceeds_with_yes_flag():
+    from pawai_cli.network import WifiStatus
+
+    current = WifiStatus(ssid="LM306", iface="wlp1s0", ip="192.168.0.113",
+                         default_route_via_wifi=True)
+    with patch("pawai_cli.network.wifi_status", return_value=current), \
+         patch("pawai_cli.network.wifi_forget",
+               return_value=(True, "✓ Forgot Wi-Fi profile 'OldNet'.")) as mock_forget:
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "forget", "OldNet", "-y"])
+    assert result.exit_code == 0
+    mock_forget.assert_called_once_with("OldNet")
 

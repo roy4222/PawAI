@@ -181,11 +181,13 @@ def wifi_status() -> Optional[WifiStatus]:
         m = re.search(r"\binet\s+(\d+\.\d+\.\d+\.\d+)", addr.stdout)
         ip = m.group(1) if m else None
 
-    route = shell.run_remote("ip route show default", timeout=5)
+    # Use the actual kernel-selected route to 8.8.8.8 instead of grepping the
+    # default-route table — multiple defaults with different metrics can lie.
+    route = shell.run_remote("ip route get 8.8.8.8", timeout=5)
     default_via_wifi = False
     if route.ok:
-        default_via_wifi = bool(re.search(rf"\bdev\s+{re.escape(iface)}\b",
-                                          route.stdout))
+        m = re.search(r"\bdev\s+(\S+)", route.stdout)
+        default_via_wifi = bool(m and m.group(1) == iface)
 
     return WifiStatus(ssid=ssid, iface=iface, ip=ip,
                       default_route_via_wifi=default_via_wifi)
@@ -214,15 +216,22 @@ def wifi_connect(ssid: str, password: str) -> tuple[bool, str]:
     stdout_low = (result.stdout or "").lower()
     combined = stderr_low + " " + stdout_low
 
-    # NOPASSWD missing — `sudo -n` fails immediately if password required
+    # NOPASSWD missing — `sudo -n` fails immediately if password required.
+    # Setup must happen at the Jetson local terminal (HDMI / console / serial)
+    # — the same sudo failure that brought us here makes `ssh jetson "sudo …"`
+    # equally unable to write the sudoers drop-in.
     if "sudo: a password is required" in combined \
             or "a terminal is required" in combined \
             or "password is required" in combined:
         return False, (
-            "✗ sudo nmcli needs NOPASSWD on Jetson. One-time setup:\n"
-            "  ssh jetson \"echo 'jetson ALL=(ALL) NOPASSWD: /usr/bin/nmcli' "
-            "| sudo tee /etc/sudoers.d/pawai-nmcli && "
-            "sudo chmod 440 /etc/sudoers.d/pawai-nmcli\""
+            "✗ sudo nmcli needs NOPASSWD on Jetson. One-time setup —\n"
+            "  run this **on the Jetson local terminal** (HDMI / console / serial,\n"
+            "  NOT via this CLI; the SSH non-TTY path is what just failed):\n"
+            "\n"
+            "    sudo bash -c \"echo 'jetson ALL=(ALL) NOPASSWD: /usr/bin/nmcli' \\\n"
+            "      > /etc/sudoers.d/pawai-nmcli && chmod 440 /etc/sudoers.d/pawai-nmcli\"\n"
+            "\n"
+            "  Then retry: pawai net wifi connect <SSID>"
         )
 
     if "secrets were required" in combined \
@@ -267,8 +276,9 @@ def wifi_forget(ssid: str) -> tuple[bool, str]:
             or "a terminal is required" in combined \
             or "password is required" in combined:
         return False, (
-            "✗ sudo nmcli needs NOPASSWD on Jetson. See "
-            "`pawai net wifi connect` error message for setup snippet."
+            "✗ sudo nmcli needs NOPASSWD on Jetson. Run setup on the Jetson "
+            "local terminal first; see `pawai net wifi connect` error for the "
+            "exact `/etc/sudoers.d/pawai-nmcli` command."
         )
     if "unknown connection" in combined or "no such" in combined:
         return False, f"✗ No saved profile named '{ssid}'."

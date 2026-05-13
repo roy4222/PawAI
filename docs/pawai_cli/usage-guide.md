@@ -569,6 +569,10 @@ $ pawai net wifi list
   eduroam                       60%   WPA2 802.1X
 
 $ pawai net wifi connect LM306
+Jetson currently on: SSID=OldNet  IP=10.0.0.5  iface=wlp1s0  default-via-wifi=yes
+About to switch Jetson Wi-Fi to 'LM306'.
+This may drop SSH and Tailscale until the new network is up.
+Continue? [y/N]: y
 Password for 'LM306' (hidden): ********
 ✓ Connected to 'LM306'.
 
@@ -587,15 +591,20 @@ Default: via Wi-Fi ✓
 
 `Default: NOT via Wi-Fi` 警告通常代表 Go2 Ethernet (eno1) 搶了 default route——這時雲端 LLM / Tailscale 會走不出去。修法見 [`troubleshooting.md` §I](troubleshooting.md)。
 
-**密碼安全**：
+**安全行為**：
 
+- `connect` 跑前會先印當前 SSID/IP/route + 警告「會掉 SSH/Tailscale」、要 `y` 確認才往下走。`-y` 或 `--yes` 可跳過確認（不推薦平日用）。
+- `forget` 跑前會先檢查要刪的 SSID 是不是 Jetson **正在用的**：
+  - 是 → 印大寫紅字「CURRENTLY ACTIVE」+ 「會把 Jetson 困住直到重開機 / 現場救援」、要 `y` 才往下。
+  - 不是 → 印「about to delete saved profile X」、要 `y` 才往下。
+  - `-y` / `--yes` 同樣可跳過（強烈不推薦）。
 - CLI 不存密碼。每次 connect 都重新 prompt。
 - 密碼會短暫出現在 Jetson `ps aux`（< 1 秒，sudo 跑 nmcli 的瞬間）—— 5 人共用 Jetson 的信任邊界內可接受。
 - SSID + 密碼在傳到 SSH 前都過 `shlex.quote`，所以含單引號 / `$` / 空格的密碼也安全。
 
 **已知 MVP 限制**：
 
-- 802.1X enterprise 網路（`eduroam` / `FJU-5GHz`）目前不支援；CLI 會 fail，請手動跑 `nmcli connection add type wifi ...` 那套（細節在 `references/project-status.md`）。
+- 802.1X enterprise 網路（`eduroam` / `FJU-5GHz`）目前不支援；CLI 會 fail。請改用 Jetson 上手動的 `nmcli connection add type wifi ifname wlp1s0 ssid "<SSID>"` + `nmcli connection modify ... 802-1x.eap peap 802-1x.identity ... password ...`。完整三步驟見 [`troubleshooting.md`](troubleshooting.md) §G。
 - 不存多個 SSID profile preset；每次換場地手動 `connect`。
 
 ### 8.6 `pawai dev info <module>`

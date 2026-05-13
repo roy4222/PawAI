@@ -876,9 +876,39 @@ def net_wifi_status() -> None:
 
 @net_wifi.command("connect")
 @click.argument("ssid")
-def net_wifi_connect(ssid: str) -> None:
-    """連 Jetson 到指定 SSID。會 prompt 密碼，CLI 不儲存。"""
+@click.option("-y", "--yes", is_flag=True,
+              help="Skip the 'this may drop SSH/Tailscale' confirmation.")
+def net_wifi_connect(ssid: str, yes: bool) -> None:
+    """連 Jetson 到指定 SSID。會 prompt 密碼，CLI 不儲存。
+
+    Switching Wi-Fi will briefly drop SSH and Tailscale — show current state
+    and require explicit confirmation before proceeding.
+    """
     from . import network as _net
+
+    # Current-state disclosure before destructive Wi-Fi switch
+    st = _net.wifi_status()
+    if st is None:
+        click.echo("⚠ Could not query Jetson Wi-Fi status (SSH failed).")
+        click.echo("  Continuing would attempt a switch blind; aborting.")
+        sys.exit(1)
+
+    if st.ssid is not None:
+        click.echo(f"Jetson currently on: SSID={st.ssid}  IP={st.ip or '?'}  "
+                   f"iface={st.iface}  default-via-wifi="
+                   f"{'yes' if st.default_route_via_wifi else 'no'}")
+        if st.ssid == ssid:
+            click.echo(f"⚠ Already connected to '{ssid}'. Reconnecting will "
+                       "still drop SSH/Tailscale briefly.")
+    else:
+        click.echo("Jetson currently has no active Wi-Fi.")
+
+    click.echo(f"About to switch Jetson Wi-Fi to '{ssid}'.")
+    click.echo("This may drop SSH and Tailscale until the new network is up.")
+    if not yes and not click.confirm("Continue?", default=False):
+        click.echo("Aborted.")
+        sys.exit(0)
+
     password = click.prompt(
         f"Password for '{ssid}' (hidden)",
         hide_input=True,
@@ -891,9 +921,39 @@ def net_wifi_connect(ssid: str) -> None:
 
 @net_wifi.command("forget")
 @click.argument("ssid")
-def net_wifi_forget(ssid: str) -> None:
-    """刪掉 Jetson 上已存的 Wi-Fi profile。"""
+@click.option("-y", "--yes", is_flag=True,
+              help="Skip the 'this may strand Jetson' confirmation.")
+def net_wifi_forget(ssid: str, yes: bool) -> None:
+    """刪掉 Jetson 上已存的 Wi-Fi profile。
+
+    Deleting the currently-active profile (or the only-known profile) can
+    strand Jetson — surface current state and require explicit confirmation.
+    """
     from . import network as _net
+
+    st = _net.wifi_status()
+    if st is None:
+        click.echo("⚠ Could not query Jetson Wi-Fi status (SSH failed).")
+        click.echo("  Refusing to forget profiles blind; aborting.")
+        sys.exit(1)
+
+    is_active = (st.ssid == ssid)
+    if is_active:
+        click.echo(f"⚠ '{ssid}' is the CURRENTLY ACTIVE Wi-Fi on Jetson.")
+        click.echo(f"   IP={st.ip or '?'}  iface={st.iface}  "
+                   f"default-via-wifi="
+                   f"{'yes' if st.default_route_via_wifi else 'no'}")
+        click.echo("   Deleting it will disconnect Jetson immediately and "
+                   "(unless eno1 is up) strand it until next reboot or local "
+                   "console intervention.")
+    else:
+        click.echo(f"About to delete saved profile '{ssid}' on Jetson "
+                   f"(currently active SSID is '{st.ssid or 'none'}').")
+
+    if not yes and not click.confirm("Continue?", default=False):
+        click.echo("Aborted.")
+        sys.exit(0)
+
     ok, msg = _net.wifi_forget(ssid)
     click.echo(msg)
     sys.exit(0 if ok else 1)
