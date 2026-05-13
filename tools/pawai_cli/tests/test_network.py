@@ -96,3 +96,153 @@ def test_gateway_8080_status_with_expect_demo_ok():
     with patch("pawai_cli.network.shell.run_remote", return_value=_result('{"status":"ok"}', 0)):
         status = gateway_8080_status(expect_demo=True, lock_state=None)
     assert status == "OK"
+
+
+# ─── pawai net wifi MVP ──────────────────────────────────────────────────
+
+from pawai_cli.network import (
+    wifi_list,
+    wifi_status,
+    wifi_connect,
+    wifi_forget,
+    WifiNetwork,
+    WifiStatus,
+)
+
+
+def test_wifi_list_parses_nmcli_terse():
+    stdout = (
+        "*:LM306:87:WPA2\n"
+        ":FJU-5GHz:65:WPA2 802.1X\n"
+        ":eduroam:60:WPA2 802.1X\n"
+        ":FJU-Guest:64:\n"
+    )
+    with patch("pawai_cli.network.shell.run_remote", return_value=_result(stdout, 0)):
+        nets = wifi_list()
+    assert nets is not None
+    ssids = [n.ssid for n in nets]
+    # in-use first, then by signal descending
+    assert ssids[0] == "LM306"
+    assert nets[0].in_use is True
+    assert nets[0].signal == 87
+    assert nets[0].security == "WPA2"
+    # FJU-5GHz (65) before FJU-Guest (64) before eduroam (60)
+    assert ssids[1:] == ["FJU-5GHz", "FJU-Guest", "eduroam"]
+    # FJU-Guest empty SECURITY → "--"
+    fju_guest = next(n for n in nets if n.ssid == "FJU-Guest")
+    assert fju_guest.security == "--"
+
+
+def test_wifi_list_handles_escaped_colon_in_ssid():
+    stdout = ":Cafe\\:WiFi:42:WPA2\n"
+    with patch("pawai_cli.network.shell.run_remote", return_value=_result(stdout, 0)):
+        nets = wifi_list()
+    assert nets is not None
+    assert nets[0].ssid == "Cafe:WiFi"
+
+
+def test_wifi_list_returns_none_on_ssh_fail():
+    with patch("pawai_cli.network.shell.run_remote", return_value=_result("", 255)):
+        assert wifi_list() is None
+
+
+def test_wifi_status_composes_from_three_sources():
+    conn_out = "LM306:wlp1s0:802-11-wireless\nWired connection 1:eno1:802-3-ethernet\n"
+    addr_out = "    inet 192.168.0.113/24 brd 192.168.0.255 scope global wlp1s0\n"
+    route_out = "default via 192.168.0.1 dev wlp1s0 proto dhcp metric 600\n"
+
+    calls = []
+
+    def fake_run_remote(cmd, timeout=None):
+        calls.append(cmd)
+        if "connection show --active" in cmd:
+            return _result(conn_out, 0)
+        if "ip -4 addr show" in cmd:
+            return _result(addr_out, 0)
+        if "ip route show default" in cmd:
+            return _result(route_out, 0)
+        return _result("", 1)
+
+    with patch("pawai_cli.network.shell.run_remote", side_effect=fake_run_remote):
+        st = wifi_status()
+
+    assert st is not None
+    assert st.ssid == "LM306"
+    assert st.iface == "wlp1s0"
+    assert st.ip == "192.168.0.113"
+    assert st.default_route_via_wifi is True
+    assert len(calls) == 3
+
+
+def test_wifi_status_returns_no_wifi_when_no_wireless_active():
+    conn_out = "Wired connection 1:eno1:802-3-ethernet\n"
+    with patch("pawai_cli.network.shell.run_remote", return_value=_result(conn_out, 0)):
+        st = wifi_status()
+    assert st is not None
+    assert st.ssid is None
+    assert st.iface is None
+    assert st.default_route_via_wifi is False
+
+
+def test_wifi_connect_quotes_ssid_and_password():
+    """Malicious-looking SSID / password must be shlex.quoted before SSH embed."""
+    sent_cmds = []
+
+    def fake_run_remote(cmd, timeout=None):
+        sent_cmds.append(cmd)
+        return _result("Device 'wlp1s0' successfully activated", 0)
+
+    with patch("pawai_cli.network.shell.run_remote", side_effect=fake_run_remote):
+        ok, msg = wifi_connect(ssid="A' B; rm -rf /", password="p$x'y")
+    assert ok is True
+    # shlex.quote produces single-quoted bash-safe form
+    assert "'A'\"'\"' B; rm -rf /'" in sent_cmds[0]
+    assert "'p$x'\"'\"'y'" in sent_cmds[0]
+
+
+def test_wifi_connect_translates_secret_rejected():
+    err = "Error: Connection activation failed: (4) Secrets were required, but not provided."
+    with patch("pawai_cli.network.shell.run_remote",
+               return_value=_result("", 4)) as _:
+        # also need stderr — patch via Result
+        pass
+    with patch(
+        "pawai_cli.network.shell.run_remote",
+        return_value=Result(code=4, stdout="", stderr=err),
+    ):
+        ok, msg = wifi_connect("LM306", "wrong-password")
+    assert ok is False
+    assert "rejected" in msg.lower()
+
+
+def test_wifi_connect_translates_nopasswd_missing():
+    err = "sudo: a password is required\n"
+    with patch(
+        "pawai_cli.network.shell.run_remote",
+        return_value=Result(code=1, stdout="", stderr=err),
+    ):
+        ok, msg = wifi_connect("LM306", "x")
+    assert ok is False
+    assert "NOPASSWD" in msg
+    assert "sudoers.d/pawai-nmcli" in msg
+
+
+def test_wifi_forget_success():
+    with patch(
+        "pawai_cli.network.shell.run_remote",
+        return_value=_result("Connection 'LM306' (xxx) successfully deleted.", 0),
+    ):
+        ok, msg = wifi_forget("LM306")
+    assert ok is True
+    assert "LM306" in msg
+
+
+def test_wifi_forget_unknown_connection():
+    err = "Error: unknown connection 'NoSuchSSID'.\n"
+    with patch(
+        "pawai_cli.network.shell.run_remote",
+        return_value=Result(code=10, stdout="", stderr=err),
+    ):
+        ok, msg = wifi_forget("NoSuchSSID")
+    assert ok is False
+    assert "No saved profile" in msg

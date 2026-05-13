@@ -821,6 +821,84 @@ def demo_stop(force: bool) -> None:
     sys.exit(rc)
 
 
+# ─── pawai net wifi ──────────────────────────────────────────────────────
+# Phase 3 MVP: 4 subcommands (list / status / connect / forget). Connect and
+# forget require Jetson-side NOPASSWD sudo for /usr/bin/nmcli; CLI prints
+# setup guidance on first failure. Password is solicited via
+# click.prompt(hide_input=True) and never persisted.
+
+@cli.group()
+def net() -> None:
+    """Network diagnostics and Wi-Fi control (Phase 3 MVP)."""
+
+
+@net.group("wifi")
+def net_wifi() -> None:
+    """Jetson Wi-Fi: list / status / connect / forget."""
+
+
+@net_wifi.command("list")
+def net_wifi_list() -> None:
+    """掃描 Jetson 上看得到的 Wi-Fi 網路。"""
+    from . import network as _net
+    nets = _net.wifi_list()
+    if nets is None:
+        click.echo("✗ nmcli scan failed (SSH unreachable or nmcli missing).")
+        sys.exit(1)
+    if not nets:
+        click.echo("ℹ No Wi-Fi networks visible.")
+        return
+    for n in nets:
+        marker = "✓" if n.in_use else " "
+        sig_bar = f"{n.signal:3d}%"
+        click.echo(f"{marker} {n.ssid:<28} {sig_bar}   {n.security}")
+
+
+@net_wifi.command("status")
+def net_wifi_status() -> None:
+    """看 Jetson 現在連哪個 Wi-Fi（SSID / IP / default route）。"""
+    from . import network as _net
+    st = _net.wifi_status()
+    if st is None:
+        click.echo("✗ Could not query Jetson (SSH failed).")
+        sys.exit(1)
+    if st.ssid is None:
+        click.echo("ℹ Jetson has no active Wi-Fi connection.")
+        return
+    click.echo(f"SSID:    {st.ssid}")
+    click.echo(f"Iface:   {st.iface}")
+    click.echo(f"IP:      {st.ip or '(none yet)'}")
+    if st.default_route_via_wifi:
+        click.echo("Default: via Wi-Fi ✓")
+    else:
+        click.echo("Default: NOT via Wi-Fi (likely going through eno1 / Go2 Ethernet)")
+
+
+@net_wifi.command("connect")
+@click.argument("ssid")
+def net_wifi_connect(ssid: str) -> None:
+    """連 Jetson 到指定 SSID。會 prompt 密碼，CLI 不儲存。"""
+    from . import network as _net
+    password = click.prompt(
+        f"Password for '{ssid}' (hidden)",
+        hide_input=True,
+        confirmation_prompt=False,
+    )
+    ok, msg = _net.wifi_connect(ssid, password)
+    click.echo(msg)
+    sys.exit(0 if ok else 1)
+
+
+@net_wifi.command("forget")
+@click.argument("ssid")
+def net_wifi_forget(ssid: str) -> None:
+    """刪掉 Jetson 上已存的 Wi-Fi profile。"""
+    from . import network as _net
+    ok, msg = _net.wifi_forget(ssid)
+    click.echo(msg)
+    sys.exit(0 if ok else 1)
+
+
 @cli.command()
 @click.argument("module")
 @click.option("--lines", default=500, show_default=True, help="Lines to capture from tmux pane.")

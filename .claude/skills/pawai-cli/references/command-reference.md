@@ -23,6 +23,10 @@ pawai demo start --brain-only              # minimal mode, brain + executive onl
 pawai demo start --nav capability
 pawai demo stop
 pawai health brain                         # Phase 1 — runs brain lane healthcheck (8 checks)
+pawai net wifi list                        # Jetson Wi-Fi scan
+pawai net wifi status                      # Jetson active SSID / IP / default route
+pawai net wifi connect <SSID>              # connect Jetson Wi-Fi (prompts password)
+pawai net wifi forget <SSID>               # delete saved Wi-Fi profile
 pawai logs <module> --lines 200
 pawai logs all                             # capture all demo windows at once
 pawai docs <target>                        # jump to 0511 architecture doc

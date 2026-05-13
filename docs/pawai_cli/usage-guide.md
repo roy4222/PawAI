@@ -540,7 +540,65 @@ pawai contract check --jetson    # 在 Jetson 上跑
 
 修改 ROS topic schema 後一定要跑，CI 也會跑。
 
-### 8.5 `pawai dev info <module>`
+### 8.5 `pawai net wifi` — Jetson Wi-Fi 控制（無需 SSH 手動）
+
+省掉早上到學校 / 換教室時手動 SSH 進 Jetson 跑 `nmcli` 的儀式。**只控制 Jetson 的 Wi-Fi**，不動你 Mac 本機。
+
+```bash
+pawai net wifi list                          # 掃 Jetson 看得到的網路
+pawai net wifi status                        # 看現在連哪個、IP、default route
+pawai net wifi connect <SSID>                # 連線（會 prompt 密碼）
+pawai net wifi forget <SSID>                 # 刪掉已存 profile
+```
+
+**首次設定**（每台 Jetson 一次）：需設 NOPASSWD sudo 給 `nmcli`，否則 SSH 沒 TTY 跑 sudo 會失敗。CLI 第一次 `connect` 失敗時會印對應指令，照貼即可：
+
+```bash
+ssh jetson "echo 'jetson ALL=(ALL) NOPASSWD: /usr/bin/nmcli' \
+  | sudo tee /etc/sudoers.d/pawai-nmcli \
+  && sudo chmod 440 /etc/sudoers.d/pawai-nmcli"
+```
+
+**典型場景：到學校 / 換教室 / Jetson Wi-Fi 跑掉**
+
+```text
+$ pawai net wifi list
+✓ LM306                         87%   WPA2
+  FJU-5GHz                      65%   WPA2 802.1X
+  FJU-Guest                     64%   --
+  eduroam                       60%   WPA2 802.1X
+
+$ pawai net wifi connect LM306
+Password for 'LM306' (hidden): ********
+✓ Connected to 'LM306'.
+
+$ pawai doctor --cache 0        # 確認 Tailscale 也回來
+```
+
+**狀態檢查**：
+
+```text
+$ pawai net wifi status
+SSID:    LM306
+Iface:   wlp1s0
+IP:      192.168.0.113
+Default: via Wi-Fi ✓
+```
+
+`Default: NOT via Wi-Fi` 警告通常代表 Go2 Ethernet (eno1) 搶了 default route——這時雲端 LLM / Tailscale 會走不出去。修法見 [`troubleshooting.md` §I](troubleshooting.md)。
+
+**密碼安全**：
+
+- CLI 不存密碼。每次 connect 都重新 prompt。
+- 密碼會短暫出現在 Jetson `ps aux`（< 1 秒，sudo 跑 nmcli 的瞬間）—— 5 人共用 Jetson 的信任邊界內可接受。
+- SSID + 密碼在傳到 SSH 前都過 `shlex.quote`，所以含單引號 / `$` / 空格的密碼也安全。
+
+**已知 MVP 限制**：
+
+- 802.1X enterprise 網路（`eduroam` / `FJU-5GHz`）目前不支援；CLI 會 fail，請手動跑 `nmcli connection add type wifi ...` 那套（細節在 `references/project-status.md`）。
+- 不存多個 SSID profile preset；每次換場地手動 `connect`。
+
+### 8.6 `pawai dev info <module>`
 
 看模組 metadata（packages、docs、tests、log target、Go2 access、注意事項）。改完 brain 不確定該跑哪些 test 時很好用：
 

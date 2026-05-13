@@ -789,3 +789,50 @@ def test_contract_check_jetson_uses_ssh(monkeypatch):
         runner = CliRunner()
         runner.invoke(cli, ["contract", "check", "--jetson"])
     assert mocked.called
+
+
+# ─── pawai net wifi MVP ──────────────────────────────────────────────────
+
+def test_net_wifi_list_invokes_network_function():
+    from pawai_cli.network import WifiNetwork
+
+    fake_networks = [
+        WifiNetwork(ssid="LM306", signal=87, security="WPA2", in_use=True),
+        WifiNetwork(ssid="FJU-5GHz", signal=65, security="WPA2 802.1X", in_use=False),
+    ]
+    with patch("pawai_cli.network.wifi_list", return_value=fake_networks):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "list"])
+    assert result.exit_code == 0
+    assert "LM306" in result.output
+    assert "FJU-5GHz" in result.output
+    assert "✓" in result.output  # in_use marker
+
+
+def test_net_wifi_connect_prompts_for_password_and_passes_through():
+    captured = {}
+
+    def fake_connect(ssid, password):
+        captured["ssid"] = ssid
+        captured["password"] = password
+        return True, f"✓ Connected to '{ssid}'."
+
+    with patch("pawai_cli.network.wifi_connect", side_effect=fake_connect):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "connect", "LM306"],
+                               input="secret-pw\n")
+    assert result.exit_code == 0
+    assert captured == {"ssid": "LM306", "password": "secret-pw"}
+    # Password must not appear in CLI output (hide_input=True)
+    assert "secret-pw" not in result.output
+
+
+def test_net_wifi_connect_propagates_failure_exit_code():
+    with patch("pawai_cli.network.wifi_connect",
+               return_value=(False, "✗ Wi-Fi password rejected")):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["net", "wifi", "connect", "LM306"],
+                               input="bad\n")
+    assert result.exit_code == 1
+    assert "rejected" in result.output
+
