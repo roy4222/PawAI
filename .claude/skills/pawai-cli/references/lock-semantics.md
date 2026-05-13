@@ -31,16 +31,40 @@ Expected stale policy:
 - `starting` older than 10 minutes: likely failed startup; prompt before clearing.
 - `running` older than 4 hours: stale warning only; do not delete automatically.
 
+## Owner-Aware Release (Phase 1, item 6)
+
+`Lock.release_if_owned(user, host)` is the safe path used by `pawai demo stop`:
+
+- Runs under a remote `flock` to avoid race with concurrent CLI invocations.
+- `user` / `host` are `shlex.quote`-protected and compared inside a Python script
+  that reads from `os.environ`, so a malicious lock payload cannot inject shell.
+- Returns True iff the lock was your user/host AND was removed (or was already
+  absent). Returns False on owner mismatch.
+
+This means:
+
+- **Own stale lock + `demo stop`** → no `--force` needed. CLI prints
+  `Reclaiming your own stale {state} lock (started ...)` and uses
+  `release_if_owned()`. **Do not coach users to add `--force` for their own
+  stale lock**; that habit defeats the safety check.
+- **Own non-stale lock + `demo stop`** → also uses `release_if_owned()`. Same
+  safety.
+- **Other user's lock + `demo stop --force`** → falls back to plain
+  `Lock.release()` (no owner gate). Required for legitimate takeover, but the
+  user must have coordinated first.
+
 ## `-y` Versus `--force`
 
 Keep these meanings separate:
 
-- `-y`: skip ordinary confirmations for your own operation.
-- `--force`: take over or stop another user's demo lock.
+- `-y`: skip ordinary confirmations for your own operation. **Cannot** override
+  another user's lock. Triggers exit 2 with message
+  `` `-y` does not override another user's {demo,lock}. Use --force[ to take over]. ``
+- `--force`: take over or stop another user's demo lock. Implies a takeover and
+  should be preceded by out-of-band coordination (Slack, in-person).
 
-If `--force` is not implemented in the current CLI, do not claim it is available.
-Tell the user to coordinate manually and run `pawai demo stop` only after the
-current owner agrees.
+`--force` is **not** required to clear your own stale lock (Phase 1 item 6).
+Reserve it for the legitimate takeover case.
 
 ## Branch Awareness
 

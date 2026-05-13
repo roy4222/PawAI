@@ -27,10 +27,11 @@ pawai demo stop --help
 
 Then use the human docs as the canonical explanation:
 
-- `docs/pawai_cli/README.md`
-- `docs/pawai_cli/troubleshooting.md`
-- `docs/pawai_cli/modules.md`
-- `docs/pawai_cli/team-onboarding.md` if present
+- `docs/pawai_cli/usage-guide.md` — daily-use walkthrough (start here for "how do I X with the CLI"). Has decision trees for the three high-frequency commands and an error-message lookup table.
+- `docs/pawai_cli/README.md` — full command reference, flag tables, env vars.
+- `docs/pawai_cli/troubleshooting.md` — red-light triage A–J.
+- `docs/pawai_cli/modules.md` — module ↔ package/test/log map.
+- `docs/pawai_cli/team-onboarding.md` — first-time install only.
 
 If this skill mentions a planned flag that does not exist yet, do not invent it.
 Report that the CLI has not implemented it and fall back to the nearest current
@@ -56,12 +57,40 @@ For "demo start/stop":
 
 1. Run `pawai status --short`.
 2. Respect any active demo/lock warning. `-y` means skip ordinary prompts; only
-   `--force` may take over another user's lock if the CLI supports it.
-3. Start with `pawai demo start`; stop with `pawai demo stop`.
-4. Use `pawai logs <module> --lines 200` for the failing module.
+   `--force` may take over another user's lock.
+3. Phase 1 behaviour to remember:
+   - **Own existing lock + `demo start`** → CLI auto-cleans your old lane and
+     restarts. No flag needed. Message: `Existing lock is yours (...). Restarting demo.`
+   - **Own stale lock + `demo stop`** → CLI uses `release_if_owned()`, no `--force`
+     needed. Message: `Reclaiming your own stale ... lock`.
+   - **Other user's lock + `demo stop`** → requires `--force`; coach the user to
+     coordinate first, do not auto-force.
+4. Start with `pawai demo start`; stop with `pawai demo stop`.
+5. Use `pawai logs <module> --lines 200` for the failing module.
+
+For "platform error / exit 10":
+
+- The CLI rejects Windows native, WSL1, and repos under `/mnt/c/...` with exit 10.
+- This is non-negotiable; do not suggest workarounds. Direct the user to WSL2
+  Ubuntu and a Linux-side repo path.
+
+For "what does this CLI error mean":
+
+- The error-message lookup table is in `docs/pawai_cli/usage-guide.md` §7.
+- Cover: platform exit 10, Tailscale offline, missing JETSON_TAILSCALE_IP,
+  lock owned by other user, `-y` cannot override, failed acquire lock 3 retries,
+  module required, Jetson unreachable. Each row has the exact next command.
+
+For "pawai health brain" (Phase 1 new command):
+
+- Wraps `.claude/skills/brain-studio-lane/scripts/healthcheck.sh` with `$JETSON_HOST`
+  and `$JETSON_TAILSCALE_IP` injected from the CLI's resolved env.
+- Run after `pawai demo start` once the stack is ~30s up.
+- Output is 8 numbered checks; treat any ❌ as actionable.
 
 ## References
 
+- Daily-use walkthrough + decision trees + error table: `docs/pawai_cli/usage-guide.md`
 - Command syntax and examples: `references/command-reference.md`
 - Lock ownership, `-y` vs `--force`, branch mismatch: `references/lock-semantics.md`
 - Tailscale, Jetson network moves, Go2 Ethernet: `references/network-diagnosis.md`

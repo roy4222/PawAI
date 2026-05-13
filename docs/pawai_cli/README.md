@@ -5,6 +5,8 @@
 
 > 它不取代既有 bash 腳本，只是讓「每個人記一套指令」變成「全隊記一套」。
 
+> **日常使用：** 隊友 onboarding 完之後，請看 [`usage-guide.md`](usage-guide.md) — 三個高頻指令（`jetson deploy` / `demo start` / `demo stop`）的場景 walkthrough、決策樹、Phase 1 新行為、錯誤訊息對照表。本 README 保留為**指令參考手冊**（完整 flag、環境變數、Lock 機制設計）。
+
 ---
 
 ## 1. 安裝（首次）
