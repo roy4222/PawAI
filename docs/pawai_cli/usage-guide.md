@@ -551,13 +551,15 @@ pawai net wifi connect <SSID>                # 連線（會 prompt 密碼）
 pawai net wifi forget <SSID>                 # 刪掉已存 profile
 ```
 
-**首次設定**（每台 Jetson 一次）：需設 NOPASSWD sudo 給 `nmcli`，否則 SSH 沒 TTY 跑 sudo 會失敗。CLI 第一次 `connect` 失敗時會印對應指令，照貼即可：
+**首次設定**（每台 Jetson 一次）：需設 NOPASSWD sudo 給 `nmcli`，否則 SSH 沒 TTY 跑 sudo 會失敗。**必須在 Jetson 本機 terminal 上跑**（HDMI 接螢幕鍵盤 / 串列 console / 物理接觸的方式登入），**不能** `ssh jetson "sudo ..."` —— 那條路就是這次要修的失敗模式。
 
 ```bash
-ssh jetson "echo 'jetson ALL=(ALL) NOPASSWD: /usr/bin/nmcli' \
-  | sudo tee /etc/sudoers.d/pawai-nmcli \
-  && sudo chmod 440 /etc/sudoers.d/pawai-nmcli"
+# 在 Jetson 本機（不是從 Mac SSH）：
+sudo bash -c "echo 'jetson ALL=(ALL) NOPASSWD: /usr/bin/nmcli' \
+  > /etc/sudoers.d/pawai-nmcli && chmod 440 /etc/sudoers.d/pawai-nmcli"
 ```
+
+設定完之後，從 Mac 跑 `pawai net wifi connect <SSID>` 才會走得通。如果你忘記、直接從 Mac 試 `connect`，CLI 會在第一次失敗時印同樣的指令引導你。
 
 **典型場景：到學校 / 換教室 / Jetson Wi-Fi 跑掉**
 
