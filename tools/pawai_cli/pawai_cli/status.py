@@ -65,6 +65,9 @@ class NavCapabilityStatus:
 
 def collect(short: bool = False) -> LiveStatus:
     tmux = shell.run_remote("tmux ls 2>/dev/null || true", timeout=10)
+    if not tmux.ok:
+        reason = tmux.stderr.strip() or tmux.stdout.strip() or f"ssh command failed with code {tmux.code}"
+        return LiveStatus(reason, ros_nodes="", git="", last_deploy="", reachable=False)
     if short:
         ros_nodes = ""
     else:
@@ -85,8 +88,7 @@ def collect(short: bool = False) -> LiveStatus:
         f"cat {shell.jetson_repo()}/.pawai-last-deploy 2>/dev/null || true",
         timeout=8,
     )
-    reachable = tmux.code != 127 and tmux.code != 255
-    return LiveStatus(tmux.stdout.strip(), ros_nodes, git.stdout.strip(), last.stdout.strip(), reachable)
+    return LiveStatus(tmux.stdout.strip(), ros_nodes, git.stdout.strip(), last.stdout.strip(), reachable=True)
 
 
 def collect_go2_drivers() -> list[Go2DriverProcess]:
@@ -184,6 +186,8 @@ def print_status(short: bool = False) -> LiveStatus:
     print("────────────────────────────")
     if not st.reachable:
         print("✗ Jetson unreachable over SSH")
+        if st.tmux:
+            print(f"  {st.tmux}")
         return st
 
     print("tmux sessions:")

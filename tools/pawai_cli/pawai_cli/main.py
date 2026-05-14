@@ -760,7 +760,7 @@ def _current_sha_short() -> str:
 def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
                yes: bool, force: bool) -> None:
     """Start brain demo or nav capability lane."""
-    from .lock import Lock, is_stale, is_own_lock
+    from .lock import LOCK_FLOCK_PATH, Lock, is_stale, is_own_lock
 
     nav_mode = _validate_nav_mode(nav_mode, brain_only)
     lane = "nav_capability" if nav_mode == "capability" else "brain"
@@ -853,7 +853,18 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
     lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting",
                       demo_mode=demo_mode, tmux_session=tmux_session, lane=lane)
     if lk is None:
-        click.echo("Failed to acquire lock after 3 retries — flock held by another process or remote SSH issue. Investigate before retrying.")
+        lock_path = f"{shell.jetson_repo()}/.pawai-demo-lock"
+        host_hint = shell.jetson_host()
+        click.echo(
+            "Failed to acquire lock after 3 retries — flock held by another process "
+            "or remote SSH issue."
+        )
+        click.echo("Inspect before retrying:")
+        click.echo(
+            f"  ssh {host_hint} 'lsof {LOCK_FLOCK_PATH} 2>/dev/null || "
+            f"echo no active flock holder; cat {lock_path} 2>/dev/null || "
+            "echo no demo lock file'"
+        )
         sys.exit(2)
 
     rc = _invoke_nav_start_sh() if lane == "nav_capability" else \

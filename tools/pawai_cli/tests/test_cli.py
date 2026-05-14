@@ -748,6 +748,27 @@ def test_status_short_skips_ros_node_list_ssh_call():
     assert ros_calls == [], f"unexpected ros2 calls under --short: {ros_calls}"
 
 
+def test_status_unreachable_short_circuits_after_tmux_probe():
+    """If the first SSH probe times out/fails, status must not spend another
+    ~30s probing ROS/git/last-deploy."""
+    from pawai_cli import status as status_mod
+    from pawai_cli.shell import Result
+
+    calls = []
+
+    def fake_run_remote(cmd, timeout=None):
+        calls.append(cmd)
+        return Result(code=124, stdout="", stderr="timeout after 10s")
+
+    with patch("pawai_cli.status.shell.run_remote", side_effect=fake_run_remote):
+        st = status_mod.collect(short=False)
+
+    assert st.reachable is False
+    assert "timeout" in st.tmux
+    assert len(calls) == 1
+    assert "tmux ls" in calls[0]
+
+
 def test_deploy_prompts_on_active_other_lock(monkeypatch):
     from pawai_cli.lock import Lock
     other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
@@ -1179,6 +1200,23 @@ def test_demo_start_failure_uses_release_if_owned_not_bare_release(monkeypatch):
     assert released == [("bob", platform.node())], \
         "start.sh failure must call release_if_owned(self), not bare release"
     assert bare_release_called == [], "bare Lock.release() must not be invoked"
+
+
+def test_demo_start_acquire_failure_prints_actionable_flock_hint(monkeypatch):
+    """When acquire exhausts retries, show the exact remote inspection command
+    instead of only saying 'investigate'."""
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=None), \
+         patch("pawai_cli.main.shell.jetson_host", return_value="jetson-nano"), \
+         patch("pawai_cli.main.shell.jetson_repo",
+               return_value="/home/jetson/elder_and_dog"):
+        result = CliRunner().invoke(cli, ["demo", "start"])
+
+    assert result.exit_code == 2
+    assert "lsof /tmp/pawai-demo-lock.flock" in result.output
+    assert "cat /home/jetson/elder_and_dog/.pawai-demo-lock" in result.output
 
 
 def test_demo_start_transition_failure_does_not_corrupt_others_lock():
