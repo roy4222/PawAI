@@ -617,7 +617,7 @@ MECHANICAL RESULT: 5 PASS / 1 FAIL
 
 **重要**：
 - `demo start` 新 hook 必須在既有 orphan preflight **之後**
-- 任何失敗路徑走 `release_if_owned(user, host)`
+- Post-lock 失敗路徑必須走 `release_if_owned(user, host)`；pre-start 失敗在取得 lock 之前 exit，不涉及 release
 - `event_action_bridge` 停用必須獨立 commit，msg：`spec-a: keep event_action_bridge out of demo mainline`
 
 #### PR 群 2B：Semantic Dry-Run
