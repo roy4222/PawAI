@@ -124,6 +124,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
+| [`pawai net wifi {list,status,connect,forget}`](usage-guide.md#85-pawai-net-wifi--jetson-wi-fi-控制無需-ssh-手動) | Jetson Wi-Fi 控制（無需 SSH 手動 nmcli） |
 
 ---
 
@@ -192,11 +193,19 @@ pawai status --short # 跳過 ROS node list，適合快速看 lock/branch/tmux
 讀 Jetson 上的：
 - `tmux ls` — 找 `demo:` / `pawai_brain:` / `studio_gw:` / `llm-e2e:` 等 session
 - `ros2 node list` — 看 perception/brain 是否亮
+- `ps -eo … | grep go2_driver_node|go2_robot_sdk` — 列出 Go2 driver 程序的 PID / user / tty / start time / cmd（P0）
 - `$JETSON_REPO/.pawai-last-deploy` — JSON 紀錄誰、何時、deploy 了哪個 module、git SHA、用 `rsync` 還是 `~/sync once`
+
+**Go2 driver processes 區塊**（P0，五人共用 Jetson 時尤其重要）：
+- 列出 Jetson 上所有 `go2_driver_node` / `ros2 launch go2_robot_sdk` 程序
+- 若 driver 存在但**沒有任何 demo lock**，會印 `⚠ drivers running with NO demo lock — orphan or direct ros2 launch`，提示有人繞過 `pawai demo start`
+- ❗ **不會**把 Jetson process user (`jetson`) 跟 lock owner（本機 user 例如 `alice`）做比對 — 兩個欄位語意不同，比對會誤觸
 
 **Heads-up 區**會警告：
 - demo 正在跑，deploy 要先 stop
 - 上次 deploy 的人不是你（多人協作場景）
+
+**SSH 失敗 / timeout（🟡 fail-fast）**：第一個 SSH probe (`tmux ls`) timeout / 失敗時 status 立即 short-circuit 印 `✗ Jetson unreachable over SSH` + 原因，**不會**再花 30s 把後續 4 個 probe 逐一 timeout。
 
 `--short` 不會 SSH 到 Jetson 跑 `ros2 node list`，所以適合 demo 剛停、ROS daemon cache
 還沒刷新時看真實 tmux/lock/deploy 狀態。
@@ -264,17 +273,22 @@ pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 ```
 
 預設模式做的事：
-1. 偵測舊 lane（Jetson tmux session / 本機 `next dev`），有就 auto-cleanup
-2. 跑 preflight（SSH/.env/port 8080/OpenRouter key/LLM tunnel/ASR tunnel/USB 喇叭/nav session 衝突）
-3. SSH 進 Jetson 起 `start_full_demo_tmux.sh`（13-window：go2/D435/face/vision/object/asr/tts/llm/executive/gateway/...）
-4. 本機 frontend：
+1. **Orphan driver preflight（P1）**：讀完 lock 後，若**無 lock 但 Jetson 上仍有 `go2_driver_node` 程序**（直接 `ros2 launch` / 手動 tmux / 上次 crash 殘留）：
+   - `--force` → 自動跑 cleanup 後繼續
+   - `-y` → exit 2（**不**自動清，避免 CI / 新人誤殺別人手動 session）
+   - 互動 → prompt `Cleanup orphan drivers and continue?`
+   - **lock 存在時 skip 此檢查**（沒有可靠 session id，不做不可靠判斷）
+2. 偵測舊 lane（Jetson tmux session / 本機 `next dev`），有就 auto-cleanup
+3. 跑 preflight（SSH/.env/port 8080/OpenRouter key/LLM tunnel/ASR tunnel/USB 喇叭/nav session 衝突）
+4. SSH 進 Jetson 起 `start_full_demo_tmux.sh`（13-window：go2/D435/face/vision/object/asr/tts/llm/executive/gateway/...）
+5. 本機 frontend：
    - 缺 `.env.local` → 從 `.env.local.example` 自動生成（替換 `JETSON_TAILSCALE_IP`）
    - 缺 `node_modules` → 自動跑 `npm install`
    - 用 `node_modules/.bin/next dev` 啟動，並寫 `/tmp/pawai-frontend.pid`
-5. Healthcheck：
+6. Healthcheck：
    - 從本機 curl `http://$JETSON_TAILSCALE_IP:8080/health`
    - 從本機 probe `http://localhost:3000/studio` 是否 200
-6. 印出真正的 Studio URL
+7. 印出真正的 Studio URL
 
 成功時最後印：
 
@@ -283,8 +297,14 @@ pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 ✅ Frontend: http://localhost:3000/studio
 ```
 
-`JETSON_TAILSCALE_IP` 必須存在。CLI 會先嘗試從 `tailscale status` 自動偵測並注入；
-如果直接手動跑 `start.sh` 或偵測失敗，腳本會明確 fail，不再 fallback 到寫死 IP。
+**`JETSON_TAILSCALE_IP` 解析優先序**（`demo start` / `health brain` 共用）：
+1. `PAWAI_TRUST_ENV_IP=1` → 信任 env 值不覆蓋（hand-crafted testing 的逃生口）
+2. **Tailscale peer online + 有 IP → 偵測值 override env**（即使 env 已設）；env 與偵測不一致時會印兩行 warning 告知正在用哪個 IP / 如何 silence
+3. peer offline / 偵測失敗 → keep env 原值
+
+預設「偵測 wins」的原因：`.env.local` 留下 stale IP 是多人共用最常見的失敗模式；`pawai doctor` 已 flag mismatch，但 `health brain` / `demo start` 需要實際**用對的 IP**，不只警告。
+
+如果直接手動跑 `start.sh`、CLI 沒注入、且偵測失敗，腳本會明確 fail，不再 fallback 到寫死 IP。
 
 #### Nav capability mode
 

@@ -480,10 +480,15 @@ CLI 的 user-actionable failure 字串對照。**不包含**正常 progress mess
 | `Existing lock is yours ({state}). Restarting demo.` | `demo start` | 正常訊息，CLI 會自動清理+重啟，無需動作 |
 | `Another user is in demo: alice@xxx branch=X state=Y` + `Take over? [force/cancel]` | `demo start` | 跟 alice 溝通；同意後輸入 `force` |
 | `` `-y` does not override another user's lock. Use --force to take over. `` (exit 2) | `demo start -y` | 拿掉 `-y`、加 `--force`、先溝通 |
-| `Failed to acquire lock after 3 retries — flock held by another process or remote SSH issue. Investigate before retrying.` (exit 2) | `demo start` | **不要重跑**。SSH 上 Jetson 看 `/tmp/pawai-demo-lock.flock` 持有者；或檢查 SSH 抖動 |
+| `Failed to acquire lock after 3 retries…` (exit 2) | `demo start` | **不要重跑**。訊息會印出 `ssh $JETSON_HOST 'lsof /tmp/pawai-demo-lock.flock; cat .pawai-demo-lock'` 等可直接複製的指令；通常原因是上一個 start.sh 還沒跑完 |
 | `Lock is owned by alice@alice-mac. Use --force to stop their demo.` (exit 2) | `demo stop` | 跟 alice 溝通；同意後 `pawai demo stop --force` |
 | `No demo lock present.` | `demo stop` | 已沒鎖；cleanup 仍會跑一次清殘留 process |
-| `⚠ Lock release skipped — another process holds the flock or lock changed.` | `demo stop` | 通常 race 或 SSH 抖動，跑一次 `pawai status` 確認；多半已乾淨 |
+| `⚠ Cleanup failed (rc=N). Lock for alice@alice-mac kept on Jetson for investigation.` | `demo stop --force` | **lock 故意保留**作 audit trail；照訊息跑 `pawai status` + `ssh $JETSON_HOST 'tmux ls; pgrep -af go2_driver_node'` 找根因；解決後 `pawai demo stop --force` 重跑 |
+| `⚠ Demo started, but our lock was taken over during startup. NOT marking running…` (exit 2) | `demo start` | 你跑 start.sh 期間別人 force 接手了。Demo process 已起但不是你的；跑 `pawai status` 看現任 owner，跟對方協調 |
+| `⚠ Go2 driver processes detected on Jetson with no demo lock:` + `Cleanup orphan drivers and continue? [y/N]` | `demo start` | 有人繞 CLI 直接 `ros2 launch` 或上次 crash 殘留。**先 `pawai status` 看是誰**；確認非別人手動 session 後輸入 `y` |
+| `` `-y` does not auto-clean orphan drivers. Use --force… `` (exit 2) | `demo start -y` | `-y` 不會自動清孤兒 driver（避免 CI 誤殺）。先 `pawai status` 確認狀況，再用 `--force` 或互動跑 |
+| `⚠ JETSON_TAILSCALE_IP=X differs from live Tailscale peer Y. Using detected.` | `demo start` / `health brain` | 偵測到 `.env.local` 寫的 IP 跟現網不同；CLI 已自動切到偵測值。建議更新 `.env.local`；想保留 env 值設 `PAWAI_TRUST_ENV_IP=1` |
+| `✗ Jetson unreachable over SSH` (status 第一行) | `status` | SSH timeout / 連不到；訊息會印出 stderr 原因。先確認 Tailscale online (`pawai doctor`)；換網路後等 60s 重試 |
 | `Error: --module is required unless --all is set` (exit 2) | `jetson deploy` | 加 `--module brain`（或其他），或加 `--all` |
 | `module X has no colcon package; use --no-build` | `jetson deploy --module studio` | `studio` 等非 ROS 模組：加 `--no-build` |
 | `Error: --nav capability cannot be combined with --brain-only` | `demo start` | 二選一 |
@@ -508,13 +513,13 @@ pawai health brain            # 跑 8 步 healthcheck
 
 **Phase 1 修正**：之前 `healthcheck.sh` 寫死 `JETSON_HOST=jetson-nano`，team 用不同 SSH alias 會 fail。現在 CLI 注入 `$JETSON_HOST` + `$JETSON_TAILSCALE_IP` 給腳本。
 
-### 8.2 `pawai logs <module> --lines 200`
+### 8.2 `pawai logs <module> --lines 500`
 
 抓 Jetson 上對應模組的 tmux pane 最後 N 行。例：
 
 ```bash
-pawai logs brain                    # 200 行（預設）
-pawai logs face --lines 500         # 500 行
+pawai logs brain                    # 500 行（預設）
+pawai logs face --lines 200         # 200 行
 pawai logs all                      # 一次抓 8 個 demo windows
 ```
 

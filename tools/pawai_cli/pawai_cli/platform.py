@@ -116,4 +116,4 @@ def _print_unsupported(info: PlatformInfo, repo_err: Optional[str]) -> None:
         print("  -> Upgrade to WSL2: wsl --set-version Ubuntu 2")
     elif repo_err:
         print("  -> Move repo into Linux home:  cd ~ && git clone <url> elder_and_dog")
-    print("  See: docs/pawai_cli/platform-policy.md")
+    print("  See: docs/pawai_cli/README.md §1 (支援平台)")

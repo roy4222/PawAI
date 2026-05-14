@@ -419,6 +419,40 @@ sleep 60 && pawai doctor
 學校網路偶爾擋 SSH (22) 或 outbound HTTP — 表現是 SenseVoice tunnel / OpenRouter 連不到。
 fallback：用 local ASR / local TTS（`ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]'`）。
 
+### G4. 802.1X / WPA-Enterprise（eduroam、FJU-5GHz）— `pawai net wifi connect` 不支援
+
+CLI Phase 3 MVP 不認 802.1X / WPA-EAP；`pawai net wifi connect` 對 `eduroam` / `FJU-5GHz`
+這類網路會 fail。手動三步驟（在 Jetson 本機 terminal 上跑，不是從 Mac SSH）：
+
+```bash
+# 1) 建立 connection profile（替換 <SSID> / <iface>，iface 通常是 wlp1s0 或 wlan0）
+sudo nmcli connection add type wifi ifname wlp1s0 con-name eduroam ssid eduroam
+
+# 2) 設 802.1X 認證參數（PEAP + MSCHAPv2 是 eduroam / FJU-5GHz 最常見組合）
+sudo nmcli connection modify eduroam \
+  wifi-sec.key-mgmt wpa-eap \
+  802-1x.eap peap \
+  802-1x.phase2-auth mschapv2 \
+  802-1x.identity '<學號或員工帳號>@fju.edu.tw' \
+  802-1x.password '<你的密碼>'
+
+# 3) 啟用
+sudo nmcli connection up eduroam
+```
+
+驗證：
+
+```bash
+nmcli -t -f NAME,DEVICE,STATE connection show --active
+ip addr show wlp1s0 | grep inet
+ping -c 3 1.1.1.1
+```
+
+**已知坑**：
+- `802-1x.identity` 格式各校不同；輔大 FJU-5GHz 通常是 `<學號>` 不帶網域，eduroam 通常需要 `<帳號>@fju.edu.tw`
+- 不要 `nmcli ... password ...` 後跑 `cat /etc/NetworkManager/system-connections/eduroam.nmconnection` — 密碼明碼會出現在檔裡，權限 600 才安全
+- 切走時 `sudo nmcli connection down eduroam`；徹底刪掉 `sudo nmcli connection delete eduroam`
+
 ---
 
 ## H. Tailscale Sharing
