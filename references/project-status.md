@@ -1,7 +1,60 @@
 # 專案狀態
 
-**最後更新**：2026-05-12 night（Go2 已移交學校 + PawAI CLI 生產化 L1/L2/L3 + project-onboard 對齊 0511 七大功能 + nav capability lane + offline fallback E2E 驗證）
-**硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-05-14（PawAI CLI 多人協作硬化：P0/P1 driver visibility + 3 lock races + IP override + status fail-fast + Windows CRLF defence）
+**硬底線**：5/18 期末 demo（4 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/14：PawAI CLI 多人協作硬化（6 commits + 132/132 tests）
+
+延續 5/12 day-night L1/L2/L3，這一輪鎖定五人 + Jetson + Go2 的「現場可控性」缺口：lock 暗中被覆寫、stale env 連舊 IP、status 對 SSH timeout 偽裝成 reachable、Windows CRLF 啃壞 `.env`。6 個 commits，全部 ahead `origin/main` 待 push。
+
+### P0/P1 — 看見誰在連 Go2（`b05205d`）
+
+- `status.py` 新增 `collect_go2_drivers()` + `Go2DriverProcess`：遠端 `ps -eo pid,user,tty,lstart,cmd` 抓 `go2_driver_node` / `go2_robot_sdk` 任何 process
+- `pawai status` 新區塊 **Go2 driver processes**：列出 PID / Jetson user / tty / 啟動時間 / cmd；無 lock 但有 driver 時警告 `⚠ drivers running with NO demo lock`
+- 刻意不比對 `proc.user`（Jetson `jetson`） vs `lk.user`（laptop `alice`）— 不同語意，比對會永遠誤觸（roy review 抓到的）
+- `pawai demo start` 新增 **orphan driver preflight**：無 lock + 有 driver 時，`--force` 跑 cleanup → 繼續；`-y` exit 2（不自動清，避免 CI/新人誤殺別人手動 session）；互動 prompt；**lock 存在時 skip** 整段檢查
+
+### 🔴 三個 lock corruption race（`84f201f`）
+
+- `lock.py` 新增 `transition_if_owned(new_state, user, host)` — owner-aware，flock + 嵌入 Python 比對 pattern；`transition_to()` / `release()` 標 DEPRECATED
+- 自己 restart / force takeover / start.sh 失敗 / `demo stop --force` 全部 `Lock.release()` → `release_if_owned(...)`，守備 takeover window 內被別人搶後又誤刪新 owner lock 的 race
+- `demo stop --force` 重排：cleanup rc ≠ 0 時 **保留 lock 不刪** + 印 `pawai status` / `tmux ls; pgrep -af go2_driver_node` 等可直接複製的 inspect 指令；cleanup OK 才 release
+- `transition_to("running")` → `transition_if_owned(...)`，失敗時 exit 2 印「lock taken over during startup, NOT marking running」，避免覆寫接手者的 lock
+
+### `_build_demo_env` 偵測 IP override stale env（`8ac67a7`）
+
+- 之前 `JETSON_TAILSCALE_IP` 只在 env 為空才注入偵測值 → `.env.local` 寫死 stale IP 永遠勝出 → `health brain` 連舊 IP
+- 新解析優先序：`PAWAI_TRUST_ENV_IP=1` > 偵測 peer online > env。偵測值 override 時印兩行 warning 指出在用哪個 IP / 如何 silence
+- 解掉 baseline 紅燈 `test_health_brain_passes_jetson_host_env`
+
+### 🟡 status SSH timeout fail-fast + flock 訊息（`4de2d71`）
+
+- `status.py:collect` 第一個 SSH probe (`tmux ls`) timeout 124 / 失敗即 `reachable=False` short-circuit return（不再花 30s 把 4 個 probe 各自 timeout，每段看起來都「正常但空」）
+- `print_status` 印 stderr 原因，不只 `✗ Jetson unreachable`
+- `main.py:822` flock acquire 失敗訊息加可直接複製的 `ssh $JETSON_HOST 'lsof /tmp/pawai-demo-lock.flock; cat .pawai-demo-lock'`
+
+### 🟢 文件同步（`668ca29`）
+
+- `docs/pawai_cli/README.md`：§3 指令表加 `pawai net wifi`、§status 加 Go2 driver / fail-fast 區塊、§demo start 加 orphan preflight + 新 IP 解析優先序
+- `docs/pawai_cli/usage-guide.md`：§8.2 logs 預設 200→500（match code）、§7 錯誤對照表新增 6 行（orphan / cleanup-fail / takeover / `-y` 擋 / IP mismatch / SSH unreachable）
+- `docs/pawai_cli/troubleshooting.md` §G4 NEW：802.1X / WPA-Enterprise 三步驟 nmcli recipe（usage-guide §8.5 之前指過來但內容不存在 → 死連結）
+- `platform.py:119` 死連結 `platform-policy.md` → `README.md §1`
+
+### Windows CRLF / BOM 防線（`caef6b5`）
+
+- 新建 `.gitattributes`：`*.sh / *.py / *.yaml / *.yml / *.toml / *.cfg` + `.env*` 強制 LF，`*.png/jpg/bag/pcap/pbstream` 明示 binary
+- `main.py` 新增 `_load_env_file`：讀 bytes → 剝 UTF-8 BOM → CRLF/CR → LF → dotenv stream，解掉「`JETSON_HOST=jetson-nano\r`」這種 SSH 連不上但訊息看不出原因的情境
+- 一次性手續：之後 pull 後跑 `git add --renormalize . && git commit -m "chore: renormalize CRLF to LF"`
+- 不收 PR 67 的 `package-lock.json` 大量 peer 變動、private key（`ssh-copy-id jetson{,.pub}`）
+
+### Tests + 已知待辦
+
+- pawai_cli `tests/`：**116 → 132（+16 新）**，全綠
+- pre-existing baseline 紅燈 `test_health_brain_passes_jetson_host_env` 已修復並改寫成 regression guard
+- **未做（不阻擋 demo）**：PR 67 cherry-pick #2/#3（`start.sh` / `healthcheck.sh` 的 `tr -d '\r'` + `wait_for_*` + emoji→ASCII）、`network.py:257` 對 802.1X 失敗訊息自動指向 troubleshooting §G4
+- **🚨 需 roy 親自處理**：PR 67 不小心 commit 進去的 `ssh-copy-id jetson{,.pub}` 是 ed25519 私鑰（owner `kirk7@pawai`），要在 Jetson `~/.ssh/authorized_keys` 撤銷 + 請 kirk7 重新產 key + 從 PR 歷史 filter-repo 清掉
 
 ---
 
