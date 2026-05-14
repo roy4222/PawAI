@@ -178,6 +178,39 @@ class LlmBridgeNode(Node):
         )
         self.declare_parameter("local_llm_model", "qwen2.5:1.5b")
         self.declare_parameter("subscribe_face", True)
+<<<<<<< Updated upstream
+=======
+        self.declare_parameter("output_mode", "brain")  # "legacy" | "brain"
+        self.declare_parameter("chat_candidate_topic", "/brain/chat_candidate")
+        # ── OpenRouter (Phase B B1, 2026-05-04) ────────────────────────
+        # Primary: Gemini 3 Flash; conditional fallback: DeepSeek V4 Flash.
+        # Key from env (OPENROUTER_KEY or OPENROUTER_API_KEY); never a ROS param.
+        self.declare_parameter("enable_openrouter", True)
+        self.declare_parameter(
+            "openrouter_base_url",
+            "https://openrouter.ai/api/v1/chat/completions",
+        )
+        self.declare_parameter(
+            "openrouter_gemini_model", "google/gemini-3-flash-preview"
+        )
+        self.declare_parameter(
+            "openrouter_deepseek_model", "deepseek/deepseek-v4-flash"
+        )
+        # Defaults bumped 2.0/2.2 → 4.0/5.0 after 5/4 Jetson smoke: eval ran on
+        # RTX 8000 (1.61s avg / 1.87s p90); Jetson curl alone is 1.5s but
+        # Python urllib3+requests overhead pushes total past 2.0s and triggers
+        # premature fallback. 4.0s leaves headroom for p99 + overhead.
+        self.declare_parameter("openrouter_request_timeout_s", 4.0)
+        self.declare_parameter("openrouter_overall_budget_s", 5.0)
+        # llm_persona_file: optional path to a system prompt file (e.g.
+        # tools/llm_eval/persona.txt). Empty → use legacy SYSTEM_PROMPT inline.
+        self.declare_parameter("llm_persona_file", "")
+        # max_reply_chars: optional hard cap on reply_text length.
+        # 0 = uncapped (let LLM persona control length). Storytelling / long
+        # explanations need 500+ chars; chitchat naturally stays short via
+        # persona guidance.
+        self.declare_parameter("max_reply_chars", 0)
+>>>>>>> Stashed changes
 
     def _read_parameters(self) -> None:
         def _str(name: str) -> str:
