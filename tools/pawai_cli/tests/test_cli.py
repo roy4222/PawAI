@@ -1273,3 +1273,60 @@ def test_demo_stop_force_releases_lock_only_when_cleanup_succeeds():
         result = CliRunner().invoke(cli, ["demo", "stop", "--force"])
     assert result.exit_code == 0
     assert released == [("alice", "alice-mac")]
+
+
+# ─── CRLF / BOM defence for .env loading ──────────────────────────────────
+
+def test_load_env_strips_crlf_from_values(tmp_path, monkeypatch):
+    """A .env saved by a Windows editor (CRLF) must NOT leak \\r into env
+    values. Without normalization, JETSON_HOST=jetson-nano\\r breaks every
+    SSH call in a way that's hard to diagnose."""
+    from pawai_cli.main import _load_env_file
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b"JETSON_HOST=jetson-nano\r\nJETSON_REPO=/home/jetson/repo\r\n")
+    monkeypatch.delenv("JETSON_HOST", raising=False)
+    monkeypatch.delenv("JETSON_REPO", raising=False)
+
+    _load_env_file(env_file, override=True)
+
+    import os
+    assert os.environ["JETSON_HOST"] == "jetson-nano", \
+        "trailing CR must be stripped"
+    assert "\r" not in os.environ["JETSON_HOST"]
+    assert os.environ["JETSON_REPO"] == "/home/jetson/repo"
+
+
+def test_load_env_strips_utf8_bom(tmp_path, monkeypatch):
+    """A .env saved by Notepad with UTF-8 BOM must not break the first key."""
+    from pawai_cli.main import _load_env_file
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b"\xef\xbb\xbfFIRST_KEY=hello\nSECOND=world\n")
+    monkeypatch.delenv("FIRST_KEY", raising=False)
+    monkeypatch.delenv("SECOND", raising=False)
+
+    _load_env_file(env_file, override=True)
+
+    import os
+    assert os.environ["FIRST_KEY"] == "hello", \
+        "BOM must be stripped so the first key parses"
+    assert os.environ["SECOND"] == "world"
+
+
+def test_load_env_missing_file_is_silent(tmp_path):
+    """Missing .env / .env.local must not raise — many devs have only one."""
+    from pawai_cli.main import _load_env_file
+    _load_env_file(tmp_path / "does-not-exist.env", override=False)
+
+
+def test_load_env_local_overrides_env(tmp_path, monkeypatch):
+    """Two-file semantics preserved: .env.local wins over .env."""
+    from pawai_cli.main import _load_env_file
+    (tmp_path / ".env").write_bytes(b"SHARED_KEY=from-env\n")
+    (tmp_path / ".env.local").write_bytes(b"SHARED_KEY=from-env-local\r\n")
+    monkeypatch.delenv("SHARED_KEY", raising=False)
+
+    _load_env_file(tmp_path / ".env", override=False)
+    _load_env_file(tmp_path / ".env.local", override=True)
+
+    import os
+    assert os.environ["SHARED_KEY"] == "from-env-local"

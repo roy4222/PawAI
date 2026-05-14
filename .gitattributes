@@ -1,0 +1,36 @@
+# Normalize line endings for files that must stay LF across Windows / WSL / macOS / Linux.
+#
+# Why: Windows editors (Notepad, default-config VS Code, Git Bash with
+# core.autocrlf=true) write CRLF. Once a `.sh` script or `.env` file
+# contains \r:
+#   - bash reports `bad interpreter: /usr/bin/env\r`
+#   - dotenv loads JETSON_HOST=jetson-nano\r, breaking every SSH call
+#   - colcon / ament_python build scripts choke similarly
+#
+# Forcing eol=lf at the .gitattributes layer means git CHECKS OUT these
+# files as LF on every platform, regardless of the user's core.autocrlf.
+# Existing files in the working tree with CRLF need a one-time
+# `git add --renormalize .` after this lands.
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+
+# Env files (.env, .env.local, .env.local.example) are dotenv-style
+# KEY=value text; same CRLF hazard.
+.env           text eol=lf
+.env.*         text eol=lf
+.env.local     text eol=lf
+.env.local.*   text eol=lf
+
+# Binary assets: opt out so git doesn't try to normalize.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bag   binary
+*.pcap  binary
+*.pbstream binary

@@ -19,9 +19,33 @@ from .modules import MODULES, existing_docs, get_module
 from .status import print_status
 
 
+def _load_env_file(path: Path, *, override: bool) -> None:
+    """Load a dotenv file with CRLF / UTF-8 BOM normalization.
+
+    Files edited on Windows (Notepad, default VS Code, Git Bash with
+    core.autocrlf=true) ship with CRLF line endings and sometimes a
+    UTF-8 BOM. python-dotenv treats the trailing `\\r` as part of the
+    value, so `JETSON_HOST=jetson-nano` silently becomes
+    `JETSON_HOST=jetson-nano\\r` — every downstream `ssh jetson-nano` /
+    `JETSON_REPO`/etc lookup then fails with confusing "no such host"
+    or "no such directory" errors that don't mention CRLF anywhere.
+
+    Strip BOM + collapse CR-anywhere to LF before handing the text to
+    dotenv. Mirrors the protection PR #67 added to start.sh /
+    healthcheck.sh; this is the Python-side equivalent.
+    """
+    if not path.exists():
+        return
+    raw = path.read_bytes()
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    load_dotenv(stream=io.StringIO(text), override=override)
+
+
 def _load_env(root: Path) -> None:
-    load_dotenv(root / ".env")
-    load_dotenv(root / ".env.local", override=True)
+    _load_env_file(root / ".env", override=False)
+    _load_env_file(root / ".env.local", override=True)
 
 
 def _install_hint_map() -> dict[str, str]:
