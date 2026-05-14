@@ -375,7 +375,7 @@ Semantic dry-run script 4 對 reply 內容驗收（見 §8.3）。
 | `pawai demo preflight --pre-start-only` | 5 條 pre-start（`demo start` 內部用） |
 | `pawai demo preflight --post-start-only` | 5 條 post-start（`demo start` 內部用） |
 | `pawai demo preflight --semantic --reason "<text>"` | 6 scripts 語音 dry-run（需 stack 已啟動，reason 必填，允許短字串如 `pre-demo`） |
-| `pawai demo preflight --allow-fallback --reason "<text>"` | OpenRouter key 缺失或 LLM inactive 改 WARN 通過；明印 `FALLBACK ACCEPTED: <reason>` |
+| `pawai demo preflight --allow-fallback --reason "<text>"` | OpenRouter key 缺失或 LLM inactive 改 WARN 通過；明印 `FALLBACK ACCEPTED: <reason>`；preflight #2 / #7 改用 fallback PASS 條件（見 §7.3 表格右欄） |
 | `pawai demo preflight --skip <check_name>` | debug 用 |
 | `pawai demo start` | 內部自動跑 pre-start → start.sh → post-start mechanical preflight |
 
@@ -383,25 +383,52 @@ Semantic dry-run script 4 對 reply 內容驗收（見 §8.3）。
 
 ### 7.3 10 條 Mechanical Checks
 
+**Execution target**：每條 check 明標 `local`（pawai_cli 本機執行）或 `jetson_ssh`（透過既有 SSH wrapper 在 Jetson 執行）。Brain runtime 在 Jetson，本機 import / process / ROS graph 不能代表 Jetson 狀態；env 與 repo 文件則本機跑即可。
+
+CLI flag：
+- `--target {jetson,local,both}`（預設 `jetson`，因為 demo 跑在 Jetson）
+- `--target local` 用於 dev 純文件 / persona / CLI 自驗，跳過所有 jetson_ssh 檢查並標 SKIP
+- `pawai demo start` 內部呼叫一律 `--target jetson`
+
 #### Pre-start（5 條，純靜態 / 環境）
 
-| # | name | 內容 | PASS 條件 |
-|---|------|------|----------|
-| 1 | `imports` | `python -c "import langgraph, langchain_core, requests, yaml"` | exit 0 |
-| 2 | `env_key` | 讀 `.env` 或 process env 找 `OPENROUTER_KEY` / `OPENROUTER_API_KEY` | 非空字串；缺則需 `--allow-fallback --reason` |
-| 3 | `persona_loaded_no_banned` | grep `pawai_brain/personas/v1/CAPABILITIES.md` 違規 literal（單詞層面：`靜音模式` / `監聽模式` / 「主動巡邏」/ 「跟隨」單獨成項） | 不含 |
-| 4 | `pose_grounding_code_ready` | `import pawai_brain.nodes.world_state_builder` 成功；`set_pose_provider` signature 支援 dict shape | 是 |
-| 5 | `legacy_processes_not_running` | `pgrep` 確認 `llm_bridge_node` / `intent_tts_bridge_node` / `event_action_bridge` / `route_runner_node` 未在跑 | 全無；若有提示先 `pawai demo stop` |
+| # | name | target | 內容 | PASS 條件 |
+|---|------|--------|------|----------|
+| 1 | `imports` | jetson_ssh | SSH 至 Jetson 跑 `python3 -c "import langgraph, langchain_core, requests, yaml"` | exit 0；本機跑等同 dev sanity，但不能取代 Jetson 結果 |
+| 2 | `env_key` | local（讀 repo `.env`）+ jetson_ssh（讀 Jetson `~/elder_and_dog/.env` 或 process env） | 兩端皆找 `OPENROUTER_KEY` / `OPENROUTER_API_KEY`；本機與 Jetson 不一致時印 WARN 列差異 | 兩端非空字串；缺則需 `--allow-fallback --reason` |
+| 3 | `persona_loaded_no_banned` | local | 見 §7.3.1 scoped scan 規則 | 違反規則零行 |
+| 4 | `pose_grounding_code_ready` | jetson_ssh | SSH 跑 `python3 -c "from pawai_brain.nodes.world_state_builder import set_pose_provider; ..."`；確認 signature 支援 dict shape（透過 `inspect`） | 是 |
+| 5 | `legacy_processes_not_running` | jetson_ssh | SSH 跑 `pgrep -f` 確認 `llm_bridge_node` / `intent_tts_bridge_node` / `event_action_bridge` / `route_runner_node` 未在 Jetson 跑 | 全無；若有提示先 `pawai demo stop` |
 
-#### Post-start（5 條，ROS runtime / topology）
+#### Post-start（5 條，ROS runtime / topology — 全 jetson_ssh）
 
-| # | name | 內容 | PASS 條件 |
-|---|------|------|----------|
-| 6 | `conversation_graph_alive` | `ros2 node list` 含 `conversation_graph_node` 且訂閱 `/brain/text_input` | 是（subprocess parse，失敗有 hint） |
-| 7 | `brain_trace_pipeline` | publish `__preflight_ping__` 至 `/brain/text_input`，等 8 秒收 `/brain/conversation_trace` | 含 `input → world_state → capability → llm_decision → output`；`engine == langgraph`；無 `error` status；`/brain/chat_candidate` 有輸出 |
-| 8 | `chat_candidate_publisher_unique` | `ros2 topic info /brain/chat_candidate -v` | == `{conversation_graph_node}` |
-| 9 | `tts_publisher_unique` | `ros2 topic info /tts -v` | == `{interaction_executive_node}` |
-| 10 | `tts_playing_state_available` | `/state/tts_playing` 有 publisher 且 publisher 為 `tts_node` | 是（不要求立刻收 true/false） |
+| # | name | target | 內容 | PASS 條件（langgraph 模式） | PASS 條件（`--allow-fallback`） |
+|---|------|--------|------|----------------------------|-------------------------------|
+| 6 | `conversation_graph_alive` | jetson_ssh | SSH 跑 `ros2 node list` + `ros2 topic info /brain/text_input -v` | 含 `conversation_graph_node` 且為 subscriber | 同左（fallback 不影響 node 存活）|
+| 7 | `brain_trace_pipeline` | jetson_ssh | SSH 跑 publish `__preflight_ping__`、等 8 秒收 `/brain/conversation_trace` | 含 `input → world_state → capability → llm_decision → output`；`engine == langgraph`；無 `error` status；`/brain/chat_candidate` 有輸出 | 含 `input → world_state → output`（`llm_decision` 可省略或標 fallback）；`engine in {langgraph_degraded, rule_brain}`；無 `error` status；`/brain/chat_candidate` 有輸出；輸出明印 `FALLBACK ACCEPTED: <reason>` |
+| 8 | `chat_candidate_publisher_unique` | jetson_ssh | SSH 跑 `ros2 topic info /brain/chat_candidate -v` | == `{conversation_graph_node}` | 同左 |
+| 9 | `tts_publisher_unique` | jetson_ssh | SSH 跑 `ros2 topic info /tts -v` | == `{interaction_executive_node}` | 同左 |
+| 10 | `tts_playing_state_available` | jetson_ssh | SSH 跑 `ros2 topic info /state/tts_playing -v` | publisher 為 `tts_node`（不要求立刻收 true/false） | 同左 |
+
+**Implementation note**：SSH wrapper 沿用 pawai_cli 既有 `_ssh_run()`（或同名 helper），不另寫新 SSH 機制；`JETSON_HOST` 解析沿用既有 `_build_demo_env()` 邏輯（PAWAI_TRUST_ENV_IP → Tailscale peer → keep env）。
+
+#### 7.3.1 `persona_loaded_no_banned` Scoped Scan 規則
+
+**問題**：STATUS_NOTE 內「不列為 demo 能力」段落會故意列 `跟隨` / `主動巡邏` / `靜音模式` / `監聽模式`，這是降級宣告，不應被視為違規。
+
+**規則**：
+1. 解析 `pawai_brain/personas/v1/CAPABILITIES.md` 為 markdown sections
+2. 排除以下區塊不掃：
+   - `## STATUS_NOTE` 整段
+   - 任何標題含「不列為 demo 能力」或「不做」的子段
+3. 在剩餘區塊內 grep 違規 **claim pattern**（不是單詞）：
+   - `我會跟隨` / `會跟隨你` / `可以跟著`
+   - `我會主動巡邏` / `會主動巡邏`
+   - `我會靜音` / `進入靜音模式`
+   - `我會監聽` / `進入監聽模式`
+4. 違規條目零 → PASS；否則列出檔案行號 + matched pattern
+
+**rationale**：與附錄 B reply pattern 同樣採 claim-pattern 而非單詞 ban，避免 STATUS_NOTE / EXAMPLES 降級用語誤殺。
 
 ### 7.4 輸出
 
@@ -433,13 +460,22 @@ pawai demo start
 既有：wait_for_ready
   ↓
 ★ post-start mechanical preflight (5 條)
-       FAIL → cleanup + release_if_owned(user, host)；
-              標記 start failed；提示 pawai demo stop
+       FAIL → cleanup（呼叫既有 demo cleanup helper）
+            → release_if_owned(user, host)
+            → exit 1，print：
+              "post-start preflight failed; stack and lock cleaned up.
+               Fix the failing checks above and re-run `pawai demo start`."
+            （不留 lock、不留 stack、不要求另外跑 stop）
   ↓
 既有：transition_if_owned("running")
   ↓
 demo ready
 ```
+
+**失敗行為決策**（§10 R7 同步）：
+- pre-start fail：未取 lock，直接 exit 1
+- start.sh fail：既有 release_if_owned 邏輯（不變）
+- post-start fail：cleanup + release_if_owned + exit 1（**不轉 lock 為 failed 狀態、不留 stack 給 inspect**）；理由：post-start 失敗代表 stack 起來但行為錯，留半成品 stack 給下一個人或自己 misread 風險高於可調試價值；要 inspect 改用 `--skip-preflight`（emergency）+ 手動 `pawai status` / 看 `runtime/preflight/<timestamp>.txt` 報告
 
 **禁止裸 `Lock.release()`**；所有失敗路徑走 `release_if_owned(user, host)`。
 
@@ -574,8 +610,9 @@ MECHANICAL RESULT: 5 PASS / 1 FAIL
 | Executive TTS guard timer（5s + 60s 去重） | `interaction_executive/interaction_executive/brain_node.py` | 4 |
 | `.env` propagation 共用片段 | `scripts/start_full_demo_tmux.sh` | 2 |
 | **獨立 commit** 停用 `event_action_bridge` from demo mainline | `scripts/start_full_demo_tmux.sh` | 4 |
-| Unit test：preflight checks（mock） | `tools/pawai_cli/tests/test_preflight.py` | 7 |
-| Unit test：`demo start` hook 順序 + `release_if_owned` 行為 | `tools/pawai_cli/tests/test_demo_start_hook.py` | 7 |
+| Unit test：preflight checks（mock SSH wrapper、mock subprocess、mock ROS graph）含 `--target {jetson,local,both}` 路由與 `--allow-fallback` PASS 條件分支 | `tools/pawai_cli/tests/test_preflight.py` | 7 |
+| Unit test：`demo start` hook 順序 + `release_if_owned` 行為（pre-start fail 不取 lock；post-start fail cleanup + release 後 exit 1） | `tools/pawai_cli/tests/test_demo_start_hook.py` | 7 |
+| Unit test：persona scoped scan（STATUS_NOTE「不列為 demo 能力」段降級用語不誤殺；claim pattern 抓得到） | `tools/pawai_cli/tests/test_persona_scoped_scan.py` | 7 |
 | Unit test：TTS guard timer | `interaction_executive/test/test_tts_guard_timer.py` | 4 |
 
 **重要**：
@@ -641,10 +678,11 @@ PR 1 可任何時候 merge 不阻塞；PR 2A 依賴 1（persona banned grep 需 
 | R4 | Pose `duration_s` 算錯 | Medium | §6 已修為 `now - first_seen_ts`；7 unit case 含「t=20 不重發」痛點 |
 | R5 | `event_action_bridge` 停用影響 dev | Low | demo runtime 只移除啟動指令；code 不動；commit 訊息明標 |
 | R6 | Executive TTS guard timer 加重 CPU / trace 雜訊 | Low | 60s 去重 + log throttle；`enable_tts_guard:=false` 可關 |
-| R7 | Preflight 與既有 `demo start`（orphan / lock / env override）相沖 | High | §7.5 順序鎖定 + unit test cover；**pre-start fail：未取 lock，直接 exit；post-start fail：cleanup + `release_if_owned(user, host)`；禁止裸 `Lock.release()`** |
+| R7 | Preflight 與既有 `demo start`（orphan / lock / env override）相沖 | High | §7.5 順序鎖定 + unit test cover；**pre-start fail：未取 lock，直接 exit 1；post-start fail：cleanup + `release_if_owned(user, host)` + exit 1，不留 lock 也不要求另外跑 stop；禁止裸 `Lock.release()`** |
 | R8 | 多套件 cross-package import / version 不一致 | Medium | 三 PR 群順序強制；每 PR 跑 touched packages tests；不引入新 cross-package import |
 | R9 | Semantic dry-run pose injection 與真實 perception 衝突 | Low | §8.4 isolation：live publisher 存在 → WARN 跳過或 `--force-pose-inject` |
-| R10 | 無 Jetson 條件下無法驗 post-start preflight | High（unavoidable） | dev 跑 pre-start 5 條；post-start 留到硬體回來日 0；§11.1 acceptance 分 dev / Jetson |
+| R10 | 無 Jetson 條件下無法驗 post-start preflight；本機 `import langgraph` PASS 不代表 Jetson PASS | High（unavoidable） | dev 用 `--target local` 跑 #2 / #3 即可；其他全部標 SKIP；post-start 留到硬體回來日 0；§7.3 表格已標每條 check 的 `local` / `jetson_ssh` 執行端；§11.1 acceptance 分 dev / Jetson |
+| R11 | `--allow-fallback` 通過後 demo 全程靠 RuleBrain，使用者體感落差大 | Medium | `FALLBACK ACCEPTED: <reason>` 必印 + reason 必填；`pawai status` 顯示 fallback 標記；persona / RuleBrain 風格落差屬 Spec A 不解（Spec B 待補）|
 
 ### 10.2 Rollback
 
@@ -687,10 +725,12 @@ PR 1 可任何時候 merge 不阻塞；PR 2A 依賴 1（persona banned grep 需 
 
 **Mechanical**：
 
-| 環境 | 標準 |
-|------|------|
-| dev / no hardware | pre-start 5 條 PASS；ROS post-start 5 條預期 fail with clear hint |
-| Jetson / stack running | full 10 條 PASS |
+| 環境 | 指令 | 標準 |
+|------|------|------|
+| dev / no hardware | `pawai demo preflight --target local` | 跑 #2 (本機 `.env` 部分) + #3（persona scoped scan）兩條，PASS；其他 8 條標 SKIP（不算 fail） |
+| dev + Jetson reachable | `pawai demo preflight --target jetson`（demo stack 未啟） | pre-start 5 條全 PASS；post-start 5 條預期 fail with hint |
+| Jetson + demo stack running | `pawai demo preflight`（預設 `--target jetson`） | full 10 條 PASS |
+| Jetson + demo stack running + LLM 降級 | `pawai demo preflight --allow-fallback --reason "<text>"` | full 10 條，其中 #2 / #7 套用 fallback PASS 條件；輸出明印 `FALLBACK ACCEPTED` |
 
 加上：
 - 現有 pawai_cli test suite + 三 PR 群 touched packages tests 全綠
