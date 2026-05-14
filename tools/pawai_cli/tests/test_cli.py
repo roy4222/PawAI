@@ -520,12 +520,19 @@ def test_demo_stop_own_stale_lock_releases_without_force(monkeypatch):
     mock_rel.assert_called_once_with(user="lubaiyu", host="Roy422deMacBook-Pro.local")
 
 
-def test_health_brain_passes_jetson_host_env():
+def test_health_brain_passes_jetson_host_env(monkeypatch):
+    """Detected live Tailscale peer must override whatever JETSON_TAILSCALE_IP
+    the env happened to have (e.g. stale .env.local from a previous Jetson
+    move). This is the real-world bug `_build_demo_env` had to address."""
     captured_env = {}
 
     def fake_stream(argv, cwd=None, env=None):
         captured_env.update(env or {})
         return 0
+
+    # Simulate a stale .env.local value that disagrees with the live peer.
+    monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")
+    monkeypatch.delenv("PAWAI_TRUST_ENV_IP", raising=False)
 
     with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
          patch("pawai_cli.main.shell.jetson_host", return_value="jetson"), \
@@ -536,7 +543,43 @@ def test_health_brain_passes_jetson_host_env():
 
     assert result.exit_code == 0
     assert captured_env.get("JETSON_HOST") == "jetson"
-    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.83.109.89"
+    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.83.109.89", \
+        "detected live peer must override stale env value"
+    # Operator should see WHY the IP changed (avoid silent override).
+    assert "100.99.99.99" in result.output and "100.83.109.89" in result.output
+
+
+def test_build_demo_env_trust_env_opt_out(monkeypatch):
+    """Operators can opt out of override with PAWAI_TRUST_ENV_IP=1 (hand-
+    crafted testing setup, intentional override, etc)."""
+    from pawai_cli import main as cli_main
+
+    monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")
+    monkeypatch.setenv("PAWAI_TRUST_ENV_IP", "1")
+    called_detection = []
+    with patch("pawai_cli.network.find_jetson_peer",
+               side_effect=lambda **kw: called_detection.append(1) or
+                                          {"hostname": "j", "ip": "100.83.109.89", "online": True}):
+        env = cli_main._build_demo_env()
+
+    assert env["JETSON_TAILSCALE_IP"] == "100.99.99.99", \
+        "PAWAI_TRUST_ENV_IP=1 must keep env value untouched"
+    assert called_detection == [], \
+        "opt-out should short-circuit before network probe"
+
+
+def test_build_demo_env_keeps_env_when_peer_offline(monkeypatch):
+    """If Tailscale peer is offline (or detection fails), keep env as-is —
+    don't blank out a value the operator may still want to try."""
+    from pawai_cli import main as cli_main
+
+    monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")
+    monkeypatch.delenv("PAWAI_TRUST_ENV_IP", raising=False)
+    with patch("pawai_cli.network.find_jetson_peer",
+               return_value={"hostname": "j", "ip": "100.83.109.89", "online": False}):
+        env = cli_main._build_demo_env()
+
+    assert env["JETSON_TAILSCALE_IP"] == "100.99.99.99"
 
 
 def _reachable_live_status():

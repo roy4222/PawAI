@@ -621,16 +621,48 @@ def _invoke_start_sh(no_studio: bool, brain_only: bool) -> int:
 
 
 def _build_demo_env() -> dict:
-    """Compose env for start.sh and inject detected Tailscale IP when possible."""
+    """Compose env for start.sh and resolve JETSON_TAILSCALE_IP.
+
+    Resolution priority (highest first):
+      1. PAWAI_TRUST_ENV_IP=1 → trust whatever the env already has, never
+         override. Escape hatch for hand-crafted testing setups.
+      2. Live Tailscale peer (online + has IP) → use detected. If the env
+         had a different value, emit a one-line warning so the operator
+         can see they're running against a different IP than .env.local
+         claims.
+      3. Otherwise (no peer / offline / detection threw) → keep env as-is.
+
+    Detection wins by default because the most common multi-user failure
+    is a stale .env.local IP surviving a Jetson move / Tailscale rotation.
+    `pawai doctor` already flags this, but `health brain` and `demo start`
+    must actually CONNECT to the right IP, not just warn about it.
+    """
     env = os.environ.copy()
-    if not env.get("JETSON_TAILSCALE_IP"):
-        try:
-            from . import network
-            peer = network.find_jetson_peer(hint=shell.jetson_hostname_hint())
-            if peer and peer.get("online") and peer.get("ip"):
-                env["JETSON_TAILSCALE_IP"] = peer["ip"]
-        except Exception:
-            pass
+    if env.get("PAWAI_TRUST_ENV_IP") == "1":
+        return env
+
+    try:
+        from . import network
+        peer = network.find_jetson_peer(hint=shell.jetson_hostname_hint())
+    except Exception:
+        return env
+
+    if not (peer and peer.get("online") and peer.get("ip")):
+        return env
+
+    detected = peer["ip"]
+    current = env.get("JETSON_TAILSCALE_IP", "").strip()
+    if not current:
+        env["JETSON_TAILSCALE_IP"] = detected
+    elif current != detected:
+        click.echo(
+            f"⚠ JETSON_TAILSCALE_IP={current} differs from live Tailscale "
+            f"peer {detected}. Using detected."
+        )
+        click.echo(
+            "  (Update .env.local, or set PAWAI_TRUST_ENV_IP=1 to keep env value.)"
+        )
+        env["JETSON_TAILSCALE_IP"] = detected
     return env
 
 
