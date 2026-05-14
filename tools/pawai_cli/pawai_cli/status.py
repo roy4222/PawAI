@@ -28,6 +28,15 @@ def _current_branch() -> str:
 
 
 @dataclass
+class Go2DriverProcess:
+    pid: int
+    user: str
+    tty: str
+    started: str
+    cmd: str
+
+
+@dataclass
 class LiveStatus:
     tmux: str
     ros_nodes: str
@@ -78,6 +87,44 @@ def collect(short: bool = False) -> LiveStatus:
     )
     reachable = tmux.code != 127 and tmux.code != 255
     return LiveStatus(tmux.stdout.strip(), ros_nodes, git.stdout.strip(), last.stdout.strip(), reachable)
+
+
+def collect_go2_drivers() -> list[Go2DriverProcess]:
+    """Find Go2 driver-related processes on Jetson.
+
+    Returns owner / PID / start time for any process whose cmdline matches
+    `go2_driver_node` or `go2_robot_sdk` (the launch). Used to surface drivers
+    that were started outside `pawai demo start` and therefore bypassed the
+    lock. Empty list = nothing matching, or Jetson unreachable.
+    """
+    cmd = (
+        "ps -eo pid,user,tty,lstart,cmd --no-headers 2>/dev/null | "
+        "grep -E 'go2_driver_node|go2_robot_sdk' | "
+        "grep -v grep || true"
+    )
+    result = shell.run_remote(cmd, timeout=8)
+    if not result.ok or not result.stdout.strip():
+        return []
+    procs: list[Go2DriverProcess] = []
+    for line in result.stdout.strip().splitlines():
+        # ps lstart prints 5 whitespace-separated tokens, e.g.
+        #   "Wed May 14 19:30:01 2026"
+        # so the fixed prefix is: pid user tty <5 lstart tokens> cmd...
+        parts = line.split(None, 8)
+        if len(parts) < 9:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        procs.append(Go2DriverProcess(
+            pid=pid,
+            user=parts[1],
+            tty=parts[2],
+            started=" ".join(parts[3:8]),
+            cmd=parts[8],
+        ))
+    return procs
 
 
 def _ros_remote(command: str, timeout: int = 6) -> str:
@@ -202,6 +249,24 @@ def print_status(short: bool = False) -> LiveStatus:
         print(f"  tmux: {getattr(lk, 'tmux_session', 'demo')}")
         print(f"  state: {lk.state}{suffix}")
         print(f"  started: {lk.start_time}")
+
+    # Go2 driver processes — surface direct ros2 launch / SSH-tmux bypass.
+    # Note: proc.user is the Jetson-side process owner (usually `jetson`),
+    # whereas lk.user is the laptop user that ran `pawai demo start`. The two
+    # are not directly comparable — do NOT use proc.user to validate lock
+    # ownership. Until we add a tracked demo session id / heartbeat, the only
+    # reliable signal is "drivers exist but no lock at all".
+    drivers = collect_go2_drivers()
+    print("\nGo2 driver processes:")
+    if not drivers:
+        print("  (none)")
+    else:
+        for proc in drivers:
+            cmd_short = proc.cmd if len(proc.cmd) <= 90 else proc.cmd[:87] + "..."
+            print(f"  pid={proc.pid} user={proc.user} tty={proc.tty} started={proc.started}")
+            print(f"    cmd: {cmd_short}")
+        if lk is None:
+            print("  ⚠ drivers running with NO demo lock — orphan or direct `ros2 launch`")
 
     nav_running = st.has_nav_capability or (lk is not None and getattr(lk, "lane", "brain") == "nav_capability")
     if nav_running:

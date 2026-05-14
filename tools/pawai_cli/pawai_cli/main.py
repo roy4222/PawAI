@@ -743,6 +743,48 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
     sha = _current_sha_short()
 
     existing = Lock.read()
+
+    # Orphan Go2 driver preflight (P1): drivers running on Jetson with NO lock
+    # are either a direct `ros2 launch`, a manual SSH-tmux session, or leftover
+    # from a crashed `pawai demo start`. We do NOT check this branch when a lock
+    # exists — without a tracked session id / heartbeat we can't reliably tell
+    # whether the running drivers belong to the current lock owner.
+    if existing is None:
+        from .status import collect_go2_drivers
+        orphans = collect_go2_drivers()
+        if orphans:
+            click.echo("⚠ Go2 driver processes detected on Jetson with no demo lock:")
+            for proc in orphans[:5]:
+                cmd_short = proc.cmd if len(proc.cmd) <= 70 else proc.cmd[:67] + "..."
+                click.echo(f"  pid={proc.pid} user={proc.user} tty={proc.tty} cmd={cmd_short}")
+            if len(orphans) > 5:
+                click.echo(f"  (+{len(orphans) - 5} more)")
+            click.echo(
+                "These were started outside `pawai demo start` (direct `ros2 launch`, "
+                "manual tmux, or leftover from a crashed session)."
+            )
+            click.echo("Run `pawai status` for the full picture before continuing.")
+            if force:
+                click.echo("--force: cleaning orphan drivers before acquiring lock.")
+                rc = _invoke_cleanup_sh()
+                if rc != 0:
+                    click.echo("Cleanup failed — aborting.")
+                    sys.exit(rc)
+            elif yes:
+                click.echo(
+                    "`-y` does not auto-clean orphan drivers. "
+                    "Use --force, or run `pawai demo stop --force` to clear, then retry."
+                )
+                sys.exit(2)
+            else:
+                if not click.confirm("Cleanup orphan drivers and continue?", default=False):
+                    click.echo("Aborted.")
+                    sys.exit(0)
+                rc = _invoke_cleanup_sh()
+                if rc != 0:
+                    click.echo("Cleanup failed — aborting.")
+                    sys.exit(rc)
+
     if existing is not None:
         if is_own_lock(existing, user, host):
             click.echo(f"Existing lock is yours ({existing.state}). Restarting demo.")

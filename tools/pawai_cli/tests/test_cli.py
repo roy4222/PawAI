@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 from click.testing import CliRunner
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -543,7 +544,8 @@ def test_status_shows_lock_state(monkeypatch):
               state="running",
               start_time=datetime.now(timezone.utc).isoformat())
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
-         patch("pawai_cli.status.Lock.read", return_value=lk):
+         patch("pawai_cli.status.Lock.read", return_value=lk), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "alice" in result.output.lower()
@@ -568,7 +570,8 @@ def test_status_shows_nav_capability_block(monkeypatch):
     )
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status.Lock.read", return_value=lk), \
-         patch("pawai_cli.status.collect_nav_capability_status", return_value=nav):
+         patch("pawai_cli.status.collect_nav_capability_status", return_value=nav), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
         runner = CliRunner()
         result = runner.invoke(cli, ["status", "--short"])
     assert "nav capability" in result.output.lower()
@@ -584,7 +587,8 @@ def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
     }
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status._read_last_deploy_remote", return_value=last_deploy), \
-         patch("pawai_cli.status._current_branch", return_value="feat/new"):
+         patch("pawai_cli.status._current_branch", return_value="feat/new"), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "mismatch" in result.output.lower() or "feat/old" in result.output
@@ -597,10 +601,82 @@ def test_status_shows_stale_running_warning(monkeypatch):
     lk = Lock(user="alice", host="h", branch="b", sha="s",
               state="running", start_time=old)
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
-         patch("pawai_cli.status.Lock.read", return_value=lk):
+         patch("pawai_cli.status.Lock.read", return_value=lk), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "stale" in result.output.lower()
+
+
+# ─── Go2 driver process detection (P0) ─────────────────────────────────────
+
+def test_collect_go2_drivers_parses_ps_output():
+    from pawai_cli.status import collect_go2_drivers
+    from pawai_cli.shell import Result
+    sample = (
+        "12345 jetson   pts/0    Wed May 14 19:30:01 2026 /usr/bin/python3 "
+        "/opt/ros/humble/lib/go2_robot_sdk/go2_driver_node\n"
+        "12350 jetson   pts/0    Wed May 14 19:30:01 2026 "
+        "ros2 launch go2_robot_sdk robot.launch.py\n"
+    )
+    with patch("pawai_cli.status.shell.run_remote",
+               return_value=Result(code=0, stdout=sample, stderr="")):
+        procs = collect_go2_drivers()
+    assert len(procs) == 2
+    assert procs[0].pid == 12345
+    assert procs[0].user == "jetson"
+    assert procs[0].tty == "pts/0"
+    assert procs[0].started == "Wed May 14 19:30:01 2026"
+    assert "go2_driver_node" in procs[0].cmd
+    assert procs[1].pid == 12350
+
+
+def test_collect_go2_drivers_empty_when_no_match():
+    from pawai_cli.status import collect_go2_drivers
+    from pawai_cli.shell import Result
+    with patch("pawai_cli.status.shell.run_remote",
+               return_value=Result(code=0, stdout="", stderr="")):
+        assert collect_go2_drivers() == []
+
+
+def test_status_warns_when_driver_running_without_lock():
+    from pawai_cli.status import Go2DriverProcess
+    procs = [Go2DriverProcess(
+        pid=12345, user="kirk7", tty="pts/0",
+        started="Wed May 14 19:30:01 2026",
+        cmd="/usr/bin/python3 .../go2_driver_node",
+    )]
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=procs):
+        result = CliRunner().invoke(cli, ["status"])
+    assert "pid=12345" in result.output
+    assert "kirk7" in result.output
+    assert "NO demo lock" in result.output
+
+
+def test_status_does_not_warn_on_user_mismatch_when_lock_present():
+    """proc.user is always the Jetson-side process owner (typically `jetson`)
+    whereas lk.user is the laptop user. Comparing them produces false alarms,
+    so we must NOT emit a mismatch warning when a lock is present."""
+    from pawai_cli.lock import Lock
+    from pawai_cli.status import Go2DriverProcess
+    lk = Lock(user="alice", host="alice-mac", branch="main", sha="abc",
+              state="running",
+              start_time=datetime.now(timezone.utc).isoformat())
+    procs = [Go2DriverProcess(
+        pid=12345, user="jetson", tty="pts/0",
+        started="Wed May 14 19:30:01 2026",
+        cmd="/usr/bin/python3 .../go2_driver_node",
+    )]
+    with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
+         patch("pawai_cli.status.Lock.read", return_value=lk), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=procs):
+        result = CliRunner().invoke(cli, ["status"])
+    # Driver is listed but no mismatch warning is emitted.
+    assert "pid=12345" in result.output
+    assert "lock owner is" not in result.output
+    assert "driver user(s)" not in result.output
 
 
 def test_status_short_skips_ros_node_list_ssh_call():
@@ -912,3 +988,116 @@ def test_net_wifi_forget_proceeds_with_yes_flag():
     assert result.exit_code == 0
     mock_forget.assert_called_once_with("OldNet")
 
+
+
+# ─── P1: orphan Go2 driver preflight on `demo start` ──────────────────────
+
+def _orphan_proc(pid=12345, user="jetson"):
+    from pawai_cli.status import Go2DriverProcess
+    return Go2DriverProcess(
+        pid=pid, user=user, tty="pts/0",
+        started="Wed May 14 19:30:01 2026",
+        cmd="/usr/bin/python3 .../go2_driver_node",
+    )
+
+
+def test_demo_start_orphan_driver_blocks_with_dash_y(monkeypatch):
+    """`-y` must NOT auto-clean orphan drivers — that would let CI / new users
+    silently kill someone else's manual session. Exit 2 with hint."""
+    monkeypatch.setenv("USER", "bob")
+    cleanup_called: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.main.collect_go2_drivers", return_value=[_orphan_proc()],
+               create=True), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[_orphan_proc()]), \
+         patch("pawai_cli.main._invoke_cleanup_sh",
+               side_effect=lambda: cleanup_called.append(1) or 0), \
+         patch("pawai_cli.lock.Lock.acquire") as acquire, \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0):
+        result = CliRunner().invoke(cli, ["demo", "start", "-y"])
+    assert result.exit_code == 2
+    assert "orphan" in result.output.lower() or "-y" in result.output
+    assert cleanup_called == []
+    assert not acquire.called
+
+
+def test_demo_start_orphan_driver_force_cleans_and_proceeds(monkeypatch):
+    monkeypatch.setenv("USER", "bob")
+    calls: list = []
+    from pawai_cli.lock import Lock
+    new_lock = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat())
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[_orphan_proc()]), \
+         patch("pawai_cli.main._invoke_cleanup_sh",
+               side_effect=lambda: calls.append("cleanup") or 0), \
+         patch("pawai_cli.lock.Lock.acquire",
+               side_effect=lambda **kw: calls.append("acquire") or new_lock), \
+         patch("pawai_cli.main._invoke_start_sh",
+               side_effect=lambda **kw: calls.append("start") or 0), \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        result = CliRunner().invoke(cli, ["demo", "start", "--force"])
+    assert result.exit_code == 0, result.output
+    assert calls == ["cleanup", "acquire", "start"]
+
+
+def test_demo_start_orphan_driver_interactive_yes_cleans(monkeypatch):
+    monkeypatch.setenv("USER", "bob")
+    calls: list = []
+    from pawai_cli.lock import Lock
+    new_lock = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat())
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[_orphan_proc()]), \
+         patch("pawai_cli.main._invoke_cleanup_sh",
+               side_effect=lambda: calls.append("cleanup") or 0), \
+         patch("pawai_cli.lock.Lock.acquire",
+               side_effect=lambda **kw: calls.append("acquire") or new_lock), \
+         patch("pawai_cli.main._invoke_start_sh",
+               side_effect=lambda **kw: calls.append("start") or 0), \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        result = CliRunner().invoke(cli, ["demo", "start"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert calls == ["cleanup", "acquire", "start"]
+
+
+def test_demo_start_orphan_driver_interactive_no_aborts(monkeypatch):
+    monkeypatch.setenv("USER", "bob")
+    calls: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[_orphan_proc()]), \
+         patch("pawai_cli.main._invoke_cleanup_sh",
+               side_effect=lambda: calls.append("cleanup") or 0), \
+         patch("pawai_cli.lock.Lock.acquire") as acquire:
+        result = CliRunner().invoke(cli, ["demo", "start"], input="n\n")
+    assert result.exit_code == 0
+    assert calls == []
+    assert not acquire.called
+
+
+def test_demo_start_no_orphan_check_when_lock_present(monkeypatch):
+    """Spec: when a lock exists, do NOT run orphan check — we can't tell if the
+    drivers belong to the lock owner without a tracked session id."""
+    from pawai_cli.lock import Lock
+    monkeypatch.setenv("USER", "bob")
+    own_lock = Lock(user="bob", host=platform.node(), branch="main", sha="a",
+                    state="running",
+                    start_time=datetime.now(timezone.utc).isoformat())
+    orphan_check_called: list = []
+
+    def _track_orphans():
+        orphan_check_called.append(1)
+        return [_orphan_proc()]
+
+    with patch("pawai_cli.lock.Lock.read", return_value=own_lock), \
+         patch("pawai_cli.status.collect_go2_drivers", side_effect=_track_orphans), \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.release", return_value=True), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=own_lock), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+        result = CliRunner().invoke(cli, ["demo", "start"])
+    assert result.exit_code == 0, result.output
+    assert orphan_check_called == [], "orphan check must not run when lock present"
