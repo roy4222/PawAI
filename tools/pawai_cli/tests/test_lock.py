@@ -161,3 +161,54 @@ def test_release_if_owned_quotes_user_and_host(monkeypatch):
     assert Lock.release_if_owned(user="a' ; echo bad", host="h$(echo bad)") is True
     assert "EXPECT_USER='a'\"'\"' ; echo bad'" in commands[0]
     assert "EXPECT_HOST='h$(echo bad)'" in commands[0]
+
+
+def test_transition_if_owned_writes_when_owner_matches(monkeypatch):
+    commands: list[str] = []
+
+    def stub(cmd, timeout=None):
+        commands.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    lk = Lock(user="alice", host="alice-mac", branch="main", sha="abc",
+              state="starting",
+              start_time="2026-05-13T08:00:00+00:00")
+    assert lk.transition_if_owned("running", user="alice", host="alice-mac") is True
+    assert "EXPECT_USER=alice" in commands[0]
+    assert "EXPECT_HOST=alice-mac" in commands[0]
+    assert "PAYLOAD=" in commands[0]
+    assert "python3 -c" in commands[0]
+
+
+def test_transition_if_owned_refuses_when_owner_changed(monkeypatch):
+    """If a force-takeover replaced our lock during start.sh, the embedded
+    python script exits 17 → transition_if_owned must return False so the
+    caller can fail loudly instead of corrupting the new owner's lock."""
+    def stub(cmd, timeout=None):
+        return Result(code=17, stdout="", stderr="not owner")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    lk = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+              state="starting",
+              start_time="2026-05-13T08:00:00+00:00")
+    assert lk.transition_if_owned("running", user="bob", host="bob-mac") is False
+
+
+def test_transition_if_owned_quotes_user_and_host(monkeypatch):
+    """Shell metachars in user / host / payload must be shlex-quoted, mirroring
+    the same hardening as release_if_owned."""
+    commands: list[str] = []
+
+    def stub(cmd, timeout=None):
+        commands.append(cmd)
+        return Result(code=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pawai_cli.lock.shell.run_remote", stub)
+    lk = Lock(user="a' ; echo bad", host="h$(echo bad)",
+              branch="b", sha="s",
+              state="starting",
+              start_time="2026-05-13T08:00:00+00:00")
+    lk.transition_if_owned("running", user="a' ; echo bad", host="h$(echo bad)")
+    assert "EXPECT_USER='a'\"'\"' ; echo bad'" in commands[0]
+    assert "EXPECT_HOST='h$(echo bad)'" in commands[0]

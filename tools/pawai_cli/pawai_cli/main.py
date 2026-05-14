@@ -792,7 +792,7 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
             if rc != 0:
                 click.echo("Existing lane cleanup failed — keeping lock for investigation.")
                 sys.exit(rc)
-            Lock.release()
+            Lock.release_if_owned(user=user, host=host)
         else:
             stale = is_stale(existing)
             if stale:
@@ -813,7 +813,9 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
                 click.echo("Previous lane cleanup failed — keeping lock for investigation.")
                 sys.exit(rc)
             click.echo(f"--force: clearing {existing.user}'s lock")
-            Lock.release()
+            # Guard the take-over window: if someone raced in and replaced
+            # the lock between our verification and now, don't clobber it.
+            Lock.release_if_owned(user=existing.user, host=existing.host)
 
     # Acquire starting lock
     lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha, state="starting",
@@ -826,10 +828,22 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
         _invoke_start_sh(no_studio=no_studio, brain_only=brain_only)
     if rc != 0:
         click.echo("Demo start failed — releasing lock.")
-        Lock.release()
+        # Owner-aware: if a force-takeover replaced our lock during start.sh,
+        # we must NOT delete the new owner's lock.
+        Lock.release_if_owned(user=user, host=host)
         sys.exit(rc)
 
-    lk.transition_to("running")
+    if not lk.transition_if_owned("running", user=user, host=host):
+        # Lock got force-taken (or vanished) while start.sh was running.
+        # The demo processes are now up but no longer "ours" — fail loudly
+        # so the operator can investigate rather than silently corrupting
+        # whoever's lock is currently there.
+        click.echo(
+            "⚠ Demo started, but our lock was taken over during startup. "
+            "NOT marking running to avoid corrupting another user's lock. "
+            "Run `pawai status` to see current owner."
+        )
+        sys.exit(2)
     click.echo(f"✓ Demo running (lane: {lane}, lock owner: {user}@{host})")
 
 
@@ -853,13 +867,30 @@ def demo_stop(force: bool) -> None:
         sys.exit(2)
 
     rc = _cleanup_for_lock(existing)
-    if force and not is_own_lock(existing, user, host):
-        Lock.release()
-    else:
-        if is_own_lock(existing, user, host) and is_stale(existing):
-            click.echo(f"Reclaiming your own stale {existing.state} lock (started {existing.start_time}).")
-        if not Lock.release_if_owned(user=existing.user, host=existing.host):
-            click.echo("⚠ Lock release skipped — another process holds the flock or lock changed.")
+    if rc != 0:
+        # Cleanup failed — KEEP the lock as evidence. Releasing now would
+        # leave the team with "no lock + tmux still alive", losing the
+        # only record of who was running and what state cleanup got stuck in.
+        click.echo(
+            f"⚠ Cleanup failed (rc={rc}). Lock for {existing.user}@{existing.host} "
+            f"kept on Jetson for investigation."
+        )
+        click.echo(
+            "  Inspect: `pawai status` then `ssh $JETSON_HOST 'tmux ls; "
+            f"pgrep -af go2_driver_node'`"
+        )
+        click.echo("  Retry once root cause is clear: `pawai demo stop --force`")
+        sys.exit(rc)
+
+    # Cleanup OK → release. release_if_owned guards against the race where
+    # someone else acquired between our cleanup and release.
+    if is_own_lock(existing, user, host) and is_stale(existing):
+        click.echo(f"Reclaiming your own stale {existing.state} lock (started {existing.start_time}).")
+    if not Lock.release_if_owned(user=existing.user, host=existing.host):
+        click.echo(
+            "⚠ Lock release skipped — lock no longer matches expected owner "
+            "(another process changed it). Run `pawai status` to verify."
+        )
     sys.exit(rc)
 
 

@@ -84,7 +84,8 @@ class Lock:
         return None  # exhausted retries
 
     def transition_to(self, new_state: str) -> bool:
-        """Update state field on existing lock. Caller must own it."""
+        """DEPRECATED — use `transition_if_owned`. Writes without owner check;
+        kept only to avoid breaking callers that haven't migrated yet."""
         now = datetime.now(timezone.utc).isoformat()
         updated = asdict(self)
         updated["state"] = new_state
@@ -97,8 +98,46 @@ class Lock:
         )
         return shell.run_remote(cmd, timeout=10).ok
 
+    def transition_if_owned(self, new_state: str, user: str, host: str) -> bool:
+        """Atomically update state only if lock on Jetson still matches user/host.
+
+        Prevents a long-running `start.sh` from silently overwriting a lock
+        that was force-taken during that window. Returns False if the lock
+        was missing or had a different owner.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        updated = asdict(self)
+        updated["state"] = new_state
+        updated["start_time"] = now
+        payload = json.dumps(updated)
+        lock_path = _remote_lock_path()
+        py_script = (
+            "import json, os, sys\n"
+            "p = os.environ['LOCK_FILE']\n"
+            "if not os.path.exists(p):\n"
+            "    sys.exit(17)\n"
+            "d = json.load(open(p))\n"
+            "if d.get('user') != os.environ['EXPECT_USER'] "
+            "or d.get('host') != os.environ['EXPECT_HOST']:\n"
+            "    sys.exit(17)\n"
+            "open(p + '.tmp', 'w').write(os.environ['PAYLOAD'])\n"
+            "os.replace(p + '.tmp', p)\n"
+            "sys.exit(0)\n"
+        )
+        cmd = (
+            f"EXPECT_USER={shlex.quote(user)} "
+            f"EXPECT_HOST={shlex.quote(host)} "
+            f"LOCK_FILE={shlex.quote(lock_path)} "
+            f"PAYLOAD={shlex.quote(payload)} "
+            f"flock -n {shlex.quote(LOCK_FLOCK_PATH)} "
+            f"python3 -c {shlex.quote(py_script)}"
+        )
+        return shell.run_remote(cmd, timeout=10).code == 0
+
     @classmethod
     def release(cls) -> bool:
+        """DEPRECATED — use `release_if_owned`. Bare unlink kept for
+        emergency manual cleanup only; production callers must verify owner."""
         result = shell.run_remote(f"rm -f {_remote_lock_path()}", timeout=5)
         return result.ok
 

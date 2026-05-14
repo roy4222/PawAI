@@ -395,15 +395,19 @@ def test_demo_start_force_takes_over(monkeypatch):
 
     with patch("pawai_cli.lock.Lock.read", return_value=other_lock), \
          patch("pawai_cli.main._invoke_cleanup_sh", return_value=0) as cleanup, \
-         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True), \
          patch("pawai_cli.lock.Lock.acquire", return_value=other_lock), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         runner.invoke(cli, ["demo", "start", "--force"])
 
     assert cleanup.called
-    assert released == [1], "Expected lock release on --force takeover"
+    # The take-over MUST target the OTHER user's lock, not our own — proves
+    # we use release_if_owned(existing.user, existing.host).
+    assert ("alice", "alice-mac") in released, \
+        f"Expected release_if_owned to target alice's lock, got {released}"
 
 
 def test_demo_start_force_cleans_old_nav_lane_before_takeover(monkeypatch):
@@ -422,13 +426,13 @@ def test_demo_start_force_cleans_old_nav_lane_before_takeover(monkeypatch):
     with patch("pawai_cli.lock.Lock.read", return_value=other_lock), \
          patch("pawai_cli.main._invoke_nav_cleanup_sh",
                side_effect=lambda: calls.append("nav_cleanup") or 0), \
-         patch("pawai_cli.lock.Lock.release",
-               side_effect=lambda: calls.append("release") or True), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: calls.append("release") or True), \
          patch("pawai_cli.lock.Lock.acquire",
                side_effect=lambda **kwargs: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kwargs: calls.append("brain_start") or 0), \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "start", "--force"])
 
@@ -444,7 +448,8 @@ def test_demo_stop_refuses_other_users_lock(monkeypatch):
     monkeypatch.setenv("USER", "bob")
     released: list = []
     with patch("pawai_cli.lock.Lock.read", return_value=other), \
-         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True):
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "stop"])
     assert released == [], "demo stop must not release another user's lock by default"
@@ -459,11 +464,13 @@ def test_demo_stop_force_releases_other_lock(monkeypatch):
     monkeypatch.setenv("USER", "bob")
     released: list = []
     with patch("pawai_cli.lock.Lock.read", return_value=other), \
-         patch("pawai_cli.lock.Lock.release", side_effect=lambda: released.append(1) or True), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True), \
          patch("pawai_cli.main._invoke_cleanup_sh", return_value=0):
         runner = CliRunner()
         runner.invoke(cli, ["demo", "stop", "--force"])
-    assert released == [1]
+    # Force takeover MUST target the other user's lock — never bob's own.
+    assert released == [("alice", "alice-mac")]
 
 
 def test_demo_stop_routes_nav_lock_to_nav_cleanup(monkeypatch):
@@ -788,7 +795,7 @@ def test_demo_start_nav_capability_invokes_nav_start(monkeypatch):
          patch("pawai_cli.lock.Lock.acquire", side_effect=fake_acquire), \
          patch("pawai_cli.main._invoke_nav_start_sh", return_value=0) as nav_start, \
          patch("pawai_cli.main._invoke_start_sh", return_value=0) as brain_start, \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "start", "--nav", "capability"])
 
@@ -1036,7 +1043,7 @@ def test_demo_start_orphan_driver_force_cleans_and_proceeds(monkeypatch):
                side_effect=lambda **kw: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kw: calls.append("start") or 0), \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start", "--force"])
     assert result.exit_code == 0, result.output
     assert calls == ["cleanup", "acquire", "start"]
@@ -1057,7 +1064,7 @@ def test_demo_start_orphan_driver_interactive_yes_cleans(monkeypatch):
                side_effect=lambda **kw: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kw: calls.append("start") or 0), \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start"], input="y\n")
     assert result.exit_code == 0, result.output
     assert calls == ["cleanup", "acquire", "start"]
@@ -1097,7 +1104,91 @@ def test_demo_start_no_orphan_check_when_lock_present(monkeypatch):
          patch("pawai_cli.lock.Lock.release", return_value=True), \
          patch("pawai_cli.lock.Lock.acquire", return_value=own_lock), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
-         patch("pawai_cli.lock.Lock.transition_to", return_value=True):
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start"])
     assert result.exit_code == 0, result.output
     assert orphan_check_called == [], "orphan check must not run when lock present"
+
+
+# ─── Race-fix tests for lock owner guard ──────────────────────────────────
+
+def test_demo_start_failure_uses_release_if_owned_not_bare_release(monkeypatch):
+    """If start.sh fails, we must NOT bare-release: a force-takeover may have
+    replaced our lock during the start.sh window, and bare release would
+    delete the new owner's lock."""
+    from pawai_cli.lock import Lock
+    monkeypatch.setenv("USER", "bob")
+    lk = Lock(user="bob", host=platform.node(), branch="main", sha="b",
+              state="starting",
+              start_time=datetime.now(timezone.utc).isoformat())
+    released: list = []
+    bare_release_called: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=lk), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=7), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True), \
+         patch("pawai_cli.lock.Lock.release",
+               side_effect=lambda: bare_release_called.append(1) or True):
+        result = CliRunner().invoke(cli, ["demo", "start"])
+    assert result.exit_code == 7
+    assert released == [("bob", platform.node())], \
+        "start.sh failure must call release_if_owned(self), not bare release"
+    assert bare_release_called == [], "bare Lock.release() must not be invoked"
+
+
+def test_demo_start_transition_failure_does_not_corrupt_others_lock():
+    """If our lock got force-taken during start.sh, transition_if_owned returns
+    False; demo_start must surface this loudly (exit 2) rather than overwriting
+    whoever's lock is currently present."""
+    from pawai_cli.lock import Lock
+    lk = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+              state="starting",
+              start_time=datetime.now(timezone.utc).isoformat())
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=lk), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=False):
+        result = CliRunner().invoke(cli, ["demo", "start"])
+    assert result.exit_code == 2
+    assert "taken over during startup" in result.output.lower() \
+        or "not marking running" in result.output.lower()
+
+
+def test_demo_stop_force_keeps_lock_when_cleanup_fails():
+    """If cleanup fails, lock MUST remain on Jetson. Otherwise the team loses
+    the only record of who was running, and ends up with 'no lock + tmux still
+    alive' which is the worst state."""
+    from pawai_cli.lock import Lock
+    other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                 state="running",
+                 start_time=datetime.now(timezone.utc).isoformat())
+    released: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=other), \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=3), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True), \
+         patch("pawai_cli.lock.Lock.release") as bare_release:
+        result = CliRunner().invoke(cli, ["demo", "stop", "--force"])
+    assert result.exit_code == 3
+    assert released == [], "Cleanup failure must NOT release the lock"
+    assert not bare_release.called
+    assert "kept on Jetson" in result.output or "Cleanup failed" in result.output
+
+
+def test_demo_stop_force_releases_lock_only_when_cleanup_succeeds():
+    """Happy path: cleanup OK → release_if_owned(existing.user, existing.host)."""
+    from pawai_cli.lock import Lock
+    other = Lock(user="alice", host="alice-mac", branch="x", sha="a",
+                 state="running",
+                 start_time=datetime.now(timezone.utc).isoformat())
+    released: list = []
+    with patch("pawai_cli.lock.Lock.read", return_value=other), \
+         patch("pawai_cli.main._invoke_cleanup_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.release_if_owned",
+               side_effect=lambda user, host: released.append((user, host)) or True):
+        result = CliRunner().invoke(cli, ["demo", "stop", "--force"])
+    assert result.exit_code == 0
+    assert released == [("alice", "alice-mac")]
