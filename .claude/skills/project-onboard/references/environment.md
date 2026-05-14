@@ -1,40 +1,69 @@
-# 環境與部署
-
-> 最後更新：2026-03-15
+# 環境與部署（Jetson + Go2 + CLI）
 
 ## 這個模組是什麼
 
-開發環境建置、Jetson 操作要點、Go2 連線、build 流程、跨機器同步。
-不是某個 ROS2 package，而是所有模組共用的基礎設施知識。
+跨機器開發環境的基礎設施知識：Jetson 操作、Go2 連線、colcon build 流程、日常部署。
+5/11 後**主入口是 `pawai-cli`**（統一部署、狀態檢查、tmux 管理），手動 SSH/colcon 流程保留作背景知識。
 
 ## 權威文件
 
-- `docs/setup/README.md` — 環境建置總覽
-- `docs/setup/hardware/` — 硬體設置指南（Jetson、GPU server）
-- `docs/setup/software/基礎動作操作說明.md` — Go2 基礎操作
-- `docs/setup/network/網路排查.md` — 網路問題排查
-- `AGENTS.md` — 跨機器開發架構、SSH 指令、auto-sync 流程
+| 文件 | 用途 |
+|------|------|
+| `.claude/skills/pawai-cli/SKILL.md` | pawai CLI 完整命令參考（pawai doctor / status / deploy / demo）|
+| `docs/pawai_cli/team-onboarding.md` | 5 人團隊上手指南（首次設定 + 日常操作）|
+| `docs/pawai_cli/troubleshooting.md` | 故障排查（G/H/I/J 章：Jetson / Go2 / Tailscale / 網路）|
+| `docs/runbook/README.md` | 環境建置總覽（初次設定）|
 
 ## 雙平台架構
 
 | 環境 | 路徑 | 用途 |
 |------|------|------|
-| **WSL2（開發機）** | `/home/roy422/newLife/elder_and_dog` | 程式碼編輯、git、VS Code |
-| **Jetson Orin Nano** | `/home/jetson/elder_and_dog` | ROS2 runtime、colcon build、GPU 推理、Go2 連線 |
+| **Mac / Windows（開發機）** | `/Users/lubaiyu/elder_and_dog`（Mac）| 程式碼編輯、git、VS Code SSH |
+| **Jetson Orin Nano 8GB**（邊緣端）| `~/elder_and_dog` | ROS2 runtime、colcon build、推理、Go2 連線 |
+| **Go2 Pro** | 192.168.12.1（Wi-Fi）/ 192.168.123.161（Ethernet）| 運動控制、音訊播放 |
 
-- **Source of truth 是 WSL**，不要直接在 Jetson 上改 code
-- Sync 方式：`sshfs`，Jetson 的 `/home/jetson` 掛在 WSL 的 `/home/roy422/jetson`
-- Auto-sync：`~/sync start`（WSL → Jetson 單向），排除 `.git/`、`build/`、`install/`、`log/`
-- SSH target：`jetson-nano`
+**Tailscale**：Jetson IP 100.83.109.89（`jetson-nano` hostname），可從任何網路 SSH。
 
-## Go2 連線
+## pawai-cli 主入口（5/11 後）
 
-| 連線方式 | IP | 用途 |
-|---------|----|----|
-| Wi-Fi AP | 192.168.12.1 | 無線連線 |
-| Ethernet | 192.168.123.161 | 有線連線（穩定，推薦） |
+```bash
+# 診斷（開工前必跑）
+pawai doctor
 
-啟動 driver：
+# 系統狀態
+pawai status
+
+# 部署到 Jetson（sync + build + restart）
+pawai jetson deploy
+
+# Demo 啟動 / 停止
+pawai demo start
+pawai demo stop
+
+# 查 log
+pawai logs <module>
+```
+
+詳細指令與場景（換教室 IP、多人共用 Jetson、lock collision 排解）指向 `.claude/skills/pawai-cli/SKILL.md`。
+
+## Build 流程（背景知識）
+
+```bash
+# Jetson 上，必須用 zsh
+source /opt/ros/humble/setup.zsh        # setup.bash 不可混用
+
+colcon build                                         # 全部
+colcon build --packages-select speech_processor      # 單一
+colcon build --packages-select face_perception       # 人臉模組
+
+source install/setup.zsh                 # build 後必須重新 source
+```
+
+**setuptools 版本限制**：Jetson 必須 `< 70`（setuptools 80+ 拿掉 `--editable` flag → `setup.py shim` 失敗）。
+修法：`uv pip install "setuptools<70"`（已知好版本：69.5.1）。
+
+## Go2 連線（背景知識）
+
 ```bash
 export ROBOT_IP="192.168.123.161"
 export CONN_TYPE="webrtc"
@@ -42,66 +71,30 @@ ros2 launch go2_robot_sdk robot.launch.py \
   enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false
 ```
 
-## Build 流程
-
-```bash
-# Jetson 上
-source /opt/ros/humble/setup.zsh        # 注意是 .zsh
-
-colcon build                                         # 全部
-colcon build --packages-select go2_robot_sdk         # 單一
-colcon build --packages-select speech_processor      # 語音
-
-source install/setup.zsh                 # build 後必須重新 source
-```
-
-- Launch 檔案改動不需 rebuild，重啟即可
-- Python 程式碼改動必須 rebuild + re-source
-- `setup.bash` 和 `setup.zsh` 不可混用
-
-## 核心程式目錄
-
-| 目錄 | 用途 |
-|------|------|
-| `go2_robot_sdk/` | Go2 驅動，Clean Architecture 分層 |
-| `go2_interfaces/` | 自訂 ROS2 訊息（`WebRtcReq.msg`） |
-| `speech_processor/` | 語音模組全套 |
-| `scripts/` | 啟動/測試/清理腳本 |
-| `go2_robot_sdk/config/` | SLAM/Nav2/CycloneDDS/Joystick 參數 |
-| `go2_robot_sdk/launch/robot.launch.py` | 主 launch |
-
-## 目前狀態
-
-[DONE] — 開發環境穩定，WSL↔Jetson 同步正常，Go2 連線可用。
-
 ## 已知陷阱
 
-- **Jetson shell 是 zsh**：所有 source 指令用 `.zsh`，用 `.bash` 會環境不完整
-- **zsh glob 炸陣列**：ROS2 參數含陣列時要加引號 `'["item"]'`，或 `setopt nonomatch`
-- **麥克風裝置漂移**：ALSA default 不一定指向 HyperX，啟動時需指定 `input_device:=0`
-- **rsync --delete 會清 build/**：sync 時需 `--exclude` 或 `--filter=':- .gitignore'`
-- **ROS_DOMAIN_ID**：所有 node 必須一致，否則互相看不到 topic
-- **Jetson 記憶體 8GB**：D435 + YuNet + ASR + TTS + ROS2 同時跑要保留 >= 0.8GB 餘量，展示模式關閉 RViz/Foxglove/Nav2/SLAM
-- **CycloneDDS 設定**：跨機器通訊需要 `go2_robot_sdk/config/cyclonedds.xml`
+- **Jetson shell 是 zsh**：`source setup.zsh`，不是 `setup.bash`，兩者不可混用
+- **tmux 不繼承 `LD_LIBRARY_PATH`**：啟動腳本中必須 export（含 `~/.local/ctranslate2-cuda/lib`）
+- **setuptools < 70**：否則 colcon build 失敗（`option --editable not recognized`）
+- **多 driver instance 殘留**：`killall python3` 只殺 launch parent，C++ 子 process 需逐一 `pkill`
+- **Go2 OTA 自動更新**：連外網 Wi-Fi 會背景更新韌體，建議用 Ethernet 直連（192.168.123.161）
+- **Jetson 記憶體 8GB**：D435 + YuNet + ASR + TTS + ROS2 同時跑保留 ≥ 0.8GB 餘量，Demo 關 RViz/Foxglove
+- **rsync 只搬源碼**：`install/` 目錄不會同步，感覺 brain 新模式沒生效時跑 `colcon build`
+- **ROS_DOMAIN_ID**：所有 node 必須一致，否則看不到彼此 topic
 
 ## 開發入口
 
-- **第一次建置**：讀 `docs/setup/README.md`，照步驟設定 WSL + Jetson
-- **Go2 連線除錯**：`ros2 topic list` 確認 driver 輸出，`ros2 topic info /webrtc_req -v` 確認訂閱者
-- **新增 ROS2 節點**：建檔 → 更新 `setup.py` entry_points → `colcon build` → `source install/setup.zsh` → `ros2 run`
-
-## 驗收方式
-
 ```bash
-# 確認 ROS2 環境正常
+# 確認 ROS2 環境
 ros2 topic list
 
-# 確認 Go2 driver 運作
-ros2 topic echo /webrtc_req
+# 確認 Go2 driver 輸出
+ros2 topic info /webrtc_req -v
 
-# 確認 Jetson 同步
-ssh jetson-nano "ls /home/jetson/elder_and_dog/speech_processor/"
+# 新增 ROS2 節點標準流程
+# 1. 建節點檔 → 2. 更新 setup.py entry_points
+# 3. colcon build → 4. source install/setup.zsh → 5. ros2 run
 
-# 確認記憶體餘量
-ssh jetson-nano "free -h"
+# Tailscale / 網路問題
+# → 見 docs/pawai_cli/troubleshooting.md §G/H/I/J
 ```

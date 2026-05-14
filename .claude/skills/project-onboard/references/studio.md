@@ -1,97 +1,64 @@
-# PawAI Studio Reference
+# PawAI Studio（studio_gateway + mock_server + Next.js 16）
 
-> 最後更新：2026-03-16
+## 這個模組是什麼
 
-## 模組定位
+Studio 是 PawAI 系統的觀測、操作與對話前端，同時也是 demo 現場的語音替代入口（筆電收音代替機身 mic）。
+chat-first 設計（5/4 落地）：主畫面 ChatGPT 風純對話，6 個感知模組收進 navbar icon-only button 開 center modal。
+雙路徑架構：Jetson 模式（FastAPI + rclpy）/ Mock 模式（純 Python，支援 opt-in Gemini 真對話）。
 
-PawAI Studio 是整個系統的**統一操作與展示入口**。
-設計原則：「預設像 ChatGPT（簡潔對話），需要觀測時像 Foxglove 展開即時面板」。
-
-## 權威文件
+## 0511 權威文件
 
 | 文件 | 用途 |
 |------|------|
-| `docs/Pawai-studio/README.md` | 規格總綱 |
-| `docs/Pawai-studio/event-schema.md` | Event/State/Command JSON schema |
-| `docs/Pawai-studio/system-architecture.md` | Gateway、Mock Server、快慢系統 |
-| `docs/Pawai-studio/ui-orchestration.md` | Layout preset + 切換規則 |
-| `pawai-studio/docs/design-tokens.md` | 色彩、字體、spacing |
-| `pawai-studio/docs/{face,speech,gesture,pose}-panel-spec.md` | 各 panel 視覺與互動規範 |
+| `docs/pawai-brain/architecture/0511/studio/studio.md` | Studio 主總覽 + 雙路徑架構 + 5/11 freeze 快照 |
+| `docs/pawai-brain/architecture/0511/studio/studio-runtime-flow.md` | WebSocket 端點 + ROS2 ↔ Gateway 完整訊息流 + 跨線程橋接模型 |
+| `docs/pawai-brain/architecture/0511/studio/studio-frontend-components.md` | Next.js panel 拆分 + Zustand stores + 事件分派規則 |
+| `docs/pawai-brain/architecture/0511/studio/studio-gateway-mock-bridge.md` | Gateway vs Mock 雙路徑對比 + PawAIEvent schema + 各模組 data schema |
+| `docs/pawai-brain/architecture/0511/studio/studio-debug-runbook.md` | 症狀 → 檔案定位（DISCONNECTED / ChatPanel 沒泡泡 / Trace 空白等）|
 
-## 技術棧
+## 核心程式檔案
 
-| 層級 | 技術 |
+| 檔案 | 用途 |
 |------|------|
-| 前端 | Next.js 16 + React 19 + TypeScript + Tailwind + shadcn/ui + Zustand |
-| 後端 | FastAPI + uvicorn（RTX 8000） |
-| 即時通訊 | WebSocket（Gateway ↔ Frontend） |
-| 事件總線 | Redis Pub/Sub + Streams + KV |
-| 測試/開發 | Mock Event Server（FastAPI, :8001） |
+| `pawai-studio/gateway/studio_gateway.py` | Jetson 模式：FastAPI + GatewayNode(rclpy) + TOPIC_MAP 10 個 |
+| `pawai-studio/backend/mock_server.py` | Mock 模式：periodic push + opt-in Gemini + Demo A 場景 |
+| `pawai-studio/frontend/hooks/use-websocket.ts` | WS 連線狀態機（3s 重連，L13）|
+| `pawai-studio/frontend/stores/state-store.ts` | 各模組 state + TTS messages（Zustand，ring buffer）|
+| `pawai-studio/frontend/contracts/types.ts` | PawAIEvent + 所有模組 TS 型別（真相）|
 
-## 核心面板
+## 關鍵 ROS2 topic / event
 
-| 面板 | 資料來源 | 狀態 |
-|------|---------|:----:|
-| ChatPanel | WebSocket ↔ Gateway | P0 |
-| CameraPanel | MJPEG / WebRTC | P0 |
-| FacePanel | `/state/perception/face` | P0 |
-| SpeechPanel | `/state/interaction/speech` | P0 |
-| BrainPanel | `/state/executive/brain` | P0 |
-| TimelinePanel | Redis Streams | P0 |
-| SystemHealthPanel | `/state/system/health` | P0 |
-| SkillButtons | `POST /api/command` | P0 |
-| GesturePanel | `/event/gesture_detected` | P1 |
-| PosePanel | `/event/pose_detected` | P1 |
-
-## 啟動開發
-
-```bash
-# 一鍵啟動（推薦）
-bash pawai-studio/start.sh
-# → Frontend:    http://localhost:3000/studio
-# → Mock Server: http://localhost:8001
-# → WebSocket:   ws://localhost:8001/ws/events
-
-# 觸發 Demo A 場景
-curl -X POST http://localhost:8001/mock/scenario/demo_a
-```
-
-## 前端目錄結構
-
-```
-pawai-studio/frontend/
-├── app/           # Next.js App Router
-├── components/
-│   ├── panels/    # 各 Panel 元件（ChatPanel, FacePanel, ...）
-│   ├── layout/    # StudioLayout, PanelContainer
-│   └── shared/    # PanelCard, StatusBadge, MetricChip（不可直接改）
-├── hooks/         # useWebSocket, useEventStream, useLayoutManager（不可直接改）
-├── stores/        # Zustand: eventStore, stateStore, layoutStore（不可直接改）
-├── contracts/     # TypeScript 型別（不可直接改）
-└── public/        # 靜態資源
-```
-
-## 分工與開發頁面
-
-| 人 | Panel | URL | Spec |
-|----|-------|-----|------|
-| 鄔 | FacePanel | `/studio/face` | `face-panel-spec.md` |
-| 陳 | SpeechPanel | `/studio/speech` | `speech-panel-spec.md` |
-| 黃 | GesturePanel | `/studio/gesture` | `gesture-panel-spec.md` |
-| 楊 | PosePanel | `/studio/pose` | `pose-panel-spec.md` |
+| Topic | 方向 | 內容 |
+|-------|------|------|
+| `/brain/conversation_trace` | Brain → Gateway → Studio | 12-node trace（Trace Drawer 視覺化）|
+| `/tts` | Executive → Gateway → Studio | TTS text → `tts_speaking` event → ChatPanel AI 泡泡 |
+| `/brain/text_input` | Studio → Brain | 使用者文字輸入（`POST /api/text_input`）|
+| `/brain/skill_request` | Studio → Executive | 技能按鈕（`POST /api/skill_request`）|
+| `/brain/reset_context` | Studio → Brain | 清 memory（`POST /api/reset`）|
 
 ## 已知陷阱
 
-- `shared/`、`hooks/`、`stores/`、`layout/`、`contracts/` 不可直接改，需開 Issue
-- Mock Server 與 Gateway 端點路徑相同，前端切 URL 即可切換真假資料
-- Layout 切換由 `source + event_type` 驅動，使用者手動收合優先
-- `pose_detected (fallen)` 會強制展開 PosePanel（安全功能）
+- **CORS hotfix 5/7**：Gateway 已設 `allow_origins=["*"]`（`studio_gateway.py` L444-449）；Mock 只允許 localhost。Jetson 跨 Tailscale IP 發 POST 要靠 Gateway wildcard
+- **ChatPanel AI 泡泡不出現**：`/tts` topic 沒被 `_on_tts_msg()` 接到 → broadcast 沒 `tts_speaking` event → `state-store.lastTtsText` 不更新
+- **TTS rate-limit**：非 chat_reply / skill_say / say_canned 的自發性 TTS 限 5s 一次（`state-store.ts` L1-5）
+- **skill_registry import 失敗**：Mock `SKILL_REGISTRY = {}` silent fallback（L29-31），表現為技能按鈕全 unknown
+- **Video streaming Jetson only**：`cv2 + cv_bridge` 需要，Mac/Mock 模式無影像
 
-## 當前狀態
+## 開發入口
 
-| 里程碑 | 日期 | 狀態 |
-|--------|------|------|
-| MVP（能看能 review） | 3/16 | [WIP] |
-| Alpha（完整視覺 + mock 即時更新） | 3/23 | [PENDING] |
-| Beta（真實 Gateway 資料） | 4/6 | [PENDING] |
-| Freeze（僅修 bug） | 4/13 | [PENDING] |
+```bash
+# Mock 模式（本機開發）
+bash pawai-studio/start-live.sh --mock
+# → http://localhost:3000/studio
+# → http://localhost:8080
+
+# Mock + 真 Gemini（需 .env OPENROUTER_KEY）
+set -a && . ./.env && set +a
+MOCK_OPENROUTER=1 bash pawai-studio/start-live.sh --mock
+
+# Jetson 模式
+GATEWAY_HOST=100.83.109.89 bash pawai-studio/start-live.sh --live
+
+# TypeScript 檢查
+cd pawai-studio/frontend && npx tsc --noEmit
+```

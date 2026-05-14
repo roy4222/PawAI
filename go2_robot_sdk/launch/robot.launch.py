@@ -96,6 +96,11 @@ class Go2NodeFactory:
                 "nav2", default_value="true", description="Launch Nav2"
             ),
             DeclareLaunchArgument(
+                "nav_params_file",
+                default_value=self.config.config_paths["nav2"],
+                description="Nav2 params yaml path (default = main nav2_params.yaml; pass detour profile for D435 fusion)",
+            ),
+            DeclareLaunchArgument(
                 "slam", default_value="true", description="Launch SLAM"
             ),
             DeclareLaunchArgument(
@@ -106,6 +111,12 @@ class Go2NodeFactory:
             ),
             DeclareLaunchArgument(
                 "teleop", default_value="true", description="Launch teleoperation"
+            ),
+            # 5/12: mux 從 teleop flag 拆出獨立 — safety_hold / nav_capability 要關 teleop
+            # 但仍需 mux 才能讓 reactive_stop /cmd_vel_obstacle (priority 200) 接到 driver。
+            # 之前 teleop:=false 會連 twist_mux 一起關，導致 hold_brake 不生效（5/12 T3 發現）。
+            DeclareLaunchArgument(
+                "mux", default_value="true", description="Launch twist_mux multiplexer (default true; needed for reactive_stop / nav even when teleop:=false)"
             ),
             DeclareLaunchArgument(
                 "mcp_mode",
@@ -426,6 +437,7 @@ class Go2NodeFactory:
         use_sim_time = LaunchConfiguration("use_sim_time", default="false")
         with_joystick = LaunchConfiguration("joystick", default="true")
         with_teleop = LaunchConfiguration("teleop", default="true")
+        with_mux = LaunchConfiguration("mux", default="true")
 
         return [
             # Joystick node
@@ -436,23 +448,30 @@ class Go2NodeFactory:
                 parameters=[self.config.config_paths["joystick"]],
             ),
             # Teleop twist joy node
+            # remap cmd_vel → cmd_vel_joy 讓 teleop 走 mux 而非繞過去直發 driver
             Node(
                 package="teleop_twist_joy",
                 executable="teleop_node",
                 name="go2_teleop_node",
                 condition=IfCondition(with_joystick),
                 parameters=[self.config.config_paths["twist_mux"]],
+                remappings=[("cmd_vel", "cmd_vel_joy")],
             ),
             # Twist multiplexer
+            # twist_mux executable 預設 publish 到 /cmd_vel_out（不是 /cmd_vel），
+            # 必須 remap 才能讓 go2_driver_node 訂的 /cmd_vel 收到 mux 出來的命令
             Node(
                 package="twist_mux",
                 executable="twist_mux",
                 output="screen",
-                condition=IfCondition(with_teleop),
+                # 5/12 fix: 改 with_mux（從 with_teleop 拆出）
+                # 原 bug：teleop:=false 會連 twist_mux 一起關，hold_brake 不生效
+                condition=IfCondition(with_mux),
                 parameters=[
                     {"use_sim_time": use_sim_time},
                     self.config.config_paths["twist_mux"],
                 ],
+                remappings=[("/cmd_vel_out", "/cmd_vel")],
             ),
         ]
 
@@ -522,20 +541,22 @@ class Go2NodeFactory:
                 }.items(),
             ),
             # Nav2 (enabled when nav2=true AND mcp_mode=false)
+            # 使用 nav_capability wrapper：把 final cmd_vel output 從 /cmd_vel 改到 /cmd_vel_nav
+            # (twist_mux priority 10)，讓 reactive_stop /cmd_vel_obstacle (priority 200) 能覆寫。
+            # 詳見 docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md §4
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     [
                         os.path.join(
-                            get_package_share_directory("nav2_bringup"),
+                            get_package_share_directory("nav_capability"),
                             "launch",
-                            "navigation_launch.py",
+                            "navigation_remap.launch.py",
                         )
                     ]
                 ),
                 condition=IfCondition(nav2_enabled),
                 launch_arguments={
-                        "map": with_map,
-                        "params_file": self.config.config_paths["nav2"],
+                        "params_file": LaunchConfiguration("nav_params_file"),
                         "use_sim_time": use_sim_time,
                         "autostart": with_autostart,
                     }.items(),
@@ -554,7 +575,7 @@ class Go2NodeFactory:
                 condition=IfCondition(nav2_localization_enabled),
                 launch_arguments={
                         "map": with_map,
-                        "params_file": self.config.config_paths["nav2"],
+                        "params_file": LaunchConfiguration("nav_params_file"),
                         "use_sim_time": use_sim_time,
                         "autostart": with_autostart,
                     }.items(),

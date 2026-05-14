@@ -1,6 +1,6 @@
 # Gesture Panel Spec
 
-> 真相來源：[../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
+> 真相來源：[../../docs/pawai-brain/studio/specs/event-schema.md](../../docs/pawai-brain/studio/specs/event-schema.md) §2.5 GestureState / §1.4 GestureEvent
 > 參考實作：[../frontend/components/chat/chat-panel.tsx](../frontend/components/chat/chat-panel.tsx)
 > Design Tokens：[design-tokens.md](design-tokens.md)
 
@@ -9,7 +9,7 @@
 | 文件 | 用途 |
 |------|------|
 | [testing-playbook.md](testing-playbook.md) | 啟動方式、觸發指令、常見問題 |
-| [../../docs/superpowers/specs/2026-03-16-studio-handoff-design.md](../../docs/superpowers/specs/2026-03-16-studio-handoff-design.md) | 交接規則、責任切分、placeholder 規格 |
+| [../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md](../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md) | 交接規則、責任切分、placeholder 規格 |
 
 ### Placeholder 圖
 
@@ -195,7 +195,7 @@ PanelCard (icon=Hand, title="手勢辨識")
 
 | 需求 | 看哪裡 |
 |------|--------|
-| GestureState / GestureEvent 欄位 | [../../docs/Pawai-studio/specs/event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) §2.5 + §1.4 |
+| GestureState / GestureEvent 欄位 | [../../docs/pawai-brain/studio/specs/event-schema.md](../../docs/pawai-brain/studio/specs/event-schema.md) §2.5 + §1.4 |
 | 色彩 / 字體 / 間距 | [design-tokens.md](design-tokens.md) |
 | PanelCard 用法 | `frontend/components/shared/panel-card.tsx` |
 | StatusBadge 用法 | `frontend/components/shared/status-badge.tsx` |

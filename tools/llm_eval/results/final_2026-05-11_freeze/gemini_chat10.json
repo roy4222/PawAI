@@ -1,0 +1,740 @@
+{
+  "version": "2026-05-04",
+  "timestamp": "20260510-154322",
+  "models": [
+    {
+      "alias": "gemini",
+      "slug": "google/gemini-3-flash-preview"
+    }
+  ],
+  "prompts_file": "tools/llm_eval/prompts.json",
+  "results": [
+    {
+      "item_id": "chat-01",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你好啊"
+      ],
+      "expected_intent": "greet",
+      "expected_skills": [
+        "chat_reply",
+        "wave_hello"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.9689159393310547,
+        "response": {
+          "id": "gen-1778399001-63puqWSGTuRwyoR2khyu",
+          "object": "chat.completion",
+          "created": 1778399001,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[excited] 嗨！今天心情怎麼樣？\", \"skill\": \"wave_hello\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a19V5HBprvPTzGUFURW9j0YyBvhMBIZznaqYWe5KOUVRlL/pFyFAgrGBj/ms04A=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 27,
+            "total_tokens": 5140,
+            "cost": 0.0026375,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026375,
+              "upstream_inference_prompt_cost": 0.0025565,
+              "upstream_inference_completions_cost": 8.1e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[excited] 嗨！今天心情怎麼樣？\", \"skill\": \"wave_hello\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-02",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "今天天氣不錯耶"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.752000093460083,
+        "response": {
+          "id": "gen-1778399003-f1e2J7j1i6JgpNqt4fQ9",
+          "object": "chat.completion",
+          "created": 1778399003,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[excited] 對啊，太陽照進來暖洋洋的，好舒服喔。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/TWWYeVpYq8qBNbPP/D5i954321tcZOyY4qalR2zx302udoO8P895lVHMIEK0=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 35,
+            "total_tokens": 5150,
+            "cost": 0.0026625,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026625,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 0.000105
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[excited] 對啊，太陽照進來暖洋洋的，好舒服喔。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-03",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你會做什麼"
+      ],
+      "expected_intent": "self_intro_or_status",
+      "expected_skills": [
+        "self_introduce",
+        "show_status",
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.7593133449554443,
+        "response": {
+          "id": "gen-1778399004-CNvcpIHQYcY1aPm8ZuFL",
+          "object": "chat.completion",
+          "created": 1778399004,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我會看懂你、聽懂你，還會陪你說說話。如果你比個 OK，我也能扭一下或伸個懶腰給你看喔！\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a181YdaxmaOb0A3vBRlQx5/40Bo7vhYDI2tNS52UMCJktrmhQvJE+hfwXNYXrW4=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5114,
+            "completion_tokens": 57,
+            "total_tokens": 5171,
+            "cost": 0.002728,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.002728,
+              "upstream_inference_prompt_cost": 0.002557,
+              "upstream_inference_completions_cost": 0.000171
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我會看懂你、聽懂你，還會陪你說說話。如果你比個 OK，我也能扭一下或伸個懶腰給你看喔！\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-04",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你叫什麼名字"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [
+        "self_introduce",
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.6864628791809082,
+        "response": {
+          "id": "gen-1778399006-cv3O5IjOsQURA5M2VuUI",
+          "object": "chat.completion",
+          "created": 1778399006,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] PawAI 啊，住你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a193oYiMTIQw/evHqVs+w8HtDi5SZgYHdDb5MyQBkqLXTEfJrRIw+L4nlBnlwIY=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 31,
+            "total_tokens": 5146,
+            "cost": 0.0026505,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026505,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 9.3e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] PawAI 啊，住你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-05",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你今天感覺怎樣"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8955833911895752,
+        "response": {
+          "id": "gen-1778399008-j61KRQmNpCtY1uHG8VAq",
+          "object": "chat.completion",
+          "created": 1778399008,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 還不錯呀，剛剛在看陽光照在地板上，亮亮的很舒服。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/MEdC1k50iPY9p8QIFkc5yAnDj8E1JG3RIR6FOm9OgPuPEXyLFDdf4BHRTD5M=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 39,
+            "total_tokens": 5154,
+            "cost": 0.0026745,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026745,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 0.000117
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 還不錯呀，剛剛在看陽光照在地板上，亮亮的很舒服。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-06",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "陪我一下嘛"
+      ],
+      "expected_intent": "companion",
+      "expected_skills": [
+        "chat_reply",
+        "sit_along"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.31294846534729004,
+        "response": {
+          "id": "gen-1778399010-vD5hXPDShmwezyXzWPYa",
+          "object": "chat.completion",
+          "created": 1778399010,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 好啊，那我安靜坐在這裡陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/fuNw3wmE1O3+YyuHgu8mbS2tsSMKpmbEXj/pDVRhIc5bxVRQjeeNVHI0CQMA=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 30,
+            "total_tokens": 5145,
+            "cost": 0.0026475,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026475,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 9e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 好啊，那我安靜坐在這裡陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-07",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "說個笑話來聽"
+      ],
+      "expected_intent": "smalltalk",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.288377046585083,
+        "response": {
+          "id": "gen-1778399011-WLxEKZzqFAaIMbGUY8tB",
+          "object": "chat.completion",
+          "created": 1778399011,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 嗯... 有一天小狗問大狗：「為什麼我們要一直搖尾巴？」大狗說：「因為尾巴在那裡，我們不搖它，它就會來搖我們啊。」嘿嘿，不好笑嗎？\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/LJwOdyZ9O2NOGsxB24AVYJ1KUUv9VWqC6VzgFidPLd413sabOB4Gt2MW3tas=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 66,
+            "total_tokens": 5183,
+            "cost": 0.0027565,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0027565,
+              "upstream_inference_prompt_cost": 0.0025585,
+              "upstream_inference_completions_cost": 0.000198
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 嗯... 有一天小狗問大狗：「為什麼我們要一直搖尾巴？」大狗說：「因為尾巴在那裡，我們不搖它，它就會來搖我們啊。」嘿嘿，不好笑嗎？\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-08",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "我有點累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [
+        "chat_reply",
+        "sit_along"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.5992538928985596,
+        "response": {
+          "id": "gen-1778399014-wEg9KCR6aVGOW5zczuLi",
+          "object": "chat.completion",
+          "created": 1778399014,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18SHSx8vbNdnZgtR9qM5M7WfpNF710b/smgd1+jTbIbymThokeeV/paY9GIS90=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5114,
+            "completion_tokens": 31,
+            "total_tokens": 5145,
+            "cost": 0.00265,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00265,
+              "upstream_inference_prompt_cost": 0.002557,
+              "upstream_inference_completions_cost": 9.3e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-09",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你會認得我嗎"
+      ],
+      "expected_intent": "ask_face",
+      "expected_skills": [
+        "chat_reply",
+        "show_status"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.7508981227874756,
+        "response": {
+          "id": "gen-1778399015-lyZq9qORMT1jF0pm5cXl",
+          "object": "chat.completion",
+          "created": 1778399015,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 當然會啊！只要你看著我，我就會努力記住你的臉喔。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1+oOkiHwem723qbhtObpc18XKweDfzTLsbEGEXWyw1iMMBfZxYQwNx4b0/1dHg=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5116,
+            "completion_tokens": 39,
+            "total_tokens": 5155,
+            "cost": 0.002675,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.002675,
+              "upstream_inference_prompt_cost": 0.002558,
+              "upstream_inference_completions_cost": 0.000117
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 當然會啊！只要你看著我，我就會努力記住你的臉喔。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "chat-10",
+      "bucket": "chat",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "晚安"
+      ],
+      "expected_intent": "goodbye",
+      "expected_skills": [
+        "chat_reply"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.7515883445739746,
+        "response": {
+          "id": "gen-1778399017-msD4g1MUQuKf3jtBkMTi",
+          "object": "chat.completion",
+          "created": 1778399017,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 晚安呀，你要去休息了嗎？\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1+Aew/D+u5twHwUGliptuEIT2vtaaSFQ1vXZElzic8xEoTUSQbvzI8glYOqm0M=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 31,
+            "total_tokens": 5144,
+            "cost": 0.0026495,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026495,
+              "upstream_inference_prompt_cost": 0.0025565,
+              "upstream_inference_completions_cost": 9.3e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 晚安呀，你要去休息了嗎？\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    }
+  ]
+}

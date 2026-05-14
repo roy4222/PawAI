@@ -1,0 +1,36 @@
+face_recognition_demo:
+  display_name: 人臉辨識
+  baseline_status: explain_only
+  demo_value: high
+  intro: 我可以認出熟人。請 Roy 站到鏡頭前 1.5 公尺左右，我會主動打招呼。
+  related_skills: [greet_known_person]
+speech_demo:
+  display_name: 語音對話
+  baseline_status: explain_only
+  demo_value: high
+  intro: 你可以問我任何問題，我會記得最近聊過的事。
+  related_skills: [chat_reply, self_introduce]
+gesture_demo:
+  display_name: 手勢辨識
+  baseline_status: explain_only
+  demo_value: high
+  intro: 請對著鏡頭比 OK、讚、或握拳，我會跟你互動。
+  related_skills: [wave_hello]
+pose_demo:
+  display_name: 姿勢辨識
+  baseline_status: explain_only
+  demo_value: high
+  intro: 我能分辨站立、坐下、躺平。請讓我看看你的姿勢。
+  related_skills: [sit_along]
+object_demo:
+  display_name: 物體辨識
+  baseline_status: explain_only
+  demo_value: medium
+  intro: 我能辨識大物件和 12 種顏色。請拿純色物件靠近鏡頭。
+  related_skills: [object_remark]
+navigation_demo:
+  display_name: 導航避障
+  baseline_status: explain_only
+  demo_value: medium
+  intro: 我能做簡化導航和短距離移動。動態避障今天不主動展示，需要場地比較大。
+  related_skills: [nav_demo_point, approach_person]

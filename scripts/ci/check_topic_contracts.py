@@ -3,7 +3,7 @@
 
 Statically scans node source files for create_publisher / create_subscription
 calls and cross-references them against the v2.1 frozen topic list from
-docs/architecture/contracts/interaction_contract.md §2.
+docs/contracts/interaction_contract.md §2.
 
 Exit code is always 0 (report-only).  Warnings are printed to stderr.
 """
@@ -15,7 +15,7 @@ import sys
 # ── Parse contract topics from interaction_contract.md §2 ────────────────
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CONTRACT_MD = os.path.join(REPO_ROOT, "docs", "architecture", "contracts", "interaction_contract.md")
+CONTRACT_MD = os.path.join(REPO_ROOT, "docs", "contracts", "interaction_contract.md")
 
 # Matches table rows like: | `/state/perception/face` | State | 10 Hz | ... |
 _CONTRACT_TABLE_RE = re.compile(r'^\|\s*`(/[^`]+)`\s*\|', re.MULTILINE)
@@ -74,6 +74,34 @@ INTERNAL_TOPICS = {
     "/scan",
     "/tf",
     "/tf_static",
+    # Nav2 / RPLIDAR infrastructure topics（4/26 加入：reactive_stop + send_relative_goal）
+    "/scan_rplidar",
+    "/amcl_pose",
+    "/goal_pose",
+    # nav_capability platform topics（Phase 1 起加入：twist_mux 4-layer routing）
+    "/cmd_vel_nav",
+    "/cmd_vel_obstacle",
+    "/cmd_vel_emergency",
+    "/cmd_vel_joy",
+    "/cmd_vel_unsmoothed",
+    "/lock/emergency",
+    # Phase 6/7 state + event topics
+    "/state/nav/heartbeat",
+    "/state/nav/status",
+    "/state/nav/safety",
+    "/state/reactive_stop/status",
+    "/event/nav/waypoint_reached",
+    "/event/nav/internal/status",
+    # Phase 7 services (driven by route_runner)
+    "/nav/pause",
+    "/nav/resume",
+    "/nav/cancel",
+    # Phase A 5/2 — capability gates + global pause state
+    "/capability/nav_ready",
+    "/capability/depth_clear",
+    "/state/nav/paused",
+    # /navigate_to_pose action infra (Nav2)
+    "/navigate_to_pose",
     # Camera topics
     "/camera/image_raw",
     "/camera/camera/color/image_raw",
@@ -102,6 +130,10 @@ INTERNAL_TOPICS = {
     # Obstacle sensor heartbeat
     "/state/obstacle/d435_alive",
     "/state/obstacle/lidar_alive",
+    # PawAI Brain MVS (Phase 0+ internal)
+    "/brain/chat_candidate",
+    # P1-2 context reset — internal signal, not in frozen public contract
+    "/brain/reset_context",
     # Test observer internal
     "/speech_test_observer/round_meta_req",
     "/speech_test_observer/round_meta_ack",
@@ -136,6 +168,7 @@ def find_node_files():
         os.path.join(REPO_ROOT, "vision_perception", "vision_perception"),
         os.path.join(REPO_ROOT, "object_perception", "object_perception"),
         os.path.join(REPO_ROOT, "coco_detector", "coco_detector"),
+        os.path.join(REPO_ROOT, "interaction_executive", "interaction_executive"),
         os.path.join(REPO_ROOT, "lidar_processor", "lidar_processor"),
         os.path.join(REPO_ROOT, "src", "search_logic", "search_logic"),
         os.path.join(REPO_ROOT, "scripts"),

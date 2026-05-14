@@ -121,7 +121,7 @@ Tailwind 參考：
 
 ### 5. 技術說明折疊區（簡單）
 
-介紹 MediaPipe Pose 33 個關鍵點、跌倒偵測邏輯（vertical_ratio guard）、已知限制（單人追蹤、側面角度依賴）。內容從 `docs/姿勢辨識/README.md` 複製。
+介紹 MediaPipe Pose 33 個關鍵點、跌倒偵測邏輯（vertical_ratio guard）、已知限制（單人追蹤、側面角度依賴）。內容從 `docs/pawai-brain/perception/pose/README.md` 複製。
 
 ### 6. 你自己想加的任何功能
 

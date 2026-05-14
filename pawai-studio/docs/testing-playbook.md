@@ -1,6 +1,6 @@
 # Studio 前端測試劇本
 
-> 規格來源：[../../docs/superpowers/specs/2026-03-16-studio-handoff-design.md](../../docs/superpowers/specs/2026-03-16-studio-handoff-design.md)
+> 規格來源：[../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md](../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md)
 
 ---
 
@@ -45,7 +45,7 @@ curl -X POST http://localhost:8001/mock/scenario/demo_a
 
 > **注意**：以下 trigger payload 是 **UI 測試捷徑**，把 event_type 和 state data 混在一起推，
 > 方便前端一次收到完整 state 更新。**這不是真實的 event schema**。
-> 真實 event 和 state 是分開的，以 [event-schema.md](../../docs/Pawai-studio/specs/event-schema.md) 為準。
+> 真實 event 和 state 是分開的，以 [event-schema.md](../../docs/pawai-brain/studio/specs/event-schema.md) 為準。
 
 **Face**
 ```bash

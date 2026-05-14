@@ -23,6 +23,7 @@ setup(
     entry_points={
         "console_scripts": [
             "interaction_executive_node = interaction_executive.interaction_executive_node:main",
+            "brain_node = interaction_executive.brain_node:main",
         ],
     },
 )

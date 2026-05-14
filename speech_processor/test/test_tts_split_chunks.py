@@ -1,0 +1,273 @@
+"""Unit tests for TtsNode._split_for_tts — Phase A.6 5/8 chunking fix.
+
+Two bugs the 5/8 fix addresses:
+
+1. **Sentence threshold too aggressive** — original code split on period when
+   buf ≥ CHUNK_MAX_CHARS // 2 (20 chars). Short clauses got cut too early,
+   making Gemini lose voice tone across chunks.
+2. **rfind -1 sentinel mishandled** — `max(rfind(','), rfind('，'), rfind(' '))`
+   returns -1 when nothing matches; the threshold check `> CHUNK_MAX_CHARS//2`
+   accidentally let very-late commas (close to cap) win, while making no
+   distinction between "no candidate" and "candidate too early".
+
+The fix: prefer sentence end at ≥ MIN_SPLIT_CHARS (30); fallback comma split
+also requires ≥ MIN_SPLIT_CHARS chars; explicit -1 guard via list filter.
+
+These tests use an unbound function call style so we don't need to spin up
+a TtsNode (rclpy / hardware deps avoided).
+"""
+from __future__ import annotations
+
+from speech_processor import tts_split
+
+
+# Alias so the existing test bodies can reference `TtsNode.MIN_SPLIT_CHARS`
+# etc. — module-level constants are the same source of truth.
+class TtsNode:
+    CHUNK_MAX_CHARS = tts_split.CHUNK_MAX_CHARS
+    MIN_SPLIT_CHARS = tts_split.MIN_SPLIT_CHARS
+    SENTENCE_PUNCT = tts_split.SENTENCE_PUNCT
+
+
+def _split(text: str) -> list[str]:
+    return tts_split.split_for_tts(text)
+
+
+# ── Boundary / threshold ────────────────────────────────────────────────
+
+
+def test_short_text_returns_single_chunk():
+    text = "嗨，你好啊。"
+    assert _split(text) == [text]
+
+
+def test_constants_reflect_5_11_night_bump():
+    """5/11 night: chunk size raised 40→60, split threshold 30→45 to
+    reduce audible boundary count on long stories without approaching
+    gemini's 80-char tail-drop threshold."""
+    assert TtsNode.MIN_SPLIT_CHARS == 45
+    assert TtsNode.CHUNK_MAX_CHARS == 60
+
+
+# ── Bug #1: sentence threshold ──────────────────────────────────────────
+
+
+def test_short_sentence_does_not_force_early_split():
+    """'好。' at char 4 must NOT split mid-sentence even though it has period.
+    Old code split when buf ≥ 20 — this ate natural breath flow."""
+    text = "好。今天天氣很不錯，我們可以一起出去走走，好嗎？"
+    chunks = _split(text)
+    # First period at index 1 is well below MIN_SPLIT_CHARS=45.
+    # Whole reply ~24 chars, single chunk under CHUNK_MAX_CHARS=60.
+    assert len(chunks) == 1
+    assert chunks[0] == text
+
+
+def test_long_text_splits_on_first_period_after_threshold():
+    """Period beyond MIN_SPLIT_CHARS=45 should trigger split."""
+    head = "一" * 46                        # 46 chars > MIN_SPLIT_CHARS
+    tail = "二" * 30
+    text = f"{head}。{tail}。"
+    chunks = _split(text)
+    assert len(chunks) >= 2
+    # First chunk ends at the first period (47 chars including 。)
+    assert chunks[0].endswith("。")
+    assert chunks[0].startswith("一")
+
+
+# ── Bug #2: rfind / cut threshold ───────────────────────────────────────
+
+
+def test_long_text_no_punct_falls_back_to_hard_cut():
+    """All-CJK no-punct text > CHUNK_MAX_CHARS → hard-cut at the limit,
+    not silently dropped or duplicated."""
+    text = "今天天氣真好我們去散步好不好快樂的一天散步真的很開心對吧呀我說真的就是想出去走走啦" * 2
+    chunks = _split(text)
+    assert len(chunks) >= 2
+    # No sentence punct, no comma — every chunk should be ≤ CHUNK_MAX_CHARS.
+    for c in chunks:
+        assert len(c) <= TtsNode.CHUNK_MAX_CHARS, f"chunk too long: {c!r}"
+    # Reassembled output preserves all characters.
+    assert "".join(chunks) == text
+
+
+def test_late_comma_used_as_split_point():
+    """Comma at index ≥ MIN_SPLIT_CHARS-1 → cut at the comma when no
+    sentence-end punct is available before CHUNK_MAX_CHARS."""
+    head = "一" * 44                        # MIN_SPLIT_CHARS-1 = 44
+    mid = "二" * 20
+    text = f"{head}，{mid}"                  # length 65 (44+1+20)
+    chunks = _split(text)
+    assert len(chunks) >= 2
+    assert chunks[0].endswith("，"), f"first chunk={chunks[0]!r}"
+
+
+def test_comma_too_early_falls_to_hard_cut():
+    """Comma at index way before MIN_SPLIT_CHARS-1 must NOT be the cut
+    point. Falls to hard cut at CHUNK_MAX_CHARS."""
+    text = "嗨，" + "一" * 70                # comma at idx 1, 72 chars total
+    chunks = _split(text)
+    assert len(chunks[0]) == TtsNode.CHUNK_MAX_CHARS, (
+        f"expected hard cut at {TtsNode.CHUNK_MAX_CHARS}, got len={len(chunks[0])}"
+    )
+    assert "".join(chunks).replace(" ", "") == text.replace(" ", "")
+
+
+# ── Audio-tag preservation ──────────────────────────────────────────────
+
+
+def test_audio_tag_preserved_on_first_chunk():
+    text = "[whispers] 我來說一個小故事給你聽好不好。今天森林裡發生一件趣事呢。"
+    chunks = _split(text)
+    assert chunks[0].startswith("[whispers]")
+
+
+def test_audio_tag_prepended_to_subsequent_chunks():
+    # Body must be long enough to produce ≥ 2 chunks under CHUNK_MAX_CHARS=60.
+    # Period at idx 46 (≥ MIN_SPLIT_CHARS=45) triggers split, then more.
+    body_first = "一" * 46 + "。"     # 47 chars, splits here
+    body_second = "二" * 30 + "。"    # 31 chars, second chunk
+    text = f"[whispers] {body_first}{body_second}"
+    chunks = _split(text)
+    assert len(chunks) >= 2, f"expected ≥2 chunks, got {chunks}"
+    for c in chunks:
+        assert c.startswith("[whispers]"), f"missing tag on: {c!r}"
+
+
+# ── No characters lost ──────────────────────────────────────────────────
+
+
+def test_reassembled_chunks_recover_full_body_with_tag():
+    """Even with audio-tag, the body content (after the tag) must be
+    fully preserved across chunks."""
+    text = "[excited] 嗨大家好我是 PawAI！今天我想跟你介紹一下我會做什麼。我可以揮手坐下還可以講笑話喔！"
+    chunks = _split(text)
+    # Strip [excited] from each chunk and concatenate.
+    body_recovered = "".join(c.replace("[excited] ", "", 1) for c in chunks)
+    body_expected = text.replace("[excited] ", "", 1)
+    # Whitespace at boundary edges may differ slightly due to .strip();
+    # check character set equivalence after collapsing whitespace.
+    assert body_recovered.replace(" ", "") == body_expected.replace(" ", "")
+
+
+def test_empty_text_returns_empty_list():
+    assert _split("") == []
+    assert _split("   ") == []
+
+
+# ── Sanity: no infinite loop on edge inputs ─────────────────────────────
+
+
+def test_text_exactly_chunk_max_chars():
+    text = "一" * TtsNode.CHUNK_MAX_CHARS
+    chunks = _split(text)
+    # ≤ MAX → single chunk per the early return at top of split()
+    assert chunks == [text]
+
+
+def test_text_chunk_max_plus_one():
+    text = "一" * (TtsNode.CHUNK_MAX_CHARS + 1)
+    chunks = _split(text)
+    # No punct, must hard-cut.
+    assert "".join(chunks) == text
+    for c in chunks:
+        assert len(c) <= TtsNode.CHUNK_MAX_CHARS
+
+
+# ── P0-1: All-or-nothing chunk synthesis (TTSProvider_OpenRouterGemini) ────
+# These tests verify that any chunk failure → entire synthesize() returns None
+# (to trigger provider chain fallback), instead of silent-skipping failed
+# chunks and concatenating partial output.
+
+
+def _make_gemini_provider():
+    """Construct a TTSProvider_OpenRouterGemini with dummy config.
+    Sets _api_key directly to bypass OPENROUTER_KEY env check.
+    Avoids ROS node init — only the provider class is under test.
+    Skips cleanly when ROS env is absent (e.g. pre-commit hook env).
+    """
+    import os
+    import pytest
+    os.environ.setdefault("OPENROUTER_KEY", "test-dummy-key")
+
+    try:
+        from speech_processor.tts_node import (
+            TTSConfig,
+            TTSProvider_OpenRouterGemini,
+        )
+    except (ImportError, ModuleNotFoundError) as exc:
+        pytest.skip(f"tts_node requires ROS env: {exc}")
+
+    config = TTSConfig(api_key="dummy")
+    provider = TTSProvider_OpenRouterGemini(config)
+    # Ensure _api_key is non-empty so synthesize() doesn't early-return.
+    provider._api_key = "test-dummy-key"
+    return provider
+
+
+def test_partial_chunk_failure_returns_none():
+    """Any chunk failure → entire synthesize returns None for fallback chain.
+
+    P0-1: prevents '念一念跳到結尾' by ensuring partial results are not
+    concatenated and returned to the caller when some chunks fail.
+    """
+    from unittest.mock import patch
+
+    provider = _make_gemini_provider()
+
+    # Patch _timed_chunk so chunk[0] succeeds, chunk[1] fails.
+    # Text produces exactly 2 chunks (CHUNK_MAX_CHARS + 1 chars → hard-cut at 40,
+    # remainder 1 char = second chunk).
+    side_effects = [
+        (b"chunk0_pcm", 0.1),
+        (None, 0.2),          # failure — this chunk returns None
+    ]
+    call_count = [0]
+
+    def fake_timed_chunk(text):
+        result = side_effects[call_count[0]]
+        call_count[0] += 1
+        return result
+
+    # Use a text long enough to produce exactly 2 chunks.
+    long_text = "一" * (TtsNode.CHUNK_MAX_CHARS + 1)
+
+    with patch.object(provider, "_timed_chunk", side_effect=fake_timed_chunk):
+        result = provider.synthesize(long_text)
+
+    assert result is None, (
+        "Partial chunk failure must return None to trigger fallback chain, "
+        f"but got {result!r}"
+    )
+
+
+def test_all_chunks_success_returns_wav():
+    """All chunks succeed → WAV bytes returned (non-None, non-empty).
+
+    P0-1 regression guard: the all-or-nothing change must not break the
+    success path — full_pcm concatenation and WAV wrapping must still work.
+    """
+    from unittest.mock import patch
+
+    provider = _make_gemini_provider()
+
+    side_effects = [
+        (b"\x00\x01" * 10, 0.1),   # chunk0 PCM
+        (b"\x02\x03" * 10, 0.1),   # chunk1 PCM
+    ]
+    call_count = [0]
+
+    def fake_timed_chunk(text):
+        result = side_effects[call_count[0]]
+        call_count[0] += 1
+        return result
+
+    # Text long enough to produce exactly 2 chunks.
+    long_text = "一" * (TtsNode.CHUNK_MAX_CHARS + 1)
+
+    with patch.object(provider, "_timed_chunk", side_effect=fake_timed_chunk):
+        result = provider.synthesize(long_text)
+
+    assert result is not None, "All chunks succeeded but synthesize() returned None"
+    # Result should be a WAV file (starts with RIFF header).
+    assert result[:4] == b"RIFF", f"Expected WAV RIFF header, got {result[:4]!r}"

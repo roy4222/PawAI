@@ -12,7 +12,7 @@
 
 ## 規格參考
 
-- 無獨立 spec，參考 `docs/Pawai-studio/README.md` 的物體辨識段落
+- 無獨立 spec，參考 `docs/pawai-brain/studio/README.md` 的物體辨識段落
 - `pawai-studio/docs/design-tokens.md` — 顏色、字型、間距
 
 ## Mock 資料長什麼樣

@@ -7,16 +7,21 @@ from __future__ import annotations
 
 import time
 
-# v2.0 contract uses "ok" but implementation uses "fist".
-# Transition via compat map until 3/25 benchmark confirms switch.
-GESTURE_COMPAT_MAP = {"fist": "ok"}
+# GESTURE_COMPAT_MAP — historical compat layer, EMPTIED 2026-05-05 to align
+# with MOC §3 9-gesture spec (Fist = Mute, OK = Confirm — two distinct
+# semantics; routing fist→ok silently corrupted the enum).
+#
+# OK now comes ONLY from gesture_classifier.detect_ok_circle() geometric
+# rule, never from MediaPipe Closed_Fist. Constant kept (empty) so callers
+# importing this name don't break, but no actual rewriting happens.
+GESTURE_COMPAT_MAP: dict[str, str] = {}
 
 
 def build_gesture_event(gesture: str, confidence: float, hand: str) -> dict:
     """Build /event/gesture_detected JSON payload.
 
     stamp and event_type are auto-generated.
-    Applies GESTURE_COMPAT_MAP (impl uses "fist", contract sends "ok").
+    GESTURE_COMPAT_MAP is empty (5/5 cleanup) — gestures pass through unchanged.
 
     Note: confidence is vote ratio (fraction of buffer frames matching the gesture),
     not raw classifier confidence. E.g. 0.67 = 2/3 frames voted for this gesture.

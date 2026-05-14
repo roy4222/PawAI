@@ -3,6 +3,7 @@
 
 import json
 import logging
+import time
 
 
 from ...domain.interfaces import IRobotController
@@ -17,15 +18,34 @@ MAX_LINEAR_Y = 0.3
 MAX_ANGULAR_Z = 0.5
 DEADBAND = 0.01
 
+# Refresh interval for repeated StopMove commands. reactive_stop_node publishes
+# at 10 Hz; without dedupe, every 100ms a StopMove (1003) hits the WebRTC
+# DataChannel → backlog grows ~138 bytes/msg unbounded (B5 burndown 2026-05-11
+# saw bufferedAmount 115KB+ in 2 min). Once StopMove is acknowledged, Go2 stays
+# stopped without refresh, so dedupe to 1 Hz refresh.
+STOP_REFRESH_INTERVAL_S = 1.0
+
 
 class RobotControlService:
     """Service for robot control"""
 
     def __init__(self, controller: IRobotController):
         self.controller = controller
+        # Track last sent stop time for dedupe (None = no stop sent recently)
+        self._last_stop_sent_at: float | None = None
 
     def handle_cmd_vel(self, x: float, y: float, z: float, robot_id: str, obstacle_avoidance: bool = False) -> None:
-        """Process movement command"""
+        """Process movement command.
+
+        Routes to either Go2 sport Move (api_id=1008) for non-zero velocity, or
+        Go2 sport StopMove (api_id=1003) for explicit stops (post-deadband zero).
+
+        Why this branch matters: Go2 sport mode silently ignores Move commands
+        with |x| < MIN_X (0.5 m/s), so plain Move {x:0} does NOT stop the robot —
+        it keeps executing the last non-zero Move until sport timeout (~2-3s).
+        Confirmed via on-Jetson B4 burndown 2026-05-11 (Go2 walked 2m after
+        a stop command was sent).
+        """
         try:
             clamped_x = self._apply_deadband(self._clamp(x, -MAX_LINEAR_X, MAX_LINEAR_X))
             clamped_y = self._apply_deadband(self._clamp(y, -MAX_LINEAR_Y, MAX_LINEAR_Y))
@@ -39,6 +59,31 @@ class RobotControlService:
                 robot_id,
                 obstacle_avoidance,
             )
+
+            # Explicit stop: all axes zero after deadband → use StopMove (1003)
+            # instead of Move (1008) with x=0 (which Go2 sport mode ignores).
+            is_stop = clamped_x == 0.0 and clamped_y == 0.0 and clamped_z == 0.0
+            if is_stop:
+                # Dedupe: only send first stop (or a 1Hz refresh) — once Go2
+                # acknowledges StopMove it stays stopped without further commands.
+                # Repeated 10Hz StopMove from reactive_stop_node would backlog
+                # the WebRTC DataChannel.
+                now = time.monotonic()
+                if (self._last_stop_sent_at is not None
+                        and (now - self._last_stop_sent_at) < STOP_REFRESH_INTERVAL_S):
+                    return  # silent skip — already stopped recently
+                logger.info(
+                    "Sending StopMove (api_id=1003) to robot %s (post-deadband cmd_vel = 0)",
+                    robot_id,
+                )
+                self.controller.send_stop_move_command(robot_id)
+                self._last_stop_sent_at = now
+                return
+
+            # Non-zero motion: always send (sport mode needs frequent refresh
+            # to maintain velocity). Reset stop tracker so the next stop fires
+            # immediately without dedupe penalty.
+            self._last_stop_sent_at = None
             cmd = gen_mov_command(
                 round(clamped_x, 2),
                 round(clamped_y, 2),

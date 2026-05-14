@@ -102,7 +102,7 @@ ok    █████ 5
 
 ### 5. 技術說明折疊區（簡單）
 
-底部加一個可展開/收起的說明區，介紹 MediaPipe Gesture Recognizer 的原理、支援手勢、有效距離（1-3m）。內容可以從 `docs/手勢辨識/README.md` 複製。
+底部加一個可展開/收起的說明區，介紹 MediaPipe Gesture Recognizer 的原理、支援手勢、有效距離（1-3m）。內容可以從 `docs/pawai-brain/perception/gesture/README.md` 複製。
 
 ### 6. 你自己想加的任何功能
 

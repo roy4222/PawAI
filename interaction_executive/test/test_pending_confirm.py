@@ -1,0 +1,241 @@
+"""Tests for PendingConfirm state machine.
+
+Spec: docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md §2
+"""
+import pytest
+
+from interaction_executive.pending_confirm import (
+    ConfirmOutcomeKind,
+    ConfirmState,
+    PendingConfirm,
+)
+
+
+@pytest.fixture
+def pc():
+    # 5/8: default timeout bumped to 15s — pin test fixture to 5s for timing-sensitive cases
+    return PendingConfirm(timeout_s=5.0)
+
+
+# ---- request_confirm ------------------------------------------------------
+
+
+def test_initial_state_is_idle(pc):
+    assert pc.state == ConfirmState.IDLE
+    assert pc.pending_skill is None
+
+
+def test_request_confirm_enters_pending(pc):
+    out = pc.request_confirm("wiggle", {"intensity": 1}, now=100.0)
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+    assert pc.pending_skill == "wiggle"
+    assert pc.pending_args == {"intensity": 1}
+
+
+def test_request_confirm_replaces_prior(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    pc.request_confirm("stretch", {"name": "Roy"}, now=101.0)
+    assert pc.pending_skill == "stretch"
+    assert pc.pending_args == {"name": "Roy"}
+
+
+# ---- timeout --------------------------------------------------------------
+
+
+def test_tick_within_timeout_stays_pending(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.tick(now=104.9, current_gesture=None)
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+
+
+def test_timeout_just_at_boundary_still_pending(pc):
+    # boundary: now - started_at == timeout_s should NOT cancel (strict >)
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.tick(now=105.0, current_gesture=None)
+    assert out.kind == ConfirmOutcomeKind.PENDING
+
+
+def test_timeout_past_boundary_cancels(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.tick(now=105.01, current_gesture=None)
+    assert out.kind == ConfirmOutcomeKind.CANCELLED
+    assert out.reason == "timeout"
+    assert pc.state == ConfirmState.IDLE
+
+
+# ---- OK stability ---------------------------------------------------------
+
+
+def test_single_ok_tick_below_stable_window_stays_pending(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.tick(now=100.1, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+
+
+def test_ok_stable_05s_confirms(pc):
+    pc.request_confirm("wiggle", {"a": 1}, now=100.0)
+    pc.tick(now=100.0, current_gesture="ok")           # ok_stable_since = 100.0
+    out = pc.tick(now=100.5, current_gesture="ok")     # exactly 0.5s
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+    assert out.skill == "wiggle"
+    assert out.args == {"a": 1}
+    assert pc.state == ConfirmState.IDLE
+
+
+def test_ok_then_blank_resets_stability(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    pc.tick(now=100.0, current_gesture="ok")
+    pc.tick(now=100.3, current_gesture=None)           # break streak
+    pc.tick(now=100.4, current_gesture="ok")           # restart at 100.4
+    out = pc.tick(now=100.6, current_gesture="ok")     # only 0.2s, not enough
+    assert out.kind == ConfirmOutcomeKind.PENDING
+
+
+def test_ok_case_and_whitespace_normalized(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    pc.tick(now=100.0, current_gesture="  OK  ")
+    out = pc.tick(now=100.5, current_gesture="Ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+# ---- wrong gesture --------------------------------------------------------
+
+
+def test_different_gesture_stays_pending(pc):
+    """5/8 [#F-confirm]: non-OK gesture during PENDING window must NOT cancel.
+    MediaPipe Gesture Recognizer flickers between OK/wave at hand boundaries —
+    cancelling on first mis-classification kills confirm flow. Timeout (5s)
+    is the only cancel path."""
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.tick(now=100.2, current_gesture="palm")
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+    # OK afterwards still works
+    pc.tick(now=100.3, current_gesture="ok")
+    out = pc.tick(now=100.9, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+def test_wrong_gesture_after_partial_ok_resets_streak_but_stays_pending(pc):
+    """Partial OK streak → flicker (thumbs_up) → resume OK → still confirms.
+    OK stability streak resets on flicker but PENDING state persists."""
+    pc.request_confirm("wiggle", {}, now=100.0)
+    pc.tick(now=100.0, current_gesture="ok")  # start OK streak
+    out = pc.tick(now=100.2, current_gesture="thumbs_up")  # flicker
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.PENDING
+    # Need to re-build OK streak from scratch
+    pc.tick(now=100.3, current_gesture="ok")
+    out = pc.tick(now=100.85, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+# ---- idle no-op -----------------------------------------------------------
+
+
+def test_tick_in_idle_is_noop_pending(pc):
+    out = pc.tick(now=999.0, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.PENDING
+    assert pc.state == ConfirmState.IDLE
+
+
+# ---- manual cancel --------------------------------------------------------
+
+
+def test_manual_cancel_when_pending(pc):
+    pc.request_confirm("wiggle", {}, now=100.0)
+    out = pc.cancel("user_aborted")
+    assert out.kind == ConfirmOutcomeKind.CANCELLED
+    assert out.reason == "user_aborted"
+    assert pc.state == ConfirmState.IDLE
+
+
+def test_manual_cancel_when_idle(pc):
+    out = pc.cancel()
+    assert out.kind == ConfirmOutcomeKind.CANCELLED
+    assert out.reason == "not_pending"
+
+
+# ---- ctor validation ------------------------------------------------------
+
+
+def test_invalid_timeout_rejected():
+    with pytest.raises(ValueError):
+        PendingConfirm(timeout_s=0)
+    with pytest.raises(ValueError):
+        PendingConfirm(timeout_s=-1)
+
+
+def test_invalid_stable_rejected():
+    with pytest.raises(ValueError):
+        PendingConfirm(stable_s=-0.1)
+
+
+def test_custom_ok_gesture_works():
+    pc = PendingConfirm(ok_gesture="thumbs_up")
+    pc.request_confirm("wiggle", {}, now=100.0)
+    pc.tick(now=100.0, current_gesture="thumbs_up")
+    out = pc.tick(now=100.5, current_gesture="thumbs_up")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+# ---------------------------------------------------------------------------
+# N8 (2026-05-11): must_release_ok — guard against hand already at OK at the
+# moment of request_confirm. Without this, stretch/wiggle fires immediately
+# after the LLM proposes them because user's hand was already in OK position.
+# ---------------------------------------------------------------------------
+
+
+def test_request_with_hand_already_at_ok_requires_release(pc):
+    """If hand is at OK when request fires, must transition through non-OK
+    before any OK can count toward the stable window."""
+    # Hand already at OK at request time
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # Tick with continued OK — should NOT confirm even after stable window
+    out = pc.tick(now=0.6, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.PENDING
+
+
+def test_release_then_re_ok_does_confirm(pc):
+    """After release (non-OK gesture), next OK counts normally."""
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # User releases (no gesture)
+    pc.tick(now=0.1, current_gesture=None)
+    # Now re-issue OK, should count
+    pc.tick(now=0.2, current_gesture="ok")
+    out = pc.tick(now=0.8, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+    assert out.skill == "wiggle"
+
+
+def test_request_with_non_ok_hand_does_not_block(pc):
+    """Backward compat: request with hand NOT at OK (or unknown) — old behaviour."""
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="thumbs_up")
+    # First OK starts streak
+    pc.tick(now=0.1, current_gesture="ok")
+    out = pc.tick(now=0.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+def test_request_with_no_current_gesture_arg_works(pc):
+    """Backward compat: callers that don't pass current_gesture get the old path."""
+    pc.request_confirm("wiggle", {}, now=0.0)
+    pc.tick(now=0.1, current_gesture="ok")
+    out = pc.tick(now=0.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+
+
+def test_must_release_resets_on_subsequent_request(pc):
+    """A fresh request_confirm should re-evaluate must_release_ok."""
+    # First request with hand at OK
+    pc.request_confirm("wiggle", {}, now=0.0, current_gesture="ok")
+    # User cancels by re-requesting WITHOUT hand at OK
+    pc.request_confirm("stretch", {}, now=1.0, current_gesture=None)
+    # Now OK should count normally
+    pc.tick(now=1.1, current_gesture="ok")
+    out = pc.tick(now=1.7, current_gesture="ok")
+    assert out.kind == ConfirmOutcomeKind.CONFIRMED
+    assert out.skill == "stretch"

@@ -13,7 +13,126 @@ from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
-from object_perception.coco_classes import COCO_CLASSES, class_color
+from object_perception.coco_classes import (
+    COCO_CLASSES,
+    COLOR_ZH,
+    class_color,
+    class_name_zh,
+)
+
+# CJK font lookup for debug overlay — cv2.putText cannot render zh-TW.
+# Use PIL with a system Noto/CJK font; cache the truetype handle once.
+try:
+    from PIL import Image as PILImage, ImageDraw, ImageFont  # type: ignore
+    _PIL_AVAILABLE = True
+except ImportError:  # pragma: no cover — Pillow ships with most ROS2 setups
+    _PIL_AVAILABLE = False
+
+_CJK_FONT_CANDIDATES = (
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+    "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
+    "/System/Library/Fonts/PingFang.ttc",  # macOS dev box fallback
+)
+
+
+def _resolve_cjk_font(size: int = 16):
+    """Return a PIL ImageFont supporting CJK, or None if no font found."""
+    if not _PIL_AVAILABLE:
+        return None
+    import os
+    for path in _CJK_FONT_CANDIDATES:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return None
+
+
+# ----------------------------------------------------------------------
+# 5/6: HSV 12-colour analysis on bbox crop. Per-pixel classification with
+# V/S gates (so brown / black / white / gray work — they need value, not
+# just hue). OpenCV HSV ranges: H ∈ [0,180], S ∈ [0,255], V ∈ [0,255].
+# Returns peak colour + (peak_pixels / total_pixels).
+#
+# Classification priority (mutually exclusive masks):
+#   1. black   V < 50
+#   2. white   S < 40 AND V ≥ 200
+#   3. gray    S < 40 AND 50 ≤ V < 200
+#   4. brown   warm hue (5..25) AND V < 130 (chromatic & dark)
+#   5. pink    red side (H ≥ 160 OR ≤ 5) AND S < 150 AND V ≥ 180
+#              OR magenta band (150 < H < 165)
+#   6. red     H ≤ 8 OR H ≥ 165
+#   7. orange  8 < H ≤ 22
+#   8. yellow  22 < H ≤ 35
+#   9. green   35 < H ≤ 85
+#  10. cyan    85 < H ≤ 100
+#  11. blue    100 < H ≤ 130
+#  12. purple  130 < H ≤ 150
+#
+# Returns ("Unknown", 0.0) if peak / total < 0.25 (too fragmented to
+# commit) — protects against speckled / multi-coloured surfaces.
+# Module-level (vs class staticmethod) so unit tests can import without
+# pulling in rclpy. ObjectPerceptionNode._analyze_bbox_color delegates here.
+# ----------------------------------------------------------------------
+def analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[str, float]:
+    h, w = image_bgr.shape[:2]
+    x1c = max(0, min(x1, w - 1))
+    x2c = max(0, min(x2, w))
+    y1c = max(0, min(y1, h - 1))
+    y2c = max(0, min(y2, h))
+    if x2c <= x1c or y2c <= y1c:
+        return ("Unknown", 0.0)
+    crop = image_bgr[y1c:y2c, x1c:x2c]
+    if crop.size == 0:
+        return ("Unknown", 0.0)
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    H = hsv[..., 0]
+    S = hsv[..., 1]
+    V = hsv[..., 2]
+
+    # Achromatic gates first.
+    m_black = V < 50
+    m_white = (S < 40) & (V >= 200) & ~m_black
+    m_gray = (S < 40) & ~m_black & ~m_white
+    chromatic = ~(m_black | m_white | m_gray)
+
+    # Brown — warm hue (orange-yellow) with low V. Subset of chromatic.
+    m_brown = chromatic & (H >= 5) & (H <= 25) & (V < 130)
+    rest = chromatic & ~m_brown
+
+    # Pink — red-magenta side, lighter / less saturated than red.
+    m_pink_red_side = rest & ((H >= 160) | (H <= 5)) & (S < 150) & (V >= 180)
+    m_pink_magenta = rest & (H > 150) & (H < 165)
+    m_pink = m_pink_red_side | m_pink_magenta
+    rest = rest & ~m_pink
+
+    m_red = rest & ((H <= 8) | (H >= 165))
+    m_orange = rest & (H > 8) & (H <= 22)
+    m_yellow = rest & (H > 22) & (H <= 35)
+    m_green = rest & (H > 35) & (H <= 85)
+    m_cyan = rest & (H > 85) & (H <= 100)
+    m_blue = rest & (H > 100) & (H <= 130)
+    m_purple = rest & (H > 130) & (H <= 150)
+
+    masks = {
+        "black": m_black, "white": m_white, "gray": m_gray,
+        "brown": m_brown, "pink": m_pink,
+        "red": m_red, "orange": m_orange, "yellow": m_yellow,
+        "green": m_green, "cyan": m_cyan, "blue": m_blue, "purple": m_purple,
+    }
+    counts = {k: int(m.sum()) for k, m in masks.items()}
+    total = float(sum(counts.values()))
+    if total <= 0:
+        return ("Unknown", 0.0)
+    peak = max(counts, key=counts.get)
+    ratio = counts[peak] / total
+    if ratio < 0.25:
+        return ("Unknown", 0.0)
+    return (peak, round(float(ratio), 3))
 
 
 class ObjectPerceptionNode(Node):
@@ -68,6 +187,13 @@ class ObjectPerceptionNode(Node):
         self._cooldowns: dict = {}
         # FPS tracking
         self._tick_times: list = []
+        # Cache a CJK font handle so PIL doesn't re-open the .ttc every frame.
+        self._zh_font = _resolve_cjk_font(size=18)
+        if self._zh_font is None:
+            self.get_logger().warning(
+                "No CJK font found — debug overlay will fall back to English class names",
+                once=True,
+            )
 
         # --- Camera subscription ---
         from cv_bridge import CvBridge
@@ -176,6 +302,10 @@ class ObjectPerceptionNode(Node):
         y2 = int(max(0, min((y2 - pad_top) / scale, orig_h - 1)))
         return x1, y1, x2, y2
 
+    @staticmethod
+    def _analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[str, float]:
+        return analyze_bbox_color(image_bgr, x1, y1, x2, y2)
+
     # ------------------------------------------------------------------
     # Main tick
     # ------------------------------------------------------------------
@@ -223,11 +353,14 @@ class ObjectPerceptionNode(Node):
             )
             if x2 <= x1 or y2 <= y1:
                 continue
+            color, color_conf = self._analyze_bbox_color(image, x1, y1, x2, y2)
             detections.append({
                 "class_id": class_id,  # internal-only, stripped before event publish
                 "class_name": COCO_CLASSES[class_id],
                 "confidence": round(conf, 3),
                 "bbox": [x1, y1, x2, y2],
+                "color": color,
+                "color_confidence": color_conf,
             })
 
         # --- FPS tracking ---
@@ -250,17 +383,22 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     def _publish_events(self, detections: list):
         now = time.time()
-        # Collect new classes that pass cooldown (strip internal class_id from payload)
+        # Collect new classes that pass cooldown (strip internal class_id from payload).
+        # 5/5: include optional `color` + `color_confidence` from HSV analysis.
         new_objects = []
         for det in detections:
             cls = det["class_name"]
             last = self._cooldowns.get(cls, 0.0)
             if now - last >= self.class_cooldown:
-                new_objects.append({
+                obj = {
                     "class_name": det["class_name"],
                     "confidence": det["confidence"],
                     "bbox": det["bbox"],
-                })
+                }
+                if det.get("color") and det["color"] != "Unknown":
+                    obj["color"] = det["color"]
+                    obj["color_confidence"] = det.get("color_confidence", 0.0)
+                new_objects.append(obj)
                 self._cooldowns[cls] = now
 
         if not new_objects:
@@ -279,25 +417,48 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     def _publish_debug_image(self, image: np.ndarray, detections: list):
         debug = image.copy()
-
+        # Pre-build label strings + draw bboxes via cv2 (fast).
+        # Text rendering happens in a single PIL pass at the end (CJK requires PIL).
+        labels: list[tuple[int, int, str, tuple[int, int, int]]] = []
         for det in detections:
-            cls = det["class_name"]
-            conf = det["confidence"]
+            class_id = det.get("class_id", 0)
             x1, y1, x2, y2 = det["bbox"]
-            color = class_color(det.get("class_id", 0))
+            box_color = class_color(class_id)
+            cv2.rectangle(debug, (x1, y1), (x2, y2), box_color, 2)
 
-            cv2.rectangle(debug, (x1, y1), (x2, y2), color, 2)
-            label = f"{cls} {conf:.2f}"
-            (tw, th), _ = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
-            )
-            cv2.rectangle(
-                debug, (x1, y1 - th - 6), (x1 + tw, y1), color, -1
-            )
-            cv2.putText(
-                debug, label, (x1, y1 - 4),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
-            )
+            class_zh = class_name_zh(class_id)
+            color_str = det.get("color")
+            parts: list[str] = []
+            if color_str and color_str != "Unknown":
+                parts.append(COLOR_ZH.get(color_str, color_str))
+            parts.append(class_zh)
+            label = " ".join(parts) + f" {det['confidence']:.2f}"
+            labels.append((x1, y1, label, box_color))
+
+        if labels and self._zh_font is not None:
+            pil_img = PILImage.fromarray(cv2.cvtColor(debug, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(pil_img)
+            for x1, y1, label, box_color in labels:
+                # PIL text bbox for label background sizing
+                left, top, right, bottom = draw.textbbox((x1, y1), label, font=self._zh_font)
+                tw = right - left
+                th = bottom - top
+                bg_top = max(0, y1 - th - 6)
+                # Note: PIL uses RGB; box_color is BGR — flip.
+                rgb_bg = (box_color[2], box_color[1], box_color[0])
+                draw.rectangle((x1, bg_top, x1 + tw + 4, y1), fill=rgb_bg)
+                draw.text((x1 + 2, bg_top), label, font=self._zh_font, fill=(255, 255, 255))
+            debug = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        elif labels:
+            # No CJK font — fall back to ASCII class_name + color english
+            for x1, y1, label, box_color in labels:
+                ascii_label = label.encode("ascii", errors="ignore").decode() or "obj"
+                (tw, th), _ = cv2.getTextSize(ascii_label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(debug, (x1, y1 - th - 6), (x1 + tw, y1), box_color, -1)
+                cv2.putText(
+                    debug, ascii_label, (x1, y1 - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1,
+                )
 
         # FPS + detection count overlay
         avg_ms = (

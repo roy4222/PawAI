@@ -8,8 +8,12 @@ vision_perception_node:
     tick_period: 0.05
     color_topic: "/camera/camera/color/image_raw"
     depth_topic: "/camera/camera/aligned_depth_to_color/image_raw"
-    gesture_vote_frames: 3
+    # N7 (2026-05-11): user 反饋 fist 辨識率低。vote_frames 3→5 穩定 majority
+    # 不受單幀 misdetection 影響；gesture_stable_s 0.5→0.3 縮短 hold gate 讓
+    # fist 觸發更快（5 幀 @ 20Hz ≈ 250ms 投票 + 300ms hold = ~550ms 反應）。
+    gesture_vote_frames: 5
     gesture_min_score: 0.1
+    gesture_stable_s: 0.3
     gesture_backend: "rtmpose"    # "rtmpose" or "mediapipe"
     pose_backend: "rtmpose"       # "rtmpose" or "mediapipe"
     pose_complexity: 0            # 0=lite(fast), 1=full, 2=heavy

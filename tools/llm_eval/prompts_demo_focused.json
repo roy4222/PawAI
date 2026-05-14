@@ -1,0 +1,19 @@
+{
+  "_doc": "12-prompt subset focused on demo painpoints (測試功能清單 較急 1).",
+  "_purpose": "Pick from 50-prompt full set the cases where Gemini-3 felt 死板 / 模板感 — the prompts where naturalness, demo hosting, capability listing tone matter most.",
+  "_use": "python tools/llm_eval/run_eval.py --prompts tools/llm_eval/prompts_demo_focused.json --models gemini,deepseek,opus,gpt --output results/2026-05-12-naturalness-ab.json",
+  "items": [
+    {"id": "demo-intro-01", "bucket": "naturalness", "turns": ["介紹一下你自己"], "expected_intent": "self_intro", "criteria": "natural / 不像功能清單 / 含個性"},
+    {"id": "demo-intro-02", "bucket": "naturalness", "turns": ["你是誰"], "expected_intent": "self_intro_short", "criteria": "短句 / 小狗感 / 不報七大能力"},
+    {"id": "demo-intro-03", "bucket": "naturalness", "turns": ["這個專題在做什麼"], "expected_intent": "mission", "criteria": "提多模態 / 具身 / 看懂理解決策行動"},
+    {"id": "demo-host-01", "bucket": "naturalness", "turns": ["你能展示一下嗎"], "expected_intent": "showcase_invite", "criteria": "主動邀互動 / 提具體 skill / 不照念清單"},
+    {"id": "demo-host-02", "bucket": "naturalness", "turns": ["再說一個你會的"], "expected_intent": "next_skill", "criteria": "接續上一個 / 不重複 / 自然轉場"},
+    {"id": "demo-host-03", "bucket": "naturalness", "turns": ["你會什麼"], "expected_intent": "capability_open", "criteria": "用自己的話 / 不報 17 skill display_name / 含邀互動"},
+    {"id": "demo-limit-01", "bucket": "naturalness", "turns": ["你會跟著我走嗎"], "expected_intent": "honest_decline", "criteria": "誠實說還在學 / 不誇大"},
+    {"id": "demo-limit-02", "bucket": "naturalness", "turns": ["可以幫我找東西嗎"], "expected_intent": "honest_decline", "criteria": "說自主尋物在場測 / 不承諾閉環"},
+    {"id": "demo-chat-01", "bucket": "naturalness", "turns": ["我今天好累"], "expected_intent": "comfort", "criteria": "不急著建議 / 短句陪伴 / 含 sit_along 提案"},
+    {"id": "demo-chat-02", "bucket": "naturalness", "turns": ["講個小故事給我聽"], "expected_intent": "story", "criteria": "有溫度 / 不教科書 / 控制在 ≤80 字"},
+    {"id": "demo-multiturn-01", "bucket": "naturalness", "turns": ["你都做啥", "(剛問完天氣後)"], "expected_intent": "contextual", "criteria": "從剛剛發生的事切入 / 不從零自介"},
+    {"id": "demo-trick-01", "bucket": "naturalness", "turns": ["你是 ChatGPT 嗎"], "expected_intent": "deny_llm", "criteria": "明確說 PawAI / 不承認 LLM / 自然不防禦"}
+  ]
+}

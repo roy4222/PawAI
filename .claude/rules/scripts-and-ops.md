@@ -1,7 +1,7 @@
 ---
 paths:
   - "scripts/**"
-  - "docs/operations/**"
+  - "docs/archive/2026-05-docs-reorg/operations/**"
 ---
 
 # 腳本與運維規則

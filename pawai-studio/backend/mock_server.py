@@ -1,18 +1,57 @@
 """PawAI Studio — Gateway + Mock Event Server
 
-啟動: uvicorn mock_server:app --host 0.0.0.0 --port 8001 --reload
+啟動（推薦）: bash pawai-studio/start-live.sh --mock     # port 8080
+直接啟: uvicorn mock_server:app --host 0.0.0.0 --port 8080 --reload
 """
 from __future__ import annotations
 
 import asyncio
+import os
 import random
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# Import the real SKILL_REGISTRY (pure-Python dataclass module, no ROS deps)
+# so the mock skill_registry endpoint auto-syncs with brain_node's source of
+# truth. Path: <repo>/interaction_executive/interaction_executive/skill_contract.py
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / "interaction_executive"))
+try:
+    from interaction_executive.skill_contract import SKILL_REGISTRY  # noqa: E402
+except ImportError as _exc:
+    SKILL_REGISTRY = {}
+    print(f"[mock_server] WARN: SKILL_REGISTRY import failed: {_exc}")
+
+# Optional OpenRouter chat helper — only used when MOCK_OPENROUTER=1.
+sys.path.insert(0, str(_REPO_ROOT / "tools/llm_eval"))
+try:
+    from openrouter_chat import chat as _openrouter_chat  # noqa: E402
+except ImportError as _exc:
+    _openrouter_chat = None
+    print(f"[mock_server] WARN: openrouter_chat import failed: {_exc}")
+
+# Read once at import; flipping requires server restart (intentional — env
+# changes mid-session would surprise active sessions).
+_MOCK_OPENROUTER_ENABLED = os.environ.get("MOCK_OPENROUTER", "").strip() == "1"
+if _MOCK_OPENROUTER_ENABLED:
+    _has_key = bool(
+        os.environ.get("OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY")
+    )
+    if _has_key and _openrouter_chat is not None:
+        print("[mock_server] MOCK_OPENROUTER=1 → /api/text_input will call Gemini 3 Flash")
+    else:
+        print(
+            "[mock_server] WARN: MOCK_OPENROUTER=1 but "
+            f"{'no key' if not _has_key else 'helper missing'} — falling back to canned"
+        )
 
 from schemas import (
     BrainState,
@@ -24,9 +63,12 @@ from schemas import (
     GestureState,
     MockTrigger,
     PawAIEvent,
+    PawAIBrainState,
     PoseData,
     PoseState,
+    SkillRequestPayload,
     SkillCommand,
+    TextInputPayload,
     SpeechIntentData,
     SpeechState,
     SystemHealth,
@@ -227,6 +269,34 @@ async def run_demo_a() -> None:
 
 current_brain_state = BrainState(stamp=time.time(), executive_state="idle")
 
+current_pawai_brain_state = PawAIBrainState(
+    timestamp=time.time(),
+    mode="idle",
+    active_plan=None,
+    active_step=None,
+    fallback_active=False,
+    safety_flags={
+        "obstacle": False,
+        "emergency": False,
+        "fallen": False,
+        "tts_playing": False,
+        "nav_safe": True,
+    },
+    cooldowns={},
+    last_plans=[],
+)
+
+
+async def broadcast_brain_event(event_type: str, data: dict) -> None:
+    event = PawAIEvent(
+        id=_uid(),
+        timestamp=_ts(),
+        source="brain",
+        event_type=event_type,
+        data=data,
+    ).model_dump()
+    await manager.broadcast(event)
+
 # ── App ─────────────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -342,9 +412,191 @@ async def post_chat(cmd: ChatCommand):
     reply = f"收到你的訊息：「{cmd.text}」（這是 Mock 回覆）"
     return {"status": "ok", "reply": reply, "session_id": cmd.session_id}
 
+@app.post("/api/skill_request")
+async def post_skill_request(payload: SkillRequestPayload):
+    """Mock skill_request — emits a proposal + success/blocked-by-safety result
+    based on the real SKILL_REGISTRY shape, so Studio Trace Drawer gets
+    feedback on every button click.
+    """
+    request_id = payload.request_id or f"req-{int(time.time() * 1000)}"
+    skill = payload.skill
+    plan_id = f"p-mock-{int(time.time() * 1000)}"
+    contract = SKILL_REGISTRY.get(skill)
+
+    # Unknown skill — no event, just ack.
+    if contract is None:
+        return {"ok": False, "mock": True, "error": f"unknown skill {skill!r}"}
+
+    # Disabled-bucket or enabled_when-blocked → blocked_by_safety
+    if not contract.static_enabled or contract.enabled_when:
+        await broadcast_brain_event("skill_result", {
+            "plan_id": plan_id,
+            "step_index": None,
+            "status": "blocked_by_safety",
+            "detail": "skill statically disabled or gated"
+                if not contract.static_enabled
+                else (contract.enabled_when[0][1] if contract.enabled_when else "blocked"),
+            "selected_skill": skill,
+            "priority_class": int(contract.priority_class),
+            "step_total": len(contract.steps),
+            "step_args": {},
+            "timestamp": time.time(),
+        })
+        return {"ok": True, "mock": True, "request_id": request_id}
+
+    # Active path — emit proposal then completed result.
+    steps_payload = [
+        {"executor": s.executor.value, "args": dict(s.args)}
+        for s in contract.steps
+    ]
+    await broadcast_brain_event("proposal", {
+        "plan_id": plan_id,
+        "selected_skill": skill,
+        "steps": steps_payload,
+        "reason": f"studio_button:{skill}",
+        "source": "studio_button",
+        "priority_class": int(contract.priority_class),
+        "session_id": request_id,
+        "created_at": time.time(),
+    })
+    await broadcast_brain_event("skill_result", {
+        "plan_id": plan_id,
+        "step_index": None,
+        "status": "completed",
+        "detail": skill,
+        "selected_skill": skill,
+        "priority_class": int(contract.priority_class),
+        "step_total": len(contract.steps),
+        "step_args": {},
+        "timestamp": time.time(),
+    })
+    return {"ok": True, "mock": True, "request_id": request_id}
+
+async def _emit_text_reply(
+    request_id: str,
+    reply_text: str,
+    *,
+    selected_skill: str = "say_canned",
+    source: str = "mock",
+    reason: str = "mock_text_input",
+    extra_marker: str = "",
+) -> None:
+    """Broadcast proposal + completed result for a text reply.
+    extra_marker is appended verbatim to detail (e.g. " (mock)" / " (no key)").
+    """
+    plan_id = f"p-text-{int(time.time() * 1000)}"
+    decorated = reply_text + extra_marker if extra_marker else reply_text
+    await broadcast_brain_event("proposal", {
+        "plan_id": plan_id,
+        "selected_skill": selected_skill,
+        "steps": [{"executor": "say", "args": {"text": decorated}}],
+        "reason": reason,
+        "source": source,
+        "priority_class": 3 if selected_skill != "say_canned" else 4,
+        "session_id": request_id,
+        "created_at": time.time(),
+    })
+    await broadcast_brain_event("skill_result", {
+        "plan_id": plan_id,
+        "step_index": None,
+        "status": "completed",
+        "detail": decorated,
+        "selected_skill": selected_skill,
+        "priority_class": 3 if selected_skill != "say_canned" else 4,
+        "step_total": 1,
+        "step_args": {},
+        "timestamp": time.time(),
+    })
+
+    # Mirror the real Jetson pipeline: executive node publishes /tts when
+    # executing a SAY step → gateway forwards as a `tts:tts_speaking` event.
+    # ChatPanel watches lastTtsText/lastTtsAt and renders the AI bubble only
+    # when this event arrives. Without this broadcast the chat looks frozen
+    # ("回應逾時") even though the proposal/result events succeeded.
+    await manager.broadcast({
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "tts",
+        "event_type": "tts_speaking",
+        "data": {
+            "text": decorated,
+            "phase": "speaking",
+            "origin": source,
+        },
+    })
+
+
+@app.post("/api/text_input")
+async def post_text_input(payload: TextInputPayload):
+    """Mock text input.
+
+    Default (MOCK_OPENROUTER unset / != "1"): emit say_canned("我聽不太懂")
+    with " (mock)" marker so frontend knows the reply is fake.
+
+    Opt-in (MOCK_OPENROUTER=1 + OPENROUTER_KEY in env): call Gemini 3 Flash
+    via tools/llm_eval/openrouter_chat.py and emit the real reply.
+    """
+    request_id = payload.request_id or f"txt-{int(time.time() * 1000)}"
+    text = (payload.text or "").strip()
+
+    # Opt-in real Gemini path.
+    if _MOCK_OPENROUTER_ENABLED and _openrouter_chat is not None and text:
+        # Run the blocking requests.post in a worker thread so the FastAPI
+        # event loop stays responsive for /ws/events listeners.
+        try:
+            result = await asyncio.to_thread(_openrouter_chat, text)
+        except Exception as exc:  # Defensive: mock mode must never 500 on chat.
+            result = {
+                "ok": False,
+                "error_kind": "exception",
+                "error": str(exc),
+            }
+        if result.get("ok"):
+            await _emit_text_reply(
+                request_id,
+                str(result["reply_text"]),
+                selected_skill=result.get("selected_skill") or "chat_reply",
+                source="mock_openrouter",
+                reason="mock_text_input:gemini",
+            )
+            return {
+                "ok": True,
+                "mock": True,
+                "openrouter": True,
+                "request_id": request_id,
+                "latency_s": result.get("latency_s"),
+                "raw_skill": result.get("raw_skill"),
+                "intent": result.get("intent"),
+            }
+        # Real call failed → fall through with explicit error marker.
+        marker = f" (openrouter:{result.get('error_kind', 'fail')})"
+        await _emit_text_reply(
+            request_id,
+            "我聽不太懂",
+            extra_marker=marker,
+            reason=f"mock_text_input:openrouter_fail:{result.get('error_kind')}",
+        )
+        return {
+            "ok": True,
+            "mock": True,
+            "openrouter": False,
+            "openrouter_error": result.get("error_kind"),
+            "request_id": request_id,
+        }
+
+    # Default offline mock.
+    if _MOCK_OPENROUTER_ENABLED and _openrouter_chat is None:
+        marker = " (no helper)"
+    elif _MOCK_OPENROUTER_ENABLED:
+        marker = " (no key)"
+    else:
+        marker = " (mock)"
+    await _emit_text_reply(request_id, "我聽不太懂", extra_marker=marker)
+    return {"ok": True, "mock": True, "openrouter": False, "request_id": request_id}
+
 @app.get("/api/brain")
 async def get_brain():
-    return current_brain_state.model_dump()
+    return current_pawai_brain_state.model_dump()
 
 @app.get("/api/health")
 async def get_health():
@@ -358,6 +610,101 @@ async def get_health():
             {"name": "brain", "status": "active", "latency_ms": 150, "last_heartbeat": time.time()},
         ],
     ).model_dump()
+
+# ── Phase B B5a: skill_registry / capability / plan_mode ────────────
+#
+# Real gateway equivalents live in pawai-studio/gateway/studio_gateway.py.
+# This mock mirrors the same JSON shape so the Studio frontend can be tested
+# in browser without a running ROS / Jetson environment.
+
+# Mutable mock state for capability gates and plan mode.
+_mock_capability: dict[str, str] = {"nav_ready": "true", "depth_clear": "true"}
+_mock_plan_mode: dict[str, str] = {"mode": "A"}
+
+
+@app.get("/api/skill_registry")
+async def get_skill_registry():
+    """Mock /api/skill_registry — returns 27 skills synced with the real
+    interaction_executive.skill_contract.SKILL_REGISTRY.
+    """
+    skills = []
+    for name, c in SKILL_REGISTRY.items():
+        skills.append({
+            "name": name,
+            "bucket": c.bucket,
+            "static_enabled": c.static_enabled,
+            "enabled_when_blocked": bool(c.enabled_when),
+            "priority_class": int(c.priority_class),
+            "cooldown_s": c.cooldown_s,
+            "timeout_s": c.timeout_s,
+            "safety_requirements": list(c.safety_requirements),
+            "fallback_skill": c.fallback_skill,
+            "requires_confirmation": c.requires_confirmation,
+            "risk_level": c.risk_level,
+            "ui_style": c.ui_style,
+            "description": c.description,
+            "args_schema": c.args_schema,
+            "step_count": len(c.steps),
+        })
+    by_bucket: dict[str, int] = {"active": 0, "hidden": 0, "disabled": 0, "retired": 0}
+    for s in skills:
+        by_bucket[s["bucket"]] = by_bucket.get(s["bucket"], 0) + 1
+    return {"ok": True, "total": len(skills), "by_bucket": by_bucket, "skills": skills}
+
+
+@app.get("/api/capability")
+async def get_capability():
+    """Tri-state snapshot. Defaults: both green so nav-gated buttons can be tested."""
+    return {"ok": True, "capabilities": dict(_mock_capability)}
+
+
+class _CapabilityPayload(BaseModel):
+    name: str  # "nav_ready" | "depth_clear"
+    state: str  # "true" | "false" | "unknown"
+
+
+@app.post("/api/capability")
+async def post_capability(payload: _CapabilityPayload):
+    """Mock-only endpoint to flip a gate (so Studio Trace Drawer chips can be
+    visually verified in all 3 colours without a real perception pipeline).
+    """
+    if payload.name not in _mock_capability:
+        return {"ok": False, "error": f"unknown capability {payload.name!r}"}
+    if payload.state not in ("true", "false", "unknown"):
+        return {"ok": False, "error": "state must be true/false/unknown"}
+    _mock_capability[payload.name] = payload.state
+    # Broadcast the change as a synthetic event so /ws/events listeners update.
+    await manager.broadcast({
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "capability",
+        "event_type": f"capability_{payload.name}",
+        "data": {
+            "name": payload.name,
+            "value": payload.state == "true",
+            "tri_state": payload.state,
+        },
+    })
+    return {"ok": True, "name": payload.name, "state": payload.state}
+
+
+@app.get("/api/plan_mode")
+async def get_plan_mode():
+    return {"ok": True, "mode": _mock_plan_mode["mode"]}
+
+
+class _PlanModePayload(BaseModel):
+    mode: str  # "A" | "B"
+
+
+@app.post("/api/plan_mode")
+async def post_plan_mode(payload: _PlanModePayload):
+    mode = payload.mode.strip().upper()
+    if mode not in {"A", "B"}:
+        return {"ok": False, "error": "mode must be 'A' or 'B'"}
+    _mock_plan_mode["mode"] = mode
+    return {"ok": True, "mode": mode}
+
 
 # ── REST: Mock 控制端點 ─────────────────────────────────────────────
 
@@ -376,3 +723,89 @@ async def mock_trigger(trigger: MockTrigger):
 async def mock_demo_a():
     asyncio.create_task(run_demo_a())
     return {"status": "started", "scenario": "demo_a", "steps": len(DEMO_A_SEQUENCE)}
+
+@app.post("/mock/scenario/self_introduce")
+async def mock_scenario_self_introduce():
+    async def run() -> None:
+        plan_id = f"p-mock-{int(time.time() * 1000)}"
+        steps = [
+            ("say", {"text": "我是 PawAI，你的居家互動機器狗"}),
+            ("motion", {"name": "hello"}),
+            ("say", {"text": "平常我會待在你身邊，等你叫我"}),
+            ("motion", {"name": "sit"}),
+            ("say", {"text": "你可以用聲音、手勢，或直接跟我互動"}),
+            ("motion", {"name": "content"}),
+            ("say", {"text": "我也會注意周圍發生的事情"}),
+            ("motion", {"name": "stand"}),
+            ("say", {"text": "如果看到陌生人，我會提醒你提高注意"}),
+            ("motion", {"name": "balance_stand"}),
+        ]
+        await broadcast_brain_event("state", {
+            **current_pawai_brain_state.model_dump(),
+            "timestamp": time.time(),
+            "mode": "sequence",
+            "active_plan": {
+                "plan_id": plan_id,
+                "selected_skill": "self_introduce",
+                "step_index": 0,
+                "step_total": len(steps),
+                "started_at": time.time(),
+                "priority_class": 2,
+            },
+        })
+        await broadcast_brain_event("proposal", {
+            "plan_id": plan_id,
+            "selected_skill": "self_introduce",
+            "steps": [{"executor": executor, "args": args} for executor, args in steps],
+            "reason": "mock_scenario",
+            "source": "mock",
+            "priority_class": 2,
+            "session_id": None,
+            "created_at": time.time(),
+        })
+        for status in ("accepted", "started"):
+            await broadcast_brain_event("skill_result", {
+                "plan_id": plan_id,
+                "step_index": None,
+                "status": status,
+                "detail": "self_introduce",
+                "selected_skill": "self_introduce",
+                "priority_class": 2,
+                "step_total": len(steps),
+                "step_args": {},
+                "timestamp": time.time(),
+            })
+        for idx, (executor, args) in enumerate(steps):
+            await asyncio.sleep(0.15)
+            for status in ("step_started", "step_success"):
+                await broadcast_brain_event("skill_result", {
+                    "plan_id": plan_id,
+                    "step_index": idx,
+                    "status": status,
+                    "detail": executor,
+                    "selected_skill": "self_introduce",
+                    "priority_class": 2,
+                    "step_total": len(steps),
+                    "step_args": args,
+                    "timestamp": time.time(),
+                })
+        await broadcast_brain_event("skill_result", {
+            "plan_id": plan_id,
+            "step_index": None,
+            "status": "completed",
+            "detail": "",
+            "selected_skill": "self_introduce",
+            "priority_class": 2,
+            "step_total": len(steps),
+            "step_args": {},
+            "timestamp": time.time(),
+        })
+        await broadcast_brain_event("state", {
+            **current_pawai_brain_state.model_dump(),
+            "timestamp": time.time(),
+            "mode": "idle",
+            "active_plan": None,
+        })
+
+    asyncio.create_task(run())
+    return {"ok": True, "scenario": "self_introduce"}

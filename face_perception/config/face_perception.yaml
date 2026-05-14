@@ -17,7 +17,10 @@ face_identity_node:
     stable_hits: 2
     unknown_grace_s: 2.5
     # Recognition thresholds (relaxed for D435 + Jetson real-world conditions)
-    sim_threshold_upper: 0.30
+    # 5/8: tightened upper 0.30 → 0.40 to suppress 60%+ stranger false-alerts
+    # (hands / glass reflections / skin-tone objects). Lower kept at 0.22 so
+    # known faces still resolve quickly.
+    sim_threshold_upper: 0.40
     sim_threshold_lower: 0.22
     # Disable compare image (saves bandwidth)
     publish_compare_image: false

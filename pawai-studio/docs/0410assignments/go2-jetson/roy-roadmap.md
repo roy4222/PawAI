@@ -60,7 +60,7 @@
 
 ### 2A. PawAI Brain 三層落地（核心任務）
 
-> 完整設計見 `docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`
+> 完整設計見 `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`
 
 **執行順序**：
 
@@ -211,9 +211,9 @@
 
 | 文件 | 說明 |
 |------|------|
-| **`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`** | **系統設計規格（current）** |
-| `docs/superpowers/specs/2026-04-10-guardian-dog-design.md` | 守護犬 spec（superseded，歷史保留） |
+| **`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`** | **系統設計規格（current）** |
+| `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md` | 守護犬 spec（superseded，歷史保留） |
 | `docs/mission/README.md` | 專案入口頁 v2.4（居家互動機器狗版） |
-| `docs/導航避障/research/2026-04-08-external-lidar-feasibility.md` | LiDAR 可行性研究 |
+| `docs/navigation/research/2026-04-08-external-lidar-feasibility.md` | LiDAR 可行性研究 |
 | `pawai-studio/docs/0410assignments/README.md` | 四人分工概覽（互動主軸版） |
 | `references/project-status.md` | 每日狀態 |

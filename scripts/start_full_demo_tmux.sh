@@ -17,7 +17,25 @@ SESSION="demo"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKDIR="/home/jetson/elder_and_dog"
 CT2_LIB_PATH="$HOME/.local/ctranslate2-cuda/lib"
-ROS_SETUP="source /opt/ros/humble/setup.zsh && source $WORKDIR/install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-}"
+
+# ── Load secrets (.env at repo root) ──
+# Holds OPENROUTER_KEY / OPENROUTER_API_KEY etc. Without this, every tmux child
+# process loses access to cloud LLM keys and conversation_graph_node falls back
+# to RuleBrain on every turn (engine=langgraph, openrouter=off).
+if [[ -f "$WORKDIR/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$WORKDIR/.env"
+  set +a
+  echo "[env] loaded $WORKDIR/.env"
+else
+  echo "[env] WARNING: $WORKDIR/.env missing — OpenRouter will be disabled"
+fi
+
+# Compose ROS setup with .env re-sourced inside each tmux pane (each pane is a
+# fresh shell; just exporting in this script body would not propagate). The
+# `set -a` ensures every var becomes exported.
+ROS_SETUP="source /opt/ros/humble/setup.zsh && source $WORKDIR/install/setup.zsh && export LD_LIBRARY_PATH=$CT2_LIB_PATH:\${LD_LIBRARY_PATH:-} && { [[ -f $WORKDIR/.env ]] && set -a && source $WORKDIR/.env && set +a; } || true"
 
 # ── Go2 ──
 ROBOT_IP="${ROBOT_IP:-192.168.123.161}"
@@ -30,6 +48,23 @@ LLM_TIMEOUT="${LLM_TIMEOUT:-5.0}"
 ENABLE_LOCAL_LLM="${ENABLE_LOCAL_LLM:-true}"
 LOCAL_LLM_ENDPOINT="${LOCAL_LLM_ENDPOINT:-http://localhost:11434/v1/chat/completions}"
 LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
+
+# ── OpenRouter primary / fallback model slugs (5/12 round-2 A/B winner) ──
+# Override one-liner:
+#   PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
+# Demo decision rationale: docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md
+PAWAI_LLM_MODEL="${PAWAI_LLM_MODEL:-openai/gpt-5.4-mini}"
+PAWAI_LLM_FALLBACK_MODEL="${PAWAI_LLM_FALLBACK_MODEL:-google/gemini-3-flash-preview}"
+
+# ── Conversation Engine selection ──
+# langgraph (default): pawai_brain.conversation_graph_node owns /brain/chat_candidate
+# legacy             : speech_processor.llm_bridge_node owns /brain/chat_candidate
+# 兩者互斥；同一時間只啟動一個。
+CONVERSATION_ENGINE="${CONVERSATION_ENGINE:-langgraph}"
+if [[ "$CONVERSATION_ENGINE" != "langgraph" && "$CONVERSATION_ENGINE" != "legacy" ]]; then
+  echo "[ERROR] CONVERSATION_ENGINE must be 'langgraph' or 'legacy', got '$CONVERSATION_ENGINE'"
+  exit 1
+fi
 
 # ── ASR ──
 ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"sensevoice_local\",\"whisper_local\"]'}"
@@ -68,6 +103,7 @@ pkill -f object_perception 2>/dev/null || true
 pkill -f stt_intent_node 2>/dev/null || true
 pkill -f tts_node 2>/dev/null || true
 pkill -f llm_bridge_node 2>/dev/null || true
+pkill -f conversation_graph_node 2>/dev/null || true
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 sleep 2
 
@@ -174,43 +210,76 @@ tmux send-keys -t "$SESSION:tts" \
     -p playback_method:=datachannel" Enter
 sleep 3
 
-# --- Window 7: LLM Bridge ---
-echo "[8/10] Starting llm_bridge_node (Cloud + Ollama fallback, face=executive)..."
+# --- Window 7: Conversation Engine (langgraph primary | legacy fallback) ---
+# 兩條互斥：CONVERSATION_ENGINE 控制誰做 /brain/chat_candidate 的唯一發送者。
+# Emergency fallback：在另一個 shell 跑
+#   pkill -f conversation_graph_node && \
+#   $ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args ...
+# 不要兩個同時跑（會雙發 chat_candidate 觸發 brain_node 雙重處理）。
 tmux new-window -t "$SESSION" -n llm
-tmux send-keys -t "$SESSION:llm" \
-  "$ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args \
-    -p llm_endpoint:='$LLM_ENDPOINT' \
-    -p llm_model:='$LLM_MODEL' \
-    -p llm_timeout:=$LLM_TIMEOUT \
-    -p enable_local_llm:=$ENABLE_LOCAL_LLM \
-    -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
-    -p local_llm_model:='$LOCAL_LLM_MODEL' \
-    -p enable_actions:=$ENABLE_ACTIONS \
-    -p subscribe_face:=false" Enter
+if [[ "$CONVERSATION_ENGINE" == "langgraph" ]]; then
+  echo "[8/10] Starting pawai_brain.conversation_graph_node (langgraph primary)..."
+  tmux send-keys -t "$SESSION:llm" \
+    "$ROS_SETUP && ros2 launch pawai_brain pawai_conversation_graph.launch.py \
+      openrouter_gemini_model:=$PAWAI_LLM_MODEL \
+      openrouter_deepseek_model:=$PAWAI_LLM_FALLBACK_MODEL \
+      openrouter_request_timeout_s:=4.0 \
+      openrouter_overall_budget_s:=5.0 \
+      llm_max_tokens:=2000 \
+      chat_history_max_turns:=5" Enter
+  # llm_persona_file omitted: launch default = personas/v1 directory (Branch B 5/9)
+  # Fallback to legacy single-file: append llm_persona_file:=tools/llm_eval/persona.txt
+else
+  echo "[8/10] Starting llm_bridge_node (legacy fallback)..."
+  tmux send-keys -t "$SESSION:llm" \
+    "$ROS_SETUP && ros2 run speech_processor llm_bridge_node --ros-args \
+      -p llm_endpoint:='$LLM_ENDPOINT' \
+      -p llm_model:='$LLM_MODEL' \
+      -p llm_timeout:=$LLM_TIMEOUT \
+      -p enable_local_llm:=$ENABLE_LOCAL_LLM \
+      -p local_llm_endpoint:='$LOCAL_LLM_ENDPOINT' \
+      -p local_llm_model:='$LOCAL_LLM_MODEL' \
+      -p enable_actions:=$ENABLE_ACTIONS \
+      -p subscribe_face:=false \
+      -p output_mode:=brain \
+      -p enable_openrouter:=true \
+      -p openrouter_gemini_model:=$PAWAI_LLM_MODEL \
+      -p llm_persona_file:=/home/jetson/elder_and_dog/tools/llm_eval/persona.txt \
+      -p max_reply_chars:=0 \
+      -p llm_max_tokens:=2000 \
+      -p llm_timeout:=20.0" Enter
+fi
 sleep 3
 
 # --- Static TF: base_link → camera_link (D435 mounted on Go2) ---
-echo "[9/10] Publishing base_link → camera_link static TF..."
+echo "[9/13] Publishing base_link → camera_link static TF..."
 tmux new-window -t "$SESSION" -n camtf
 tmux send-keys -t "$SESSION:camtf" \
   "$ROS_SETUP && ros2 run tf2_ros static_transform_publisher 0.15 0 0.1 0 0 0 base_link camera_link" Enter
 sleep 1
 
+# --- Depth Safety: D435 depth → /capability/depth_clear (gates motion in safety_layer) ---
+echo "[10/13] Starting depth_safety_node (publishes /capability/depth_clear @ 5Hz)..."
+tmux new-window -t "$SESSION" -n depth_safety
+tmux send-keys -t "$SESSION:depth_safety" \
+  "$ROS_SETUP && ros2 run go2_robot_sdk depth_safety_node" Enter
+sleep 2
+
 # --- Window 8: Foxglove Bridge ---
-echo "[10/10] Starting Foxglove bridge..."
+echo "[11/13] Starting Foxglove bridge..."
 tmux new-window -t "$SESSION" -n fox
 tmux send-keys -t "$SESSION:fox" \
   "$ROS_SETUP && ros2 run foxglove_bridge foxglove_bridge --ros-args -p port:=8765 -p best_effort_qos_topic_whitelist:='[\"/(point_cloud2|scan|camera/.*/image_raw)\"]'" Enter
 
 # --- Window 9: Object Perception ---
-echo "[11/12] Starting object_perception_node (YOLO26n)..."
+echo "[12/13] Starting object_perception_node (YOLO26n)..."
 tmux new-window -t "$SESSION" -n object
 tmux send-keys -t "$SESSION:object" \
   "$ROS_SETUP && ros2 launch object_perception object_perception.launch.py" Enter
 sleep 3
 
 # --- Window 10: Studio Gateway (speech bridge, port 8080) ---
-echo "[12/12] Starting Studio Gateway (speech bridge, port 8080)..."
+echo "[13/13] Starting Studio Gateway (speech bridge, port 8080)..."
 tmux new-window -t "$SESSION" -n gateway
 tmux send-keys -t "$SESSION:gateway" \
   "$ROS_SETUP && python3 $WORKDIR/pawai-studio/gateway/studio_gateway.py" Enter
@@ -232,6 +301,7 @@ echo "  asr       — ASR + Intent (SenseVoice + Whisper fallback)"
 echo "  tts       — TTS ($TTS_PROVIDER + ${LOCAL_PLAYBACK:+USB speaker}${LOCAL_PLAYBACK:-Megaphone})"
 echo "  llm       — LLM Bridge (speech → Cloud→Ollama→RuleBrain)"
 echo "  camtf     — Static TF: base_link → camera_link (D435)"
+echo "  depth_safety — D435 depth → /capability/depth_clear (gates motion)"
 echo "  object    — Object Perception (YOLO26n)"
 echo "  fox       — Foxglove (ws://$(hostname -I | awk '{print $1}'):8765, best_effort QoS)"
 echo "  gateway   — Studio Gateway (http://$(hostname -I | awk '{print $1}'):8080/speech)"

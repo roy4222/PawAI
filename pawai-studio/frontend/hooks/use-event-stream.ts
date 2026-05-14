@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useEventStore } from "@/stores/event-store";
 import { useStateStore } from "@/stores/state-store";
 import { useLayoutManager } from "@/hooks/use-layout-manager";
+import { normalizeObjectState } from "@/lib/object-event";
 import type {
   PawAIEvent,
   FaceState,
@@ -12,8 +13,11 @@ import type {
   GestureState,
   PoseState,
   BrainState,
+  PawAIBrainState,
+  SkillPlan,
+  SkillResult,
   SystemHealth,
-  ObjectState,
+  ConversationTracePayload,
 } from "@/contracts/types";
 
 interface UseEventStreamResult {
@@ -27,9 +31,14 @@ export function useEventStream(): UseEventStreamResult {
   const updateGestureState = useStateStore((s) => s.updateGestureState);
   const updatePoseState = useStateStore((s) => s.updatePoseState);
   const updateBrainState = useStateStore((s) => s.updateBrainState);
+  const appendBrainProposal = useStateStore((s) => s.appendBrainProposal);
+  const appendBrainResult = useStateStore((s) => s.appendBrainResult);
+  const appendConversationTrace = useStateStore((s) => s.appendConversationTrace);
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
+  const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
+  const updateCapability = useStateStore((s) => s.updateCapability);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -62,27 +71,49 @@ export function useEventStream(): UseEventStreamResult {
           }
           break;
         case "brain":
-          if ("executive_state" in data) {
-            updateBrainState(data as unknown as BrainState);
+          if (event.event_type === "state") {
+            updateBrainState(data as unknown as PawAIBrainState);
+          } else if (event.event_type === "proposal") {
+            appendBrainProposal(data as unknown as SkillPlan);
+          } else if (event.event_type === "skill_result") {
+            appendBrainResult(data as unknown as SkillResult);
+          } else if (
+            event.event_type === "conversation_trace" ||
+            event.event_type === "conversation_trace_shadow"
+          ) {
+            appendConversationTrace(data as unknown as ConversationTracePayload);
+          } else if ("executive_state" in data) {
+            updateBrainState(toPawAIBrainState(data as unknown as LegacyBrainLike));
           }
           break;
         case "object": {
-          // Normalize: ROS2 sends `objects[]`, frontend state expects `detected_objects`
-          const objData = { ...data } as Record<string, unknown>;
-          if ("objects" in objData && !("detected_objects" in objData)) {
-            objData.detected_objects = objData.objects;
-          }
-          if ("detected_objects" in objData || "objects" in objData) {
-            const arr = (objData.detected_objects ?? objData.objects ?? []) as unknown[];
-            objData.active = arr.length > 0;
-            objData.status = arr.length > 0 ? "active" : "inactive";
-            updateObjectState(objData as unknown as ObjectState);
+          const objectState = normalizeObjectState(data);
+          if (objectState) {
+            updateObjectState(objectState);
           }
           break;
         }
         case "tts":
           if ("text" in data) {
+            // 既有 updateTts 維持（其他 panel 用 lastTtsText）
             updateTts(data.text as string);
+
+            // P1-1b：append 到 ttsMessages 讓 ChatPanel 全部顯示
+            appendTtsMessage({
+              id: event.id || `tts-${Date.now()}`,
+              text: data.text as string,
+              timestamp: Date.now(),
+              origin: (data.origin as string) || "tts",
+              source: data.source as string | undefined,
+            });
+          }
+          break;
+        case "capability":
+          // Tri-state capability gate (Phase B B5b).
+          if ("name" in data && "tri_state" in data) {
+            const name = data.name as "nav_ready" | "depth_clear";
+            const tri = data.tri_state as "true" | "false" | "unknown";
+            updateCapability(name, tri);
           }
           break;
         case "system":
@@ -104,14 +135,84 @@ export function useEventStream(): UseEventStreamResult {
       updateGestureState,
       updatePoseState,
       updateBrainState,
+      appendBrainProposal,
+      appendBrainResult,
+      appendConversationTrace,
       updateSystemHealth,
       updateObjectState,
       updateTts,
+      appendTtsMessage,
+      updateCapability,
       evaluateEvent,
     ]
   );
 
   const { isConnected } = useWebSocket({ onMessage });
 
+  // P1-2: F5 hybrid auto-reset (dev-only — off by default in production)
+  // beforeunload sets a sessionStorage flag so that when the page reconnects
+  // within 5s we know it was a refresh and can auto-reset context.
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem("paw_refresh_at", Date.now().toString());
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
   return { isConnected };
+}
+
+interface LegacyBrainLike {
+  stamp?: number;
+  executive_state?: string;
+  selected_skill?: string | null;
+  last_decision_reason?: string;
+}
+
+function toPawAIBrainState(data: LegacyBrainLike): BrainState {
+  const modeMap: Record<string, BrainState["mode"]> = {
+    idle: "idle",
+    observing: "idle",
+    deciding: "skill",
+    executing: "skill",
+    speaking: "chat",
+  };
+  return {
+    timestamp: data.stamp ?? Date.now() / 1000,
+    mode: modeMap[data.executive_state ?? "idle"] ?? "idle",
+    active_plan: data.selected_skill
+      ? {
+          plan_id: "legacy",
+          selected_skill: data.selected_skill,
+          step_index: 0,
+          step_total: null,
+          started_at: data.stamp ?? Date.now() / 1000,
+          priority_class: 3,
+        }
+      : null,
+    active_step: null,
+    fallback_active: false,
+    safety_flags: {
+      obstacle: false,
+      emergency: false,
+      fallen: false,
+      tts_playing: false,
+      nav_safe: true,
+    },
+    cooldowns: {},
+    last_plans: data.selected_skill
+      ? [
+          {
+            plan_id: "legacy",
+            selected_skill: data.selected_skill,
+            source: "legacy",
+            priority: 3,
+            accepted: true,
+            reason: data.last_decision_reason ?? "legacy brain event",
+            created_at: data.stamp ?? Date.now() / 1000,
+          },
+        ]
+      : [],
+  };
 }

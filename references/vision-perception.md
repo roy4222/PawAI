@@ -7,9 +7,9 @@
 
 ## 權威文件
 
-- **手勢辨識設計**：`docs/手勢辨識/README.md`
-- **姿勢辨識設計**：`docs/姿勢辨識/README.md`
-- **ROS2 介面契約**：`docs/architecture/contracts/interaction_contract.md` (gesture/pose topics)
+- **手勢辨識設計**：`docs/pawai-brain/perception/gesture/README.md`
+- **姿勢辨識設計**：`docs/pawai-brain/perception/pose/README.md`
+- **ROS2 介面契約**：`docs/contracts/interaction_contract.md` (gesture/pose topics)
 - **視覺系統研究**：memory `project_vision_research_0322.md`
 
 ## 核心程式

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import logging
+import os
 
 import cv2
 import numpy as np
@@ -22,6 +23,10 @@ from ..sensors.lidar_decoder import update_meshes_for_cloud2
 from ..sensors.camera_config import load_camera_info
 
 logger = logging.getLogger(__name__)
+
+# P0 Nav: 設 GO2_PUBLISH_ODOM_TF=0 跳過 odom→base_link TF 發布，
+# 讓 cartographer/SLAM 套件 own 整條 TF chain。預設 1（向後相容）。
+_PUBLISH_ODOM_TF = os.getenv("GO2_PUBLISH_ODOM_TF", "1") == "1"
 
 
 class ROS2Publisher(IRobotDataPublisher):
@@ -60,6 +65,8 @@ class ROS2Publisher(IRobotDataPublisher):
 
     def _publish_transform(self, robot_data: RobotData, robot_idx: int) -> None:
         """Publish TF transform"""
+        if not _PUBLISH_ODOM_TF:
+            return  # P0 Nav: cartographer owns odom→base_link TF
         odom_trans = TransformStamped()
         odom_trans.header.stamp = self.node.get_clock().now().to_msg()
         odom_trans.header.frame_id = "odom"

@@ -32,13 +32,29 @@ tts_cache/
 ## Claude Code
 .claude/test_results/*.csv
 .claude/settings.local.json
-.claude/skills/
+.claude/skills/*
 !.claude/skills/jetson-verify/
+!.claude/skills/jetson-verify/**
 !.claude/skills/project-onboard/
+!.claude/skills/project-onboard/**
 !.claude/skills/update-docs/
+!.claude/skills/update-docs/**
 !.claude/skills/jetson-deploy/
+!.claude/skills/jetson-deploy/**
 !.claude/skills/jetson-status/
-!.claude/skills/jetson-verify/
+!.claude/skills/jetson-status/**
+!.claude/skills/brain-studio-lane/
+!.claude/skills/brain-studio-lane/**
+!.claude/skills/nav-avoidance-lane/
+!.claude/skills/nav-avoidance-lane/**
+!.claude/skills/demo-preflight/
+!.claude/skills/demo-preflight/**
+!.claude/skills/reviewer/
+!.claude/skills/reviewer/**
+!.claude/skills/ros2-test-suite/
+!.claude/skills/ros2-test-suite/**
+!.claude/skills/pawai-cli/
+!.claude/skills/pawai-cli/**
 
 ## Package-level coverage (legacy paths)
 go2_robot_sdk/.coverage
@@ -55,8 +71,34 @@ PROJECT_MAP.md
 ## Benchmark raw results (working area)
 benchmarks/results/raw/*.jsonl
 
+## LLM eval raw results (intermediate artefacts; summary lives in result doc)
+tools/llm_eval/results/*.json
+
 ## Node.js (pawai-studio has its own, root should not)
 node_modules/
 
 ## Codex CLI marker file
 .codex
+
+## Agent runtime artefacts（自動產生）
+/.agents/
+
+## 會議錄音 / datasheet PDF（保留在硬碟但不入 repo）
+/*.m4a
+/*.mp3
+/*.wav
+/LD*.pdf
+
+## Windows / WSL 下載 metadata（每個檔案會帶一份）
+*Zone.Identifier
+*:Zone.Identifier
+
+## Repo root 的暫存截圖 / 參考圖（reference 用，不入 commit）
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.gif
+/螢幕擷取畫面*
+/LM*.pdf
+*.py[cod]

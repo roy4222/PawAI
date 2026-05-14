@@ -20,12 +20,14 @@ def build_target_command(cmd: str, env: str) -> list[str]:
     """Build argv list for subprocess.run().
 
     local_jetson:  ["bash", "-lc", cmd]
-    remote_jetson: ["ssh", "jetson-nano", "cd ... && bash -lc <quoted>"]
+    remote_jetson: ["ssh", "$JETSON_HOST", "cd $JETSON_REPO && bash -lc <quoted>"]
     """
     if env == "local_jetson":
         return ["bash", "-lc", cmd]
-    remote_cmd = f"cd /home/jetson/elder_and_dog && bash -lc {shlex.quote(cmd)}"
-    return ["ssh", "jetson-nano", remote_cmd]
+    host = os.getenv("JETSON_HOST", "jetson-nano")
+    repo = os.getenv("JETSON_REPO", "/home/jetson/elder_and_dog")
+    remote_cmd = f"cd {shlex.quote(repo)} && bash -lc {shlex.quote(cmd)}"
+    return ["ssh", host, remote_cmd]
 
 
 def exec_on_target(cmd: str, env: str, timeout_sec: int = 10) -> tuple[int, str, str]:

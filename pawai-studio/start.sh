@@ -41,9 +41,9 @@ pkill -f "next dev" 2>/dev/null || true
 sleep 1
 
 # ── 啟動 Backend ────────────────────────────────────────────────────────
-echo "[3/4] 啟動 Mock Server (port 8080)..."
+echo "[3/4] 啟動 Mock Server (port ${GATEWAY_PORT:-8080})..."
 cd "$BACKEND_DIR"
-python3 -m uvicorn mock_server:app --port 8080 --host 0.0.0.0 --ws wsproto &
+python3 -m uvicorn mock_server:app --port ${GATEWAY_PORT:-8080} --host 0.0.0.0 --ws wsproto &
 BACK_PID=$!
 sleep 2
 
@@ -64,10 +64,10 @@ echo "════════════════════════�
 echo "  PawAI Studio 已啟動"
 echo ""
 echo "  🌐 Studio:      http://localhost:3000/studio"
-echo "  🔧 Mock Server:  http://localhost:8080"
-echo "  📡 WebSocket:    ws://localhost:8080/ws/events"
+echo "  🔧 Mock Server:  http://localhost:${GATEWAY_PORT:-8080}"
+echo "  📡 WebSocket:    ws://localhost:${GATEWAY_PORT:-8080}/ws/events"
 echo ""
-echo "  觸發 Demo A:  curl -X POST http://localhost:8080/mock/scenario/demo_a"
+echo "  觸發 Demo A:  curl -X POST http://localhost:${GATEWAY_PORT:-8080}/mock/scenario/demo_a"
 echo ""
 echo "  停止: Ctrl+C 或 bash pawai-studio/stop.sh"
 echo "════════════════════════════════════════════"

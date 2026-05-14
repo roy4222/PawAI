@@ -1,7 +1,1831 @@
 # 專案狀態
 
-**最後更新**：2026-04-25（RPLIDAR A2M12 到貨驗證 + P0 導航避障 spec/plan 定稿）
-**硬底線**：2026/4/13 文件繳交完成，**5/13 帶去學校、5/19 開始三天驗收**（4/18 會議更新），6 月口頭報告
+**最後更新**：2026-05-12 night（Go2 已移交學校 + PawAI CLI 生產化 L1/L2/L3 + project-onboard 對齊 0511 七大功能 + nav capability lane + offline fallback E2E 驗證）
+**硬底線**：5/18 期末 demo（6 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/11 night：TTS 跳句深挖 + PawAI CLI + Mac 搬家
+
+### Mac 搬家 + PawAI CLI 落地
+
+- 從 WSL Roy422 → MacBook M1 完整搬家：Tailscale / SSH key / venv / Studio gateway URL 全部對齊
+- `tools/pawai_cli` MVP 落地：`doctor / status / dev info / jetson deploy / demo start|stop / logs`
+- `start.sh` self-heal：偵測舊 lane → cleanup → preflight；frontend 自動 `npm install` + 寫 `.env.local`
+- doctor 加 platform-aware hints（Mac brew vs Linux apt nodejs npm）+ SSH config 偵測 + frontend 檢查
+- `.env.local.example`（root + frontend）+ frontend gitignore 封堵 pnpm/yarn lockfile + `packageManager: npm@11.4.2`
+- rsync exclude `.venv/`、`node_modules/`、`.next/`、`.ruff_cache/`、`.mypy_cache/`
+- 三份手冊 in `docs/pawai_cli/`：README / troubleshooting / modules（含 pytest 需從 package 目錄跑的提醒）
+- CLI tests 12/12 + 多輪 review fix（SSH config substring 誤判、ssh-copy-id alias、apt nodejs npm、venv 安裝等）
+
+### Brain：`[whispers]` 恢復 + audio tag normalize 收斂
+
+- user 明示故事 / 念詩 / 睡前場景需要 whisper 聲 — N6 morning 把 `[whispers]` normalize → `[curious]` 是過度反應
+- 只保留 `[sighs]` / `[sigh]` 仍 normalize（會破壞 demo 節奏）
+- EXAMPLES.md 睡前故事範例改用 `[whispers]`；OUTPUT.md audio tag 清單加回
+- validator.py + json_validator.py 註解 / docstring 同步
+- `pawai_brain` 26/26 validator test 全綠
+
+### Speech：chunk size bump + pcm_trim silence + Phase 1 diagnostic
+
+三輪修法：
+
+1. `CHUNK_MAX_CHARS 40→60`、`MIN_SPLIT_CHARS 30→45`（離 80-char tail-drop 風險區 30%+，但 chunk 數 6→3-4）
+2. 新模組 `pcm_trim.py`：trim gemini 80-200ms silence padding，保留 80ms tail；`ChunkTrimError` fail-loud 走 fallback；`int16 -32768` overflow 用 `astype(np.int32)` 處理
+3. `PAWAI_TTS_DIAG=1` env-gated per-chunk log（text preview / peak / rms / duration_ms / cut_lead_ms / cut_tail_ms），預設關零 overhead
+
+**跑診斷 → 確定跳句根因 = H1 parallel voice drift**（不是 H2/H3/H4）：
+
+| chunk | text_len | peak | rms | duration_ms |
+|---|---|---|---|---|
+| [0] | 69 | 18621 | **782** | 6360 |
+| [1] | 68 | 12240 | **1139** | 6240 |
+| [2] | 37 | 28874 | **1529** | 6240 |
+
+3 個並行 chunk 對同一個 whisper Despina persona 回來的 RMS 階梯式跳動（782→1139→1529，2x range），peak 也差 2.4x — 這就是「跳句」實質聽到的「越念越大聲又突然變小」。
+
+**下輪 fix 方向（保留為 Phase 2 / N9 plan）**：sequential synthesis 取代 parallel，或 post-synth RMS normalize across chunks。詳見 [`memory/project_tts_skip_diagnosis_0511_night.md`](../.claude/projects/-Users-lubaiyu-elder-and-dog/memory/project_tts_skip_diagnosis_0511_night.md)。
+
+### Speech 動作 / 說話併發（**設計凍結，不執行**）
+
+user 提出希望「念故事時可以一邊搖屁股」。Agent 3 找出 enforcement 在
+`interaction_executive_node._active_step_done()` line 168-175。設計保留為下輪 plan：
+
+- `SkillStep.concurrent_with_tts: bool = False` 新 field
+- `_active_step_done` peek 下一 step，若 concurrent-safe 跳過 tts_playing 等待
+- 只開 `wave_hello / wiggle / stretch` 三個低風險在地動作（user 決議）
+- Go2 sport API 排隊機制 + DataChannel buffer 觀察
+
+### 測試 + Tests 數據
+
+- `speech_processor`：202/202 pass（含 pcm_trim 17 個 + tts_split 24 個 + 既有）
+- `pawai_brain` validator：26/26 pass
+- `tools/pawai_cli`：12/12 pass
+- ROS-required tests（conversation_graph_node 等）Mac 上預期跑不起來（pre-existing 限制）
+
+---
+
+## 5/12 night：Demo 最低目標 3/3 全打勾 + 加分目標 cone 探索（nav stack 浮現新 bug）
+
+### Demo 最低目標 — 全部打勾 ✅✅✅
+
+| 項目 | 狀態 | 證據 |
+|---|:-:|---|
+| 展示 SLAM / Nav2 基本能力 | ✅ | nav_capability stack 36 node 全跑、AMCL active、map 載入、`/capability/nav_ready=true` |
+| 能在安全距離內移動 | ✅ | `goto_relative 0.3m` → 實走 0.2998m，誤差 0.2mm |
+| 遇到障礙物能停下 | ✅ | `goto 0.5m` 走 0.41m 在 danger 0.81m 停下、`reactive_stop_active=true`、Go2 未撞 |
+
+5/11 撞牆事件後第一次 clean motion。**5/11 1.1m danger 在 0.81m 觸發停車，比舊 0.6m 早 0.21m，B0 設計成功**。
+
+### 兩個落地的 bug fix
+
+**B0 launch.py mux bug**（commit `2ce02fa`）：
+T3 hold_brake smoke 發現 `/cmd_vel_obstacle` 0 subscriber、`twist_mux` 不在 node list — 即使 Roy 5/11 review #1 (`d804a58`) 已切到 `robot.launch.py`，mux 仍因被綁在 `with_teleop` flag 上而 disable。
+修法：`mux` 拆出獨立 `DeclareLaunchArgument`（default true），`twist_mux` Node `condition=IfCondition(with_mux)`。修完 hold_brake / progressive / fallback 三 script 全 work。
+
+**B1 nav2_params 5/12 tuning**（commit `e881b7e`）：
+- `local_costmap.obstacle_max_range` 1.8 → 3.0
+- `raytrace_max_range` 2.0 → 3.5（業界慣例 raytrace ≥ obstacle）
+- `inflation_radius` 0.30 → 0.45（配合 reactive danger 1.1m + Go2 機鼻 ~0.5m）
+- footprint 不動（CLAUDE.md 規則 + 等 T6/T8 卡尺）
+- detour profile 不對齊（5/3 窄場景 tuning 是有意保留）
+- ⚠️ motion validation 結果：見「nav stack 浮現 bug」段
+
+### Cone 探索（窄 cone Plan A，未通過完整驗證）
+
+3 個 Explore subagent 並行調查（本地 reactive code / 本地 detour profile / 業界 best practice）後得出：
+- ❌ `front_arc_deg` 不在 `_on_param_change` callback 列表 → **runtime `param set` 改不了**，必須重啟 reactive_stop_node
+- ❌ `start_nav_capability_demo_tmux_detour.sh` 已存在但有 4 個 bug：用舊 `safety_only:=true` (auto-promote 成 hold_brake → 鎖死 nav)、`danger=0.40` 不安全、yaml 沒同步 5/12 main、D435 mount TF 沒精校
+- ⚠️ 業界共識（Nav2 docs / 5 GitHub repo）：collision_monitor / DWB / planner **三層分工互不衝突**因為作用在不同時間尺度
+
+實際試了：
+- 重啟 reactive_stop with `front_arc_deg=15.0` → cone 從 ±30° 縮成 ±15° ✅ 生效
+- 但 ±15° 中央仍偵測到 1.03m 處 36cm 寬障礙（真實家具或 Roy 自身）→ Roy 移開後 zone clear
+- 發 `goto_relative 1.0` → **Goal accepted 但 10s no_progress, ABORTED, actual_distance=0.0**
+- nav lifecycle 全 active、`/cmd_vel = 0 @ 10Hz` 來自 mux default、**`/cmd_vel_nav` 無 publisher**（controller_server 完全沒發 cmd_vel）
+- `clear_entirely_local/global_costmap` service 也不解
+
+**疑似 root cause**（demo 前需查）：
+- 5/12 inflation 0.30→0.45 改後 planner 在某些 pose 算不出 valid path？
+- 或 `nav_action_server_node` 內部 dispatch 邏輯有 bug（goal accepted 但沒 forward 給 bt_navigator/NavigateToPose action）？
+- 或 AMCL pose 漂移與 costmap 不一致？
+
+### 5/12 night follow-up（5/13 場測前必查）
+
+| # | Item | 級別 | 預估 |
+|:-:|---|:-:|:-:|
+| F1 | reactive_stop `_on_param_change` 加 `front_arc_deg` 處理 | P1 | 30 min |
+| F2 | `start_nav_capability_demo_tmux_detour.sh` 4 bug fix（safety_only→progressive、danger 0.4→1.1、yaml sync、D435 TF）| P1 | 1.5h |
+| F3 | `nav2_params_detour.yaml` 同步 5/12 main 改動或加 NOTE 說明 | P1 | 30 min |
+| F4 | D435 mount TF 卡尺精校 | P2 demo 後 | 1h |
+| F5 | 業界 nav2_collision_monitor 評估遷移 | P2 demo 後 | 6-8h |
+| F6 | `nav_capability` 腳本 `NAV_PARAMS` env override | P1 | 15 min |
+| **F7** | **🔴 nav_action_server no_progress_timeout root cause 調查**（goal accept 但 controller 完全不發 cmd_vel）| **P0 場測前必修** | 2-3h |
+
+**Plan A research 落檔**：`/home/roy422/.claude/plans/graceful-twirling-cloud.md`（含 3 subagent findings 詳細）
+
+### Stack state at end of session
+
+- Jetson nav-cap-demo session 已 cleanup（tmux server gone、0 procs）
+- Go2 在 hold_brake mode 切完才 cleanup
+- 兩個 commit 已 push：`2ce02fa` launch fix + `e881b7e` nav2_params
+
+### 5/13 任務（學校場地）
+
+P0 必做：
+1. F7 nav_action_server bug 調查（不修無法跑任何 motion demo）
+2. 學校場地重建圖（home_living_room_v8 是家裡的）
+3. 重新 /initialpose、smoke 三 script
+4. T6 卡尺機鼻、F4 D435 TF（如果有時間）
+
+驗收：能跑 goto_relative 0.5m × 5 / goto_relative 1.0m × 3 連續成功 + 障礙停車場景 × 2
+
+學校第一件事（接 Jetson 螢幕鍵盤 5 分鐘）：
+```bash
+sudo nmcli connection modify "Wired connection 1" ipv4.never-default yes  # Go2 線不搶 default route
+sudo nmcli device wifi connect "學校SSID" password "..."
+pawai doctor                  # 確認 Wi-Fi 連上 + default route=wlan0 + Go2 link 還在
+pawai demo stop               # 清掉 home demo 殘留（pre-lock，會走 brain cleanup）
+pawai jetson deploy --module brain   # 修 install: ? 那行
+pawai demo start              # 重啟拿新 lock
+```
+
+---
+
+## 5/12 day-night：PawAI CLI 生產化 + skills 對齊 0511 + nav capability lane + offline fallback E2E
+
+獨立於 5/12 nav demo 主線，這是「為 5/13 五人共用 Jetson + Go2 場測」的基礎建設整套交付。35+ commits 全 push 到 `origin/main`。
+
+### PawAI CLI L1 / L2 / L3（從 MVP 到生產級）
+
+5/11 night MVP 落地的 `pawai_cli` 今天大改成五人共用安全工具，三層連續 ship：
+
+**L1 — 連得上**（9 commits，含 `775d6ba` checkpoint fix）：
+- `network.py` 加 Tailscale auto-detect（peer hostname `orinnano-super` 預設 hint）+ Jetson 端 topology probes
+- `cache.py` TTL JSON cache 給 `--cache 30`（多人同跑不重打 SSH）
+- doctor 新 flags：`--fix`（prompt 寫 IP）/ `--deep`（live OpenRouter probe）/ `--cache`/ `--expect-demo`
+- Network topology block：local→Tailscale / Jetson internet route / Go2 link / Go2 ping / Gateway 8080
+- `.env.local.example` IP 留空、`JETSON_HOSTNAME_HINT=orin`（對齊真實 Tailscale node）
+- `docs/pawai_cli/team-onboarding.md` 新建（隊友 30 分鐘上手 6 步驟）
+- troubleshooting G/H（Jetson 換網路、Tailscale Sharing）
+
+**L2 — 不撞車**（8 commits，含 `795f130` test fix）：
+- `lock.py` Jetson-side `flock` atomic lock + state machine（`starting → running`）+ 3× retry on transient SSH failure，exit 17 不 retry
+- `Lock` schema：user / host / branch / sha / state / start_time / lane / tmux_session
+- 共用 Jetson 三道閘：demo start collision prompt / demo stop own-lock-only default / deploy collision prompt
+- `-y` vs `--force` 語意分離：`-y` 不能搶別人 lock，`--force` 才能
+- `.pawai-last-deploy` schema 擴 7 欄位（branch / git_sha_full / dirty / packages / deployed_by / deployed_from_host）
+- `pawai status` 新區塊：demo lock owner + branch + state + stale 標記
+- troubleshooting I/J（Go2 Ethernet 直連、Gateway 8080 split diagnosis）
+
+**L3 — 便利**（2 commits）：
+- `pawai docs <module>` 直接路由到 `docs/pawai-brain/architecture/0511/<module>/<module>.md` + aliases (`onboarding` / `contract`)
+- `pawai contract check`（local-first，`--jetson` flag 才走 SSH）
+
+**Tests**：70 passed（從 12 起底擴到 70，新增 `test_network.py` / `test_cache.py` / `test_lock.py` + `test_cli.py` 大量擴張）。
+
+### Nav Capability Lane Handoff（v3 plan 後實作）
+
+新增 `pawai demo start --nav capability` — 啟動完整 nav stack 用安全的 lane handoff：
+
+- Lock schema 加 `lane: str = "brain"` 欄位，舊 JSON 透過 `setdefault` 向後相容
+- `pawai demo stop` 依 lock `lane` 路由：`brain` → `brain-studio-lane/cleanup.sh`、`nav_capability` → `nav-avoidance-lane/cleanup.sh`
+- `--force` takeover **必須先跑舊 lane cleanup**，再 release lock，再 acquire 新 lock — strict on cleanup fail（避免 5/11 撞牆 root cause：teleop hot publisher 殘留）
+- 額外彩蛋：**own-lock restart 也跑 cleanup**（plan 沒要求，多做的安全保險）
+- Invalid mode（`detour` / `fallback` / `amcl` / `mapping` / `bogus`）各有專屬 reject 訊息
+- `--brain-only` + `--nav capability` 互斥
+- `pawai status` 新增 Nav capability 區塊（lane running 時）：tmux / scan_rplidar publishers / nav_ready / depth_clear / reactive_status / `/cmd_vel_joy` publishers count
+- `nav-avoidance-lane/start.sh capability` 啟動前主動 `pkill -9 teleop_twist_joy joy_node`（防 5/11 撞牆 mux priority 100 vs 10 race）
+- healthcheck 加 `[6b] /cmd_vel_joy publisher count = 0` 驗證
+
+**Scope 明確劃線**：本版只啟 stack + 手動 `ros2 action send_goal /nav/goto_relative` 場測；**Brain → NAV executor 仍是 future work**，語音叫狗走不會動。
+
+### project-onboard skill 對齊 0511 七大功能 + Studio 架構文件
+
+`refactor(skill): project-onboard align to 0511 seven modules + studio` + `docs(arch): add 0511/studio freeze-snapshot`：
+
+- references 從 8 個（face/speech/vision-perception/llm-brain/studio/environment/project-status/validation）改成 **11 個**：face / gesture / pose / object / speech / nav / brain / studio / environment / validation / project-status
+- 砍 `vision-perception.md`（gesture/pose 分開）、`llm-brain.md` → 改名 `brain.md`
+- 每個 module reference 是 **80-120 行薄指標**，指向 0511 子文件，不複製內容
+- 新建 `docs/pawai-brain/architecture/0511/studio/` 5 子文件：runtime-flow / frontend-components / gateway-mock-bridge / debug-runbook + root `studio.md`
+- `pawai-cli` skill 已存在（保守版自我發現，靠 `pawai --help` 探活 flags，免每次重 patch）
+
+### Offline Fallback Chain E2E 驗證（`c4a66b2`）
+
+5/12 night 最後一輪實機驗證（4 分鐘 jetson smoke）：
+
+| 層 | 結果 |
+|---|---|
+| LLM primary gpt-5.4-mini | ✅ bad key → fail（預期）|
+| LLM fallback gemini-3-flash | ✅ 同 key 也 fail |
+| Brain `rule:chat_fallback` | ✅ 兩 LLM timeout 自動接 `say_canned` |
+| TTS primary Gemini Despina | ✅ bad key → fail |
+| TTS fallback edge_tts | ✅ 自動接手 + 播放 |
+| TTS final piper | ⚠️ 本輪沒驗到（edge_tts 接住沒拉到底）|
+
+整套 chain 不靠寫死 fallback path，靠 startup chain 自然漂下來。詳見 [`docs/runbook/2026-05-12-offline-fallback-verification.md`](../docs/runbook/2026-05-12-offline-fallback-verification.md)。
+
+**保命話術**留底：[`docs/runbook/demo-fallback-script.md`](../docs/runbook/demo-fallback-script.md)。
+
+### 5/13 場測前 carry-over
+
+- **F7 nav_action_server bug**（5/12 nav demo 那邊已標 P0）— 用 `pawai demo start --nav capability` 啟動後第一輪 `goto_relative 0.3m` 是 acid test
+- **學校 Wi-Fi 未知**：可能擋 OpenRouter / SSH tunnel → 萬一發生走 offline fallback，已驗
+- **Piper final fallback 沒實機驗到底**：edge_tts 先接走了，TTS 三層第三層留疑問
+- **`pawai-cli` skill 對 AI 已可用**：明天進新 session 的 AI 問「怎麼 deploy / 連 Jetson / lock 衝突」會自動觸發 skill 拿到正確 entry point
+
+---
+
+## 5/11：Brain freeze + E pre-stage + Nav B1-B5 上機
+
+### Brain Minimum：A 全綠、freeze tag v1（commits `3b6a68d`/`46d53b6`/`c0c8de8`/`bf76a85`/`0612c31`）
+
+- ✅ MISSION.md 落檔（含尋物敘事 + 兩支柱），`_load_persona` 從 5 檔改 6 檔（IDENTITY → MISSION → STYLE → OUTPUT → EXAMPLES → CAPABILITIES，CAPABILITIES 仍 lazy）
+- ✅ IDENTITY/EXAMPLES/OUTPUT/CAPABILITIES 4 檔依 spec §5.2-5.5 改完，5 處 self_introduce → chat_reply 解綁、新增 5 條 self-showcase few-shot
+- ✅ tools/llm_eval `gemini` alias + temp 對齊 runtime（gemini-3-flash-preview, 0.8）
+- ✅ 最終 eval 15 prompts → 13/15 hit ≥4 軸 (gate 12/15) → **PASS**，本地 tag `brain-freeze-v1` 在 `0612c31`（未 push）
+- ⚠️ 兩個 skill 幻覺（come_to_user / move_one_step）排到 `brain-hotfix-N1` 候選，demo 不會用到不阻擋
+
+### E.Mac/Network pre-stage：完成（commits `b1e3c01`/`cee1a9d`）
+
+- ✅ `pawai-studio/gateway/studio_gateway.py:53` ASR_URL 改 `os.getenv("PAWAI_ASR_URL", ...)`，PORT 也改 env
+- ✅ `scripts/start_nav2_amcl_demo_tmux.sh` MAP_YAML、`scripts/build_map.sh` MAP_DIR、`pawai-studio/start.sh` GATEWAY_PORT 全 env override
+- ✅ `pawai-studio/start-live.sh` 8 處 8080 → `${GATEWAY_PORT}`
+- ✅ `config/school_demo.env` + `.example` 落檔，硬檢查 JETSON_IP/GATEWAY_HOST 至少一個必填，LLM_HOST/ASR_HOST 拆出讓 Jetson tunnel vs 直連雲端可切
+- ✅ `pawai-studio/start-school-live.sh` Mac wrapper（GATEWAY_HOST 必填、ping + curl /health pre-check、失敗給 Jetson 啟動指令提示）
+- 6 項本機驗證全綠（語法、env 硬檢查、env load、MAP fallback、Mac wrapper hard-fail、studio_gateway env 生效）
+- ⏳ N1-N6 連通驗證 + 三模式 smoke 留 5/12 PM（需 Mac + 手機熱點）
+
+### Nav Burndown：B1-B4 全綠、B5 訊號通但 motion 階段撞牆
+
+詳見 [`nav-root-cause-burndown.md §4`](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md)。
+
+- B1 LiDAR ✅ 11.98 Hz / 1800 pts / 94% valid / 單 publisher（`/scan_rplidar`，避免 `/scan` 雙 publisher 衝突）
+- B2 D435 ✅ color 30 Hz / aligned_depth 30 Hz / 98% valid / 中心 ROI 1.11m vs LiDAR 180° 1.18m（兩感測器交叉驗證一致）
+- B3 TF ✅ `base_link→laser` yaw=180° 正確（LiDAR 反裝補償）
+- B4 cmd_vel/mux ❌ → ✅ **修完通過**：發現 driver `_on_cmd_vel` 對 zero 仍走 `Move {x:0}` (api_id=1008)，被 Go2 sport mode 忽略 → Go2 走過頭 2m。Fix 加 `IRobotController.send_stop_move_command()` (api_id=1003 StopMove) + 1 Hz dedupe 防 reactive 10 Hz spam 撐爆 WebRTC DC buffer。Unit test 11 條全綠。Round 2 重測 3 次質心位移≈0.8m（理論 0.75m）✅。
+- B5 reactive_stop ☑ partial：訊號鏈通了（sllidar + TF + reactive_stop safety_only + foxglove + mux + driver），danger zone 真的鎖死 Go2。**但 motion 測試發現兩個 reactive_stop 設計缺陷**（撞到 1.5m 處障礙）：(1) `danger<0.6m` 對 Go2 機身太近，LiDAR 看到 0.6m 時機鼻已是 0.2m → 必撞；(2) safety_only 在 clear zone 完全不發訊號 → 「停↔全速」二元切換沒漸進減速。**修法 5/12+**：danger 0.6→1.2m / slow 0.45 m/s 漸進 / hysteresis / 長遠做 base_link projection。
+- ⏳ B6 AMCL + B7 goto 0.3/0.5m 留 5/12（reactive_stop 修法落地後再做 motion）
+
+### 5/12 任務調整
+
+原本 5/12 PM 要做的：A final eval + freeze、E 連通驗證、B6/B7 motion、C/D smoke。
+**5/11 提前消化**：A freeze、E pre-stage、B1-B4 全部、B5 訊號層 + 撞牆深度 audit + reactive_stop 4-mode 重設計。
+**5/12 重排**：Jetson sync + colcon → B5 三 script 各跑一次（hold_brake / progressive 切換驗證）→ B6/B7 → C/D smoke + N1-N6 連通驗證 → 設備清點 → 19:00 freeze → 20:00 移交。
+
+### Nav 撞牆 deep audit + 4-mode 重設計（commits `8ae7faf` `f471ebd` `4ec8350` `f366acd` `0f5a16f` `d804a58`）
+
+詳見 [`docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md`](../docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md)。
+
+**深度調查（3 subagent 並行）**：local docs / local code / 網路 best practice 三線挖掘 → 撞牆是多層設計缺陷疊加，文件層 root cause 是「3 次架構翻案沒做舊參數適用性 audit」（3/25 D435 ROI 0.8/1.5 → 4/24 RPLIDAR 改 0.6/1.0 無 decision log → 5/1 capability gate 沒 review safety_only 語境 → 5/11 撞）。
+
+**Roy 訂正 4 個 audit 事實錯誤**（Phase A `f471ebd`）：1.5m 仍在 Nav2 1.8m 視距內（不是主因）/ danger 應 enlarge 不是縮小 / 0.6/1.0 來源不是 D435 ROI / D435 detour profile 已存在。
+
+**B0 → 4-mode 演進**（5/11 night Roy code review）：原 B0.1「safety_only=True 永遠 publish 0」實質是 permanent brake 不是 release gate；nav_capability 預設啟它會鎖死 nav。重設計成 4-mode 狀態機：
+
+| mode | 行為 | 用途 |
+|---|---|---|
+| `hold_brake` | 永遠 publish 0 | B5 stop 驗證 / emergency hold |
+| `progressive` | danger=0、slow/clear silent | nav 主驅動（必 kill teleop）|
+| `released` | 不 publish、LiDAR 仍更新 | 操作員主動釋放 |
+| `disabled` | 完全 off | 全停 reactive |
+| `""` | standalone (0/slow/normal) | nav 不在的備援 |
+
+**Roy review 4 bug fix**（`d804a58`）：
+1. `start_reactive_stop_safety_hold_tmux.sh`（新建）改用 robot.launch.py 啟 mux（之前沒 mux → hold_brake 不生效）
+2. `start_nav_capability_demo_tmux.sh` 加 `teleop:=false joystick:=false` enforcement（不只註解）
+3. progressive mode resume 加 warn log 提醒 check teleop
+4. `test_emergency_publishes_in_both_modes` 改寫成 `test_emergency_behavior_per_mode`（用 decide_velocity 測 5 mode）
+
+**Threshold 升級**：`danger 0.6→1.1m` / `slow 1.0→1.7m`（5/11 B0.3，給 Go2 機鼻 + 反應時間 buffer，Roy 訂正方向）。
+**Driver fix**（`b9aac4d`）：cmd_vel zero 改走 `StopMove (api_id=1003)` 取代 `Move {x:0}`（後者被 Go2 sport mode 忽略，B4 round 1 撞牆主因）。
+
+**Tests**：`test_reactive_stop_release_gate.py` 新建（42 條 mode-based）+ `test_reactive_stop_node.py` 更新（27 條）= 69 passed。
+
+**Scripts 拆 3 種模式**：
+- `start_reactive_stop_safety_hold_tmux.sh`（新）— hold_brake 純停車驗證
+- `start_nav_capability_demo_tmux.sh`（改）— progressive，nav 可驅動
+- `start_reactive_stop_tmux.sh`（改）— standalone，reactive 直接驅動 Go2
+
+**docs 升等**：`docs/navigation/CLAUDE.md` Reactive stop 段加 architecture-critical 4-mode 故事化敘述 + 釋放 3 步驟（切 mode → kill teleop → 發 nav goal）。
+
+---
+
+## 5/10 night：Demo Readiness 重構（取代上午的 6-spec roadmap）
+
+下午做完 6-spec + Spec 1 14 點 review 後，晚上發現 4 個新硬限制 → 重組成 1 master + 5 plan：
+
+1. **5/12 晚 Go2 移交學校** → Spec 1 不能拉到 5/15，必須 5/12 中午 freeze
+2. **學校網路陌生 + Mac 當操作端** → 寫死 IP / host / port 全部要抓出（subagent 抓出 27 處，3 P0）
+3. **完全離線 / No-AI / Mac fallback 從沒測過** → 移交前必須三模式各 smoke
+4. **自由對話（不靠 Studio button）+ AirPods 評估從沒做** → 移交前確認 demo 設備
+
+### 6 plan 結構（執行入口）
+
+| 代號 | Plan | 主題 | 視窗 |
+|:---:|---|---|---|
+| **M** | [demo-readiness-master-plan](../docs/pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md) | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
+| **A** | [brain-minimum-checklist](../docs/pawai-brain/plans/2026-05-10-brain-minimum-checklist.md) | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
+| **B** | [nav-root-cause-burndown](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md) | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
+| **C** | [runtime-fallback-readiness](../docs/pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md) | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
+| **D** | [free-conversation-audio-readiness](../docs/pawai-brain/plans/2026-05-12-free-conversation-audio-readiness.md) | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
+| **E** | [mac-school-network-readiness](../docs/pawai-brain/plans/2026-05-12-mac-school-network-readiness.md) | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
+
+### 戰略收斂
+
+- **Demo 形式**：A-led hybrid（60s PawAI 自介 → Roy 帶 3-4 段穩定 → PawAI 接續對話）
+- **尋物策略**：X+（物體辨識 + nav 分段展示 + PawAI 講敘事，不真做閉環）
+- **模型**：不盲換（5/12 中午 ≥8/10 鎖；<8/10 才考慮 demo 10 題 A/B）
+- **Spec 1 縮減**：砍 SAY 解綁、變體池、6 skill 解綁、self_introduce 重構（demo 後 retrospective 後決定）
+- **Nav 主舞台移到學校**：家裡先把 7 項可能性排除到「只剩空間假設」
+
+### subagent 寫死 ref 審計（5/10 night）
+
+掃描 27 處硬寫值，3 處 P0：
+1. `speech_processor/config/speech_processor.yaml:24` ASR URL 寫死
+2. `pawai-studio/gateway/studio_gateway.py:53` ASR_URL 不讀環變
+3. `pawai-studio/gateway/asr_client.py:46` asr_url default 寫死
+
+`ROBOT_IP` / `GATEWAY_HOST` / `MAP` 都已環變 ✅。Foxglove 8765 hardcoded 但 ws URL 動態。
+完整清單見 E plan §3-§4。
+
+---
+
+## 5/10 進度（早午：demo-quality 6-spec roadmap，已被晚上重構覆蓋）
+
+## 5/10 進度（demo-quality roadmap：6 spec + Spec 1 14 點 review fix）
+
+5/10 全天文件工作日（白天 7 commit 全 docs）+ 晚上 Spec 6 P0 從「驗證 5/9 fix」演化成「Studio composer 重構」（2 commit，一個 plan、一個程式碼）。共 9 commit。把 demo 前剩餘 6 天的工作拆成 6 個 spec，並把 Spec 1（LLM Naturalness A+）打磨到可進 implementation plan 的狀態。
+
+### 6-Spec roadmap（`docs/pawai-brain/specs/2026-05-10-*`）
+
+| Spec | 主題 | demo 前 | 狀態 |
+|---|---|---|---|
+| **1 LLM Naturalness A+** | 講話、自我介紹、知道自己 | ✅ 主軸 | 14 點 review fix 全部 pass，可進 plan |
+| 2 Gesture Interaction | 9 種手勢 mapping | 靜態 6 種（若有時間）| draft，OK 標高風險（無原生 enum）|
+| 3 Pose Interaction | 7 種姿勢 + 跌倒人臉融合 | demo 後 | draft |
+| 4 Object Perception | YOLOv8n vs YOLO26n + 顏色 | demo 後 Phase 1/2/3 | draft |
+| 5 Navigation Roadmap | SLAM/Nav2 P0 + P1-P3 | P0 主軸（5/13 場地測）| draft |
+| 6 Studio UX Polish | scroll / 五功能視角 / demo 操作面板 | ✅ P0 完成（5/10 night composer 重構）| P1/P2 demo 後 |
+
+### Spec 1 A+ 核心契約
+
+> **LLM 說話，SkillContract 做動作。SkillContract 的 SAY 只在沒有 LLM reply 時 fallback。**
+
+範圍鎖定：
+- ✅ Persona 6 檔（4 改 + 新 `MISSION.md`，含 Roy 重定位**多模態感知融合具身互動機器狗 / 看懂理解決策行動**）
+- ✅ SAY 解綁（SkillPlan 加 `source_llm_reply` field + ROS proposal JSON 透傳 + executive `_resolve_say_text` 三段邏輯）
+- ✅ executor-side `SAY_TEXT_POOLS` 變體池（落在 `interaction_executive_node.py`，不污染 SkillContract registry schema）
+- ✅ `_on_chat_candidate` 三分支精準化（accepted / needs_confirm / rejected-cooldown-blocked）
+- ✅ 4 個優先 skill：self_introduce / wave_hello / greet_known_person / object_remark
+- ✅ A+ 完成後跑 10-prompt benchmark 才決定是否換模型（不先換 Gemini）
+- ❌ **不**動 LLM 輸出 JSON schema、**不**動 LangGraph 11 節點、**不**動 PendingConfirm signature、**不**做 2-skill list / composition、**不**換模型
+
+### Spec 1 review 累計 14 點 fix（4 輪迭代）
+
+| 輪 | 點數 | 主題 |
+|---|---|---|
+| 1 | 4 | mission positioning / loader 6 檔 / source_llm_reply ROS round-trip / skill_gate fallback |
+| 2 | 6 | 長者殘留 / nav overclaim / contract precision / self_introduce 雙路徑 / Spec 4 命名 / Spec 2 OK 風險 |
+| 3 | 4 | needs_confirm 三分支 / schema 用語 / module-level build_plan / text_pool 落點選定 |
+| 4 | 4 | 路徑 B SkillContract 矛盾 / 摘要殘留 / PendingConfirm 不擴簽名 / 路徑 B template |
+
+### 9 commit（5/10 全天）
+
+```
+f55a25f docs(spec): add Spec 1 LLM naturalness / self-showcase A+ design
+8376c7b docs(spec): clarify 10-prompt benchmark methodology
+87afd83 docs(spec1): apply 4 review fixes — mission/loader/roundtrip/skill_gate
+fbaefc3 docs(specs): add Spec 2-6 + roadmap index
+ce20096 docs(spec1+2+4): apply 6 review fixes
+1a6fbdb docs(spec1): apply 4 more review fixes — needs_confirm/schema/build_plan/pool
+45c342a docs(spec1): apply 4 final review fixes — text_pool location consistency
+de07a05 docs(plans): add Spec 1 full plan + Spec 2/5/6 lightweight plans/checklists
+fdd5c93 fix(studio): composer absolute-bottom layout (ChatGPT-like)
+```
+
+### 5/10 night 補充：Spec 6 P0 = Studio composer 重構
+
+預計「5–10 分鐘驗證 5/9 fix」→ 實際耗 ~3 小時，因為驗 4 case 時暴露了**比 scroll 更深層**的 layout bug：composer 被訊息推離 viewport 底部。
+
+- **5/9 stick-to-bottom (`87e2d5d`) 在原 issue 不重現**，4/4 case pass
+- 但 composer layout：`flex h-full flex-col` + `shrink-0` 不夠穩，textarea auto-grow / skill strip toggle 都會微跳
+- 嘗試 `flex-col overflow-hidden` + `min-h-0` + `behavior:"auto"` + `isAutoScrollingRef` 鎖只解部分症狀
+- 最後改 ChatGPT-like 架構（`fdd5c93`）：
+  - 抽 `components/chat/composer.tsx`（純 view）
+  - ChatPanel root 改 `relative h-full overflow-hidden`
+  - 三層：header（normal flow）/ scroll area（`absolute inset-x-0` + 動態 top/bottom）/ composer bar（`absolute bottom-0 z-20`）
+  - `ResizeObserver` 量 headerH/composerBarH 寫 useState，初始 44/96
+  - z-20 < DevButton z-30 < Sheet z-40/50（dev-button.tsx:22 已驗證）
+- ✅ npm run lint：只剩 dev-button.tsx 一條 pre-existing rules-of-hooks（與本次無關）
+- ✅ npm run build：TypeScript clean，12 pages 全 generate
+- 詳細設計 plan：`~/.claude/plans/subagent-pawai-studio-frontend-vectorized-bunny.md`
+
+### 明天（5/11）
+
+- 進 `writing-plans` 寫 Spec 1 implementation plan（Phase 0-6 拆 commit/file 級）
+- 由 Spec 1 §10 + §12 入口帶
+- Spec 2-6 各自獨立進 plan，不依賴 Spec 1
+
+---
+
+## 5/9 night 進度（origin/main d7a35ab 首次 Jetson smoke + 4 polish fix branch）
+
+5/9 evening 把 origin/main d7a35ab（含 PR #51-65 全合）首次 deploy 到 Jetson 實機 smoke。Round 1 走完 8 issue + Round 2 補 4 個動作層 / UX polish + Round A/B/C 回歸測 + Round D 誤觸觀察。Go2 沒電後收工。
+
+### 主線 4 P0 hotfix（commit `756aeb0` on main）
+
+| Bug | Root cause | 修法 |
+|---|---|---|
+| A reset 沒清 speaker | `_recent_face_identity` 沒清 + face callback 立即寫回 | conversation_graph_node._on_reset_context 加清 face identity + 5s suppress window |
+| C Studio 簡→繁 frontend 沒顯示 | `chat-panel.tsx:217` echo 用戶原文不等 backend 轉換 | gateway return converted text + frontend update bubble |
+| OpenCC API name | `OpenCC("s2twp.json")` lib append `.json` → `s2twp.json.json` FileNotFoundError，silent fallback 原文 | 改 `OpenCC("s2twp")`，兩處 helper（gateway + speech_processor） |
+| B wiggle balance_stand | wiggle motion step 缺前置 stand | skill_contract.py wiggle steps 加 balance_stand step（後續 G 證實仍需 1033 → 1020 fallback） |
+
+從 PR #52 起 ASR 簡→繁三入口都 silent fail（OpenCC API typo），這次才被抓到。
+
+### Branch `fix/demo-motion-and-chat-polish` 4 個動作層 / UX polish（5 commit，未 push）
+
+| Commit | 修法 |
+|---|---|
+| `87e2d5d` | J ChatPanel stick-to-bottom（30px tolerance + scroll listener，user scroll up 不被新訊息打斷） |
+| `c7de5ee` | H sit_along motion sit (1009) → stand_down (1005)；I 新 stand SkillContract（5 file 改：skill_contract + brain_node 兩 allowlist + persona CAPABILITIES + EXAMPLES + 兩 test 檔） |
+| `f296429` | G wiggle motion 1033 (WiggleHips) → 1020 (Content) — Go2 firmware v1.1.7 silent-ignore 1033，直接 pub /webrtc_req 試 1029/1020/1028 確認 1020 視覺像「扭」 |
+| `bb0290e` `b3c4cc1` | docs/mission/demo完成清單.md 5/9 evening + Round A/B/C 結果 |
+
+### Round 3 回歸測試結果（5/9 night Jetson 實機）
+
+| Round | 步驟 | 結果 |
+|---|---|---|
+| A motion fix | wiggle×3 + stand 兩路徑 + sit_along | ✅ 全 PASS（brain log `confirmed_via_ok`，Roy 觀察「都有做動作」） |
+| B Stop / Safety | wave_hello + sit_along 動作中 stop | ✅ 2/2 PROPOSAL stop_move（intent_classifier 75% / 50%） |
+| C Confirm skills | stretch 第一次 + 15s cooldown 後第二次 | ✅ 全 PASS |
+| D 誤觸抑制 | 對話中物體入鏡 | ✅ 1500 行 log **0 個 `object_remark` proposal**（attention guard + 60s dedup 雙保險生效） |
+
+### 新增觀察 / Backlog（不擋 demo）
+
+- **Face 誤識別 Roy → grama**：`/state/perception/face` `stable_name=grama sim=0.57`，導致 LLM 全程稱「阿嬤」。可能 face_db reference 接近，需重抓 Roy reference 或改話術。Demo 一人場景不擋。
+- **Self_introduce 中 object_remark 漏接**：5/9 evening 第二輪重現「看到黑色椅子了」插自介；下次 session 加 attention.state log 取證。
+- **TTS 跳段（睡前故事中段漏一句）**：Gemini chunk all-or-nothing 顯示 ok 但播放漏。tts_node 加 debug WAV save 取證再修。
+- **TTS 廣東腔**：Despina voice 相同文字 cache hit 壞 audio。當下清 cache (`e3faba93`+`54040645`) fresh synth 後 Roy 接受。voice 選型 spike 列 backlog。
+- **雙 SAY (chat_reply + skill_say)**：PR #65 source 標籤 by design，UX 怪但不擋 demo。
+- **Compound skill request**：「站起來並打招呼」LLM 只挑一個 skill — OUTPUT.md 「一次最多提議一個 skill」by design，已在清單 §11 SKIP→C。
+- **wiggle safety_requirements**：`["depth_clear", "robot_stable"]` 偶發 blocked_by_safety（`depth_not_clear_for_motion`，可能 transient_local 漏接）；1020 Content 不需 depth_clear，可考慮拿掉，待場地驗。
+- **USB 喇叭斷線**：5/9 evening `aplay -l` 一度看不到 CD002-AUDIO；XL4015 供電風險，demo 當天獨立電源。
+
+### Carry-over（5/10）
+
+1. push branch `fix/demo-motion-and-chat-polish` + Roy laptop frontend (chat-panel.tsx) 同步策略確認
+2. face_db 處理（重抓 Roy reference 或保留 grama 用 demo 話術）
+3. Round E 五功能個別成功率（face/gesture/pose/object，~15 min 家裡可做）
+4. 5/12-13 場地：導航避障 / 30 min 連續 / 躺平 fallen / 推車誤判
+5. 取證任務：TTS 跳段 debug save、self_introduce attention 漏接、廣東腔 voice 選型 spike
+
+---
+
+## 5/9 進度（Roy 8 issue 互動品質改善 — 13 PR 主線落地）
+
+5/8 evening Roy 列出 8 issue（TTS 音色 / LLM 死板 / LLM 不主動鏈式 / 物體人臉重複干擾 / Studio 顯示每句 / ASR 簡→繁 / refresh 重置 context / idle 待機）。5/9 全天從 spec brainstorm → master roadmap → 5 個 feature branch + 4 P0 audit fix 全 merge 進 `origin/main`。
+
+### Commits / PRs（13 條）
+
+| PR | SHA | Issue | 內容 |
+|---|---|---|---|
+| #51 | 91c8ab5 | 5（觀測底座）+ 1 跳句 | Wave 0 + P1-1：tts silent-skip 改 all-or-nothing；gateway `/tts` envelope parse；ChatPanel `ttsMessages` ring buffer + dedup + rate-limit；Phase 2-mini source pipeline (`build_plan` → IE-node envelope `source` → gateway → CSS) |
+| #52 | 79c17a1 | 6 + 7 | Branch C：OpenCC s2twp 雙入口（`stt_intent_node` + `/ws/speech`）+ ChatPanel「新對話」按鈕 + `/api/reset` endpoint + dev-only F5 hybrid auto-detect (`NEXT_PUBLIC_AUTO_RESET_ON_REFRESH`) |
+| #53 | 837541e | 2 + 3 | Branch B：persona 拆 5 檔 `personas/v1/{IDENTITY,STYLE,CAPABILITIES,EXAMPLES,OUTPUT}.md`；`mode_classifier` graph node 5-mode；capability lazy inject；4-bucket whitelist；temperature 0.6（launch 預設）；few-shot 補 wiggle/stretch + identity 8 case |
+| #54 | 3b4fb3e | 4 | Branch D：`AttentionMachine` 4-state pure Python（IDLE/NOTICED/ENGAGED/INTERACTING, dwell 1.5s / quiet 8s / face_lost 3s）+ emit gate per skill（greet ENGAGED-only, object_remark + active_plan/pending/tts not 條件）+ dedup key 改 `class_name only` |
+| #55 | fc80bf2 | 1 partial | Branch E partial：TTS dual-route（fast lane edge-tts + quality lane Gemini）+ provider `output_format` attr + `_last_served_format` 修 fallback chain Piper/MP3 decode bug |
+| #56 | fce4281 | (script fix) | `start_full_demo_tmux.sh` drop legacy persona.txt arg → 用 launch default `personas/v1` directory |
+| #57 | c59ba01 | 1 (calibrate) | TTS threshold 30 → 12；emotional audio tags（[playful]/[excited]/[whispers] etc 12 個）強制 quality lane；ElevenLabs Spike-Mini 工具 + dev-log 模板 |
+| #58 | 1c4d766 | 2 (deep) | `_build_user_message` 移除 `elif cap:` chat/identity/safety mode 不再注入 `[能力]` JSON（issue 2 真兇）；mode_classifier regex 補「介紹一下/介紹一下你/介紹一下 PawAI/自我介紹/你叫啥/你會啥/功能有哪些」；launch temp 0.6 → 0.8 |
+| #59 | 1b0593f | 4 (deep) | `AttentionMachine._transition(IDLE)` 集中清 face/dwell timestamps（修 flicker bypass）；`_attention.tick()` 進 `self._lock`；新 `_attention_state_snapshot()` helper；stranger_alert 加 active_skill+pending+tts guards；greet_known_person 改 ENGAGED-only（drop INTERACTING） |
+| #60 | ac3990a | 6 (complete) | `/api/text_input` REST endpoint 也呼叫 `to_traditional_tw`（補 Branch C 漏的第三入口） |
+| #61 | 50d18ec | 7 (complete) | `_on_reset_context` 加 `_seen_sessions.clear()` + `with self._seen_lock`（修 Branch C 漏的會話 ID dedup） |
+| #62 | a3cc9ab | 8 | Idle MVP P3-1a：12 個 audio-tagged 短語、`_maybe_emit_idle()` 6 道 gate（idle_enabled / threshold / cooldown / no active_plan / no pending / not tts_playing / attention IDLE）、`_touch_user_interaction()` 在 4 個 callback 重置時鐘、復用 10Hz `_tick_attention` timer、**default OFF** |
+| #64 | 9ea1657 | (final audit) | declare_parameter llm_temperature 0.2 → 0.8（兩處 — `conversation_graph_node:308` + `llm_bridge_node:202`）；`_on_object` 改用 `_attention_state_snapshot()`（第 3 處 race fix）；idle 時鐘統一 `time.time()`（跟 brain_node 其他 cooldown 一致）；`idle_max_per_hour` 真 enforcement（`idle_emit_history` deque + 3600s window） |
+
+### 8 issue 真實狀態（不是「100% 完成」）
+
+| # | Issue | 主線狀態 | 殘餘 |
+|---|---|---|---|
+| 1 | TTS 音色/延遲 | **部分** — dual-route 可走 Gemini quality lane，emotional tag override；threshold 12（避免短句全卡 fast lane） | ElevenLabs 待 Roy 親耳 spike（`tools/tts_spike/elevenlabs_mini.py`），spike-mini GO 後才進主鏈 |
+| 2 | LLM 死板 | **主線落地** — capability JSON 不再 leak 進 chat/identity prompt；mode regex 補完；temp 0.8 | 待 Jetson smoke：「介紹一下」是否真擺脫 70 字功能列表 |
+| 3 | LLM 不主動鏈式 | **主線落地** — wiggle/stretch few-shot 9 case + 4 桶白名單 + action_request mode regex | 待 Jetson smoke：「扭一下」LLM 是否穩定出 `skill: wiggle` |
+| 4 | 重複觸發干擾 | **主線落地** — attention 4-state + 3 race-condition lock + greet ENGAGED-only + stranger 加 active_skill 守護 + dedup key drop color | 待 Jetson smoke：路過比 OK 不被打招呼 / wiggle 不被 stranger 中斷 |
+| 5 | Studio 顯示每句 | **完成** — pipeline 已驗（build_plan → envelope → gateway → ws → CSS）；Roy 5/8 smoke 已說「ui 郝非常多 很棒」 | — |
+| 6 | ASR 簡→繁 | **主線落地** — 三入口（stt_intent + /ws/speech + /api/text_input）全 OpenCC s2twp | 待 Jetson runtime 確認 `opencc` import OK |
+| 7 | refresh reset | **主線落地** — backend `/brain/reset_context` 清 memory + seen_sessions；frontend「新對話」button + confirm + F5 dev flag | 待 Jetson smoke：按鈕清 brain 後第一句不帶舊 context |
+| 8 | Idle 待機 | **MVP 落地但 default OFF** — Roy 訴求「閒置 10 分鐘」對應 `idle_threshold_s=600` home profile | demo 是否啟用待 Roy 決定；啟用要 `-p idle_enabled:=true` |
+
+### 新增 ROS 元件 / Topic / Param
+
+- **新 topic**：`/brain/reset_context` (std_msgs/Empty)
+- **`/tts` envelope schema 擴**：JSON 新增 `source` 欄位 (`chat_reply` / `say_canned` / `skill_say`) — 純文字 backward compat 維持
+- **新 module**：`pawai_brain/pawai_brain/nodes/mode_classifier.py`（純 Python regex，5 mode）
+- **新 module**：`interaction_executive/interaction_executive/attention_machine.py`（純 Python 4-state，fake-clock injectable）
+- **新 directory**：`pawai_brain/personas/v1/`（5 檔，`setup.py` data_files 安裝到 `share/`）
+- **新 helper**（兩份）：`speech_processor/speech_processor/text_normalization.py` + `pawai-studio/gateway/text_normalization.py`
+- **新 ROS params**：
+  - `idle_enabled`（默認 False）/ `idle_threshold_s`（600s）/ `idle_cooldown_s`（600s）/ `idle_max_per_hour`（4）
+  - `enable_s2twp`（True）+ env `PAWAI_ENABLE_S2TWP`
+  - `tts_dual_route_enabled`（True）/ `tts_fast_lane_threshold`（12）
+  - `llm_temperature` declare_parameter 默認 0.2 → 0.8（兩 node）
+
+### 新增測試
+- IE：`test_attention_machine.py`（12 fake-clock unit）+ `test_attention_integration.py`（5 場景）+ `test_idle_mvp.py`（5 phrase pool sanity）
+- pawai_brain：`test_mode_classifier.py`（含 5/9 補 8 個 identity/capability case）
+- gateway：`TestTextNormalizationGateway`（4 case）
+- frontend vitest：`reset-conversation.test.ts`（3 case）
+
+合計：375+ tests pass on origin/main，0 regression。
+
+### Carry-over（明 5/10）
+
+- **Jetson sync + colcon build + restart demo**：rsync source + `rm -rf build/pawai_brain install/pawai_brain` + colcon build （`data_files` glob 增量不 trigger，需清重 build）+ tmux kill + restart
+- **5 case 實測**（Roy 親測）：
+  1. 「介紹一下」是否擺脫功能列表 → 期待識別 identity mode + 不注入 capability
+  2. 「[playful] 嗨～」是否走 quality lane（不再 google 小姐）
+  3. 「扭一下」→ wiggle skill emit → PendingConfirm → 比 OK → 真扭（不被 stranger / object 中斷）
+  4. 路過比 OK → greet/object 不發；停下 dwell 1.5s + ≤1.6m → ENGAGED → greet 才發
+  5. 「新對話」按鈕 → 對話記憶 + seen_sessions 都清，第一句不帶舊 context
+- **ElevenLabs Spike-Mini**：Roy 拿 API key + 挑 3 voice ID + 跑 `tools/tts_spike/elevenlabs_mini.py` + 聽 15 mp3 + 評分；GO 後再 PR 把 ElevenLabs 進 quality lane
+- **本機 main reconcile**：`ahead 22, behind origin/main 14`（Roy 自己 22 commits + 我 today 13 PRs 進 origin），需 rebase 或 cherry-pick
+- **Idle 啟用決策**：demo 是否展示 idle，要展示用 `-p idle_enabled:=true -p idle_threshold_s:=45 -p idle_cooldown_s:=120`
+
+### 與 5/9 brainstorm spec 對接
+
+完整 spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+Master roadmap：`docs/pawai-brain/plans/2026-05-09-master-execution-roadmap.md`
+Branch plans：B/C/D/E 各一份在 `docs/pawai-brain/plans/`
+
+---
+
+## 5/8 進度（在家驗收 8 階段 + 5 個 fix commit）
+
+### Morning：A-H 八階段測試 + 找到 3 個 P0 bug
+- A Baseline ✅ 5/5（但發現腳本漏 depth_safety_node）
+- B 語音回歸 ✅ 5/5（含記住名字 / 長句 TTS）
+- C trace_only 自介 ✅ C1（C2 Studio button 不存在 SKIP）
+- D motion skills ✅ 4/4（wave_hello / careful_remind / show_status / sit_along）
+- E 動作中 stop ✅ 2/2（preempted hard gate 守住）
+- F confirm mode 🔴 FAIL→A:BLOCKER（OK 手勢沒 wire + auto-rule 蓋掉）
+- G invalid skill ✅ 3/3（後空翻/爬樓梯/跳舞 LLM 婉拒）
+- H 多模態干擾 ✅ H1+H3（H2 fallen 留場地）
+
+### Evening：5 個 fix commit + Jetson 整合驗證
+- `35bdf1d` `fix(scripts): add depth_safety window to start_full_demo_tmux` — `/capability/depth_clear` 0 publishers → motion 全 `blocked_by_safety`，加 [10/13] window 自動啟動 `depth_safety_node`
+- `a2eefc8` `fix(tts): unify mic + Studio paths to Gemini Flash TTS preview` — Roy 要求 mic 也走 Gemini Despina（`tts_node.py:1040` routing 條件移除 input_origin gate）
+- `44a8a73` `fix(executive): repair OK-confirm flow and survive gesture event sparsity` — 4 段修法：(2a) flicker 不再 cancel pending；(2b) face/pose auto-rule 加 PENDING guard；(2c) timeout 5s→30s + new_speech_intent cancel；(2d) `_gesture_live_window_s` 0.5s→5.0s（vision 發 event ~3-4s/個，原值讓 fresh OK 永遠 stale）
+- `efda3c0` `fix(vision): align Thumb_Up label with contract enum thumbs_up` — `gesture_recognizer_backend.py:53` `"thumb"` → `"thumbs_up"` 對齊 `interaction_contract.md:485`，原本 brain `_GESTURE_CONFIRM[thumbs_up→wiggle]` silent drop
+- `31aa2ea` `fix(executive): correct wiggle_hip motion api_id 1029 → 1033` — `skill_contract.py` typo：1029 是 Scrape（拜拜），WiggleHips 真正 id 是 1033（Roy 觀察狗做拜拜抓到）
+
+### Jetson 整合驗證結果
+| 項 | 結果 |
+|---|---|
+| `/capability/depth_clear` Publisher count | 0 → **1** ✅ |
+| 對麥克風講「你好」TTS chain | `[openrouter_gemini]` ✅ |
+| §4.1 Roy 站位 greet + cooldown | brain log `identity:roy` 3 次 + `identity:grama` 1 次，cooldown 機制生效 ✅ |
+| §5.2 4 種手勢成功率 | OK / Thumb / Palm / Peace 全 confidence=1.0 ✅ |
+| §3.2 confirm 全鏈軟體面 | thumbs_up→PENDING wiggle → say_canned awaiting_ok → OK→CONFIRMED → `/webrtc_req api_id=1033` ✅ |
+
+### Carry-over（明 5/9）
+- **[#wiggle-no-physical-motion]** — 1033 (WiggleHips) 發出 Go2 沒實際扭屁股，可能 firmware v1.1.7 不支援或需 BalanceStand precondition；其他 motion (1016 Hello, 1009 Sit) 都正常，不阻擋 demo 主流程
+- **§6.3 Studio 五功能視角** — 5/8 evening 沒測到，留下次 session
+- **§5.1 Roy 5 次成功率** — 已過 3/3（in §4.1），剩 2 次取樣
+
+### 沿用 5/7 night commit 背景
+- `202a7e3` start_full_demo_tmux.sh source .env
+- `685c97d` object_remark per-(class,color) 60s dedup
+- `10829ca` per-message TTS routing 基礎建設（5/8 `a2eefc8` 把 routing 條件改寬）
+- `e1363c8` stranger_alert / object person 靜音
+- `67c28ce` Studio Gateway CORS
+
+---
+
+## 5/7 night 進度（Per-message TTS routing + 誤觸靜音 + Studio CORS）
+
+對照 5/7 demo 測試問題逐條修復。**今晚發 5 個 commit**：
+
+### Commits
+- `202a7e3` `fix(scripts): full demo tmux loads .env so OpenRouter key reaches conv graph` — `start_full_demo_tmux.sh` 沒 source `.env`，conversation_graph_node 啟動時 `openrouter=off` → 全部掉 RuleBrain。腳本加 `set -a; source .env; set +a` 雙層注入（top-level + ROS_SETUP 給每個 tmux pane re-source）。**Demo 阻塞修復**
+- `685c97d` `fix(brain): per-(class,color) dedup for object_remark — 60s window` — SkillContract.cooldown_s=5 只擋 SAY skill 不擋同物重發，YOLO 持續偵測同一張椅子每 5s 喊一次「看到咖啡色的椅子了」。`brain_node._on_object` 加 `_object_remark_seen[(class, color)]` 60s 窗口
+- `10829ca` `feat(brain,tts): per-message TTS routing — Studio chat → Gemini, others → edge_tts` — Plumbing 6 file。`pawai_brain` 訂閱 `/brain/text_input`（補主鏈斷）+ ChatCandidatePayload 加 `input_origin` 欄位 + `build_plan` 把 input_origin 帶進 step args + IE-node SAY 條件包 JSON envelope + tts_node 預 build studio chain（gemini → edge_tts → piper, dedup）+ tts_callback parse envelope 選 chain。Plan: `~/.claude/plans/polished-questing-starlight.md` v1.4
+- `e1363c8` `fix(brain): silence stranger_alert TTS + skip object_remark for person class` — `stranger_alert` SAY text → 空字串（IE-node SAY return `empty_tts_text`，trace 留 chip 但 /tts 不發）+ `build_object_tts` 對 class==`person` return None（避開 stranger / greet 路徑衝突）。同 fall_alert b224217 模式
+- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（100.101.41.4），Gateway 在 Jetson（192.168.0.222）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
+
+### Smoke 結果（Jetson 實機）
+| Smoke | 結果 |
+|---|---|
+| 1. `ros2 topic pub /tts std_msgs/String 'data: 測試純文字一'` | ✅ `🎤 [edge_tts]` |
+| 2. `curl POST /api/text_input "小狗你今天好嗎"` | ✅ `🎤 [openrouter_gemini]` Despina, 2 chunks parallel, 6.5s 首音, 12s audio |
+| 3. 麥克風 Roy 講「你好」 | ✅ `🎤 [edge_tts]`（reply 走 Gemini LLM persona）|
+| 4. Object detect 「看到咖啡色的椅子了」 | ✅ `🎤 [edge_tts]`，60s 才再講一次 |
+| 5. stranger_alert / object person | ✅ trace 留、TTS 不發（commit e1363c8 後驗證）|
+| 6. Studio chat panel UI | ⏸ 待 Roy CORS 修完後 + 重連 frontend 驗 |
+
+### Carry-over（明天 5/8 處理）
+- TTS 首句 6.5s（Gemini chunk）— 若 demo 不能接受可考慮 edge_tts 主線 + Studio 按鈕觸發 Gemini
+- single-flight 排隊：rapid pub 會掉 session（A2.1.3 OBS）— 自然語音間隔不會撞，demo 安全
+- langgraph pip 應寫進 `pawai_brain/package.xml` 或 README（fresh Jetson 要手裝），P2 backlog
+- 5/14 SL201 是否放假待確認；LW211 5/13-14 都借走
+
+### 與 5/7 教授會議方向對齊
+- ✅ LLM：Qwen 7B → OpenRouter Gemini 3 Flash（5/4 上線、5/7 night `openrouter=on` 修通）
+- ✅ TTS：edge_tts → 雙模（Studio chat 走 Gemini Despina、其他 edge_tts）
+- ✅ 陌生人警告誤觸：靜音
+- ✅ 跌倒判定放寬：`POSE_TTS_MAP['fallen']` 拆掉 + `FALL_ALERT_TTS=""`（之前已修）
+- ⏸ 動態手勢正面 / wave：放推（會議共識）
+- ⏸ SLAM 動態繞行：5/12 帶到大空間後再調
+
+---
+
+## 5/8 night 進度（Demo readiness — 誤觸抑制 + TTS chunking + Capability defense-in-depth）
+
+5/8 white box review 後抓出三批會毀實機測試的問題：(1) capability layer 對 unknown-but-allowlisted skill 沒擋 → brain_node 仍會 execute（5/8 allowlist 擴大後變嚴重）。(2) 5/7 列在 plan 但未實作的「五功能誤觸抑制 + Gemini TTS 跳行」，當天直接進 LangGraph cutover 跳過了。(3) `FALL_ALERT_TTS=""` 只關了一條 fall TTS 路徑，`POSE_TTS_MAP["fallen"]` 還會經 `_on_pose_event` 漏出。本批一次補齊。
+
+### 落地內容
+
+| 項目 | 結果 | Commit |
+|---|---|---|
+| capability layer first-gate（unknown allowlisted skill）| `normalize_proposal_v2` 在 `entry is None && skill ∈ LLM_PROPOSABLE_SKILLS` 時**丟掉** proposed_skill + trace `blocked:not_in_capability_context`；非 allowlist 不變 | `075fb23` |
+| `face_perception.yaml` `sim_threshold_upper` | 0.30 → **0.40**（拉高陌生人認定門檻；下限 0.22 不動） | `9d8acb7` |
+| `executive.yaml` `unknown_face_accumulate_s` | 3.0 → **5.0**（多 2 秒確認再警告） | `9d8acb7` |
+| `event_action_bridge.FALL_ALERT_TTS` | `""` + `if FALL_ALERT_TTS:` guard at publish site | `9d8acb7` |
+| `event_action_bridge.POSE_TTS_MAP["fallen"]` | **移除** key（demo 期靜音；`_on_pose_event` 既有 `if not template: return` 處理） | `b224217` |
+| `pose_classifier` 加 `image_height` + `ankle_y_ratio > 0.7` gate | 推車 / 椅子等 mid-frame 假跌倒擋下；image_height=None 維持 backward compat | `9d8acb7` |
+| `tts_node._split_for_tts` 抽到 `tts_split.py`（ROS-free） | pre-commit hook 不需 source ROS；單元測試直接 import | `6d548b8` |
+| TTS chunking 句號優先門檻 | `MIN_SPLIT_CHARS = 30`（原 `CHUNK_MAX_CHARS // 2 = 20`），避免短句早切丟語氣 | `6d548b8` |
+| TTS chunking 逗號 fallback | explicit `-1` guard + cut ≥ MIN_SPLIT_CHARS-1 邊界 | `6d548b8` |
+| 測試新增 | pawai_brain +3（capability defense-in-depth allowlist sweep）；vision_perception +5（4 ankle gate + 1 demo silence sync）；speech_processor +13（split chunking 全覆蓋） | — |
+
+### 兩條 fall TTS 路徑都關了
+
+| 路徑 | topic | 被 mute 在 |
+|---|---|---|
+| `_on_fall_alert` → `FALL_ALERT_TTS` | `/event/interaction/fall_alert` | `9d8acb7` |
+| `_on_pose_event` → `POSE_TTS_MAP["fallen"]` | `/event/pose_detected` | `b224217` |
+
+新 sync test `test_pose_tts_map_no_fallen_template_demo_silence` 把兩條路綁在一起 — 復原一條會被另一條 test 提醒。
+
+### 不在本 cut 範圍
+
+- ❌ 不接 IMU / 自身姿態 telemetry（硬體 safety 留 Phase 2）
+- ❌ TTS P1 並行→串行 + 前文 hint（demo 後再評估）
+- ❌ 不動 PendingConfirm internals / executive skill_queue
+- ❌ 不擴 nav / object 進 allowlist（場地 5/13-14 才驗）
+
+---
+
+## 5/8 進度（Brain Allowlist Expansion + needs_confirm Handoff）
+
+LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 仍只有 2 條 + pawai_brain `skill_policy_gate.v2` 在 needs_confirm 分支把 proposed_skill 吃掉，導致 wiggle / stretch 永遠到不了 brain_node、wave_hello / sit_along / careful_remind / greet_known_person 永遠被擋。本次修齊以解鎖 5/18 driver-less demo「PAI 自己介紹自己 + 自己選功能展示」主軸。完整 plan：`/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md`。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| `pawai_brain.skill_policy_gate.v2` needs_confirm 分支 | 從 `return None` 改為保留 `proposed_skill="wiggle/stretch"`，brain_node 才看得到 |
+| `interaction_executive.brain_node.LLM_PROPOSABLE_SKILLS` | 2 → 8（show_status / self_introduce / wave_hello / sit_along / greet_known_person / careful_remind / wiggle / stretch） |
+| brain_node mode dispatch | 二分支 (execute / trace_only) → 三分支（+ confirm，重用 `_pending_confirm.request_confirm`，不額外 emit say_canned 邀請） |
+| `pawai_brain.nodes.skill_policy_gate.LLM_PROPOSABLE_SKILLS` 鏡像 | 同步擴 8，`test_allowlist_matches_spec` 強制 sync |
+| `tools/llm_eval/persona.txt` rule 2 / 4 / +10 | 修正規則矛盾（rule 2 允許 needs_confirm 進 skill 欄位；rule 4 改邀請語氣；rule 10 強調 confirm 模式語氣） |
+| 測試新增 | pawai_brain +1 smoke（needs_confirm proposed_skill 保留）；interaction_executive +6（4 execute + 2 confirm）|
+
+### 不在本 cut 範圍
+
+- ❌ 不擴 nav / approach_person / object_remark / stranger_alert / fallen_alert 進 allowlist（場地未驗 / demo 期關閉）
+- ❌ 不動 executive / skill_queue / PendingConfirm 內部 / `/brain/chat_candidate` schema
+- ❌ self_introduce 維持 trace_only（10 步 motion 走 Studio button）
+
+---
+
+## 5/7 evening 進度（Phase A.6 Capability-Aware Self-Demonstration）
+
+把 Brain 的能力宣告從「27 個 SkillContract」擴成「27 SkillContract + 6 DemoGuide」三層結構（SkillContract / DemoGuide / CapabilityContext），讓 LLM 在 5/18 driver-less demo 能流暢自介所有功能，但實體 motion 仍受 SkillContract allowlist 嚴格控制。完整 plan `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md`，5 個 batch（B1-B5）共 19 task 一次到位。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| Plan | `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md` — 19 task / 5 batch（B1 capability core / B2 SkillContract demo metadata / B3 graph wiring / B4 ROS hooks / B5 persona+studio+docs） |
+| Capability layer | `pawai_brain/pawai_brain/capability/` — registry / demo_guides_loader / world_state / effective_status / skill_result_memory / world_state_builder / capability_builder（B1-B3） |
+| DemoGuide registry | `pawai_brain/config/demo_guides.yaml` — 6 entries（face / speech / gesture / pose / object / navigation） |
+| Demo policy | `pawai_brain/config/demo_policy.yaml` — limits + max_motion_per_turn |
+| SkillContract demo metadata | 27 entries 全部加上 4 個 demo 欄位（display_name / demo_status_baseline / demo_value / demo_reason），interaction_executive 152 test 全綠（B2） |
+| Graph wiring | conversation_graph 11 階段（`input → safety_gate → world_state → capability → memory → llm → validator → repair → skill_gate → output → trace`，B3 已把 context+env 的責任合併到 `world_state_builder`，graph 不再呼叫舊的 context_builder / env_builder — 兩檔保留只是還沒刪），新增 world_state_builder + capability_builder + demo_guide passthrough（B3） |
+| ROS hooks | conversation_graph_node 訂閱 `/state/tts_playing`（Bool TRANSIENT_LOCAL）/ `/state/reactive_stop/status` / `/state/nav/safety` / `/state/pawai_brain` / `/brain/skill_result`；`selected_skill` 從 skill_result payload 直接 populate `recent_skill_results`（B4） |
+| Persona rules | `tools/llm_eval/persona.txt` 加上 9 條 CapabilityContext 規則（kind=demo_guide trace-only、needs_confirm 要求 OK、recent_skill_results 自然銜接等）（B5 Task 16） |
+| Studio chips | `skill-trace-content.tsx` 加 needs_confirm（yellow）+ demo_guide（blue）chip color，配合既有 amber/rose/emerald palette（B5 Task 17） |
+| Architecture docs | `docs/pawai-brain/architecture/overview.md` §5.1 加上 DemoGuide registry + CapabilityContext 兩列三層結構（B5 Task 18） |
+| Tests | pawai_brain 121 / interaction_executive 152 / legacy llm_bridge 2 全綠；wrapper smoke 載入 6 demo guides + 編譯 CompiledStateGraph 通過（B5 Task 19） |
+
+### Brain contract 不變式（B1-B5 全程守住）
+
+- `/brain/chat_candidate` schema 完全不動 — `selected_demo_guide` **不出現**在 payload，只在 `/brain/conversation_trace` 流通
+- Brain（interaction_executive）對 demo_guide 一無所知，仍只看 SkillContract allowlist 仲裁
+- chat_reply / say_canned passthrough 不變 — `proposed_skill=None`，沒有副作用
+- demo_guide 在 Studio 顯示為 blue chip + trace stage `demo_guide`，不會誤觸發 motion
+
+### 提交序列（B5）
+
+```
+86ad931 feat(persona): capability_context awareness rules (Phase A.6)
+89c704c feat(studio): add needs_confirm + demo_guide chip colors
+ade4bca docs(architecture): three-tier capability layer (SkillContract + DemoGuide + CapabilityContext)
+（本 commit）docs(project-status): Phase A.6 capability awareness complete
+```
+
+B1-B5 全部從 `2bc6566` 起；B5 4 個 commit 把 plan 收尾。
+
+### 待 5/13 場地測試前要做
+
+- Jetson 上機跑全 33 capability matrix（plan acceptance §最後一條）
+- LLM 真實 prompt 驗證：問「你會做什麼」是否優先列 demo_guide display_name；提議 dance / wiggle / chat_reply 是否走對 trace 分流
+- legacy `context_builder.py` / `env_builder.py` 雖留著，後續若 Phase B 不再用可整批清掉
+
+### 不在本 cut 範圍
+
+`/brain/chat_candidate` 加 `selected_demo_guide` 欄位（demo_guide 仍只走 trace）、Studio 主動拉 capability snapshot 顯示 33 entries、Jetson colcon build + 真機驗證 — 留下次 session。
+
+---
+
+## 5/7 morning 進度（LangGraph Primary Cutover — Phase 1）
+
+把 `llm_bridge_node` 從 primary 退為 manual fallback；新建 `pawai_brain` ROS2 package 作為 `/brain/chat_candidate` 主要發送者。原本規劃 Cut 2 是 shadow skeleton，5/7 改成直接做 primary cutover（demo 影片已落袋，shadow 無架構槓桿）。
+
+### 落地內容
+
+| 項目 | 結果 |
+|---|---|
+| Plan | `/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md` — 5 step waterfall |
+| 新 package | `pawai_brain/` — package.xml / setup.py / launch / 11 graph nodes / wrapper / 4 test files |
+| LangGraph 版本 | langgraph 1.1.10 + langchain-core 1.3.3（WSL；Jetson 待部署日驗） |
+| 純 module 移植 | `llm_client.py`（OpenRouter chain）/ `memory.py` / `validator.py` / `repair.py` / `rule_fallback.py` / `schemas.py` / `state.py`（全 copy 自 llm_bridge_node，原檔保留） |
+| 11 個 graph node | input → safety_gate → (條件 edge) → context → env → memory → llm → validator → repair → skill_gate → output → trace |
+| skill_policy_gate 契約 | 違規 skill 保留原值 + trace `rejected_not_allowed`，由 brain_node 真正 reject（Studio 看雙層 trace） |
+| Wrapper failure boundary | graph fatal exception → 發 error trace + RuleBrain fallback chat_candidate（不卡死） |
+| Tests | 46 全綠（4 graph smoke + 7 llm_client offline + 16 skill_policy_gate + 19 validator）；legacy `test_llm_bridge_node.py` 仍 2/2 綠 |
+| Demo script | `scripts/start_full_demo_tmux.sh` 加 `CONVERSATION_ENGINE=langgraph|legacy` 互斥分支（預設 langgraph） |
+
+### 切換 / Fallback 程序
+
+正常啟動（langgraph primary）：
+```
+bash scripts/start_full_demo_tmux.sh
+# 驗證： ros2 node list | grep -E 'conversation_graph_node|llm_bridge_node'
+#       → 應該只看到 conversation_graph_node
+```
+
+Demo 期 emergency 切回 legacy：
+```
+# 在 tmux 的 llm window 內 ctrl-c 殺掉 conversation_graph_node 後
+pkill -f conversation_graph_node
+CONVERSATION_ENGINE=legacy bash scripts/start_full_demo_tmux.sh
+```
+
+或不重啟整 session、只重啟 llm window：
+```
+tmux kill-window -t demo:llm
+# 在新 window 跑 llm_bridge_node 完整參數（見 start_full_demo_tmux.sh:194-211 註解）
+```
+
+**不變式**：同時間只能有一個 chat_candidate publisher。雙跑會讓 brain_node 收到雙份 candidate，觸發 cooldown / dedup 邏輯不可預測。
+
+### 待 Jetson 上機驗證
+
+- `pip install --user langgraph langchain-core` 在 Jetson 是否拿得到 wheel（失敗即整個 Cut 不上機，demo 改 `CONVERSATION_ENGINE=legacy`）
+- `colcon build --packages-select pawai_brain` 在 Jetson 通過
+- 對 PAI 講「你好」→ Studio Trace Drawer 看到 11 階段 trace，engine=`langgraph`
+- 對 PAI 講「停」→ safety_gate 短路，selected_skill=stop_move
+- 對 PAI 講「介紹你自己」→ proposed_skill=`self_introduce`，brain_node trace `accepted_trace_only`
+- 對 PAI 講「亂跳一下」→ skill_gate trace `rejected_not_allowed`，brain_node 也擋一次
+
+### 不在本 cut 範圍
+
+Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦身、context_builder 整合 perception state、跨 session memory — 全部留 Phase 2。
+
+---
+
+## 5/6 night 進度（Phase 0.5 Conversation Engine + demo 錄影）
+
+晚上分兩段：先做 Phase 0.5 Cut 1（chat_candidate 升級成 SkillProposal contract、Brain allowlist gate、Studio trace drawer chip、Gemini 3 Flash primary 切換），再把 5 個 perception 功能 + nav2-amcl 全部錄成 demo 影片。
+
+### Phase 0.5 Cut 1（spec → plan → 8 task 全綠）
+
+| 項目 | 結果 |
+|---|---|
+| Spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（5 次 review 修到綠） |
+| Plan | `docs/pawai-brain/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task） |
+| Cut 1 Task 1 — `extract_proposal()` | commit `618492f` + `74f210a`，5 unit test |
+| Cut 1 Task 2 — chat_candidate proposal fields | commit `fc32c18` + `4c1a718`，schema 新增 `proposed_skill` / `proposed_args` / `proposal_reason` / `engine` |
+| Cut 1 Task 3 — primary OpenRouter model 切 `google/gemini-3-flash-preview` | commit `77a277e`，同步 default + tmux 覆寫 |
+| Cut 1 Task 4 — brain_node `LLM_PROPOSABLE_SKILLS = {show_status, self_introduce}` allowlist + `/brain/conversation_trace` publisher | commit `4169bd4`，4 unit test（execute / trace_only / rejected / no proposal） |
+| Cut 1 Task 5 — Studio gateway broadcast `/brain/conversation_trace[_shadow]` | commit `fe0297e` |
+| Cut 1 Task 6 — Studio Trace Drawer chips (proposed/accepted/blocked/rejected) | commit `c65db0d` |
+| Cut 1 Task 7 — `interaction_contract.md` v2.7 | commit `472b733` |
+| Cut 1 review fixes — passthrough skills (`chat_reply` / `say_canned` 視為無 proposal) + orphan-session early return | commit `16e7130`，3+1 test |
+
+309 unit test 全綠（145 brain + 164 speech_processor）。Jetson 真機驗證：「你還好嗎」→ `accepted · show_status`、「你是誰」→ `accepted_trace_only · self_introduce`、「跳個舞吧」→ `rejected_not_allowed · dance` trace 三態都看得到。
+
+### TTS / Persona 微調（uncommitted → 本次同步進來）
+
+- `speech_processor/speech_processor/tts_node.py` — `TTSProvider_OpenRouterGemini` 加 `CHUNK_MAX_CHARS=40` + `_AUDIO_TAG_RE` 做 leading audio tag 偵測 + `ThreadPoolExecutor` parallel 各 chunk synthesize + 完整 observability log（`chunks parallel sizes=`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall`）。Gemini Flash TTS Preview 對 ≥ 80 字 input 會隨機砍尾段，40 字以下穩定。
+- `tools/llm_eval/persona.txt` — 加 8 條具體功能清單（語音聊天 / 認熟人 / 看手勢 / 看姿勢 / 看物體 / 唸故事詩 / OK 動作 / safety），明定別瞎編做不到的事。
+- 已知未解 issue：long-form 故事仍偶爾跳句，根因疑似 OpenRouter 的 `/audio/speech` route + `[whispers]` audio tag 的 prompt classifier 行為（per Gemini docs §限制 4）。Plan 已寫在 `~/.claude/plans/gemini-api-nifty-rain.md`，Plan A = preamble + retry，明天另行實作。
+
+### Demo 錄影（5 個 perception + 1 個 nav）
+
+| Demo | 模組 | 觸發路徑 | TTS provider |
+|---|---|---|---|
+| 人臉辨識 | `face_identity_node`（YuNet+SFace） | `/event/face_identity` → brain rule `known_face` → `greet_known_person` | edge_tts |
+| 語音功能 | `stt_intent_node` + `llm_bridge_node` + `tts_node` | `/event/speech_intent_recognized` → `/brain/chat_candidate` → `chat_reply` | openrouter_gemini (Despina) |
+| 手勢辨識 | `vision_perception_node`（gesture_recognizer） | `/event/gesture_detected` → brain `_GESTURE_DIRECT` → `wave_hello` 等 | edge_tts |
+| 姿勢辨識 | `vision_perception_node`（mediapipe pose） | `/event/pose_detected` → standing/sitting/bending（fallen 已關） | edge_tts |
+| 辨識物體 | `object_perception_node`（YOLO26n + 12 色 HSV） | `/event/object_detected` → `object_remark` zh + 顏色 | edge_tts |
+| 導航避障 | `nav2_bringup` + RPLIDAR + AMCL | Foxglove `/initialpose` 設位姿 → `/goal_pose` 1m / 0.8m,-0.4m | n/a |
+
+Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://100.83.109.89:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
+
+`brain_node` 改用 ROS param `unknown_face_accumulate_s=99999.0` 暫時關掉 stranger_alert 干擾錄影；正式環境改回 3.0。
+`llm_bridge_node` 在 Jetson 上 sed 掉 `FAST_PATH_INTENTS = set()`（demo 期讓所有 intent 都走 LLM；目前 WSL 仍是 `{greet, stop, sit, stand}`，回 demo 後同步決定要不要正式落 ROS param）。
+
+---
+
+## 5/6 evening 進度（object detection v2）
+
+承接早上 pose v3，下午+晚上聚焦在物體辨識「顯示顏色 + 說出物件名」三個缺口。**Brain 全鏈路真機驗證通過**：chair brown / chair black / cup gray / person cyan 都正確跑出 zh TTS。
+
+> 5/6 morning pose v3 commit `ac6d45a` 在下方延續。
+
+### 演算法 / 架構變更
+
+| 項目 | 變更 | Commit |
+|---|---|---|
+| HSV 4 色 → 12 色 | per-pixel V/S 守門 + brown(warm hue+dark V) + 黑灰白 + pink + 8 chromatic；ratio < 0.25 視為 fragmented 不出 colour | `d9fef2d` |
+| `analyze_bbox_color` | 從 staticmethod 提到 module-level，可不 import rclpy 單元測試 | `d9fef2d` |
+| brain `_on_object` 重寫 | 支援 production `objects[]` array + legacy flat dict；whitelist 32 類，外面靜默 | `545cd33` |
+| `build_object_tts` helper | colour preamble + zh class + 可選 personality suffix（cup/bottle/book）；社群實證的 wrist drift / kneel-vs-lunge 規則 | `545cd33` |
+| `skill_contract.object_remark` template | `"我看到一個{color} {label}"` → `"{text}"`（brain 預先組好）| `545cd33` |
+| 80 類中文 dict | `coco_classes.py:COCO_CLASSES_ZH` + helpers；frontend 80 類；executive 32 類 whitelist；三份各自 self-contained 避免 ROS2 package coupling | `545cd33` |
+| Debug overlay zh 渲染 | cv2.putText 不支援 CJK，切 PIL pipeline + Noto Sans CJK font | `545cd33` |
+| 12 色 zh 同步 | 三份 dict（coco_classes / brain / frontend）+ contract §4.8 enum | `d9fef2d` |
+| Contract §4.8 sync | v2.5 補 color / color_confidence schema + class_id strip 註明 | `545cd33` / `d9fef2d` |
+| React duplicate key fix | pose-panel.tsx event.id → composite key | `545cd33` |
+
+### 範例輸出
+
+```
+red cup    → 看到紅色的杯子了，你要喝水嗎？   (preamble + special suffix)
+blue laptop → 看到藍色的筆電了                (no special suffix)
+brown chair → 看到咖啡色的椅子了              (Jetson 真機觀察)
+black chair → 看到黑色的椅子了                (Jetson 真機觀察)
+Unknown cup → 看到杯子了，你要喝水嗎？        (無顏色)
+frisbee     → None                          (whitelist 外，UI 顯示但 brain 靜默)
+```
+
+### 上機驗證（5/6 evening）
+
+| 元件 | 狀態 |
+|---|---|
+| `/event/object_detected` JSON | 含 `color` / `color_confidence`（saturation 過低 omit）|
+| `/brain/proposal` `object_remark` 模板 | colour preamble + zh class + suffix 正確渲染 |
+| Jetson tmux fv | 6 window：camera / object / vision / fox / gateway / brain 全跑 |
+| Studio Live `/studio/live` | 連 ws://100.83.109.89:8080，2 ws_clients |
+| 真實顏色觀察 | brown 0.367 / black 0.309 / cyan 0.471 / gray 0.549（confidence 偏低正常，HSV 規則式本質）|
+
+### 衍生 backlog
+
+- 小物件偵測距離問題（input_size 640 → 960）— YOLO26n 訓練 640，需 mAP × FPS A/B
+- yolo26s 升級評估 — post-demo
+- 平放扁平物體（書、手機）辨識率 — 光線 + 角度 + threshold tuning
+
+### 未在範圍
+
+- 舊 `state_machine.py:OBJECT_TTS_MAP` 留在檔案裡未被 wire（5/5 設計，3 類英文）— 標 deprecated，新增類別不要改它
+
+---
+
+## 5/6 morning 進度（pose_classifier v3）
+
+聚焦在 pose 分類器演算法升級，所有改動 scoped 在 `vision_perception` 套件。**5/12 主線 5 個動作（standing / sitting / crouching / bending / fallen）已上機通過**；akimbo / knee_kneel 真機仍 miss。
+
+### 演算法變更
+
+| 姿勢 | 變更 | 來源 |
+|---|---|---|
+| `fallen` | 解除 `bbox_ratio > 1.0` 必要條件；改 `0 ≤ vertical_ratio < 0.4` + torso 4 點 visibility ≥ 0.5 為主守門；新增 deep-bending guard（hip→ankle 與向下 < 30° + bbox ≤ 1.0 跳過 fallen） | Sun et al. 2020 / arXiv 2503.19501 / TDS fall-detection 論文 |
+| `sitting` | 改 y-geometry：trunk < 35° + `hip ≈ knee y`（< 0.12×torso）OR `knee_y < hip_y` + `ankle_y - hip_y > 0.5×torso` + knee_angle < 145° | LearnOpenCV / niharpalem squat 框架 |
+| `akimbo` | wrist-near-hip 改為 elbow-bowed-out（> hip_width × 0.4）為主訊號；vis 門檻 0.2 → 0.5；wrist 隱藏不再阻擋 | BleedAI tutorial / MediaPipe issue #4462 wrist drift 通報 |
+| `knee_kneel` | 新增 kneel-side `ankle.y ≈ knee.y`（< 0.20×torso）區分 kneel-vs-lunge；ankle vis 隱藏視為 kneel 訊號；vis 門檻 0.5 | Yoga_Poses-Dataset / Knee-Bend-Counter 社群 |
+| `bending` | 放寬到 `trunk > 30° + knee > 130° + hip < 160°` | — |
+| 順序 | `fallen → akimbo/standing → knee_kneel → sitting → crouching → bending → None`（sitting 必須先於 crouching/bending）| — |
+
+### 檔案改動
+
+- `vision_perception/vision_perception/pose_classifier.py` — 5 處 surgical edits + `_is_akimbo` / `_is_knee_kneel` 重寫
+- `vision_perception/test/test_pose_classifier.py` — 14 → 26 條（synthetic 全綠）
+- `vision_perception/vision_perception/vision_perception_node.py` — log 加 `torso_vis` / `arm_vis` 欄位（debug 用）
+- `pawai-studio/frontend/components/pose/pose-panel.tsx` — React duplicate key 修（`${event.id}-${idx}`）
+
+### 上機結果（5/6）
+
+- ✅ standing / sitting / crouching / bending / fallen 穩定（5/7 動作）
+- ❌ **akimbo / knee_kneel 真機仍 miss**（user 回報「基本完全測不出來」）— 已套社群實證規則，但 MediaPipe Pose 在這兩動作下仍 hallucinate landmark；候選後手：拉視野 1.5-3m、切 RTMPose-wholebody、加 hand keypoint
+- 真因確認：MediaPipe 在 awkward viewpoint 偶會把 shoulder 標到 hip 下方（trunk=160°+ + torso_vis=1.0），新 vertical_ratio gate 已攔住誤判 fallen，但這也讓 akimbo / knee_kneel 條件難滿足
+
+### 衍生 backlog
+
+- akimbo / knee_kneel 視野距離 / backend 切換實驗
+- pose_buffer deque(20) majority vote 切換延遲 ~1.5s — 暫不動
+- 完整 design plan: `~/.claude/plans/pose-validated-harp.md`
+
+---
+
+## 5/4 evening 進度（Phase B Day 2 — Jetson smoke + TTS 換血）
+
+> 早上完成 Phase B Day 1（見下面 morning 段）後，evening 進 Jetson 真機驗證 + B1 Plan D「TTS provider 換血」。落地 6 個 commit、19 個新 unit tests、Demo 第一句話現在能用 Gemini Despina 自然渲染 audio tag。
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Jetson smoke 4 步全 PASS** | 喇叭硬體 → TTS 單獨 → LLM bridge brain mode → 全鏈 LLM→TTS。5 個 P0 修：USB 喇叭 plughw:2,0 / setuptools<70 / OpenRouter timeout 2.0→4.0s / text vs transcript schema 對齊澄清 / `[excited]` audio tag 確認被唸出（hack 修） | ✅ commits `29d46dd` `3c3a933` |
+| **B1 Plan D Stage 1 — 路徑決策** | Jetson 三條 curl + 耳朵聽：`google/gemini-3.1-flash-tts-preview` voice=Despina（user 從 Achird/Despina 選）勝出。Audio contract: PCM 24kHz/16-bit/mono；OpenRouter 端只接 response_format=pcm（mp3/wav 回 400），自包 WAV header | ✅ data in spec doc |
+| **B1 Plan D Stage 2 — `TTSProviderBase` Protocol** | 純 refactor，4 既有 class 加 class attrs（name/sample_rate/supports_audio_tags），不改邏輯。tts_callback 加 `if not provider.supports_audio_tags` 守門。157+5 tests PASS、edge_tts smoke 行為不變 | ✅ commit `1df3afe` |
+| **B1 Plan D Stage 3 — `TTSProvider_OpenRouterGemini`** | 新 class，name=`openrouter_gemini`、sample_rate=24000、supports_audio_tags=True。讀 OPENROUTER_KEY env，timeout 6.0s default。包 WAV header via stdlib `wave`。6 unit tests + Jetson 3 句 smoke：`[excited]` `[laughs]` `[curious]` 全部 user 耳朵驗收 PASS、cache hit replay 全綠 | ✅ commit `4f6da89` |
+| **B1 Plan D Stage 4 — Fallback chain + log fix** | `_build_fallback_chain`：openrouter_gemini → [edge_tts, piper] / edge_tts → [piper]。tts_callback 重寫成單一 chain 迭代（per-provider 文字 strip + cache key + voice 解析）。Cosmetic：log 顯示 `🎤 [provider_name] (voice: actual_voice)` 取代寫死的 ElevenLabs voice ID | ✅ commit `54c68d0`（5 chain tests）|
+| **B1 Plan D Stage 5 — Spec doc** | `docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md` 174 行：Stage 1 數據、Stage 2-4 設計、Known Limitations、Follow-up 排序 | ✅ commit `5671b33` |
+
+### 5/4 evening commit 鏈
+
+```
+29d46dd  docs(brain): Phase B Day 2 — Jetson smoke result + 3 ad-hoc smoke runners
+3c3a933  fix(speech): A+B from 5/4 Jetson smoke — strip audio tags, bump OpenRouter timeout, clean docs
+1df3afe  refactor(speech): Stage 2 — TTSProviderBase Protocol + provider-aware tag strip
+4f6da89  feat(speech): Stage 3 — TTSProvider_OpenRouterGemini (Despina, audio tags native)
+54c68d0  feat(speech): Stage 4 — TTS fallback chain + per-provider cache + log cleanup
+5671b33  docs(brain): Stage 5 — TTS rewrite spec doc (B1 Plan D complete)
+```
+
+### 5/4 evening 修掉的隱性坑（記到 CLAUDE.md）
+
+- USB 喇叭實際 `plughw:2,0`（不是 3,0）— card index 跟啟動順序變
+- Jetson setuptools 必須 `<70` — colcon setup.py shim 用 `--editable`/`--uninstall`，setuptools 80+ 拿掉這兩個 flag → `colcon build` 直接 fail
+- rsync 同步只搬源碼，不會 rebuild `install/` — 改 ROS param 沒生效時要 `colcon build`，不是只 `~/sync once`
+- OpenRouter Gemini TTS 只接 `response_format=pcm`，不像 OpenAI 接 mp3/wav
+
+### Demo 第一句的差別
+
+- 之前：`[excited] 你好` → edge_tts 把「open bracket excited close bracket」唸出來 → 5/4 evening commit `3c3a933` 加 strip hack 把 tag 拿掉，但聲音平
+- 現在：`[excited] 你好` → Gemini Despina 渲染情緒（user 確認「自然多了」），失敗時 fallback edge_tts（strip tag 平語氣），最後 Piper 兜底
+
+### B1 Plan D 完成的對應 spec 14 項清單
+
+✅ Gemini 3.1 Flash TTS audio contract / TTSProvider 統一 / USB 24kHz 直接 / audio tag 渲染 / TTS provider chain
+⏸ 剩 5 項（LLMProvider adapter、Qwen3.6 Plus 補跑、4 軸人工複核、Ollama explicit test、Megaphone 端到端）
+
+### 還沒做的（明天起算）
+
+完整 punch list 在 `~/.claude/plans/jetson-kind-book.md` — 23 項剩餘工作，B4 感知 + B6 PR port + B7 E2E/供電是大塊。建議排序：B7 dry-run + 60min 供電壓測 → B4 sitting/bending → B6 三 panel port → B1 LLMProvider adapter → 其他收尾。
+
+---
+
+## 5/4 進度（Phase B Day 1）
+
+> **方向轉換**：5/3 收 nav debt 後，5/4 全力進 Phase B「Brain × Studio 整合」。今天落地 11 個 commit、共 ~3700 行新增、221 tests PASS、Studio chat 已用 Gemini 3 Flash round-trip 通。
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Skill Registry v1**（27 條 SkillContract）| Active 17 / Hidden 5 / Disabled 4 / Retired 1，加 `bucket` 欄位、cooldown / safety / fallback / confirm 流程，21 條 say_template 預埋 audio tag | ✅ commit `9f45f65` |
+| **PendingConfirm state machine** | 純 Python（零 ROS2 依賴）OK 二次確認，Active Confirm Set 4 條 skill 共用，timeout 5s + ok stable 0.5s | ✅ commit `9f45f65`（18 unit tests）|
+| **Brain rules 擴充** | gesture（wave→wave_hello / palm→system_pause / thumbs_up→wiggle confirm / peace→stretch confirm / ok→tick）、pose sitting/bending/fallen + name、object stub、Studio button confirm allowlist 限定 nav_demo_point | ✅ commit `9f45f65` |
+| **LLM eval Stage 1+2+3** | 50 prompt × 3 model（gemini-3-flash-preview / deepseek-v4-flash / qwen3.6-flash），$0.28 USD，主線 = Gemini 3 Flash（1.61s avg / 1.87s p90），fallback = DeepSeek V4 Flash | ✅ commit `8347f26` |
+| **llm_bridge_node OpenRouter chain** | Jetson 端 `_try_openrouter_chain`：overall_budget 2.2s、Gemini 主線、DeepSeek 條件式 fallback（HTTP-fail 才試、timeout 不試）、`adapt_eval_schema` 解 schema 衝突 | ✅ commit `fda1b3c`（21 mock tests）|
+| **Studio chat-first redesign**（10 commits） | 從 dashboard 改成 ChatGPT 風純對話：6 個 icon-only nav button + Sheet primitive + dev mode（`?dev=1` / `/studio/dev`）+ design tokens + ui-ux-pro-max review fixes | ✅ commits `0f8a576` → `a55f83a` |
+| **Mock chat 接 OpenRouter Gemini** | `MOCK_OPENROUTER=1` opt-in、預設離線 say_canned + (mock) marker、shared `tools/llm_eval/openrouter_chat.py`（149 行，無 ROS deps）+ FastAPI integration tests | ✅ commit `c946113`（5 + 2 tests）|
+| **Defensive hotfix（user review 後）** | `_emit_text_reply` 廣播 tts:tts_speaking、ChatPanel race（pendingRef 在 await fetch 前 arm）、mock_server outer try/except、confidence cast guard | ✅ commits `adc3ef9` `39b58a0` `3432d25` |
+| **ui-ux-pro-max review + a11y polish** | 10 個 fix（hamburger 44×44、focus rings、Sheet title 16px、isThinking aria-live、DevButton dedupe + pathname guard、LiveIndicator a11y）— ~38 行 | ✅ commit `a55f83a` |
+
+### Studio 架構轉變（5/4）
+
+**從**：sidebar 5-panel dashboard + 主畫面 17+5+4 skill button + Brain trace drawer + 5 種 brain debug bubble
+**到**：ChatGPT 風純對話 + 頂部 6 個 icon-only nav 按鈕（point-open Sheet）+ `?dev=1` 才浮現 ⚙ 開發者按鈕
+
+**保留檔案、從 nav 隱藏的舊 routes**：`/studio/face|gesture|object|pose|speech` URL 直連仍可用（給組員 / 測試腳本）。新 `/studio/dev` 直連可用作完整 dev panel。
+
+### 真實 chat round-trip 驗證（mock 模式）
+
+```
+User 在 http://localhost:3001/studio 輸入「你好」
+→ POST /api/text_input
+→ mock_server (MOCK_OPENROUTER=1) 透過 openrouter_chat.py call Gemini 3 Flash
+→ ~1.7-2.2s 後回 [excited]/[curious]/[playful] audio tag JSON
+→ broadcast brain:proposal + skill_result + tts:tts_speaking
+→ ChatPanel useEffect on lastTtsText → render AI bubble (transparent + thin outline)
+```
+
+3 條真實對話通過：
+- 「你好」→「[excited] 汪！你好呀！我是 PawAI，很高興見到你！」
+- 「你是誰」→「[excited] 我是 PawAI！是你的居家小管家，也是最愛你的狗狗喔！」
+- 「你是哪個模型」→「[curious] 我是 PawAI 呀！是你最聰明的小狗夥伴！」（persona 守住，不承認 LLM）
+
+### 還沒做的（明天 Jetson session）
+
+- Jetson 真機 smoke：OpenRouter Gemini + Go2 + TTS hardware
+- 8 scene Plan A / Plan B 連跑
+- B7 60 min 供電壓測
+- 完整 voice → ASR → LLM → TTS → Megaphone E2E
+- Phase B Day 2-N
+
+### 今日 commit 鏈（11 個，依序）
+
+```
+9f45f65  feat(brain): Phase B Day 1 — Skill Registry v1 + PendingConfirm + Studio trace + LLM eval scaffold
+8347f26  docs(brain): finalize 2026-05-04 LLM eval — Gemini 3 Flash primary / DeepSeek V4 fallback
+fda1b3c  feat(speech): llm_bridge_node — OpenRouter Gemini 3 Flash primary + conditional DeepSeek fallback
+0f8a576  feat(studio): chat-first redesign — spec v2.1 + step 1 design tokens
+c0f518f  feat(studio): mock server endpoints + start-live --auto/--mock + smoke + reply char hotfix
+c946113  feat(studio): mock chat → OpenRouter Gemini (opt-in via MOCK_OPENROUTER=1)
+adc3ef9  hotfix(studio): defensive guards on mock chat OpenRouter call + confidence cast
+63f97d4  feat(studio): NavTabbar + Sheet primitive + 6 icon-only feature buttons (chat-first redesign step F)
+ff02518  feat(studio): ChatPanel slim — chat-only UI, brain debug widgets removed (step G)
+8e5d50f  feat(studio): dev mode + 6 feature panels wired + NavigationPanel (step H)
+39b58a0  hotfix(studio): mock chat broadcast tts event so ChatPanel renders AI reply
+3432d25  hotfix(studio): chat race — arm pending BEFORE fetch await
+a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I)
+```
+
+### 關鍵 spec / feedback 文件
+
+- `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` — Phase B 11 天 sprint design
+- `docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md` — 今日決策 notes
+- `docs/pawai-brain/specs/2026-05-04-llm-eval-result.md` — LLM eval 結果（150 calls 完整數據）
+- `docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md` — redesign spec v2.1
+- `docs/pawai-brain/studio/specs/2026-05-04-design-tokens.md` — 視覺 token rationale
+- `docs/pawai-brain/studio/specs/2026-05-04-studio-redesign-feedback.md` — ui-ux-pro-max review feedback
+
+---
+
+## 5/3 進度（evening summary）
+
+**Stage 1（遇障停車）PASS / Stage 2（自動繞行）仍 fail / Demo A 1.5m goal 流程跑通**
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **nav_round_reset.sh 寫完並 sync Jetson** | 8 步檢查（emergency release / nav resume / costmap clear / 3 capability snapshot / cmd_vel quiet）+ READY/NOT-READY summary | ✅ commit 待 |
+| **Jetson deployment 修補** | `~/.local/.../entry_points.txt` 缺 3 個 entry 手補（reactive_stop_node + capability_publisher_node + depth_safety_node）→ 7 nav nodes 都活 | ✅ |
+| **rsync 災難復原** | 第一次誤用 `--delete` + trailing slash 把 nav_capability/go2_robot_sdk/scripts 內容展平到頂層、孤兒檔清掉、正確 rsync 復原 | ✅ |
+| **Stage 1 R3 R1 PASS（K-STATIC-AVOID-CONTROLLED）** | box 1.5m / goal 1.8m → Go2 走 0.85m / drift 0.19m / 停在 box 0.54m → reactive_stop + D435 depth_clear + auto-pause 三鏈同步觸發 → 不撞不摔 | ✅ |
+| **Demo A 1.5m goal R1 success reached** | 1.5m goal、actual_distance=1.401m（box 沒在路上 → 後續放對位置才有完整 demo）| ✅ |
+| **參數調整 commit 待** | xy_goal_tolerance 0.15 → 0.10（兩處）、covariance_threshold launch default 0.40 → 0.45 | ✅ 改完 |
+
+### 5/3 卡頓的 5 大根因（未解，留待後續）
+
+1. **AMCL covariance 卡 0.30-0.42 plateau** — 沒動就不收斂，初始 initialpose 後 60s 進 GREEN 偶爾，多數時候卡 YELLOW
+2. **No-progress timeout 10s（DWB 真沒動，跟 paused 無關）** — 確認 `nav_action_server_node.py:259-266` paused 會 break inner loop，timeout 不是 paused 引起
+3. **xy_goal_tolerance 0.15m 太鬆** — Go2 走 0.4m 撞 box 停就被判 reached → 沒 active goal 可 resume（**今日已修 0.10**）
+4. **Reactive_stop danger 0.6m 對 detour 太保守** — DWB 沒空間繞行
+5. **DWB 成本 + 場景太緊** — 5/3 場景左右 1.2m 對 footprint+inflation 規劃失敗（log 出 `No valid trajectory`）
+
+### Demo B 嘗試 + 失敗（detour）
+
+- 多輪嘗試 box 0.7-2.0m / goal 0.5-2.5m / 各種 cov 狀態，DWB 都沒繞
+- 最常見失敗：`no_progress_timeout actual_distance=0.000`（DWB 接受 goal 但找不到 valid trajectory）
+- log 確認：`DWBLocalPlanner: No valid trajectory` + BaseObstacle critic 把所有 sampled paths 全判 in-collision
+- 結論：當前 DWB profile 是「保守安全停」設計，不是「積極繞行」設計
+
+### TTS 計畫（user 提）
+
+- 想在 Go2 停車時喊「前方有障礙物」、繼續時喊「障礙物已移除」
+- 現狀：speech stack 不在 nav demo session 內、tts_node 沒跑
+- 待做：寫 bridge node 訂閱 `/capability/depth_clear` 翻轉 → publish to `/tts`（5 min 工作量）
+
+### 學到的 5/3 教訓
+
+1. **Demo cov 必須 GREEN 才能送 ≥0.5m goal** — capability_publisher 0.45 threshold 跟 nav_action_server YELLOW 0.5 對齊還是不夠，YELLOW 區只允許 ≤0.5m
+2. **Forward warmup 是雙刃刀** — 收斂 AMCL 但破壞場景，要用就送 0.3m 不要 0.5m
+3. **Box 距離 sweet spot**：0.7-1.7m 之間，太近 DWB 規劃失敗、太遠 reactive 不觸發、剛好可控停 + 留 resume 空間
+4. **`robot.launch.py` line 77 nav2 yaml 寫死** — 不支援 nav_params_file override（Demo B detour profile 前置要修）
+5. **rsync 多 source 帶 trailing slash + `--delete` 是災難** — 內容會展平、孤兒會被刪。永遠不帶 trailing slash + 不要 delete
+
+### 下一步（5/4-5/12）
+
+5/3 evening 第二段已執行（D435 + RPLIDAR 融合到 detour profile）— 見下面「5/3 late-night 補充」。
+
+明天 5/4 = Phase B Day 1，主菜 **B1 LLM eval + TTS 換血**（spec `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` §8）。Nav debt 排到 demo 後修。
+
+---
+
+## 5/3 late-night 補充（D435 + RPLIDAR fusion 已完成）
+
+**3-phase 漸進結果**：
+
+| Phase | 內容 | 結果 |
+|---|---|---|
+| Phase 1 | D435 → /scan_d435 + Foxglove 對齊 | ✅ PASS |
+| Phase 2 | D435 進 local_costmap（不進 global、DWB 不動） | ✅ PASS — `obstacle_layer.observation_sources = "scan d435_scan"` 雙 source 融合 |
+| Phase 3 | DWB detour profile + 短 goal 試自動繞開 | ❌ L3 FAIL（不是 DWB 不會繞，是 nav_action_server bug 串連讓 Go2 永遠進不到測試起點）|
+
+**新增 / 修改檔案**：
+- `go2_robot_sdk/launch/robot.launch.py`：加 `nav_params_file` LaunchArgument（不傳 arg 時 Demo A 行為 100% 不變）
+- `go2_robot_sdk/config/nav2_params_detour.yaml`：新檔（detour profile，加 d435_scan source / inflation 0.30→0.20 / DWB critic 全降）
+- `scripts/start_nav_capability_demo_tmux_detour.sh`：新檔（含 d435-tf + d435-scan window，reactive 帶 -p danger:=0.40）
+- `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`：spec
+- `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md`：plan + result
+
+**Demo B 話術降階**（誠實版）：
+> 「Go2 結合 RPLIDAR 主動避障 + D435 深度感測融合進入 Nav2 local costmap，可即時感知障礙物並自動安全停車」
+
+不能宣稱「自動繞開」（L3 沒過）。
+
+**5/3 evening 確認的 nav debt（明天不修，排 demo 後）**：
+
+| Bug ID | 內容 | 估工 |
+|---|---|---|
+| B1 | `nav_action_server` v1 不 enforce max_speed → 短 goal 走 2x | 1 天 |
+| B2 | AMCL covariance 卡 0.30-0.45 plateau（靜止不收斂） | 0.5 天 |
+| B3 | `capability_publisher` 沒 parameter callback | 30 min |
+| B4 | nav_action_server YELLOW gate threshold 寫死 | 1 hr |
+| B5 | `actual_distance` 計算用 send-time pose 不準 | 30 min |
+
+完整清單在 `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md` 末段。
+
+**明天 5/4 進 Phase B**（不再做 nav）：
+
+1. B1 LLM eval（50 prompt × 3 LLM × 4 軸）
+2. B1 TTS Gemini 3.1 換血 + USB 喇叭 + Megaphone 兩條路徑
+3. B1 LLMProvider / TTSProvider adapter 化
+4. B1 provider chain（OpenRouter → fallback → Ollama → RuleBrain）
+
+詳見 spec §8 B1。
+
+---
+
+---
+
+## 5/1 進度（afternoon update）
+
+**K1 baseline 5/5 PASS ✅ — A 方案主鏈正式驗收成立**
+
+### afternoon 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **xy_goal_tolerance 修正** | nav2_params.yaml general_goal_checker 0.30→0.15、FollowPath 0.25→0.15（K1 軟通過 3/5 後發現 0.30 對 0.5m goal 太鬆，Go2 走 0.3m 就被誤判 reached）| ✅ commit `59024ef` |
+| **K1 script bug 修正** | K1 v3 改用 `/amcl_pose` subscription（TRANSIENT_LOCAL）取代 TF `lookup_transform`（TF 時間語意 bug：`rclpy.time.Time()` 給 epoch 0、buffer purge 太快）| ✅ |
+| **K1 baseline 5/5 PASS** | 從 (-0.238, -0.717) yaw -0.7° 出發，5 個 0.5m forward goal 全 PASS、總移動 1.81m | ✅✅✅ |
+| **XL4015 撐住第三次** | 連續 3 次動態測試（建圖 + Nav2 K1 軟 + Nav2 K1 5/5）全程沒跳電（中午一次 idle reboot 後散熱穩定）| ✅ |
+
+### K1 5/5 詳細數據
+
+| Goal | Start | End | Travel | Err | 判定 |
+|---|---|---|---|---|---|
+| 1 | (-0.238, -0.717) yaw +0.4° | (+0.086, -0.760) yaw -8.6° | **0.326m** | 0.183m | **PASS** |
+| 2 | (+0.086, -0.760) yaw -8.6° | (+0.455, -0.805) yaw -15.4° | **0.372m** | 0.129m | **PASS** |
+| 3 | (+0.455, -0.805) yaw -15.4° | (+0.838, -0.927) yaw -25.6° | **0.402m** | 0.100m | **PASS** |
+| 4 | (+0.838, -0.927) yaw -25.6° | (+1.189, -1.041) yaw -19.2° | **0.369m** | 0.143m | **PASS** |
+| 5 | (+1.189, -1.041) yaw -19.2° | (+1.531, -1.081) yaw -6.8° | **0.345m** | 0.179m | **PASS** |
+
+判定 criteria：travel ≥ 0.30m AND err < 0.25m。實測 5 個 goal 都符合。
+
+### 學到的 K1 design 教訓
+
+1. **xy_goal_tolerance 要 < goal_distance/3**：0.30 對 0.5m goal 等於只走 0.20m 強制完成，必須降到 0.15 才能驗 0.5m 移動能力
+2. **TF lookup 在 rclpy 時間語意有坑**：`rclpy.time.Time()` 不等於「latest available」、會給 epoch 0 → 退回 buffer 找不到。改用 topic 訂閱 `/amcl_pose` 完美解
+3. **連續 K1 goals 累積 yaw drift**：Goal 1 yaw +0.4° → Goal 4 yaw -25.6° → Goal 5 yaw -6.8°，DWB controller 跨多個 goal 會偏轉 30° 內，仍能達成 PASS criteria
+
+### Phase 4 動態避障 v0（14:23）
+
+切到 nav_capability stack（含 reactive_stop_node priority 200 safety_only mode）後跑 1m forward goal、用戶放紙箱。
+
+**reactive_stop 完美 fire**（log 11s 內 4× pause/resume cycle）：
+```
+slow → danger (0.47m) → /nav/pause
+danger → slow (0.62m) → /nav/resume
+... × 4 cycles ...
+slow → clear (1.02m) ← obstacle 移除
+```
+
+**Verdict: PARTIAL PASS**
+- ✅ Go2 沒撞（核心 safety net 成立）
+- ✅ Obstacle 進入 danger zone 自動 pause
+- ✅ Slow zone 自動 resume
+- ⚠️ Obstacle 完全移除後 Go2 沒自動 continue（卡在 0.78m，距 1.0m goal 短 0.45m）
+
+**根因**：發 /goal_pose 走 bt_navigator 的 navigate_to_pose action，但 reactive_stop 的 /nav/pause + /nav/resume service 由 nav_capability 自定 nav_action_server 提供，**兩條路徑沒完整 wire**。要解：用 `/nav/goto_relative` action（plan D Phase 7 layered 測試）。
+
+### Phase 3 K2-lite（14:11）
+
+`/navigate_through_poses` 3 個 waypoint（forward 0.3m → left 0.3m → back to start）。Action 回 SUCCEEDED 但 Go2 物理沒動。**Fake PASS / 實 FAIL**：WP3 = start，Nav2 BT 看到 Go2 已在 WP3 容差內 → 短路返回。
+
+### Phase 7 layered 測試（15:30-16:30）
+
+#### 7.1 `/nav/goto_relative 0.5m` 無障礙基線
+
+第一次嘗試：crash with `RuntimeError: no running event loop` — `nav_action_server_node._execute_relative_inner` 用 `await asyncio.sleep(0.1)`、rclpy action callback 不在 asyncio context。
+
+**Fix（commit `27b33d8`）**：3 處 `asyncio.sleep` → `time.sleep`（MultiThreadedExecutor 在線、blocking 安全）。重 install via `pip install -e .`（colcon build 因 setuptools `--editable`/`--uninstall` 不相容失敗）。
+
+修後 0.5m goal：Action SUCCEEDED、Go2 物理移動 0.345m（actual_distance race 條件 bug 顯示 0.174m，不影響）。
+
+#### 7.2 0.5m + 紙箱障礙（**Go2 直撞紙箱**！）
+
+放紙箱 30cm 在 Go2 前方 → action 1.7s 內 SUCCEEDED + actual_distance=0、**Go2 直接撞紙箱**。reactive_stop 沒 fire 任何 pause cycle。
+
+**根因深度調查**揭露 **3 個 critical bugs**：
+
+##### BUG #1（已修 commit `e3270da`）：reactive_stop 看不到 Go2 前方
+
+`go2_robot_sdk/lidar_geometry.py:compute_front_min_distance` 寫死「laser frame 0° = Go2 前方」、但 v8 mount yaw=π 後 laser 0° 物理上是 Go2 **後方**。reactive_stop ±30° front arc 監控錯方向、Go2 前方變盲區。
+
+**Fix**：加 `front_offset_rad` 參數（預設 0 向後相容）、`reactive_stop_node` ROS param、scripts 設 π。
+
+驗收 standalone 4 場景全 PASS：
+| 場景 | obstacle_distance | zone | 預期 | 結果 |
+|---|---|---|---|---|
+| 紙箱前方 0.4m | 0.413m | danger / active=true | ✅ | ✅ |
+| 紙箱前方 0.8m | 0.807m | slow / active=false | ✅ | ✅ |
+| 紙箱前方 ≥1m | 1.254m | clear | ✅ | ✅ |
+| 紙箱後方 0.4m | 1.185m（Go2 前方仍空）| clear（不誤觸）| ✅ | ✅ |
+
+unit test 27/27 PASS（含 4 個新 offset cases）。
+
+##### BUG #2（待修）：nav_action_server 沒 `/nav/pause` handler
+
+`/nav/pause` service **只有 route_runner_node 接**（grep 確認 nav_action_server_node.py 無 "pause" 字串）。reactive_stop 觸發 /nav/pause → route_runner 收到（沒在跑 route）→ 沒效用。**`/nav/goto_relative` action 完全 ignore reactive_stop 的 pause 信號**。
+
+##### BUG #4（待修）：Nav2 BT WP3=start 短路
+
+K2-lite WP3 = start → Nav2 BT 看到 Go2 在 WP3 容差內 → action 立即 SUCCEEDED but Go2 沒動。K2 設計需避免 WP_n = start 或加 yaw 變化強迫 controller 動作。
+
+#### 7.3-7.5（暫停）
+
+依 Plan D Phase 5 stop condition「Go2 撞 → 立即停動態測試」。改純 code 工作（已修 BUG #1）。
+
+### 下一步
+
+- BUG #2 fix（給 nav_action_server 加 /nav/pause handler、共享 pause flag）→ 配合 #1 完整解 K5
+- BUG #4 fix（K2 設計避免 WP_n = start）→ 解 K2
+- 等 KREE 到貨
+- BUG #2 修完後跑完整 stack 整合測試（紙箱 + Go2 動 + reactive 三層 fire）
+
+### 不開 B / C
+
+D435 local costmap、goto_object 視覺尋物 — 留 5/13 後
+
+---
+
+## 5/1 進度（noon update，supersedes morning）
+
+**v7 偽陽性發現 → yaw=π 修正 → v8 map → K1 主線跑通**
+
+### 重大發現（推翻 v7 morning 結論）
+
+**早上 v7 物理錨定通過是偽陽性**：用戶 11:30 觀察 Foxglove 時發現 lidar 跟 map 方向 180° 相反 + costmap 出現假障礙物。深度診斷發現：
+
+- `scan_health_check.py` 早上驗 yaw=0 時，用戶把物體放在「以為的 Go2 正前方」（實際是 Go2 屁股方向）→ 物體在 angle=0° → 誤判 yaw=0 通過
+- 真實情況：lidar 物理 0° 朝向 Go2 **背後**（不是頭）
+- 證據：用戶站在 Go2 物理頭前 0.5m 時，scan 返回出現在 angle=±180°（laser -X），不是 0°
+- 其他證據：用戶推 Go2 物理前進 1.7m，map 上 Go2 icon 反方向移動 + AMCL yaw 從 178° 跳到 -17.7° 嘗試自我修正
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **TF 修正 v7→v8** | `base_link → laser` yaw 0 → π（3.14159）；7 scripts 同步 | ✅ commit `fa0fa54` |
+| **v8 map 建立** | 用正確 TF 重建：10.25×4.90m / 205×98 cells，origin [-2.41, -2.81]；跟 v7 是鏡像（必然結果）| ✅ commit `5d938d6` |
+| **Default map v7→v8** | `start_nav2_amcl_demo_tmux.sh` + `start_nav_capability_demo_tmux.sh` | ✅ |
+| **AMCL 完美收斂** | initialpose 設好後 `map → base_link` yaw=-1.57°、σ²_x 0.175 → **0.033**（σ_x 0.42m → 0.18m）| ✅ |
+| **K1 軟通過 3/5** | Go2 cmd_vel 動態跑 1.28m（從 0.015 → 1.269）、3 個 goal 移動 0.28-0.33m、4-5 卡住 yaw drift +30° | ⚠️ 部分通過 |
+| **供電 第二次 surprise** | XL4015 連續第二次（建圖 + Nav2 動態）全程穩定 | ✅ |
+
+### Map v7 vs v8 處理
+
+- v7 (`home_living_room_v7.*`) 留在 repo 作歷史對照（用錯誤 TF 建的，**不可用**）
+- v8 (`home_living_room_v8.*`) 為 default map
+- mount-measurement.md 加 v8 段、v7 標 superseded
+
+### K1 軟通過分析
+
+3/5 goal 移動失敗的根因（5/13 demo 前要修）：
+1. **xy_goal_tolerance 0.30 太鬆** → Go2 走 0.3m 就被 nav2 視作 reached、沒走滿 0.5m。建議降到 0.15
+2. **Goal 4-5 卡住** → Go2 累積 yaw drift 30°，可能 plan 失敗或 controller wobble
+3. **Go2 sport mode min_vel_x 0.50 vs DWB min_vel_x 0.45** 邊界 → 中間 cmd_vel 可能被 sport filter 吃掉
+
+K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實際 navigate 1.28m，是重大進展。
+
+### 下一步
+
+1. 調 `nav2_params.yaml`：xy_goal_tolerance 0.30 → 0.15、檢查 goal 4-5 卡住的 plan log
+2. 重跑 K1，目標 ≥ 4/5
+3. K1 通過後進 K2/K4/K5/K7
+4. 等 KREE DL241910 到貨（雖然 XL4015 連續兩次都沒跳電，但 KREE 仍是 demo 主力電源）
+
+---
+
+## 5/1 進度（morning，已 superseded by noon update）
+
+**LiDAR mount v7 完成 + v7 map 建成 — XL4015 撐住沒跳電**
+
+> ⚠️ **Morning 結論被 noon 推翻**：v7 yaw=0 物理錨定是偽陽性（用戶把物體放在 Go2 屁股方向）。真實 yaw=π。v7 map 因此 unusable，noon 重建 v8。下面 morning 段保留作偵錯歷史。
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **硬體變動** | LiDAR 從背部移到脖子前方 3D 列印背板平台（更大、更穩） | ✅ |
+| **Mount 量測 v7** | x=+0.175 / y=0 / z=+0.18 / yaw=0；7 scripts + mount-measurement.md 同步 | ✅ commit `fabbf06` |
+| **物理錨定驗證** | scan_health_check.py：物體 0.8m 在 angle=0° ±15° 偵測到 0.83m，PHANTOM PASS、scan 10.45 Hz | ✅ |
+| **v7 map 建立** | `home_living_room_v7.{pbstream,pgm,yaml}` 客廳核心 4×4m 慢走 30-60s，10.35×4.90m / 207×98 cells | ✅ |
+| **Default map 切換** | `start_nav2_amcl_demo_tmux.sh` + `start_nav_capability_demo_tmux.sh` → v7 | ✅ |
+| **供電 surprise** | 整段建圖 + scan_only XL4015 全程穩定，Jetson 47°C 沒跳電 | ✅（與 4/29 紀錄不同）|
+
+### Map QA（v7）
+
+- ✅ 客廳區（東側 ~4×4m 正方形）：牆面單線、角落直角、loop closure 不裂 → AMCL K1 可用
+- ⚠️ 西側延伸走廊：可見輕微 yaw drift（與 v2 同症狀）→ 嚴禁發 goal 到走廊
+- ❌ 不擴掃走廊（pure scan-matching 在走廊 yaw drift 5-10°）
+
+### 下一步
+
+1. **等 KREE DL241910 到貨** — XL4015 建圖撐住，但 Nav2 動態 cmd_vel 風險級別更高
+2. KREE 上機後跑 K1：`send_relative_goal.py --distance 0.5` × 5（≥ 4/5 即過）
+3. K1 過則進 K2/K4/K5/K7
+
+---
+
+## 4/30 進度
+
+**LiDAR yaw 物理錨定一次定案 + 供電災難 + KREE 補位**
+
+### 完成事項
+
+| 項目 | 內容 | 狀態 |
+|------|------|------|
+| **Phase 1（plan abstract-sleeping-hoare）** | scan-only stack + Go2 正前方 0.8m 放物體 → scan_health_check 量到 90° bin (0.6534m) | ✅ |
+| **Phase 2** | 7 scripts + mount-measurement.md yaw 3.1416 → -1.5708 一次性更新 | ✅ commit `560ca79` |
+| **TF 驗證** | `tf2_echo base_link laser` RPY [0, 0, -90°] | ✅ |
+| **Foxglove 視覺驗證** | base_link +x 軸對齊 Go2 真實正前方、scan 點雲在前方 | ✅（用戶現場確認） |
+
+### 供電災難 + 應對
+
+| 階段 | 狀況 |
+|---|---|
+| 4/29 night | 2464 模組宣稱穩定 |
+| **4/30 ~9:15** | Jetson SSH 連線斷 → 真因：2464 輸入上限 30V < Go2 滿電 33.6V |
+| **4/30 ~10:00** | 重開後 ~10 分鐘再斷一次（過壓保護觸發或元件壓力異常） |
+| **4/30 上午** | 暫退回 XL4015（4-38V/75W）撐到新模組到貨 |
+| **訂購中** | KREE DL241910 (22-40V→19V/10A/190W) 鋁殼 IP68 — Go2 滿電 33.6V 在範圍內、190W 餘裕大 |
+
+### Yaw 物理錨定的關鍵推論
+
+物體實際在 base_link +x（Go2 正前），scan 顯示在 angle=90° bin → laser frame +y 對應 base_link +x → laser 的 0° 物理上指向 Go2 右方 → 補正 yaw = **−π/2**。
+
+| Yaw 試過的值 | 結果 | 棄用原因 |
+|---|---|---|
+| 0 (v2) | ❌ | 視覺猜，map 90° 旋轉 |
+| −π/2 (v3) | ❌ | 視覺猜，map 看起來反 |
+| +π/2 (v4) | ❌ | 視覺猜 |
+| π (v5, 4/29 night) | ❌ | 視覺猜 |
+| **−π/2 (v6, 4/30 物理錨定)** | ✅ | scan_health_check 90° bin + tf2_echo + Foxglove 三重驗證 |
+
+> 教訓：**視覺判讀不可信**（map 由錯誤 yaw 建出時也會「內部一致」）。**只有物理錨定看 raw LaserScan 角度**才是黃金標準。
+
+### 沒做的事（避開風險）
+
+- ❌ 不重建 map v6（XL4015 撐不住 cartographer + Go2 移動）
+- ❌ 不跑 Nav2 demo（Go2 動態移動 → 馬達瞬電流尖峰 → XL4015 跳電風險）
+- ❌ 不寫 scan_flipper（H1 已排除）
+
+### 下一步（等 KREE 到貨）
+
+1. KREE 到貨 → 萬用表驗 19V → 接 Jetson
+2. 重啟 cartographer stack → 遙控 Go2 慢走客廳一圈 → 存 v6 map
+3. AMCL 跑 K1：`send_relative_goal.py --distance 0.5` × 5（≥ 4/5 即過）
+4. v6 過則進 K2/K4/K5/K7 連發
+
+---
+
+## 4/29 進度
+
+**LiDAR roadmap Phase 1-3 — 物理層 + 建圖實機驗證 / yaw 仍待定案 / 4/30 教授會議對齊**
+
+### 完成事項
+
+| Phase | 內容 | 狀態 |
+|-------|------|------|
+| **Phase 1** | mount 量測（x=−0.035, y=0, z=0.15）+ TF 6 scripts + build_map.sh echo 同步 | ✅ |
+| **Phase 2** | scan-only stack + `scan_health_check.py`（PHANTOM 4-條件 gate）+ baseline CSV + 旋轉復測 | ✅ |
+| **Phase 3** | Cartographer pure scan-matching 重建 4 張 map（v2 yaw=0 / v3 yaw=−π/2 / v4 yaw=+π/2 / v5 yaw=π）| ⚠️ 全部因 yaw 錯而 deprecated |
+| **AMCL 校正預備** | nav2_params.yaml `laser_min_range: 0.20` / `laser_max_range: 8.0` | ✅ commit ready |
+| **教授會議** | [`docs/mission/meetings/2026-04-29.md`](../docs/mission/meetings/2026-04-29.md) | ✅ 紀錄 |
+
+### Yaw 校正 4 次失敗的教訓
+
+每改 yaw 就重建一張 map → cartographer 用該 yaw 建出**內部一致**的 map → Foxglove 看 scan 跟 map 永遠看起來反，因為比對基準（map）也跟著轉。**用戶 4/29 SSH 實測排除**：
+
+- `/scan_rplidar:angle_increment = +0.008738784` → 標準 CCW，**排除 scan 鏡像 / scan_flipper 路線**
+- `/scan_rplidar` publisher 唯一是 sllidar_node → 排除 topic 混用
+- 雷達 motor 朝下 → 排除物理倒裝
+- initialpose 拖箭頭對齊 Go2 真實前方 → 排除 initialpose 方向錯
+
+**新路徑（user 定）**：物理錨定測試 — 在 Go2 正前方 0.8m 放物體，跑 scan_health_check.py 看物體落在哪個 angle bin，直接判讀 yaw。**完整 plan**：`/home/roy422/.claude/plans/abstract-sleeping-hoare.md`
+
+### 供電升級（demo blocker → 已解）
+
+| 階段 | 狀態 |
+|---|---|
+| XL4015 | 4/29 16:30-17:30 跳電 3 次（10 分鐘內） |
+| **2464 可調自動升降壓恒壓恒流模組** | 35W 自然散熱 + 50W 加強散熱、過流/過壓/過溫多重保護、輸入防反接、輸出防倒灌 |
+| 4/29 19:52 後 | 不再跳電 ✅ |
+
+### 4/30 教授會議對齊（會議 vs 進度差異）
+
+- ✅ 一致：北極星機器狗版 OpenClaw、Brain Phase A 完成、雷達校正本週主軸、OpenRouter 升級
+- ⚠️ 落差：供電 XL4015 → 2464、OpenRouter 候選改 DeepSeek V4 / Gemini 2.5 Flash / Kimi K2、TTS 升級新需求、雷達背板平台新需求
+- ❌ 時程更緊：「真正剩 4/30 那一週」= 4-5 天 code 時間，之後忙簡報 + 搬運 + 整合
+- ✅ Brain 設計：會議列「指令分層架構」為次大難題，**Phase A 已 cover**（safety_layer + skill_contract + executive 單一出口）
+
+### 文件 / 工具新增
+
+- `scripts/scan_health_check.py` — 30 樣本 angular probe + PHANTOM 4-條件 fail gate
+- `scripts/start_scan_only_tmux.sh` — 3-window scan-only（TF + sllidar + monitor）
+- `docs/navigation/research/2026-04-29-mount-measurement.md` — 量測 + yaw 修正歷史
+- `docs/navigation/research/baseline-scans/` — baseline / Pose-A / Pose-B-cw30 三 CSV
+- `docs/navigation/research/maps/` — v2/v3/v4/v5 PNG/yaml/pgm + README
+
+### 明日（4/30）下一步
+
+1. **早上**：物理錨定測試（plan Phase 1）→ yaw 一次定案
+2. **早上**：重掃 v6 map → AMCL 跑 K1 baseline 0.5m × 5（≥ 4/5 即過）
+3. **中午 12:00**：教授會議 + 簡報
+4. **下午**（時間夠）：B-1 OpenRouter（DeepSeek V4 主、Gemini Flash 備）
+
+### 不做（5/19 前 scope 控制）
+
+- ❌ 不寫 scan_flipper_node（H1 排除）
+- ❌ 不再改 yaw 第 5 次靠視覺猜
+- ❌ Brain Phase B / C 留 5/19 後
+- ❌ Studio UI 重做 留 freeze 後
+
+---
+
+## 4/28 進度
+
+**PawAI Brain × Studio 從零做到 Phase A 完整骨架（17 commits 一日完成）**
+
+### 完成事項
+
+| Phase | 內容 | 狀態 | tag |
+|-------|------|------|-----|
+| **Phase 0** | Action Outlet Refactor — sport `/webrtc_req` 收成 Executive 單一出口 | ✅ | `pawai-brain-phase0-done` |
+| **Phase 1 (A1)** | Brain MVS 後端 — brain_node + skill_contract + safety_layer + world_state + skill_queue + executive 重寫 | ✅ | `pawai-brain-phase1-done` |
+| **Phase 2 (A2)** | Studio Brain Skill Console — schemas + gateway + mock + 8 React components + chat-panel 整合 | ✅ | `pawai-brain-phase2-done` |
+| **Master Plan** | PawClaw Master Integration Plan v1.0（單一入口、5 條 review 修正併入） | ✅ | — |
+
+### 驗證
+
+- **interaction_executive**：77 tests pass
+- **WebRtcReq audit**：OK（只 executive + tts_node 是合法發送者）
+- **Topic contract v2.5**：5 個新 `/brain/*` + `/state/pawai_brain` 進 §2 表格
+- **Studio mock smoke**：`/api/skill_request` `/api/text_input` `/mock/scenario/self_introduce` 三條全 200
+- **TypeScript / ESLint**：clean（4 個 pre-existing 無關 warning）
+
+### North Star 共識（2026-04-28 釐清）
+
+> **PawAI Brain = 機器狗版 [OpenClaw](https://github.com/openclaw/openclaw)**
+>
+> 自然語言互動 + 居家互動/守護犬 + 所有能力暴露為 SkillContract + 危險動作經 deterministic safety。Phase A 是 OpenClaw-style 框架地基，不是 demo 終點；Phase B 加 Capability/BodyState；Phase C 接 LLM function calling。
+
+### Codex 外包流程（成功 2 次）
+
+兩次 Codex job 都採用「briefing → review feedback → v2 briefing → Codex 實作 → 5 點驗收 → merge + tag」流程，每次都在約 2-4 小時內完成數千行 PR-quality diff：
+
+- A1 Brain backend：3 commits + 77 tests + WebRtcReq audit + 5 個 forward-compat 欄位
+- A2 Studio Console：4 commits + 8 React components + REST 200 + WS envelope 一致
+
+### 唯一文件入口
+
+從今天起：[`docs/pawai-brain/plans/2026-04-28-pawclaw-master-integration.md`](../docs/pawai-brain/plans/2026-04-28-pawclaw-master-integration.md)（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
+
+### 下一步（4/29 雙軌開發）
+
+- **軌道 1（主軸）**：LiDAR mount STL 已印好 → 跑 roadmap Phase 1-7（量測 → SLAM → AMCL → K1/K2 → K5/K7）
+- **軌道 2（背景）**：B-1 OpenRouter 接入 — 把 `llm_bridge_node` fallback chain 升級成 4 級（OpenRouter Sonnet 4.6 → 本地 Qwen2.5-7B → Ollama → RuleBrain），讓自由對話智商升級
+
+### 4/30 教授會議後
+
+隊員 push 過來時：宇童手勢 mapping、佩珍跌倒 TTS 文案、黃旭物體擴 whitelist、如恩語音正向表列；都是「加 brain rule + skill_contract 條目 + bubble 文案」，不是大整合。
+
+### 不做（避免 5/16 demo 前 scope 失控）
+
+- ❌ Studio UI 重做 — 留 5/14-5/18（freeze 後）用 ui-ux-pro-max skill 一次重做
+- ❌ Phase B（Capability Validator / BodyState）— 5/19 驗收後啟動
+- ❌ Phase C（LLM function calling）— Phase B 完成後
+- ❌ 抄 4 個 PawAI repo PR — Phase 3 hooks，5/16 後
+
+---
+
+## 4/27 進度
+
+**Phase 10 K1 撞牆 → 挖出從 4/25 上機就埋的雷**
+
+### 觸發事件
+
+跑 K1 warmup（`goto_relative 0.3m`）→ nav_action_server 拒收 `amcl_lost`。Go2 完全沒動 AMCL covariance 反而從 σ_y 0.52 漂大到 0.72。`/state/nav/safety` 顯示 `obstacle_distance=0.819m, zone=slow`，user 現場確認 Go2 前方根本沒東西。
+
+### 重大發現（30 樣本 5 秒 angular probe）
+
+Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensity 全部 = 15（max），jitter < 3mm。左側完全空（2-3m）。**完全不對稱、極穩、強反射** → 不是 ghost / 雜訊，是真實物體被 RPLIDAR 看到，最可能是 **Go2 自身揹包 / 拓展模組 / 電池蓋** 或 **mount yaw 偏 ~70°**（文件明寫 mount xyz yaw 從 4/25 起就沒量過）。
+
+完整證據與三假設見 [`docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md)。
+
+### 同步發現的平台 latent bug
+
+`lifecycle_manager_localization` 自動 STARTUP **沒完成** — `map_server` 與 `amcl` 卡在 inactive（process 都活、tmux 8 window 都綠，但靜默失敗）。手動 `ros2 lifecycle set /map_server activate` + `/amcl activate` 兩次 transition 才上來。`lifecycle_manager_navigation` 卻是 active，所以表面看 stack 正常。Root cause 留作 5/13 前 todo。
+
+### 三天 KPI 卡關真因（Linus 風格回顧）
+
+1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。[4/25 log §3](../docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md) 寫「待精確量測」但延宕至今
+2. **4/25 桌上 10.4Hz 通過 → 直接上機，沒做 scan angular audit** — 30 樣本角度分布該是 day-1 sanity，到今天才跑
+3. **4/26 上午判定「lethal 是暫態 / map 髒污」 → 整下午重建地圖** — 但根因是 scan 本身有 phantom，新 map 一樣會被污染
+4. **4/26 下午+晚上做 nav_capability S2 平台抽象（4 actions / 70 unit tests / 22+ commits）** — 抽象層 K9/K10 過了，但 K1 從沒成功一次。底層沒打穩，平台層蓋再多都是空中樓閣
+5. **4/26 晚 covariance 0.53 紅當下沒查根因，推到 4/27** — 今天直接重啟變 0.72，更糟
+
+### 物理 mount 升級調研
+
+- amigo_ros2 README 連結 `pant_tilt_v2-1` 已 link rot（GrabCAD 404）
+- GrabCAD 全平台 0 個 Go2+RPLIDAR mount
+- MakerWorld 找到 8 個 Go2 背架候選，前 3 推薦：「宇树Go2 背部拓展板」/「Unitree GO2 Back Plate」/「Base Unitree Go 2 - T-Track 30」
+- Demo 短期方案：3M VHB 雙面膠 + 手機水平儀（±3°），線材側邊綁出
+
+### Phase 10 KPI 結果（無變化）
+
+| KPI | 結果 | 備註 |
+|-----|------|------|
+| K1/K2/K4/K5/K7 | ⏳ **全部阻塞** | RPLIDAR 物理 mount + scan phantom 未解 → AMCL 無法收斂 |
+| K8 | ✅ WSL 4/4 / 移出實機 | 不變 |
+| K9 | ✅ heartbeat 1.001 / status 9.997 / safety ~10 Hz | 今天 rate 回到正常（4/26 是 2x 異常）— 可能 4/26 DDS ghost 已自然消失 |
+| K10 | ✅ 3/5（user override 為 3 點） | 不變 |
+
+### 工具升級
+
+- 加 `Bash(agent-browser:*)` 到 `.claude/settings.local.json`（permission，個人不入版控）
+- 全域安裝 `agent-browser` v0.26.0 + Chrome for Testing 148（用於需要 JS render 的 web 調研）
+
+### 下次 session 接手
+
+**優先級 P0（必做完才動 KPI）**：
+
+1. user 用搖桿原地左轉 Go2 90°，重抓 30 樣本 angular probe → 判定 H1/H2/H3
+2. 量 RPLIDAR 中心相對 Go2 base_link 實測 xyz（mm 尺）+ 雷達黑色 USB 線朝向（Slamtec 規定朝後 = 0° 朝前）
+3. 判定後修法：
+   - **H1/H3**：reactive_stop_node 加 `blank_angle_ranges_deg` param + `nav2_params.yaml` 改 `laser_min_range: 1.1`
+   - **H2**：移 Go2 到開闊處重點 initialpose
+4. 物理 mount 升級：選一個 MakerWorld 背架印 / 或 3M VHB 暫接
+
+**P0 通過後跑**：
+
+5. K1 warmup `goto_relative 0.3m` → covariance σ < 0.3m
+6. K1（0.5m × 5）→ K2（0.8m × 5）→ K4（route × 3）→ K5⭐ → K7⭐
+
+**Bonus**：
+
+- root-cause `lifecycle_manager_localization` 自動 STARTUP fail
+- 寫 `scripts/scan_health_check.py`（30 樣本 angular probe + intensity 異常標記）
+
+### 新增/修改檔案
+
+- 新增 [`docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
+- 新增 [`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
+- 新增 [`docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md) — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
+- 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
+
+### LiDAR 開發藍圖（5/9 起執行）
+
+完整 plan：[`docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md)
+
+7 階段路徑（user 已選好 mount STL，等支架印好開工）：
+
+```
+1. Mount 量測 + TF 更新（5 scripts + build_map.sh echo）  ← 30 分鐘（裝完當天必做）
+2. Scan 健康驗證（scan-only stack）         ← 1 小時
+3. SLAM 重建圖                              ← 1.5 小時
+4. AMCL 校正（laser range 先 → beamskip 後） ← 1.5 小時
+5. Nav2 K1/K2                              ← 1 小時
+6. 動態安全 K5/K7（reactive + pause + emergency）← 1.5 小時
+7. 自動巡邏 K4 + Brain                      ← 2-4 小時
+```
+
+**最低限度 demo（5/13）**：1+2+3+4+5；**目標**：再加 6+7；**不做**：「人擋路自動繞」、進階導航。
+
+Plan 修正歷程 v1 → v2 → v2.1 → v2.2，含**歷史踩坑彙總 9 大類 40+ 條**（雷達物理 / RPLIDAR scan 品質 / AMCL Nav2 設定 / Go2 driver / tmux mux 路由 / cartographer / ROS2 工具鏈 / 架構決策 / Linus 反思）。之後開發**先看那節**，避免重蹈覆轍。
+
+### 主時程（2026-04-27 確定）
+
+- **5/8 deadline**：PawAI Brain MVS 必須到 70%（另一份 plan）
+- **5/9-5/12**：LiDAR 7 階段開發（本 plan）
+- **5/11-5/12**：freeze（spec 強制）
+- **5/13**：學校 demo
+
+### 4/27 晚 Annie 外部諮詢會議（董偉峰指導 + Annie 外部教授 + Roy/若恩/黃旭）
+
+完整紀錄：[`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
+
+**現場展示**（黃旭 Web Dashboard，Go2 不在現場用線上 demo）：
+- 人臉打招呼（認得 Roy）/ 手勢比讚 → happy / 物件辨識 / 姿勢站立蹲下 / 語音對話（天氣 / 笑話 / 自介）
+
+**Annie 提案 4 個方向**（**全部未承諾、不阻塞 5/13 demo 主線**）：
+1. **對話延續性**：強化 ChatGPT 式主動反問 / 引導，由若恩處理
+2. **Affective Computing ⭐**：audio-visual 情緒辨識 → LLM prompt 帶情緒 metadata → emotional support 回應。**未排程，需另開研究 spec**
+3. **TTS 升級**：Gemini 2.5 Flash TTS 評估（語氣自然度顯著高於 edge-tts / Piper）。**5/13 demo 後排程**
+4. **LiDAR 頂部支架**：魔鬼氈不夠穩，需印固定支架。**已併入 4/27 RPLIDAR 物理 mount 調查**（同方向，不重複工作）
+
+**待議**：下次可邀 Annie 介紹同校 affect computing dataset
+
+---
+
+## 4/27 late night — PawAI Brain Skill-first MVS 設計收斂 + PawClaw 演進路線
+
+**晚上轉軌：白天 LiDAR 卡關後，把時間投到 Brain 架構，避免兩線同時阻塞。**
+
+### 決策脈絡（brainstorming）
+
+**起點問題**：speech intent 直接進 state_machine、Executive 也直接發 `/cmd_vel`，且 `/webrtc_req` 同時被 `llm_bridge_node` / `interaction_executive_node` / `event_action_bridge` **三個 publisher 競爭**（其中兩個沒 banned_api 守衛）。直接加新 Brain 變第四個寫手，重演導航踩過的「多控制源互搶」事故。
+
+**設計方向 5 次迭代收斂**：
+1. → **Phase 0 refactor**：sport `/webrtc_req` 收成 Executive 單一出口，TTS audio `/webrtc_req`（tts_node Megaphone 4001-4004）保留不動；llm_bridge 加 `output_mode: legacy|brain` feature flag 漸進切換
+2. → **Brain in interaction_executive package**（不開新 package，brain_node + executive_node 雙 entry_point，共用 safety_layer / skill_contract / world_state modules）
+3. → **Brain 純規則 + llm_bridge 改發 /brain/chat_candidate**（LLM 變 proposal source，不直接控狗）
+4. → **Skill-first reframe**：所有能力（聊天 / 動作 / 導航 / 警示）統一 SkillContract；Executive 只認 say/motion/nav 三個 primitive executor
+5. → **Studio Chat = Brain Skill Console**（不是另開 dashboard，Chat 即決策可視化）
+
+7 場景 MVS：你好 / 停 / 介紹自己 / wave / 陌生人 3s / 熟人問候 / 跌倒。Hybrid 路由（Safety 關鍵字硬擋 + 規則 + 1500ms LLM chat_candidate 等待）。
+
+### Linus 風格 review 發現的 4 個 P0/P1 bug（已修）
+
+1. **P0**：plan 只在 `_dispatch()` 加 brain mode 閘門，但 `_rule_fallback()`（fast-path + LLM-fail 都會走）仍會發 `/tts` 和 sport `/webrtc_req` → **兩個決策出口都加閘門 + plumb session_id/confidence 全鏈**
+2. **P0**：plan snippet 用 `_load_parameters` 但實際是 `_read_parameters`；`_dispatch(result, source)` 只有 2 args 卻在 plan 裡塞 session_id → **signature 全部對齊**
+3. **P1**：驗證 grep 是 single-line，會漏掉現有 multi-line publisher → **改用 `rg -U` + Python AST `audit_webrtc_publishers.py` 腳本**
+4. **P1**：Executive 被 SAFETY/ALERT 中斷時，ABORTED 用新 plan 的 metadata 標老 plan → **`_ActiveStep` 改持 SkillPlan 完整參考；worker_tick 也改用 `_active.plan` 避免 post-preempt race**
+
+### PawClaw 演進（5/16 demo 後 Phase B）
+
+借鑑 [openclaw/openclaw](https://github.com/openclaw/openclaw) 的 harness engineering pattern，**派 Explore subagent 深掘** repo + docs 後產出可偷 / 不該偷對照表（4 偷 / 5 簡化 / 7 不偷）。Phase B 三大新增：
+
+- **CapabilityRegistry**（SkillContract 加 `enabled_when: list[CapabilityPredicate]`）— 動態 enable/disable per skill，理由人類可讀
+- **BodyState**（擴 WorldState 加 AMCL covariance / map_loaded / nav_stack_ready / battery / sensor liveness）— Brain 發 plan 前已知道身體可不可行
+- **Nav Skill Pack** 6 條 — 對接 `nav_capability` 既有 4 actions（GotoNamed / GotoRelative / RunRoute / LogPose）+ 3 services（pause/resume/cancel）；NAV step 真正進 Executive dispatch
+
+**MVS 已做 forward-compat patch**（不打斷明天的 Phase A execution）：
+- `SkillContract` 新增 `static_enabled` / `enabled_when` / `requires_confirmation` / `risk_level` 欄位（safe defaults）
+- `go_to_named_place` 從 `enabled=False` 改成 sentinel `enabled_when=[("phase_b_pending", "...")]`
+- `build_plan()` 認得 sentinel 並 raise 帶 reason 的 ValueError → Studio 可顯示「我為什麼不能做」的人話訊息
+
+### 交付物（5 個 commit）
+
+| Commit | 內容 | 行數 |
+|---|---|---|
+| `43aa039` | Spec — Brain MVS Skill-first design | 769 行 |
+| `31febe6` | Plan — MVS 34-task implementation | 3650 行 |
+| `6c8d79d` | Overview — Brain × Studio 整合總覽（對外 / 論文用） | 466 行 |
+| `59921ed` | Plan fix — 4 review corrections（P0×2 + P1×2） | +489/-86 |
+| `07e0287` | PawClaw evolution spec + MVS forward-compat patch | +736 |
+
+合計 **~5400 新行文件、0 程式碼**。明天起進 Phase A execution。
+
+### 明天 Phase A 起手式
+
+```
+Task 0.1: llm_bridge 加 output_mode param
+   ↓
+Task 0.2: 雙閘門 + chat_candidate publisher（10 sub-step + 3 smoke test）
+   ↓
+Task 0.3: tts_node audio-api guard test
+   ↓
+Task 0.4: event_action_bridge launch arg
+   ↓
+Task 0.5: AST audit + 既有 e2e smoke + tag pawai-brain-phase0-done
+   ↓
+Phase 1（5-6 天）: 5 新檔 + 4 unit test + executive rewrite
+   ↓
+Phase 2（3-4 天）: Studio Brain Skill Console 8 components
+```
+
+### 新增/修改檔案
+
+- 新增 [`docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
+- 新增 [`docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
+- 新增 [`docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
+- 新增 [`docs/pawai-brain/architecture/overview.md`](../docs/pawai-brain/architecture/overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
+
+---
+
+## 4/26 進度
+
+**P0-D Nav2 動態避障實機驗證 + reactive_stop_node fallback（雙管齊下）**
+
+### A 線：Nav2 lethal space 翻案
+- 上午 SSH 進 Jetson 跑 A0 診斷流程（不改參數）
+- **0.5m goal**：amcl 14cm 移動，現場確認 ✅
+- **0.8m goal × 2**：amcl 50cm（用戶現場確認 ~50cm 真實移動）✅
+  - 起始位置 (1.19, 0.56) **接近昨天 lethal 區域 (1.56, -0.16)**，今天直接 plan 成功
+- **重大判定**：昨天 lethal 是**暫態**（costmap 髒污 / particle filter 漂移），不是位置固有問題、不是 inflation 過大、不是 footprint padding
+- **v3.7 nav2_params 不需修改**（不執行 plan v2 提的「階梯一」參數調整）
+- 中途 Jetson 跳電一次（XL4015 已知），重啟後流程順利
+
+### A 線發現的兩個 bug
+1. **`/goal_pose` QoS mismatch**：bt_navigator 訂閱用 BEST_EFFORT，但 `send_relative_goal.py` publisher 預設 RELIABLE → 訊息丟失。CLAUDE.md 早警告「不要 `ros2 topic pub --once /goal_pose`」是同一原因。已修：publisher 改 BEST_EFFORT + 加 `_wait_for_subscriber()` 等 DDS discovery
+2. **連發 5 個 goal preemption 太密集**：controller 0.5s 內被打斷 3 次，導致 `Reached the goal!` 在距離 goal 0.5m 時就誤觸發。已修：預設 `--repeat 1 --rate 0.5`
+
+### A 線收尾（待用戶回家繼續）
+- 用戶判定「map 髒污過多太亂」→ 啟 cartographer 重新建圖流程
+- 已備份舊 map 為 `home_living_room.{yaml,pgm,pbstream}.bak.20260426-094853`
+- cartographer 6-window stack 已啟動驗證 OK（scan 11.13Hz、`Inserted submap (0, 1)`），用戶出門前已停 lidar-slam tmux
+- 待續：用戶回家遙控 Go2 繞客廳一圈 → 三步驟存圖 → 重啟 nav2-amcl 用新 map 重跑 0.8m goal
+
+### B 線：reactive_stop_node 開發完成
+- 純 ROS node，訂 `/scan_rplidar` → 發 `/cmd_vel` @ 10Hz
+- 前方 ±30° 扇形：< 0.6m STOP / 0.6-1.0m SLOW(0.45) / ≥ 1.0m NORMAL(0.60)
+- LiDAR 中斷 > 1s emergency stop，含 hysteresis（danger → 非 danger 需連 3 frame）+ warmup 第一筆 cmd_vel = 0
+- **17 case 單元測試全綠**（dev + Jetson 都驗）— front arc filter / wrap-around / range_min skip / classification boundary
+- Jetson dry-run（無 Go2 driver）：cmd_vel 10Hz 穩定、CSV 全 0、zone transition log 正確
+- **未做**：4 場景實機驗收（Go2 + reactive 全 stack）— 用戶判斷今日先做 A 線，B 線實機留 5/13 demo 前
+
+### 新增/修改檔案
+- 新增 `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py`（純 helpers）
+- 新增 `go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py`（≈ 130 行）
+- 新增 `go2_robot_sdk/test/test_reactive_stop_node.py`（17 cases）
+- 新增 `scripts/send_relative_goal.py`（讀 amcl_pose 算前方相對 goal）
+- 新增 `scripts/start_reactive_stop_tmux.sh`（4-window）
+- 新增 `docs/navigation/research/2026-04-26-nav2-dynamic-obstacle-log.md`（完整實機 log）
+- 修改 `go2_robot_sdk/setup.py`（加 reactive_stop_node entry point）
+
+### 下次 session 接手
+1. 重新建圖（用戶遙控 Go2 繞客廳，慢速 ≤ 0.15 m/s）
+2. 三步驟存圖（`/finish_trajectory` → `/write_state` → `map_saver_cli`）
+3. 用新 map 重跑 0.8m / 1.0m goal 驗證首次 plan 不再失敗
+4. reactive_stop_node 4 場景實機驗收
+5. 動態避障 bonus（人走入路徑看 Nav2 dynamic re-plan）
+
+---
+
+## 4/26 晚進度
+
+**nav_capability S2 平台化導航（Phase 0–9 完成 + Phase 10 KPI 部分驗收）**
+
+### Phase 0–9 落地（22+ commits）
+
+把 P0 reactive 邏輯抽象成「平台層」`nav_capability`，把 4 個 action / 3 個 service / 3 個 state topic 介面化，給 interaction_executive 與 PawAI Brain 使用：
+
+- **Actions**：`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route` / `/log_pose`
+- **Services**：`/nav/pause` / `/nav/resume` / `/nav/cancel`
+- **State**：`/state/nav/heartbeat` (1Hz) / `/state/nav/status` (10Hz) / `/state/nav/safety` (10Hz)
+- **Event**：`/event/nav/waypoint_reached` / `/event/nav/internal/status` / `/state/reactive_stop/status`
+- **twist_mux 4 層**：emergency(255) > obstacle(200) > teleop(100) > nav2(10) + Bool `/lock/emergency`
+
+新 nodes：`nav_action_server_node` / `route_runner_node` / `log_pose_node` / `state_broadcaster_node`。共 70 unit/integration tests pass（WSL）。
+
+**Spec / Plan**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / [`docs/navigation/plans/2026-04-26-nav-capability-s2.md`](../docs/navigation/plans/2026-04-26-nav-capability-s2.md)
+
+### 兩個重大修法（commit 8ec9a59 + e2b3932）
+
+1. **`reactive_stop_node` safety_only mode** — 原設計是 standalone fallback「永遠驅動前進」，當被 repurpose 接到 mux priority 200 後，clear zone 時 0.60 m/s 永遠 shadow nav。實機 dry-run 抓到 Go2 衝出，新增 `safety_only` param：mux 模式只在 danger / emergency 發 0.0，clear / slow 不發，讓 nav 通過。`scripts/start_nav_capability_demo_tmux.sh` 已加 `-p safety_only:=true`。
+2. **runtime path** — `named_poses_file` / `routes_dir` 預設指 `pkg_share/config/`，會被 colcon build 覆蓋且不在 git 之外。改用 `~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/`，tmux 啟動時 `mkdir -p` 自動建。
+
+### Phase 10 P0 KPI 結果（5/8 驗收，3/8 推遲）
+
+| KPI | 結果 | 備註 |
+|-----|------|------|
+| K8 mux integration | ✅ WSL 4/4 / **移出實機** | FakePublisher `/cmd_vel_nav` = 0.30 透過真實 mux 進 go2_driver → Go2 衝出。永久規則：K8 不在 full stack 跑 |
+| K9 state topic rate | ✅ heartbeat 2.02Hz / status 20.00Hz / safety 20.04Hz | 全 ≥ 門檻；rate 2x 預期（DDS ghost participant 異常，待 root cause） |
+| K10 log_pose | ✅ 3/5（user override 為 3 點） | runtime path 寫入確認；alpha/beta/gamma 都 SUCCEEDED |
+| K1/K2/K4/K5/K7 | ⏳ 推遲 | AMCL covariance 0.53（紅）需先收斂；用戶判定問題太多今日先收 |
+
+### Phase 10 事故記錄
+- 22:30 跑 K8 時 Go2 撞 — fake_nav publishes 0.30 m/s 走 mux→driver→馬達。原因是 plan 把 K8 排在 full stack。修正：K8 移出實機驗收（plan + 此 status 都註記）。
+
+### 下次 session 接手
+1. 重啟 stack `bash scripts/start_nav_capability_demo_tmux.sh`（含 e2b3932 runtime path）
+2. Foxglove 設 initialpose → 等 AMCL covariance 收斂到 yellow（≤0.5）或 green（<0.3）
+3. K1（goto_relative 0.5m × 5）→ K2（0.8m × 5）→ K4（run_route × 3）→ K5⭐（pause/resume × 3）→ K7⭐（emergency × 3）
+4. （可選）量測 base_link → laser z 實際值，更新 `start_nav_capability_demo_tmux.sh` L40 `--z 0.10`
+5. （bonus）K3/K6/K11 P1 KPI；root-cause state_broadcaster 2x rate
+
+### 新增/修改檔案（commit `9ef3875`..`e2b3932`）
+- 新增 `nav_capability/` 全包（4 nodes + 5 lib modules + 38+5 unit tests + 4 mux integration tests）
+- 新增 `go2_interfaces/{action,srv}/`（4 actions + Cancel.srv）
+- 修改 `go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py`（+ safety_only mode + nav pause/resume bridge）
+- 修改 `go2_robot_sdk/config/twist_mux.yaml`（4-layer + Bool lock）
+- 修改 `go2_robot_sdk/launch/robot.launch.py`（改用 nav_capability wrapper）
+- 新增 `nav_capability/scripts/emergency_stop.py`（CLI helper）
+- 新增 `scripts/start_nav_capability_demo_tmux.sh`（Phase 10 demo 8-window）
+- 修改 `scripts/start_nav_capability_demo_tmux.sh`（runtime path env override）
 
 ---
 
@@ -14,7 +1838,7 @@
 - 實測：`/scan` **10.57 Hz** / **1800 points/scan**（0.2° 解析度，比 datasheet 0.225° 更密）/ 60% valid / 0.20-7.94m range / 中位數 1.08m
 - Foxglove bridge 可視化通過（port 8765）
 
-**舊 LiDAR 問題全部解決**（對照 docs/導航避障/research/）：
+**舊 LiDAR 問題全部解決**（對照 docs/navigation/research/）：
 
 | 歷史痛點（Go2 內建 LiDAR） | 現況（RPLIDAR A2M12 外接） |
 |---------------------------|--------------------------|
@@ -27,12 +1851,12 @@
 
 - 舊判定基於 Go2 內建 LiDAR 5Hz 品質差，業界 SLAM 門檻 7Hz
 - 新實測 RPLIDAR 10.5Hz 超過門檻 → **Full SLAM / Nav2 路線復活為 P0 主線**
-- `docs/導航避障/README.md` 的「架構決策 2026-04-01」加 Supersedes 註記
+- `docs/navigation/legacy-readme-from-導航避障.md` 的「架構決策 2026-04-01」加 Supersedes 註記
 
 **P0 導航避障 spec + plan 定稿**：
 
-- Spec: `docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`（803 行）
-- Plan: `docs/superpowers/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
+- Spec: `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`（803 行）
+- Plan: `docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
 - P0 承諾：劇本式 A→B + 停障 + 續行（不承諾一般繞障）
 - P1 Stretch：單一靜態障礙繞行（5/6 P0-I KPI 4/5 通過才啟動）
 - 嵌入 PawAI Brain 三層架構：Safety Layer 新增 Emergency latched FSM + Obstacle auto-recovery FSM，Policy Layer 新增 `patrol_route` skill（deterministic，不經 LLM），Expression Layer 新增 `safety_tts` 固定 6 句模板
@@ -49,12 +1873,43 @@
 
 ---
 
+## 4/25 晚進度同步會議 + PR Review
+
+**4/25 21:00 會議**（教授 + Roy + 佩珍 + 如恩 + 黃旭 + 宇童 + 偉民學長線上）：
+
+- 完整紀錄：[`docs/mission/meetings/2026-04-25.md`](../docs/mission/meetings/2026-04-25.md)
+- 會議性質：週六進度同步 +「禮拜一 (4/27) UIT 訪客交流」前的成果盤點
+- **4/27 19:00 線上交流**：UIT 助理教授（華人 AI 研究），非驗收性質
+- **5 月驗收 + 6 月發表**：黃淮生老師（有 robot 經驗）大概率當校外評審
+- **教授 demo 策略**：正向表列優先、避免跨模組 conflict、加 entertainment 元素（跳舞/伸懶腰）
+- **Roy 明天衝刺**：動態避障「繞開」demo 影片（教授定義為「第二難關」），週一播
+
+**4 個夥伴功能 PR review**（Linus 風格）：
+
+| PR | 作者 | 模組 | 結論 |
+|----|------|------|------|
+| #38 | Yamikowu | 手勢前端 | REQUEST_CHANGES — port 寫 8080 但 server 是 8001 / enum 違反 contract / unbounded fan-out |
+| #40 | Capybara094 (Elio) | 物件辨識 | REQUEST_CHANGES — 32MB 模型 binary 進 git / 用了禁用的 ultralytics / mock_server `/mock/yolo/start` RCE |
+| #41 | GuaGua0216 (瓜瓜) | 姿勢前端 | REQUEST_CHANGES — 空殼 lockfile / useEffect deps race / `test_pose.py` 副作用 |
+| #42 | katiechen128 (如恩) | 語音 | REQUEST_CHANGES — Shell injection / 雙音訊播放 / studio_api.py 繞過 ROS2 contract / CI 兩 job FAIL |
+
+**共通系統性問題**：沒人對齊 `interaction_contract.md`、binary 檔亂入 git、port 全亂（5000/8000/8001/8080）、scope 失控
+
+**各模組功能提取計畫**（明天實作）：
+
+- [`docs/pawai-brain/perception/pose/research/2026-04-25-pr41-extraction-plan.md`](../docs/pawai-brain/perception/pose/research/2026-04-25-pr41-extraction-plan.md) — 分類細則 + pose schema
+- [`docs/pawai-brain/perception/gesture/research/2026-04-25-pr38-extraction-plan.md`](../docs/pawai-brain/perception/gesture/research/2026-04-25-pr38-extraction-plan.md) — `_is_waving()` 算法 + UI panel
+- [`docs/pawai-brain/speech/research/2026-04-25-pr42-extraction-plan.md`](../docs/pawai-brain/speech/research/2026-04-25-pr42-extraction-plan.md) — TTS voice + zhconv 簡轉繁 + 去重邏輯
+- [`docs/pawai-brain/perception/object/research/2026-04-25-pr40-extraction-plan.md`](../docs/pawai-brain/perception/object/research/2026-04-25-pr40-extraction-plan.md) — retry 邏輯（重寫去 ultralytics）+ 雙模式 UX
+
+---
+
 ## 4/12 今日進度
 
 **專題文件衝刺(迎戰 4/13 繳交 deadline)**:
 
 - **Ch3 系統範圍**擴寫完成(9,112 字),以 MeetSure 格式 3-1~3-10 逐項描述使用者操作情境 + 後端技術,含導航避障 Option C 條件式敘述、守護能力、自主展示
-- **Ch4 背景知識**擴寫完成(13,492 字),並**額外拆為 10 個獨立 md 檔**存於 `docs/thesis/背景知識/` 便於分節驗收:
+- **Ch4 背景知識**擴寫完成(13,492 字),並**額外拆為 10 個獨立 md 檔**存於 `docs/deliverables/thesis/背景知識/` 便於分節驗收:
   - 4-1 ROS2 / 4-2 Unitree Go2 / 4-3 MediaPipe Gesture / 4-4 MediaPipe Pose / 4-5 YuNet + SFace / 4-6 Speech / 4-7 YOLO26 / 4-8 Navigation / 4-9 Jetson / 4-10 D435
 - **Ch5 系統限制**擴寫完成(9,401 字),13 大類涵蓋硬體 / 運算 / 語音 / 視覺 / 多人權限 / 隱私等
 - **三章合計從 ~6,400 字 → 32,005 字(約 5× 擴寫)**
@@ -78,15 +1933,15 @@
 
 **同步修正的 code/文件不一致**(本次 update-docs 撰寫時一併處理):
 
-- `docs/語音功能/README.md` 狀態卡「本地 ASR/LLM 不可用」與下方三級 fallback 流程矛盾 → 澄清本地 ASR 可作 fallback、本地 LLM 僅形式備援
-- `docs/人臉辨識/AGENT.md` 的 `/camera/aligned_depth_to_color/image_raw` 缺 double namespace、OpenCV 4.5.4+ 過時宣稱 → 訂正為 `/camera/camera/aligned_depth_to_color/image_raw` + OpenCV ≥ 4.8
+- `docs/pawai-brain/speech/README.md` 狀態卡「本地 ASR/LLM 不可用」與下方三級 fallback 流程矛盾 → 澄清本地 ASR 可作 fallback、本地 LLM 僅形式備援
+- `docs/pawai-brain/perception/face/AGENT.md` 的 `/camera/aligned_depth_to_color/image_raw` 缺 double namespace、OpenCV 4.5.4+ 過時宣稱 → 訂正為 `/camera/camera/aligned_depth_to_color/image_raw` + OpenCV ≥ 4.8
 - `CLAUDE.md` 行 22、365 的 Whisper 敘述容易誤導 → 澄清 CPU int8(yaml 預設)可用、CUDA int8 不支援、Demo 啟動腳本覆寫為 CUDA float16 三層關係
 
 **產出檔案**:
 
-- `docs/thesis/114-thesis.md`(三章擴寫已合入)
-- `docs/thesis/114-thesis.docx`(pandoc 轉檔完成)
-- `docs/thesis/背景知識/4-*.md`(10 個獨立背景知識檔,待驗收後決定是否整合回 114-thesis.md)
+- `docs/deliverables/thesis/114-thesis.md`(三章擴寫已合入)
+- `docs/deliverables/thesis/114-thesis.docx`(pandoc 轉檔完成)
+- `docs/deliverables/thesis/背景知識/4-*.md`(10 個獨立背景知識檔,待驗收後決定是否整合回 114-thesis.md)
 
 **尚未決定**:背景知識/ 10 份獨立檔是否要整合回主文件 Ch4。等使用者驗收後再決定。
 
@@ -108,13 +1963,13 @@
 - **4-10**:align_depth 改為「相機啟動時啟用,face node 訂閱已對齊 topic」
 
 **Ch5 系統限制獨立檔**（新增）:
-- `docs/thesis/5-系統限制與可行性分析.md`（13 節,含延遲鏈分解、距離對照表、RAM 預算表、Megaphone 逆向工程、ARM 碎片化等技術深度）
+- `docs/deliverables/thesis/5-系統限制與可行性分析.md`（13 節,含延遲鏈分解、距離對照表、RAM 預算表、Megaphone 逆向工程、ARM 碎片化等技術深度）
 - 使用者抽查後補修 5 處:光線影響降級為定性描述、供電電壓補 19.2V/20V 雙值、odom 0.3m 標示為規劃門檻、測試數量改為不精確描述、最靠近原則補語氣保留
 
 **合併版產出**:
-- `docs/thesis/Ch4-背景知識-合併版.md`（10 章按 4-1→4-10 順序拼接,Python 驗證腳本確認 523 行 0 缺失）
-- `docs/thesis/Ch4-背景知識-合併版.docx`（79KB）
-- `docs/thesis/5-系統限制與可行性分析.docx`（26KB）
+- `docs/deliverables/thesis/Ch4-背景知識-合併版.md`（10 章按 4-1→4-10 順序拼接,Python 驗證腳本確認 523 行 0 缺失）
+- `docs/deliverables/thesis/Ch4-背景知識-合併版.docx`（79KB）
+- `docs/deliverables/thesis/5-系統限制與可行性分析.docx`（26KB）
 
 ---
 
@@ -137,8 +1992,8 @@
 
 **雷達狀態**：**確定採購**，老師跑國科會流程中，到貨時程未定
 
-**新 spec（current）**：[`docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md`](../docs/superpowers/specs/2026-04-11-pawai-home-interaction-design.md)
-**舊 spec（superseded）**：[`docs/superpowers/specs/2026-04-10-guardian-dog-design.md`](../docs/superpowers/specs/2026-04-10-guardian-dog-design.md)
+**新 spec（current）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)
+**舊 spec（superseded）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md)
 
 ---
 
@@ -153,9 +2008,9 @@
 | LLM (llm_bridge_node) | **E2E 通過** | 4/1 | Cloud 7B → RuleBrain，greet cooldown dedup 正確 |
 | Studio (pawai-studio) | **Chat ROS2 閉環 + Live View 實機通過** | 4/7 | Chat 走 ROS2 pipeline 閉環（文字/語音→LLM→/tts→AI bubble）；錄音音量動畫（AnalyserNode 7 bars）；Live View 三欄影像；gateway-url 統一；start-live.sh 正式站；mock TTS event 修復；31 tests PASS |
 | CI | **17 test files, 225+ cases** | 4/1 | fast-gate + **blocking contract check** + git pre-commit hook |
-| interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS |
+| interaction_executive | **v0 + thumbs_up 擴展 + fallen 可關** | 4/6 | thumbs_up 在 GREETING/CONVERSING 也生效；`enable_fallen` 參數化（demo 關閉）；39 tests PASS。**4/27 night**: Brain Skill-first MVS spec + 34-task plan + PawClaw 演進 spec 落地（純文件，0 程式變更），4/28 起進 Phase A execution — brain_node + executive 重寫 + 9-skill registry + Studio Brain Skill Console |
 | 物體辨識 | **Executive 整合完成** | 4/6 | cup 觸發 TTS「你要喝水嗎？」✅；book 偶爾辨識（0.3 threshold 下）；bottle 未偵測到；YOLO26n 小物件偵測率低，yolo26s 升級記錄到 Day 12+ |
-| 導航避障 | **RPLIDAR A2M12 驗證通過 / P0 劇本式導航開發中** | 4/25 | LiDAR 到貨接 Jetson 驗證 /scan 10.57Hz / 1800 點/圈 / 60% valid；Full SLAM/Nav2 從「永久關閉」翻案為 P0 主線（舊判定基於 5Hz 品質差，RPLIDAR 10.5Hz > 7Hz 業界門檻）；spec + 17-task plan 定稿；P0 = 劇本式 A→B + 停障 + 續行，不承諾一般繞障；5/1 emergency hotkey 硬截止、5/6 KPI 4/5、5/11-5/12 freeze、5/13 學校現場重建地圖 |
+| 導航避障 | **Nav2 0.8m 自主前進實機驗證 + reactive_stop fallback** | 4/26 | 0.8m goal 走 50cm 用戶現場確認；昨天 lethal 判定為暫態（v3.7 nav2_params 不需改）；reactive_stop_node 完成 17 tests pass + Jetson dry-run 通過；發現並修兩 bug（goal_pose BEST_EFFORT QoS、preemption 過密）；待續：重新建圖（用戶判定 map 髒污）+ B 線 4 場景實機驗收 |
 
 ## 4/9 外部會議 + 核心方向 Brainstorm
 
@@ -233,7 +2088,7 @@
 - **CPU**：風險點（slam_toolbox ~70%，導航時建議關手勢）
 - **推薦**：RPLIDAR A2M12（$7,530，16000/s，ROS 生態最豐富）
 - **最大風險**：供電（LiDAR 馬達 +2-5W，XL4015 已 8+ 次斷電）
-- 詳見 `docs/導航避障/research/2026-04-08-external-lidar-feasibility.md`
+- 詳見 `docs/navigation/research/2026-04-08-external-lidar-feasibility.md`
 
 ### 文件更新
 - `docs/mission/README.md` v2.3 完成
@@ -810,7 +2665,7 @@
 - Device mapping：mic card 24→0（device drift 確認），speaker plughw:3,0
 - 新增 `scripts/clean_full_demo.sh`（全環境清理）
 - 新增 `scripts/device_detect.sh`（USB 音訊裝置自動偵測，source 介面）
-- 新增 `docs/operations/baseline-contract.md`（啟動順序 + QoS + SOP + 驗收記錄）
+- 新增 `docs/archive/2026-05-docs-reorg/operations/baseline-contract.md`（啟動順序 + QoS + SOP + 驗收記錄）
 
 ### 語音 Noisy Profile v1
 - **問題：** Go2 伺服噪音下 Whisper 產生幻覺，垃圾 intent 觸發 Go2 危險動作
@@ -870,9 +2725,9 @@
 - requirements-jetson.txt 新建
 
 ### 研究文件
-- `docs/research/2026-03-25-object-detection-feasibility.md`（YOLO26n，32KB）
-- `docs/research/2026-03-25-reactive-obstacle-avoidance.md`（D435 避障，34KB）
-- `docs/research/2026-03-25-go2-sdk-capability-and-architecture.md`（SDK 能力 + Clean Architecture 藍圖，41KB）
+- `docs/archive/2026-05-docs-reorg/research-misc/2026-03-25-object-detection-feasibility.md`（YOLO26n，32KB）
+- `docs/archive/2026-05-docs-reorg/research-misc/2026-03-25-reactive-obstacle-avoidance.md`（D435 避障，34KB）
+- `docs/archive/2026-05-docs-reorg/research-misc/2026-03-25-go2-sdk-capability-and-architecture.md`（SDK 能力 + Clean Architecture 藍圖，41KB）
 
 ## Sprint B-prime（3/28-4/7，一人衝刺）
 

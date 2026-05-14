@@ -30,8 +30,15 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# canonical pkg manager is npm — block stray pnpm/yarn lockfiles from polluting
+pnpm-lock.yaml
+pnpm-workspace.yaml
+yarn.lock
+
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+!.env.example
 
 # vercel
 .vercel

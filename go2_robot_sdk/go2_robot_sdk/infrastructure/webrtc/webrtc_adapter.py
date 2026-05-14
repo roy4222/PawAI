@@ -179,17 +179,30 @@ class WebRTCAdapter(IRobotDataReceiver, IRobotController):
             logger.error(f"Error in async send command: {e}")
 
     def send_movement_command(self, robot_id: str, x: float, y: float, z: float) -> None:
-        """Send movement command to robot"""
+        """Send movement command to robot (Go2 sport Move, api_id=1008)"""
         try:
             command = gen_mov_command(
-                round(x, 2), 
-                round(y, 2), 
-                round(z, 2), 
+                round(x, 2),
+                round(y, 2),
+                round(z, 2),
                 self.config.obstacle_avoidance
             )
             self.send_command(robot_id, command)
         except Exception as e:
             logger.error(f"Error sending movement command: {e}")
+
+    def send_stop_move_command(self, robot_id: str) -> None:
+        """Send hard-stop (Go2 StopMove, api_id=1003).
+
+        See IRobotController.send_stop_move_command for why this is required
+        instead of plain Move {x:0}. Uses gen_command (not gen_mov_command)
+        because StopMove takes no parameters.
+        """
+        try:
+            stop_cmd = gen_command(ROBOT_CMD["StopMove"])
+            self.send_command(robot_id, stop_cmd)
+        except Exception as e:
+            logger.error(f"Error sending stop_move command: {e}")
 
     def send_stand_up_command(self, robot_id: str) -> None:
         """Send stand up command"""

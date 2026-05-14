@@ -271,7 +271,10 @@ class ExecutiveStateMachine:
 
     def _route_gesture(self, data: dict) -> EventResult:
         gesture = data.get("gesture", "")
-        if gesture == "thumbs_up":
+        # 2026-05-05: align to MOC §3 enum (palm/thumb/peace/ok). Legacy
+        # names (thumbs_up) kept for back-compat during the 5/5→5/12
+        # transition; can drop after demo.
+        if gesture in ("thumb", "thumbs_up"):
             return EventResult(tts="謝謝!", action=ACTION_CONTENT)
         if gesture == "ok":
             return EventResult(action=ACTION_CONTENT)

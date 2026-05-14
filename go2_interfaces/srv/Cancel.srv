@@ -1,0 +1,5 @@
+# Request
+bool safe_stop
+---
+# Response
+bool success

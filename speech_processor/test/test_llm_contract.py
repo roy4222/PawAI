@@ -18,6 +18,8 @@ from speech_processor.llm_contract import (
     LLM_REQUIRED_FIELDS,
     P0_SKILLS,
     SKILL_TO_CMD,
+    adapt_eval_schema,
+    extract_proposal,
     parse_llm_response,
     strip_markdown_fences,
 )
@@ -199,3 +201,65 @@ class TestJsonParsingEdgeCases(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# 7. extract_proposal helpers (Phase 0.5, 2026-05-06)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_proposal_returns_skill_and_args_when_present():
+    eval_obj = {
+        "reply": "汪，我是 PawAI",
+        "skill": "self_introduce",
+        "args": {},
+    }
+    proposal = extract_proposal(eval_obj)
+    assert proposal == {
+        "proposed_skill": "self_introduce",
+        "proposed_args": {},
+        "proposal_reason": "openrouter:eval_schema",
+    }
+
+
+def test_extract_proposal_returns_none_skill_when_missing():
+    proposal = extract_proposal({"reply": "你好"})
+    assert proposal["proposed_skill"] is None
+    assert proposal["proposed_args"] == {}
+
+
+def test_extract_proposal_handles_non_dict_args():
+    proposal = extract_proposal({"reply": "...", "skill": "show_status", "args": "ignore"})
+    assert proposal["proposed_skill"] == "show_status"
+    assert proposal["proposed_args"] == {}
+
+
+def test_extract_proposal_preserves_skill_outside_legacy_p0():
+    """The whole point: persona skill that adapt_eval_schema would drop must survive here."""
+    proposal = extract_proposal({"reply": "...", "skill": "show_status", "args": {}})
+    assert proposal["proposed_skill"] == "show_status"
+
+
+def test_adapt_eval_schema_unchanged_for_legacy_skill():
+    """Regression guard: adapt_eval_schema behavior must not change."""
+    bridge = adapt_eval_schema({"reply": "stop", "skill": "stop_move", "args": {}})
+    assert bridge["selected_skill"] == "stop_move"
+    assert bridge["reply_text"] == "stop"
+
+
+def test_extract_proposal_treats_chat_reply_as_no_side_effect():
+    """Persona returning skill='chat_reply' is redundant with reply_text — surface as None."""
+    proposal = extract_proposal({"reply": "你好", "skill": "chat_reply", "args": {}})
+    assert proposal["proposed_skill"] is None
+
+
+def test_extract_proposal_treats_say_canned_as_no_side_effect():
+    proposal = extract_proposal({"reply": "好的", "skill": "say_canned", "args": {}})
+    assert proposal["proposed_skill"] is None
+
+
+def test_extract_proposal_still_passes_through_real_side_effects():
+    """show_status, self_introduce, dance, wiggle — all should pass through (brain gates them)."""
+    for s in ("show_status", "self_introduce", "dance", "wiggle"):
+        proposal = extract_proposal({"reply": "...", "skill": s, "args": {}})
+        assert proposal["proposed_skill"] == s

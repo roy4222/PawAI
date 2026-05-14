@@ -11,10 +11,12 @@ caching, and multiple provider support.
 """
 
 import base64
+import concurrent.futures
 import io
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -37,6 +39,15 @@ from rclpy.node import Node
 import requests
 from std_msgs.msg import Bool, String, UInt8MultiArray
 from go2_interfaces.msg import WebRtcReq
+
+from speech_processor.audio_tag import strip_audio_tags
+from speech_processor import pcm_trim as _pcm_trim
+from speech_processor import tts_split as _tts_split
+
+# Diagnostic mode for chunk-level TTS investigation. Set PAWAI_TTS_DIAG=1 in
+# the tts_node environment to emit per-chunk text preview / peak / rms /
+# duration_ms log lines. Off by default — zero overhead on normal demo runs.
+_DIAG_TTS: bool = os.environ.get("PAWAI_TTS_DIAG", "") == "1"
 
 
 def _env_str(name: str, default: str) -> str:
@@ -89,6 +100,7 @@ class TTSProvider(Enum):
     AMAZON = "amazon"
     OPENAI = "openai"
     EDGE_TTS = "edge_tts"
+    OPENROUTER_GEMINI = "openrouter_gemini"
 
 
 @dataclass
@@ -131,6 +143,14 @@ class TTSConfig:
 
     # edge-tts specific settings
     edge_tts_voice: str = "zh-CN-XiaoxiaoNeural"
+
+    # OpenRouter Gemini TTS settings (Stage 3 of B1 Plan D)
+    # Voice "Despina" selected after Stage 1 listening test on Jetson 5/4.
+    # Model is preview-stage; latency baseline 3.6-5.1s avg ~4.6s on Jetson
+    # (timeout 6.0s = baseline + ~30% headroom).
+    openrouter_gemini_voice: str = "Despina"
+    openrouter_gemini_model: str = "google/gemini-3.1-flash-tts-preview"
+    openrouter_gemini_timeout_s: float = 60.0
 
 
 class AudioCache:
@@ -220,6 +240,12 @@ class AudioCache:
 class TTSProvider_ElevenLabs:
     """ElevenLabs TTS provider implementation"""
 
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "elevenlabs"
+    sample_rate: int = 22050  # mp3 typical; pydub re-derives on decode
+    supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.MP3
+
     def __init__(self, config: TTSConfig):
         self.config = config
         self.base_url = "https://api.elevenlabs.io/v1"
@@ -264,6 +290,12 @@ class TTSProvider_ElevenLabs:
 
 
 class TTSProvider_MeloTTS:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "melotts"
+    sample_rate: int = 0  # dynamic, read from self._model.hps.data.sampling_rate
+    supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.WAV  # deprecated; kept for safety
+
     def __init__(self, config: TTSConfig):
         self.config = config
         try:
@@ -320,6 +352,12 @@ class TTSProvider_MeloTTS:
 
 
 class TTSProvider_Piper:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "piper"
+    sample_rate: int = 22050  # zh_CN-huayan-medium native rate
+    supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.WAV
+
     def __init__(self, config: TTSConfig):
         self.config = config
         self._piper_bin = shutil.which("piper")
@@ -400,6 +438,12 @@ class TTSProvider_Piper:
 
 
 class TTSProvider_EdgeTTS:
+    # TTSProviderBase protocol attributes (Stage 2 refactor)
+    name: str = "edge_tts"
+    sample_rate: int = 24000  # mp3 24 kHz mono confirmed via `file` on output
+    supports_audio_tags: bool = False
+    output_format: AudioFormat = AudioFormat.MP3
+
     """Microsoft Edge TTS (cloud, high quality, zh-TW/zh-CN support)"""
 
     def __init__(self, config: TTSConfig):
@@ -429,6 +473,242 @@ class TTSProvider_EdgeTTS:
         except Exception as e:
             _logger.warning("edge-tts synthesize failed: %s", e)
             return None
+
+
+class TTSProvider_OpenRouterGemini:
+    """Gemini 3.1 Flash TTS Preview via OpenRouter `/api/v1/audio/speech`.
+
+    Stage 1 listening test on Jetson 5/4: voice "Despina" selected by user.
+    Native audio tag support — passes `[excited]` `[laughs]` etc. through
+    to Gemini which renders them as emotion/SFX (verified by ear). Hence
+    `supports_audio_tags=True` (gates strip in tts_node.tts_callback).
+
+    Output: OpenRouter returns raw PCM (audio/pcm;rate=24000;channels=1)
+    when response_format=pcm. We wrap a WAV header (24kHz/16-bit/mono) in
+    Python so downstream cache + pydub treat the result like any other WAV.
+
+    Auth: reads `OPENROUTER_KEY` from env at call time. Not stored in
+    TTSConfig.api_key (already used by ElevenLabs). Tracked in `.env` only.
+    """
+
+    # TTSProviderBase protocol attributes
+    name: str = "openrouter_gemini"
+    sample_rate: int = 24000
+    supports_audio_tags: bool = True
+    output_format: AudioFormat = AudioFormat.WAV  # wraps raw PCM into WAV container
+
+    OPENROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
+
+    def __init__(self, config: TTSConfig):
+        self.voice = config.openrouter_gemini_voice
+        self.model = config.openrouter_gemini_model
+        self.timeout = float(config.openrouter_gemini_timeout_s)
+        # 5/12: .strip() guards against CRLF (\r\n) line endings in .env files
+        # which leak \r into the Authorization header → "Invalid return character
+        # or leading space in header" 500 from urllib3. Mirror conv_graph
+        # llm_client.resolve_openrouter_key behaviour.
+        self._api_key = (
+            os.getenv("OPENROUTER_KEY", "") or os.getenv("OPENROUTER_API_KEY", "")
+        ).strip()
+        if not self._api_key:
+            _logger.warning(
+                "OPENROUTER_KEY not set — TTSProvider_OpenRouterGemini will "
+                "fail every synthesize() call until env is configured"
+            )
+
+    # Constants kept as class attributes for backward compatibility with any
+    # subclass / test that referenced TTSProvider_OpenRouterGemini.* directly.
+    # Source of truth: speech_processor.tts_split (ROS-free, importable in
+    # pre-commit hook env without sourcing ROS).
+    CHUNK_MAX_CHARS: int = _tts_split.CHUNK_MAX_CHARS
+    MIN_SPLIT_CHARS: int = _tts_split.MIN_SPLIT_CHARS
+    SENTENCE_PUNCT: str = _tts_split.SENTENCE_PUNCT
+    _AUDIO_TAG_RE = _tts_split._AUDIO_TAG_RE
+
+    def _split_for_tts(self, text: str) -> list[str]:
+        """Split text into chunks ≤ CHUNK_MAX_CHARS at sentence boundaries.
+
+        Implementation lives in `speech_processor.tts_split.split_for_tts`
+        so unit tests can call it without importing this module (which pulls
+        in ROS std_msgs).
+        """
+        return _tts_split.split_for_tts(text)
+
+    def _timed_chunk(self, text: str) -> tuple[Optional[bytes], float]:
+        """Wrap _synthesize_chunk with wall-clock timing for parallel debug."""
+        t0 = time.monotonic()
+        pcm = self._synthesize_chunk(text)
+        return pcm, time.monotonic() - t0
+
+    def _synthesize_chunk(self, text: str) -> Optional[bytes]:
+        """One OpenRouter TTS request → raw PCM bytes (no WAV header)."""
+        try:
+            response = requests.post(
+                self.OPENROUTER_TTS_URL,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "input": text,
+                    "voice": self.voice,
+                    "response_format": "pcm",
+                },
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout:
+            _logger.warning(
+                "openrouter_gemini timeout (%.1fs) for text=%r",
+                self.timeout,
+                text[:40],
+            )
+            return None
+        except requests.exceptions.RequestException as exc:
+            _logger.warning("openrouter_gemini request error: %s", exc)
+            return None
+
+        if response.status_code != 200:
+            _logger.warning(
+                "openrouter_gemini HTTP %s: %s",
+                response.status_code,
+                response.text[:200],
+            )
+            return None
+
+        pcm = response.content
+        if not pcm or pcm.startswith(b"{"):
+            _logger.warning("openrouter_gemini empty or JSON body, len=%d", len(pcm))
+            return None
+        return pcm
+
+    def synthesize(self, text: str) -> Optional[bytes]:
+        if not self._api_key:
+            return None
+
+        chunks = self._split_for_tts(text)
+        if not chunks:
+            return None
+
+        if len(chunks) == 1:
+            pcm = self._synthesize_chunk(chunks[0])
+            if pcm is None:
+                return None
+            # Trim gemini's silence padding from single chunks too.
+            full_pcm = _pcm_trim.trim_silence_pcm16(pcm)
+            if not full_pcm:
+                # Fully silent — fall back rather than emit empty audio.
+                _logger.warning("openrouter_gemini: single chunk fully silent after trim")
+                return None
+        else:
+            t0 = time.monotonic()
+            _logger.warning(
+                "openrouter_gemini: %d chunks parallel, sizes=%s",
+                len(chunks),
+                [len(c) for c in chunks],
+            )
+            if _DIAG_TTS:
+                preview = [
+                    (c if len(c) <= 60 else f"{c[:40]}…{c[-15:]}")
+                    for c in chunks
+                ]
+                _logger.warning(
+                    "openrouter_gemini DIAG chunks_text=%s", preview,
+                )
+            # Fire all chunks in parallel; preserve order via index map.
+            results: list[Optional[bytes]] = [None] * len(chunks)
+            timings: list[float] = [0.0] * len(chunks)
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=min(len(chunks), 8)
+            ) as pool:
+                future_to_idx = {}
+                for idx, chunk in enumerate(chunks):
+                    fut = pool.submit(self._timed_chunk, chunk)
+                    future_to_idx[fut] = idx
+                for fut in concurrent.futures.as_completed(future_to_idx):
+                    idx = future_to_idx[fut]
+                    pcm, latency = fut.result()
+                    results[idx] = pcm
+                    timings[idx] = latency
+                    if pcm is None:
+                        _logger.warning(
+                            "openrouter_gemini chunk[%d] FAILED (%.2fs) text=%r",
+                            idx,
+                            latency,
+                            chunks[idx][:30],
+                        )
+                    else:
+                        _logger.warning(
+                            "openrouter_gemini chunk[%d] ok (%.2fs, %d bytes)",
+                            idx,
+                            latency,
+                            len(pcm),
+                        )
+                        if _DIAG_TTS:
+                            try:
+                                import numpy as _np
+                                arr = _np.frombuffer(pcm, dtype=_np.int16).astype(_np.int32)
+                                peak = int(_np.abs(arr).max()) if arr.size else 0
+                                rms = (
+                                    int(_np.sqrt(_np.mean(arr.astype(_np.float64) ** 2)))
+                                    if arr.size else 0
+                                )
+                                dur_ms = len(pcm) / (self.sample_rate * 2) * 1000
+                                _logger.warning(
+                                    "openrouter_gemini DIAG chunk[%d] peak=%d rms=%d "
+                                    "duration_ms=%.0f text_len=%d",
+                                    idx, peak, rms, dur_ms, len(chunks[idx]),
+                                )
+                            except Exception as exc:
+                                _logger.warning(
+                                    "openrouter_gemini DIAG chunk[%d] stats failed: %s",
+                                    idx, exc,
+                                )
+
+            # All-or-nothing: any chunk failure → fallback chain.
+            if any(p is None for p in results):
+                _logger.warning(
+                    "openrouter_gemini: chunked synth partial failure "
+                    "(%d/%d chunks None) — returning None for provider chain fallback",
+                    sum(1 for p in results if p is None),
+                    len(results),
+                )
+                return None
+            # 5/11 night: trim silence padding from each chunk before concat.
+            # Gemini API adds ~80-200ms silence at both ends of every chunk;
+            # raw join produced audible "斷句" gaps in long stories/poems.
+            # See speech_processor.pcm_trim for threshold rationale.
+            raw_join = b"".join(results)  # type: ignore[arg-type]
+            try:
+                full_pcm = _pcm_trim.trim_and_join_chunks(results)  # type: ignore[arg-type]
+            except _pcm_trim.ChunkTrimError as exc:
+                _logger.warning(
+                    "openrouter_gemini: chunk trimmed to silence (%s) — "
+                    "returning None for provider chain fallback",
+                    exc,
+                )
+                return None
+            saved_ms = (len(raw_join) - len(full_pcm)) / (self.sample_rate * 2) * 1000
+            wall = time.monotonic() - t0
+            _logger.warning(
+                "openrouter_gemini: %d/%d chunks ok in %.2fs wall (max single=%.2fs), "
+                "%.1fs audio after trim (saved %.0fms silence)",
+                len(results),
+                len(chunks),
+                wall,
+                max(timings),
+                len(full_pcm) / (self.sample_rate * 2),
+                saved_ms,
+            )
+
+        # Wrap raw PCM (24kHz / 16-bit / mono) in a WAV container.
+        wav_io = io.BytesIO()
+        with wave.open(wav_io, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(self.sample_rate)
+            wf.writeframes(full_pcm)
+        return wav_io.getvalue()
 
 
 class AudioProcessor:
@@ -480,6 +760,103 @@ class AudioProcessor:
         return [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]
 
 
+# ---------------------------------------------------------------------------
+# E3-3: Dual-route helpers (fast lane / quality lane)
+# ---------------------------------------------------------------------------
+
+# Safety / stop keywords that always force fast lane regardless of text length.
+SAFETY_KEYWORDS: re.Pattern = re.compile(
+    r"停|停止|不要動|先不要動|別動|小心|警告|危險|stop",
+    re.IGNORECASE,
+)
+
+FAST_LANE_THRESHOLD: int = 12  # effective char/word units (5/9 review: was 30 — too high, LLM short answers all fell to edge-tts)
+
+# Audio tags that signal emotional / story content → force quality lane regardless of length.
+# (Issue 1 fix: short emotional sentences like "[playful] 嗨～" should NOT use edge-tts robotic voice.)
+QUALITY_LANE_AUDIO_TAGS: frozenset[str] = frozenset({
+    "excited", "curious", "playful", "worried", "whispers", "laughs", "sighs", "thinking",
+    "gentle", "happy", "sad", "shy",
+})
+
+# Regex to strip audio-tag markup like [playful], [excited] before counting.
+_AUDIO_TAG_RE_LANE: re.Pattern = re.compile(r"\[(\w+)\]")
+
+# Chinese / English punctuation that doesn't count as content.
+_PUNCT_RE: re.Pattern = re.compile(r"[，。！？：；、,.!?:;\s]")
+
+
+def _compute_effective_length(text: str) -> int:
+    """Compute effective length for dual-route lane decision.
+
+    Algorithm:
+    1. Strip audio tags (e.g. ``[playful]``, ``[excited]``).
+    2. Strip Chinese/English punctuation and whitespace.
+    3. Count CJK characters (each = 1 unit) + English words (each = 1 unit).
+    """
+    # Strip audio tags
+    stripped = _AUDIO_TAG_RE_LANE.sub("", text)
+    # Strip punctuation and whitespace to isolate content tokens
+    stripped = _PUNCT_RE.sub(" ", stripped).strip()
+
+    if not stripped:
+        return 0
+
+    cjk_count = 0
+    en_words_count = 0
+    current_en: list[str] = []
+
+    for ch in stripped:
+        if "一" <= ch <= "鿿" or "㐀" <= ch <= "䶿":
+            # Flush pending English word
+            if current_en:
+                en_words_count += 1
+                current_en = []
+            cjk_count += 1
+        elif ch.isalpha() or ch.isdigit():
+            current_en.append(ch)
+        else:
+            # Space or other separator — flush English word
+            if current_en:
+                en_words_count += 1
+                current_en = []
+
+    if current_en:
+        en_words_count += 1
+
+    return cjk_count + en_words_count
+
+
+def _has_quality_lane_audio_tag(text: str) -> bool:
+    """Return True if text contains an emotional audio tag → force quality lane.
+
+    This overrides length-based routing because short emotional sentences
+    (e.g. "[playful] 嗨～") sound terrible in edge-tts robotic voice.
+    Safety/stop keywords still take precedence (handled before this check).
+    """
+    matches = _AUDIO_TAG_RE_LANE.findall(text)
+    return any(tag.lower() in QUALITY_LANE_AUDIO_TAGS for tag in matches)
+
+
+def _should_use_fast_lane(text: str, threshold: int = FAST_LANE_THRESHOLD) -> bool:
+    """Return True when fast lane (edge-tts → Piper) should handle ``text``.
+
+    Decision priority:
+    1. Safety/stop keyword present → ALWAYS fast lane (override everything).
+    2. Emotional audio tag (e.g. [excited]/[playful]) → quality lane for voice fidelity.
+    3. Effective length > threshold → quality lane (long content = quality investment).
+    4. Otherwise (short, plain) → fast lane.
+    """
+    if SAFETY_KEYWORDS.search(text):
+        return True
+    if _has_quality_lane_audio_tag(text):
+        return False
+    return _compute_effective_length(text) <= threshold
+
+
+# ---------------------------------------------------------------------------
+
+
 class EnhancedTTSNode(Node):
     """Enhanced TTS Node with improved architecture"""
 
@@ -492,16 +869,58 @@ class EnhancedTTSNode(Node):
         # Load configuration
         self.config = self._load_configuration()
 
+        # E3-4: dual-route routing flags (loaded after _declare_parameters)
+        self._dual_route_enabled: bool = (
+            self.get_parameter("tts_dual_route_enabled").get_parameter_value().bool_value
+        )
+        self._fast_lane_threshold: int = (
+            self.get_parameter("tts_fast_lane_threshold").get_parameter_value().integer_value
+        )
+
         # Initialize components
         self.cache = AudioCache(self.config.cache_dir, self.config.use_cache)
         self.audio_processor = AudioProcessor()
 
-        # Initialize TTS provider
+        # Initialize TTS provider + fallback chain (Stage 4 of B1 Plan D)
         self.tts_provider = self._create_tts_provider()
+        self._fallback_chain: List = []
+
+        # E3-1: track the format of the last successfully served provider
+        # Default MP3 so _play_on_robot has a sane fallback before first call.
+        self._last_served_format: AudioFormat = AudioFormat.MP3
 
         if not self.tts_provider:
             self.get_logger().error("Failed to initialize TTS provider!")
             return
+
+        self._fallback_chain = self._build_fallback_chain()
+
+        # Pre-build a Studio override chain (gemini-first) for per-message routing.
+        # Used when /tts message arrives as JSON envelope with input_origin=studio_text.
+        # Order: gemini → default-primary (e.g. edge_tts) → default-fallbacks (e.g. piper).
+        # Dedup by provider name handles default==gemini case. Skipped silently when
+        # OPENROUTER_KEY env not set so demo stays audible (falls through to default).
+        self._studio_fallback_chain = None
+        if os.environ.get("OPENROUTER_KEY") or os.environ.get("OPENROUTER_API_KEY"):
+            try:
+                gemini = TTSProvider_OpenRouterGemini(self.config)
+                chain = [gemini, self.tts_provider] + list(self._fallback_chain)
+                seen: set[str] = set()
+                deduped: List = []
+                for prov in chain:
+                    if prov.name not in seen:
+                        seen.add(prov.name)
+                        deduped.append(prov)
+                self._studio_fallback_chain = deduped
+                self.get_logger().info(
+                    f"studio chain built: {[p.name for p in deduped]}"
+                )
+            except Exception as exc:
+                self.get_logger().warn(f"studio chain disabled: {exc}")
+        else:
+            self.get_logger().info(
+                "studio chain disabled: OPENROUTER_KEY env not set"
+            )
 
         # Setup subscriptions and publishers
         self._setup_communication()
@@ -554,6 +973,29 @@ class EnhancedTTSNode(Node):
         self.declare_parameter("piper_use_cuda", _env_bool("PIPER_USE_CUDA", False))
         self.declare_parameter(
             "edge_tts_voice", _env_str("EDGE_TTS_VOICE", "zh-CN-XiaoxiaoNeural")
+        )
+        self.declare_parameter(
+            "openrouter_gemini_voice",
+            _env_str("OPENROUTER_GEMINI_VOICE", "Despina"),
+        )
+        self.declare_parameter(
+            "openrouter_gemini_model",
+            _env_str(
+                "OPENROUTER_GEMINI_MODEL", "google/gemini-3.1-flash-tts-preview"
+            ),
+        )
+        self.declare_parameter(
+            "openrouter_gemini_timeout_s",
+            _env_float("OPENROUTER_GEMINI_TIMEOUT_S", 6.0),
+        )
+        # E3-4: dual-route parameters
+        self.declare_parameter(
+            "tts_dual_route_enabled",
+            _env_bool("TTS_DUAL_ROUTE_ENABLED", True),
+        )
+        self.declare_parameter(
+            "tts_fast_lane_threshold",
+            _env_int("TTS_FAST_LANE_THRESHOLD", 12),  # 5/9 review: was 30 — too high
         )
 
     def _load_configuration(self) -> TTSConfig:
@@ -642,6 +1084,17 @@ class EnhancedTTSNode(Node):
             edge_tts_voice=self.get_parameter("edge_tts_voice")
             .get_parameter_value()
             .string_value,
+            openrouter_gemini_voice=self.get_parameter("openrouter_gemini_voice")
+            .get_parameter_value()
+            .string_value,
+            openrouter_gemini_model=self.get_parameter("openrouter_gemini_model")
+            .get_parameter_value()
+            .string_value,
+            openrouter_gemini_timeout_s=self.get_parameter(
+                "openrouter_gemini_timeout_s"
+            )
+            .get_parameter_value()
+            .double_value,
         )
 
     def _create_tts_provider(self):
@@ -657,9 +1110,53 @@ class EnhancedTTSNode(Node):
             return TTSProvider_Piper(self.config)
         elif self.config.provider == TTSProvider.EDGE_TTS:
             return TTSProvider_EdgeTTS(self.config)
+        elif self.config.provider == TTSProvider.OPENROUTER_GEMINI:
+            return TTSProvider_OpenRouterGemini(self.config)
         else:
             self.get_logger().error(f"Unsupported TTS provider: {self.config.provider}")
             return None
+
+    def _build_fallback_chain(self) -> List:
+        """Build provider fallback chain based on main provider.
+
+        Stage 4 of B1 Plan D: keeps demo audible when the cloud TTS path
+        fails (timeout / 4xx / network). edge-tts is a quick cloud second;
+        Piper is the offline last-line. Audio tag handling is per-provider
+        — when a fallback runs, tts_callback strips tags first because
+        edge-tts and Piper don't render them.
+
+        Returns list of fallback provider instances (excluding the main
+        one). Failures during instantiation are warned and skipped, not
+        fatal — a chain with one fallback is still better than zero.
+        """
+        chain: List = []
+        if self.config.provider == TTSProvider.OPENROUTER_GEMINI:
+            for cls in (TTSProvider_EdgeTTS, TTSProvider_Piper):
+                try:
+                    chain.append(cls(self.config))
+                except Exception as exc:
+                    self.get_logger().warning(
+                        f"Skipping fallback {cls.__name__}: {exc}"
+                    )
+        elif self.config.provider == TTSProvider.EDGE_TTS:
+            try:
+                chain.append(TTSProvider_Piper(self.config))
+            except Exception as exc:
+                self.get_logger().warning(f"Skipping Piper fallback: {exc}")
+        return chain
+
+    def _cache_voice_for(self, provider_name: str) -> str:
+        """Resolve the voice identifier used in cache keys per provider.
+
+        Each provider has its own voice space (Gemini "Despina" vs
+        edge-tts "zh-CN-XiaoxiaoNeural" vs ElevenLabs voice ID), so cache
+        keys must match the provider that produced the audio.
+        """
+        if provider_name == "edge_tts":
+            return self.config.edge_tts_voice
+        if provider_name == "openrouter_gemini":
+            return self.config.openrouter_gemini_voice
+        return self.config.voice_name
 
     def _setup_communication(self) -> None:
         """Setup ROS2 communication"""
@@ -682,74 +1179,173 @@ class EnhancedTTSNode(Node):
         # )
 
     def tts_callback(self, msg: String) -> None:
-        """Handle incoming TTS requests"""
+        """Handle incoming TTS requests via main+fallback provider chain.
+
+        Stage 4 of B1 Plan D: replaces the inline edge_tts→Piper fallback
+        with a uniform chain iteration. Each provider in the chain:
+        - resolves its own text (strip audio tags if !supports_audio_tags)
+        - looks up its own provider-specific cache slot
+        - synthesizes; on failure (None) we move to the next provider.
+        """
         try:
-            text = msg.data.strip()
-            if not text:
+            raw_text = msg.data.strip()
+            input_origin: str | None = None
+
+            # Per-message envelope (5/7 plan polished-questing-starlight):
+            # accepts both plain text (legacy publishers untouched) and JSON
+            # `{"text": "...", "input_origin": "studio_text"}`. raw_text MUST
+            # be replaced with payload["text"] otherwise providers synthesize
+            # the entire JSON string verbatim (Gemini reads "input_origin"
+            # aloud, demo-killer).
+            try:
+                payload = json.loads(raw_text)
+                if isinstance(payload, dict) and "text" in payload:
+                    raw_text = str(payload["text"]).strip()
+                    input_origin = payload.get("input_origin")
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass  # plain-text path; raw_text already correct
+
+            if not raw_text:
                 self.get_logger().warn("Received empty TTS request")
                 return
 
-            self.get_logger().info(
-                f'🎤 TTS Request: "{text}" (voice: {self.config.voice_name})'
-            )
+            if self.tts_provider is None:
+                self.get_logger().error("❌ TTS provider is not initialized")
+                return
 
-            # Activate echo gate IMMEDIATELY — before synthesis, not after.
-            # Without this, ASR records during the entire TTS synthesis + LLM
-            # processing window (~8s), picking up Go2's playback as input.
+            # Activate echo gate IMMEDIATELY — before any synthesis attempt.
+            # ASR otherwise records during the entire synth + playback window
+            # (~8s), capturing Go2's own playback as input.
             self._publish_tts_playing(True)
 
-            # Resolve cache voice identity (edge-tts uses its own voice param)
-            cache_voice = (
-                self.config.edge_tts_voice
-                if self.config.provider == TTSProvider.EDGE_TTS
-                else self.config.voice_name
-            )
+            # ---------------------------------------------------------------------------
+            # E3-4: Dual-route chain selection
+            # ---------------------------------------------------------------------------
+            # Fast lane: edge-tts → Piper   (low latency, short/safety text)
+            # Quality lane: OpenRouter Gemini → edge-tts → Piper  (richer voice, long text)
+            #
+            # When tts_dual_route_enabled=False, behaviour matches pre-E3 single chain.
+            # ---------------------------------------------------------------------------
+            default_chain = [self.tts_provider] + list(self._fallback_chain)
 
-            # Check cache first
-            cache_hit = False
-            audio_data = self.cache.get(
-                text, cache_voice, self.config.provider.value
-            )
-
-            if audio_data:
-                self.get_logger().info("💾 Cache hit - using cached audio")
-                cache_hit = True
-            else:
-                if self.tts_provider is None:
-                    self.get_logger().error("❌ TTS provider is not initialized")
-                    self._publish_tts_playing(False)
-                    return
-
-                # Generate new speech
-                self.get_logger().info("🔊 Generating new speech...")
-                audio_data = self.tts_provider.synthesize(text)
-
-                # Piper fallback if edge-tts fails
-                if audio_data is None and self.config.provider == TTSProvider.EDGE_TTS:
-                    self.get_logger().warn("edge-tts failed, falling back to Piper")
-                    try:
-                        piper_fb = TTSProvider_Piper(self.config)
-                        audio_data = piper_fb.synthesize(text)
-                        if audio_data:
-                            # Cache under piper key, not edge_tts
-                            self.cache.put(text, cache_voice, "piper", audio_data)
-                            self.get_logger().info("Piper fallback cached")
-                    except Exception as e:
-                        self.get_logger().warning(f"Piper fallback also failed: {e}")
-
-                if audio_data:
-                    # Cache the result
-                    if self.cache.put(
-                        text,
-                        cache_voice,
-                        self.config.provider.value,
-                        audio_data,
-                    ):
-                        self.get_logger().info("💾 Audio cached successfully")
+            if self._dual_route_enabled:
+                use_fast = _should_use_fast_lane(raw_text, self._fast_lane_threshold)
+                lane = "fast" if use_fast else "quality"
+                self.get_logger().info(
+                    f"[tts] lane={lane} "
+                    f"effective_len={_compute_effective_length(raw_text)} "
+                    f"text_preview={raw_text[:30]!r}"
+                )
+                if use_fast:
+                    # Fast lane: edge-tts primary, Piper fallback
+                    fast_chain: List = []
+                    edge_prov = None
+                    piper_prov = None
+                    for p in [self.tts_provider] + list(self._fallback_chain):
+                        if getattr(p, "name", "") == "edge_tts" and edge_prov is None:
+                            edge_prov = p
+                        elif getattr(p, "name", "") == "piper" and piper_prov is None:
+                            piper_prov = p
+                    if edge_prov is not None:
+                        fast_chain.append(edge_prov)
+                    if piper_prov is not None:
+                        fast_chain.append(piper_prov)
+                    # If neither found (e.g. main provider is neither), fall back to default
+                    chain = fast_chain if fast_chain else default_chain
                 else:
-                    self.get_logger().error("❌ Failed to generate speech")
-                    self._publish_tts_playing(False)
-                    return
+                    # Quality lane: Gemini → edge-tts → Piper (no ElevenLabs until spike-real GO)
+                    if self._studio_fallback_chain is not None:
+                        chain = self._studio_fallback_chain
+                    else:
+                        chain = default_chain
+            else:
+                # Dual-route disabled: legacy single-chain behaviour
+                if self._studio_fallback_chain is not None:
+                    chain = self._studio_fallback_chain
+                else:
+                    chain = default_chain
+
+            audio_data = None
+            cache_hit = False
+            served_by = ""
+
+            for prov in chain:
+                pname = getattr(prov, "name", prov.__class__.__name__)
+                # Per-provider tag handling. Provider's supports_audio_tags
+                # flag (see tts_provider.py TTSProviderBase) gates the strip:
+                #   True  → pass tags through (Gemini renders [excited])
+                #   False → strip tags (edge-tts/Piper read them literally)
+                supports_tags = bool(getattr(prov, "supports_audio_tags", False))
+                if supports_tags:
+                    text = raw_text
+                else:
+                    text = strip_audio_tags(raw_text)
+                    if not text:
+                        self.get_logger().warn(
+                            f"[{pname}] empty after tag strip: {raw_text!r}, "
+                            f"trying next provider"
+                        )
+                        continue
+
+                cache_voice = self._cache_voice_for(pname)
+
+                # Per-provider log header (replaces the legacy single-line log
+                # that always showed config.voice_name regardless of active
+                # provider — cosmetic fix bundled with chain refactor)
+                if text != raw_text:
+                    self.get_logger().info(
+                        f'🎤 [{pname}] "{raw_text}" → stripped "{text}" '
+                        f"(voice: {cache_voice})"
+                    )
+                else:
+                    self.get_logger().info(
+                        f'🎤 [{pname}] "{text}" (voice: {cache_voice})'
+                    )
+
+                # Cache lookup (per-provider key)
+                hit = self.cache.get(text, cache_voice, pname)
+                if hit:
+                    self.get_logger().info(f"💾 Cache hit [{pname}]")
+                    audio_data = hit
+                    cache_hit = True
+                    served_by = pname
+                    # E3-1: record format of cache-hit provider
+                    self._last_served_format = getattr(
+                        prov, "output_format", AudioFormat.MP3
+                    )
+                    break
+
+                # Synthesize
+                self.get_logger().info(f"🔊 Generating [{pname}]...")
+                try:
+                    fresh = prov.synthesize(text)
+                except Exception as exc:
+                    self.get_logger().warning(
+                        f"[{pname}] synthesize raised: {exc}, trying next"
+                    )
+                    continue
+
+                if fresh:
+                    if self.cache.put(text, cache_voice, pname, fresh):
+                        self.get_logger().info(f"💾 Cached [{pname}]")
+                    audio_data = fresh
+                    served_by = pname
+                    # E3-1: record format of successful provider
+                    self._last_served_format = getattr(
+                        prov, "output_format", AudioFormat.MP3
+                    )
+                    break
+                else:
+                    self.get_logger().warn(
+                        f"[{pname}] returned no audio, trying next provider"
+                    )
+
+            if audio_data is None:
+                self.get_logger().error(
+                    "❌ Failed to generate speech (all providers exhausted)"
+                )
+                self._publish_tts_playing(False)
+                return
 
             # Process and play audio
             if self.config.local_playback:
@@ -759,7 +1355,9 @@ class EnhancedTTSNode(Node):
 
             # Log success
             status = "cached" if cache_hit else "generated"
-            self.get_logger().info(f"✅ TTS completed successfully ({status})")
+            self.get_logger().info(
+                f"✅ TTS completed [{served_by}] ({status})"
+            )
 
         except Exception as e:
             self.get_logger().error(f"❌ TTS processing error: {str(e)}")
@@ -781,7 +1379,7 @@ class EnhancedTTSNode(Node):
                         ["aplay", "-D", self.config.local_output_device, tmp_path],
                         check=True,
                         capture_output=True,
-                        timeout=30,
+                        timeout=max(30.0, audio.duration_seconds + 10.0),
                     )
                 finally:
                     os.unlink(tmp_path)
@@ -813,9 +1411,12 @@ class EnhancedTTSNode(Node):
                 duration = self.audio_processor.get_duration(wav_data, AudioFormat.WAV)
                 self._play_on_robot_audio_track(wav_data, duration)
             else:
-                # DataChannel: needs 16kHz/16bit/mono for Go2 audiohub
-                # Piper now returns WAV directly; other providers still return MP3
-                src_fmt = AudioFormat.WAV if self.config.provider == TTSProvider.PIPER else AudioFormat.MP3
+                # DataChannel: needs 16kHz/16bit/mono for Go2 audiohub.
+                # E3-2: use _last_served_format so fallback chain demotions
+                # (e.g. Gemini→Piper) decode with the correct container format.
+                # Old code keyed off config.provider which is the *primary*
+                # provider and wrong when a fallback (e.g. Piper WAV) ran.
+                src_fmt = self._last_served_format
                 wav_data = self.audio_processor.convert_to_wav(audio_data, src_fmt)
                 if not wav_data:
                     self.get_logger().error("Failed to convert audio to WAV")

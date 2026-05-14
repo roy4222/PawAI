@@ -1,0 +1,14 @@
+# Goal
+string name
+string note
+string log_target
+string route_id
+string task_type
+---
+# Result
+bool success
+string saved_path
+geometry_msgs/Pose recorded_pose
+---
+# Feedback (no progress feedback for log_pose; structurally required)
+bool dummy

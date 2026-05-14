@@ -71,10 +71,45 @@ class TestGestureActionMap(unittest.TestCase):
 
 
 class TestFallAlertConfig(unittest.TestCase):
-    def test_fall_alert_tts_is_nonempty(self):
+    def test_fall_alert_tts_is_string(self):
+        """5/8: empty FALL_ALERT_TTS disables fall TTS broadcast for demo
+        silence. Must remain a string (not None) so the guard `if FALL_ALERT_TTS:`
+        in _on_fall_alert can short-circuit cleanly without TypeError."""
         from vision_perception.event_action_bridge import FALL_ALERT_TTS
 
-        assert FALL_ALERT_TTS and len(FALL_ALERT_TTS) > 0
+        assert isinstance(FALL_ALERT_TTS, str)
+
+    def test_fall_alert_tts_bridge_audible_disabled(self):
+        """5/12 (post-review fix): bridge audible path REMOVED to avoid
+        double-announce with Brain `fallen_alert` skill.
+
+        FALL_ALERT_TTS == "" is the active design — Brain skill is the
+        sole audible path (motion stop_move + SAY "偵測到 {name} 跌倒，請注意安全"
+        with name injected from brain_node._last_stable_identity_name cache).
+
+        Bridge handler still LOGS for Studio trace but skips /tts publish.
+        Restoring requires either disabling Brain skill or adding cross-path
+        dedup.
+        """
+        from vision_perception.event_action_bridge import FALL_ALERT_TTS
+
+        assert FALL_ALERT_TTS == "", (
+            f"FALL_ALERT_TTS={FALL_ALERT_TTS!r} — bridge audible must remain "
+            "disabled to avoid double-announce with Brain fallen_alert skill"
+        )
+
+    def test_pose_tts_map_no_fallen_template_demo_silence(self):
+        """Defense-in-depth: same demo-silence rationale as FALL_ALERT_TTS
+        applies to the POSE_TTS_MAP['fallen'] code path in _on_pose_event.
+        Both routes must be muted, otherwise a single fallen false-positive
+        from /event/pose_detected still interrupts the conversation even
+        though /event/interaction/fall_alert is silenced."""
+        from vision_perception.event_action_bridge import POSE_TTS_MAP
+
+        assert "fallen" not in POSE_TTS_MAP or not POSE_TTS_MAP.get("fallen"), (
+            f"POSE_TTS_MAP['fallen']={POSE_TTS_MAP.get('fallen')!r} — "
+            "both fall TTS routes must be muted during demo"
+        )
 
 
 class TestTTSGuardLogic(unittest.TestCase):
