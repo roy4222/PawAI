@@ -58,6 +58,280 @@
 
 ---
 
+# Day 0：Recovery + Hardware Bring-up Gate
+
+> **MUST RUN BEFORE ANY PR EXECUTION.** 不過此關不准開任何 PR group goal。
+
+**背景**：執行 Spec A 前一日嘗試平行跑 PR1/PR2A/PR2B/PR3 四個 goal，在同一個 workspace 內互相 checkout/stash，導致 branch / stash 漂移。明日恢復 Go2 / Jetson 在手，但第一步**不是繼續 goal**，是收拾狀態 + 用真機驗 PR1 假設。
+
+## D0.1：Workspace 狀態盤點
+
+- [ ] **Step 1：停所有正在跑的 goal / subagent / terminal**
+
+確認所有 Spec A 相關背景 process 都已停。`ps aux | grep -E "claude|goal|subagent" | grep -v grep` 應為空（或只有當前 session）。
+
+- [ ] **Step 2：盤點 worktree / branch / stash 狀態**
+
+在主 workspace `/home/roy422/newLife/elder_and_dog`：
+
+```bash
+cd /home/roy422/newLife/elder_and_dog
+
+# 1. 哪些 worktree 存在
+git worktree list
+
+# 2. 哪些 spec-a branch 存在 + 各 HEAD
+git branch --list 'spec-a/*' --verbose
+
+# 3. 哪些 stash 存在
+git stash list
+
+# 4. 當前 HEAD 與 main 差異
+git log --oneline main..HEAD 2>/dev/null | head -10
+git log --oneline HEAD..main 2>/dev/null | head -10
+
+# 5. 是否有未追蹤 / 修改檔
+git status --short
+```
+
+把上述輸出貼進 `runtime/preflight/day0-audit-<timestamp>.md`（runtime/ 已 gitignored）。
+
+- [ ] **Step 3：辨識「哪個 branch 真的有哪個 PR 群的改動」**
+
+對每個 `spec-a/*` branch 跑：
+
+```bash
+for B in $(git branch --list 'spec-a/*' | tr -d '* '); do
+  echo "=== $B ==="
+  git log --oneline main..$B 2>/dev/null
+done
+```
+
+對每個 stash 跑：
+
+```bash
+git stash list | while read entry; do
+  idx=$(echo "$entry" | grep -oE '^stash@\{[0-9]+\}')
+  echo "=== $idx ==="
+  git stash show -p "$idx" | head -20
+done
+```
+
+辨識：
+- 哪些檔案屬 PR1（package.xml / requirements / persona / docs）
+- 哪些屬 PR2A（preflight.py / brain_node.py guard / start_full_demo_tmux）
+- 哪些屬 PR2B（semantic dry-run additions）
+- 哪些屬 PR3（gesture frozenset / pose dict / world_state_builder）
+- 哪些是 collision（同檔被多個 goal 改）
+
+若 collision 出現：以 PR 群順序裁決（PR1 最先、PR3 最後；後者繼承前者結果），不是時間先後。
+
+## D0.2：Worktree 隔離（執行前硬性條件）
+
+從此刻起，**主 workspace `/home/roy422/newLife/elder_and_dog` 禁止用於跑 goal / subagent**。每個 PR 群有獨立 worktree。
+
+- [ ] **Step 1：建 4 個 worktree（每 PR 群一個）**
+
+```bash
+cd /home/roy422/newLife/elder_and_dog
+
+# PR1
+git worktree add ../elder_and_dog-pr1 spec-a/pr1-static-fixes 2>/dev/null || \
+  git worktree add -b spec-a/pr1-static-fixes ../elder_and_dog-pr1 main
+
+# PR2A
+git worktree add ../elder_and_dog-pr2a -b spec-a/pr2a-mechanical-guard \
+  spec-a/pr1-static-fixes
+
+# PR2B
+git worktree add ../elder_and_dog-pr2b -b spec-a/pr2b-semantic-dryrun \
+  spec-a/pr2a-mechanical-guard
+
+# PR3
+git worktree add ../elder_and_dog-pr3 -b spec-a/pr3-behavior-gate \
+  spec-a/pr2b-semantic-dryrun
+
+git worktree list
+```
+
+PR2A/2B/3 的 base branch 在 PR1 merge 前是 placeholder（尚不存在於 main）；先用 sibling branch 當 base，merge 鏈走完後再 rebase 到 main。
+
+- [ ] **Step 2：把 stash 內 PR3 改動 apply 到 PR3 worktree**
+
+從 D0.1 Step 3 辨識的 stash 內容，挑 PR3 相關 hunks：
+
+```bash
+cd ../elder_and_dog-pr3
+
+# 對於每個 PR3 相關 stash：
+git stash show -p stash@{N} -- \
+  interaction_executive/interaction_executive/brain_node.py \
+  pawai_brain/pawai_brain/conversation_graph_node.py \
+  pawai_brain/pawai_brain/nodes/world_state_builder.py \
+  pawai_brain/test/ \
+  interaction_executive/test/ \
+  | git apply --3way -
+
+git status
+```
+
+衝突手動解。Apply 成功後**不要立刻 drop stash**，先用 `git stash list` 留 backup，到 PR3 merge 後再 `git stash drop stash@{N}`。
+
+同樣方式處理 PR1 / PR2A / PR2B 漂移到 stash 的 hunks。
+
+- [ ] **Step 3：禁止規則**
+
+從此刻起 Spec A 執行期間：
+
+```text
+- 主 workspace /home/roy422/newLife/elder_and_dog 禁止用於跑 PR goal。
+- 每個 PR group goal 必須在對應 ../elder_and_dog-pr<N> worktree 內跑。
+- 禁止 git stash（除非明確指示且只在當前 worktree 內）。
+- 禁止 git checkout 切換 branch（worktree 已固定 branch）。
+- 禁止改動其他 PR 群檔案（PR1 不准動 preflight.py，PR2A 不准動 persona 等）。
+- 若 HEAD 變動超出預期或 git status 出現非預期 untracked，停下回報。
+```
+
+## D0.3：PR1 Clean-up（First Mergeable Group）
+
+明日第一個 actionable 任務是把 PR1 整理乾淨並 merge 進 main。**所有後續 PR 都依賴 PR1 base**。
+
+- [ ] **Step 1：在 PR1 worktree 內 review 改動**
+
+```bash
+cd ../elder_and_dog-pr1
+git log --oneline main..HEAD
+git diff main..HEAD --stat
+```
+
+對照 Task 1.2-1.10 清單，確認：
+- `pawai_brain/package.xml` 有補 `python3-requests`
+- `requirements-jetson.txt`（repo 根）含 `langgraph` / `langchain-core`
+- `docs/pawai-brain/README.md:18` 主模型已改 `openai/gpt-5.4-mini`
+- `docs/runbook/README.md` 有 Jetson bring-up `uv pip install` 段
+- `docs/pawai_cli/team-onboarding.md` 有 demo 合法 chain
+- `CAPABILITIES.md` 行 22/26/27/32/55 已收斂 + STATUS_NOTE
+- `EXAMPLES.md` 補 2 條降級對話
+
+- [ ] **Step 2：跑 Task 1.11 自驗 grep**
+
+```bash
+awk '/^## STATUS_NOTE/{exit} {print}' pawai_brain/personas/v1/CAPABILITIES.md > /tmp/persona-pre-status.txt
+grep -nE "我會跟隨|會跟隨你|可以跟著|我會主動巡邏|會主動巡邏|我會靜音|進入靜音模式|我會監聽|進入監聽模式" /tmp/persona-pre-status.txt
+grep -nE "我會跟著你|我可以跟著你|我會靠近你|我可以自己找你" pawai_brain/personas/v1/EXAMPLES.md
+```
+
+兩個 grep 都應該無輸出。若有違規，當場修。
+
+- [ ] **Step 3：處理昨日 PR1 review 的 3 個 finding**
+
+D0 執行者要查昨日 review 紀錄。若 review 已歸納成 task，照修；若未歸納，列出當前已知 PR1 issues 並逐項解決，commit 訊息標 `spec-a/pr1: review fix — <topic>`。
+
+- [ ] **Step 4：push + 開 PR + 等 merge**
+
+```bash
+git push -u origin spec-a/pr1-static-fixes
+# 走 Task 1.12 的 PR 開法
+```
+
+PR1 merge 進 main 後，**才能解鎖 PR2A 執行**。
+
+## D0.4：Jetson Hardware Bring-up Gate
+
+PR1 merge 後、PR2A 開跑前，必須驗 PR1 在 Jetson 上的假設成立。
+
+- [ ] **Step 1：sync 最新 main 到 Jetson**
+
+```bash
+cd /home/roy422/newLife/elder_and_dog  # 主 workspace 用於 sync，不跑 goal
+git checkout main
+git pull --ff-only
+~/sync once     # 或既有 deploy 流程
+```
+
+- [ ] **Step 2：Jetson 上裝 deps**
+
+```bash
+ssh jetson-nano
+cd ~/elder_and_dog
+git log --oneline -3  # 確認含 PR1 commits
+uv pip install -r requirements-jetson.txt
+python3 -c "import langgraph, langchain_core, requests, yaml; print('imports OK')"
+```
+
+`imports OK` 才算 gate pass。任何 import error → 回 PR1 補 requirements。
+
+- [ ] **Step 3：Jetson 上 colcon build + 跑 conversation_graph_node 5 秒**
+
+```bash
+ssh jetson-nano
+cd ~/elder_and_dog
+source /opt/ros/humble/setup.zsh
+colcon build --packages-select pawai_brain interaction_executive
+source install/setup.zsh
+timeout 5 ros2 run pawai_brain conversation_graph_node 2>&1 | tail -20
+```
+
+期望：5 秒內無 ImportError / ROS 啟動錯誤。出現 RuleBrain 降級訊息可接受（OPENROUTER_KEY 可能還沒設）。
+
+- [ ] **Step 4：Jetson 上驗 `.env` propagation 假設**
+
+```bash
+ssh jetson-nano
+cd ~/elder_and_dog
+cat scripts/start_full_demo_tmux.sh | grep -A2 "ROS_SETUP"
+# 確認 set -a / source .env / set +a 共用片段已落地（這是 PR 2A 才做，
+# D0.4 此步驟只 baseline 既有狀態；若已在 PR1 順帶改了也 OK）
+```
+
+D0.4 全 pass → 解鎖 PR2A 執行。
+
+## D0.5：Goal Prompt 規範
+
+從 PR2A 開始所有 goal / subagent dispatch 必須帶下列 prompt header：
+
+```text
+WORKTREE BOUNDARIES（強制）：
+
+- 你的工作目錄是 /home/roy422/newLife/elder_and_dog-pr<N>
+- 禁止 cd 出此目錄，禁止 checkout 其他 branch
+- 禁止 git stash（除非任務明確要求）
+- 禁止改動其他 PR 群檔案；當前 PR 允許動的檔案清單見 plan 對應「File Structure」
+- 若發現 git HEAD 變動超出預期、或 git status 出現非預期 untracked，立即停下回報，不要自行恢復
+
+當前 PR：spec-a/pr<N>-<topic>
+Base branch：spec-a/pr<N-1> 或 main
+任務範圍：plan 中 Task <X.Y> 至 <X.Z>
+```
+
+每個 goal 完成後 review 必須包含：
+- `git log --oneline <base>..HEAD`：commit 數 vs plan 預期一致
+- `git diff <base>..HEAD --stat`：動的檔在允許清單內
+- `git status --short`：working tree clean
+- `git stash list`：未增加新 stash
+
+任一不符 → 該 PR rollback、不 merge。
+
+## D0.6：硬體在手後的執行順序調整
+
+PR1 / D0.4 完成後，PR2A / 2B / 3 的執行**改在真 Jetson 上做 post-start 驗證**：
+
+| PR | Mock 範圍（dev 機）| 真機驗證（Jetson 在手）|
+|----|-------------------|---------------------|
+| 2A | 既有 mock SSH unit test | demo start hook 跑一輪真實 lifecycle；preflight 10 條全跑；TTS guard timer 真實 trigger 一次測試 |
+| 2B | semantic mock unit test | `pawai demo preflight --semantic --reason day0-real` 跑 6 scripts，人工判讀；報告留 `runtime/preflight/` |
+| 3 | gesture / pose unit test | 真實手勢 thumbs_up + chat_active → 不誤觸 wiggle；真實 pose sitting 20s 後問「我在幹嘛」→ 答「坐著」 |
+
+**禁止**：
+- 把現場閾值調參（gesture cooldown / pose stable vote / fallen threshold）塞回 Spec A
+- 真機驗證若揭出 bug，分兩類：
+  - **Spec A 本身錯**：修進對應 PR
+  - **現場調參需求**：開新 issue 給 Spec C/D，**不**進 Spec A
+
+D0.6 完成 → Spec A 驗收結束，spec / plan 進 archive。
+
+---
+
 # PR 群 1：靜態修補
 
 **Branch**：`spec-a/pr1-static-fixes`
