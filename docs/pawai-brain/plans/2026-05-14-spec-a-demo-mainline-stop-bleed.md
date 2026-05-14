@@ -1051,14 +1051,21 @@ _REQUIRED_IMPORTS = ("langgraph", "langchain_core", "requests", "yaml")
 
 
 def _ssh_run(cmd: str, timeout: int = 15) -> subprocess.CompletedProcess:
-    """SSH wrapper — 沿用 pawai_cli 既有 main._ssh_run（若存在），否則用
-    subprocess + JETSON_HOST env。Implementation plan O1 開時對齊 main.py
-    既有 helper 命名。"""
-    import os
-    host = os.environ.get("JETSON_HOST")
+    """SSH wrapper — **必須**復用 pawai_cli 既有 host 解析鏈，禁止平行讀
+    `os.environ['JETSON_HOST']`。
+
+    使用 `shell.jetson_host()`（tools/pawai_cli/pawai_cli/shell.py:62）取
+    host；若需要 demo env（含 Tailscale IP override / `.env` propagation），
+    用 `main._build_demo_env()`（main.py:647）。這條鏈在
+    `b05205d`~`caef6b5` 已修穩，preflight 不得重寫。
+    """
+    from pawai_cli import shell  # 既有 helper
+    host = shell.jetson_host()
     if not host:
-        # 在本機 unit test 場景，monkeypatch 應已取代此函式
-        raise RuntimeError("JETSON_HOST not set; cannot SSH")
+        raise RuntimeError(
+            "shell.jetson_host() returned empty; "
+            "check JETSON_HOST / .env / Tailscale override"
+        )
     return subprocess.run(
         ["ssh", "-o", "BatchMode=yes", "-o", f"ConnectTimeout={timeout}",
          host, cmd],
@@ -1397,7 +1404,7 @@ Node name: event_action_bridge
 """
 
 _TRACE_OUTPUT_OK = """\
-data: '{"stage": "input", "engine": "langgraph"}'
+data: '{"stage": "input", "engine": "langgraph", "text": "__preflight_ping_TOKEN__"}'
 ---
 data: '{"stage": "world_state", "engine": "langgraph"}'
 ---
@@ -1408,6 +1415,7 @@ data: '{"stage": "llm_decision", "engine": "langgraph", "status": "ok"}'
 data: '{"stage": "output", "engine": "langgraph"}'
 ---
 """
+# TOKEN 由 test 動態替換成實際產生的 token，驗 correlation 強關聯路徑
 
 
 def test_conversation_graph_alive_pass(monkeypatch):
@@ -1462,20 +1470,37 @@ def test_tts_playing_state_available_pass(monkeypatch):
 
 
 def test_brain_trace_pipeline_pass(monkeypatch):
+    """Token 注入 trace 觸發強關聯；stages 完整；engine=langgraph。"""
+    captured_token = {}
     def fake_ssh(cmd, **kw):
         if "topic pub" in cmd:
+            # 從 publish 命令抽出 ping token
+            import re
+            m = re.search(r"__preflight_ping_[0-9a-f]+__", cmd)
+            if m:
+                captured_token["t"] = m.group(0)
             return MagicMock(returncode=0, stdout="", stderr="")
         if "topic echo" in cmd or "trace" in cmd:
-            return MagicMock(returncode=0, stdout=_TRACE_OUTPUT_OK, stderr="")
+            # 把 _TRACE_OUTPUT_OK 的 TOKEN 換成這次實際 token
+            body = _TRACE_OUTPUT_OK.replace(
+                "__preflight_ping_TOKEN__", captured_token.get("t", "TOKEN_NOT_SET"))
+            return MagicMock(returncode=0, stdout=body, stderr="")
         return MagicMock(returncode=0, stdout="", stderr="")
     monkeypatch.setattr(preflight, "_ssh_run", fake_ssh)
     r = preflight.check_brain_trace_pipeline(allow_fallback=False)
-    assert r.is_pass()
+    assert r.is_pass(), r.detail
 
 
-def test_brain_trace_pipeline_missing_stage_fails(monkeypatch):
-    truncated = """\
+def test_brain_trace_pipeline_stale_buffer_fails(monkeypatch):
+    """Trace 不含 token、payload 也無 stamp >= t_publish → correlation lost。"""
+    stale = """\
 data: '{"stage": "input", "engine": "langgraph"}'
+---
+data: '{"stage": "world_state", "engine": "langgraph"}'
+---
+data: '{"stage": "capability", "engine": "langgraph"}'
+---
+data: '{"stage": "llm_decision", "engine": "langgraph"}'
 ---
 data: '{"stage": "output", "engine": "langgraph"}'
 ---
@@ -1483,7 +1508,55 @@ data: '{"stage": "output", "engine": "langgraph"}'
     def fake_ssh(cmd, **kw):
         if "topic pub" in cmd:
             return MagicMock(returncode=0, stdout="", stderr="")
-        return MagicMock(returncode=0, stdout=truncated, stderr="")
+        return MagicMock(returncode=0, stdout=stale, stderr="")
+    monkeypatch.setattr(preflight, "_ssh_run", fake_ssh)
+    r = preflight.check_brain_trace_pipeline(allow_fallback=False)
+    assert r.is_fail()
+    assert "correlation" in r.detail.lower() or "stale" in r.detail.lower()
+
+
+def test_brain_trace_pipeline_weak_correlation_via_stamp(monkeypatch):
+    """無 token echo，但 trace 含 stamp >= t_publish → 弱關聯仍 pass。"""
+    import time
+    future_stamp = time.time() + 1.0  # 必 > t_publish
+    body = f"""\
+data: '{{"stage": "input", "engine": "langgraph", "stamp": {future_stamp}}}'
+---
+data: '{{"stage": "world_state", "engine": "langgraph"}}'
+---
+data: '{{"stage": "capability", "engine": "langgraph"}}'
+---
+data: '{{"stage": "llm_decision", "engine": "langgraph"}}'
+---
+data: '{{"stage": "output", "engine": "langgraph"}}'
+---
+"""
+    def fake_ssh(cmd, **kw):
+        if "topic pub" in cmd:
+            return MagicMock(returncode=0, stdout="", stderr="")
+        return MagicMock(returncode=0, stdout=body, stderr="")
+    monkeypatch.setattr(preflight, "_ssh_run", fake_ssh)
+    r = preflight.check_brain_trace_pipeline(allow_fallback=False)
+    assert r.is_pass(), r.detail
+
+
+def test_brain_trace_pipeline_missing_stage_fails(monkeypatch):
+    truncated_with_token = """\
+data: '{"stage": "input", "engine": "langgraph", "text": "TOKEN_HERE"}'
+---
+data: '{"stage": "output", "engine": "langgraph"}'
+---
+"""
+    def fake_ssh(cmd, **kw):
+        if "topic pub" in cmd:
+            import re
+            m = re.search(r"__preflight_ping_[0-9a-f]+__", cmd)
+            if m:
+                truncated_with_token_replaced = truncated_with_token.replace(
+                    "TOKEN_HERE", m.group(0))
+                fake_ssh._echo_body = truncated_with_token_replaced
+            return MagicMock(returncode=0, stdout="", stderr="")
+        return MagicMock(returncode=0, stdout=getattr(fake_ssh, "_echo_body", ""), stderr="")
     monkeypatch.setattr(preflight, "_ssh_run", fake_ssh)
     r = preflight.check_brain_trace_pipeline(allow_fallback=False)
     assert r.is_fail()
@@ -1492,7 +1565,7 @@ data: '{"stage": "output", "engine": "langgraph"}'
 
 def test_brain_trace_pipeline_fallback_accepted(monkeypatch):
     fallback_trace = """\
-data: '{"stage": "input", "engine": "rule_brain"}'
+data: '{"stage": "input", "engine": "rule_brain", "text": "TOKEN_HERE"}'
 ---
 data: '{"stage": "world_state", "engine": "rule_brain"}'
 ---
@@ -1501,8 +1574,12 @@ data: '{"stage": "output", "engine": "rule_brain", "status": "ok"}'
 """
     def fake_ssh(cmd, **kw):
         if "topic pub" in cmd:
+            import re
+            m = re.search(r"__preflight_ping_[0-9a-f]+__", cmd)
+            if m:
+                fake_ssh._echo_body = fallback_trace.replace("TOKEN_HERE", m.group(0))
             return MagicMock(returncode=0)
-        return MagicMock(returncode=0, stdout=fallback_trace, stderr="")
+        return MagicMock(returncode=0, stdout=getattr(fake_ssh, "_echo_body", ""), stderr="")
     monkeypatch.setattr(preflight, "_ssh_run", fake_ssh)
     r = preflight.check_brain_trace_pipeline(allow_fallback=True, fallback_reason="LLM down")
     assert r.is_warn() or r.is_pass()
@@ -1524,25 +1601,37 @@ _FALLBACK_REQUIRED_STAGES = ("input", "world_state", "output")
 
 
 def _parse_topic_info_publishers(stdout: str) -> list[str]:
-    """從 ros2 topic info -v 輸出抽 publisher node 名稱清單。"""
+    """從 `ros2 topic info -v` 輸出抽 publisher node 名稱清單。
+
+    **嚴格只解析 Publishers section**。不做「無 section heading 時 fallback
+    抓所有 Node name」— 那會把 subscribers（例如 `/tts` 的 `tts_node`）誤算
+    成 publisher，導致 unique check false fail。
+
+    若 stdout 無法解析出 Publishers section，回傳空 list，由 caller 判定為
+    `fail`（"could not parse publishers section"），而不是 silent grabbing all。
+    """
     nodes: list[str] = []
-    section = None
+    section: Optional[str] = None
     for line in stdout.splitlines():
-        line = line.strip()
-        if line.lower().startswith("publishers"):
+        stripped = line.strip()
+        low = stripped.lower()
+        # ros2 cli 不同版本可能用 "Publishers:" / "Publisher count: N"
+        # / "Publishers" 等；都以 "publisher" 開頭觸發
+        if low.startswith("publisher"):
             section = "pub"
             continue
-        if line.lower().startswith("subscriptions") or line.lower().startswith("subscribers"):
+        if low.startswith("subscription") or low.startswith("subscriber"):
             section = "sub"
             continue
-        if section == "pub" and line.startswith("Node name:"):
-            nodes.append(line.split(":", 1)[1].strip())
-    # 部分版本只印 "Node name:" 一行，無 section heading — 退化策略
-    if not nodes:
-        for line in stdout.splitlines():
-            if "Node name:" in line:
-                nodes.append(line.split(":", 1)[1].strip())
+        if section == "pub" and stripped.startswith("Node name:"):
+            nodes.append(stripped.split(":", 1)[1].strip())
     return nodes
+
+
+def _topic_info_parseable(stdout: str) -> bool:
+    """Did the output contain any Publisher / Subscription section header?"""
+    low = stdout.lower()
+    return ("publisher" in low) or ("subscription" in low) or ("subscriber" in low)
 
 
 def check_conversation_graph_alive() -> CheckResult:
@@ -1583,6 +1672,17 @@ def _check_unique_publisher(topic: str, expected_node: str, check_name: str) -> 
         return CheckResult(
             name=check_name, status="fail",
             detail=f"ros2 topic info {topic} failed: {info.stderr.strip()}",
+            target="jetson_ssh",
+        )
+    if not _topic_info_parseable(info.stdout):
+        # Output format unrecognized — refuse to guess, fail explicitly
+        return CheckResult(
+            name=check_name, status="fail",
+            detail=f"could not parse Publishers section from "
+                   f"`ros2 topic info {topic} -v` output; refuse to guess "
+                   f"(would risk false pass/fail)",
+            fix_hint="check ros2 cli version on Jetson; "
+                     "consider switching to rclpy graph API",
             target="jetson_ssh",
         )
     pubs = _parse_topic_info_publishers(info.stdout)
@@ -1628,24 +1728,48 @@ def check_tts_playing_state_available() -> CheckResult:
     )
 
 
-def _parse_trace_stages(stdout: str) -> tuple[list[str], Optional[str]]:
-    """從 ros2 topic echo /brain/conversation_trace 輸出抽 stage 序列與 engine。"""
+def _parse_trace_stages(
+    stdout: str,
+    token: Optional[str] = None,
+    after_ts: Optional[float] = None,
+) -> tuple[list[str], Optional[str], bool]:
+    """從 `ros2 topic echo /brain/conversation_trace` 輸出抽 stage 序列、engine、
+    與 correlation 結果。
+
+    Correlation 判定：
+    - 強關聯：任一 stage payload 字串含 `token`（input stage 通常會 echo
+      使用者文字；或 trace 內帶 request_id / input_text 欄位）
+    - 弱關聯：payload 含 `stamp` 或 `ts` 欄位且 >= after_ts
+    - 兩者都無 → correlated=False（caller 視為 stale buffer，fail）
+    """
     stages: list[str] = []
     engine: Optional[str] = None
+    correlated = False
     for line in stdout.splitlines():
         line = line.strip()
         if not line.startswith("data:"):
             continue
-        payload = line[len("data:"):].strip().strip("'\"")
+        payload_str = line[len("data:"):].strip().strip("'\"")
         try:
-            obj = json.loads(payload)
+            obj = json.loads(payload_str)
         except json.JSONDecodeError:
             continue
         if "stage" in obj:
             stages.append(obj["stage"])
         if "engine" in obj and engine is None:
             engine = obj["engine"]
-    return stages, engine
+        # 強關聯：token 在 payload 任何字串值內
+        if token and not correlated:
+            if token in payload_str:
+                correlated = True
+        # 弱關聯：stamp >= after_ts
+        if not correlated and after_ts is not None:
+            for stamp_field in ("stamp", "ts", "timestamp"):
+                v = obj.get(stamp_field)
+                if isinstance(v, (int, float)) and v >= after_ts:
+                    correlated = True
+                    break
+    return stages, engine, correlated
 
 
 def check_brain_trace_pipeline(
@@ -1653,10 +1777,23 @@ def check_brain_trace_pipeline(
     fallback_reason: str = "",
     wait_seconds: int = 8,
 ) -> CheckResult:
-    """Check #7 — publish ping + collect trace + verify stage 序列 / engine。"""
+    """Check #7 — publish ping + collect trace + verify stage 序列 / engine。
+
+    **Correlation**：每次 ping 帶唯一 token `__preflight_ping_<8hex>__`，
+    確保收到的 trace 是這次 ping 觸發的、不是 buffered 舊 trace。判定條件：
+    1. 必要：trace 任一 stage payload 含此 token（強關聯）
+    2. 補救：若 token 找不到（trace schema 未 echo input text），則時間窗
+       guard — 只接受 ping publish 之後 `wait_seconds` 內收到的 trace
+       （需 trace payload 含 stamp 或用 `--field-csv` 抓 ROS header）
+    若兩條都沒滿足 → fail "trace correlation lost — likely stale buffer"。
+    """
+    import secrets
+    import time as _time
+    token = f"__preflight_ping_{secrets.token_hex(4)}__"
+    t_publish = _time.time()
     pub = _ssh_run(
-        'ros2 topic pub --once /brain/text_input std_msgs/msg/String '
-        '"data: \\\"__preflight_ping__\\\""'
+        f'ros2 topic pub --once /brain/text_input std_msgs/msg/String '
+        f'"data: \\\"{token}\\\""'
     )
     if pub.returncode != 0:
         return CheckResult(
@@ -1667,12 +1804,22 @@ def check_brain_trace_pipeline(
     echo = _ssh_run(
         f"timeout {wait_seconds} ros2 topic echo /brain/conversation_trace"
     )
-    stages, engine = _parse_trace_stages(echo.stdout)
+    stages, engine, correlated = _parse_trace_stages(echo.stdout, token=token,
+                                                    after_ts=t_publish)
     if not stages:
         return CheckResult(
             name="brain_trace_pipeline", status="fail",
             detail="no trace received within wait window",
             fix_hint="conversation_graph_node alive? check ROS_DOMAIN_ID",
+            target="jetson_ssh",
+        )
+    if not correlated:
+        return CheckResult(
+            name="brain_trace_pipeline", status="fail",
+            detail=(f"trace correlation lost — token {token} not found in trace "
+                    f"and no stamp >= t_publish; likely stale buffer"),
+            fix_hint="check trace schema for input echo / stamp; "
+                     "or rerun preflight after 5s drain",
             target="jetson_ssh",
         )
     required = _LANGGRAPH_REQUIRED_STAGES
@@ -1987,16 +2134,26 @@ def _mock_check(name, status):
     return CheckResult(name=name, status=status)
 
 
+def _fake_lk(user="alice", host="laptop1"):
+    """Create a fake Lock instance with transition_if_owned bound."""
+    lk = MagicMock()
+    lk.user = user
+    lk.host = host
+    lk.transition_if_owned = MagicMock(return_value=True)
+    return lk
+
+
 def test_pre_start_fail_does_not_acquire_lock(runner, monkeypatch):
-    """pre-start fail → exit 1，不應呼叫 lock acquire。"""
+    """pre-start fail → exit 1，不應呼叫 Lock.acquire。"""
     calls = []
     monkeypatch.setattr("pawai_cli.preflight.run_mechanical",
         lambda phase, **kw: [_mock_check("imports", "fail")] if phase == "pre_start" else [])
 
-    def fake_acquire(*a, **kw):
+    def fake_acquire(**kw):
         calls.append("acquire")
-        return MagicMock()
-    monkeypatch.setattr("pawai_cli.lock.acquire_or_force", fake_acquire)
+        return _fake_lk()
+    # Lock.acquire 是 classmethod，patch class attribute
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire", fake_acquire)
 
     result = runner.invoke(cli, ["demo", "start"])
     assert result.exit_code != 0
@@ -2004,33 +2161,42 @@ def test_pre_start_fail_does_not_acquire_lock(runner, monkeypatch):
 
 
 def test_post_start_fail_cleanup_release(runner, monkeypatch):
-    """post-start fail → cleanup + release_if_owned，不留 lock。"""
+    """post-start fail → cleanup + Lock.release_if_owned，不留 lock；
+    必須是 acquire → start.sh → cleanup → release_if_owned 順序。"""
     calls = []
 
     def fake_pre(*a, **kw): return [_mock_check("imports", "pass")]
     def fake_post(*a, **kw): return [_mock_check("tts_publisher_unique", "fail")]
-    def fake_acquire(*a, **kw):
+
+    def fake_acquire(**kw):
         calls.append("acquire")
-        return MagicMock(user="alice", host="laptop1")
+        return _fake_lk(user="alice", host="laptop1")
+
     def fake_start_sh(*a, **kw):
         calls.append("start.sh")
         return 0
+
     def fake_cleanup(*a, **kw):
         calls.append("cleanup")
-    def fake_release(*a, **kw):
-        calls.append("release_if_owned")
+
+    def fake_release(**kw):
+        calls.append(f"release_if_owned(user={kw.get('user')}, host={kw.get('host')})")
+        return True
 
     monkeypatch.setattr("pawai_cli.preflight.run_mechanical",
         lambda phase, **kw: fake_pre() if phase == "pre_start" else fake_post())
-    monkeypatch.setattr("pawai_cli.lock.acquire_or_force", fake_acquire)
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire", fake_acquire)
     monkeypatch.setattr("pawai_cli.main._run_start_sh", fake_start_sh)
     monkeypatch.setattr("pawai_cli.main._cleanup_demo_stack", fake_cleanup)
-    monkeypatch.setattr("pawai_cli.lock.release_if_owned", fake_release)
+    monkeypatch.setattr("pawai_cli.lock.Lock.release_if_owned", fake_release)
 
     result = runner.invoke(cli, ["demo", "start"])
     assert result.exit_code != 0
-    # 必須是 acquire → start.sh → cleanup → release_if_owned 順序
-    assert calls == ["acquire", "start.sh", "cleanup", "release_if_owned"]
+    # 嚴格順序：acquire 在前、release_if_owned 在後且帶 owner kwargs
+    assert calls[0] == "acquire"
+    assert calls[1] == "start.sh"
+    assert calls[2] == "cleanup"
+    assert calls[3].startswith("release_if_owned(user=alice")
 
 
 def test_orphan_preflight_runs_before_pre_start_preflight(runner, monkeypatch):
@@ -2039,45 +2205,61 @@ def test_orphan_preflight_runs_before_pre_start_preflight(runner, monkeypatch):
 
     def fake_orphan(*a, **kw):
         calls.append("orphan_preflight")
+
     def fake_pre(phase, **kw):
         calls.append(f"preflight:{phase}")
         return [_mock_check("imports", "pass")]
 
     monkeypatch.setattr("pawai_cli.main._orphan_driver_preflight", fake_orphan)
     monkeypatch.setattr("pawai_cli.preflight.run_mechanical", fake_pre)
-    monkeypatch.setattr("pawai_cli.lock.acquire_or_force",
-        lambda *a, **kw: MagicMock(user="x", host="y"))
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire",
+        lambda **kw: _fake_lk(user="x", host="y"))
     monkeypatch.setattr("pawai_cli.main._run_start_sh", lambda *a, **kw: 0)
-    monkeypatch.setattr("pawai_cli.lock.transition_if_owned", lambda *a, **kw: True)
     monkeypatch.setattr("pawai_cli.main._wait_for_ready", lambda *a, **kw: True)
 
-    result = runner.invoke(cli, ["demo", "start"])
-    # orphan 必須在 pre_start preflight 之前
+    runner.invoke(cli, ["demo", "start"])
     orphan_idx = calls.index("orphan_preflight")
     pre_idx = calls.index("preflight:pre_start")
     assert orphan_idx < pre_idx
 
 
+def test_transition_to_running_uses_instance_method(runner, monkeypatch):
+    """post-start PASS 後必須走 lk.transition_if_owned('running', user=, host=)。"""
+    monkeypatch.setattr("pawai_cli.preflight.run_mechanical",
+        lambda phase, **kw: [_mock_check("imports", "pass")])
+    lk = _fake_lk(user="alice", host="laptop1")
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire", lambda **kw: lk)
+    monkeypatch.setattr("pawai_cli.main._run_start_sh", lambda *a, **kw: 0)
+    monkeypatch.setattr("pawai_cli.main._wait_for_ready", lambda *a, **kw: True)
+
+    runner.invoke(cli, ["demo", "start"])
+    # lk.transition_if_owned 至少被 call 一次，且帶 ("running", user=, host=)
+    assert lk.transition_if_owned.called
+    args, kwargs = lk.transition_if_owned.call_args
+    assert args[0] == "running"
+    assert kwargs.get("user") == "alice"
+    assert kwargs.get("host") == "laptop1"
+
+
 def test_no_naked_lock_release_on_failure(runner, monkeypatch):
-    """任何 post-lock 失敗都不該裸 Lock.release()。"""
-    calls = []
+    """任何 post-lock 失敗都不該走 Lock.release() 裸版本。"""
+    naked_called = []
+
     monkeypatch.setattr("pawai_cli.preflight.run_mechanical",
         lambda phase, **kw: ([_mock_check("imports", "pass")] if phase == "pre_start"
                              else [_mock_check("tts_publisher_unique", "fail")]))
-    monkeypatch.setattr("pawai_cli.lock.acquire_or_force",
-        lambda *a, **kw: MagicMock(user="x", host="y"))
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire",
+        lambda **kw: _fake_lk(user="x", host="y"))
     monkeypatch.setattr("pawai_cli.main._run_start_sh", lambda *a, **kw: 0)
     monkeypatch.setattr("pawai_cli.main._cleanup_demo_stack", lambda *a, **kw: None)
-
-    def fake_release(*a, **kw):
-        calls.append("release_if_owned")
-    def fake_naked(*a, **kw):
-        calls.append("naked_release")
-    monkeypatch.setattr("pawai_cli.lock.release_if_owned", fake_release)
-    monkeypatch.setattr("pawai_cli.lock.Lock.release", fake_naked, raising=False)
+    monkeypatch.setattr("pawai_cli.lock.Lock.release_if_owned",
+        lambda **kw: True)
+    # 任何呼叫 Lock.release() 都記為違規
+    monkeypatch.setattr("pawai_cli.lock.Lock.release",
+        lambda: naked_called.append("naked_release"))
 
     runner.invoke(cli, ["demo", "start"])
-    assert "naked_release" not in calls
+    assert naked_called == []
 ```
 
 - [ ] **Step 2：實作 hook（修改既有 `demo start`）**
@@ -2094,6 +2276,17 @@ Sketch（細節以實際 main.py 為準）：
 
 ```python
 # main.py demo start handler 內，依 Spec A §7.5 順序
+# 真實 API（驗於 lock.py + main.py:851/874/877/900/903/956）：
+#   Lock.read()                                       classmethod
+#   Lock.acquire(user=..., host=..., branch=..., sha=..., state="starting", ...)
+#                                                     classmethod，回 instance lk
+#   lk.transition_if_owned("running", user=user, host=host)
+#                                                     instance method
+#   Lock.release_if_owned(user=..., host=...)         classmethod
+#   Lock.release()                                    legacy classmethod — **禁用**
+
+from pawai_cli.lock import Lock
+
 
 def demo_start(...):
     lock_state = Lock.read()
@@ -2101,19 +2294,20 @@ def demo_start(...):
     _orphan_driver_preflight(...)
     _handle_force_or_yes(...)
 
-    # ★ Spec A pre-start preflight
+    # ★ Spec A pre-start preflight（未取 lock，fail 直接 exit）
     pre_results = preflight.run_mechanical(phase="pre_start", target="jetson")
     if not preflight.summarize(pre_results).all_passed:
         click.echo(preflight.format_report(pre_results), err=True)
         raise SystemExit(1)
 
     # 既有：acquire lock + start.sh
-    lk = lock.acquire_or_force(...)
+    lk = Lock.acquire(user=user, host=host, branch=branch, sha=sha,
+                      state="starting", ...)
     rc = _run_start_sh(...)
     if rc != 0:
-        # 既有失敗路徑
+        # 既有失敗路徑（已在 caef6b5 前就 owner-aware）
         _cleanup_demo_stack(...)
-        lock.release_if_owned(lk.user, lk.host)
+        Lock.release_if_owned(user=user, host=host)
         raise SystemExit(rc)
 
     _wait_for_ready(...)
@@ -2128,12 +2322,20 @@ def demo_start(...):
         click.echo("post-start preflight failed; stack and lock cleaned up. "
                    "Fix the failing checks and re-run `pawai demo start`.", err=True)
         _cleanup_demo_stack(...)
-        lock.release_if_owned(lk.user, lk.host)
+        Lock.release_if_owned(user=user, host=host)
         raise SystemExit(1)
 
-    # 既有：transition_if_owned("running")
-    lock.transition_if_owned("running", lk.user, lk.host)
+    # 既有：lk.transition_if_owned("running", user=user, host=host)
+    if not lk.transition_if_owned("running", user=user, host=host):
+        # 既有保留行為：lock 被別人接管，不 mark running
+        click.echo("lock taken over during startup, NOT marking running", err=True)
+        raise SystemExit(2)
 ```
+
+**禁止**：
+- `Lock.release()`（裸 release，無 owner check）
+- 引用 `lock.release_if_owned(...)` 形式（無 `Lock.`）— 它不是 module-level function
+- 引用 `lock.acquire_or_force(...)` — 此 API 不存在
 
 - [ ] **Step 3：跑 test**
 
@@ -2744,11 +2946,17 @@ def _jetson_run_pub(topic: str, msg_type: str, payload: str) -> bool:
 
 def maybe_inject_pose(pose: str, force: bool = False) -> bool:
     """Inject synthetic /event/pose_detected;
-    若已有 live publisher，預設 skip 並回 False；force=True 強跑。"""
+    若已有 live publisher，預設 skip 並回 False；force=True 強跑。
+
+    **Schema**：canonical key 為 `pose`（與 vision_perception 真實 event 對齊，
+    驗於 conversation_graph_node._on_pose_detected:955）。**不可**用 `name`，
+    否則 Brain parser 認不出，synthetic event 假裝 inject 成功但 Brain cache
+    無更新，script 4「我在幹嘛」會 silent false pass。
+    """
     if not force and _jetson_topic_has_live_publisher("/event/pose_detected"):
         return False
     import json
-    payload = json.dumps({"name": pose, "confidence": 0.85})
+    payload = json.dumps({"pose": pose, "confidence": 0.85})
     return _jetson_run_pub(
         "/event/pose_detected", "std_msgs/msg/String",
         f"data: '{payload}'",
@@ -3335,22 +3543,34 @@ world_state_builder.set_pose_provider(self._pose_provider)
 
 ```python
 def _on_pose(self, msg):
-    """Update pose cache; 同 name 不重置 first_seen_ts。"""
+    """Update pose cache; 同 pose 不重置 first_seen_ts。
+
+    **Event schema**：canonical key 為 `pose`（vision_perception 既有契約，
+    驗於 conversation_graph_node._on_pose_detected:955）。Parser **必須**讀
+    `pose`；額外容忍 `name` 作為防禦（避免任何遺留 publisher 仍用舊 key）。
+
+    **Cache dict shape**：內部 field 取名 `name`（無 contract 影響；
+    world_state_builder._normalize_pose_data 一致讀 cache["name"]）。
+    """
     import time
     import json
     try:
         payload = json.loads(msg.data)
     except (json.JSONDecodeError, AttributeError):
         return
-    name = payload.get("name")
-    if not name:
+    if not isinstance(payload, dict):
         return
+    # canonical key 是 "pose"；"name" 容忍作 fallback
+    pose_value = payload.get("pose") or payload.get("name")
+    if not isinstance(pose_value, str) or not pose_value.strip():
+        return
+    pose_value = pose_value.strip()
     now = time.time()
     confidence = payload.get("confidence")
-    if self._pose_cache is None or self._pose_cache.get("name") != name:
+    if self._pose_cache is None or self._pose_cache.get("name") != pose_value:
         # 新 pose 或 cache 空：reset first_seen
         self._pose_cache = {
-            "name": name,
+            "name": pose_value,
             "confidence": confidence,
             "first_seen_ts": now,
             "last_seen_ts": now,
@@ -3367,22 +3587,97 @@ def _pose_provider(self) -> Optional[dict]:
     return self._pose_cache
 ```
 
-- [ ] **Step 3：unit test（既有 conversation_graph_node test 內）**
+- [ ] **Step 3：unit test for `_on_pose` schema 兼容與 transition rule**
 
-如果有現成 test file（例如 `pawai_brain/test/test_conversation_graph_node.py`），新增 case：
+新增（或擴充既有）`pawai_brain/test/test_conversation_graph_pose.py`：
 
 ```python
-def test_pose_cache_transition_resets_first_seen():
-    # 模擬 conversation_graph_node 內 _on_pose
-    # 略：依現有 test 風格組裝
-    pass
+"""Spec A §6 — conversation_graph_node._on_pose parser 與 cache transition。"""
+
+import json
+import time
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+
+# 假設 BrainNode 可獨立構造（依現有 test 風格；若需要更多 mock，照
+# pawai_brain/test/test_conversation_graph_node.py 既有 helper 組裝）
+from pawai_brain.conversation_graph_node import BrainNode
 
 
-def test_pose_cache_same_pose_keeps_first_seen():
-    pass
+@pytest.fixture
+def node():
+    n = MagicMock(spec=BrainNode)
+    n._pose_cache = None
+    return n
+
+
+def _msg(payload: dict):
+    return SimpleNamespace(data=json.dumps(payload))
+
+
+def test_canonical_pose_key_accepted(node):
+    BrainNode._on_pose(node, _msg({"pose": "sitting", "confidence": 0.8}))
+    assert node._pose_cache is not None
+    assert node._pose_cache["name"] == "sitting"
+    assert node._pose_cache["confidence"] == 0.8
+
+
+def test_legacy_name_key_tolerated(node):
+    """容忍舊 publisher 用 `name`；canonical 仍是 `pose`。"""
+    BrainNode._on_pose(node, _msg({"name": "standing"}))
+    assert node._pose_cache is not None
+    assert node._pose_cache["name"] == "standing"
+
+
+def test_pose_key_wins_when_both_present(node):
+    BrainNode._on_pose(node, _msg({"pose": "sitting", "name": "standing"}))
+    assert node._pose_cache["name"] == "sitting"
+
+
+def test_same_pose_keeps_first_seen(node, monkeypatch):
+    t0 = 1000.0
+    monkeypatch.setattr(time, "time", lambda: t0)
+    BrainNode._on_pose(node, _msg({"pose": "sitting"}))
+    first_seen = node._pose_cache["first_seen_ts"]
+
+    monkeypatch.setattr(time, "time", lambda: t0 + 8.0)
+    BrainNode._on_pose(node, _msg({"pose": "sitting"}))
+    assert node._pose_cache["first_seen_ts"] == first_seen  # not reset
+    assert node._pose_cache["last_seen_ts"] == t0 + 8.0
+
+
+def test_different_pose_resets_first_seen(node, monkeypatch):
+    t0 = 1000.0
+    monkeypatch.setattr(time, "time", lambda: t0)
+    BrainNode._on_pose(node, _msg({"pose": "sitting"}))
+
+    monkeypatch.setattr(time, "time", lambda: t0 + 8.0)
+    BrainNode._on_pose(node, _msg({"pose": "standing"}))
+    assert node._pose_cache["name"] == "standing"
+    assert node._pose_cache["first_seen_ts"] == t0 + 8.0
+    assert node._pose_cache["last_seen_ts"] == t0 + 8.0
+
+
+def test_invalid_json_silently_dropped(node):
+    BrainNode._on_pose(node, SimpleNamespace(data="not json"))
+    assert node._pose_cache is None
+
+
+def test_missing_pose_field_silently_dropped(node):
+    BrainNode._on_pose(node, _msg({"confidence": 0.9}))
+    assert node._pose_cache is None
 ```
 
-若無對應 test 框架，先靠 `test_pose_brain_simulation.py` 透過 provider 路徑驗。
+跑 test：
+
+```bash
+cd pawai_brain && python -m pytest test/test_conversation_graph_pose.py -v 2>&1 | tail -15
+cd ..
+```
+
+Expected：7 cases pass。
 
 - [ ] **Step 4：commit**
 
