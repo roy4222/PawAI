@@ -967,7 +967,8 @@ def demo_stop(force: bool) -> None:
 # 文字自然觸發前三段（打招呼 / 自介 / 介紹輔大資管）；CLI 僅保留結尾固定
 # 詞的手動觸發，繞過 brain 直接 publish /tts，保證原文播出、不入對話歷史。
 
-SCHOOL_DEMO_ENDING_TEXT = "最後~請記得，輔大資管系填寫第一志願！"
+SCHOOL_DEMO_ENDING_TEXT = "最後~祝各位考生面試順利！請記得，輔大資管系填寫第一志願喔！"
+FINGER_HEART_API_ID = 1036  # Go2 sport action「比愛心」
 
 
 @demo.group("school")
@@ -978,7 +979,7 @@ def school() -> None:
 @school.command("list")
 def school_list() -> None:
     """印出結尾固定詞與 brain 觸發提示（給主持人對講稿用）。"""
-    click.echo("結尾固定詞（CLI 手動觸發）：")
+    click.echo("結尾固定詞（CLI 手動觸發，含 Go2 比愛心動作）：")
     click.echo(f"  {SCHOOL_DEMO_ENDING_TEXT}")
     click.echo("")
     click.echo("Brain 觸發提示（直接對 PawAI 說／用 Studio 送文字）：")
@@ -988,19 +989,50 @@ def school_list() -> None:
 
 
 def _build_school_ending_remote_cmd() -> str:
-    """Compose the remote ros2 topic pub command for the ending line.
+    """Compose the remote command for the ending: FingerHeart + /tts line.
+
+    Uses an inline python3 rclpy publisher rather than two one-shot
+    `ros2 topic pub` calls. A one-shot `ros2 topic pub` (even with `-w 1`)
+    tears the publisher down the instant publish() returns — DDS has not
+    necessarily flushed the message to the wire, so the /tts line is
+    silently dropped maybe 1-in-3 times (observed live 2026-05-15). The
+    python publisher instead: waits for both subscriptions to be discovered,
+    publishes, then spins 1.5s so the RELIABLE-QoS write actually lands
+    before the process exits.
 
     Uses shell.jetson_repo() so it follows the repo-wide JETSON_REPO env.
-    Double-layered quoting (json.dumps + shlex.quote) so the 中文 payload
-    survives bash with literal Chinese 字 + 引號 + ~ intact.
+    json.dumps(ensure_ascii=False) embeds the 中文 ending line as a valid
+    python str literal; shlex.quote wraps the whole script for zsh.
     """
     repo = shell.jetson_repo()
-    payload = json.dumps({"data": SCHOOL_DEMO_ENDING_TEXT}, ensure_ascii=False)
+    data_literal = json.dumps(SCHOOL_DEMO_ENDING_TEXT, ensure_ascii=False)
+    script = "\n".join([
+        "import time, rclpy",
+        "from std_msgs.msg import String",
+        "from go2_interfaces.msg import WebRtcReq",
+        "rclpy.init()",
+        "n = rclpy.create_node('pawai_school_ending')",
+        "heart = n.create_publisher(WebRtcReq, '/webrtc_req', 10)",
+        "tts = n.create_publisher(String, '/tts', 10)",
+        "deadline = time.time() + 5.0",
+        "while time.time() < deadline and "
+        "(heart.get_subscription_count() == 0 or tts.get_subscription_count() == 0):",
+        "    rclpy.spin_once(n, timeout_sec=0.1)",
+        f"heart.publish(WebRtcReq(id=0, topic='rt/api/sport/request', "
+        f"api_id={FINGER_HEART_API_ID}, parameter='', priority=0))",
+        f"msg = String(); msg.data = {data_literal}",
+        "tts.publish(msg)",
+        "flush = time.time() + 1.5",
+        "while time.time() < flush:",
+        "    rclpy.spin_once(n, timeout_sec=0.1)",
+        "n.destroy_node(); rclpy.shutdown()",
+        "print('school ending published')",
+    ])
     return (
         f"cd {shlex.quote(repo)} && "
-        f"source /opt/ros/humble/setup.bash && "
-        f"source install/setup.bash && "
-        f"ros2 topic pub --once /tts std_msgs/msg/String {shlex.quote(payload)}"
+        f"source /opt/ros/humble/setup.zsh && "
+        f"source install/setup.zsh && "
+        f"python3 -c {shlex.quote(script)}"
     )
 
 
@@ -1012,7 +1044,7 @@ def school_ending(dry_run: bool) -> None:
     if dry_run:
         click.echo(ros_cmd)
         return
-    res = shell.run_remote(ros_cmd, timeout=15)
+    res = shell.run_remote(ros_cmd, timeout=25)
     if not res.ok:
         click.echo(f"[school ending] SSH failed (code {res.code}): {res.stderr}", err=True)
         sys.exit(res.code or 1)

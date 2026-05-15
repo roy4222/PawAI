@@ -1332,14 +1332,14 @@ def test_school_list_prints_ending_and_cues() -> None:
 
 
 def test_school_ending_dry_run_does_not_invoke_remote() -> None:
-    """`--dry-run` 必須印出 ros2 topic pub 整段且 0 次 SSH。"""
+    """`--dry-run` 必須印出 python publisher 整段且 0 次 SSH。"""
     from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
     with patch.object(shell, "run_remote") as mock_remote:
         result = CliRunner().invoke(cli, ["demo", "school", "ending", "--dry-run"])
     assert result.exit_code == 0, result.output
     assert mock_remote.call_count == 0
-    assert "ros2 topic pub --once /tts" in result.output
-    assert "std_msgs/msg/String" in result.output
+    assert "python3 -c" in result.output
+    assert "/tts" in result.output
     assert SCHOOL_DEMO_ENDING_TEXT in result.output
 
 
@@ -1352,10 +1352,34 @@ def test_school_ending_invokes_remote_with_correct_command() -> None:
     assert result.exit_code == 0, result.output
     assert mock_remote.call_count == 1
     sent_cmd = mock_remote.call_args.args[0]
+    assert "setup.zsh" in sent_cmd
+    assert "setup.bash" not in sent_cmd
     assert "/tts" in sent_cmd
-    assert "std_msgs/msg/String" in sent_cmd
     assert SCHOOL_DEMO_ENDING_TEXT in sent_cmd
     assert shell.jetson_repo() in sent_cmd
+    # Inline python rclpy publisher — NOT a one-shot `ros2 topic pub`. A
+    # one-shot pub tears down before DDS flushes the wire; the python path
+    # waits for discovery then spins to guarantee delivery.
+    assert "python3 -c" in sent_cmd
+    assert "ros2 topic pub" not in sent_cmd
+    # Load-bearing robustness markers: discovery wait + post-publish flush.
+    assert "get_subscription_count" in sent_cmd
+
+
+def test_school_ending_includes_finger_heart_action() -> None:
+    """ending 必須先 publish FingerHeart (api_id 1036) 到 /webrtc_req。"""
+    from pawai_cli.main import FINGER_HEART_API_ID
+    fake_result = shell.Result(code=0, stdout="", stderr="")
+    with patch.object(shell, "run_remote", return_value=fake_result) as mock_remote:
+        result = CliRunner().invoke(cli, ["demo", "school", "ending"])
+    assert result.exit_code == 0, result.output
+    sent_cmd = mock_remote.call_args.args[0]
+    assert FINGER_HEART_API_ID == 1036
+    assert "WebRtcReq" in sent_cmd
+    assert "/webrtc_req" in sent_cmd
+    assert "api_id=1036" in sent_cmd
+    # FingerHeart must precede the /tts line so the action and speech overlap.
+    assert sent_cmd.index("/webrtc_req") < sent_cmd.index("/tts")
 
 
 def test_load_env_local_overrides_env(tmp_path, monkeypatch):
