@@ -61,6 +61,29 @@ from pawai_brain.nodes.mode_classifier import classify_mode
     ("扭一下", "action_request"),
     ("伸個懶腰", "action_request"),
     ("揮個手", "action_request"),
+    # 學校招生 demo (2026-05-16) — school_demo_request 觸發輔大 facts 注入。
+    # 每條都必須含「輔大 / 輔仁」校名錨點。
+    ("輔大資管", "school_demo_request"),
+    ("輔仁資管", "school_demo_request"),
+    ("輔大資管系有什麼特色", "school_demo_request"),
+    ("介紹輔大資管", "school_demo_request"),
+    ("輔仁大學的資管系怎麼樣", "school_demo_request"),
+    ("輔仁大學資訊管理系特色", "school_demo_request"),
+    ("輔仁大學的資訊管理系", "school_demo_request"),
+    ("為什麼要讀輔大資管", "school_demo_request"),
+    ("為什麼選輔大資管系", "school_demo_request"),
+    # 順序 regression：必須在 self_intro_request 之前判定，否則「跟大家介紹」
+    # 會被 self_intro_request 的 「跟\s*(教授|大家|觀眾|評審).{0,5}介紹」吃掉。
+    ("請跟大家介紹輔大資管系特色", "school_demo_request"),
+    ("跟教授介紹輔大資管", "school_demo_request"),
+    # 負面：其他學校的「資管系特色」絕對不能注入輔大 facts
+    ("台大資管系特色", "chat"),
+    ("政大資管系亮點", "chat"),
+    ("資管系特色", "chat"),
+    ("資管系亮點", "chat"),
+    # 負面：一般「資訊管理」對話也不該誤觸
+    ("我想念資訊管理", "chat"),
+    ("資訊管理系都在學什麼", "chat"),
     # Chat (default)
     ("天氣好嗎", "chat"),
     ("我今天累了", "chat"),

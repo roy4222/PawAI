@@ -3,8 +3,8 @@
 Used by _build_user_message and graph.py to decide whether to inject
 CAPABILITIES.md and capability_context JSON.
 
-Order matters: safety > self_intro_request > scene_query > identity
-             > capability_question > action_request > chat (default).
+Order matters: safety > school_demo_request > self_intro_request > scene_query
+             > identity > capability_question > action_request > chat (default).
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 N4 (2026-05-11): split `self_intro_request` from `identity` — the former
@@ -27,6 +27,21 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
     (
         "safety",
         r"停|停止|不要動|別動|先不要動|小心|警告|危險|stop",
+    ),
+    (
+        "school_demo_request",
+        # 學校招生 demo (2026-05-16): 使用者明確問到輔大資管才觸發 facts 注入。
+        # 強制每條 alternation 都必須含「輔大 / 輔仁」校名錨點，否則「台大資管
+        # 系特色」「政大資管系亮點」會誤注入。
+        # 放在 self_intro_request 之前，避免「請跟大家介紹輔大資管系特色」被
+        # self_intro 的「跟大家介紹」吃掉。
+        r"輔大資管"
+        r"|輔仁資管"
+        r"|輔仁大學.{0,8}資管"
+        r"|輔大.{0,4}資訊管理"
+        r"|輔仁大學.{0,8}資訊管理"
+        r"|就讀.{0,4}輔大.{0,4}資管"
+        r"|為什麼.{0,4}(選|讀|念).{0,4}輔大.{0,4}資管",
     ),
     (
         "self_intro_request",

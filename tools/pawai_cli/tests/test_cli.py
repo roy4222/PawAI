@@ -1318,6 +1318,46 @@ def test_load_env_missing_file_is_silent(tmp_path):
     _load_env_file(tmp_path / "does-not-exist.env", override=False)
 
 
+# ─── 學校招生 demo: pawai demo school subgroup ─────────────────────────
+
+
+def test_school_list_prints_ending_and_cues() -> None:
+    """`pawai demo school list` 必須印結尾固定詞與三段 brain cue 提示。"""
+    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
+    result = CliRunner().invoke(cli, ["demo", "school", "list"])
+    assert result.exit_code == 0, result.output
+    assert SCHOOL_DEMO_ENDING_TEXT in result.output
+    assert "輔大資管系的特色" in result.output
+    assert "介紹一下你自己" in result.output
+
+
+def test_school_ending_dry_run_does_not_invoke_remote() -> None:
+    """`--dry-run` 必須印出 ros2 topic pub 整段且 0 次 SSH。"""
+    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
+    with patch.object(shell, "run_remote") as mock_remote:
+        result = CliRunner().invoke(cli, ["demo", "school", "ending", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert mock_remote.call_count == 0
+    assert "ros2 topic pub --once /tts" in result.output
+    assert "std_msgs/msg/String" in result.output
+    assert SCHOOL_DEMO_ENDING_TEXT in result.output
+
+
+def test_school_ending_invokes_remote_with_correct_command() -> None:
+    """無 dry-run 時必須呼叫 shell.run_remote 一次，且 command 含關鍵片段。"""
+    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
+    fake_result = shell.Result(code=0, stdout="", stderr="")
+    with patch.object(shell, "run_remote", return_value=fake_result) as mock_remote:
+        result = CliRunner().invoke(cli, ["demo", "school", "ending"])
+    assert result.exit_code == 0, result.output
+    assert mock_remote.call_count == 1
+    sent_cmd = mock_remote.call_args.args[0]
+    assert "/tts" in sent_cmd
+    assert "std_msgs/msg/String" in sent_cmd
+    assert SCHOOL_DEMO_ENDING_TEXT in sent_cmd
+    assert shell.jetson_repo() in sent_cmd
+
+
 def test_load_env_local_overrides_env(tmp_path, monkeypatch):
     """Two-file semantics preserved: .env.local wins over .env."""
     from pawai_cli.main import _load_env_file

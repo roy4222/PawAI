@@ -4,6 +4,7 @@ import io
 import json
 import os
 import platform
+import shlex
 import shutil
 import sys
 import urllib.error
@@ -959,6 +960,63 @@ def demo_stop(force: bool) -> None:
             "(another process changed it). Run `pawai status` to verify."
         )
     sys.exit(rc)
+
+
+# ─── pawai demo school (學校招生 demo) ─────────────────────────────────
+# 2026-05-16: 配合 brain school_demo_request mode 設計。Brain 端負責由語音/
+# 文字自然觸發前三段（打招呼 / 自介 / 介紹輔大資管）；CLI 僅保留結尾固定
+# 詞的手動觸發，繞過 brain 直接 publish /tts，保證原文播出、不入對話歷史。
+
+SCHOOL_DEMO_ENDING_TEXT = "最後~請記得，輔大資管系填寫第一志願！"
+
+
+@demo.group("school")
+def school() -> None:
+    """學校招生 demo 工具（手動結尾 + 講稿提示）。"""
+
+
+@school.command("list")
+def school_list() -> None:
+    """印出結尾固定詞與 brain 觸發提示（給主持人對講稿用）。"""
+    click.echo("結尾固定詞（CLI 手動觸發）：")
+    click.echo(f"  {SCHOOL_DEMO_ENDING_TEXT}")
+    click.echo("")
+    click.echo("Brain 觸發提示（直接對 PawAI 說／用 Studio 送文字）：")
+    click.echo("  打招呼：「跟現場家長和學生打個招呼」")
+    click.echo("  自介：「介紹一下你自己」")
+    click.echo("  輔大資管：「介紹輔大資管系的特色」")
+
+
+def _build_school_ending_remote_cmd() -> str:
+    """Compose the remote ros2 topic pub command for the ending line.
+
+    Uses shell.jetson_repo() so it follows the repo-wide JETSON_REPO env.
+    Double-layered quoting (json.dumps + shlex.quote) so the 中文 payload
+    survives bash with literal Chinese 字 + 引號 + ~ intact.
+    """
+    repo = shell.jetson_repo()
+    payload = json.dumps({"data": SCHOOL_DEMO_ENDING_TEXT}, ensure_ascii=False)
+    return (
+        f"cd {shlex.quote(repo)} && "
+        f"source /opt/ros/humble/setup.bash && "
+        f"source install/setup.bash && "
+        f"ros2 topic pub --once /tts std_msgs/msg/String {shlex.quote(payload)}"
+    )
+
+
+@school.command("ending")
+@click.option("--dry-run", is_flag=True, help="只印將執行的指令，不實際 SSH。")
+def school_ending(dry_run: bool) -> None:
+    """Publish 固定結尾詞到 /tts，繞過 brain。"""
+    ros_cmd = _build_school_ending_remote_cmd()
+    if dry_run:
+        click.echo(ros_cmd)
+        return
+    res = shell.run_remote(ros_cmd, timeout=15)
+    if not res.ok:
+        click.echo(f"[school ending] SSH failed (code {res.code}): {res.stderr}", err=True)
+        sys.exit(res.code or 1)
+    click.echo("[school ending] published.")
 
 
 # ─── pawai net wifi ──────────────────────────────────────────────────────

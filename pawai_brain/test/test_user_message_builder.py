@@ -418,3 +418,56 @@ def test_chat_mode_no_scene_hint():
     }
     msg = _build_user_message(state)
     assert "[scene_hint]" not in msg
+
+
+# 學校招生 demo (2026-05-16) — school_demo_request facts injection
+def test_school_demo_request_injects_facts():
+    state = {
+        "user_text": "介紹輔大資管系的特色",
+        "mode": "school_demo_request",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[school_demo_facts]" in msg
+    # 5 大亮點關鍵字
+    assert "1981" in msg
+    assert "AI" in msg
+    assert "做中學" in msg or "專題" in msg
+    assert "AACSB" in msg or "跨域" in msg
+    assert "EMI" in msg or "國際化" in msg
+
+
+def test_school_demo_request_does_not_inject_scaffold_or_scene_hint():
+    """facts 注入時不該疊上 intro_scaffold / scene_hint / capability。"""
+    state = {
+        "user_text": "輔大資管",
+        "mode": "school_demo_request",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[intro_scaffold]" not in msg
+    assert "[scene_hint]" not in msg
+    assert "[能力描述]" not in msg
+    assert "[mode_hint]" not in msg
+
+
+def test_chat_mode_no_school_demo_facts():
+    """確保 facts 不污染日常對話。"""
+    state = {
+        "user_text": "今天天氣好嗎",
+        "mode": "chat",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[school_demo_facts]" not in msg
+    assert "輔大資管" not in msg
+
+
+def test_identity_mode_no_school_demo_facts():
+    state = {
+        "user_text": "你是誰",
+        "mode": "identity",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[school_demo_facts]" not in msg
