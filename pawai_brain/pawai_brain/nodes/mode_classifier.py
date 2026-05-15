@@ -5,6 +5,9 @@ CAPABILITIES.md and capability_context JSON.
 
 Order matters: safety > school_demo_request > self_intro_request > scene_query
              > identity > capability_question > action_request > chat (default).
+5/15: school_demo_request broadened to bare "資管 / 資訊管理" keyword, then
+given ASR-typo tolerance via homophone character classes — live ASR mis-hears
+both the school name and the keyword itself (資管→直管, 資訊→資詢).
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 N4 (2026-05-11): split `self_intro_request` from `identity` — the former
@@ -30,18 +33,20 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
     ),
     (
         "school_demo_request",
-        # 學校招生 demo (2026-05-16): 使用者明確問到輔大資管才觸發 facts 注入。
-        # 強制每條 alternation 都必須含「輔大 / 輔仁」校名錨點，否則「台大資管
-        # 系特色」「政大資管系亮點」會誤注入。
-        # 放在 self_intro_request 之前，避免「請跟大家介紹輔大資管系特色」被
+        # 學校招生 demo: 提到「資管 / 資訊管理」即觸發 facts 注入。
+        # 5/15a 放寬：移除校名錨點（ASR 常把輔大→古大、輔仁→虎仁聽錯）。
+        # 5/15b 加 ASR 錯字容錯：實機 ASR 把「資管」聽成「直管」、「資訊」
+        # 聽成「資詢」太頻繁，純字面比對漏接。改用同音字族字元類：
+        #   資 zī → 資直自諮姿滋紫字   訊 xùn → 訊詢訓迅尋
+        #   管 guǎn → 管館官觀         理 lǐ → 理里裡
+        # 第 3 段是收尾網：任何「X管系 / X管理系 / X館系」都接住（含校名被
+        # ASR 砍爛的 case，如「古大司館系」），但用 (?!統) 排除「管理系統」
+        # 這種 PawAI 自指、非學校語意的詞。
+        # 放在 self_intro_request 之前，避免「請跟大家介紹資管系特色」被
         # self_intro 的「跟大家介紹」吃掉。
-        r"輔大資管"
-        r"|輔仁資管"
-        r"|輔仁大學.{0,8}資管"
-        r"|輔大.{0,4}資訊管理"
-        r"|輔仁大學.{0,8}資訊管理"
-        r"|就讀.{0,4}輔大.{0,4}資管"
-        r"|為什麼.{0,4}(選|讀|念).{0,4}輔大.{0,4}資管",
+        r"[資直自諮姿滋紫字][管館官觀]"
+        r"|[資直自諮姿滋紫字][訊詢訓迅尋][管館官觀][理里裡]"
+        r"|[管館][理里]?系(?!統)",
     ),
     (
         "self_intro_request",
