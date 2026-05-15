@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-05-15（學校招生 demo 強化：school_demo_request ASR 錯字容錯 + CLI ending FingerHeart + 可靠投遞）
+**最後更新**：2026-05-15（學校招生 demo 強化 + Spec A demo 主線止血 D0 recovery + PR1 靜態修補）
 **硬底線**：5/18 期末 demo（4 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
 
 ---
@@ -27,6 +27,34 @@
 ### 現場硬體
 
 - USB 喇叭 `CD002-AUDIO` demo 中途斷線（XL4015 供電不穩），換新 USB 喇叭但 Jetson 未列舉到（疑線材/接觸），待現場排除
+
+---
+
+## 5/15（晚）：Spec A demo 主線止血 — D0 recovery + PR1 靜態修補
+
+平行於學校招生 demo（5/18 主線），開 Spec A 解 demo 主線結構性風險（Brain bring-up / persona / TTS 單出口 / gesture gate / pose state / preflight）。全程在獨立 worktree，**`main` demo 主線不動**。
+
+### Plan 修訂
+
+`docs/pawai-brain/plans/2026-05-14-spec-a-demo-mainline-stop-bleed.md` 對齊現況：base `a1ebdd2`→`d9d4879`（已含 5/14-15 school demo commits）；D0 recovery 改「已盤點乾淨」（無 spec-a branch / stash / 漂移）；worktree 命名 `elder_and_dog-spec-a-pr<N>`；PR2A/2B/3 開工前強制 `rebase origin/main`；merge 後改回主 workspace 更新 main（避免 PR worktree `checkout main` 衝突）；補 school demo 保護註記。
+
+### Worktree 隔離
+
+從 `d9d4879` 建 4 個 worktree：`spec-a/pr1-static-fixes` / `pr2a-mechanical-guard` / `pr2b-semantic-dryrun` / `pr3-behavior-gate`。
+
+### PR1 完成（branch `spec-a/pr1-static-fixes`，3 commits，**未 push / 未開 PR**）
+
+`0e3381b` + `79eccf5` + `64bb657`，7 檔：
+
+- `pawai_brain/package.xml` — 補 `python3-requests` exec_depend
+- `requirements-jetson.txt` — 補 `langgraph` / `langchain-core`
+- `docs/pawai-brain/README.md` — LLM chain 對齊 code（`gpt-5.4-mini`）；demo Active 清單移除 `approach_person`
+- `docs/runbook/README.md` — 加 Jetson Brain Bring-up 指引
+- `docs/pawai_cli/team-onboarding.md` — 加 demo 唯一合法 chain + legacy 禁用清單
+- `personas/v1/CAPABILITIES.md` — 收斂誇大字（手勢/守護/移動）、跌倒改保守 trace、移除 `approach_person`、加 STATUS_NOTE 三層 demo 行為規範
+- `personas/v1/EXAMPLES.md` — 移除「走過去靠近人」、加 2 條保守降級範例
+
+驗證：XML parse OK、requirements 語法合法、claim-pattern grep 乾淨、237 pawai_brain test 通過、reviewer LGTM。下一步：PR1 push → PR2A。
 
 ---
 
