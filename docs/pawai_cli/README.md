@@ -120,6 +120,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai jetson deploy`](#jetson-deploy) | rsync 整個 repo + colcon build 指定模組 |
 | [`pawai demo start`](#demo-start) | 啟動 brain-studio-lane（Jetson tmux + 本機 Studio） |
 | [`pawai demo stop`](#demo-stop) | 清掉 demo session |
+| [`pawai demo school {list,ending}`](#demo-school) | 學校招生 demo：講稿提示 + 結尾固定詞 |
 | [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
@@ -354,6 +355,27 @@ pawai demo stop
 
 Brain cleanup 只會關閉 `/tmp/pawai-frontend.pid` 指向的本機 frontend，不會用
 `pkill -f "next.*dev"` 掃掉隊友其他 Next.js 專案。
+
+---
+
+### demo school
+
+學校招生 demo 工具。前三段（打招呼 / 自介 / 介紹輔大資管）由 brain 端
+`school_demo_request` mode 自然觸發，CLI 只負責**結尾固定詞 + Go2 比愛心**。
+
+```bash
+pawai demo school list             # 印結尾固定詞 + brain 觸發講稿（給主持人）
+pawai demo school ending           # publish FingerHeart + 結尾語音
+pawai demo school ending --dry-run # 只印遠端指令，不 SSH
+```
+
+`ending` 繞過 brain，直接送 Go2 FingerHeart 動作（`/webrtc_req` api_id 1036）
++ 結尾語音（`/tts`），保證原文播出、不入對話歷史。內部用 inline python rclpy
+publisher（等 subscriber discovery → publish → spin 1.5s 確保投遞），避免
+一次性 `ros2 topic pub` race 掉訊息。
+
+> brain 端 `school_demo_request`：使用者提到「資管 / 資訊管理」即注入輔大 5
+> 大亮點 facts；含 ASR 同音字錯字容錯（直管系 / 資詢管理系 等也能命中）。
 
 ---
 

@@ -1,7 +1,32 @@
 # 專案狀態
 
-**最後更新**：2026-05-14（PawAI CLI 多人協作硬化：P0/P1 driver visibility + 3 lock races + IP override + status fail-fast + Windows CRLF defence）
+**最後更新**：2026-05-15（學校招生 demo 強化：school_demo_request ASR 錯字容錯 + CLI ending FingerHeart + 可靠投遞）
 **硬底線**：5/18 期末 demo（4 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+
+---
+
+## 5/15：學校招生 demo 強化（3 commits）
+
+接續 e9eaac6 的學校招生 demo（`school_demo_request` brain mode + `pawai demo school` CLI），實機 demo 暴露兩個缺口並修復。
+
+### Brain：`school_demo_request` 放寬 + ASR 錯字容錯（`2714599`）
+
+- 實機 ASR 把「輔大」聽成「古大」、「輔仁」→「虎仁」、「資管」→「直管」、「資訊」→「資詢」，原本強制校名錨點的 pattern 幾乎全漏接
+- 兩階段放寬：① 移除「輔大/輔仁」校名錨點（招生現場不會問台大/政大資管）② 改用同音字族字元類做錯字容錯（資→資直自諮姿滋紫字、訊→訊詢訓迅尋、管→管館官觀、理→理里裡）
+- 第 3 段收尾網 `[管館][理里]?系(?!統)` 接住「X管系/館系」（含 ASR 砍爛的「古大司館系」），`(?!統)` 排除「管理系統」自指詞
+- `test_mode_classifier` 77 cases 全綠（含 7 ASR 錯字 case + 2「管理系統」負面 regression）；Jetson 上 brain 全套 100/100
+- 實機驗證：「直管系」「資詢管理系」「直管西」都觸發輔大 facts 注入
+
+### CLI：`demo school ending` FingerHeart + 可靠投遞（`b011b40`）
+
+- `setup.bash` → `setup.zsh`（Jetson 預設 zsh，source bash 版 setup 時 `$BASH_SOURCE` 解析錯誤路徑 → exit 127）
+- 加 Go2 FingerHeart「比愛心」動作（`/webrtc_req` api_id 1036），與結尾語音一起播；台詞加祝考生面試順利
+- 一次性 `ros2 topic pub`（即使 `-w 1`）仍 race DDS 投遞，約 1/3 機率訊息沒上線就被丟 → 改用 inline python3 rclpy publisher：等 subscriber discovery → publish → spin 1.5s 確保 RELIABLE QoS 落地。實機連跑 3/3 送達
+- `test_cli` school 4 cases 全綠
+
+### 現場硬體
+
+- USB 喇叭 `CD002-AUDIO` demo 中途斷線（XL4015 供電不穩），換新 USB 喇叭但 Jetson 未列舉到（疑線材/接觸），待現場排除
 
 ---
 
