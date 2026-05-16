@@ -1364,6 +1364,9 @@ def test_school_ending_invokes_remote_with_correct_command() -> None:
     assert "ros2 topic pub" not in sent_cmd
     # Load-bearing robustness markers: discovery wait + post-publish flush.
     assert "get_subscription_count" in sent_cmd
+    assert "no /tts subscriber discovered" in sent_cmd
+    assert "sys.exit(20)" in sent_cmd
+    assert "time.time() + 15.0" in sent_cmd
 
 
 def test_school_ending_includes_finger_heart_action() -> None:

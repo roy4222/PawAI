@@ -1007,17 +1007,26 @@ def _build_school_ending_remote_cmd() -> str:
     repo = shell.jetson_repo()
     data_literal = json.dumps(SCHOOL_DEMO_ENDING_TEXT, ensure_ascii=False)
     script = "\n".join([
-        "import time, rclpy",
+        "import sys, time, rclpy",
         "from std_msgs.msg import String",
         "from go2_interfaces.msg import WebRtcReq",
         "rclpy.init()",
         "n = rclpy.create_node('pawai_school_ending')",
         "heart = n.create_publisher(WebRtcReq, '/webrtc_req', 10)",
         "tts = n.create_publisher(String, '/tts', 10)",
-        "deadline = time.time() + 5.0",
+        "deadline = time.time() + 15.0",
         "while time.time() < deadline and "
         "(heart.get_subscription_count() == 0 or tts.get_subscription_count() == 0):",
         "    rclpy.spin_once(n, timeout_sec=0.1)",
+        "tts_subs = tts.get_subscription_count()",
+        "heart_subs = heart.get_subscription_count()",
+        "if tts_subs == 0:",
+        "    print('ERROR: no /tts subscriber discovered after 15s; not publishing', "
+        "file=sys.stderr)",
+        "    n.destroy_node(); rclpy.shutdown(); sys.exit(20)",
+        "if heart_subs == 0:",
+        "    print('WARN: no /webrtc_req subscriber discovered; publishing speech only', "
+        "file=sys.stderr)",
         f"heart.publish(WebRtcReq(id=0, topic='rt/api/sport/request', "
         f"api_id={FINGER_HEART_API_ID}, parameter='', priority=0))",
         f"msg = String(); msg.data = {data_literal}",
@@ -1026,7 +1035,7 @@ def _build_school_ending_remote_cmd() -> str:
         "while time.time() < flush:",
         "    rclpy.spin_once(n, timeout_sec=0.1)",
         "n.destroy_node(); rclpy.shutdown()",
-        "print('school ending published')",
+        "print(f'school ending published (tts_subs={tts_subs}, heart_subs={heart_subs})')",
     ])
     return (
         f"cd {shlex.quote(repo)} && "
@@ -1044,7 +1053,7 @@ def school_ending(dry_run: bool) -> None:
     if dry_run:
         click.echo(ros_cmd)
         return
-    res = shell.run_remote(ros_cmd, timeout=25)
+    res = shell.run_remote(ros_cmd, timeout=40)
     if not res.ok:
         click.echo(f"[school ending] SSH failed (code {res.code}): {res.stderr}", err=True)
         sys.exit(res.code or 1)
