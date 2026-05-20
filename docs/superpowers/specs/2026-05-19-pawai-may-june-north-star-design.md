@@ -344,6 +344,94 @@ demo flow 預期連跑 30 分鐘以上，可能撞 stale state（見第 4 章 F7
 
 ---
 
+## 7.5 Runtime budget & Mode 治理（跨章節）
+
+> 補入：2026-05-20。物件章節升級研究時暴露：三個 P0（nav / object / gesture）+ 維持項（人臉 / 語音 / brain / studio）若同時滿速跑，必壓爆 Jetson Orin Nano 8GB。這條治理章是所有 P0 與維持章的共同約束，不歸任何單一章。
+
+### 7.5.1 核心原則
+
+6/18 demo **不應讓所有高負載模組同時滿速跑**。PawAI 是有狀態的居家四足機器人，不是「所有功能一直全開」的功能清單機器。
+
+```
+該看物件時看物件 → 該移動時把 safety/nav 放第一
+該聊天時把 speech/brain 放第一 → 該手勢互動時才提升 gesture
+```
+
+### 7.5.2 功能效能分級
+
+| 模組 | 常駐策略 | 理由 |
+|---|---|---|
+| Go2 driver / reactive_stop / twist_mux | **必須常駐** | safety 不能關 |
+| RPLIDAR / Nav2 / AMCL | nav demo 時常駐 | 移動主線 |
+| D435 depth safety | nav 時常駐 | 移動前 gate、`/capability/depth_clear` |
+| Speech VAD / ASR trigger | 常駐但低負載 | 互動入口 |
+| Face identity | 可常駐低頻 | 認人是主線，但不需滿 FPS |
+| Gesture | **不可全時高敏** | OK 模式開關（北極星 §3）、cooldown |
+| Pose | 降頻 context | P2，不該搶 P0 資源 |
+| Object detection | **降頻 / 按需** | grounding 非 safety brake；1–2 FPS 對 Brain context 已足 |
+| Studio video / heavy debug | demo 時限流 | 吃 bandwidth / CPU |
+
+### 7.5.3 Demo Mode 表（Executive / Studio 切換）
+
+| Mode | 觸發 | Object | Gesture | Pose | Nav | 用途 |
+|---|---|---|---|---|---|---|
+| **Chat** | 對話為主、無視覺問題 | low-rate / off | gate DISABLED | low-rate context | off | 7 章敘事第 1–2 段「聽懂你 / 認得你」 |
+| **Scene** | 使用者問「你看到什麼」 | **boost on**（5–10s 後降回） | gated | low-rate | off | 7 章敘事「看懂環境」 |
+| **Nav** | 「PAI 過來一下」 | low-rate（1–2 FPS）或 off | safety gestures only | off | **on** | 7 章敘事「安全移動」 |
+| **Gesture** | OK 進入手勢模式 | low-rate | **boost on** | off | off | 7 章敘事「做出反應」 |
+| **Demo full** | 全閉環 | 分段啟用 | 分段啟用 | 分段啟用 | 分段啟用 | 由 Executive 在閉環中切 Mode，**不是全開** |
+
+切換規則範例：
+- 使用者問「你看到什麼」 → Object boost 5–10s 後降頻
+- 使用者說「過來」 → Object 降頻、Nav / safety 優先
+- OK 進手勢模式 → Gesture boost、Object 降頻
+- TTS 播放中 → 非 safety perception 不觸發技能（既有 conversation gate）
+
+### 7.5.4 三情境量測（所有 P0 升級必須通過）
+
+任何 P0 章節（nav / object / gesture）的能力升級評估，除了「能力是否變強」，**必須** 額外通過三組情境量測：
+
+| 情境 | 啟動範圍 | 該章節 KPI | 共同 KPI |
+|---|---|---|---|
+| **單跑** | 該模組 + 必要 driver | 章節內定義（如 obj FPS ≥ 8） | RAM ≥ 0.8GB、temp < 75°C |
+| **Full perception** | 該模組 + face + vision + brain + speech（無 nav） | 章節內定義（如 obj FPS ≥ 5） | RAM ≥ 0.8GB、temp < 75°C、TTS / ASR 延遲不可較單跑增加 > 30% |
+| **Nav mode** | nav stack + 該模組降頻 | 章節內定義（如 obj 1–2 FPS） | **`/cmd_vel_nav` 不可掉**、無 gap > 200ms — hard gate |
+
+通過情境分級對應到部署策略：
+- 只過單跑 → 升級候選，不部署
+- 過單跑 + Full perception → 可作為某 Mode 預設
+- 全過 → 可作為 6/18 demo 預設
+- 部分過 → 列為 boost-only（特定 Mode 觸發）
+
+### 7.5.5 系統指標 hard floor（全情境）
+
+- RAM available ≥ 0.8 GB
+- 溫度 < 75°C OK，75–80°C warn，> 80°C no-go
+- Camera frame drop：`/camera/camera/color/image_raw` 平均 ≥ 15 FPS
+- 同跑 brain 時：TTS / ASR 延遲 vs 單跑 ≤ +30%
+- 同跑 nav 時：`/cmd_vel_nav` 無 gap > 200ms
+
+任何升級若違反任一 hard floor，**不可** 列為 6/18 demo 預設。
+
+### 7.5.6 對其他章節的拘束
+
+- **第 2 章 物件**：模型 / 參數升級評估必須涵蓋 §7.5.4 三情境，不只看 single-run FPS。明文點：26s 若僅單跑通過、Nav mode 把 nav 拉掉 → 列 boost-only，**不作常駐預設**。詳見 object benchmark protocol §5。
+- **第 3 章 手勢**：OK 模式開關天然降低常駐負載；ENABLED 模式須驗證在 Full perception 下不打架。
+- **第 4 章 導航**：Nav mode 啟動時要明確告訴 Executive「object 降頻、pose off」；不允許 nav demo 同時跑滿 perception。
+- **第 5 章 姿勢**：本身已降級 P2，符合本治理章「降頻 context」位置。
+- **第 6 章 人臉 + 語音**：維持級，face 低頻、speech 常駐低負載，符合既有定位。
+- **第 7 章 全域驗收**：`pawai demo preflight` 應在 demo 啟動時印出當前 Mode 與預期 KPI，不允許在 Full perception + Nav mode 同時 boost。
+
+### 7.5.7 與 §8 非目標的關係
+
+本治理章把「不可全速全開」明文化。對應到 §8 增補：
+- **本窗口不做**：全模組無 Mode 切換的「永遠全開」demo 形態。
+- **本窗口至少要做（discipline-level）**：以 launch 腳本 / 配置檔 / 手動 Mode 切換的 discipline 驗證三情境量測通過。Executive 自動 Mode 廣播（cross-node mode topic + 自動切換邏輯）是**加分項，不是 P0 deliverable** — 是否列入由 implementation plan 評估投資報酬後決定，超出本窗口 scope 也 OK。
+
+換句話說：runtime budget 是 P0 共同約束（量測必須通過），但「如何讓系統自動切 Mode」是 implementation 層級決定，本北極星不對此承諾交付物。
+
+---
+
 ## 8. 非目標與延期項
 
 北極星不只說做什麼，也明確擋掉「看起來酷但會炸掉四週」的東西。
