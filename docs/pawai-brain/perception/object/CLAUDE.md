@@ -44,6 +44,18 @@
    - YOLO 輸出 bbox 在 640x640 letterboxed space
    - 要逆 pad + 逆 scale 回原圖像素座標，`ObjectPerceptionNode.rescale_bbox()` 已實作
 
+6. **`input_size` 必須是 640，改 960 直接 inference fail**（2026-05-23 踩坑）
+   - `/home/jetson/models/yolo26n.onnx` 是 fixed input 模型，匯出時固定 640×640
+   - yaml 把 `input_size: 960` 看似合理（小物件召回率），但 ORT/TRT 會在第一筆 inference 直接報 shape mismatch → node crash silent restart
+   - 要改 input_size 必須先重匯 ONNX（`opset` + `dynamic_axes`）或換 dynamic-input weights
+   - demo 期間需要小物件偵測 → 改走「縮短距離」或「換 yolo26s」，不要改 input_size
+
+7. **`class_whitelist` 非空 list 仍可能被 rclpy 推成 BYTE_ARRAY，導致型別衝突**（2026-05-23 commit `3020a87`）
+   - rclpy ParameterDescriptor 對純小整數 list（值 < 256）有時推 BYTE_ARRAY 而非 INTEGER_ARRAY
+   - 撞到 declare 階段宣告的 INTEGER_ARRAY hint → `ParameterTypeException`
+   - 修法：list 內塞一個 ≥ 256 的 dummy 值（如 `[41, 999]`）強制 INTEGER_ARRAY；node 啟動 filter `>= 80` 丟掉
+   - 不要把 dummy 寫成 999 以外的值 — 過濾邏輯 hard-coded `< 80`（COCO class count），用 999 是慣例
+
 ## 改之前先看
 
 - `docs/pawai-brain/perception/object/README.md`（模組現況）
