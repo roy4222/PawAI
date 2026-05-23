@@ -360,6 +360,21 @@ class BrainNode(Node):
             self._emit(plan)
             return
 
+        # 2026-05-23: 5/27 demo § 5 — unsafe action keyword rejection
+        # 對齊 ADR-0001 非接觸式 + 5/27 spec § 5 設計
+        # 偵測「翻跟斗 / 後空翻 / 倒立 / backflip / handstand」等危險動作關鍵字
+        # → 兩個 plan：(1) say_canned TTS 拒絕 (2) request_backflip 觸發 SafetyLayer
+        #   reject → Studio BLOCKED_BY_SAFETY 紅色 highlight
+        # LLM whitelist 完全不動 / BANNED_API_IDS 不動 / execution 100% 阻擋
+        unsafe_result = self._safety.unsafe_request(transcript)
+        if unsafe_result is not None:
+            say_plan, motion_plan = unsafe_result
+            say_plan.session_id = session_id
+            motion_plan.session_id = f"{session_id}-unsafe-visual"
+            self._emit(say_plan)
+            self._emit(motion_plan)
+            return
+
         # Note: self_introduce + show_status keyword bypasses removed 2026-05-05.
         # Reasons:
         #   1. self_introduce contains MOTION steps which SafetyLayer blocks

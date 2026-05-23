@@ -35,7 +35,10 @@ def test_all_skills_have_display_name():
 
 
 def test_baseline_distribution_matches_spec_section_11():
-    """5/18 baseline classification per spec §11. 5/9 evening: +stand (available_execute)."""
+    """5/18 baseline classification per spec §11.
+    5/9 evening: +stand (available_execute).
+    5/23 evening: +request_backflip (explain_only) for 5/27 demo § 5 safety reject viz.
+    """
     counts = {}
     for contract in SKILL_REGISTRY.values():
         counts[contract.demo_status_baseline] = counts.get(contract.demo_status_baseline, 0) + 1
@@ -43,7 +46,8 @@ def test_baseline_distribution_matches_spec_section_11():
     # available_execute: original 9 (incl. stop_move) + stand = 10
     assert counts.get("available_execute") == 10
     assert counts.get("available_confirm") == 2
-    assert counts.get("explain_only") == 5
+    # explain_only: 5/18 baseline 5 + request_backflip (5/23) = 6
+    assert counts.get("explain_only") == 6
     assert counts.get("studio_only") == 1
     assert counts.get("disabled") == 10
 

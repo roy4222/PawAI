@@ -122,6 +122,13 @@ MOTION_NAME_MAP: dict[str, int] = {
     # contract name 保持 wiggle / wiggle_hip，只改 api_id 對應 → 1020。
     "wiggle_hip": 1020,
     "scrape": 1029,
+    # 2026-05-23: 5/27 demo § 5 — backflip name → banned api_id
+    # 對齊 SafetyLayer.unsafe_request() 視覺化 BLOCKED_BY_SAFETY trace 需求
+    # 注意：1301 在 BANNED_API_IDS → SafetyLayer.validate() 必然 reject
+    # → execution 永遠不會發生，這只是讓 plan 能進 validate() 流程被擋
+    # LLM whitelist 完全不動 / BANNED_API_IDS 不動 / request_backflip 只能由
+    # SafetyLayer.unsafe_request() 觸發,不在 LLM 可生成 skill 名單
+    "backflip": 1301,
 }
 
 BANNED_API_IDS: set[int] = {1030, 1031, 1301}
@@ -391,6 +398,31 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         demo_status_baseline="explain_only",
         demo_value="medium",
         demo_reason="關閉誤觸打斷對話；只在 Studio 顯示警示",
+    ),
+    "request_backflip": SkillContract(
+        name="request_backflip",
+        # 2026-05-23: 5/27 demo § 5 — 視覺化 SafetyLayer 拒絕
+        # 設計意圖：使用者語音請求危險動作 (翻跟斗) → SafetyLayer.unsafe_request()
+        # 觸發本 skill → IE validate() 發現 MOTION step name="backflip" 對應
+        # api_id=1301 在 BANNED_API_IDS → 整個 plan 被 reject →
+        # SkillResult emit BLOCKED_BY_SAFETY → Studio chat-panel.tsx:543 紅色 highlight
+        #
+        # 安全保證 (對齊 5/27 spec § 5 + ADR-0001)：
+        # - LLM whitelist 完全不含 request_backflip / backflip → LLM 無法獨立生成
+        # - 只能由 SafetyLayer.unsafe_request() 規則觸發
+        # - 即使被觸發,SafetyLayer.validate() 必然 reject (1301 ∈ BANNED_API_IDS)
+        # - execution 永遠不會發生
+        # - 視覺 BLOCKED 是 happy path，失敗代表 ADR-0001 紅線破洞
+        steps=[SkillStep(ExecutorKind.MOTION, {"name": "backflip"})],
+        priority_class=PriorityClass.ALERT,
+        cooldown_s=30.0,
+        description="Demo-only: visualize SafetyLayer rejection. Never executable; banned_api:1301.",
+        ui_style="alert",
+        bucket="active",
+        display_name="不安全動作（視覺化拒絕）",
+        demo_status_baseline="explain_only",
+        demo_value="high",
+        demo_reason="5/27 demo § 5 — PawAI Brain Safety/Policy/Expression 三層架構唯一視覺化證據（呂奇傑 5/22 指定鏡頭）",
     ),
 
     # ---- Object ----

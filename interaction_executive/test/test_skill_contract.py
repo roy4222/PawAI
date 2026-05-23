@@ -37,6 +37,8 @@ EXPECTED_ACTIVE = {
     "nav_demo_point",
     "approach_person",
     "fallen_alert",
+    # 2026-05-23: 5/27 demo § 5 safety reject visualization
+    "request_backflip",
 }
 EXPECTED_HIDDEN = {
     "enter_mute_mode",
@@ -51,7 +53,8 @@ EXPECTED_RETIRED = {"acknowledge_gesture"}
 
 def test_registry_total_count():
     # 18 active (added stand 5/9 evening) + 5 hidden + 4 disabled + 1 retired = 28
-    assert len(SKILL_REGISTRY) == 28
+    # + request_backflip (5/23 5/27 demo § 5) = 29
+    assert len(SKILL_REGISTRY) == 29
 
 
 def test_active_bucket_matches_inventory():
@@ -191,7 +194,32 @@ def test_motion_name_map_covers_registry_and_avoids_banned_ids():
                 if name:
                     referenced.add(name)
     assert referenced <= set(MOTION_NAME_MAP), referenced - set(MOTION_NAME_MAP)
-    assert not (set(MOTION_NAME_MAP.values()) & BANNED_API_IDS)
+
+    # 2026-05-23: 5/27 demo § 5 documented exception
+    # request_backflip skill 故意路由「backflip」name 到 banned api_id 1301
+    # 目的：讓 SafetyLayer.validate() 可實際 reject + emit BLOCKED_BY_SAFETY 視覺化
+    # 安全保證：(1) backflip name 只被 request_backflip skill 引用
+    #          (2) request_backflip 只能由 SafetyLayer.unsafe_request() 觸發
+    #          (3) request_backflip 不在 LLM whitelist → LLM 無法獨立生成
+    #          (4) MOTION 步驟仍會被 SafetyLayer.validate() banned_api 攔截 → 不執行
+    DOCUMENTED_BANNED_DEMO_NAMES = {"backflip"}
+    other_banned = {
+        name for name, api_id in MOTION_NAME_MAP.items()
+        if api_id in BANNED_API_IDS and name not in DOCUMENTED_BANNED_DEMO_NAMES
+    }
+    assert not other_banned, (
+        f"MOTION_NAME_MAP routes {other_banned} to banned api_ids without documented exception"
+    )
+    # 確保 backflip 真的只被 request_backflip skill 引用
+    for contract in SKILL_REGISTRY.values():
+        if contract.name == "request_backflip":
+            continue
+        for step in contract.steps:
+            if step.executor == ExecutorKind.MOTION:
+                assert step.args.get("name") != "backflip", (
+                    f"Skill {contract.name!r} references 'backflip' MOTION; "
+                    "only request_backflip may do so (5/27 demo § 5 exception)"
+                )
 
 
 def test_stop_move_priority_is_safety():

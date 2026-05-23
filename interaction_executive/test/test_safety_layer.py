@@ -1,8 +1,15 @@
 """Tests for safety_layer.py."""
 import pytest
 
-from interaction_executive.safety_layer import SAFETY_KEYWORDS_STOP, SafetyLayer
+from interaction_executive.safety_layer import (
+    SAFETY_KEYWORDS_STOP,
+    UNSAFE_KEYWORDS_REJECT,
+    UNSAFE_REJECT_TEXT,
+    SafetyLayer,
+)
 from interaction_executive.skill_contract import (
+    BANNED_API_IDS,
+    MOTION_NAME_MAP,
     ExecutorKind,
     PriorityClass,
     SkillPlan,
@@ -29,6 +36,59 @@ def test_hard_rule_misses_normal_text(safety):
     assert safety.hard_rule("你好嗎") is None
     assert safety.hard_rule("") is None
     assert safety.hard_rule(None) is None
+
+
+# ---------------------------------------------------------------------------
+# 2026-05-23: 5/27 demo § 5 — unsafe action keyword rejection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("keyword", list(UNSAFE_KEYWORDS_REJECT))
+def test_unsafe_request_hits_each_keyword(safety, keyword):
+    """每個 unsafe keyword 都應觸發 (say_plan, motion_plan) 雙 plan。"""
+    result = safety.unsafe_request(f"PawAI 請{keyword}一下")
+    assert result is not None, f"keyword {keyword!r} missed"
+    say_plan, motion_plan = result
+    assert say_plan.selected_skill == "say_canned"
+    assert motion_plan.selected_skill == "request_backflip"
+
+
+def test_unsafe_request_misses_normal_text(safety):
+    assert safety.unsafe_request("你好嗎") is None
+    assert safety.unsafe_request("PawAI 坐下") is None
+    assert safety.unsafe_request("") is None
+    assert safety.unsafe_request(None) is None
+
+
+def test_unsafe_request_say_plan_carries_reject_text(safety):
+    """say_plan 必須含 ADR-0001 對外語句。"""
+    result = safety.unsafe_request("PawAI 請翻跟斗")
+    assert result is not None
+    say_plan, _ = result
+    say_step = next(s for s in say_plan.steps if s.executor == ExecutorKind.SAY)
+    assert say_step.args["text"] == UNSAFE_REJECT_TEXT
+
+
+def test_unsafe_request_motion_plan_routes_to_banned_api(safety):
+    """request_backflip 必須路由 backflip name → banned api_id (確保 validate 會 reject)。"""
+    result = safety.unsafe_request("PawAI 請翻跟斗")
+    assert result is not None
+    _, motion_plan = result
+    motion_step = next(s for s in motion_plan.steps if s.executor == ExecutorKind.MOTION)
+    assert motion_step.args["name"] == "backflip"
+    assert MOTION_NAME_MAP["backflip"] in BANNED_API_IDS
+
+
+def test_unsafe_request_motion_plan_actually_rejected_by_validate(safety):
+    """端到端驗證：unsafe_request 產生的 motion_plan 一定被 validate() 拒絕。
+    這是 5/27 demo § 5 真實 BLOCKED_BY_SAFETY 視覺化的核心保證。
+    """
+    result = safety.unsafe_request("backflip please")
+    assert result is not None
+    _, motion_plan = result
+    validation = safety.validate(motion_plan, WorldStateSnapshot())
+    assert validation.ok is False
+    assert "banned_api" in validation.reason
 
 
 def test_validate_safety_bypasses_world(safety):
