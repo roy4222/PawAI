@@ -149,12 +149,15 @@ class ObjectPerceptionNode(Node):
         self.declare_parameter("publish_fps", 8.0)
         self.declare_parameter("class_cooldown_sec", 5.0)
         # Empty list default needs explicit type descriptor (rclpy can't infer from [])
+        # 2026-05-23: ParameterDescriptor INTEGER_ARRAY hint 在 Humble 對 empty [] 不會強制
+        # → 推成 BYTE_ARRAY → yaml `[39]` INTEGER_ARRAY override 衝突 crash
+        # 改 default `[-1]` 強制 INTEGER 推論 (-1 不是 valid COCO class、被 filter 排除)
         self.declare_parameter(
             "class_whitelist",
-            [],
+            [-1],
             ParameterDescriptor(
                 type=ParameterType.PARAMETER_INTEGER_ARRAY,
-                description="COCO class IDs to detect; empty = all 80 classes",
+                description="COCO class IDs to detect; [-1] sentinel = all 80 classes (default)",
             ),
         )
 
@@ -168,7 +171,10 @@ class ObjectPerceptionNode(Node):
         self.class_cooldown = float(self.get_parameter("class_cooldown_sec").value)
 
         wl = list(self.get_parameter("class_whitelist").value or [])
-        self.allowed_classes: set = set(int(i) for i in wl) if wl else set(COCO_CLASSES.keys())
+        # 2026-05-23: -1 sentinel = all classes (避開 empty [] rclpy type 推論問題)
+        # 並過濾 yaml dummy >=80 (e.g. 999) 不在 COCO 集合
+        wl_clean = [int(i) for i in wl if 0 <= int(i) <= 79]
+        self.allowed_classes: set = set(wl_clean) if wl_clean else set(COCO_CLASSES.keys())
 
         self.publish_period = 1.0 / max(1.0, publish_fps)
         self.last_publish_ts = 0.0

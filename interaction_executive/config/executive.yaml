@@ -7,6 +7,10 @@ brain_node:
     # demo silence, override at launch with a large value (e.g. 99999).
     unknown_face_accumulate_s: 5.0
     fallen_accumulate_s: 2.0
+    # 2026-05-23 5/27 demo record mode: 手勢只供 Studio trace 視覺化、不直接觸發 Go2 motion
+    # _GESTURE_DIRECT 在 brain_node __init__ 被 instance shadow 成 {}
+    # 5/28+ 改回 false 即可 revert（不需 code 改）
+    gesture_direct_disabled: true
 
 interaction_executive_node:
   ros__parameters:
