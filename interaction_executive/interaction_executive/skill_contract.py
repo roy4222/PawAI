@@ -348,11 +348,12 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "greet_known_person": SkillContract(
         name="greet_known_person",
         steps=[
-            SkillStep(ExecutorKind.SAY, {"text_template": "歡迎回來，{name}"}),
+            SkillStep(ExecutorKind.SAY, {"text_template": "嗨 {name}"}),
             SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
         ],
         priority_class=PriorityClass.SKILL,
-        cooldown_s=20.0,
+        # 2026-05-23 5/27 demo video mode: 20→60s，避免錄影時連續觸發
+        cooldown_s=60.0,
         description="Personalised greeting for a registered face.",
         args_schema={"name": "string"},
         bucket="active",
@@ -363,12 +364,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     ),
     "stranger_alert": SkillContract(
         name="stranger_alert",
-        # 2026-05-23: 5/27 demo thin 版陌生人警示
-        # 原 5/7 demo silence (text="")，5/27 影片改成單向警示一句
-        # 注意：stranger_alert 在 LLM_DYNAMIC_SKILLS set (test_skill_contract.py:206)
-        # → 不能 preembed audio tag。若想要 audio tag 由 LLM runtime 填。
-        # 詳 docs/pawai-demo/2026-05-27-mid-video-spec.md §3
-        steps=[SkillStep(ExecutorKind.SAY, {"text": "請問你是哪位？我無法確認身份，我會通知管理人員。"})],
+        # 2026-05-23 PM: 5/27 demo video mode (Roy 決定不錄陌生人段)
+        # 改回 silent (text="") — 避免錄影時陌生人入鏡誤觸打斷主敘事
+        # 5/28+ 若要錄陌生人段再 revert 成 "請問你是哪位..."
+        steps=[SkillStep(ExecutorKind.SAY, {"text": ""})],
         priority_class=PriorityClass.ALERT,
         cooldown_s=30.0,
         description="Unknown face stable for 3 seconds.",

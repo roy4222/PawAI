@@ -14,8 +14,10 @@ object_perception_node:
     tick_period: 0.067
     publish_fps: 8.0
     class_cooldown_sec: 5.0
-    # YAML parser pitfall: [39] 會被推成 BYTE_ARRAY (CLAUDE.md 警告)
-    # 加 dummy 999 (不存在 COCO class) 強制推成 INTEGER_ARRAY，999 不會被偵測
-    class_whitelist: [39, 999]
+    # 5/27 demo video mode: 只認 cup (COCO #41)
+    # YAML parser pitfall: [41] 會被推成 BYTE_ARRAY (CLAUDE.md 警告)
+    # 加 dummy 999 (不存在 COCO class) 強制推成 INTEGER_ARRAY，999 被 filter 排除
+    # 5/28+ 視需求擴回 P0 subset [0, 16, 39, 41, 56, 60]
+    class_whitelist: [41, 999]
     # Original whitelist suggestion (P0 subset): [0, 16, 39, 41, 56, 60]
     # = [person, dog, bottle, cup, chair, dining_table]

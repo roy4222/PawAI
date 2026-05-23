@@ -135,6 +135,9 @@ class BrainInternalState:
     fallen_first_seen: float | None = None
     sitting_first_seen: float | None = None
     bending_first_seen: float | None = None
+    # 2026-05-23 5/27 demo video mode: last seen sitting timestamp
+    # 用來判斷 object_detected=cup 是否在 recent sitting context 內觸發複合句
+    last_sitting_seen_ts: float = 0.0
     last_alert_ts: dict[str, float] = field(default_factory=dict)
     chat_buffer: dict[str, BufferedSpeech] = field(default_factory=dict)
     dedup_cache: dict[tuple[str, str, int], float] = field(default_factory=dict)
@@ -252,6 +255,15 @@ class BrainNode(Node):
         # 預設 False 維持現有 wave/palm/fist/index → direct skill 行為
         # 設 true → 改用語音 keyword 觸發（intent_classifier greet 等）+ palm safety 改走語音「停」
         self.declare_parameter("gesture_direct_disabled", False)
+        # 2026-05-23 PM: 5/27 demo video mode — peace 直接觸發 stretch (繞 PendingConfirm)
+        # 預設 False 維持現有「peace 要 OK 二確認」安全行為
+        # 設 true → peace 進入 _GESTURE_DIRECT={"peace":"stretch"}，一步觸發、不需 OK
+        self.declare_parameter("peace_direct_stretch", False)
+        # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
+        # 設 true → 觸發複合句「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along TTS
+        # 預設 False 維持現有 object_remark + sit_along 獨立行為
+        self.declare_parameter("demo_video_cup_compound", False)
+        self.declare_parameter("demo_video_silent_sit_along", False)
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -263,9 +275,19 @@ class BrainNode(Node):
         self.idle_cooldown_s = float(self.get_parameter("idle_cooldown_s").value)
         self.idle_max_per_hour = int(self.get_parameter("idle_max_per_hour").value)
         self.gesture_direct_disabled = bool(self.get_parameter("gesture_direct_disabled").value)
+        self.peace_direct_stretch = bool(self.get_parameter("peace_direct_stretch").value)
+        self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
+        self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
         if self.gesture_direct_disabled:
             # Instance shadow class attribute — 不影響其他 BrainNode instances 或 test fixtures
             self._GESTURE_DIRECT = {}
+        if self.peace_direct_stretch:
+            # demo video mode: peace 一步觸發 stretch, 同時砍掉 _GESTURE_CONFIRM["peace"]
+            # 避免 peace 同時走 confirm path
+            self._GESTURE_DIRECT = {**self._GESTURE_DIRECT, "peace": "stretch"}
+            self._GESTURE_CONFIRM = {
+                k: v for k, v in self._GESTURE_CONFIRM.items() if k != "peace"
+            }
 
     def _emit(self, plan: SkillPlan) -> None:
         payload = self._plan_to_dict(plan)
@@ -1031,12 +1053,17 @@ class BrainNode(Node):
 
         # ---- sitting → sit_along (low-risk social) ----
         if pose == "sitting":
+            # 2026-05-23: last_sitting_seen_ts 持續更新 (for cup+Roy+sitting 複合句 check)
+            self._state.last_sitting_seen_ts = now
             if self._state.sitting_first_seen is None:
                 self._state.sitting_first_seen = now
             elif (now - self._state.sitting_first_seen) >= 1.0 and not confirm_pending:
-                self._emit_with_cooldown(
-                    "sit_along", source="rule:pose_sitting", reason="pose_sitting_stable_1s"
-                )
+                # 2026-05-23 5/27 demo video mode: sit_along TTS「會不會太累」
+                # 跟 cup+Roy+sitting 複合句語意打架 → 設 param 砍 sit_along auto-fire
+                if not self.demo_video_silent_sit_along:
+                    self._emit_with_cooldown(
+                        "sit_along", source="rule:pose_sitting", reason="pose_sitting_stable_1s"
+                    )
                 self._state.sitting_first_seen = None
             self._state.bending_first_seen = None
             return
@@ -1112,6 +1139,38 @@ class BrainNode(Node):
         if snap.tts_playing:
             return  # Don't insert object remark while PAI is speaking
 
+        # 2026-05-23 5/27 demo video mode: cup + Roy + recent sitting → 複合句
+        # Roy 5/23 PM 指定 demo 句:「我看到 Roy 坐著拿著杯子，是口渴了嗎」
+        # 觸發條件:
+        #   - class_name == "cup"
+        #   - last_stable_identity_name == "Roy" (5/12 face cache, ≤30s 算 fresh)
+        #   - last_sitting_seen_ts 在最近 10s 內 (Roy 真的坐著且 brain 看到)
+        # 5/28+ 設 demo_video_cup_compound=false 即可 revert
+        now = time.time()
+        if (
+            self.demo_video_cup_compound
+            and class_name == "cup"
+        ):
+            with self._lock:
+                cached_name = self._last_stable_identity_name
+                cached_age = now - self._last_stable_identity_ts
+            recent_sitting = (now - self._state.last_sitting_seen_ts) < 10.0
+            if cached_name == "Roy" and cached_age <= 30.0 and recent_sitting:
+                # 直接 emit say_canned 固定句，跳過 object_remark
+                compound_key = ("cup_compound_roy_sitting",)
+                last_compound = self._object_remark_seen.get(compound_key, 0.0)
+                if now - last_compound >= 60.0:
+                    self._object_remark_seen[compound_key] = now
+                    self._emit(
+                        build_plan(
+                            "say_canned",
+                            args={"text": "我看到 Roy 坐著拿著杯子，是口渴了嗎？"},
+                            source="rule:demo_video_cup_compound",
+                            reason="cup+Roy+sitting",
+                        )
+                    )
+                    return
+
         # Compose zh-TW TTS — None means class is outside the speaking whitelist.
         text = build_object_tts(class_name, color)
         if text is None:
@@ -1121,7 +1180,6 @@ class BrainNode(Node):
         # Rationale: YOLO color labels jitter on the same object (brown_chair →
         # coffee_chair → dark_chair within seconds), which previously bypassed
         # the 60s dedup.  class_name-only key gives stable dedup across color noise.
-        now = time.time()
         seen_key = (class_name,)
         last = self._object_remark_seen.get(seen_key, 0.0)
         if now - last < OBJECT_REMARK_DEDUP_S:

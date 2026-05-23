@@ -166,7 +166,8 @@ def test_known_face_greets_stable_identity(brain):
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "greet_known_person"
-    assert plan["steps"][0]["args"]["text"] == "歡迎回來，alice"
+    # 2026-05-23: greet TTS 從「歡迎回來，{name}」改成「嗨 {name}」(5/27 demo video mode)
+    assert plan["steps"][0]["args"]["text"] == "嗨 alice"
 
 
 def test_unknown_face_stable_triggers_stranger_alert(brain):

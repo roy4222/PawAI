@@ -11,6 +11,16 @@ brain_node:
     # _GESTURE_DIRECT 在 brain_node __init__ 被 instance shadow 成 {}
     # 5/28+ 改回 false 即可 revert（不需 code 改）
     gesture_direct_disabled: true
+    # 2026-05-23 PM: 5/27 demo video mode — peace 一步觸發 stretch (繞 PendingConfirm OK 二確認)
+    # 這條會 override gesture_direct_disabled 對 peace 的影響：peace 仍走 direct trigger
+    # 其他手勢 (wave/palm/fist/index) 仍被 gesture_direct_disabled 砍掉
+    # 5/28+ 改回 false 即可 revert
+    peace_direct_stretch: true
+    # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
+    # 觸發「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along auto-TTS
+    # 5/28+ 改回 false 即可 revert
+    demo_video_cup_compound: true
+    demo_video_silent_sit_along: true
 
 interaction_executive_node:
   ros__parameters:

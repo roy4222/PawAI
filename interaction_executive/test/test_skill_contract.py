@@ -144,7 +144,8 @@ def test_meta_skills_dict_exposes_self_introduce():
 
 def test_greet_known_person_template_resolves():
     plan = build_plan("greet_known_person", args={"name": "alice"})
-    assert plan.steps[0].args["text"] == "歡迎回來，alice"
+    # 2026-05-23: greet TTS 從「歡迎回來，{name}」改成「嗨 {name}」(5/27 demo video mode)
+    assert plan.steps[0].args["text"] == "嗨 alice"
     assert plan.steps[1].args["name"] == "hello"
 
 
