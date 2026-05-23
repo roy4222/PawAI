@@ -3,14 +3,13 @@ object_perception_node:
     model_path: "/home/jetson/models/yolo26n.onnx"
     trt_cache_dir: "/home/jetson/trt_cache/"
     color_topic: "/camera/camera/color/image_raw"
-    # 2026-05-23 5/27 demo record mode (subagent codebase audit 推薦)
-    # 原 threshold=0.5 / input=640 demo 場景召回率不足 (Roy 5/22「效果極差」)
-    # threshold 0.5→0.35: 召回率 +5-10% (per-class cooldown 5s 已吸收 false positive)
-    # input 640→960: 小物件偵測率最大提升 (FPS 15→~8 仍夠用，瓶頸在 LLM 2s+nav 8s)
-    # class_whitelist=[39]: 只認 bottle (COCO #39, 訓練資料最充分的 class)
-    # 5/28+ 視 demo 拍完狀況決定是否擴回 P0 subset / 加 CLAHE 後處理
+    # 2026-05-23 5/27 demo record mode
+    # threshold 0.5→0.35: 召回率 +5-10% (per-class cooldown 5s 吸收 false positive)
+    # input_size: 必須 640 (YOLO26n ONNX fixed input、改 960 直接 inference fail)
+    # class_whitelist=[41]: 只認 cup (COCO #41) + 999 dummy 強制 INTEGER_ARRAY
+    # 5/28+ 視需求擴回 P0 subset / 換大模型 / 加 CLAHE
     confidence_threshold: 0.35
-    input_size: 960
+    input_size: 640
     tick_period: 0.067
     publish_fps: 8.0
     class_cooldown_sec: 5.0

@@ -348,7 +348,10 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "greet_known_person": SkillContract(
         name="greet_known_person",
         steps=[
-            SkillStep(ExecutorKind.SAY, {"text_template": "嗨 {name}"}),
+            # 2026-05-23 PM: 5/27 demo video mode 段 1 — face + sitting 合一句
+            # Roy 拍攝場景一定先坐下，brain greet 觸發時 implicit sitting ✅
+            # 嚴格的 if recent sitting 邏輯留 5/28+
+            SkillStep(ExecutorKind.SAY, {"text_template": "{name}，歡迎回來。我看到你坐下來了。"}),
             SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
         ],
         priority_class=PriorityClass.SKILL,
