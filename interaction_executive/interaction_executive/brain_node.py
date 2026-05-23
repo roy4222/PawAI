@@ -248,6 +248,10 @@ class BrainNode(Node):
         self.declare_parameter("idle_threshold_s", 600.0)
         self.declare_parameter("idle_cooldown_s", 600.0)
         self.declare_parameter("idle_max_per_hour", 4)
+        # 2026-05-23 5/27 demo record mode: 砍 gesture direct trigger（手勢只供 Studio trace）
+        # 預設 False 維持現有 wave/palm/fist/index → direct skill 行為
+        # 設 true → 改用語音 keyword 觸發（intent_classifier greet 等）+ palm safety 改走語音「停」
+        self.declare_parameter("gesture_direct_disabled", False)
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -258,6 +262,10 @@ class BrainNode(Node):
         self.idle_threshold_s = float(self.get_parameter("idle_threshold_s").value)
         self.idle_cooldown_s = float(self.get_parameter("idle_cooldown_s").value)
         self.idle_max_per_hour = int(self.get_parameter("idle_max_per_hour").value)
+        self.gesture_direct_disabled = bool(self.get_parameter("gesture_direct_disabled").value)
+        if self.gesture_direct_disabled:
+            # Instance shadow class attribute — 不影響其他 BrainNode instances 或 test fixtures
+            self._GESTURE_DIRECT = {}
 
     def _emit(self, plan: SkillPlan) -> None:
         payload = self._plan_to_dict(plan)
@@ -583,6 +591,14 @@ class BrainNode(Node):
         "index": "enter_listen_mode",
     }
     _GESTURE_CONFIRM = {"thumbs_up": "wiggle", "peace": "stretch"}
+    # 2026-05-23 5/27 demo record mode (Roy 5/22 P0「手勢狂誤觸」):
+    # ROS param `gesture_direct_disabled=true` 時，brain_node __init__ 會把
+    # instance-level _gesture_direct 設成 {} → 手勢只供 Studio trace 視覺化、
+    # 不直接觸發 Go2 motion。
+    # 對應 5/27 demo § 4：「手勢觸發互動」demo 鏡頭改走語音 keyword
+    #   wave_hello → 講「打招呼」(intent_classifier greet → wave_hello)
+    #   system_pause → 講「停」(SafetyLayer.hard_rule 已 cover)
+    # _GESTURE_CONFIRM (thumbs_up→wiggle / peace→stretch) 保留 (需 OK 二確認 = 安全)
     # N6: gestures that produce social skills (wave/hello) or mode switches
     # (mute/listen) get suppressed when chat is active in the last 30s.
     # palm/system_pause is SAFETY and NEVER gated.

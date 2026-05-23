@@ -11,9 +11,14 @@ vision_perception_node:
     # N7 (2026-05-11): user 反饋 fist 辨識率低。vote_frames 3→5 穩定 majority
     # 不受單幀 misdetection 影響；gesture_stable_s 0.5→0.3 縮短 hold gate 讓
     # fist 觸發更快（5 幀 @ 20Hz ≈ 250ms 投票 + 300ms hold = ~550ms 反應）。
-    gesture_vote_frames: 5
+    #
+    # 2026-05-23 5/27 demo record mode (Roy 5/22 P0「狂誤觸」)
+    # 拉到 vote=10 + stable=1.5 = 必須 ~3-4s 穩定姿勢才觸發
+    # 對應 5/27 demo § 4：手勢只供 Studio trace 視覺化，不直接觸發 Go2 motion
+    # 5/28+ 視 demo 拍完狀況決定是否 revert N7 baseline
+    gesture_vote_frames: 10
     gesture_min_score: 0.1
-    gesture_stable_s: 0.3
+    gesture_stable_s: 1.5
     gesture_backend: "rtmpose"    # "rtmpose" or "mediapipe"
     pose_backend: "rtmpose"       # "rtmpose" or "mediapipe"
     pose_complexity: 0            # 0=lite(fast), 1=full, 2=heavy
