@@ -356,11 +356,12 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     ),
     "stranger_alert": SkillContract(
         name="stranger_alert",
-        # 5/7 night demo silence: empty text → IE-node SAY returns
-        # "empty_tts_text" → no /tts publish. Studio still sees the
-        # /brain/proposal trace (chip visible). Same pattern as
-        # fall_alert FALL_ALERT_TTS="" / POSE_TTS_MAP['fallen'] removal.
-        steps=[SkillStep(ExecutorKind.SAY, {"text": ""})],
+        # 2026-05-23: 5/27 demo thin 版陌生人警示
+        # 原 5/7 demo silence (text="")，5/27 影片改成單向警示一句
+        # 注意：stranger_alert 在 LLM_DYNAMIC_SKILLS set (test_skill_contract.py:206)
+        # → 不能 preembed audio tag。若想要 audio tag 由 LLM runtime 填。
+        # 詳 docs/pawai-demo/2026-05-27-mid-video-spec.md §3
+        steps=[SkillStep(ExecutorKind.SAY, {"text": "請問你是哪位？我無法確認身份，我會通知管理人員。"})],
         priority_class=PriorityClass.ALERT,
         cooldown_s=30.0,
         description="Unknown face stable for 3 seconds.",
@@ -369,7 +370,7 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         display_name="陌生人警告",
         demo_status_baseline="explain_only",
         demo_value="medium",
-        demo_reason="Demo 期間靜音；trace 仍可見，避免打斷語音主鏈",
+        demo_reason="5/27 demo：門口監控陌生人偵測單向警示（baseline 維持 explain_only 對齊 spec §11 分布測試）",
     ),
     "fallen_alert": SkillContract(
         name="fallen_alert",
