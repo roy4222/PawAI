@@ -584,3 +584,19 @@ ros2 run speech_processor tts_node --ros-args -p provider:=piper \
 ```
 
 > MeloTTS、ElevenLabs 已淘汰（3/26 會議確認），不再支援。
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues at `github.com/roy4222/PawAI` via `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default 5-role vocabulary (needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. `CONTEXT.md` at repo root acts as glossary index pointing to existing `CLAUDE.md` + `docs/pawai-brain/architecture/0511/`. ADRs in `docs/adr/`. See `docs/agents/domain.md`.
