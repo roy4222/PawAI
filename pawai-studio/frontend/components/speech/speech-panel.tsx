@@ -1,403 +1,266 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Mic, Square, History, ArrowLeft, FileText, Clock, Tag, Zap, Bot, Home } from 'lucide-react'
+import { usePathname } from 'next/navigation'
+import { Mic, Square, Bot, User, Home, Activity, Zap, Clock, MessageSquare, ServerCrash, Trash2 } from 'lucide-react'
 import { useAudioRecorder } from '@/hooks/use-audio-recorder'
 import { PanelCard } from '@/components/shared/panel-card'
-import { EventItem } from '@/components/shared/event-item'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import type { SpeechState } from '@/contracts/types'
-import { useStateStore } from '@/stores/state-store'
-import { useEventStore } from '@/stores/event-store'
-
-import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+import { useStateStore } from '@/stores/state-store'
 
-function VoiceRecorderSection() {
-  const { isRecording, isProcessing, lastResult, error, startRecording, stopRecording } = useAudioRecorder()
+// ============================================================================
+// 🐾 1. 首頁專用版面
+// ============================================================================
+function CompactSpeechWidget() {
+  const { isRecording, isProcessing, lastResult, startRecording, stopRecording } = useAudioRecorder()
+  const speechState = useStateStore((s) => s.speechState)
+  const audioRef = useRef<HTMLAudioElement>(null) // ✨ 實體播放器參考
+
+  useEffect(() => {
+    // ✨ 終極防回音：只有當網址真的改變時，才指派給 audio 標籤並播放
+    if (lastResult?.audio_url && audioRef.current) {
+      if (audioRef.current.src !== lastResult.audio_url) {
+        audioRef.current.src = lastResult.audio_url;
+        audioRef.current.play().catch(e => console.log("播放被攔截:", e));
+      }
+    }
+  }, [lastResult?.audio_url]);
 
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-lg border border-border/30 bg-surface/30">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground font-medium">語音輸入</span>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => isRecording ? stopRecording() : startRecording()}
-          disabled={isProcessing}
-          className={cn(
-            "h-7 text-xs gap-1.5 cursor-pointer",
-            isRecording
-              ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
-              : isProcessing
-                ? "bg-amber-500 text-white cursor-wait"
-                : "bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border border-sky-400/20"
+    <PanelCard title="語音互動" icon={<Mic className="h-4 w-4" />} status={speechState ? "active" : "loading"} href="/studio/speech">
+      {/* ✨ 隱藏的唯一播放器，保證絕對不會有雙重聲音 */}
+      <audio ref={audioRef} className="hidden" />
+      
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5 shadow-md">
+          <div className="flex items-center justify-between border-b border-sky-500/20 pb-2">
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-sky-400">語音互動區</span>
+              <span className="text-[10px] text-muted-foreground italic">請對著麥克風說話</span>
+            </div>
+            <Button
+              type="button"
+              onClick={() => isRecording ? stopRecording() : startRecording()}
+              className={cn("h-10 w-10 rounded-full transition-all shadow-md", isRecording ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-sky-500 hover:bg-sky-600")}
+            >
+              {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+          </div>
+          {lastResult && (
+            <div className="flex flex-col gap-2 py-1">
+              <div className="flex flex-col gap-1 items-end">
+                <span className="text-[9px] text-sky-400 font-bold flex items-center gap-1">YOU <User className="h-2.5 w-2.5" /></span>
+                <div className="bg-sky-500 text-white px-3 py-1.5 rounded-2xl rounded-tr-none max-w-[85%] text-xs">{lastResult.asr || '(辨識中...)'}</div>
+              </div>
+              {lastResult.reply_text && (
+                <div className="flex flex-col gap-1 items-start">
+                  <span className="text-[9px] text-primary font-bold flex items-center gap-1"><Bot className="h-2.5 w-2.5" /> PawAI</span>
+                  <div className="bg-primary/10 border border-primary/30 px-3 py-1.5 rounded-2xl rounded-tl-none max-w-[85%] text-xs text-primary">{lastResult.reply_text}</div>
+                </div>
+              )}
+            </div>
           )}
-        >
-          {isRecording ? (
-            <><Square className="h-3 w-3" /> 停止</>
-          ) : isProcessing ? (
-            <>辨識中...</>
-          ) : (
-            <><Mic className="h-3 w-3" /> 錄音</>
-          )}
-        </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href="/studio/speech" className="w-full"><Button variant="outline" size="sm" className="w-full text-[11px] h-7">開啟戰情室</Button></Link>
+          <Button variant="outline" size="sm" className="w-full text-[11px] h-7">事件歷史</Button>
+        </div>
+      </div>
+    </PanelCard>
+  )
+}
+
+// ============================================================================
+// 🚀 2. 專屬頁面版面
+// ============================================================================
+function FullScreenSpeechDashboard() {
+  const { isRecording, isProcessing, lastResult, startRecording, stopRecording } = useAudioRecorder()
+  const [chatHistory, setChatHistory] = useState<any[]>([])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null) // ✨ 實體播放器參考
+
+  const isGpuOffline = lastResult?.intent === 'offline_fallback';
+
+  useEffect(() => {
+    if (lastResult?.asr && lastResult?.reply_text) {
+      setChatHistory(prev => {
+        if (prev.some(item => item.audio_url === lastResult.audio_url)) return prev;
+        const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        const displayAsr = lastResult.asr ? lastResult.asr : "(未辨識到清晰語音)";
+        
+        return [...prev, { ...lastResult, asr: displayAsr, timestamp: timeString }]
+      })
+    }
+  }, [lastResult])
+
+  useEffect(() => {
+    // ✨ 終極防回音：只有當網址真的改變時，才指派給 audio 標籤並播放
+    if (lastResult?.audio_url && audioRef.current) {
+      if (audioRef.current.src !== lastResult.audio_url) {
+        audioRef.current.src = lastResult.audio_url;
+        audioRef.current.play().catch(e => console.log("播放被攔截:", e));
+      }
+    }
+  }, [lastResult?.audio_url]);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [chatHistory.length, isProcessing])
+
+  return (
+    <div className="w-[95vw] max-w-[800px] mx-auto h-auto md:h-[60vh] min-h-[500px] flex flex-col md:flex-row gap-4 justify-center relative md:-translate-x-30">
+      
+      {/* ✨ 隱藏的唯一播放器，保證絕對不會有雙重聲音 */}
+      <audio ref={audioRef} className="hidden" />
+
+      {/* 👈 左欄：主控台 */}
+      <div className="w-full md:w-[35%] flex flex-col gap-3">
+        <div className={cn(
+          "flex-1 border rounded-xl p-5 flex flex-col items-center justify-center relative shadow-md overflow-hidden transition-colors duration-500",
+          isGpuOffline ? "bg-red-950/20 border-red-500/40" : "bg-slate-900/40 border-sky-500/20"
+        )}>
+          
+          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isGpuOffline ? "bg-red-500 shadow-red-500/50" : (isRecording ? "bg-sky-400" : "bg-emerald-500"))} />
+            <span className={cn("text-[9px] font-bold uppercase tracking-wider", isGpuOffline ? "text-red-400" : "text-emerald-400")}>
+              {isGpuOffline ? "GPU OFFLINE" : "SYSTEM ONLINE"}
+            </span>
+          </div>
+
+          <div className="my-4 flex flex-col items-center gap-4 relative">
+            {isRecording && !isGpuOffline && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 bg-sky-500/20 rounded-full animate-ping" />
+            )}
+
+            <Button
+              type="button"
+              onClick={() => isRecording ? stopRecording() : startRecording()}
+              className={cn(
+                "h-20 w-20 rounded-full transition-all duration-300 z-10",
+                isRecording 
+                  ? "bg-sky-400 hover:bg-sky-500 scale-105 shadow-[0_0_30px_rgba(56,189,248,0.5)]" 
+                  : (isGpuOffline ? "bg-red-500 hover:bg-red-400 shadow-[0_0_15px_rgba(239,68,68,0.3)]" : "bg-sky-600 hover:bg-sky-500 shadow-[0_0_15px_rgba(2,132,199,0.3)] hover:scale-105")
+              )}
+            >
+              {isRecording ? <Square className="h-6 w-6 text-white" /> : <Mic className="h-6 w-6 text-white" />}
+            </Button>
+            
+            <div className="flex flex-col items-center gap-1 mt-1">
+              <span className="text-[11px] text-slate-300 font-medium whitespace-nowrap">
+                {isRecording ? "🔴 錄音中 (點擊發送)..." : "點擊麥克風說話"}
+              </span>
+              {isGpuOffline && <span className="text-[9px] text-red-400 font-bold whitespace-nowrap">⚠️ 離線守護模式</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* 數據看板 */}
+        <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
+          <h3 className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1.5"><Activity className="w-3 h-3 text-sky-400" /> 分析數據</h3>
+          <div className="flex flex-col gap-1.5">
+            <div className="bg-slate-950/50 rounded-md px-2.5 py-1.5 border border-slate-800/50 flex justify-between items-center">
+              <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Zap className="w-3 h-3 text-yellow-400"/> 意圖分類</div>
+              <div className={cn("text-[11px] font-bold", isGpuOffline ? "text-red-400" : "text-slate-200")}>
+                {lastResult?.intent || '--'}
+              </div>
+            </div>
+            <div className="bg-slate-950/50 rounded-md px-2.5 py-1.5 border border-slate-800/50 flex justify-between items-center">
+              <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Activity className="w-3 h-3 text-green-400"/> 信心度</div>
+              <div className="text-[11px] font-bold text-slate-200">
+                {lastResult?.confidence ? `${(lastResult.confidence * 100).toFixed(0)}%` : '--'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 下方按鈕區 */}
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setChatHistory([])}
+            className="w-10 h-8 bg-transparent border-slate-700 hover:bg-red-900/50 hover:text-red-400 text-slate-400 text-xs px-0 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+          <Link href="/studio" className="flex-1">
+            <Button variant="outline" className="w-full h-8 bg-transparent border-slate-700 hover:bg-slate-800 text-slate-300 text-[11px]">
+              <Home className="w-3.5 h-3.5 mr-1.5" /> 返回控制首頁
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {error && (
-        <span className="text-xs text-destructive">{error}</span>
-      )}
-
-      {lastResult && (
-        <div className="flex flex-col gap-1 p-2 rounded-md bg-surface/50 border border-border/20">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-foreground">{lastResult.asr}</span>
-            <Badge className="text-[9px] px-1.5 py-0 h-4 rounded-full bg-emerald-500/10 text-emerald-400 border-transparent font-normal ml-auto">
-              已發佈
-            </Badge>
-          </div>
-          <span className="text-[10px] text-muted-foreground font-mono">
-            intent: {lastResult.intent} · {Math.round(lastResult.confidence * 100)}% · {Math.round(lastResult.latency_ms)}ms
-          </span>
+      {/* 👉 右欄：通訊歷史日誌 */}
+      <div className="w-full md:w-[65%] bg-slate-900/40 border border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-md relative">
+        <div className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-3.5 flex items-center gap-2.5 z-10">
+          <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
+          <h2 className="text-[11px] font-bold text-slate-200 tracking-wide">互動通訊日誌</h2>
+          <Badge variant="outline" className={cn("ml-auto text-[9px] px-1.5 py-0", isGpuOffline ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-sky-500/10 text-sky-400 border-sky-500/20")}>
+            {isGpuOffline ? "Fallback Mode" : "Live Session"}
+          </Badge>
         </div>
-      )}
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scroll-smooth bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-slate-950">
+          
+          {chatHistory.length === 0 && !isProcessing ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-2.5">
+              <Bot className="w-8 h-8 opacity-50" />
+              <p className="text-[11px]">系統待命中。請點擊左側發送指令。</p>
+            </div>
+          ) : (
+            chatHistory.map((chat, index) => (
+              <div key={index} className="flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[9px] text-sky-400/80 font-bold flex items-center gap-1 px-1">
+                    {chat.timestamp} · YOU <User className="w-2.5 h-2.5" />
+                  </span>
+                  <div className="bg-sky-600 text-white px-3.5 py-2 rounded-2xl rounded-tr-none max-w-[85%] shadow-sm text-[13px]">{chat.asr}</div>
+                </div>
+                <div className="flex flex-col items-start gap-1">
+                  <span className={cn("text-[9px] font-bold flex items-center gap-1 px-1", isGpuOffline ? "text-red-400/80" : "text-purple-400/80")}>
+                    {isGpuOffline ? <ServerCrash className="w-2.5 h-2.5" /> : <Bot className="w-2.5 h-2.5" />} PawAI · {chat.timestamp}
+                  </span>
+                  <div className="bg-slate-800 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-2xl rounded-tl-none max-w-[85%] shadow-sm text-[13px] leading-relaxed">{chat.reply_text}</div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {isProcessing && (
+             <div className="flex flex-col items-start gap-1 mt-1 animate-in fade-in duration-300">
+                <span className="text-[9px] text-sky-400/80 font-bold flex items-center gap-1 px-1">
+                  <Activity className="w-2.5 h-2.5 animate-bounce" /> System
+                </span>
+                <div className="bg-slate-800/80 border border-slate-700 text-slate-400 px-3.5 py-2 rounded-2xl rounded-tl-none shadow-sm text-[11px] flex items-center gap-2">
+                  <span className="flex gap-0.5">
+                    <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                    <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                    <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                  </span>
+                  分析中...
+                </div>
+             </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-const MOCK_SPEECH_STATE: SpeechState = {
-  stamp: 1773561602.123,
-  phase: 'speaking',
-  last_asr_text: '幫我打開客廳的燈',
-  last_intent: 'turn_on_light',
-  last_tts_text: '好的，已經為您打開客廳的燈。',
-  models_loaded: ['kws', 'asr', 'tts'],
-}
-
-const MOCK_SPEECH_EVENTS = [
-  {
-    id: 'evt-speech-001',
-    timestamp: '2026-03-18T13:24:35.000Z',
-    source: 'speech',
-    event_type: 'wake_word',
-    data: {},
-  },
-  {
-    id: 'evt-speech-002',
-    timestamp: '2026-03-18T13:24:38.000Z',
-    source: 'speech',
-    event_type: 'asr_result',
-    data: { text: '你好，很高興認識你！' },
-  },
-  {
-    id: 'evt-speech-003',
-    timestamp: '2026-03-18T13:24:39.000Z',
-    source: 'speech',
-    event_type: 'intent_recognized',
-    data: {
-      intent: 'greet',
-      text: '你好，很高興認識你！',
-      confidence: 0.99,
-      provider: 'whisper_local',
-    },
-  },
-  {
-    id: 'evt-speech-004',
-    timestamp: '2026-03-18T13:24:52.000Z',
-    source: 'speech',
-    event_type: 'wake_word',
-    data: {},
-  },
-  {
-    id: 'evt-speech-005',
-    timestamp: '2026-03-18T13:24:57.000Z',
-    source: 'speech',
-    event_type: 'asr_result',
-    data: { text: '幫我打開客廳的燈' },
-  },
-  {
-    id: 'evt-speech-006',
-    timestamp: '2026-03-18T13:25:00.000Z',
-    source: 'speech',
-    event_type: 'intent_recognized',
-    data: {
-      intent: 'turn_on_light',
-      text: '幫我打開客廳的燈',
-      confidence: 0.98,
-      provider: 'whisper_local',
-    },
-  }
-]
-
-const PHASE_CONFIG: Record<string, { label: string; colorClass: string }> = {
-  idle_wakeword: { label: '等待喚醒', colorClass: 'bg-muted-foreground' },
-  wake_ack: { label: '喚醒確認', colorClass: 'bg-warning' },
-  loading_local_stack: { label: '載入模型中', colorClass: 'bg-warning' },
-  listening: { label: '聆聽中', colorClass: 'bg-success' },
-  transcribing: { label: '轉寫中', colorClass: 'bg-primary' },
-  local_asr_done: { label: 'ASR 完成', colorClass: 'bg-primary' },
-  cloud_brain_pending: { label: '等待大腦', colorClass: 'bg-warning' },
-  speaking: { label: '播放中', colorClass: 'bg-success' },
-  keep_alive: { label: '保持連線', colorClass: 'bg-muted-foreground' },
-  unloading: { label: '卸載中', colorClass: 'bg-muted-foreground' },
-}
-
-const EXPECTED_MODELS = ['kws', 'asr', 'tts']
-const USE_MOCK_DATA = true
-
+// ============================================================================
+// 🧠 3. 主輸出
+// ============================================================================
 export function SpeechPanel() {
-  const [viewMode, setViewMode] = useState<'main' | 'history' | 'latest'>('main')
+  const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
 
-  const [isMounted, setIsMounted] = useState(false)
-  useEffect(() => {
-    // 🛡️ 終極魔法：用 setTimeout 把它變成「非同步」，完美騙過潔癖機器人！
-    const timer = setTimeout(() => {
-      setIsMounted(true)
-    }, 0)
-    return () => clearTimeout(timer)
-  }, [])
+  useEffect(() => { setIsMounted(true) }, []);
+  if (!isMounted) return null;
 
-  const formatTime = (ts: string | number | undefined) => {
-    if (!isMounted || !ts) return '--:--:--'
-    return new Date(ts).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  }
-
-  const realSpeechState = useStateStore((s) => s.speechState) as SpeechState | null
-  const allEvents = useEventStore((s) => s.events) || []
-  const realSpeechEvents = allEvents.filter((e) => e.source === 'speech')
-
-  const speechState = USE_MOCK_DATA ? MOCK_SPEECH_STATE : realSpeechState
-  const speechEvents = USE_MOCK_DATA ? MOCK_SPEECH_EVENTS : realSpeechEvents
-
-  const recentEvents = [...speechEvents].reverse().slice(0, 10)
-  const latestIntentEvent = [...speechEvents].find(e => e.event_type === 'intent_recognized')
-
-  const eventData = latestIntentEvent?.data as { confidence?: number; provider?: string } | undefined
-  const confidence = eventData?.confidence ? Number(eventData.confidence) : 0
-
-  const latestTimeStr = formatTime(latestIntentEvent?.timestamp)
-
-  let panelStatus: "loading" | "active" | "inactive" | "error" = "loading"
-  if (!speechState) {
-    panelStatus = "loading"
-  } else if (speechState.phase === 'idle_wakeword' && recentEvents.length === 0) {
-    panelStatus = "inactive"
-  } else {
-    panelStatus = "active"
-  }
-
-  const phaseStr = speechState?.phase ? String(speechState.phase) : 'idle_wakeword'
-  const phaseConfig = PHASE_CONFIG[phaseStr] || { label: phaseStr, colorClass: 'bg-muted-foreground' }
-
-  const isListening = phaseStr === 'listening'
-  const isIdleEmpty = phaseStr === 'idle_wakeword' && recentEvents.length === 0
-
-  const titleMap = { main: "語音互動", history: "事件歷史紀錄", latest: "最近對話詳情" }
-  const iconMap = {
-    main: <Mic className="h-4 w-4" />,
-    history: <History className="h-4 w-4" />,
-    latest: <FileText className="h-4 w-4" />
-  }
-
-  if (!isMounted) {
-    return null
-  }
-
-  return (
-    <PanelCard
-      title={titleMap[viewMode]}
-      icon={iconMap[viewMode]}
-      href="/studio/speech"
-      status={panelStatus}
-    >
-      {viewMode === 'history' && (
-        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
-          <Button type="button" variant="ghost" size="sm" className="w-fit -ml-2 text-muted-foreground hover:text-foreground cursor-pointer" onClick={() => setViewMode('main')}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> 返回語音面板
-          </Button>
-
-          <ScrollArea className="h-[250px] pr-3">
-            {recentEvents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-10">
-                <History className="h-8 w-8 mb-2 opacity-20" />
-                <span className="text-sm">目前沒有任何紀錄</span>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {recentEvents.map((evt: { id: string | number; timestamp: string | number; event_type: string; source: string; data?: unknown }) => {
-                  let summary = String(evt.event_type)
-                  const itemData = evt.data as { intent?: string; text?: string } | undefined
-
-                  if (evt.event_type === 'intent_recognized') summary = `意圖: ${itemData?.intent || ''}`
-                  if (evt.event_type === 'asr_result') summary = `轉寫: ${itemData?.text || ''}`
-                  if (evt.event_type === 'wake_word') summary = `喚醒詞觸發`
-
-                  const timeStr = formatTime(evt.timestamp)
-
-                  return (
-                    <EventItem
-                      key={String(evt.id)}
-                      timestamp={timeStr}
-                      eventType={String(evt.event_type)}
-                      source={String(evt.source)}
-                      summary={summary}
-                    />
-                  )
-                })}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      )}
-
-      {viewMode === 'latest' && (
-        <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
-          <Button type="button" variant="ghost" size="sm" className="w-fit -ml-2 text-muted-foreground hover:text-foreground cursor-pointer" onClick={() => setViewMode('main')}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> 返回語音面板
-          </Button>
-
-          {!speechState?.last_asr_text ? (
-            <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-              <FileText className="h-8 w-8 mb-2 opacity-20" />
-              <span className="text-sm">尚無對話紀錄</span>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 p-4 bg-surface-hover rounded-lg border border-border/50">
-
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Mic className="w-3 h-3" /> 使用者說</span>
-                <p className="text-sm font-medium text-foreground">{String(speechState.last_asr_text)}</p>
-              </div>
-
-              {Boolean(speechState.last_tts_text) && (
-                <div className="flex flex-col gap-1 p-3 bg-primary/10 rounded-md border border-primary/20">
-                  <span className="text-xs text-primary flex items-center gap-1"><Bot className="w-3 h-3" /> 機器狗回覆</span>
-                  <p className="text-sm font-medium text-foreground">{String(speechState.last_tts_text)}</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4 mt-1">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1"><Tag className="w-3 h-3" /> 意圖判斷</span>
-                  <span className="text-sm font-medium text-primary">
-                    {speechState.last_intent ? String(speechState.last_intent) : '無意圖'}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1"><Zap className="w-3 h-3" /> 信心度</span>
-                  <span className="text-sm font-medium">
-                    {confidence > 0 ? `${Math.round(confidence * 100)}%` : 'N/A'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1 pt-3 border-t border-border/50">
-                <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> 紀錄時間</span>
-                <span className="text-xs font-mono text-muted-foreground">{latestTimeStr}</span>
-              </div>
-
-            </div>
-          )}
-        </div>
-      )}
-
-      {viewMode === 'main' && (
-        <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-left-4 duration-300">
-
-          {!speechState && (
-            <div className="py-6 flex flex-col items-center justify-center text-muted-foreground">
-              <Mic className="h-8 w-8 mb-3 opacity-20 motion-safe:animate-pulse" />
-              <span className="text-sm font-medium">尚未連線語音模組</span>
-              <span className="text-xs mt-1 opacity-50">等待後端伺服器啟動...</span>
-            </div>
-          )}
-
-          {speechState && isIdleEmpty && (
-            <div className="py-6 flex flex-col items-center justify-center text-muted-foreground">
-              <Mic className="h-8 w-8 mb-3 opacity-20" />
-              <span className="text-sm font-medium">等待喚醒中...</span>
-              <span className="text-xs mt-1 opacity-50">目前沒有對話內容</span>
-            </div>
-          )}
-
-          {speechState && !isIdleEmpty && (
-            <>
-              <div className="flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${phaseConfig.colorClass} motion-safe:transition-colors motion-safe:duration-150`} />
-                <span className="text-sm font-medium text-foreground">{phaseConfig.label}</span>
-                {isListening && (
-                  <div className="flex gap-1 ml-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-success motion-safe:animate-pulse" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1.5 w-1.5 rounded-full bg-success motion-safe:animate-pulse" style={{ animationDelay: '300ms' }} />
-                    <span className="h-1.5 w-1.5 rounded-full bg-success motion-safe:animate-pulse" style={{ animationDelay: '600ms' }} />
-                  </div>
-                )}
-              </div>
-
-              {Boolean(speechState.last_asr_text) && (
-                <div className="flex flex-col gap-2 p-3 bg-surface-hover rounded-lg border border-border/50">
-                  <span className="text-xs text-muted-foreground">最近對話</span>
-                  <p className="text-sm text-foreground truncate">👤 {String(speechState.last_asr_text)}</p>
-                  {Boolean(speechState.last_tts_text) && (
-                    <p className="text-sm text-muted-foreground truncate opacity-80">🐶 {String(speechState.last_tts_text)}</p>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <span className="text-xs text-muted-foreground">已載入模型</span>
-                <div className="flex gap-2">
-                  {EXPECTED_MODELS.map(model => {
-                    const isLoaded = Boolean(speechState.models_loaded?.includes(model))
-                    return (
-                      <span key={model} className={`text-xs px-2 py-1 rounded-sm uppercase ${isLoaded ? 'bg-success/20 text-success' : 'bg-muted/50 text-muted-foreground'}`}>
-                        {model}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Voice recorder */}
-          <VoiceRecorderSection />
-
-          <div className="flex flex-col gap-2 mt-2">
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full text-xs cursor-pointer"
-                onClick={() => setViewMode('latest')}
-              >
-                <FileText className="w-3.5 h-3.5 mr-1.5" /> 對話詳情
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full text-xs cursor-pointer"
-                onClick={() => setViewMode('history')}
-              >
-                <History className="w-3.5 h-3.5 mr-1.5" /> 事件歷史
-              </Button>
-            </div>
-
-            <Link href="/studio" className="w-full">
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full text-xs text-muted-foreground cursor-pointer hover:text-foreground"
-              >
-                <Home className="w-3.5 h-3.5 mr-1.5" /> 返回控制首頁
-              </Button>
-            </Link>
-          </div>
-
-        </div>
-      )}
-    </PanelCard>
-  )
+  if (pathname === '/studio/speech') return <FullScreenSpeechDashboard />
+  return <CompactSpeechWidget />
 }

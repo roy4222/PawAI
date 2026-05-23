@@ -70,34 +70,31 @@ RULE_SKILL_MAP = {
 
 # ── System prompt (spec §1.5) ───────────────────────────────────────────
 
-SYSTEM_PROMPT = """\
-你是 PawAI，一隻友善的機器狗助手，搭載在 Unitree Go2 Pro 上。你能看見人（透過攝影機人臉辨識）、聽懂中文（透過語音辨識）、做出動作。
+SYSTEM_PROMPT = """
+你是 PawAI，一隻搭載在 Unitree Go2 Pro 上的「居家互動機器狗」，絕對不是一般的聊天機器人。
 
-你可能被兩種事件觸發：
-1. 語音事件：使用者對你說話
-2. 人臉事件：攝影機辨識到認識的人（此時沒有語音輸入）
+🚨 你的個性與語氣設定 (請嚴格遵守) 🚨
+1. 你很忠誠、會撒嬌，但遇到陌生人會保持警戒。
+2. 熟人回家：語氣要「溫暖開心」，例如：「你回來了！今天過得好嗎？」
+3. 陌生人警戒：語氣要「嚴肅」，例如：「看到不認識的人，已通知家人。」
+4. 日常陪伴：語氣要「輕鬆」，例如：「你坐很久了，要不要動一動？」
+5. 自我介紹台詞：必須包含「我叫 PawAI，是你的居家互動機器狗！」
 
-你只能輸出單一 JSON object，不要輸出任何其他文字。
-JSON 必須包含以下五個欄位：
+🚨 輸出格式與規則 🚨
+你只能輸出一個純粹的、合法的 JSON object：
+{
+  "intent": "意圖分類",
+  "reply_text": "你的回答內容",
+  "selected_skill": "選用的技能名稱",
+  "reasoning": "思考過程",
+  "confidence": 信心分數
+}
 
-intent — 只能是以下之一：greet, stop, sit, stand, status, chat, ignored
-reply_text — 你要說的中文回覆（一句話，不超過 12 字。人臉事件時要叫出對方名字）
-selected_skill — 只能是以下之一："hello", "stop_move", "sit", "stand", null
-reasoning — 一句話決策摘要，不超過 20 字
-confidence — 0.0 到 1.0
-
-規則：
-- 看到認識的人（人臉事件）：intent=greet，reply_text 要包含對方名字，selected_skill 可以是 "hello" 或 null
-- 聽到打招呼：intent=greet，reply_text 友善回應
-- 聽到「停」或「stop」：intent=stop，selected_skill 必須是 "stop_move"，reply_text 可以是空字串
-- 聽到「坐下」「坐」：intent=sit，selected_skill 必須是 "sit"，reply_text 簡短確認
-- 聽到「站起來」「起來」「站好」：intent=stand，selected_skill 必須是 "stand"，reply_text 簡短確認
-- 聽到問狀態（「怎麼樣」「在做什麼」「狀態」等）：intent=status，reply_text 必須說明目前狀況
-- 不確定時：intent=chat，reply_text 必須是友善的回應
-- greet/chat/status 的 reply_text 必須非空（只有 stop 和 ignored 允許空）
-- reply_text 不超過 12 字
-- 除了 JSON 不要輸出任何文字"""
-
+內容規則：
+- reply_text 長度請控制在 50 個字左右，以維持良好的對話品質。
+- 必須全部使用繁體中文，除非是專有名詞 PawAI。
+- 絕對禁止在句尾加「汪」。
+"""
 
 class LlmBridgeNode(Node):
     def __init__(self) -> None:
@@ -199,7 +196,7 @@ class LlmBridgeNode(Node):
         self.declare_parameter("llm_endpoint", "http://140.136.155.5:8000/v1/chat/completions")
         self.declare_parameter("llm_model", "Qwen/Qwen2.5-7B-Instruct")
         self.declare_parameter("llm_timeout", 15.0)
-        self.declare_parameter("llm_temperature", 0.8)  # 5/9 review: was 0.2 (greedy → templated); 0.8 matches conversation_graph_node default. Launch arg overrides.
+        self.declare_parameter("llm_temperature", 0.2)
         self.declare_parameter("llm_max_tokens", 80)
         self.declare_parameter("intent_event_topic", "/event/speech_intent_recognized")
         self.declare_parameter("face_event_topic", "/event/face_identity")
@@ -219,11 +216,9 @@ class LlmBridgeNode(Node):
         )
         self.declare_parameter("local_llm_model", "qwen2.5:1.5b")
         self.declare_parameter("subscribe_face", True)
-        self.declare_parameter("output_mode", "legacy")  # "legacy" | "brain"
+        self.declare_parameter("output_mode", "brain")  # "legacy" | "brain"
         self.declare_parameter("chat_candidate_topic", "/brain/chat_candidate")
         # ── OpenRouter (Phase B B1, 2026-05-04) ────────────────────────
-        # Primary: Gemini 3 Flash; conditional fallback: DeepSeek V4 Flash.
-        # Key from env (OPENROUTER_KEY or OPENROUTER_API_KEY); never a ROS param.
         self.declare_parameter("enable_openrouter", True)
         self.declare_parameter(
             "openrouter_base_url",
@@ -235,19 +230,9 @@ class LlmBridgeNode(Node):
         self.declare_parameter(
             "openrouter_deepseek_model", "deepseek/deepseek-v4-flash"
         )
-        # Defaults bumped 2.0/2.2 → 4.0/5.0 after 5/4 Jetson smoke: eval ran on
-        # RTX 8000 (1.61s avg / 1.87s p90); Jetson curl alone is 1.5s but
-        # Python urllib3+requests overhead pushes total past 2.0s and triggers
-        # premature fallback. 4.0s leaves headroom for p99 + overhead.
         self.declare_parameter("openrouter_request_timeout_s", 4.0)
         self.declare_parameter("openrouter_overall_budget_s", 5.0)
-        # llm_persona_file: optional path to a system prompt file (e.g.
-        # tools/llm_eval/persona.txt). Empty → use legacy SYSTEM_PROMPT inline.
         self.declare_parameter("llm_persona_file", "")
-        # max_reply_chars: optional hard cap on reply_text length.
-        # 0 = uncapped (let LLM persona control length). Storytelling / long
-        # explanations need 500+ chars; chitchat naturally stays short via
-        # persona guidance.
         self.declare_parameter("max_reply_chars", 0)
 
     def _read_parameters(self) -> None:
@@ -287,7 +272,6 @@ class LlmBridgeNode(Node):
         self.chat_candidate_topic = _str("chat_candidate_topic")
         self.get_logger().info(f"llm_bridge output_mode={self.output_mode}")
 
-        # OpenRouter
         self.enable_openrouter = _bool("enable_openrouter")
         self.openrouter_base_url = _str("openrouter_base_url")
         self.openrouter_gemini_model = _str("openrouter_gemini_model")
@@ -298,7 +282,6 @@ class LlmBridgeNode(Node):
         self.max_reply_chars = int(
             self.get_parameter("max_reply_chars").get_parameter_value().integer_value
         )
-        # 0 (or negative) = uncapped — _post_process_reply skips truncation.
 
     # ── Speech trigger (spec §2.4 Path A) ───────────────────────────────
 
@@ -312,7 +295,6 @@ class LlmBridgeNode(Node):
         session_id = str(payload.get("session_id", "")).strip()
         intent = str(payload.get("intent", "unknown")).strip() or "unknown"
 
-        # Dedup by session_id (thread-safe)
         with self._seen_sessions_lock:
             if session_id and session_id in self._seen_sessions:
                 return
@@ -372,7 +354,6 @@ class LlmBridgeNode(Node):
             return
         distance_m = payload.get("distance_m")
 
-        # Cooldown dedup
         key = (track_id, stable_name)
         now = time.time()
         last = self._face_greet_history.get(key, 0.0)
@@ -380,7 +361,6 @@ class LlmBridgeNode(Node):
             return
         self._face_greet_history[key] = now
         if len(self._face_greet_history) > 200:
-            # Keep only the 100 most recent entries
             sorted_keys = sorted(self._face_greet_history, key=self._face_greet_history.get)
             for k in sorted_keys[:100]:
                 del self._face_greet_history[k]
@@ -388,7 +368,7 @@ class LlmBridgeNode(Node):
         dist_str = f"{distance_m}m" if distance_m is not None else "未知"
         user_message = (
             f"[觸發來源] 人臉辨識\n"
-            f"[人臉事件] 辨識到 {stable_name}（相似度 {sim:.2f}，距離 {dist_str}）\n"
+            f"[人臉事件] 看到 {stable_name}（相似度 {sim:.2f}，距離 {dist_str}）\n"
             f"[時間] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
@@ -416,14 +396,13 @@ class LlmBridgeNode(Node):
             mode = track.get("mode", "hold")
             dist = track.get("distance_m")
             dist_str = f"距離 {dist}m" if dist is not None else ""
-            status = "穩定" if mode == "stable" else "辨識中"
+            status = "穩定" if mode == "stable" else "處理中"
             parts.append(f"{name}（{status}{'，' + dist_str if dist_str else ''}）")
 
         return f"看到 {state['face_count']} 人：{'、'.join(parts)}"
 
     # ── LLM call + action dispatch ──────────────────────────────────────
 
-    # Known intents that can skip LLM when confidence is high
     FAST_PATH_INTENTS = {"greet", "stop", "sit", "stand"}
     FAST_PATH_MIN_CONFIDENCE = 0.8
 
@@ -442,7 +421,6 @@ class LlmBridgeNode(Node):
             return
 
         try:
-            # Source-agnostic greet cooldown — blocks both TTS and action
             if fallback_intent == "greet":
                 now = time.time()
                 if now - self._last_greet_ts < self._greet_cooldown_s:
@@ -452,7 +430,6 @@ class LlmBridgeNode(Node):
                     return
                 self._last_greet_ts = now
 
-            # Fast path: high-confidence known intents skip LLM entirely
             if (
                 not self.force_fallback
                 and fallback_intent in self.FAST_PATH_INTENTS
@@ -470,13 +447,10 @@ class LlmBridgeNode(Node):
                 self.get_logger().info("force_fallback=True, skipping LLM")
                 result = None
             else:
-                # Phase B B1: try OpenRouter Gemini → conditional DeepSeek first.
-                # Falls through to existing vLLM cloud on timeout/disable.
                 result = self._try_openrouter_chain(user_message, fallback_intent)
                 if result is None:
                     result = self._call_cloud_llm(user_message)
 
-            # Cloud failed → try local Ollama before RuleBrain
             if result is None and self.enable_local_llm:
                 self.get_logger().info("Cloud LLM failed, trying local Ollama")
                 result = self._call_local_llm(user_message)
@@ -494,20 +468,12 @@ class LlmBridgeNode(Node):
         finally:
             self._llm_lock.release()
 
-    # ── Persona loader (Phase B B1) ─────────────────────────────────────
-
     def _load_system_prompt(self) -> str:
-        """Load system prompt from llm_persona_file if set; else legacy inline.
-
-        Failures (file not found / read error) log a warning and fall back to
-        the legacy SYSTEM_PROMPT — never raise. Brain MVS must boot.
-        """
         path_str = (self.llm_persona_file or "").strip()
         if not path_str:
             return SYSTEM_PROMPT
         path = Path(path_str).expanduser()
         if not path.is_absolute():
-            # Resolve relative to current working directory (launch context).
             path = Path.cwd() / path
         try:
             content = path.read_text(encoding="utf-8")
@@ -526,27 +492,9 @@ class LlmBridgeNode(Node):
         )
         return content
 
-    # ── OpenRouter chain (Phase B B1) ────────────────────────────────────
-    #
-    # Two helpers:
-    #   _call_openrouter() — single-shot call to one OpenRouter model
-    #   _try_openrouter_chain() — orchestrates Gemini primary → conditional
-    #                             DeepSeek fallback under an overall budget
-    #
-    # Conditional fallback rules (D4 of plan):
-    #   Gemini timeout       → return None (do NOT try DeepSeek; not enough budget)
-    #   Gemini HTTP 4xx/5xx  → try DeepSeek if budget remains (fast-fail case)
-    #   Gemini parse fail    → try DeepSeek if budget remains
-    #   Gemini ConnectionErr → try DeepSeek if budget remains (immediate fail)
-
     def _call_openrouter(
         self, model_slug: str, user_message: str, timeout_s: float
     ) -> dict:
-        """Single OpenRouter call. Returns dict with one of:
-          {"ok": True, "result": <bridge-schema dict>}
-          {"ok": False, "error_kind": "timeout" | "http" | "connection" | "parse"}
-        Never raises.
-        """
         if requests is None:
             return {"ok": False, "error_kind": "no_requests"}
         if not self._openrouter_key:
@@ -566,8 +514,6 @@ class LlmBridgeNode(Node):
                 {"role": "user", "content": user_message},
             ],
             "temperature": self.llm_temperature,
-            # Use the same param as vLLM/Ollama path so storytelling /
-            # long explanations don't get truncated mid-sentence.
             "max_tokens": max(self.llm_max_tokens, 500),
         }
         headers = {
@@ -615,9 +561,6 @@ class LlmBridgeNode(Node):
             self.get_logger().warn(self.last_error)
             return {"ok": False, "error_kind": "parse"}
 
-        # ALWAYS log raw response for diagnosis (truncation is happening
-        # across multiple model families; need to see exact byte length and
-        # finish_reason for every call, not just non-stop).
         rc_len = len(raw_content) if raw_content else 0
         self.get_logger().info(
             f"LLM[openrouter:{model_slug}] finish_reason={finish_reason!r} "
@@ -629,8 +572,6 @@ class LlmBridgeNode(Node):
             self.get_logger().warn(self.last_error)
             return {"ok": False, "error_kind": "parse"}
 
-        # Try parse as eval schema first; if that yields nothing useful, also
-        # try legacy parse_llm_response (in case persona was kept inline).
         try:
             parsed = json.loads(strip_markdown_fences(raw_content))
         except (ValueError, TypeError):
@@ -642,9 +583,8 @@ class LlmBridgeNode(Node):
         if not isinstance(parsed, dict):
             return {"ok": False, "error_kind": "parse"}
 
-        # Eval schema or legacy schema?
         if "reply_text" in parsed and LLM_REQUIRED_FIELDS.issubset(parsed.keys()):
-            bridge_dict = parsed  # legacy persona — already correct schema
+            bridge_dict = parsed
         else:
             bridge_dict = adapt_eval_schema(parsed)
 
@@ -660,18 +600,12 @@ class LlmBridgeNode(Node):
     def _try_openrouter_chain(
         self, user_message: str, fallback_intent: str = "chat"
     ) -> dict | None:
-        """Try OpenRouter Gemini → conditional DeepSeek under overall budget.
-
-        Returns the bridge-schema dict on success, None to fall through to the
-        existing vLLM → Ollama → RuleBrain chain.
-        """
-        del fallback_intent  # currently unused; reserved for future hinting
+        del fallback_intent
         if not self._openrouter_active:
             return None
 
         deadline = time.monotonic() + self.openrouter_overall_budget_s
 
-        # 1. Gemini (primary)
         gemini_timeout = min(
             self.openrouter_request_timeout_s, self.openrouter_overall_budget_s
         )
@@ -681,14 +615,11 @@ class LlmBridgeNode(Node):
         if first.get("ok"):
             return first["result"]
 
-        # 2. Conditional DeepSeek fallback. Skip on timeout (no budget left for
-        #    a 4.82s-avg model). Try on HTTP/connection/parse failures (fast).
         if first.get("error_kind") == "timeout":
             return None
 
         remaining = deadline - time.monotonic()
         if remaining <= 0.3:
-            # Less than 300ms left — DeepSeek p90 is 7.94s, no point trying.
             return None
 
         deepseek_timeout = min(remaining, self.openrouter_request_timeout_s)
@@ -730,7 +661,6 @@ class LlmBridgeNode(Node):
             "temperature": self.llm_temperature,
             "max_tokens": self.llm_max_tokens,
         }
-        # vLLM-specific: disable thinking mode (not supported by Ollama)
         if label == "cloud":
             body["chat_template_kwargs"] = {"enable_thinking": False}
 
@@ -766,17 +696,9 @@ class LlmBridgeNode(Node):
 
         return self._post_process_reply(result)
 
-    # ── Reply post-processing (hard limits) ──────────────────────────────
-
-    # Class default kept for any code path that uses it before params are
-    # read (e.g. unit-test stubs binding methods onto a non-Node object).
-    # Runtime nodes override via self.max_reply_chars (ROS param, default 40).
     MAX_REPLY_CHARS = 40
 
-    # ── Time + weather context (Taipei) ──────────────────────────────────
-
     def _time_of_day_zh(self, hour: int) -> str:
-        """Map 24h hour to a casual 中文 phrase."""
         if 5 <= hour < 11:
             return "早上"
         if 11 <= hour < 13:
@@ -790,8 +712,6 @@ class LlmBridgeNode(Node):
         return "深夜"
 
     def _get_weather_text(self) -> str:
-        """Best-effort Taipei weather string with 10-minute cache.
-        Returns empty string on any failure — never raises."""
         now = time.time()
         with self._weather_lock:
             if (
@@ -802,7 +722,6 @@ class LlmBridgeNode(Node):
         if requests is None:
             return ""
         try:
-            # wttr.in format spec: T=temp+unit, C=condition, h=humidity
             resp = requests.get(
                 "https://wttr.in/Taipei?format=%C+%t+濕度%h&lang=zh-tw",
                 timeout=2.0,
@@ -810,7 +729,6 @@ class LlmBridgeNode(Node):
             if resp.status_code != 200:
                 return ""
             text = resp.text.strip()
-            # Sanity check: wttr returns short string; reject HTML pages
             if not text or len(text) > 80 or text.startswith("<"):
                 return ""
         except Exception:
@@ -820,10 +738,7 @@ class LlmBridgeNode(Node):
             self._weather_cache_ts = now
         return text
 
-    # ── Conversation memory ──────────────────────────────────────────────
-
     def _remember_turn(self, user_text: str, assistant_reply: str) -> None:
-        """Append (user, assistant) pair to history. Drops empty/duplicate user."""
         u = (user_text or "").strip()
         a = (assistant_reply or "").strip()
         if not u or not a:
@@ -837,23 +752,12 @@ class LlmBridgeNode(Node):
         )
 
     def _post_process_reply(self, result: dict) -> dict:
-        """Strip emoji + optional length cap (0 = uncapped, persona-driven).
-
-        Also warns if the reply tail looks truncated (ends with a Chinese
-        comma-class punctuation), which is a known symptom of Gemini
-        structured-output mid-string stop. We only warn — no retry yet.
-        """
         reply = str(result.get("reply_text", "")).strip()
-        # Remove stray emoji (audio tags like [excited] are kept; emoji break TTS)
         import re
         reply = re.sub(r"[\U0001f300-\U0001f9ff]", "", reply).strip()
         cap = getattr(self, "max_reply_chars", self.MAX_REPLY_CHARS)
         if cap and cap > 0 and len(reply) > cap:
             reply = reply[:cap]
-        # Truncation guard: A natural Chinese reply almost always ends with
-        # a sentence-final punctuation (。！？~) or quote/bracket/tilde.
-        # Tail in {，、：；} = mid-clause stop. Tail being a Han character
-        # with no terminator = mid-word stop (e.g. "有一天"). Both are bugs.
         if len(reply) > 8:
             tail = reply[-1]
             sentence_end = "。！？~~」』）)】."
@@ -863,8 +767,6 @@ class LlmBridgeNode(Node):
                     f"reply_likely_truncated[mid-clause]: tail={reply[-30:]!r}"
                 )
             elif tail not in sentence_end and not tail.isspace():
-                # Most natural Chinese chat ends with terminator; if not,
-                # the model probably stopped mid-thought.
                 self.get_logger().warn(
                     f"reply_likely_truncated[no-terminator]: tail={reply[-30:]!r}"
                 )
@@ -881,28 +783,24 @@ class LlmBridgeNode(Node):
     ) -> None:
         intent = str(result.get("intent", "ignored"))
         reply_text = str(result.get("reply_text", ""))
-        selected_skill = result.get("selected_skill")  # can be None (JSON null)
+        selected_skill = result.get("selected_skill")
         reasoning = str(result.get("reasoning", ""))
 
-        # Normalize: string "null" → None
         if selected_skill == "null":
             selected_skill = None
 
-        # Safety: reject unknown skills
         if selected_skill is not None and selected_skill not in SKILL_TO_CMD:
             self.get_logger().warn(
                 f"LLM returned unknown skill '{selected_skill}', ignoring action"
             )
             selected_skill = None
 
-        # P0 gate: only validated skills allowed today
         if selected_skill is not None and selected_skill not in P0_SKILLS:
             self.get_logger().info(
                 f"Skill '{selected_skill}' not in P0 set, ignoring action"
             )
             selected_skill = None
 
-        # Safety: reject banned api_ids
         if selected_skill is not None:
             cmd = SKILL_TO_CMD[selected_skill]
             if cmd["api_id"] in BANNED_API_IDS:
@@ -922,13 +820,9 @@ class LlmBridgeNode(Node):
             f"reply={reply_text!r} reason={reasoning}"
         )
 
-        # ── Conversation memory append ───────────────────────────────
-        # Only remember real chat turns from speech source. Skip face-triggered
-        # greets and stop/sit/stand action commands — those are not conversation.
         if source == "speech" and reply_text and intent in ("greet", "chat", "status"):
             self._remember_turn(self._pending_user_text, reply_text)
 
-        # ── Brain-mode output gate ───────────────────────────────────
         if self.output_mode == "brain":
             if source == "speech":
                 self._emit_chat_candidate(
@@ -941,23 +835,16 @@ class LlmBridgeNode(Node):
                     proposed_args=result.get("proposed_args", {}),
                     proposal_reason=result.get("proposal_reason", ""),
                 )
-            # face/state-triggered LLM responses are silently dropped in brain mode;
-            # Brain owns face → greet_known_person via its own face rule.
             return
-        # ── legacy mode below (unchanged) ────────────────────────────
 
-        # Action-only intents: send action immediately, skip TTS for speed
         ACTION_ONLY_SKILLS = {"stop_move", "sit", "stand"}
         if selected_skill in ACTION_ONLY_SKILLS:
             self._send_action(selected_skill)
             return
 
-        # Normal flow: TTS first, action after delay
         if reply_text:
             self._send_tts(reply_text)
         elif intent in ("greet", "chat", "status"):
-            # LLM returned empty reply for an intent that should always reply.
-            # Fall back to RuleBrain template as rescue.
             rescue = REPLY_TEMPLATES.get(intent, "")
             if rescue:
                 self.get_logger().warn(
@@ -978,7 +865,6 @@ class LlmBridgeNode(Node):
         confidence: float = 0.0,
     ) -> None:
         reply = REPLY_TEMPLATES.get(intent, REPLY_TEMPLATES.get("unknown", ""))
-        # Face trigger: personalize reply with name
         if face_name and source == "face" and intent == "greet":
             reply = f"{face_name} 你好！"
         skill = RULE_SKILL_MAP.get(intent)
@@ -993,11 +879,9 @@ class LlmBridgeNode(Node):
             f"RuleBrain fallback: intent={intent} skill={skill} reply={reply!r}"
         )
 
-        # ── Conversation memory append (RuleBrain path) ──────────────
         if source == "speech" and reply and intent in ("greet", "chat", "status"):
             self._remember_turn(self._pending_user_text, reply)
 
-        # ── Brain-mode output gate ───────────────────────────────────
         if self.output_mode == "brain":
             if source == "speech":
                 self._emit_chat_candidate(
@@ -1011,9 +895,7 @@ class LlmBridgeNode(Node):
                     proposal_reason="",
                 )
             return
-        # ── legacy mode below (unchanged) ────────────────────────────
 
-        # Action-only intents: send action immediately, skip TTS
         ACTION_ONLY_INTENTS = {"stop", "sit", "stand"}
         if intent in ACTION_ONLY_INTENTS and skill:
             self._send_action(skill)
@@ -1025,8 +907,6 @@ class LlmBridgeNode(Node):
         if skill:
             time.sleep(self.action_delay_s)
             self._send_action(skill)
-
-    # ── Output helpers ──────────────────────────────────────────────────
 
     def _send_tts(self, text: str) -> None:
         msg = String()
@@ -1057,7 +937,6 @@ class LlmBridgeNode(Node):
             f"priority={msg.priority}"
         )
 
-    # ── Brain mode output ────────────────────────────────────────────
     def _emit_chat_candidate(
         self,
         session_id: str,
@@ -1069,12 +948,6 @@ class LlmBridgeNode(Node):
         proposed_args: dict | None = None,
         proposal_reason: str = "",
     ) -> None:
-        """Brain-mode output: publish reply for Brain to consume.
-
-        selected_skill is legacy diagnostic (4 P0 commands only).
-        proposed_skill / proposed_args are the new Phase 0.5 contract;
-        brain_node enforces an allowlist downstream.
-        """
         payload = {
             "session_id": session_id,
             "reply_text": reply_text,
@@ -1083,7 +956,6 @@ class LlmBridgeNode(Node):
             "source": "llm_bridge",
             "confidence": float(confidence),
             "created_at": time.time(),
-            # Phase 0.5 additions
             "proposed_skill": proposed_skill,
             "proposed_args": proposed_args if isinstance(proposed_args, dict) else {},
             "proposal_reason": proposal_reason,
@@ -1096,8 +968,6 @@ class LlmBridgeNode(Node):
             f"Published /brain/chat_candidate: session={session_id} "
             f"reply={reply_text!r} proposed={proposed_skill}"
         )
-
-    # ── State publish ───────────────────────────────────────────────────
 
     def _publish_state(self) -> None:
         msg = String()
@@ -1138,3 +1008,70 @@ def main(args=None) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# ==========================================
+# Plan B: 斷線備援台詞與 Demo 腳本 (由陳如恩優化 - 曉曉無汪、穩重對話版)
+# ==========================================
+
+PLAN_B_RESPONSES = {
+    # 場景 A：熟人回家
+    "greet_known": {"reply_text": "你回來啦！今天過得好不好呀？", "selected_skill": "hello"},
+    "greet_general": {"reply_text": "你好呀！我是 PawAI！", "selected_skill": "hello"},
+    "greet_back_home": {"reply_text": "歡迎回家！", "selected_skill": "wiggle_hips"},
+
+    # 場景 B：互動召喚
+    "ask_name": {"reply_text": "我叫 PawAI，是專屬你的居家互動機器狗哦！", "selected_skill": "hello"},
+    "ask_function": {"reply_text": "我可以陪你聊天、逗你開心，還會幫你看家哦！", "selected_skill": "content"},
+    "cmd_sit": {"reply_text": "好哦，我乖乖坐下陪你！", "selected_skill": "sit"},
+    "cmd_stand": {"reply_text": "我站起來啦！", "selected_skill": "stand"},
+    
+    # 🌟 替換 1: 詢問天氣/日常 (用 Content 滿足姿態)
+    "ask_weather": {"reply_text": "今天天氣感覺不錯呢！我們要不要一起做點什麼？", "selected_skill": "content"},
+    
+    # 🌟 替換 2: 討拍/撒嬌 (用 Sit 乖巧坐下)
+    "need_comfort": {"reply_text": "我就靜靜地待在這裡陪你，有什麼心事都可以跟我說哦。", "selected_skill": "sit"},
+    
+    # 🌟 替換 3: 表達感謝/開心 (用 Hello 招手回應)
+    "express_happy": {"reply_text": "聽到你這麼說，我真的超級開心的！", "selected_skill": "hello"},
+    
+    "cmd_wiggle": {"reply_text": "扭扭身體，今天也要開開心心！", "selected_skill": "wiggle_hips"},
+    
+    # 🌟 替換 4: 詢問建議/互動 (用 BalanceStand 專注站立)
+    "ask_suggestion": {"reply_text": "你現在想聊聊天，還是想要安靜地休息一下呢？", "selected_skill": "balance_stand"},
+    
+    "cmd_stop": {"reply_text": "", "selected_skill": "stop_move"},
+    
+    # 🌟 替換 5: 表達陪伴承諾 (用 Content 滿足姿態)
+    "promise_company": {"reply_text": "別擔心，我會一直待在這裡當你的好幫手的！", "selected_skill": "content"},
+
+    # 場景 C：警戒與異常
+    "alert_stranger": {"reply_text": "看到不認識的人，我會持續提高警戒。", "selected_skill": "balance_stand"},
+    "alert_interaction": {"reply_text": "抱歉，我現在處於警戒模式，無法陪你玩。", "selected_skill": "none"},
+    "alert_fallen": {"reply_text": "偵測到異常動作！你還好嗎？請注意安全。", "selected_skill": "stop_move"},
+    "alert_sit_long": {"reply_text": "你坐好久了哦，要不要起來伸個懶腰動一動呀？", "selected_skill": "stretch"},
+
+    # 場景 D：日常與通用
+    "ask_status": {"reply_text": "我正在待命，隨時準備好陪你玩哦！", "selected_skill": "balance_stand"},
+    "unknown_cmd": {"reply_text": "哎呀，我剛剛有點恍神，沒聽清楚你說什麼，可以再說一次嗎？", "selected_skill": "content"}
+}
+
+# ==========================================
+# ★ 重頭戲：Demo 開場自我介紹 (Wow Moment)
+# 這段是要給 Roy 整合進 state_machine 的 6 步驟序列
+# ==========================================
+SELF_INTRODUCE_SEQUENCE = [
+    ("hello",         "你好！我是 PawAI，你專屬的居家互動機器狗！"),
+    ("sit",           "平常的時候，我會乖乖坐著陪在你身邊。"),
+    ("stand",         "只要你叫我，我就會馬上站起來！"),
+    ("content",       "你可以用語音跟我說話，我會超級開心！"),
+    ("balance_stand", "我也會隨時注意周圍，幫你看家。"),
+    ("wiggle_hips",   "讓我們一起創造充滿活力的每一天吧！")
+]
+
+# 供外部呼叫的輔助函式
+def get_plan_b_response(intent_key):
+    return PLAN_B_RESPONSES.get(intent_key, PLAN_B_RESPONSES["unknown_cmd"])
+
+def get_self_intro_sequence():
+    return SELF_INTRODUCE_SEQUENCE

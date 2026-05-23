@@ -400,6 +400,12 @@ class SttIntentNode(Node):
             Bool, "/state/tts_playing", self._on_tts_playing, tts_playing_qos
         )
 
+        # 🌟 新增：全域對話鎖 (Interaction Lock)
+        self._is_interaction_busy = False
+        self.interaction_busy_sub = self.create_subscription(
+            Bool, "/state/interaction_busy", self._on_interaction_busy, 10
+        )
+
         self._sounddevice = None
         self._stream = None
         self._audio_queue: "queue.Queue[np.ndarray]" = queue.Queue(maxsize=512)
@@ -480,7 +486,10 @@ class SttIntentNode(Node):
         self.declare_parameter("input_device", -1)
         self.declare_parameter("alsa_device", "")
         self.declare_parameter("max_record_seconds", 6.0)
-        self.declare_parameter("speech_end_grace_ms", 250)
+        
+        # 🌟 修改：將預設等待時間從 250 改為 100
+        self.declare_parameter("speech_end_grace_ms", 100)
+        
         self.declare_parameter("pre_roll_ms", 300)
         self.declare_parameter("state_publish_hz", 5.0)
         self.declare_parameter("language", "zh")
@@ -512,12 +521,15 @@ class SttIntentNode(Node):
         self.declare_parameter("whisper_local.compute_type", "int8")
         self.declare_parameter("whisper_local.cpu_threads", 4)
 
-        self.declare_parameter("tts_echo_cooldown_ms", 1000)
+        self.declare_parameter("tts_echo_cooldown_ms", 1500)
 
-        self.declare_parameter("energy_vad.enabled", True)
+        self.declare_parameter("energy_vad.enabled", False)
         self.declare_parameter("energy_vad.start_threshold", 0.015)
         self.declare_parameter("energy_vad.stop_threshold", 0.01)
-        self.declare_parameter("energy_vad.silence_duration_ms", 800)
+        
+        # 🌟 修改：將內建 VAD 預設等待時間從 500 改為 400
+        self.declare_parameter("energy_vad.silence_duration_ms", 400)
+        
         self.declare_parameter("energy_vad.min_speech_ms", 300)
         self.declare_parameter("energy_vad.adaptive", False)
         self.declare_parameter("energy_vad.noise_start_ratio", 2.5)
@@ -679,9 +691,18 @@ class SttIntentNode(Node):
                 f"Echo gate: cooldown {self.tts_echo_cooldown_ms}ms"
             )
 
+    # 🌟 新增：處理全域鎖狀態
+    def _on_interaction_busy(self, msg: Bool) -> None:
+        self._is_interaction_busy = msg.data
+        if msg.data:
+            self.get_logger().debug("Echo gate: CLOSED (interaction busy)")
+        else:
+            self.get_logger().debug("Echo gate: interaction not busy")
+
     def _is_echo_gated(self) -> bool:
-        """Return True if audio should be discarded (TTS playing or cooldown)."""
-        if self._tts_playing:
+        """Return True if audio should be discarded (TTS playing, interaction busy, or cooldown)."""
+        # 🌟 修改：加入 self._is_interaction_busy 判斷，避免思考時被雜音打斷
+        if self._tts_playing or self._is_interaction_busy:
             return True
         if self._tts_gate_open_time > 0.0:
             if time.monotonic() < self._tts_gate_open_time:
@@ -752,7 +773,7 @@ class SttIntentNode(Node):
         if status:
             self._last_error = str(status)
 
-        # Echo gate: discard audio while TTS is playing (or during cooldown)
+        # Echo gate: discard audio while TTS is playing (or during cooldown / busy state)
         if self._is_echo_gated():
             return
 

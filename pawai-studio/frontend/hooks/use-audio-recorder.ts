@@ -38,7 +38,7 @@ interface UseAudioRecorderResult {
 }
 
 function getSpeechWsUrl(): string {
-  return getGatewayWsUrl("/ws/speech");
+  return "ws://127.0.0.1:5000/ws/speech_interaction";
 }
 
 // Prefer opus codec for best compression
