@@ -83,6 +83,9 @@ node_modules/
 ## Agent runtime artefacts（自動產生）
 /.agents/
 
+## Capability baseline 量測產物（snapshot/preflight 是量測輸出，不入 repo；example fixture 例外，見 pawai_brain/test/fixtures/）
+/artifacts/
+
 ## 會議錄音 / datasheet PDF（保留在硬碟但不入 repo）
 /*.m4a
 /*.mp3
