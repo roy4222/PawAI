@@ -11,7 +11,7 @@
 
 ## 上機流程
 
-0. **Layer-0 Preflight**：跑填好的 `pawai`/`jetson-verify demo.yaml`；`fail → 全 insufficient_data，停`。記 `version_snapshot`（讀 `.pawai-last-deploy` + WSL commit，mismatch 警告）。
+0. **Layer-0 Preflight**：跑填好的 `pawai`/`jetson-verify demo.yaml`；`fail → 全 insufficient_data，停`。記 `version_snapshot`（讀 `.pawai-last-deploy` + WSL commit）。**`snapshot sha != deploy sha` = 硬擋**（§9：`→ not_ready`、不可 override——跑的不是這份 code，snapshot 不可當 demo 依據）；**age 才是 advisory warning**（>3d warning / >7d strong warning，不擋 verdict）。
 1. **環境鎖定**：`sudo bash benchmarks/scripts/prepare_env.sh`（nvpmodel -m 0 + jetson_clocks；必要時 `--drop-cache`）。
 2. **資源採樣**：背景跑 `benchmarks/core/monitor.py JetsonMonitor`（reuse），aggregate 值填回 scenario 的 `cpu_pct/gpu_pct/ram_mb`。
    - 實機參考（2026-05-31 motion-safe 感知 lane face+vision+D435）：RAM ~1.17GB used / avail 6.2GB、CPU ~41%、temp ~53–54°C、`/state/perception/face` 19.97Hz、vision debug_image ~3.9–4.8Hz。
