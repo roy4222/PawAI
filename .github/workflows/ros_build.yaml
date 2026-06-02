@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install pytest pytest-cov flake8 numpy opencv-python-headless
+        run: pip install pytest pytest-cov flake8 numpy opencv-python-headless jsonschema
       - name: Flake8 lint (report-only)
         run: |
           flake8 speech_processor/ go2_robot_sdk/ face_perception/ \
@@ -66,6 +66,7 @@ jobs:
             benchmarks/test/test_build_scoreboard.py \
             benchmarks/test/test_perception_baseline_observer.py \
             benchmarks/test/test_face_baseline_observer.py \
+            benchmarks/test/test_readiness.py \
             -v --tb=short \
             --cov=speech_processor/speech_processor \
             --cov=vision_perception/vision_perception \
