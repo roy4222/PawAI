@@ -421,7 +421,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 
 - **Claude Code hooks**：Edit/Write 後即時 py_compile + commit 時 colcon build 提醒
 - **Git pre-commit**：commit 時 py_compile + contract check + smart-scope tests
-- **GitHub Actions**：push/PR 時 flake8 + 16 test files + contract check（blocking）+ colcon build
+- **GitHub Actions**：push/PR 時 Fast Gate（flake8 report-only + 新 core code blocking flake8 + pure-Python tests：speech/vision/benchmarks **+ scoreboard core + pawai_brain**，兩 invocation 避 `test` package 撞名）+ test_environment + contract check（blocking）+ colcon build
 
 ### 雙平台架構
 
