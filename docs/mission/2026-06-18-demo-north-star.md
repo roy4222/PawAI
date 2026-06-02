@@ -125,7 +125,7 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 - **voice.command**：固定指令輸入
 - **brain.skill_gate**：Brain 不亂執行不可靠能力（fail-closed）
 - **studio.evidence**：Studio 顯示每步證據（差異化全押可驗證，這是硬前提）
-- **nav.short_move + nav.safe_stop**：6/18 的具身證明——「機器狗非噱頭」靠這一條。完整自主導航、動態繞障、跟隨人**不屬於 6/18 主張**。（隱含前置：F7 `cmd_vel_nav` 不出的 root cause 須在 fresh stack 上定位；未定位前 nav 相關 claim 一律不講。）
+- **nav.short_move + nav.safe_stop**：6/18 具身證明的**目標**——「機器狗非噱頭」要靠這一條，但**baseline pass 後才宣稱**。完整自主導航、動態繞障、跟隨人**不屬於 6/18 主張**。（前置鎖：① F7 `cmd_vel_nav` 不出的 root cause 須在 fresh stack 上定位；② `nav.safe_stop` / `nav.no_auto_resume` 在 nav baseline run **pass（或明確人工安全 override）前，scoreboard 一律 `insufficient_data`**——未 pass 前文件 / demo 不得宣稱已具備安全停車或具身導航能力，nav 相關 claim 一律不講。）
 - **object.cup**：至少一類 demo 物件可靠辨識
 - **gesture.wave**：**P0 target / candidate**——需 baseline 驗證誤觸率後才鎖定（不寫「P0 必成」，否則與「先量化」矛盾）
 
