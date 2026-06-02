@@ -64,6 +64,7 @@ jobs:
             benchmarks/test/test_grader.py \
             benchmarks/test/test_scoreboard.py \
             benchmarks/test/test_build_scoreboard.py \
+            benchmarks/test/test_perception_baseline_observer.py \
             -v --tb=short \
             --cov=speech_processor/speech_processor \
             --cov=vision_perception/vision_perception \
