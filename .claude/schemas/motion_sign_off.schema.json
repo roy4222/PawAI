@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pawai.local/schemas/motion_sign_off.schema.json",
+  "title": "PawAI Go2 Motion Sign-Off",
+  "description": "One append-only JSONL record for a Go2 motion HITL trial.",
+  "type": "object",
+  "required": [
+    "operator",
+    "timestamp",
+    "trial_id",
+    "commit_sha",
+    "safety_checks_passed",
+    "video_sha"
+  ],
+  "properties": {
+    "operator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "trial_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{7,40}$"
+    },
+    "safety_checks_passed": {
+      "type": "boolean"
+    },
+    "video_sha": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}
