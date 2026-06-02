@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -28,11 +30,21 @@ jobs:
             vision_perception/ benchmarks/ \
             --max-line-length=100 --extend-ignore=E203 --max-complexity=10 \
             --exit-zero
-      - name: Pure Python unit tests (no ROS2 needed)
-        env:
-          PYTHONPATH: speech_processor:vision_perception:benchmarks
+      - name: Flake8 blocking on newly-added core Python
         run: |
-          pytest \
+          git fetch origin main --quiet 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || git rev-parse HEAD~1)
+          NEW=$(git diff --name-only --diff-filter=A "$BASE" HEAD -- 'benchmarks/core/*.py' 'pawai_brain/**/*.py' 'tools/pawai_cli/**/*.py' || true)
+          if [ -n "$NEW" ]; then
+            echo "Linting newly-added core files (blocking):"; echo "$NEW"
+            flake8 $NEW --max-line-length=100 --extend-ignore=E203 --max-complexity=10
+          else
+            echo "No newly-added core Python files to lint."
+          fi
+      - name: Pure Python unit tests (no ROS2 needed)
+        run: |
+          # Invocation 1: existing modules + scoreboard core (default import mode, unchanged)
+          PYTHONPATH=speech_processor:vision_perception:benchmarks pytest \
             speech_processor/test/test_speech_test_observer.py \
             speech_processor/test/test_intent_classifier.py \
             speech_processor/test/test_llm_contract.py \
@@ -48,11 +60,28 @@ jobs:
             benchmarks/test/test_reporter.py \
             benchmarks/test/test_runner.py \
             benchmarks/test/test_monitor.py \
+            benchmarks/test/test_scoreboard_schema.py \
+            benchmarks/test/test_grader.py \
+            benchmarks/test/test_scoreboard.py \
+            benchmarks/test/test_build_scoreboard.py \
             -v --tb=short \
             --cov=speech_processor/speech_processor \
             --cov=vision_perception/vision_perception \
             --cov=benchmarks \
             --cov-report=term --cov-report=xml:coverage.xml
+          # Invocation 2: pawai_brain pure-Python tests in an isolated PYTHONPATH to avoid
+          # the duplicate top-level 'test' package collision with speech_processor/test
+          PYTHONPATH=pawai_brain pytest \
+            pawai_brain/test/test_effective_status.py \
+            pawai_brain/test/test_mode_classifier.py \
+            pawai_brain/test/test_response_repair.py \
+            pawai_brain/test/test_skill_policy_gate.py \
+            pawai_brain/test/test_skill_result_memory.py \
+            pawai_brain/test/test_skill_result_subscription.py \
+            pawai_brain/test/test_validator.py \
+            pawai_brain/test/test_world_snapshot.py \
+            pawai_brain/test/test_world_state_builder.py \
+            -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
