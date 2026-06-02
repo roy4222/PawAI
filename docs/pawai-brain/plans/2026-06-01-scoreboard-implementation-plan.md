@@ -1,5 +1,7 @@
 # Scoreboard Implementation Plan（TDD，給工程師照做）
 
+> **✅ 實作狀態（2026-06-03）**：核心 deliverable 全部實作 + merged 進 main。Task 1 schema(#71, PR #92) / Task 2 grader(#72, #93) / Task 3 aggregator(#79, #94) / Task 3b build_scoreboard(#79, #94) / Task 4 perception_baseline_observer(#74, #98) / Task 4b face_baseline_observer(#75, #99) 全綠進 Fast Gate CI。另 readiness verdict + freeze（#87, PR #100，`benchmarks/core/readiness.py` + `pawai readiness` CLI）已 merged。**ROS node wrapper（Task 4/4b 的 Jetson 端）維持薄 sketch、v0.1 不在 CI**；actual baseline run（產真 JSONL）是 HITL（#80-#84）。下方 checkbox 為原始 TDD 指引、保留作參考。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: 用 superpowers:subagent-driven-development 或 executing-plans 逐 task 實作。Steps use checkbox (`- [ ]`) syntax。
 > **性質**：6 個 deliverable 的 TDD skeleton（test→impl→commit）。這份是「**怎麼寫 code**」的唯一真相源。
 > **不放**：架構決策（見 Master Plan）、逐功能門檻（見 Capability Baseline Spec）、上機步驟（見 Runbook）。
