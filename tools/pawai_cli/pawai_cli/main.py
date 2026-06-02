@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 from . import __version__, shell
 from .modules import MODULES, existing_docs, get_module
+from .readiness import readiness as readiness_command
 from .status import print_status
 
 
@@ -155,6 +156,9 @@ def cli() -> None:
     root = shell.repo_root()
     _plat.assert_supported(root)
     _load_env(root)
+
+
+cli.add_command(readiness_command)
 
 
 @cli.command()
