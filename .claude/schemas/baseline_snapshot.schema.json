@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pawai.local/schemas/baseline_snapshot.schema.json",
+  "title": "PawAI Capability Baseline Snapshot",
+  "description": "Schema for benchmarks.core.scoreboard.to_snapshot output. run_meta fields are flattened at the top level.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_trusted",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "scoreboard-0.1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "wsl_commit": {
+      "type": "string"
+    },
+    "git_commit": {
+      "type": "string"
+    },
+    "wsl_dirty": {
+      "type": "boolean"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "jetson_install_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "jetson_deploy_ts": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "jetson_sync_method": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "jetson_dirty": {
+      "type": "boolean"
+    },
+    "manifest_exists": {
+      "type": "boolean"
+    },
+    "version_mismatch": {
+      "type": "boolean"
+    },
+    "version_stale": {
+      "type": "boolean"
+    },
+    "layer0_preflight_status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "pass_with_warnings",
+        "fail",
+        "unknown"
+      ]
+    },
+    "run_trusted": {
+      "type": "boolean"
+    },
+    "demo_profile_env": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "face.recognition",
+        "voice.command",
+        "voice.stop",
+        "gesture.wave",
+        "object.cup",
+        "nav.safe_stop",
+        "nav.no_auto_resume",
+        "nav.short_move",
+        "nav.dynamic_avoidance",
+        "pose.basic",
+        "pose.fall",
+        "brain.skill_gate",
+        "brain.trace",
+        "studio.evidence",
+        "cli.readiness"
+      ],
+      "properties": {
+        "face.recognition": {
+          "$ref": "#/$defs/capability"
+        },
+        "voice.command": {
+          "$ref": "#/$defs/capability"
+        },
+        "voice.stop": {
+          "$ref": "#/$defs/capability"
+        },
+        "gesture.wave": {
+          "$ref": "#/$defs/capability"
+        },
+        "object.cup": {
+          "$ref": "#/$defs/capability"
+        },
+        "nav.safe_stop": {
+          "$ref": "#/$defs/capability"
+        },
+        "nav.no_auto_resume": {
+          "$ref": "#/$defs/capability"
+        },
+        "nav.short_move": {
+          "$ref": "#/$defs/capability"
+        },
+        "nav.dynamic_avoidance": {
+          "$ref": "#/$defs/capability"
+        },
+        "pose.basic": {
+          "$ref": "#/$defs/capability"
+        },
+        "pose.fall": {
+          "$ref": "#/$defs/capability"
+        },
+        "brain.skill_gate": {
+          "$ref": "#/$defs/capability"
+        },
+        "brain.trace": {
+          "$ref": "#/$defs/capability"
+        },
+        "studio.evidence": {
+          "$ref": "#/$defs/capability"
+        },
+        "cli.readiness": {
+          "$ref": "#/$defs/capability"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": [
+        "capability_id",
+        "grade",
+        "sample_count",
+        "success_rate",
+        "false_trigger_rate",
+        "latency_p50",
+        "latency_p90",
+        "confirmed",
+        "positive_count",
+        "idle_count",
+        "registered_recall",
+        "unknown_false_accept_rate",
+        "wrong_person_count",
+        "claim_level",
+        "risk_role",
+        "depth",
+        "dependency_role",
+        "brain_allowed"
+      ],
+      "properties": {
+        "capability_id": {
+          "type": "string"
+        },
+        "grade": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "degraded",
+            "fail",
+            "insufficient_data"
+          ]
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "false_trigger_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "latency_p50": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "latency_p90": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "positive_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "idle_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "registered_recall": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "unknown_false_accept_rate": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "wrong_person_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "claim_level": {
+          "type": "string",
+          "enum": [
+            "mainline",
+            "future",
+            "studio_only",
+            "not_claimed"
+          ]
+        },
+        "risk_role": {
+          "type": "string",
+          "enum": [
+            "evidence_only",
+            "convenience",
+            "safety_critical",
+            "actuation",
+            "safety_support"
+          ]
+        },
+        "depth": {
+          "type": "string",
+          "enum": [
+            "deep",
+            "thin",
+            "future"
+          ]
+        },
+        "dependency_role": {
+          "type": "string",
+          "enum": [
+            "trigger",
+            "content",
+            "safety_guard",
+            "actuation",
+            "evidence"
+          ]
+        },
+        "brain_allowed": {
+          "type": "boolean"
+        },
+        "failure_reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
