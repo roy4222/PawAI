@@ -1,0 +1,5 @@
+run_id: face-2026-06-03
+rounds:
+  - {capability_id: face.recognition, scenario_id: alice_1m_01, expected_label: alice, scenario_kind: positive, distance_m: 1.0}
+  - {capability_id: face.recognition, scenario_id: alice_2m_01, expected_label: alice, scenario_kind: positive, distance_m: 2.0}
+  - {capability_id: face.recognition, scenario_id: stranger_idle_01, expected_label: unknown, scenario_kind: idle}
