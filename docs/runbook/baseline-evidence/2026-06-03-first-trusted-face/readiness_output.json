@@ -1,0 +1,19 @@
+{
+  "verdict": "not_ready",
+  "reasons": [
+    "schema_validator_unavailable:ModuleNotFoundError",
+    "mainline_failure_reason_missing:face.recognition",
+    "mainline_failure_reason_missing:voice.command",
+    "mainline_failure_reason_missing:voice.stop",
+    "mainline_failure_reason_missing:gesture.wave",
+    "mainline_failure_reason_missing:object.cup",
+    "mainline_failure_reason_missing:nav.safe_stop",
+    "mainline_failure_reason_missing:nav.no_auto_resume",
+    "mainline_failure_reason_missing:nav.short_move",
+    "mainline_failure_reason_missing:brain.skill_gate",
+    "mainline_failure_reason_missing:brain.trace",
+    "mainline_failure_reason_missing:studio.evidence"
+  ],
+  "warnings": [],
+  "override": null
+}
