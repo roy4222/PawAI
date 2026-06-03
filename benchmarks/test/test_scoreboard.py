@@ -131,3 +131,32 @@ def test_layer0_preflight_fail_forces_all_insufficient():
     assert cap["failure_reason"] == "layer0_preflight=fail"
     assert cap["success_rate"] is not None
     assert all(c["grade"] == "insufficient_data" for c in snap["capabilities"].values())
+
+
+def test_trusted_fail_capability_carries_failure_reason():
+    # false-trigger forces fail under a trusted run -> must carry a reason
+    recs = [_rec("gesture.wave", True, ft=True) for _ in range(4)]
+    scores = aggregate(recs, CRIT, confirm_min=3)
+    snap = to_snapshot(scores, {"git_commit": "abc", "run_trusted": True})
+    cap = snap["capabilities"]["gesture.wave"]
+    assert cap["grade"] == GRADE_FAIL
+    reason = cap.get("failure_reason", "")
+    assert reason.startswith("fail:") and reason.strip()
+
+
+def test_trusted_pass_capability_has_no_failure_reason():
+    recs = [_rec("gesture.wave", True) for _ in range(4)]
+    scores = aggregate(recs, CRIT, confirm_min=3)
+    snap = to_snapshot(scores, {"git_commit": "abc", "run_trusted": True})
+    cap = snap["capabilities"]["gesture.wave"]
+    assert cap["grade"] == GRADE_PASS
+    assert "failure_reason" not in cap
+
+
+def test_trusted_untested_capability_carries_reason():
+    recs = [_rec("gesture.wave", True) for _ in range(4)]
+    scores = aggregate(recs, CRIT, confirm_min=3)
+    snap = to_snapshot(scores, {"git_commit": "abc", "run_trusted": True})
+    cap = snap["capabilities"]["face.recognition"]
+    assert cap["grade"] == "insufficient_data"
+    assert cap.get("failure_reason", "").startswith("insufficient_data:")
