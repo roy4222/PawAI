@@ -1,0 +1,6 @@
+run_id: gesture-object-2026-06-03
+rounds:
+  - {capability_id: gesture.wave, scenario_id: wave_1m_01, expected_label: wave, scenario_kind: positive, distance_m: 1.0}
+  - {capability_id: gesture.wave, scenario_id: wave_idle_01, expected_label: none, scenario_kind: idle}
+  - {capability_id: object.cup, scenario_id: cup_1m_01, expected_label: cup, scenario_kind: positive, distance_m: 1.0}
+  - {capability_id: object.cup, scenario_id: cup_idle_01, expected_label: none, scenario_kind: idle}
