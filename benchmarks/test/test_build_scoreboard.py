@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 from benchmarks.core.build_scoreboard import DEFAULT_CRITERIA, build_scoreboard
 
@@ -35,6 +36,21 @@ def _trusted_preflight(path):
     return preflight
 
 
+def _matching_manifest(path):
+    """寫一個 git_sha_full 與當前 HEAD 相符的 manifest → version_mismatch=False（trusted run）。
+
+    fail-closed 修正後，trusted snapshot 同時需要 preflight pass 且 deploy provenance 相符；
+    這個 helper 模擬「Jetson 跑的就是被評分的這版 code」。
+    """
+    full_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    manifest = path / "manifest.json"
+    manifest.write_text(
+        json.dumps({"git_sha_full": full_sha, "when": "2026-06-03T10:00:00+00:00"}),
+        encoding="utf-8",
+    )
+    return manifest
+
+
 def test_build_scoreboard_preflight_pass_produces_snapshot(tmp_path):
     jsonl = tmp_path / "baseline_result.jsonl"
     _write_jsonl(
@@ -44,9 +60,15 @@ def test_build_scoreboard_preflight_pass_produces_snapshot(tmp_path):
     )
     preflight = _trusted_preflight(tmp_path)
     out = tmp_path / "snap.json"
-    build_scoreboard(str(jsonl), preflight_path=str(preflight), out_path=str(out))
+    build_scoreboard(
+        str(jsonl),
+        manifest_path=str(_matching_manifest(tmp_path)),
+        preflight_path=str(preflight),
+        out_path=str(out),
+    )
     snap = json.loads(out.read_text(encoding="utf-8"))
     assert snap["run_trusted"] is True
+    assert snap["version_mismatch"] is False
     assert len(snap["capabilities"]) == 15
     assert snap["capabilities"]["gesture.wave"]["grade"] == "pass"
 
@@ -65,6 +87,30 @@ def test_build_scoreboard_missing_preflight_is_failclosed(tmp_path):
     assert snap["capabilities"]["gesture.wave"]["grade"] == "insufficient_data"
 
 
+def test_build_scoreboard_version_mismatch_is_failclosed(tmp_path):
+    # preflight pass 但無 manifest（無法確認 Jetson 跑的是被評分的這版 code）
+    # → version_mismatch=True → 即使 preflight pass，全能力仍覆寫 insufficient_data。
+    jsonl = tmp_path / "baseline_result.jsonl"
+    _write_jsonl(
+        jsonl,
+        [_positive_round("gesture.wave") for _ in range(3)]
+        + [_idle_round("gesture.wave") for _ in range(2)],
+    )
+    preflight = _trusted_preflight(tmp_path)
+    out = tmp_path / "snap.json"
+    build_scoreboard(
+        str(jsonl),
+        manifest_path=None,
+        preflight_path=str(preflight),
+        out_path=str(out),
+    )
+    snap = json.loads(out.read_text(encoding="utf-8"))
+    assert snap["version_mismatch"] is True
+    cap = snap["capabilities"]["gesture.wave"]
+    assert cap["grade"] == "insufficient_data"
+    assert "version_mismatch" in cap["failure_reason"]
+
+
 def test_gesture_wave_false_accept_gate_uses_idle_only_metric(tmp_path):
     jsonl = tmp_path / "baseline_result.jsonl"
     _write_jsonl(
@@ -74,7 +120,12 @@ def test_gesture_wave_false_accept_gate_uses_idle_only_metric(tmp_path):
     )
     preflight = _trusted_preflight(tmp_path)
     out = tmp_path / "snap.json"
-    build_scoreboard(str(jsonl), preflight_path=str(preflight), out_path=str(out))
+    build_scoreboard(
+        str(jsonl),
+        manifest_path=str(_matching_manifest(tmp_path)),
+        preflight_path=str(preflight),
+        out_path=str(out),
+    )
 
     cap = json.loads(out.read_text(encoding="utf-8"))["capabilities"]["gesture.wave"]
     assert cap["success_rate"] == 1.0
@@ -93,7 +144,12 @@ def test_voice_stop_requires_zero_false_negatives(tmp_path):
     )
     preflight = _trusted_preflight(tmp_path)
     out = tmp_path / "snap.json"
-    build_scoreboard(str(jsonl), preflight_path=str(preflight), out_path=str(out))
+    build_scoreboard(
+        str(jsonl),
+        manifest_path=str(_matching_manifest(tmp_path)),
+        preflight_path=str(preflight),
+        out_path=str(out),
+    )
 
     cap = json.loads(out.read_text(encoding="utf-8"))["capabilities"]["voice.stop"]
     assert cap["success_rate"] < DEFAULT_CRITERIA["voice.stop"][0].pass_min
@@ -109,7 +165,12 @@ def test_object_cup_false_accept_gate_uses_idle_only_metric(tmp_path):
     )
     preflight = _trusted_preflight(tmp_path)
     out = tmp_path / "snap.json"
-    build_scoreboard(str(jsonl), preflight_path=str(preflight), out_path=str(out))
+    build_scoreboard(
+        str(jsonl),
+        manifest_path=str(_matching_manifest(tmp_path)),
+        preflight_path=str(preflight),
+        out_path=str(out),
+    )
 
     cap = json.loads(out.read_text(encoding="utf-8"))["capabilities"]["object.cup"]
     assert cap["success_rate"] == 1.0

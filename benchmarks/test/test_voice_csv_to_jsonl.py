@@ -21,7 +21,7 @@ def test_csv_row_to_record_voice_command_pass_with_latency():
         "expected_intent": "sit",
         "intent": "sit",
         "e2e_latency_ms": "123.4",
-        "match": "match",
+        "match": "hit",
         "status": "complete",
     }
 
@@ -55,7 +55,7 @@ def test_csv_row_to_record_skips_orphan_and_empty_expected_intent():
         "expected_intent": "stop",
         "intent": "stop",
         "e2e_latency_ms": "100",
-        "match": "match",
+        "match": "hit",
         "status": "orphan",
     }
     empty_expected = {
@@ -63,7 +63,7 @@ def test_csv_row_to_record_skips_orphan_and_empty_expected_intent():
         "expected_intent": "",
         "intent": "stop",
         "e2e_latency_ms": "100",
-        "match": "match",
+        "match": "hit",
         "status": "complete",
     }
 
@@ -76,7 +76,7 @@ def test_csv_row_to_record_invalid_or_zero_latency_is_none():
         "round_id": "5",
         "expected_intent": "sit",
         "intent": "sit",
-        "match": "match",
+        "match": "hit",
         "status": "complete",
     }
     zero_latency = {**base_row, "e2e_latency_ms": "0"}
