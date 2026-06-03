@@ -158,6 +158,11 @@ def _evaluate_capabilities(snapshot: dict[str, Any], reasons: list[str]) -> None
         if not grade:
             reasons.append(f"mainline_grade_missing:{capability_id}")
             continue
+        if grade != "pass":
+            # Hard fail-closed: a mainline capability that is not "pass" blocks
+            # readiness outright. Previously only the failure_reason-missing case
+            # was checked, so a documented non-pass grade leaked through as ready.
+            reasons.append(f"mainline_capability_not_pass:{capability_id}:{grade}")
         if grade != "pass" and not str(capability.get("failure_reason", "")).strip():
             reasons.append(f"mainline_failure_reason_missing:{capability_id}")
 
