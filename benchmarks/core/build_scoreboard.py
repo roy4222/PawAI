@@ -21,6 +21,10 @@ DEFAULT_CRITERIA: dict[str, list[Criterion]] = {
     "voice.command": [
         Criterion("success_rate", 0.80, 0.70, higher_is_better=True),
     ],
+    "voice.stop": [
+        # 規格 §2b：voice.stop FN 硬性=0 —— 任一漏聽即 fail，故 pass 需 success_rate==1.0。
+        Criterion("success_rate", 1.0, 1.0, higher_is_better=True),
+    ],
     "gesture.wave": [
         Criterion("success_rate", 0.90, 0.80, higher_is_better=True),
         # 規格 §4：手勢 idle 誤觸只看 scenario_kind=idle 的 unknown_false_accept_rate。

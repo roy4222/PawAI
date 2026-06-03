@@ -83,6 +83,23 @@ def test_gesture_wave_false_accept_gate_uses_idle_only_metric(tmp_path):
     assert cap["grade"] == "fail"
 
 
+def test_voice_stop_requires_zero_false_negatives(tmp_path):
+    jsonl = tmp_path / "baseline_result.jsonl"
+    missed_stop = _positive_round("voice.stop")
+    missed_stop["pass_fail"] = "fail"
+    _write_jsonl(
+        jsonl,
+        [_positive_round("voice.stop"), _positive_round("voice.stop"), missed_stop],
+    )
+    preflight = _trusted_preflight(tmp_path)
+    out = tmp_path / "snap.json"
+    build_scoreboard(str(jsonl), preflight_path=str(preflight), out_path=str(out))
+
+    cap = json.loads(out.read_text(encoding="utf-8"))["capabilities"]["voice.stop"]
+    assert cap["success_rate"] < DEFAULT_CRITERIA["voice.stop"][0].pass_min
+    assert cap["grade"] != "pass"
+
+
 def test_object_cup_false_accept_gate_uses_idle_only_metric(tmp_path):
     jsonl = tmp_path / "baseline_result.jsonl"
     _write_jsonl(
