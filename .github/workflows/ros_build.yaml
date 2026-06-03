@@ -79,6 +79,7 @@ jobs:
           # the duplicate top-level 'test' package collision with speech_processor/test
           PYTHONPATH=pawai_brain pytest \
             pawai_brain/test/test_effective_status.py \
+            pawai_brain/test/test_capability_health_gate.py \
             pawai_brain/test/test_mode_classifier.py \
             pawai_brain/test/test_response_repair.py \
             pawai_brain/test/test_skill_policy_gate.py \
