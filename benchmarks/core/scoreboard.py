@@ -10,7 +10,7 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Optional
 
-from .grader import Criterion, GRADE_INSUFFICIENT, brain_allowed, grade_capability
+from .grader import Criterion, GRADE_INSUFFICIENT, GRADE_PASS, brain_allowed, grade_capability
 from .scoreboard_schema import CAPABILITY_META
 
 
@@ -156,6 +156,34 @@ def _empty_score_dict(capability_id: str) -> dict:
     }
 
 
+def _grade_reason(capability: dict) -> str:
+    """Honest, threshold-free reason for a non-pass grade.
+
+    The grader returns only a grade tier (no rationale), so we summarise the
+    already-computed metrics rather than re-deriving thresholds. Readiness
+    requires every non-pass mainline capability to carry a failure_reason.
+    """
+    grade = capability["grade"]
+    sample_count = capability.get("sample_count", 0) or 0
+    if sample_count == 0:
+        return f"{grade}:no_samples"
+    if not capability.get("confirmed", False):
+        return f"{grade}:insufficient_samples(n={sample_count})"
+    metric_bits = []
+    for key in (
+        "success_rate",
+        "false_trigger_rate",
+        "registered_recall",
+        "unknown_false_accept_rate",
+        "wrong_person_count",
+    ):
+        value = capability.get(key)
+        if value is not None:
+            metric_bits.append(f"{key}={value}")
+    detail = ",".join(metric_bits) if metric_bits else "metrics_below_threshold"
+    return f"{grade}:{detail}"
+
+
 def to_snapshot(scores: dict[str, CapabilityScore], run_meta: dict) -> dict:
     run_trusted = bool(run_meta.get("run_trusted", False))
     # fail-closed：preflight 非 pass，或無法確認 Jetson 跑的是被評分的這版 code
@@ -179,6 +207,8 @@ def to_snapshot(scores: dict[str, CapabilityScore], run_meta: dict) -> dict:
             if version_mismatch:
                 reason += ";version_mismatch=true"
             capability["failure_reason"] = reason
+        elif capability["grade"] != GRADE_PASS:
+            capability["failure_reason"] = _grade_reason(capability)
 
         capability["claim_level"] = meta["claim_level"]
         capability["risk_role"] = meta["risk_role"]
