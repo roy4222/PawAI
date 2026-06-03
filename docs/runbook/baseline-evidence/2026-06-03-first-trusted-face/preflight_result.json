@@ -1,0 +1,89 @@
+{
+  "status": "pass",
+  "checks": [
+    {
+      "id": "jetson.ssh_reachable",
+      "status": "PASS",
+      "blocking": true,
+      "value": "ok",
+      "message": "Jetson SSH 可達：ok",
+      "duration_ms": 530
+    },
+    {
+      "id": "go2.ethernet_ping",
+      "status": "PASS",
+      "blocking": true,
+      "value": "1",
+      "message": "Go2 乙太網路連線狀態：1（需要 1）",
+      "duration_ms": 460
+    },
+    {
+      "id": "demo.entrypoint_started",
+      "status": "PASS",
+      "blocking": true,
+      "value": "1",
+      "message": "Demo tmux session 狀態：1（需要 demo）",
+      "duration_ms": 540
+    },
+    {
+      "id": "ros.runtime_started",
+      "status": "PASS",
+      "blocking": true,
+      "value": "20",
+      "message": "20 個 ROS2 nodes 已啟動（至少 5）",
+      "duration_ms": 3196
+    },
+    {
+      "id": "go2.driver_alive",
+      "status": "PASS",
+      "blocking": true,
+      "value": "1",
+      "message": "go2_driver 節點數：1（至少 1）",
+      "duration_ms": 3150
+    },
+    {
+      "id": "topic_contract_ok",
+      "status": "PASS",
+      "blocking": false,
+      "value": "67",
+      "message": "67 個 ROS2 topics 已發現（建議至少 20）",
+      "duration_ms": 3218
+    },
+    {
+      "id": "system.memory",
+      "status": "PASS",
+      "blocking": true,
+      "value": "3238",
+      "message": "3238MB 可用記憶體（至少 800MB）",
+      "duration_ms": 469
+    },
+    {
+      "id": "system.gpu_temp",
+      "status": "PASS",
+      "blocking": false,
+      "value": "58",
+      "message": "GPU 58°C（警告門檻 >70°C）",
+      "duration_ms": 576
+    },
+    {
+      "id": "version_snapshot",
+      "status": "PASS",
+      "blocking": false,
+      "value": "499",
+      "message": "deploy manifest 大小：499 bytes",
+      "duration_ms": 566
+    }
+  ],
+  "details": {
+    "overall": "PASS",
+    "summary": {
+      "pass": 9,
+      "warn": 0,
+      "fail": 0,
+      "skip": 0,
+      "error": 0
+    },
+    "version_snapshot": "{\"deployed_by\": \"roy422\", \"deployed_from_host\": \"DESKTOP-575ABRI\", \"branch\": \"main\", \"git_sha\": \"2e00914\", \"git_sha_full\": \"2e00914cd8eeef869664c8ed9acea681f237a39a\", \"dirty\": true, \"module\": \"all\", \"packages\": [\"face_perception\", \"go2_robot_sdk\", \"interaction_executive\", \"object_perception\", \"pawai_brain\", \"speech_processor\", \"vision_perception\"], \"when\": \"2026-06-03T06:24:20.519262+00:00\", \"sync_method\": \"sync-once\", \"user\": \"roy422@DESKTOP-575ABRI\", \"ts\": \"2026-06-03T06:24:20.519262+00:00\"}\n",
+    "verify_report_path": "artifacts/baseline/logs/latest.json"
+  }
+}
