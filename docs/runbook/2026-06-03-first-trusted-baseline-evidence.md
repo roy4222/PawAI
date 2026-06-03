@@ -22,7 +22,8 @@ scoreboard、readiness 產出可重現的工程證據**。
 
 | Artifact | 內容 |
 |---|---|
-| `preflight_result.json` | **pass**（demo 全起 9/9 checks）+ **fail**（demo 沒開 → 3 blocking fail）|
+| `preflight_result.json` | **pass** 版（demo 全起 9/9 checks）|
+| `preflight_result.fail.json` | **fail** 版（demo 沒開 → 3 blocking fail，示範 fail-closed）|
 | `baseline_result.jsonl` | 3 筆真 face record（含 D435 深度量測）|
 | `baseline_snapshot.json` | **trusted**：`run_trusted=True` / `version_mismatch=False`（wsl 2e00914 == jetson 2e00914）|
 | `readiness_output.json` | verdict **`not_ready`**（fail-closed：只測 face、其餘無數據）|
@@ -38,6 +39,8 @@ scoreboard、readiness 產出可重現的工程證據**。
 | 其餘 14 能力 | insufficient_data（無數據）|
 
 `roy_1m_02` pass：sim 0.45、313ms 鎖定、D435 深度 **1.67m**。
+
+> ⚠️ **定位 caveat（不要過度包裝）**：snapshot 的 `wsl_dirty=true` / `jetson_dirty=true`（repo 有未追蹤檔/本地改動）。這份是**「工程鏈路打通 + 第一次可信量測」的證據**，**不是乾淨的 release-grade baseline**。正式 release baseline 需：repo clean、完整 round 數（face 1m/2m × registered/stranger、object、gesture、voice）、idle protocol 修正後重測。
 
 ## 6/18 報告寫法（工程挑戰與突破）
 
