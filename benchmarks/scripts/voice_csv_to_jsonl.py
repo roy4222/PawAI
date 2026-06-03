@@ -38,7 +38,9 @@ def csv_row_to_record(
         "scenario_kind": "positive",
         "expected_label": expected_intent,
         "predicted_label": row.get("intent", ""),
-        "pass_fail": "pass" if row.get("match") == "match" else "fail",
+        # speech_test_observer 的成功值是 "hit"（speech_test_observer.py:228）；
+        # 兼容歷史誤用值 "match"（從未真實輸出，僅防呆）。
+        "pass_fail": "pass" if row.get("match") in ("hit", "match") else "fail",
         "false_trigger": False,
         "latency_ms": _positive_float_or_none(row.get("e2e_latency_ms")),
     }

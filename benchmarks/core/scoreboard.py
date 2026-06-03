@@ -158,6 +158,13 @@ def _empty_score_dict(capability_id: str) -> dict:
 
 def to_snapshot(scores: dict[str, CapabilityScore], run_meta: dict) -> dict:
     run_trusted = bool(run_meta.get("run_trusted", False))
+    # fail-closed：preflight 非 pass，或無法確認 Jetson 跑的是被評分的這版 code
+    # （version_mismatch=True，含缺 manifest / SHA 不符）→ 全能力覆寫 insufficient_data。
+    # run_trusted（preflight）與 version_mismatch（deploy provenance）是兩個獨立旗標，
+    # 任一不可信即覆寫 grade（對齊 scoreboard_schema docstring「version_mismatch fail-closed」
+    # + spec §9 sha-mismatch 硬擋）。
+    version_mismatch = bool(run_meta.get("version_mismatch", False))
+    trusted = run_trusted and not version_mismatch
     capabilities = {}
 
     for capability_id, meta in CAPABILITY_META.items():
@@ -166,11 +173,12 @@ def to_snapshot(scores: dict[str, CapabilityScore], run_meta: dict) -> dict:
         else:
             capability = _empty_score_dict(capability_id)
 
-        if not run_trusted:
+        if not trusted:
             capability["grade"] = GRADE_INSUFFICIENT
-            capability["failure_reason"] = (
-                f"layer0_preflight={run_meta.get('layer0_preflight_status', 'unknown')}"
-            )
+            reason = f"layer0_preflight={run_meta.get('layer0_preflight_status', 'unknown')}"
+            if version_mismatch:
+                reason += ";version_mismatch=true"
+            capability["failure_reason"] = reason
 
         capability["claim_level"] = meta["claim_level"]
         capability["risk_role"] = meta["risk_role"]
