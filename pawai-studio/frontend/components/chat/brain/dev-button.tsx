@@ -8,12 +8,12 @@ import { useSheetStore } from "@/stores/sheet-store";
 function DevButtonInner() {
   const sp = useSearchParams();
   const pathname = usePathname();
+  const open = useSheetStore((s) => s.openSheet);
   // Guard 1: only render when ?dev=1 is present.
   if (sp.get("dev") !== "1") return null;
   // Guard 2: hide on /studio/dev itself — that page IS the dev panel,
   // a floating ⚙ would be redundant / confusing.
   if (pathname === "/studio/dev") return null;
-  const open = useSheetStore((s) => s.openSheet);
   return (
     <button
       type="button"
