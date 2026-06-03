@@ -14,7 +14,8 @@ from __future__ import annotations
 from ..state import ConversationState
 
 
-# Mirrors brain_node.LLM_PROPOSABLE_SKILLS — keep in sync.
+# Canonical LLM proposal allowlist (single source of truth, issue #85).
+# brain_node.py mirrors this; test_allowlist_single_source_of_truth enforces parity.
 LLM_PROPOSABLE_SKILLS: frozenset[str] = frozenset({
     "show_status",
     "self_introduce",

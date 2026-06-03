@@ -84,13 +84,40 @@ def test_skill_with_surrounding_whitespace_stripped():
 
 # ── allowlist contract ──────────────────────────────────────────────────
 
-def test_allowlist_matches_spec():
-    """Sync check: keep allowlist aligned with brain_node.LLM_PROPOSABLE_SKILLS."""
-    assert LLM_PROPOSABLE_SKILLS == frozenset({
+def _brain_node_allowlist() -> frozenset:
+    """Extract LLM_PROPOSABLE_SKILLS from interaction_executive.brain_node WITHOUT
+    importing it — the IE node pulls in rclpy, absent in the pure-Python Fast Gate.
+    AST keeps the cross-package parity check while preserving IE's decoupling."""
+    import ast
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    src = (repo_root / "interaction_executive" / "interaction_executive" / "brain_node.py").read_text(encoding="utf-8")
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "LLM_PROPOSABLE_SKILLS" for t in node.targets
+        ):
+            value = node.value
+            if isinstance(value, ast.Call):          # frozenset({...})
+                return frozenset(ast.literal_eval(value.args[0]))
+            return frozenset(ast.literal_eval(value))  # bare {...}
+    raise AssertionError("LLM_PROPOSABLE_SKILLS not found in brain_node.py")
+
+
+def test_allowlist_single_source_of_truth():
+    """Single source of truth for the LLM proposal allowlist (issue #85, Option A).
+
+    Both real copies — skill_policy_gate.LLM_PROPOSABLE_SKILLS (canonical, imported)
+    and interaction_executive.brain_node.LLM_PROPOSABLE_SKILLS (AST-extracted, no
+    import) — must equal the spec set. Drift in EITHER copy fails CI.
+    """
+    expected = frozenset({
         "show_status", "self_introduce",
         "wave_hello", "sit_along", "stand", "greet_known_person",
         "careful_remind", "wiggle", "stretch",
     })
+    assert LLM_PROPOSABLE_SKILLS == expected, "skill_policy_gate allowlist drifted from spec"
+    assert _brain_node_allowlist() == expected, "brain_node allowlist drifted from spec"
 
 
 # ── skill_policy_gate node integration ──────────────────────────────────
