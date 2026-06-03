@@ -311,3 +311,48 @@ class TestTextNormalizationGateway:
         result = tn.to_traditional_tw("网络")
         assert result == "网络"
         tn._converter = None  # restore
+
+
+class TestScoreboardEndpoint:
+    """Tests for _read_scoreboard helper (issue #76 GET /api/scoreboard)."""
+
+    def test_missing_file_returns_missing_provenance(self, tmp_path):
+        from studio_gateway import _read_scoreboard
+        out = _read_scoreboard(tmp_path / "nope.json")
+        assert out["provenance"] == "missing"
+        assert out["capabilities"] == []
+
+    def test_frozen_snapshot_maps_fields(self, tmp_path):
+        from studio_gateway import _read_scoreboard
+        snap = {
+            "schema_version": "scoreboard-0.1",
+            "timestamp": "2026-06-03T06:49:40.049762+00:00",
+            "wsl_commit": "2e00914",
+            "run_trusted": True,
+            "version_mismatch": False,
+            "capabilities": {
+                "face.recognition": {
+                    "capability_id": "face.recognition",
+                    "grade": "fail",
+                    "brain_allowed": False,
+                },
+            },
+        }
+        p = tmp_path / "baseline_snapshot.json"
+        p.write_text(json.dumps(snap), encoding="utf-8")
+        out = _read_scoreboard(p)
+        assert out["provenance"] == "frozen"
+        assert out["run_trusted"] is True
+        assert out["version_mismatch"] is False
+        assert out["git_commit"] == "2e00914"
+        cap = out["capabilities"][0]
+        assert cap["capability_id"] == "face.recognition"
+        assert cap["grade"] == "fail"
+        assert cap["failure_reason"] == ""
+        assert cap["last_tested_at"] == snap["timestamp"]
+
+    def test_env_override_respected(self, tmp_path, monkeypatch):
+        from studio_gateway import _scoreboard_path
+        target = tmp_path / "custom.json"
+        monkeypatch.setenv("PAWAI_SCOREBOARD_PATH", str(target))
+        assert _scoreboard_path() == target

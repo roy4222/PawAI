@@ -541,6 +541,68 @@ async def get_capability():
     return {"ok": True, "capabilities": node.capability_snapshot()}
 
 
+# ── Baseline Scoreboard (read-only frozen snapshot, issue #76) ──────
+# Reads a frozen baseline_snapshot.json; NO live recompute, NO runtime
+# Brain gate. Path from PAWAI_SCOREBOARD_PATH (env override) else the repo
+# default artifacts/baseline/baseline_snapshot.json. Mirrors the resolution
+# in tools/pawai_cli/pawai_cli/readiness.py.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_SCOREBOARD_REL = Path("artifacts/baseline/baseline_snapshot.json")
+
+
+def _scoreboard_path() -> Path:
+    override = os.environ.get("PAWAI_SCOREBOARD_PATH")
+    if override:
+        p = Path(override).expanduser()
+        return p if p.is_absolute() else _REPO_ROOT / p
+    return _REPO_ROOT / _DEFAULT_SCOREBOARD_REL
+
+
+def _read_scoreboard(path: Path) -> dict:
+    """Return a UI-ready scoreboard payload with explicit provenance.
+
+    provenance:
+      - "missing": file absent or unreadable/invalid JSON
+      - "frozen":  valid snapshot read from disk (always frozen — never live recompute)
+    last_tested_at is the snapshot-level timestamp (no per-capability time exists).
+    """
+    if not path.exists():
+        return {"provenance": "missing", "source_path": str(path), "capabilities": []}
+    try:
+        snap = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"provenance": "missing", "source_path": str(path), "capabilities": []}
+
+    timestamp = snap.get("timestamp")
+    caps_in = snap.get("capabilities", {})
+    capabilities = []
+    for cap_id, cap in caps_in.items():
+        capabilities.append({
+            "capability_id": cap.get("capability_id", cap_id),
+            "grade": cap.get("grade"),
+            "failure_reason": cap.get("failure_reason", ""),
+            "brain_allowed": cap.get("brain_allowed"),
+            "last_tested_at": timestamp,
+        })
+    return {
+        "provenance": "frozen",
+        "source_path": str(path),
+        "schema_version": snap.get("schema_version"),
+        "run_trusted": snap.get("run_trusted"),
+        "version_mismatch": snap.get("version_mismatch"),
+        "git_commit": snap.get("git_commit") or snap.get("wsl_commit"),
+        "generated_at": timestamp,
+        "capabilities": capabilities,
+    }
+
+
+@app.get("/api/scoreboard")
+async def get_scoreboard():
+    """Read-only frozen baseline_snapshot.json (issue #76). No live recompute."""
+    return _read_scoreboard(_scoreboard_path())
+
+
 class PlanModePayload(BaseModel):
     mode: str  # "A" or "B"
 
