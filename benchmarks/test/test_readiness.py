@@ -86,6 +86,16 @@ def _hard_cases():
             DEPLOY_SHA,
             "mainline_failure_reason_missing:gesture.wave",
         ),
+        (
+            "mainline_not_pass_with_reason",
+            lambda: _mutated(
+                lambda snapshot: snapshot["capabilities"]["gesture.wave"].update(
+                    {"grade": "fail", "failure_reason": "fail:registered_recall=0.0"}
+                )
+            ),
+            DEPLOY_SHA,
+            "mainline_capability_not_pass:gesture.wave",
+        ),
     ]
 
 
