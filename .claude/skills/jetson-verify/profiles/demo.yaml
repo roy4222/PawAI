@@ -1,5 +1,73 @@
-# TODO: v2 — demo readiness checklist, go/no-go report
-# This profile is intentionally empty. verify.py will refuse to run it.
 profile: demo
-description: "展示前 readiness check"
-checks: []
+description: "Layer-0 baseline preflight：展示前 hard-blocker gate"
+min_checks: 1
+
+checks:
+  # -- 第一組：連線與 demo 入口（硬性阻擋）--
+
+  - id: jetson.ssh_reachable
+    command: "echo ok"
+    expect: "nonempty"
+    blocking: true
+    timeout_sec: 5
+    message_template: "Jetson SSH 可達：{value}"
+
+  - id: go2.ethernet_ping
+    command: "ping -c1 -W1 192.168.123.161 >/dev/null 2>&1 && echo 1 || echo 0"
+    expect: ">= 1"
+    blocking: true
+    timeout_sec: 5
+    message_template: "Go2 乙太網路連線狀態：{value}（需要 1）"
+
+  - id: demo.entrypoint_started
+    command: "tmux has-session -t demo 2>/dev/null && echo 1 || echo 0"
+    expect: ">= 1"
+    blocking: true
+    timeout_sec: 5
+    message_template: "Demo tmux session 狀態：{value}（需要 demo）"
+
+  # -- 第二組：ROS2 與 Go2 執行期（硬性阻擋）--
+
+  - id: ros.runtime_started
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | wc -l"
+    expect: ">= 5"
+    blocking: true
+    timeout_sec: 15
+    message_template: "{value} 個 ROS2 nodes 已啟動（至少 5）"
+
+  - id: go2.driver_alive
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 node list 2>/dev/null | grep -c go2_driver || true"
+    expect: ">= 1"
+    blocking: true
+    timeout_sec: 15
+    message_template: "go2_driver 節點數：{value}（至少 1）"
+
+  - id: topic_contract_ok
+    command: "source /opt/ros/humble/setup.bash && source install/setup.bash && ros2 topic list 2>/dev/null | wc -l"
+    expect: ">= 20"
+    blocking: false
+    timeout_sec: 15
+    message_template: "{value} 個 ROS2 topics 已發現（建議至少 20）"
+
+  # -- 第三組：系統狀態與部署證據 --
+
+  - id: system.memory
+    command: "awk '/MemAvailable:/ {print int($2/1024)}' /proc/meminfo"
+    expect: ">= 800"
+    blocking: true
+    timeout_sec: 5
+    message_template: "{value}MB 可用記憶體（至少 800MB）"
+
+  - id: system.gpu_temp
+    command: "cat /sys/devices/virtual/thermal/thermal_zone1/temp 2>/dev/null | awk '{print int($1/1000)}'"
+    expect: "<= 70"
+    blocking: false
+    timeout_sec: 5
+    message_template: "GPU {value}°C（警告門檻 >70°C）"
+
+  - id: version_snapshot
+    command: "cat ~/elder_and_dog/.pawai-last-deploy 2>/dev/null | wc -c"
+    expect: ">= 1"
+    blocking: false
+    timeout_sec: 5
+    message_template: "deploy manifest 大小：{value} bytes"
