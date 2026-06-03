@@ -23,11 +23,13 @@ DEFAULT_CRITERIA: dict[str, list[Criterion]] = {
     ],
     "gesture.wave": [
         Criterion("success_rate", 0.90, 0.80, higher_is_better=True),
-        Criterion("false_trigger_rate", 0.10, 0.30, higher_is_better=False),
+        # 規格 §4：手勢 idle 誤觸只看 scenario_kind=idle 的 unknown_false_accept_rate。
+        Criterion("unknown_false_accept_rate", 0.10, 0.30, higher_is_better=False),
     ],
     "object.cup": [
         Criterion("success_rate", 0.80, 0.60, higher_is_better=True),
-        Criterion("false_trigger_rate", 0.01, 0.10, higher_is_better=False),
+        # 規格 §5：物件 idle 誤觸只看 scenario_kind=idle 的 unknown_false_accept_rate。
+        Criterion("unknown_false_accept_rate", 0.01, 0.10, higher_is_better=False),
     ],
 }
 
