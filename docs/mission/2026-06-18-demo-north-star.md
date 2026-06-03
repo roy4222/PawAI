@@ -96,7 +96,7 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 分兩層講，避免提前宣稱未經 baseline 的能力：
 
 - **目前（baseline 前）可說的「價值 / 角色語言」**：守望、提醒、回報、非接觸、可解釋互動、Studio evidence；以及「借鑑導盲犬的非接觸守望價值，但 6/18 不宣稱導盲能力」。
-- **通過 baseline（scoreboard 標 pass）後才說的「能力宣稱」**：短距安全移動、遇障安全停車、揮手互動、物件辨識——**每一項都要在 scoreboard 標 pass，才進旁白**；未 pass 前只在 Studio 顯示，不口頭宣稱。
+- **通過 baseline（scoreboard 標 pass）後才說的「能力宣稱」**：短距安全移動、遇障安全停車、揮手互動、物件辨識——**每一項都僅在該能力於 scoreboard 標 pass 後才進旁白**；其中「遇障安全停車」需 nav baseline run 標 pass（或明確人工安全 override）後才宣稱，未 pass 前一律 `insufficient_data`、只在 Studio 顯示、不口頭宣稱。
 
 ---
 
@@ -164,7 +164,7 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 - **fail**：不宣稱、不觸發
 - **insufficient_data**：不放行高風險動作（motion / nav）
 
-> **Brain 必須 fail-closed**：當能力為 `degraded` / `fail` / `insufficient_data` 時，**不得用該能力觸發 motion / nav 類動作**。**預計落點**是 `pawai_brain` 既有的 capability / effective_status 純函式——**目前該純函式有 gate 骨架但缺 health 維度，需補上 `capability_health` 分支後單測**（尚未存在，不是現成品）；不在 LLM prompt 層做。
+> **Brain 必須 fail-closed**：當能力為 `degraded` / `fail` / `insufficient_data` 時，**不得用該能力觸發 motion / nav 類動作**。此 health gate 落在 `pawai_brain` 既有的 effective_status 純函式（新增 `capability_health` 分支，#85 v0.2）——**6/18 預設關閉（fail-closed）、不接 runtime motion 觸發**，僅作為能力分級的設計落點，非現成的強制 gate，也不在 LLM prompt 層做。
 
 這也是 §4 demo promise 的執行機制：scoreboard 決定 Brain 能不能用某能力，而不是「功能寫了就用」。
 
@@ -174,7 +174,7 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 
 > PawAI 的 Edge AI 價值在於 **Jetson 端即時感知、ROS2 狀態整合、安全 gate、fallback 行為與 Studio evidence**。雲端 LLM / TTS 是**互動品質加分，不是系統可靠性的唯一來源**。
 
-具體證明：感知（face / pose / gesture / object）+ 安全層 + reactive_stop 全在 Jetson 邊緣跑。斷網時**可降級到本地感知 + 固定指令 / RuleBrain / Piper 的守望模式**，**需 baseline 驗證後**作為 Edge AI 證據（repo 已有 `sensevoice_local` / `whisper_local` / `piper` / RuleBrain fallback 線索，但語音主線含 Studio / Gateway / Cloud path，完整斷網閉環尚待 current-path baseline，不寫成已驗證完成品）。不要用桌機 GPU 標準評估 Jetson 表現。
+具體證明：感知（face / pose / gesture / object）+ 安全層 + reactive_stop 全在 Jetson 邊緣跑。斷網守望（本地感知 + 固定指令 / RuleBrain / Piper）是**設計上的目標路徑，尚未經 current-path baseline 驗證，因此目前只作為「設計意圖」陳述、不作為已成立的 Edge AI 證據**（repo 雖有 `sensevoice_local` / `whisper_local` / `piper` / RuleBrain fallback 線索，但現行語音主線仍走 Studio / Gateway / Cloud path，完整斷網閉環尚未在 current path 跑通；通過 baseline 後才升級為已驗證證據）。不要用桌機 GPU 標準評估 Jetson 表現。
 
 ---
 
