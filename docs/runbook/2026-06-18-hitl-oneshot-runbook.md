@@ -53,8 +53,13 @@ ssh jetson-nano 'zsh -lic "cd ~/elder_and_dog && source /opt/ros/humble/setup.zs
 # 若 demo 沒在跑，冷啟（不要用 'pawai demo start' — 它會 P0-fail 於缺 brain .env）：
 # ssh jetson-nano 'zsh -lic "cd ~/elder_and_dog && bash scripts/start_full_demo_tmux.sh"'   # 等 ~50s
 
-# 0c. 在 Jetson 重生 PASS preflight（之後 run_trusted=True）。jsonschema 先裝（已知陷阱）：
-ssh jetson-nano 'python3 -m pip install --user jsonschema'
+# 0c-i. PRECHECK：jsonschema 是否在（run_preflight 需要）。不要在採集中途隱性裝環境。
+ssh jetson-nano 'python3 -c "import jsonschema" 2>/dev/null && echo JSONSCHEMA_OK || echo JSONSCHEMA_MISSING'
+#   若 JSONSCHEMA_MISSING → 在 GATE-0（採集前）補裝再繼續：
+#   - Jetson：`ssh jetson-nano 'python3 -m pip install --user jsonschema'`
+#     （專案慣例是 `uv pip install`，但 **Jetson 無 uv** 是已知例外，故 Jetson 端用 pip --user）
+#   - WSL 端若缺：`uv pip install jsonschema`（不要用裸 pip）
+# 0c-ii. 重生 PASS preflight（之後 run_trusted=True）：
 ssh jetson-nano 'zsh -lic "cd ~/elder_and_dog && source /opt/ros/humble/setup.zsh && source install/setup.zsh && python3 benchmarks/scripts/run_preflight.py --profile demo --out artifacts/baseline/preflight_result.json"'   # status 必須 pass 或 pass_with_warnings
 
 # 0d. （建議）乾淨重起 JSONL（handoff 留了 ~9 筆 hitl-0603 face 記錄）。保留歷史、不刪除：
@@ -203,7 +208,7 @@ mkdir -p docs/runbook/baseline-evidence/2026-06-04-hitl && cp /tmp/baseline_resu
 ```
 **verdict 數學：** `ready` 只在 run_trusted=True AND preflight pass AND snapshot SHA == Jetson `.pawai-last-deploy`（WSL HEAD `885728f` 對得上）AND 15 caps 全在 AND 每個 mainline cap pass、非 pass 者帶 failure_reason。**本輪預期 NOT-ready**（face 可能轉 pass，但 nav/pose 仍 insufficient_data）— 這是正確的、誠實的 fail-closed 結果，不是失敗。
 
-**清掉 schema_validator_unavailable：** 已驗證**本輪非 blocker** — jsonschema 4.26.0 可在 `/home/roy422/.venv` import；對 stale snapshot 跑 readiness 第一個 reason 是 `sha_mismatch` 不是 schema_validator。**在 WSL 用該 venv 跑 build+readiness 就不會觸發。** 永久鎖法（Codex follow-up，非本輪）：把 jsonschema 釘進 pawai/benchmarks runtime deps + 加 ImportError 測試。若真看到 `schema_validator_unavailable:ModuleNotFoundError`：`/home/roy422/.venv/bin/pip install jsonschema`。
+**清掉 schema_validator_unavailable：** 已驗證**本輪非 blocker** — jsonschema 4.26.0 可在 `/home/roy422/.venv` import；對 stale snapshot 跑 readiness 第一個 reason 是 `sha_mismatch` 不是 schema_validator。**在 WSL 用該 venv 跑 build+readiness 就不會觸發。** 永久鎖法（Codex follow-up，非本輪）：把 jsonschema 釘進 pawai/benchmarks runtime deps + 加 ImportError 測試。若真看到 `schema_validator_unavailable:ModuleNotFoundError`：WSL 端 `uv pip install jsonschema`（裝進 `/home/roy422/.venv`，不要用裸 pip）。
 
 ---
 

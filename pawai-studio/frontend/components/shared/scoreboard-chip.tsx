@@ -30,21 +30,28 @@ export function ScoreboardChip() {
       />
       <div className="space-y-1">
         {hasCapabilities ? (
-          capabilities.map((capability) => (
-            <div
-              key={capability.capability_id}
-              className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded border border-zinc-700/60 bg-zinc-900/40 px-2 py-1"
-            >
-              <span className="truncate">{capability.capability_id}</span>
-              <span className={gradeClasses[capability.grade]}>{capability.grade}</span>
-              <span className="truncate text-zinc-400">
-                {capability.failure_reason ?? "—"}
-              </span>
-              <span className="truncate text-zinc-500">
-                {capability.last_tested_at ?? "—"}
-              </span>
-            </div>
-          ))
+          capabilities.map((capability) => {
+            const reason = capability.failure_reason?.trim();
+            const reasonText = reason || (capability.grade === "pass" ? "—" : "⚠ 缺 reason");
+            const reasonClass = reason
+              ? "text-zinc-400"
+              : capability.grade === "pass"
+                ? "text-zinc-600"
+                : "text-amber-300";
+            return (
+              <div
+                key={capability.capability_id}
+                className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded border border-zinc-700/60 bg-zinc-900/40 px-2 py-1"
+              >
+                <span className="truncate">{capability.capability_id}</span>
+                <span className={gradeClasses[capability.grade]}>{capability.grade}</span>
+                <span className={`truncate ${reasonClass}`}>{reasonText}</span>
+                <span className="truncate text-zinc-500">
+                  {capability.last_tested_at ?? "—"}
+                </span>
+              </div>
+            );
+          })
         ) : (
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_minmax(0,1fr)] gap-2 rounded border border-red-500/40 bg-red-500/10 px-2 py-1 text-red-300">
             <span>missing</span>
