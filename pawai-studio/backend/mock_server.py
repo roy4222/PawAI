@@ -396,6 +396,10 @@ async def ws_text(ws: WebSocket):
 
 # ── REST: Gateway 端點 ──────────────────────────────────────────────
 
+@app.get("/api/scoreboard")
+async def get_scoreboard():
+    return {"provenance": "mock", "backend": "mock", "capabilities": []}
+
 @app.post("/api/command")
 async def post_command(cmd: SkillCommand):
     event = PawAIEvent(

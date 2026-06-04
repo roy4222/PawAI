@@ -568,11 +568,21 @@ def _read_scoreboard(path: Path) -> dict:
     last_tested_at is the snapshot-level timestamp (no per-capability time exists).
     """
     if not path.exists():
-        return {"provenance": "missing", "source_path": str(path), "capabilities": []}
+        return {
+            "provenance": "missing",
+            "backend": "live",
+            "source_path": str(path),
+            "capabilities": [],
+        }
     try:
         snap = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {"provenance": "missing", "source_path": str(path), "capabilities": []}
+        return {
+            "provenance": "missing",
+            "backend": "live",
+            "source_path": str(path),
+            "capabilities": [],
+        }
 
     timestamp = snap.get("timestamp")
     caps_in = snap.get("capabilities", {})
@@ -587,6 +597,7 @@ def _read_scoreboard(path: Path) -> dict:
         })
     return {
         "provenance": "frozen",
+        "backend": "live",
         "source_path": str(path),
         "schema_version": snap.get("schema_version"),
         "run_trusted": snap.get("run_trusted"),

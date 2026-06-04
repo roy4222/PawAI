@@ -3,6 +3,7 @@
 import { useEventStream } from "@/hooks/use-event-stream";
 import { SkillButtons } from "@/components/chat/brain/skill-buttons";
 import { SkillTraceContent } from "@/components/chat/brain/skill-trace-content";
+import { ScoreboardChip } from "@/components/shared/scoreboard-chip";
 
 /**
  * /studio/dev — full-page dev panel for direct URL access.
@@ -25,6 +26,12 @@ export default function DevPage() {
         <SkillButtons />
         <div className="border-t border-[var(--sheet-border)]">
           <SkillTraceContent />
+        </div>
+        <div className="border-t border-[var(--sheet-border)] p-4">
+          <h2 className="mb-2 text-xs font-semibold text-muted-foreground">
+            能力 Scoreboard（誠實層 · 唯讀 frozen snapshot）
+          </h2>
+          <ScoreboardChip />
         </div>
       </div>
     </div>

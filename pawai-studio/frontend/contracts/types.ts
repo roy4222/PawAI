@@ -462,3 +462,25 @@ export interface ConversationTracePayload {
   detail: string;
   ts: number;
 }
+export type ScoreboardGrade = 'pass' | 'degraded' | 'fail' | 'insufficient_data';
+export type ScoreboardProvenance = 'frozen' | 'missing';
+export type ScoreboardBackend = 'live' | 'mock';
+export type ProvenanceState = 'live' | 'mock' | 'frozen' | 'missing';
+export interface ScoreboardCapability {
+  capability_id: string;
+  grade: ScoreboardGrade;
+  failure_reason: string | null;
+  brain_allowed: boolean;
+  last_tested_at: string | null;
+}
+export interface ScoreboardResponse {
+  provenance: ScoreboardProvenance;
+  backend?: ScoreboardBackend;
+  source_path?: string;
+  schema_version?: string;
+  run_trusted?: boolean;
+  version_mismatch?: boolean;
+  git_commit?: string;
+  generated_at?: string;
+  capabilities: ScoreboardCapability[];
+}
