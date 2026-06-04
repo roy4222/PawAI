@@ -398,7 +398,9 @@ async def ws_text(ws: WebSocket):
 
 @app.get("/api/scoreboard")
 async def get_scoreboard():
-    return {"provenance": "mock", "backend": "mock", "capabilities": []}
+    # provenance = file identity (frozen|missing); mock has no snapshot file -> missing.
+    # mock-ness is carried by backend, not provenance (keeps the TS contract honest).
+    return {"provenance": "missing", "backend": "mock", "capabilities": []}
 
 @app.post("/api/command")
 async def post_command(cmd: SkillCommand):
