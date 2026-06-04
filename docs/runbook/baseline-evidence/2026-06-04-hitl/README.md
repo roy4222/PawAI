@@ -2,7 +2,8 @@
 
 **Run**: `hitl-0604` · **demo SHA**: `78fbf36` · **snapshot**: `run_trusted=True`, `version_mismatch=False`
 **Method**: demo (`pawai demo start`, 13-window full stack) → `capture_baseline_round.py` (fixed-window, SSH-driven) + voice `run_speech_test.sh` → WSL `build_scoreboard --preflight` (built at checkout `78fbf36` to match Jetson deploy manifest) → `pawai readiness`.
-**Operator**: Roy (HITL, present at Go2+Jetson). **Go2 motion**: none (nav skipped live dry-run).
+**Operator**: Roy (HITL, present at Go2+Jetson). **Go2 motion**: none (nav live dry-run aborted at AMCL gate, actual_distance=0.0).
+**Provenance note**: snapshot `wsl_dirty=true` / `jetson_dirty=true` = **untracked files present** (slide PDFs, `.tmp/`), NOT tracked-code changes; SHA `78fbf36` is the clean tracked-tree commit. Reproducibility is weaker than a fully-clean freeze — **next freeze should attach `git status --short` or rerun/freeze from a clean checkout**.
 
 ## Capability grades (15)
 
@@ -14,7 +15,7 @@
 | **gesture.wave** | 🔴 fail | 9 | registered_recall=0.0 (wave_pub=False; dynamic detector not triggering) |
 | **voice.stop** | 🔴 fail | 6 | success_rate=0.667, FN=2 (R16 no-ack, R18→come_here) |
 | pose.basic / pose.fall | ⚪ insufficient_data | 0 | no pose observer in tooling |
-| nav.safe_stop / no_auto_resume / short_move / dynamic_avoidance | ⚪ insufficient_data | 0 | no observer; §7 iron rule; no live dry-run this round |
+| nav.safe_stop / no_auto_resume / short_move / dynamic_avoidance | ⚪ insufficient_data | 0 | no observer; §7 iron rule; live dry-run aborted (amcl_lost, 0 motion) |
 | brain.skill_gate / brain.trace / cli.readiness / studio.evidence | ⚪ insufficient_data | 0 | not measured this round |
 
 **readiness verdict**: `not_ready` (correct fail-closed — most capabilities not pass), no `sha_mismatch`.
@@ -27,7 +28,7 @@
 - **voice.stop**: FN=2 → fail; R18「欸等一下先停住」misclassified as come_here (clear miss). voice e2e is **VAD-era** (mic_stop unwired) — do NOT claim mic_stop latency.
 - **voice CSV**: `run_speech_test.sh` observer report ack timed out → no CSV; records **reconstructed from terminal intent results** (real data; latency/play_ok unmeasured, grading uses success_rate only).
 - **brain LLM persona hallucination** (operator-observed): TTS replies invented unsensed world state (rain / "saw the cup" / posture). Brain-persona follow-up — do not present as real perception.
-- **nav**: no Go2 motion executed; all nav.* insufficient_data; live action-chain dry-run deferred to a supervised session.
+- **nav**: all nav.* insufficient_data. Supervised live action-chain dry-run **completed** (Roy confirmed "go2 nav"): `/nav/goto_relative {distance:0.3}` accepted → AMCL gate aborted (`amcl_lost`), `actual_distance=0.0`, Go2 **zero motion** → proves action chain wired + fail-closed. **Grade unchanged** (no real-motion measurement; not localized — no `/initialpose` set). No nav navigation claim.
 
 ## Files
 
