@@ -1,0 +1,15 @@
+{
+  "verdict": "not_ready",
+  "reasons": [
+    "mainline_capability_not_pass:voice.stop:fail",
+    "mainline_capability_not_pass:gesture.wave:fail",
+    "mainline_capability_not_pass:nav.safe_stop:insufficient_data",
+    "mainline_capability_not_pass:nav.no_auto_resume:insufficient_data",
+    "mainline_capability_not_pass:nav.short_move:insufficient_data",
+    "mainline_capability_not_pass:brain.skill_gate:insufficient_data",
+    "mainline_capability_not_pass:brain.trace:insufficient_data",
+    "mainline_capability_not_pass:studio.evidence:insufficient_data"
+  ],
+  "warnings": [],
+  "override": null
+}
