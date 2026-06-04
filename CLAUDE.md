@@ -497,6 +497,14 @@ Go2 sport mode 對 `Move (api_id=1008)` 有 `MIN_X = 0.50 m/s` 門檻 — `Move 
 
 Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet 直連模式（192.168.123.161）開發，避免 Go2 連上外網被更新。
 
+### Demo 啟動 / `.env` 環境陷阱（6/4 HITL 發現）
+
+- **`.env` CRLF 致 demo 靜默假成功**：`.env` 若是 Windows CRLF 換行，`start_full_demo_tmux.sh` 的 `source .env` 會撞 `$'\r': command not found`，配 `set -euo pipefail` **整個腳本靜默 abort、tmux session 從沒建起來**——但 `pawai demo start` 仍回報 `✓ Demo running`（假成功）。**修法**：`ssh jetson-nano "cd ~/elder_and_dog && sed -i 's/\r$//' .env .env.local"`；**起 demo 後務必 `tmux ls` + 數 process / `ros2 node list`，不要只信 CLI 的成功訊息**。（注意：5/14 已有 CRLF 防線但**未覆蓋 `.env` source 路徑**。）
+- **`.env` vs `.env.local` 檔名漂移**：`start_full_demo_tmux.sh` 與 brain preflight 都 source/檢查 `.env`，但 Jetson 上可能只有 `.env.local`（真實 keys）。**修法**：`cp .env.local .env`。canonical 化是 roadmap follow-up。
+- **`capture_baseline_round.py percep` 同收 gesture+object 兩流、不按 capability 過濾**：量 `object.cup` 會被 gesture event 污染、反之亦然。**量單一能力要隔離另一條 topic**：object 用 `--gesture-topic /__no_gesture__`、gesture 用 `--object-topic /__no_object__`。
+- **gesture `WaveDetector` config default=rtmpose 是 footgun**：`vision_perception.yaml` 預設 `gesture_backend: rtmpose`，rtmpose backend 不餵 WaveDetector → wave 永不觸發。**demo 主線靠 `start_full_demo_tmux.sh` 的 `gesture_backend:=recognizer` override**；直接 `ros2 launch` 不帶 override 會中招。
+- **voice `run_speech_test.sh` observer report-ack-timeout → 不產 CSV**（`test_results/` 只剩 `.gitkeep`）。terminal 仍有逐輪 intent 結果 → 可重建 CSV 給 `voice_csv_to_jsonl.py`（評分只看 success_rate，不需 latency）。
+
 ---
 
 ## 關鍵文件索引

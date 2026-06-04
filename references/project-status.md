@@ -1,7 +1,35 @@
 # 專案狀態
 
-**最後更新**：2026-05-15（學校招生 demo 強化 + Spec A demo 主線止血 D0 recovery + PR1 靜態修補）
-**硬底線**：5/18 期末 demo（4 天）；**5/12 晚 → Go2 已移交學校 ✅**；5/13 中 → M307→SL201；5/14 → SL201（待確認放假）；5/15 → LW21E
+**最後更新**：2026-06-04（第一份多能力 trusted baseline + 8 baseline issue 全清；HITL，Roy 在場 Go2+Jetson）
+**硬底線**：6/18 期末發表。Go2 目前在 Roy 手上做 HITL baseline。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/4：第一份多能力 trusted baseline + 8 issue 全清（HITL，Roy 在場 Go2+Jetson）
+
+**當日主軸**：跑通 `demo → preflight → capture → build_scoreboard → readiness → freeze`，產出第一份**多能力 trusted snapshot**（@ `78fbf36`, run_trusted=True, version_mismatch=False, readiness=`not_ready`），8 張 baseline issue（#80/#81/#82/#83/#84/#88 + #118/#120）全部誠實收口。
+
+### 模組 baseline 狀態（15 能力 → 3 pass / 2 fail / 10 insufficient_data）
+| 模組 | grade | 重點（誠實窄版） |
+|---|---|---|
+| 人臉 `face.recognition` | 🟢 **pass** | recall 1.0 / fa 0.0，但**窄版**：Roy 一人、空景 idle（無真陌生人）、信心 0.24-0.54、實際 ~1.8m。6/3 是 fail → 翻盤 |
+| 語音 `voice.command` | 🟢 **pass** | 0.875；ASR 短同音字會掉（照相/狀態→chat） |
+| 物體 `object.cup` | 🟢 **pass** | **近距 ~1m only**、cup-only（距離拉開 recall 掉） |
+| 手勢 `gesture.wave` | 🔴 **fail** | recall 0/6，`wave_pub=False`（偵測器沒觸發；今天 runtime 是 recognizer，**非** backend 問題。config default=rtmpose 是另一個 footgun） |
+| 語音 `voice.stop` | 🔴 **fail** | FN=2（「請你停下來」no-ack、「先停住」→come_here）— 安全關鍵 |
+| 姿勢 `pose.*` / 導航 `nav.*` / brain / cli / studio | ⚪ **insufficient_data** | pose/nav 無 baseline observer；nav live dry-run 證明 action 鏈路通 + fail-closed（amcl_lost、Go2 actual_distance=0.0 零移動） |
+
+### code merged（2 PR）
+- **#118 Studio 證據 UI**（PR #122 → `78fbf36`）：scoreboard chip + provenance badge(live/mock/frozen/missing) + trace reason-guard，掛 `/studio/dev`
+- **#120 capability gate → IE runtime**（PR #123 → `c56cd8f`，**default-OFF**，221 IE + 345 brain 測試綠、OFF-path byte-identical）
+
+### 關鍵發現 / 產出
+- **★ brain LLM persona 幻覺**（Roy 頭號關注）：TTS 杜撰未感測世界狀態（下雨/看到杯子/姿勢）→ persona 反幻覺為 6/18 最高優先 follow-up
+- **跨系統改進 roadmap**：`docs/pawai-brain/plans/2026-06-04-system-improvement-roadmap.md`（9-agent 研究，26 blocker/high、24 個 6/18 相關）
+- **evidence 凍結**：`docs/runbook/baseline-evidence/2026-06-04-hitl/`（snapshot + 55 JSONL + preflight + readiness + README 含誠實 caveat）
+
+### ⚠️ 操作陷阱（5/14 CRLF 防線未覆蓋 `.env` source 路徑 → 今天再中招）
+詳見 `CLAUDE.md` 已知陷阱新增區（`.env` CRLF 致 demo 靜默假成功、`.env`↔`.env.local` 檔名漂移、percep 工具 gesture/object 流混算、voice CSV report-ack-timeout）。
 
 ---
 
