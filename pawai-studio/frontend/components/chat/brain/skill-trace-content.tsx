@@ -15,6 +15,7 @@ function statusToClass(status: string): string {
     case "proposed":
       return "bg-slate-500/20 text-slate-300 border-slate-500/40";
     case "blocked":
+    case "insufficient_data":
     case "fallback":
     case "retry":
       return "bg-amber-500/20 text-amber-300 border-amber-500/40";
@@ -128,10 +129,15 @@ export function SkillTraceContent() {
               <span className="font-medium">{t.stage}</span>
               <span className="opacity-60"> · </span>
               <span className="font-semibold">{t.status}</span>
-              {t.detail ? (
+              {t.detail?.trim() ? (
                 <>
                   <span className="opacity-60"> · </span>
                   <span className="truncate">{t.detail}</span>
+                </>
+              ) : (t.status === "blocked" || String(t.status) === "insufficient_data") ? (
+                <>
+                  <span className="opacity-60"> · </span>
+                  <span className="text-amber-300">⚠ no reason provided</span>
                 </>
               ) : null}
               <span className="ml-2 text-[10px] opacity-50">{t.engine}</span>
