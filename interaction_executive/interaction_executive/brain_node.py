@@ -23,6 +23,7 @@ from .pending_confirm import (
 )
 from .safety_layer import SafetyLayer
 from .skill_contract import (
+    ExecutorKind,
     SKILL_REGISTRY,
     PriorityClass,
     SkillPlan,
@@ -264,6 +265,8 @@ class BrainNode(Node):
         # 預設 False 維持現有 object_remark + sit_along 獨立行為
         self.declare_parameter("demo_video_cup_compound", False)
         self.declare_parameter("demo_video_silent_sit_along", False)
+        self.declare_parameter("capability_gate_enabled", False)
+        self.declare_parameter("baseline_snapshot_path", "")
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -278,6 +281,13 @@ class BrainNode(Node):
         self.peace_direct_stretch = bool(self.get_parameter("peace_direct_stretch").value)
         self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
         self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
+        self._capability_gate_enabled = bool(
+            self.get_parameter("capability_gate_enabled").value
+        )
+        self._baseline_snapshot_path = str(
+            self.get_parameter("baseline_snapshot_path").value or ""
+        )
+        self._capability_health_cache: dict[str, Any] | None = None
         if self.gesture_direct_disabled:
             # Instance shadow class attribute — 不影響其他 BrainNode instances 或 test fixtures
             self._GESTURE_DIRECT = {}
@@ -330,6 +340,41 @@ class BrainNode(Node):
 
     def _mark_cooldown(self, key: str) -> None:
         self._state.last_alert_ts[key] = time.time()
+
+    def _capability_health_block(self, skill: str) -> str | None:
+        if not self._capability_gate_enabled:
+            return None
+
+        # Lazy import: keep brain_node importable (IE standalone tests) without
+        # pawai_brain on the path; only the gate-ON runtime path needs it.
+        from pawai_brain.capability.health_loader import (
+            load_capability_health,
+            skill_capability,
+        )
+
+        capability_id = skill_capability(skill)
+        if capability_id == "content":
+            return None
+        if capability_id is None:
+            if self._skill_has_motion_or_nav(skill):
+                return f"{skill}:unmapped_motion_capability"
+            return None
+
+        if self._capability_health_cache is None:
+            self._capability_health_cache = load_capability_health(self._baseline_snapshot_path)
+
+        health = self._capability_health_cache.get(capability_id)
+        grade = str(health.grade)
+        if grade in {"fail", "degraded", "insufficient_data"} or not health.brain_allowed:
+            return f"{skill}:{capability_id}:{grade}"
+        return None
+
+    def _skill_has_motion_or_nav(self, skill: str) -> bool:
+        contract = SKILL_REGISTRY.get(skill)
+        if contract is None:
+            return True
+        motion_executors = {ExecutorKind.MOTION, ExecutorKind.NAV}
+        return any(step.executor in motion_executors for step in (contract.steps or []))
 
     def _check_dedup(self, source: str, key: str) -> bool:
         if not key:
@@ -509,6 +554,17 @@ class BrainNode(Node):
                 stage="skill_gate",
                 status="rejected_not_allowed",
                 detail=proposed_skill,
+            )
+            return
+
+        reason = self._capability_health_block(proposed_skill)
+        if reason:
+            self._emit_trace(
+                session_id=session_id,
+                engine=engine,
+                stage="skill_gate",
+                status="blocked",
+                detail=reason,
             )
             return
 

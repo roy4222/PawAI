@@ -1,11 +1,12 @@
 """CapabilityRegistry — merge SkillContract + DemoGuide → CapabilityEntry list."""
 from __future__ import annotations
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from .demo_guides_loader import DemoGuide
-from .effective_status import WorldFlags, compute_effective_status
+from .effective_status import CapabilityHealth, WorldFlags, compute_effective_status
 
 
 _AVAILABLE_STATUSES = frozenset({"available", "needs_confirm"})
@@ -52,11 +53,16 @@ class CapabilityRegistry:
         self._guides = list(guides)
 
     def build_entries(
-        self, world: WorldFlags, recent_results: list
+        self,
+        world: WorldFlags,
+        recent_results: list,
+        capability_health: Mapping[str, CapabilityHealth] | None = None,
     ) -> list:
         entries: list = []
         for name, contract in self._skills.items():
-            entries.append(self._skill_entry(name, contract, world, recent_results))
+            entries.append(
+                self._skill_entry(name, contract, world, recent_results, capability_health)
+            )
         for guide in self._guides:
             entries.append(self._guide_entry(guide))
         return entries
@@ -64,7 +70,12 @@ class CapabilityRegistry:
     # ── internals ──
 
     def _skill_entry(
-        self, name: str, contract, world: WorldFlags, recent_results: list
+        self,
+        name: str,
+        contract,
+        world: WorldFlags,
+        recent_results: list,
+        capability_health: Mapping[str, CapabilityHealth] | None = None,
     ) -> CapabilityEntry:
         # Adapter for compute_effective_status
         adapter = _SkillAdapter(
@@ -78,7 +89,11 @@ class CapabilityRegistry:
             has_nav_step=any(_is_nav(s) for s in (contract.steps or [])),
             kind="skill",
         )
-        status, reason = compute_effective_status(adapter, world)
+        health = capability_health.get(name) if capability_health is not None else None
+        if health is None:
+            status, reason = compute_effective_status(adapter, world)
+        else:
+            status, reason = compute_effective_status(adapter, world, health)
         return CapabilityEntry(
             name=name,
             kind="skill",
