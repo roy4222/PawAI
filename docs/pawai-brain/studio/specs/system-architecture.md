@@ -1,8 +1,18 @@
 # PawAI Studio 系統架構
 
-**文件版本**：v1.0
-**最後更新**：2026-03-13
-**對齊來源**：[mission/README.md](../mission/README.md) v2.0
+> ⚠️ **LEGACY / 部分 superseded（2026-03-13 原始設計，保留作歷史）**
+> 本文件描述的 **RTX 8000 伺服器 + Redis Event Bus + ros2_bridge → Redis** 拓撲是**早期設計提案，未落地**。**現行架構不同**：
+> - **Gateway 位置**：現行 Gateway 跑在 **Jetson**（`pawai-studio/gateway/studio_gateway.py`，FastAPI + rclpy **直接** subscribe ROS2 topics + broadcast WebSocket），**不經 RTX 8000、不經 Redis Event Bus、無 ros2_bridge → Redis 中介層**。
+> - **Port**：現行 `8080`（不是本文件寫的 `8000` / `8001`）。
+> - **端點 / WebSocket 頻道**：以 **current** 真相為準 — [`../README.md` §Gateway / Mock 端點](../README.md) 列現行 `/ws/events`、`/ws/video/{source}`、`/ws/speech`、`/api/text_input`、`/api/capability` 等；本文件的 `/ws/state`、`/ws/chat`、Redis Streams 段落**不再反映實作**。
+> - **Mock Server**：現行為 `pawai-studio/backend/mock_server.py`（FastAPI），非本文件描述的「Redis 重播 / scenario」設計。
+>
+> **與現行 gateway README 衝突點**（本檔 vs `pawai-studio/README.md` + `docs/pawai-brain/studio/README.md`）：部署目標（RTX 8000 vs Jetson）、事件總線（Redis vs rclpy 直連）、port（8000/8001 vs 8080）。**衝突一律以 current（studio/README.md + gateway 程式碼）為準。**
+> 本檔僅保留作「快/慢雙系統」概念與早期拓撲歷史參考。current vs legacy 對照見 [`specs/README.md`](README.md)。
+
+**文件版本**：v1.0（legacy）
+**最後更新**：2026-03-13（內容已部分 superseded，banner 補 2026-06-05）
+**對齊來源**：[mission/README.md](../../../mission/README.md) v2.0（注意：本檔原寫 `../mission/` 為錯誤相對深度，已修為 `../../../mission/`）
 
 ---
 

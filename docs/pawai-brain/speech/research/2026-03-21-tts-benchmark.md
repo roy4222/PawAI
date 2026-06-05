@@ -1,5 +1,7 @@
 # TTS 模型選型調查
 
+> 🔬 **RESEARCH-ONLY / HISTORICAL（2026-03-21 模型選型調查，保留作引用，不重複維護）。** 本檔是 TTS 候選模型 benchmark 紀錄，**不是能力 claim 真相**。能力分級一律以 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) + [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) 為準。此處 latency / 音質數字屬 benchmark research，不得當作 e2e 能力驗證。現役 TTS routing 真相見 [`../README.md`](../README.md)。
+
 > 最後更新：2026-03-21
 
 ## 目標效果

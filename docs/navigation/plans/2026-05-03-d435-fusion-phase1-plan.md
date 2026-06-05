@@ -1,5 +1,7 @@
 # Phase 1 Implementation Plan — D435 → /scan_d435 可視化
 
+> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 D435 深度影像透過 `depthimage_to_laserscan_node` 轉成 `/scan_d435`，在 Foxglove 與 RPLIDAR 對同一個 box 視覺對齊，**不影響 Nav2 行為、不送 Go2 goal**。Phase 1 通過才能進 Phase 2（local_costmap 整合）。

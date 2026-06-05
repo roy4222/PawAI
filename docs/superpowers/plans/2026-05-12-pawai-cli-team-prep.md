@@ -1,5 +1,7 @@
 # PawAI CLI Team-Prep Implementation Plan
 
+> **historical / legacy planning（superpowers 已執行 plan）**：本檔是 pawai CLI team-prep 的逐 task 實作計畫（已 land）。checkbox 為歷史執行紀錄，非待辦。**CLI 的當前真相是手冊 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)**；路由與仲裁見 [`../../README.md`](../../README.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `pawai_cli` safe for five-person concurrent Jetson use tomorrow morning: teammates self-onboard via Tailscale share + `pawai doctor`, no silent collisions, network problems are self-diagnosable.

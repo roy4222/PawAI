@@ -1,7 +1,10 @@
 # ADR-0001: PawAI 2026-06 POC 採非接觸式機構巡檢助理定位
 
 - **Date**: 2026-05-23
-- **Status**: accepted
+- **Status**: accepted（**2026-06-05 amended** — 見下方 Amendment）
+
+> **Amendment（2026-06-05，by 6/18 North Star v2 + scoreboard-first）**
+> 本 ADR 的**非接觸紅線完整保留**（不攙扶 / 不碰觸 / 不承重，物理接觸須另開 ADR + safety case）。受修訂的只是 **demo 層用詞**：6/18 demo 場景由「非接觸式機構巡檢助理」**reframe 為「機構公共空間非接觸式守望互動 POC」**——「守望」= 非接觸前提下觀察、提醒、回報、可解釋互動，**不含**攙扶 / 守護 / 陌生人警報 / 替代照護。`巡檢` 降為 future / 可延伸場景，**非 6/18 主張**。6/18 一律用「守望」、不用「守護 / guardian」。Demo 影片仍不得出現長者物理接觸 PawAI 鏡頭（原 §Decision 落地約束不變）。權威用詞見 [`docs/mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) §2 + 能力 claim 見 [`docs/mission/2026-06-18-capability-claim-matrix.md`](../mission/2026-06-18-capability-claim-matrix.md)。ADR 正文不重寫，此 amendment note 即為記錄（不 silent conflict）。
 
 ## Context
 

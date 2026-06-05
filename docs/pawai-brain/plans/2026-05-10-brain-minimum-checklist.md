@@ -1,5 +1,7 @@
 # Brain Minimum Checklist — 5/12 中午 Freeze
 
+> 🗄️ **HISTORICAL（對應 5/12 demo freeze，已被 6/18 scoreboard-first 路線取代）**。保留作歷史，**不再執行**。現行計畫見 [`README.md`](README.md) current 區；能力 claim 以 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md) 與 baseline-evidence 為準。
+
 > **Status**: ready-to-execute
 > **Date**: 2026-05-10 night
 > **取代**：[`2026-05-10-spec1-llm-naturalness-plan.md`](./2026-05-10-spec1-llm-naturalness-plan.md) §3-§7

@@ -1,5 +1,8 @@
 # Studio Gateway Speech Bridge — Implementation Plan
 
+> 📜 **HISTORICAL（2026-04-06 已實作計畫，保留作歷史）**
+> 本計畫描述的 Studio Gateway push-to-talk 收音 → ASR → intent pipeline **已落地**（gateway = `pawai-studio/gateway/studio_gateway.py`，port `8080`，`/ws/speech`）。current 狀態與端點以 [`../README.md`](../README.md) 為準；本檔僅保留實作脈絡，不再更新。能力 claim 一律回 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 瀏覽器 push-to-talk 收音 → Jetson Gateway → ASR → intent → ROS2 publish，讓 Demo 在 Go2 風扇噪音下仍有語音互動能力。

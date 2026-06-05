@@ -8,7 +8,7 @@
 
 **Tech Stack:** ROS2 Humble / Python 3.10 / pytest / Nav2 (DWB controller, no MPPI) / slam_toolbox online_async / twist_mux / Slamtec RPLIDAR A2M12 via sllidar_ros2 / Unitree Go2 Pro (WebRTC DataChannel)
 
-**Spec:** [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
+**Spec:** [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](../../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
 
 **Hard Deadlines:**
 - 5/1: Emergency latch hotkey 必須通過（不過不上 Go2）
@@ -2032,7 +2032,7 @@ git commit -m "feat(studio): Emergency Button + /safety/{trigger,reset} endpoint
 - 障礙移開 3 秒續行
 - 到達 B 播「已到達目的地」
 
-詳細設計見 [P0 Nav Obstacle Avoidance Design](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
+詳細設計見 [P0 Nav Obstacle Avoidance Design](../../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md)
 ```
 
 - [ ] **Step 3: Commit**

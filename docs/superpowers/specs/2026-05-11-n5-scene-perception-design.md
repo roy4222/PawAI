@@ -1,5 +1,7 @@
 # N5 Scene Perception Design
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 N5 perception cache 的 after-the-fact 設計記錄（已實作）。模組設計當前真相見 [`../../pawai-brain/`](../../pawai-brain/)；能力 pass/fail 一律回 [`../../README.md` §衝突仲裁](../../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY（pose 為 Studio-only/insufficient，gesture.wave 現為 fail，不得據本 spec over-claim）。
+
 **Date**: 2026-05-11
 **Target**: 5/18 demo
 **Status**: **Implemented** — see commits `631b98b` (N5) + `0f13d98` (N5.1). This document is the after-the-fact design record; the in-repo behaviour matches §Implementation. Use this spec to understand *why* perception layers split the way they do when revisiting trade-offs.

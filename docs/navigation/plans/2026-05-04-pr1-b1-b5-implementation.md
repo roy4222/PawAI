@@ -1,5 +1,7 @@
 # PR 1 (B1+B5) — nav_action_server 距離/速度正確性 Implementation Plan
 
+> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+
 > ⚠️ **SUPERSEDED 2026-05-04** by [`2026-05-04-pr1a-measurement-first.md`](2026-05-04-pr1a-measurement-first.md)
 >
 > Rejected during review with 5 valid blockers:

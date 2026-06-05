@@ -1,5 +1,7 @@
 # PR #42 語音功能提取計畫
 
+> 🔬 **RESEARCH-ONLY / HISTORICAL（2026-04-25 PR 提取計畫，保留作引用，不重複維護）。** 本檔是針對單一 PR 的 review / 提取規劃，**不是能力 claim 真相**。voice 能力分級一律以 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) + [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) 為準。
+
 **日期**：2026-04-25
 **來源 PR**：https://github.com/roy4222/PawAI/pull/42 (katiechen128 / 陳如恩)
 **整體 PR review 結論**：REQUEST_CHANGES（不能直接 merge — CI 兩個 job 都 FAIL）— 詳見 `docs/mission/meetings/2026-04-25.md`

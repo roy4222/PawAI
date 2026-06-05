@@ -1,5 +1,7 @@
 # PawAI Phase A: Navigation Attack Implementation Plan
 
+> 🕰️ **HISTORICAL — 5/1–5/12 sprint plan（保留作引用，不重複維護）。** 內含「動態避障 / detour / 自走」目標屬 5/12 sprint，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不要把本 plan 當「現在能跑什麼」。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 5/2-5/3 兩天攻破最大不確定性 — 修 nav_capability 兩個 critical bug、落地兩層 Capability Gate(Nav Gate + Depth Gate)、上機驗證兩條主線 nav skill(`nav_demo_point` 5/5 + `approach_person` 1 次 PASS),保證 Storyboard Scene 2 + Scene 7 可執行。

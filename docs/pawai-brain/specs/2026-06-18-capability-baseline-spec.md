@@ -1,5 +1,6 @@
 # Capability Baseline Spec（6/18 逐功能規格）
 
+> ✅ **Status：current — measurement truth**（specs 層唯一現行真相源；其餘 specs 見 [`README.md`](README.md) 的 current/legacy 分區）。本檔定義「怎麼量」；**能力 grade 結果**（pass/fail）以 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/) 為準，**能不能講**連 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md)。門檻在跑完 baseline 前 provisional。
 > **性質**：15 個 capability 的逐功能 baseline 規格（9+1 問）。這份是「**每個能力怎麼量、怎樣算 pass**」的**唯一真相源**。
 > **不放**：架構決策（見 Master Plan）、code skeleton（見 Implementation Plan）、上機步驟（見 Runbook）。
 > **關係**：
@@ -241,7 +242,7 @@ aggregate 按 (capability_id, scenario_kind) 分組產出這些 key：`registere
 | 2 | claim_level | mainline |
 | 3 | risk_role | **actuation** |
 | 4 | dependency_role | **actuation** |
-| 5 | observer | 🟡 手動發 `/nav/goto_relative`→`/event/nav/mission`(outcome_code/actual_distance) 量得到；但 demo 主線量不到（見下）|
+| 5 | observer | 🟡 手動發 `/nav/goto_relative`→**讀 action result**（`bool success` / `string message` / `float32 actual_distance`）量得到；但 demo 主線量不到（見下）。⚠️ **DOC BUG（待修，勿照抄）**：原文寫的 `/event/nav/mission`(outcome_code) **不存在**——source 無此 topic、無 `outcome_code` 欄位。真實 observer surface 是 `/nav/goto_relative` 的 action **result**（型別 `go2_interfaces/action/GotoRelative`，由 `nav_capability/nav_action_server_node.py` serve；`actual_distance` 在 :408 填）。量測請讀 action result，不要訂閱不存在的 `/event/nav/mission`。|
 | 6 | scenario | goto_relative 0.3m×N / 0.5m×N |
 | 7 | metrics | goto 成功率 / actual_distance 分佈 |
 | 8 | pass/deg/fail | goto SUCCEEDED rate ≥85%/70-85%/<85%（calibrate-from-run-1）|

@@ -1,5 +1,7 @@
 # 5 月三場驗收老師意見 synthesis（5/18 葉承達 + 5/20 雅文 + 5/22 呂奇傑）
 
+> **review synthesis / historical（5/23，敘事輸入非能力真相）**：本檔收斂 5 月三場驗收的老師訊號，作為 6/18 敘事與報告心態來源。它記錄**老師意見與敘事決議**，不認定任何能力 pass/fail。能力真相一律回 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY；6/18 最新定位與禁說清單見 [`../mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) v2（晚於本檔，衝突以它為準）。
+
 > **撰寫日**：2026-05-23
 > **目的**：把三場驗收的訊號收斂成共同決議 + 衝突點 + 必修 demo 改動，作為 5/26 sprint kickoff 對齊文件、6/18 demo 影片腳本來源、與教授後續對話依據。
 > **與 v2 spec 的關係**：本文件不取代 [`docs/superpowers/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`](../superpowers/specs/2026-05-22-pawai-may-june-north-star-v2-design.md)，而是補它沒涵蓋的「**對外敘事 / 報告心態 / 安全聲明**」三塊。

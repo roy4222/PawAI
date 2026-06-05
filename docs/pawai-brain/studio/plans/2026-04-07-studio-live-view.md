@@ -1,5 +1,8 @@
 # PawAI Studio Live View Implementation Plan
 
+> 📜 **HISTORICAL（2026-04-07 已實作計畫，保留作歷史）**
+> 本計畫描述的 `/studio/live` 三欄即時影像頁 **已落地**（`/ws/video/{face,vision,object}` binary JPEG 流，見 [`../README.md` §Live View](../README.md)）。current 狀態以 README 為準；本檔僅保留實作脈絡。Live View 顯示為 **evidence 載體**，非能力 pass 證明（見 README「Studio claim 邊界」）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 新增 `/studio/live` 三欄即時影像展示頁，取代 Foxglove 作為 Demo 觀測牆。

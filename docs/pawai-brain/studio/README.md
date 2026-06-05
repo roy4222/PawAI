@@ -1,8 +1,61 @@
 # PawAI Studio
 
+> **Governance header**（治理規則）
+> - **Scope**：PawAI Studio 前端 + Gateway + Mock Server 的單一真相層（chat-first UI / WebSocket 事件流 / panel orchestration / scoreboard 與 provenance 顯示）。
+> - **Status**：active / source-of-truth（Studio lane）— chat-first redesign 已落地（2026-05-04）。
+> - **Owner lane**：brain-studio-lane（`conversation_graph_node` / `interaction_executive` / tts / asr / studio gateway / frontend）。
+> - **Source-of-truth priority**：能力是否 pass / 可否進 Brain 主線一律回 **(1) 實測證據** `docs/runbook/baseline-evidence/2026-06-04-hitl/`（trusted, SHA `78fbf36`, readiness=not_ready）＞ **(2) 收斂審計** `docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` ＞ **(3) 能力規格** `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` ＞ **(4) 戰略邊界** `docs/mission/2026-06-18-demo-north-star.md`。Studio 的「能講什麼 / 不能講什麼」綁 canonical [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)。ROS2 schema 真相在 [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md)。
+> - **Maintained child files**：[`CLAUDE.md`](CLAUDE.md)（工作規則）、[`AGENT.md`](AGENT.md)（介面契約）、[`specs/README.md`](specs/README.md)（specs index：current / legacy / superseded）、`specs/*`、`plans/*`。
+> - **Archived / legacy boundary**：`specs/system-architecture.md` 的 RTX 8000 + Redis Event Bus 拓撲是 **legacy**（與現行 `pawai-studio/gateway/studio_gateway.py` 的 Jetson FastAPI+rclpy 直連衝突，見 specs index）；`plans/2026-04-*` 三份是 **historical 已實作計畫**（頂部 banner 標明）。`docs/archive/2026-05-docs-reorg/` 全 frozen。
+> - **What this README is NOT**：不是能力 pass 證明（Studio evidence 顯示**有價值但非能力 pass**，除非綁 trusted baseline 資料 — 見下方「Studio claim 邊界」）；不是 ROS2 contract（去 `docs/contracts/`）；不是 demo 劇本（去 `docs/mission/README.md`）；不是前端原始碼（在 `pawai-studio/frontend/`）。
+
 > Status: current（chat-first redesign 已落地，2026-05-04）
 
 > ChatGPT 風純對話為主畫面、6 個 icon-only feature button 開 Sheet、`?dev=1` 開發者模式 — embodied AI studio 統一操作入口。
+
+## Studio claim 邊界（6/18，強制）
+
+> Studio 是**證據載體**，不是能力驗證。「Studio 同框顯示 chip + trace + debug_image」證明 demo 是即時感知、非寫死，**有展示價值**；但**不等於該能力 pass**——`studio.evidence` 本身在 6/04 trusted snapshot 仍是 ⚪ insufficient_data（n=0，本輪未量測）。
+
+- **可講**：Studio 顯示 evidence / provenance（chip 狀態 + trace + debug_image）、證明感知是即時的。
+- **不可講**：把「Studio 顯示了某 chip 是綠的」當成「該能力 pass」的驗證；`studio.evidence` 標 pass。chip 的 pass/fail 只能引用 trusted baseline（`docs/runbook/baseline-evidence/2026-06-04-hitl/`），不能由 Studio 自己宣稱。
+- **真相源**：每能力 chip 該顯示什麼狀態、能講什麼，連到 canonical [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)，本檔不重複整份。
+
+## 6/4 Scoreboard / Provenance 顯示（trusted baseline 綁定）
+
+> Studio 的 capability chip 與 provenance badge 一律以 **6/04 HITL trusted snapshot** 為唯一數據來源（`docs/runbook/baseline-evidence/2026-06-04-hitl/`，SHA `78fbf36`，readiness=`not_ready`）。chip 顏色不得由前端 / mock 自行決定 pass，只能反映 trusted baseline 的 grade。完整 claim 邊界連 [`capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)；詳細量測協定連 [`capability-baseline-spec.md`](../specs/2026-06-18-capability-baseline-spec.md)。
+
+### Capability chip 四態（綁 6/04 grade，不重複整份 matrix）
+
+| chip 狀態 | 顏色 | 6/04 對應能力（trusted） |
+|---|---|---|
+| `pass` | 綠 | face.recognition（窄版，僅註冊者）｜voice.command（固定指令意圖）｜object.cup（**僅 ~1m 近距、cup-only**）|
+| `degraded` | 橙 | （6/04 無此態，保留給未來窄版降級）|
+| `fail` | 紅 | gesture.wave（recall=0.0，wave_pub=False）｜voice.stop（success=0.667，**非 safety-stop**）|
+| `insufficient` | 灰 | pose.basic / pose.fall｜nav.*（safe_stop / no_auto_resume / short_move / dynamic_avoidance）｜brain.skill_gate / brain.trace｜cli.readiness｜studio.evidence |
+
+> **chip 文案紀律**（與 claim matrix 一致，禁止 overclaim）：
+> - face：只認**已註冊熟人 + 問候**；idle=空景，**不顯示陌生人拒絕 / 守護 / 「不會認錯」**。
+> - object：**僅 object.cup 近距窄版**；不顯示通用物體偵測 / 尋物 / 顏色可靠。
+> - voice.command：固定指令意圖分類；**不顯示語音延遲 / mic_stop**。
+> - voice.stop：現為 **fail**；**不得標成 safety-stop / 急停**。
+> - gesture.wave：現為 **fail**；static gesture（thumbs_up/ok）是 demo-only fallback，**非 gesture.wave pass**。
+> - pose：**Studio-only / insufficient**；跌倒是 future，**非緊急行為**。
+> - nav：一律 **insufficient_data**；只顯示 LiDAR 點雲 / depth / map，**不宣稱動態避障 / 自走**；dry-run 只證 fail-closed + action chain。
+> - brain：可顯示 deterministic safety / allowlist 拒絕（機制存在 + 單測），**不顯示「反幻覺 pass」/「非幻覺自主 agent」**。
+
+### Provenance badge
+
+每個 chip 旁顯示 provenance badge，標明數據來源與可信度，避免把「機制存在」誤讀為「e2e 驗證過」：
+
+| badge | 意義 |
+|---|---|
+| `trusted: 6/04 HITL (78fbf36)` | 來自 trusted snapshot，可作 pass/fail 依據 |
+| `insufficient: n=0` | 本輪未量測，不可宣稱任何 grade |
+| `live (unverified)` | 現場即時事件流，**僅供顯示**，非 baseline 驗證 |
+| `mock` | mock_server 產生，純 UI / 離線測試，**絕不可當能力證據** |
+
+> ⚠️ mock 模式（`start-live.sh --mock`）的事件全部 `mock` provenance，**任何情況下都不得當作能力 pass 證據**。6/03 first-trusted-face snapshot 為**歷史**，已被 6/04 取代，不再作為 chip 數據源。
 
 ## 狀態卡
 

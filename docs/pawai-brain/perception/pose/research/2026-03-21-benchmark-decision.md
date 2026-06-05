@@ -1,5 +1,7 @@
 # 姿勢辨識模型選型調查
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 3/21 選型調查，**不是能力真相**。⚠️ **pose.basic 6/04 = ⚪ insufficient_data（Studio-only）；跌倒 = future、非緊急**。grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/)、claim 邊界以 [claim matrix `pose.basic / pose.fall`](../../../../mission/2026-06-18-capability-claim-matrix.md#posebasic--posefall) 為準。本檔不得覆寫 baseline-evidence / contracts。
+
 > 最後更新：2026-03-21
 
 ## 目標效果

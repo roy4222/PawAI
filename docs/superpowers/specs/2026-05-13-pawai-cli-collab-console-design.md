@@ -1,5 +1,7 @@
 # PawAI CLI — Collaboration Console Umbrella Design
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 pawai CLI「協作 console」的長版 umbrella 設計背景（Phase 1 已實作）。**CLI 的當前真相是手冊 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)**；精煉決策見 [`../../adr/`](../../adr/)。路由與仲裁見 [`../../README.md`](../../README.md)。
+
 **Written on**: 2026-05-13
 **Author**: Roy + Claude Code brainstorm (3 parallel research agents: local audit, industry CLI patterns, platform strategy)
 **Status**: design approved, Phase 1 implementation pending

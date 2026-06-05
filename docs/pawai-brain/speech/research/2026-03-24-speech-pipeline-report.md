@@ -1,5 +1,7 @@
 # 語音管線驗證報告（2026-03-24）
 
+> 🔬 **RESEARCH-ONLY / HISTORICAL（2026-03-24 開發期 pipeline 驗證紀錄，保留作引用，不重複維護）。** 本檔描述當日 pipeline 整合進度（含「Demo Ready」「四條 fallback 驗證」等開發期用語），**不是 6/18 能力 claim 真相**，也不等於 trusted baseline e2e 驗證。`voice.command` 窄版 pass / `voice.stop` fail 一律以 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) + [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) 為準；此處任何 latency / 辨識率數字屬開發期 proxy 觀測，不得當作 trusted 量測或 safety-stop / mic_stop 依據。
+
 ## 摘要
 
 本日完成 USB 外接音訊設備整合、本地/雲端 LLM 驗證、TTS 主線切換（edge-tts）、intent fast path、以及四條 fallback 路徑驗證。語音管線從「硬體未接」推進到 **Demo Ready** 狀態。

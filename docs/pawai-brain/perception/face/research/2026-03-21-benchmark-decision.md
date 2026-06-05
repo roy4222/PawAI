@@ -1,5 +1,7 @@
 # 人臉辨識模型選型調查
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 3/21 選型調查，**不是能力 pass/fail 真相**。能力 grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/) 為準、claim 邊界見 [claim matrix `face.recognition`](../../../../mission/2026-06-18-capability-claim-matrix.md#facerecognition)。模型分層：YuNet + SFace = **BASELINE_NOW（現役 pass 不換）**。本檔不得覆寫 baseline-evidence / contracts。
+
 > 最後更新：2026-03-21
 
 ## 目標效果

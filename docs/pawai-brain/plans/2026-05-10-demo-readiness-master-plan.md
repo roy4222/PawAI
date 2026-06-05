@@ -1,5 +1,7 @@
 # Demo Readiness Master Plan — 5/11→5/18
 
+> 🗄️ **HISTORICAL（對應 5/11→5/18 demo 視窗，已被 6/18 scoreboard-first 路線取代）**。保留作歷史，**不再執行**。現行計畫見 [`README.md`](README.md) current 區；能力 claim 以 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md) 與 baseline-evidence 為準。
+
 > **Status**: ready-to-execute
 > **Date**: 2026-05-10 night
 > **Demo**: 5/18 final（5/16 dry-run，5/12 晚移交學校）

@@ -1,5 +1,7 @@
 # 多人協作型 CLI 工具的 UX 最佳實踐研究
 
+> **research-only / 非真相層**：本檔是 2026-05-13 對外部 CLI（flutter/gh/kubectl 等）UX 模式的一手調查，僅為 pawai CLI 升級提供背景。**不是 PawAI 能力或產品真相**，不覆寫 baseline-evidence / contracts。pawai CLI 的當前真相見 [`../pawai_cli/README.md`](../pawai_cli/README.md)；路由與仲裁見 [`../README.md`](../README.md)。
+
 > 日期：2026-05-13
 > 目的：為 pawai CLI（Python click，五人共用 Jetson）下一輪升級提供事實基礎
 > 方法：WebFetch / WebSearch 一手文件 + GitHub issue / 官方 doc 為主

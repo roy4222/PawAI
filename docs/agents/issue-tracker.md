@@ -1,6 +1,12 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+> **Scope**：本檔定義 issue / PRD 在何處、用什麼工具操作。
+> **Status**：active / agent-config（流程設定）。**Verified 2026-06-05** — repo = `roy4222/PawAI`，`gh` CLI 可用。
+> **Owner lane**：agents。
+> **Related**：triage 角色 → label 對照見 [`triage-labels.md`](triage-labels.md)；`/goal` → issue 開工規格見 [`issue-development-workflow.md`](issue-development-workflow.md)。
+> **What this file is NOT**：不是能力真相、不是 triage label 清單。
+
+Issues and PRDs for this repo live as GitHub issues (`github.com/roy4222/PawAI`). Use the `gh` CLI for all operations.
 
 ## Conventions
 

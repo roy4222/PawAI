@@ -1,5 +1,7 @@
 # PR #38 手勢辨識功能提取計畫
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 4/25 PR extraction 計畫，**不是能力真相、不是現行 backlog**。⚠️ **gesture.wave 6/04 trusted = 🔴 fail**；任何手勢能力 claim 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/) + [claim matrix `gesture.wave`](../../../../mission/2026-06-18-capability-claim-matrix.md#gesturewave) 為準。
+
 **日期**：2026-04-25
 **來源 PR**：https://github.com/roy4222/PawAI/pull/38 (Yamikowu)
 **整體 PR review 結論**：REQUEST_CHANGES（不能直接 merge）— 詳見 `docs/mission/meetings/2026-04-25.md`

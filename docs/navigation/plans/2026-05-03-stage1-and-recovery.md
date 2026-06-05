@@ -1,5 +1,7 @@
 # 2026-05-03 — Stage 1 + Recovery 主線打穿
 
+> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+
 > **今日唯一目標**：Go2 遇靜態障礙能可控停下；障礙移除後，能 reset + re-send goal 繼續到達。
 > **不做**：漂亮繞行、人類動態避障、D435 進 costmap、`nav_demo_point` 封裝。
 

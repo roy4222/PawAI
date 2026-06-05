@@ -1,5 +1,8 @@
 # Chat 閉環 + 錄音動畫 Implementation Plan
 
+> 📜 **HISTORICAL（2026-04-07 已實作計畫，保留作歷史）**
+> 本計畫描述的 ChatPanel 接 ROS2 pipeline（文字/語音 → LLM → TTS → AI bubble）+ 錄音音量動畫 **已落地並經多次重構**（見 [`../README.md`](../README.md) 的 5/9 / 5/10 stick-to-bottom + composer absolute-layout 章節）。current 狀態以 README 為準；本檔僅保留原始實作脈絡。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 讓 Studio ChatPanel 真正接上 ROS2 pipeline（文字/語音 → LLM → TTS → AI bubble），並在錄音時顯示音量動畫。

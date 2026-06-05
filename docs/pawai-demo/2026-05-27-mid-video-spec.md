@@ -1,5 +1,7 @@
 # 2026-05-27 中期 demo 影片 spec — 門口監控小閉環
 
+> **demo 製作 spec / historical（5/27 影片，deadline 已過）**：本檔是 5/27 中期**影片**（可剪輯）的製作 scope，非 6/18 實機 live demo 的當前真相。任何能力宣稱（face 認熟人 / object cup / voice 指令 / 安全拒絕）以 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY 為準；6/18 定位 / 禁說清單見 [`../mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) v2。本 spec 中「安全拒絕」屬 Brain deterministic safety/allowlist，**不代表** nav 動態避障或自走（nav 為 insufficient_data）。
+
 > **Deadline**：2026-05-27（4 天）
 > **影片長度**：~3 分鐘
 > **主軸口號**：「PawAI 門口巡檢助理：看得見人、認得出身份、聽得懂指令、知道危險動作不能做」

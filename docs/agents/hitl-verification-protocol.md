@@ -1,5 +1,12 @@
 # HITL 驗證協定
 
+> **Scope**：Issue #86 的 HITL 驗證分級、逐能力硬體對照、Go2 motion sign-off 與 artifact layout / schema。
+> **Status**：active / agent-config（取證流程，非能力真相）。
+> **Owner lane**：agents。
+> **Source-of-truth priority**：本檔定義**怎麼取證 / 怎麼簽核**，**不裁定**能力是否 pass。量測結果的最終事實依據是 [`../runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（trusted snapshot）；路徑 / readiness fail-closed 規則引用 [`../pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md) §9。
+> **詞彙**：trusted snapshot / readiness / HITL / fail-closed 等共用定義見 [`domain.md`](domain.md) §Glossary。
+> **What this file is NOT**：不是能力 grade、不是 CI gate（不做 T3/T4 自動 gate）、不是 dashboard。
+
 本文件定義 Issue #86 的 HITL 驗證與 artifact 版本化規則。範圍只含文件與 JSON Schema，不改 runtime code、不做 T3/T4 自動 CI gate、不做 artifact dashboard / web UI。
 
 ## 外部邊界

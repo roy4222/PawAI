@@ -1,5 +1,7 @@
 # Spec 5 Nav 場測 Checklist — 5/13–14 LM307 + 5/16 Demo
 
+> 🗄️ **HISTORICAL（5 月 nav 場測，已被 6/18 路線取代）**。保留作歷史，**不再執行**。6/18 nav 已降級為純 Studio/Foxglove 顯示、**零實機自走、不主張動態避障**（見 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md) 與 north-star §7）；nav 能力 claim 以 baseline-evidence 的 insufficient_data 為準。
+
 > **Status**: ready-for-fieldtest
 > **Date**: 2026-05-10
 > **依據 spec**：[`2026-05-10-spec5-navigation-roadmap.md`](../specs/2026-05-10-spec5-navigation-roadmap.md) §3

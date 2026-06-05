@@ -13,6 +13,10 @@
    jsonschema 4.26.0 在 venv 可 import，schema 路徑本輪非 blocker（見 STEP 6 末）。
 -->
 
+> **⚠️ PRE-RUN / 已被取代（2026-06-04 後）** — 本 runbook 是 **6/04 HITL run 執行前**寫的操作指引。其中所有「face 已 commit 的真相 = FAIL」「n=3」「handoff n=9 從未被 build 進 commit」等敘述，描述的是 **6/04 run 之前**的 commit 狀態。**6/04 run 已完成並 commit**：當前唯一 trusted snapshot = `docs/runbook/baseline-evidence/2026-06-04-hitl/`（SHA `78fbf36`，`run_trusted=true`，`readiness=not_ready`），**face=pass、n=9 已 build 進該 snapshot**。
+>
+> 因此：**face 是否 pass 一律以 `baseline-evidence/2026-06-04-hitl/` 為準，不可再引用本檔 line 29 的 face=FAIL 宣稱**（那是 pre-run 指引、已 stale）。本檔保留作「如何坐定執行一輪 HITL」的操作步驟參考，**不是當前能力真相來源**。能力分級權威見 North Star v2 + convergence audit + baseline-evidence。
+
 # PawAI HITL Capability Baseline — 一次坐定 Runbook（Roy 回到 Jetson+Go2 後自己執行）
 
 **Repo HEAD:** main @ `885728f` · **pawai 路徑：** `/home/roy422/.venv/bin/pawai`（**不在 PATH**）
@@ -26,7 +30,8 @@
 
 - **誠實鐵律：** 不追求全 pass，追求每個 issue 有真實結論（pass / degraded / fail / insufficient_data + reason）。不誇大、不擴張 scope。
 - **SSH 狀態與 brief 衝突：** brief 說 :22 timeout，但 audit 時 `ssh jetson-nano echo SSH_OK` 回 `SSH_OK`（port 22 是 UP）。**GATE-0 先實測**：通就照下面 `ssh` wrapper 跑；**若 SSH 已掛**，把 `ssh jetson-nano '...'` 外殼拿掉、直接在 Jetson `demo` tmux pane 貼內層 `zsh -lic "..."` 本體。**注意 readiness 與 scp 都吃 SSH（無離線 fallback）**，SSH 掛了 STEP 6 走不到 verdict=ready。
-- **face 已 commit 的真相 = FAIL**（n=3、registered_recall=0.5、unknown_false_accept_rate=1.0）。目標是**可信的重測**，不是保證 pass。即使乾淨 6/6 + 0 誤觸，每個 scenario_kind 若 n<3 仍被 grader 壓到 **degraded floor** → 所以 positive ≥3、idle ≥3。handoff 那份 n=9「expected PASS」**從未被 build 進 commit 的 snapshot**，不可據此宣稱 face PASS。
+- **（pre-run 指引，已被 6/04 run 取代）face 在本 runbook 撰寫當下的 commit 真相 = FAIL**（n=3、registered_recall=0.5、unknown_false_accept_rate=1.0）。目標是**可信的重測**，不是保證 pass。即使乾淨 6/6 + 0 誤觸，每個 scenario_kind 若 n<3 仍被 grader 壓到 **degraded floor** → 所以 positive ≥3、idle ≥3。
+  **⚠️ 更新（6/04 後）：本輪重測已完成並 commit** — `baseline-evidence/2026-06-04-hitl/` 內 **face=pass、n=9** 已 build 進 trusted snapshot（SHA `78fbf36`）。下面這句「handoff n=9 從未被 build 進 commit」已不再成立、**僅描述 run 之前的狀態**；現在判定 face 一律以 `baseline-evidence/2026-06-04-hitl/` 為準，不要再據此宣稱 face=FAIL。
 - **voice e2e 是 VAD 時代，不是 metric-v2。** mic_stop **未接線**（`stt_intent_node.py` 只訂 vad/text/tts_playing；`energy_vad.enabled` 預設 True）。報告**不可**宣稱「mic_stop 起算」或「快 2 秒」。e2e_median 未達 ≤3.5s 是誠實的 as-is-with-VAD 結果，不是退步。mic_stop 接線（Codex，4 檔，動到語音主線）**延到 demo stop 後的另一場 session**，本輪不做。
 - **nav = 純 DRY-RUN，Go2 不可走。** **不要設 `/initialpose`**。**不要跑 `send_relative_goal.py --distance 0.5/1.0`**（那是真走的 KPI 行）。`/event/nav/mission` **不存在於 source** — 不要 `echo` 它（會永久 hang）。觀測值是 `send_relative_goal.py` 印出的 action Result（`success`/`message`/`actual_distance`）。
 - **pose = insufficient_data，不採集**（無 observer：`perception_baseline_observer` 只訂 gesture+object；`capture_baseline_round.py` 只有 `[face, percep]` 兩 mode，無 pose mode）。從 WSL 關閉。

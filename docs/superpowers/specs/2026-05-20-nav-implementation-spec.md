@@ -1,5 +1,7 @@
 # PawAI 導航避障 — Implementation Spec（北極星 §4 落地）
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 5/20 導航避障的長版實作 spec（5/22 sprint 落地計畫）。**nav 模組設計當前真相在 [`../../navigation/`](../../navigation/) 與 [`../../pawai-brain/architecture/0511/nav/`](../../pawai-brain/architecture/0511/nav/)**。能力 pass/fail 一律回 [`../../README.md` §衝突仲裁](../../README.md#衝突仲裁誰是真相來源)：**6/18 nav 為 `insufficient_data`，已被降級為純 Studio 顯示、零實機自走**（北極星 §7 + 6/05 convergence audit §4）。本 spec 中的「動態繞障 / detour / 自主移動」一律不得當作已驗證能力宣稱；dry-run 只證 fail-closed / action chain，非真實移動。
+
 > 文件類型：Implementation spec（**不是** implementation plan — 不排每日任務、不指 PR 順序）
 > 日期：2026-05-20
 > 窗口：2026-05-22 – 2026-06-18

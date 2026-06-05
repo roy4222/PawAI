@@ -1,7 +1,13 @@
 # ADR-0002: PawAI 採平台身份與 2026-06 demo 場景的雙層敘事
 
 - **Date**: 2026-05-23
-- **Status**: accepted
+- **Status**: accepted（**2026-06-05 amended** — 見下方 Amendment）
+
+> **Amendment（2026-06-05，by 6/18 North Star v2 + scoreboard-first）**
+> **雙層敘事結構完整保留**（平台層 = 通用居家 / 機構四足互動機器人；demo 層 = 短期驗收場景）。兩處修訂：
+> 1. **demo 層用詞**：6/18 demo 場景由「非接觸式機構巡檢助理」**reframe 為「機構公共空間非接觸式守望互動 POC」**（與 ADR-0001 amendment 一致）。`< 100㎡ 已知小型室內` POC 邊界不變。
+> 2. **新增 claim 紀律**：平台層能力宣稱不再是二元「有 / 沒有」，一律走 **scoreboard-first 分級**（pass / degraded / fail / insufficient_data）——平台「能力涵蓋移動 / 多模態感知 / 語音 / 安全仲裁」是**架構意圖**，**個別能力是否可宣稱仍回 baseline-evidence**（見 ADR-0005 / ADR-0006）。未經 baseline 的能力只作為平台延伸方向，不作為已成立宣稱。
+> 權威：[`docs/mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) §2 / §9 + [`docs/mission/2026-06-18-capability-claim-matrix.md`](../mission/2026-06-18-capability-claim-matrix.md)。ADR 正文不重寫，此 amendment note 即為記錄（不 silent conflict）。
 
 ## Context
 

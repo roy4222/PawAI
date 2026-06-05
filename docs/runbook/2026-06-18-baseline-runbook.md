@@ -21,7 +21,8 @@
    - **face**（required）：跑 `face_baseline_observer`（Task 4b，吃 `/state/perception/face` 連續流），operator 宣告 FaceRoundMeta（expected 註冊者名 / "unknown"(idle) / distance / window，每 round 標 `scenario_kind`）→ JSONL。**勿用 `perception_baseline_observer` 跑 face**（event-only 量不出 unknown-false-accept）。
    - **nav 跑序鐵律（§6 鎖定）**：`safe_stop` + `no_auto_resume` **pass（或明確人工安全 override）前，不允許跑 motion**。順序不可顛倒（不可先跑 motion 再補 safety）。
      - `nav.safe_stop` / `nav.no_auto_resume`：**等 recorder BD-7/BD-8**（no_auto_resume 還需 **BD-8 行為重設計**，非只接 recorder），本輪標 insufficient_data。
-     - `nav.short_move`：safety 兩項未 pass 前**只做 dry-run / action-path check**（手動發 goto_relative 驗 action server 鏈路通、量 /event/nav/mission，**不讓 Go2 實際走**）；safety pass 或人工 override 後才跑真實 0.3/0.5m motion。fresh stack 先定位 F7、走 BD-7D wrapper。
+     - `nav.short_move`：safety 兩項未 pass 前**只做 dry-run / action-path check**（手動發 `/nav/goto_relative` 驗 action server 鏈路通，**不讓 Go2 實際走**）；safety pass 或人工 override 後才跑真實 0.3/0.5m motion。fresh stack 先定位 F7、走 BD-7D wrapper。
+       > 🐛 **Doc bug（已知，勿照舊抄）**：本步舊文字寫「量 `/event/nav/mission`」——**該 topic 全 source 不存在，`ros2 topic echo` 它會永久 hang**。正確觀測 = `scripts/send_relative_goal.py` 印出的 action Result（`success` / `message` / `actual_distance`）。權威操作步驟見 `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`（nav = 純 DRY-RUN 段）。
 
 > **附註（執行日誌，非主流程）**：2026-05-31 的 motion-safe 探測輪**未**測 object/gesture-recognizer（當天只驗感知 lane 可起）。正式 baseline run 必須補齊上述 object_perception + recognizer backend——它們是 mainline required step，不可停在 `insufficient_data`。
 4. **產 snapshot**：`build_scoreboard.py`（Task 3b，≤30 行 CLI，讀 `baseline_result.jsonl` + `--manifest` + `--preflight artifacts/baseline/preflight_result.json` → `aggregate` → 寫 `artifacts/baseline/baseline_snapshot.json`）。**必須帶 `--preflight`**——缺 preflight → `run_trusted=False` → 全 grade 覆寫 insufficient_data（fail-closed）。

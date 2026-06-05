@@ -1,5 +1,7 @@
 # PawAI CLI Team-Development Prep — Design
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 pawai CLI 團隊協作 prep 的長版設計背景（後由 5/13 collab-console umbrella spec reframe）。**CLI 的當前真相是手冊 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)**。路由與仲裁見 [`../../README.md`](../../README.md)。
+
 **Written on**: 2026-05-12 (for 2026-05-13 team development day)
 **Author**: Roy + Claude Code brainstorm
 **Status**: design approved, implementation pending

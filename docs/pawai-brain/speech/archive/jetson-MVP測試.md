@@ -1,5 +1,7 @@
 # Jetson MVP 語音功能測試手冊
 
+> 🕰️ **HISTORICAL / ARCHIVED（2026-03 MVP 測試手冊，保留作引用，不重複維護）。** 本檔是早期 no-VAD MVP 測試 SOP，**不是當前操作手冊、也不是能力 claim 真相**。現役語音模組真相見 [`../README.md`](../README.md)；能力是否 pass 一律以 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) + [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) 為準。
+
 > 適用對象：PawAI 語音模組、整合測試、展示前驗收  
 > 適用平台：NVIDIA Jetson Orin Nano 8GB + ROS2 Humble + Unitree Go2  
 > 目標期限：2026/4/13 Demo 前完成 Jetson 端 MVP 驗證  

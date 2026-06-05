@@ -2,7 +2,7 @@
 
 **文件版本**：v1.1
 **最後更新**：2026-03-14
-**對齊來源**：[mission/README.md](../mission/README.md) v2.0
+**對齊來源**：[mission/README.md](../../../mission/README.md) v2.0
 
 ---
 
