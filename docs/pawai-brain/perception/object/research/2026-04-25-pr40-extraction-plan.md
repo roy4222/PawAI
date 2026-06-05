@@ -1,5 +1,7 @@
 # PR #40 物件辨識功能提取計畫
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 4/25 PR extraction 計畫，**不是能力真相、不是現行 backlog**。6/18 object claim 窄鎖 `object.cup` ~1m 近距；grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/) + [claim matrix `object.cup`](../../../../mission/2026-06-18-capability-claim-matrix.md#objectcup) 為準。
+
 **日期**：2026-04-25
 **來源 PR**：https://github.com/roy4222/PawAI/pull/40 (Capybara094 / Elio / 黃旭)
 **整體 PR review 結論**：REQUEST_CHANGES（不能直接 merge — 有 ultralytics 違禁 + RCE 風險）— 詳見 `docs/mission/meetings/2026-04-25.md`

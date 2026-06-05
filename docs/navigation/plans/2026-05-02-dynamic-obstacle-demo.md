@@ -1,5 +1,7 @@
 # Dynamic Obstacle Avoidance v0 — 5/2 試跑紀錄與下一步
 
+> 🕰️ **HISTORICAL — 5/2 sprint 試跑紀錄（保留作引用，不重複維護）。** 標題的「Dynamic Obstacle Avoidance」屬 5/12 sprint 目標，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走/動態避障**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準。
+
 **日期**：2026-05-02 evening + late-night
 **結果**：K-STATIC-AVOID-CONTROLLED **PARTIAL**（1 輪 PASS、1 輪 no-op、未做 R3）
 **事故**：v3 試 detour 時 Go2 摔倒一次（Damp 1001 用錯）；v4 改用 emergency_stop engage + StopMove 1003，後續沒摔

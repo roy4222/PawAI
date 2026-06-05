@@ -1,5 +1,7 @@
 # PawAI 5/22~6/18 北極星 — 從功能整合走向定位清楚、可自主移動的居家四足機器人
 
+> **historical / legacy planning（superpowers 背景 spec，已 superseded）**：本檔已被 v2 取代，再被 6/18 north-star 收斂。6/18 當前定位 / 禁說清單見 [`../../mission/2026-06-18-demo-north-star.md`](../../mission/2026-06-18-demo-north-star.md) v2；能力 pass/fail 回 [`../../README.md` §衝突仲裁](../../README.md#衝突仲裁誰是真相來源)。標題「可自主移動」為當時願景，**非已驗證能力**（nav 為 insufficient_data，不得宣稱動態避障/自走）。
+
 > ⚠️ **本文件已被 v2 supersede**：見 [`2026-05-22-pawai-may-june-north-star-v2-design.md`](2026-05-22-pawai-may-june-north-star-v2-design.md)
 >
 > v2 修正：定位從「居家陪伴四足機器人」改為「**室內場域具身 AI 任務 POC**」；P0/P1/P2 線性切法改為 **L1/L2/L3 三層擴充模型**；commit 策略改為 **Spike-then-commit**（W1 驗 3 個硬 gate，分項決定 L2 升級深度）。本文件保留作歷史紀錄，新工作以 v2 為準。

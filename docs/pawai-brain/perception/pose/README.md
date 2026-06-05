@@ -1,17 +1,38 @@
 # 姿勢辨識
 
-> Status: current
+> **Scope**：vision_perception 姿勢子系統設計真相（MediaPipe Pose + 角度/幾何分類）｜**Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `pose.basic` / `pose.fall`
+> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（pose.basic / pose.fall = ⚪ **insufficient_data**，無 pose observer；caveats 凌駕本頁敘事）
+> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
+> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）。⚠️ **pose.basic = Studio-only / insufficient_data**（6/04 無 observer，未量）；**跌倒（pose.fall）是 future、非緊急行為**，demo 維持 `enable_fallen:=false`。**不得宣稱跌倒偵測可靠 / 防跌倒守護 / 緊急警報已 pass**。
 
-> MediaPipe Pose 辨識人體姿勢，跌倒偵測觸發緊急警報。
+> MediaPipe Pose 辨識人體姿勢。**pose.basic 本輪未量測（Studio-only）；跌倒是 future、非緊急行為**。
+
+## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+
+> 完整 8 欄位散文見 [claim matrix `pose.basic / pose.fall`](../../../mission/2026-06-18-capability-claim-matrix.md#posebasic--posefall)。本表為速查。
+
+| 欄位 | 值 |
+|---|---|
+| **Current Claim** | 姿勢 / 跌倒有能力鏈路但本輪未量測；demo 不做、用應用場景影片帶過 |
+| **Claim Level** | DO_NOT_CLAIM |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（n=0, 無 pose observer, fall claim_level=future, `brain_allowed=false`） |
+| **Pass/Degraded/Fail/Insufficient** | ⚪ insufficient_data（pose.basic = Studio-only）；跌倒是 **future**、非緊急行為 |
+| **Fallback** | 鏡頭帶到 Studio fallen 紅標時旁白**絕不提跌倒**；demo 啟動維持 `enable_fallen:=false` |
+| **Non-Claims** | 跌倒偵測可靠 / 防跌倒守護 / 坐下偵測已 pass / 緊急警報 / 把 pose 觀察當醫療判斷 |
+| **Model Candidates** | FUTURE_RESEARCH（跌倒）；pose.basic 待建 observer |
+| **Next Retest** | 建 pose observer 工具 + HITL 收 ground-truth 樣本才可談 pass；fall 本就 future 不進 demo |
 
 ## 狀態卡
 
+> **狀態卡 caveat（6/04 收斂）**：下表「5/7 上機通過」是**開發期主觀上機觀察（無 observer 量化）**，**非 6/04 trusted baseline**。6/04 pose.basic / pose.fall = ⚪ insufficient_data（無 pose observer，n=0）。完成度為模組開發進度，非能力 pass。「fallen 穩定」**不構成跌倒偵測 pass**——跌倒是 future、非緊急。
+
 | 項目 | 值 |
 |------|---|
-| 狀態 | **5/6 tune 後 5/7 上機通過**：standing / sitting / crouching / bending / fallen 穩定；akimbo / knee_kneel 仍不穩 |
+| 狀態 | **pose.basic = ⚪ Studio-only / insufficient（6/04 trusted）**；fallen = future 非緊急 |
 | 版本/決策 | MediaPipe Pose (CPU 18.5 FPS) |
-| 完成度 | 90% |
-| 最後驗證 | 2026-05-06（5/7 動作上機，akimbo+knee_kneel 待繼續 tune） |
+| 完成度 | 90%（模組開發進度，非能力 pass — 見上方 caveat） |
+| 最後驗證 | 6/04 trusted 無 pose observer（insufficient_data）；5/7「上機通過」僅開發期主觀觀察 |
 | 入口檔案 | `vision_perception/vision_perception/pose_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
 
@@ -34,8 +55,10 @@ pose_classifier.py（hip/knee/trunk 角度判定）
     ↓
 /event/pose_detected（JSON: pose, confidence）
     ↓
-interaction_executive_node → fallen = EMERGENCY
+interaction_executive_node → fallen = EMERGENCY（內部 routing 標籤）
 ```
+
+> ⚠️ **「EMERGENCY」是內部事件 routing 標籤，非已驗證的緊急守護能力**。跌倒（pose.fall）= future、非緊急行為（claim matrix `pose.fall` Non-Claims）。demo 維持 `enable_fallen:=false`、fallen TTS 兩條路徑皆 mute（5/8）；**不得對外宣稱跌倒守護 / 緊急警報已 pass**。
 
 ## 支援姿勢（MOC 7 種全部 Active，5/5 落地）
 
@@ -92,7 +115,7 @@ interaction_executive_node → fallen = EMERGENCY
 | sitting | demo bridge → 「會不會太累？」TTS（say only）| 5s | 互動段 |
 | crouching | demo bridge → 「我在這裡喔」TTS | 5s | 互動段 |
 | bending | demo bridge → 「請小心喔」TTS | 5s | 互動段 |
-| fallen | **demo silence**（5/8）— TTS 兩條路徑都已 mute，Studio Trace 仍顯示紅 alert | **10s** | Scene 8 / 守護 |
+| fallen | **demo silence**（5/8）— TTS 兩條路徑都已 mute，Studio Trace 仍顯示紅 alert | **10s** | Scene 8（future，非緊急；用詞用「守望/回報」不用「守護」）|
 | akimbo | demo bridge → 「你看起來很有架式喔！」（暫定）| 5s | 互動段（5/5 升 Active）|
 | knee_kneel | demo bridge → 「需要我幫忙嗎？」（暫定）| 5s | 互動段（5/5 升 Active）|
 

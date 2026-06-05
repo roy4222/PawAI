@@ -1,5 +1,8 @@
 # ASR / LLM / TTS 模型選擇路徑整理
 
+> 🔬 **RESEARCH-ONLY — research-not-truth**。本檔整理選型路徑與淘汰原因，**不是**新實作規格、**不是**換現役 pass 模型的指令。語音三段現役主線見 `speech/README.md`；能不能講連 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md)。索引見 [`README.md`](README.md)。
+> 🏷️ **Tier**：`BASELINE_NOW`（語音三段為 6/18 主線；`voice.command` 現 pass 窄版、`voice.stop` 現 fail，以 baseline-evidence 為準）。
+
 > Drafted: 2026-06-03  
 > Purpose: 整理目前語音三段模型的採用路徑、測試結果、淘汰原因，供文件網站與既有淘汰模型資料合併。  
 > Scope: ASR、LLM、TTS 三段互動語音管線。  

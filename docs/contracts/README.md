@@ -1,6 +1,14 @@
 # Contracts — 跨主線 ROS2 介面契約
 
-> Brain 主線（pawai-brain/）與 Navigation 主線（navigation/）共同遵守的 topic / action / service / message schema。
+> **Governance**
+> - **Scope**：Brain 主線（pawai-brain/）與 Navigation 主線（navigation/）共同遵守的 ROS2 topic / action / service / message schema + 設計總則。
+> - **Status**：active / source-of-truth（衝突仲裁 #5）。`interaction_contract.md` v2.5 凍結。
+> - **Owner lane**：跨 lane 共用；新增/移除 topic 先在此 PR review，再各模組跟進。
+> - **Source-of-truth priority**：程式碼 / runtime topic schema ＞ 本契約。能力是否 pass **不在此判定**——回 [`../README.md` §衝突仲裁](../README.md) 的 EVIDENCE_AUTHORITY（baseline-evidence 為準）。
+> - **Maintained child files**：`interaction_contract.md`。
+> - **Archived-legacy boundary**：設計總則原稿在 `archive/2026-05-docs-reorg/architecture-misc/`（frozen，僅引用）。
+> - **What this README is NOT**：不是能力 grade、不是 demo claim 真相、不是模組實作狀態；只定義介面 schema 與命名/QoS 總則。
+>
 > 任何感知模組或控制邏輯改動，**先改契約，後改 code**。
 
 ---

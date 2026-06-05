@@ -1,5 +1,7 @@
 # PawAI 5/22~6/18 北極星 v2（amended）— 機構場域巡檢與互動助理 POC
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 5/22 sprint 的長版北極星背景 spec。**6/18 的當前戰略邊界 / 禁說清單 / scope 分層真相已移到 [`../../mission/2026-06-18-demo-north-star.md`](../../mission/2026-06-18-demo-north-star.md) v2**（含 scoreboard-first 原則，amend ADR-0001/0002）。本檔保留作背景推理；能力 pass/fail 一律回 [`../../README.md` §衝突仲裁](../../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY（baseline-evidence ＞ convergence audit ＞ capability-baseline-spec ＞ north-star）。本檔含「自主移動 / 動態繞障」語言者，6/18 已被降級為純 Studio 顯示零實機自走（nav 為 insufficient_data），不得據此宣稱。
+
 > **文件類型**：北極星 v2（定位 + 三層擴充模型 + 取捨規則 + spike gate）
 > **狀態**：**Accepted**（撰寫日 2026-05-21；2026-05-22 amended after 教授 5/21 機構巡檢 pivot；2026-05-23 amended after 三場 review synthesis + grill + ADR-0001/0002/0003，詳 A.3）
 > **窗口**：2026-05-22 ~ 2026-06-18

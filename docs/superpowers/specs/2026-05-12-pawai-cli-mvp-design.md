@@ -1,5 +1,7 @@
 # PawAI CLI MVP — Design Spec
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 pawai CLI MVP 的長版設計背景（已 shipped，後由 team-prep / collab-console spec 擴充）。**CLI 的當前真相是手冊 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)**；精煉決策見 [`../../adr/`](../../adr/)。路由與仲裁見 [`../../README.md`](../../README.md)。
+
 **Date**: 2026-05-12
 **Deadline**: 2026-05-14（週三 5 人帶 Go2 進校園）
 **Status**: Draft → pending user review → implementation

@@ -1,5 +1,7 @@
 # 導航避障 — 介面契約
 
+> 🕰️ **HISTORICAL / SUPERSEDED — 舊 D435 depth→`/event/obstacle_detected`→Damp 介面（4/3 上機全失敗後停用）。** 現行避障是 `reactive_stop_node`（LiDAR + D435 ROI，發 `/cmd_vel_obstacle` 經 twist_mux，**不送 Damp**——移動中送 Damp 會摔倒，見 `docs/navigation/CLAUDE.md`「不能做」）。當前 nav 能力 claim 一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準；介面真相見 `docs/contracts/interaction_contract.md`。本檔保留作歷史。
+
 > 任何 agent 或接手者，讀這份就知道怎麼跟這個模組互動。
 
 ## 模組邊界

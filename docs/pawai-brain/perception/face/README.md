@@ -1,16 +1,37 @@
 # 人臉辨識
 
-> Status: current
+> **Scope**：face_perception 模組設計真相（YuNet + SFace + IOU tracker）｜**Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `face.recognition`（任何「能不能講、屬哪層」一律以此頁為準）
+> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（face = 🟢 pass 窄版；caveats 凌駕本頁敘事）
+> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
+> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）；不是量測協定（看 [`specs/2026-06-18-capability-baseline-spec.md`](../../specs/2026-06-18-capability-baseline-spec.md)）；不講陌生人拒絕 / 守護 / 「不會認錯人」。
 
-> YuNet 偵測 + SFace 識別 + IOU 追蹤，即時辨認已知人物並觸發互動。
+> YuNet 偵測 + SFace 識別 + IOU 追蹤，辨認**已註冊熟人**並觸發互動（窄版：僅已註冊者）。
+
+## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+
+> 完整 8 欄位散文見 [claim matrix `face.recognition`](../../../mission/2026-06-18-capability-claim-matrix.md#facerecognition)。本表為速查。
+
+| 欄位 | 值 |
+|---|---|
+| **Current Claim** | 6/04 trusted 量測對「已註冊的 Roy」在 ~1.5–2.4m 拿到 pass，示範認出註冊者並問候（窄版） |
+| **Claim Level** | CLAIM_WITH_CAVEAT |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（n=9, registered_recall=1.0, unknown_false_accept=0.0, p50≈74ms） |
+| **Pass/Degraded/Fail/Insufficient** | 🟢 pass（窄版）— 僅單一註冊者、單光照、最低 positive conf 0.2378、idle=空景 |
+| **Fallback** | track 抖動 / 名字閃 → 退泛稱「看到有人靠近並打招呼」或只秀 `debug_image` 證鏈路 |
+| **Non-Claims** | 陌生人拒絕 / 守護 / 陌生人警報 / 「不會認錯人」 / 身份驗證 / 門禁級確認 / 2m+ 可靠 / 通用人臉辨識 |
+| **Model Candidates** | BASELINE_NOW（YuNet + SFace，現役 pass 不換） |
+| **Next Retest** | #81 乾淨重跑：≥2 註冊者 + 多光照、真實陌生人樣本、conf 離開 0.24 邊界、full-stack 久放後複測 |
 
 ## 狀態卡
 
+> **狀態卡 caveat（6/04 收斂）**：下表「完成度 95%」是模組開發進度，**非能力 pass 證據**。能力證據以 [能力卡](#能力卡canonical-8-欄位--連結-claim-matrix勿在本頁重複整份散文) + baseline-evidence 為準（face = 🟢 pass 窄版：僅已註冊熟人 / 空景 idle，**陌生人拒絕未驗證**）。
+
 | 項目 | 值 |
 |------|---|
-| 狀態 | **greeting 可靠化** |
+| 狀態 | **已註冊熟人 greeting（窄版 pass）** |
 | 版本/決策 | YuNet 2023mar (CPU 71.3 FPS) + SFace 2021dec |
-| 完成度 | 95% |
+| 完成度 | 95%（模組開發進度，非能力 pass — 見上方 caveat） |
 | 最後驗證 | 2026-05-08（sim_threshold_upper 0.30→0.40 拉高陌生人門檻，避免 demo 期 60%+ 誤判）；上次完整 smoke 2026-04-06（identity_stable 21 次/2min） |
 | 入口檔案 | `face_perception/face_perception/face_identity_node.py` |
 | 測試 | `python3 -m pytest face_perception/test/ -v` |
@@ -48,6 +69,8 @@ interaction_executive_node 訂閱 -> WELCOME 觸發 -> TTS 問候
 **face_db**：`/home/jetson/face_db/`，目前有 roy、grama 兩人。
 
 ## Skill 觸發對應（5/12 Sprint Scene 4 + 8）
+
+> **Claim 邊界（6/04）**：下表 `stranger_alert` 是**內部事件路由機制**，**不是**已驗證的陌生人偵測/警報能力。6/04 idle 只測空景，**真實陌生人拒絕未量測**（baseline-evidence honesty caveat）。demo/簡報**不得**宣稱守護 / 陌生人警報 / 「不會認錯人」（claim matrix `face.recognition` Non-Claims）。
 
 | 事件 | Brain 觸發 Skill | Demo Scene | 備註 |
 |---|---|---|---|

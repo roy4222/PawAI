@@ -1,5 +1,7 @@
 # 2026-05-04 — Demo Scope Freeze (5/12 demo)
 
+> 🕰️ **HISTORICAL — 5/4 寫定的 5/12 demo scope freeze（保留作引用，不重複維護）。** 此處的 scope（含 detour / Wow）屬 5/12 sprint，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走**。6/18 的 nav 真相以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準。
+
 > **目的**:把 5/12 demo 的功能 scope、戰略 framing、bug backlog、驗收條件、禁忌一次寫清楚,讓團隊對齊。本檔**不**改任何 ROS code,code 改動拆獨立 PR(Phase 2,見 §15)。
 > **狀態**:Phase 1 文件凍結 — 5/4 寫定後 5/12 demo 前不再大改。
 > **作者**:Roy + Claude (PawAI)

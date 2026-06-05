@@ -376,7 +376,7 @@ Executive：
 | [`specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md) | Phase A 設計藍圖（schema / 規則 / topic 契約） | 寫 code 前查 schema |
 | [`plans/2026-04-27-pawai-brain-skill-first.md`](2026-04-27-pawai-brain-skill-first.md) | Phase A 施工圖（34 tasks） | 執行 Phase 1/2 |
 | [`specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../specs/2026-04-27-pawclaw-embodied-brain-evolution.md) | Phase B 演進 spec | 5/19 後 |
-| [`specs/2026-04-11-pawai-home-interaction-design.md`](../specs/2026-04-11-pawai-home-interaction-design.md) | PawAI 系統定位（4/11 三層 Brain 概念源） | 答辯論述補強 |
+| [`specs/2026-04-11-pawai-home-interaction-design.md`](../../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md) | PawAI 系統定位（4/11 三層 Brain 概念源，已搬 archive） | 答辯論述補強 |
 | [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) | ROS2 介面契約（v2.4 → v2.5 Phase A → v2.6 Phase B） | 任何新 topic |
 | [`docs/mission/README.md`](../../mission/README.md) | 專案方向、時程、分工 | 接手 / 解釋大方向 |
 | 7 模組各自 README | 模組真相來源 | 改該模組時 |

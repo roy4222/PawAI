@@ -1,7 +1,16 @@
 # Archive — 歷史文件
 
+> **Governance**
+> - **Scope**：reorg 前歷史文件（早期 mission / module / spec / log / 重構計畫）。
+> - **Status**：frozen / historical。**不主動維護**，內容凍結在搬入時的狀態，僅供引用與歷史追蹤。
+> - **Owner lane**：無（共用唯讀）。
+> - **Source-of-truth priority**：**最低**——archive 內任何陳述一律被 active 主線文件與 baseline-evidence 覆寫。引用 archive 不得當作現況證據。
+> - **Maintained child files**：無（搬入後凍結）；各子資料夾 README 為純導航。
+> - **Archived-legacy boundary**：整個資料夾即 legacy 邊界本身。
+> - **What this README is NOT**：不是現況、不是能力真相、不是 demo claim；只是歷史索引。找最新資訊 → 回 [`docs/README.md`](../README.md) 走主線路由 + §衝突仲裁。
+>
 > **不主動維護**。內容凍結在搬入時的狀態，作引用與歷史用途。
-> 找最新資訊 → 回到 [`docs/README.md`](../README.md) 走七條主線。
+> 找最新資訊 → 回到 [`docs/README.md`](../README.md) 走主線路由。
 
 ---
 

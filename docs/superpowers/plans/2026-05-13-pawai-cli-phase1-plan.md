@@ -1,5 +1,7 @@
 # PawAI CLI Phase 1 Implementation Plan
 
+> **historical / legacy planning（superpowers 已執行 plan）**：本檔是 pawai CLI Phase 1 的逐 task 實作計畫（11 fixes，已 land）。checkbox 為歷史執行紀錄，非待辦。**CLI 的當前真相是手冊 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)**；路由與仲裁見 [`../../README.md`](../../README.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Land 11 surgical fixes that promote `pawai` CLI from tool collection to Jetson on-site collaboration console, before 2026-05-16 (5/18 demo prep buffer).

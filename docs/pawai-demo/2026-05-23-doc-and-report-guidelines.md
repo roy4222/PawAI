@@ -1,5 +1,7 @@
 # PawAI 對外材料寫作 / 報告 guidelines
 
+> **demo 製作指南 / 非能力真相層（historical 5/23）**：本檔是「對外材料怎麼寫、報告心態、禁用詞」的製作流程指南，來源是 5 月三場驗收 + ADR-0001/0002/0003。**它規範敘事語氣，不認定任何能力是否 pass**。能力 pass/fail 與「能不能講」一律以 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY 為準（baseline-evidence ＞ convergence audit ＞ capability-baseline-spec ＞ north-star）。6/18 禁說清單的權威是 [`../mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) v2；本指南早於它，若衝突以 north-star v2 為準。
+
 > **撰寫日**：2026-05-23
 > **適用範圍**：所有對外材料（5/27 影片旁白、6/18 live demo 現場話術、6/13 文件繳交、簡報、回答老師問答、訪客介紹）
 > **來源**：三場 5 月驗收 synthesis（5/18 葉承達 / 5/20 雅文 / 5/22 呂奇傑）+ ADR-0001/0002/0003

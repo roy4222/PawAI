@@ -1,5 +1,7 @@
 # Mac Migration Pre-flight Housekeeping — Design Spec
 
+> **historical / legacy planning（superpowers 背景 spec）**：本檔是 5/12 WSL→Mac 搬家前置的一次性 housekeeping 設計，已過時序。當前 ops / 環境真相見 [`../../runbook/`](../../runbook/) 與 [`../../pawai_cli/README.md`](../../pawai_cli/README.md)；路由與仲裁見 [`../../README.md`](../../README.md)。不含能力宣稱。
+
 **Date**: 2026-05-12
 **Author**: roy422 + Claude
 **Status**: Draft → Pending user review

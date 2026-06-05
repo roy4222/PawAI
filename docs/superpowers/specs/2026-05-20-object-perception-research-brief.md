@@ -1,5 +1,7 @@
 # 物件偵測升級 — 研究 Brief
 
+> **historical / research-only（superpowers 背景，model 研究 = BASELINE_NOW/SPIKE_AFTER_FAIL，非預設實作 backlog）**：本檔是 5/20 物件偵測升級的外部調查 + 決策對齊背景。物件偵測模組真相見 [`../../pawai-brain/perception/object/`](../../pawai-brain/perception/object/)；能力 pass/fail 回 [`../../README.md` §衝突仲裁](../../README.md#衝突仲裁誰是真相來源)。**object 當前 claim 僅 `object.cup` 近距窄版**，不得據本 brief 宣稱通用偵測 / 尋物 / VLM / 可靠顏色。
+
 > 文件類型：Research brief（外部調查 + PawAI 決策對齊）
 > 日期：2026-05-20
 > 關聯：[北極星 §2](2026-05-19-pawai-may-june-north-star-design.md) ／ 執行 protocol：`2026-05-20-object-perception-benchmark-protocol.md`

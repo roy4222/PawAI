@@ -1,5 +1,14 @@
 # PawAI CLI 使用手冊
 
+> **文件治理（governance header）**
+> - **Scope**：五人共用 Jetson 的單一入口 CLI（`pawai`）操作手冊 — 安裝 / doctor / deploy / demo lock / logs。
+> - **Status**：active / ops 工具手冊（**非**能力或產品真相層）。
+> - **Owner lane**：ops（搭配 [`../runbook/`](../runbook/) 救火 SOP 使用）。
+> - **Source-of-truth priority**：本檔是 CLI **指令行為**的真相；但任何「某能力是否 pass / 能不能講 / demo 該怎麼解讀」一律回 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY 順序（baseline-evidence ＞ convergence audit ＞ capability-baseline-spec ＞ north-star）。
+> - **Maintained child files**：[`usage-guide.md`](usage-guide.md)（日常）、[`team-onboarding.md`](team-onboarding.md)（上手）、[`troubleshooting.md`](troubleshooting.md)（踩坑）、[`modules.md`](modules.md)（8 module 對照）。
+> - **Routing**：本資料夾在 [`docs/README.md`](../README.md) 列為「支援性資料夾 → PawAI CLI」。CLI 設計背景的長版 spec / plan 在 [`../superpowers/`](../superpowers/)（historical/research-only）。
+> - **What this README is NOT**：不是 capability scoreboard、不是 demo 劇本（劇本見 [`../mission/README.md`](../mission/README.md)）、不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）。CLI 印出的 nav action 能跑 ≠ 真實移動/動態避障（nav 能力一律以 baseline-evidence 的 insufficient_data 為準）。
+
 `pawai` 是 5 人團隊的單一入口工具，把分散的 `scripts/`、`tmux`、`ssh jetson`、
 `colcon build`、`bash .claude/skills/.../start.sh` 包成一致的指令。
 

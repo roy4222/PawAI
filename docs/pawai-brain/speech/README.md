@@ -1,10 +1,50 @@
 # 語音互動系統
 
-> Status: current
+> **Scope**：語音互動主線的**模組設計真相層** — ASR / VAD / Intent 分類 / LLM bridge / TTS routing 怎麼組、哪條 path 是真的、哪些是 historical/research。
+> **Status**：active（模組設計真相層）。本檔**不是**「當前能力是否 pass」的真相 — 任何 voice 能力 claim 一律以下方「能力 claim」區塊引用的 canonical claim matrix + 6/04 baseline-evidence 為準。
+> **Owner lane**：brain-speech（搭配 [`CLAUDE.md`](CLAUDE.md) 模組工作規則 + [`AGENT.md`](AGENT.md) 介面契約）。
+> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/)（實測 trusted snapshot，SHA `78fbf36`，`run_trusted=true`，readiness=`not_ready`）＞ [`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)（收斂審計）＞ [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)（每能力 claim canonical）＞ [`docs/mission/2026-06-18-demo-north-star.md`](../../mission/2026-06-18-demo-north-star.md)（戰略邊界）＞ 本檔（模組設計）＞ [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md)（topic/action schema）。
+> **Maintained child files**：[`CLAUDE.md`](CLAUDE.md)（工作規則）、[`AGENT.md`](AGENT.md)（介面契約）、`research/*.md`（research-only，benchmark / pipeline 報告）。
+> **Archived / historical 邊界**：`archive/jetson-MVP測試.md` 與 `research/*.md` 一律 **historical / research-only**，不重複維護、不得當「現在能跑什麼」的依據；下方 5/2–5/12 sprint 散文（brain-freeze-v2 / Phase 0.5 / TTS chunking 等）是**開發紀錄**，描述「機制如何實作」，**不等於 e2e 驗證過或能力 pass**。
+> **本 README 不是**：能力 claim 真相（→ [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md)）、操作手冊（→ [`docs/runbook/`](../../runbook/)）、門檻定義（→ [`specs/2026-06-18-capability-baseline-spec.md`](../specs/2026-06-18-capability-baseline-spec.md)）。
 
 > 中文語音對話：聽懂 → 理解意圖 → LLM 回應 → 說出來。
 
+---
+
+## 能力 claim（引用 canonical，勿在此重複整份）
+
+> **權威**：每能力的 Current Claim / Claim Level / Pass-Fail / Non-Claims 以 [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md) `voice.command` / `voice.stop` 行為 canonical，基準為 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/)。下面只是入口摘要，**勿改寫等級**。
+
+### voice.command（固定指令 intent — 窄版 pass）
+
+- **Current Claim**：對**固定指令集**的「意圖分類」success_rate=0.875（純 Python 關鍵字規則分類器，可作 Brain 三層決策的合法輸入）。
+- **Claim Level**：CLAIM_WITH_CAVEAT。
+- **Evidence-Provenance**：6/04 HITL（n=24, success_rate=0.875, false-trigger=0.0；**latency 全 null、CSV 由終端重建、git_commit≠snapshot SHA、單一講者 Roy**）。
+- **Pass / Degraded / Fail / Insufficient**：🟢 **pass（窄版）** — 僅限固定指令集意圖分類。
+- **Fallback**：ASR 聽錯 → 清楚發音 retake。
+- **Non-Claims（禁說）**：語音延遲 / 反應時間 / **mic_stop 急停（未接線、未量測）** / 自由對話辨識率 / LLM 直接操控機器狗 / 把 0.875 講成「ASR 辨識率」。
+- **Model Candidates**：BASELINE_NOW（規則分類器 + SenseVoice / Whisper ASR，現役不換）。
+- **Next Retest**：真人對 demo 麥克風跑完整 ASR→intent e2e ≥20 筆 + 量 e2e latency + 換非 Roy 講者 + 噪音。
+
+### voice.stop（語音「停」— fail，非安全機制）
+
+- **Current Claim**：語音「停」6/04 量到 success_rate=0.667、scoreboard 誠實標 **fail**、`brain_allowed=false`，只是便利互動指令、**不是安全機制**。
+- **Claim Level**：DO_NOT_CLAIM（僅可誠實揭露 fail 本身）。
+- **Evidence-Provenance**：6/04 HITL（n=6, 0.667, FN=2：R16 no-ack / R18「欸等一下先停住」誤判 come_here）。
+- **Pass / Degraded / Fail / Insufficient**：🔴 **fail**（baseline 後 speech code 零變更，fail live）。
+- **Fallback**：真安全靠 `reactive_stop` + 物理 e-stop；語音停只作便利指令，現場不對機器狗喊停。
+- **Non-Claims（禁說）**：「說停就停」 / 安全停車 / 緊急停止 / **mic_stop latency** / 接 nav / motion 觸發 / 把 voice.stop 講成 safety stop。
+- **Model Candidates**：SPIKE_AFTER_FAIL（不是換模型；intent_classifier 加 safety tie-break + 調 VAD）。
+- **Next Retest**：intent_classifier 加 safety tie-break + 單測 → 調 VAD → HITL n≥15 重跑，pass 前不接 motion。
+
+> ⚠️ **mic_stop / latency / safety-stop 一律未接線、未量測**：6/04 voice e2e 是 **VAD-era**，`mic_stop` 觀測者未接線、CSV 無 latency 欄。**不可宣稱 mic_stop 急停延遲、不可把 voice.stop 當 safety stop**。下方散文中任何 latency 數字（VAD 2–10s / P50 等）皆為**開發期 proxy 觀測**，非 baseline-evidence trusted 量測。
+
+> ℹ️ **brain LLM persona 幻覺（6/04 operator-observed）**：TTS 回覆曾虛構未感知世界狀態（下雨 / 「看到杯子」 / 姿勢）。這是 Brain-persona follow-up，**不得當作真實感知呈現**；voice 模組不宣稱反幻覺已驗證。
+
 ## 狀態卡
+
+> ℹ️ 下表是 **5/12 brain-freeze-v2 開發紀錄**（model / routing 選型 + 當日 smoke），描述「機制如何配置」，**不等於 6/18 能力 pass**。能力是否 pass 一律回上方「能力 claim」區塊 + canonical claim matrix；表內 latency 數字為開發期 proxy 觀測，非 trusted 量測。
 
 | 項目 | 值 |
 |------|---|
@@ -124,7 +164,7 @@ DIAG log 顯示 3 個並行 chunk 對「同一個 whisper Despina 角色」回�
 3 chunk 之間 RMS 階梯式跳動（782 → 1139 → 1529）= user 聽到的「越念越大聲、又突然變小」階梯感。
 
 **P1 未做（下輪）**：sequential synthesis（不再 parallel）或 post-synthesis RMS normalize across chunks，或兩者結合。記憶在
-[`memory/project_tts_skip_diagnosis_0511_night.md`](../../../../.claude/projects/-Users-lubaiyu-elder-and-dog/memory/project_tts_skip_diagnosis_0511_night.md)。
+`memory/project_tts_skip_diagnosis_0511_night.md`（隊友本機 `.claude` 私有記憶路徑，非本 repo 內檔案，不提供連結）。
 
 ### 5/9 補充：TTS dual-route + audio_format/served_by 重構（issue 1 partial）
 
@@ -292,7 +332,7 @@ llm_bridge_node（output_mode=brain）
                             /tts → tts_node → Megaphone
 ```
 
-詳細 schema 見 [`docs/contracts/interaction_contract.md`](../contracts/interaction_contract.md) v2.5。
+詳細 schema 見 [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) v2.5。
 
 ## 5/5 evening — LLM 個性化 + 對話記憶 + Brain MVS 全鏈接通
 

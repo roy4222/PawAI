@@ -5,6 +5,8 @@
 > **性質**：這是 6/18 專題驗收的**戰略邊界文件**，不是開發計劃。它回答「要展示什麼、為什麼需要機器狗、哪些話不能講、哪些能力只是候選、哪些一定要守住」。實作計劃見 `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`。
 > **與 ADR 的關係**：本文件的定位用詞 **amend ADR-0001 / ADR-0002**（平台/demo 雙層敘事保留；demo 層由「非接觸式機構巡檢助理」reframe 為「機構公共空間非接觸式守望互動 POC」）。ADR 正文待本文件 review 後再正式 amend，此處先記錄不 silent conflict。
 > **可靠度紀律**：本文件所有 P0 / P1 / P2 分層皆標 **`provisional until baseline`**——必須等上機 capability baseline 跑出數據，才從 provisional 轉 locked。先決定後量化是被禁止的。
+> **能力 claim 真相源**：每能力「能講什麼 / 不能講什麼 / 屬哪個分級」以 [`docs/mission/2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md) 為 canonical（綁 6/04 HITL trusted snapshot）；本文件是戰略邊界，能力是否 pass 一律回 claim matrix + baseline-evidence。
+> **v2 三項保留意見已套用（2026-06-05）**：(1) §1/§3 的「安全停車」改為 **baseline pass 後才宣稱**、未 pass 只在 Studio 顯示；(2) §10「斷網也能守望」保守化為**設計意圖、需 current-path baseline 驗證**；(3) §9 capability health gate 改述為**將補在既有 effective_status 純函式中、非現成已存在**。
 
 ---
 
@@ -12,7 +14,7 @@
 
 > **PawAI 是面向機構公共空間的非接觸式守望互動四足機器人 POC。**
 
-6/18 demo **不宣稱**完整長照、完整導盲或完整自主導航；它展示的是一台四足機器人如何以**量化驗證過的**感知、語音、短距移動與安全停車能力，在室內場域完成一段**安全、可解釋**的守望互動。
+6/18 demo **不宣稱**完整長照、完整導盲或完整自主導航；它展示的是一台四足機器人如何以**量化驗證過的**感知與語音能力，在室內場域完成一段**安全、可解釋**的守望互動。**短距移動與「遇障安全停車」是 6/18 的目標而非既成宣稱**——`nav.short_move` / `nav.safe_stop` 在 nav baseline run 標 pass（或明確人工安全 override）前一律 `insufficient_data`、**只在 Studio 顯示、不口頭宣稱**（見 §5 / §7）。
 
 6/18 是現場展示，不是剪輯影片，也不是展示「功能清單全部完成」。目標是跑出一條可信的守望互動閉環，而非把每個研究方向做到 production。
 
@@ -61,10 +63,10 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 - 有在場感
 - 能從低視角觀察人與物
 - 能用身體反應（坐下 / 拒絕危險動作）
-- 能在物理空間中**安全停下**
+- （目標，**baseline pass 後才宣稱**）能在物理空間中**安全停下**——`nav.safe_stop` 未在 baseline 標 pass 前不口頭宣稱，只在 Studio 顯示
 - 能把現場證據送回 Studio
 
-> **重點句**：PawAI 的價值不是「更會聊天」（那會輸雲端大模型），而是能在**物理空間中到場、觀察、提醒、回報，並在遇到風險時安全停下**——這些 APP / 音箱 / 固定攝影機本質上做不到。
+> **重點句**：PawAI 的價值不是「更會聊天」（那會輸雲端大模型），而是能在**物理空間中到場、觀察、提醒、回報，並（目標）在遇到風險時安全停下**——這些 APP / 音箱 / 固定攝影機本質上做不到。（「安全停下」是 6/18 的具身證明**目標**，`nav.safe_stop` 在 baseline 標 pass 前不作為已成立宣稱，只在 Studio 顯示。）
 
 ---
 
@@ -164,7 +166,7 @@ Go2 機體大、重（**十多公斤級，約 15–20kg**），**居家空間不
 - **fail**：不宣稱、不觸發
 - **insufficient_data**：不放行高風險動作（motion / nav）
 
-> **Brain 必須 fail-closed**：當能力為 `degraded` / `fail` / `insufficient_data` 時，**不得用該能力觸發 motion / nav 類動作**。此 health gate 落在 `pawai_brain` 既有的 effective_status 純函式（新增 `capability_health` 分支，#85 v0.2）——**6/18 預設關閉（fail-closed）、不接 runtime motion 觸發**，僅作為能力分級的設計落點，非現成的強制 gate，也不在 LLM prompt 層做。
+> **Brain 必須 fail-closed**：當能力為 `degraded` / `fail` / `insufficient_data` 時，**不得用該能力觸發 motion / nav 類動作**。此 health gate **不是現成已存在的強制 gate**——它**將補在 `pawai_brain` 既有的 effective_status 純函式中**（新增 `capability_health` 分支，#85 v0.2），**6/18 預設關閉（fail-closed）、不接 runtime motion 觸發**，僅作為能力分級的設計落點，也不在 LLM prompt 層做。**在它真正接上前，不得宣稱「capability health gate 已存在 / 已生效」。**
 
 這也是 §4 demo promise 的執行機制：scoreboard 決定 Brain 能不能用某能力，而不是「功能寫了就用」。
 

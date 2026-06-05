@@ -1,6 +1,9 @@
 # 語音互動系統 — 介面契約
 
 > 任何 agent 或接手者，讀這份就知道怎麼跟這個模組互動。
+>
+> **介面真相**：跨主線 topic/action schema 以 [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) 為權威；本檔只列 speech 模組邊界。
+> **能力 claim 真相**：voice 能力是否 pass（voice.command 窄版 pass、voice.stop fail）一律以 [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md) + [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/) 為準，本檔不宣稱 latency / mic_stop / safety-stop。
 
 ## 模組邊界
 

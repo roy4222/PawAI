@@ -9,6 +9,8 @@ decision: "有條件建議執行（CONDITIONAL GO）"
 
 # 物體辨識可行性研究報告
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 3/25 可行性研究（DRAFT），**不是能力真相**。6/18 object claim 窄鎖 `object.cup` ~1m 近距（🟢 pass 窄版；YOLO26n = BASELINE_NOW 不換）；通用 / 80 類 / 顏色未經 trusted baseline 量測。grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/)、claim 邊界以 [claim matrix `object.cup`](../../../../mission/2026-06-18-capability-claim-matrix.md#objectcup) 為準。
+
 > **一句話決策**：YOLO26n 在 Jetson Orin Nano 8GB 上部署可行，TensorRT FP16 推理預估 10-15 FPS，RAM 增量 0.6-1.1GB 在現有三感知 CPU-only 架構下可容納。建議以 3 天 Sprint 完成 Phase 0-4，納入 4/13 交付。
 
 ---

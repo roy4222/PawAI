@@ -1,16 +1,39 @@
 # 物體辨識
 
-> Status: current
+> **Scope**：object_perception 模組設計真相（YOLO26n ONNX + ORT TensorRT EP FP16 + HSV 顏色）｜**Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `object.cup`
+> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（object.cup = 🟢 pass **僅 ~1m 近距 cup-only**；caveats 凌駕本頁敘事）
+> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
+> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）。⚠️ **6/04 trusted 只量 `object.cup`（~1m 近距）**——code 雖支援 COCO 80 class + 12 色，但**80 類 / 通用偵測 / 尋物 / VLM / 可靠顏色 / 2m 穩 均未經 trusted baseline 量測，不得宣稱**。
 
-> 預設目標物辨識（6 個 P0 class），YOLO26n ONNX + ORT TensorRT EP。
+> YOLO26n ONNX + ORT TensorRT EP。code 支援 COCO 80 class，但 **6/18 能力 claim 窄鎖 `object.cup` ~1m 近距**（config 可硬鎖 `class_whitelist=[41,999]`）。
+
+## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+
+> 完整 8 欄位散文見 [claim matrix `object.cup`](../../../mission/2026-06-18-capability-claim-matrix.md#objectcup)。本表為速查。
+
+| 欄位 | 值 |
+|---|---|
+| **Current Claim** | ~1m 近距、桌上單色杯子受控擺位可靠辨識「杯子」這一類；config 硬鎖 cup-only |
+| **Claim Level** | CLAIM_WITH_CAVEAT |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（5/5 positive @1m, conf 0.83–0.88, idle 0 誤觸, n=7） |
+| **Pass/Degraded/Fail/Insufficient** | 🟢 pass（窄版近距）— 2m 無樣本、distance=manual_declared、latency p90≈4.9s |
+| **Fallback** | 距離拉遠 / 延遲尷尬 → 鎖 ~1m、不說「即時」、改「我看到桌上有物品」 |
+| **Non-Claims** | 通用物體辨識 / 80 類 / 「2m 也穩」 / 「即時 / 很快」 / 地上水杯提醒（絆倒守護語言）/ 把 LLM 口播「我看到杯子」當感知證據 / 用物體觸發機器狗移動 / 可靠顏色 / 尋物 / VLM |
+| **Model Candidates** | BASELINE_NOW（YOLO26n TRT FP16，現役窄版 pass 不換） |
+| **Next Retest** | 多距離 1 / 1.5 / 2m 各 5 筆 + D435 depth 量距；跨光線 / 冷啟 TRT 重跑 |
+
+> **顏色 / 80 類 / 中文 label**：以下章節描述的是 **code 能力**，**非 trusted-baseline 驗證過的能力 claim**。6/04 未量顏色準確率與多類召回——demo/簡報不得宣稱「可靠顏色辨識」或「通用 80 類偵測」。
 
 ## 狀態卡
 
+> **狀態卡 caveat（6/04 收斂）**：下表 5/6「Brain 全鏈路通」是**開發期上機觀察**，**非 6/04 trusted baseline**。trusted 能力只有 `object.cup` ~1m 近距（🟢 pass 窄版）。顏色 / 80 類 / 32-class TTS 為 code 能力，**未量化驗證**。
+
 | 項目 | 值 |
 |------|---|
-| 狀態 | **Brain 全鏈路通**：12 colour HSV + zh class label + colour-aware TTS（5/6 Jetson 上機驗證） |
+| 狀態 | **object.cup ~1m 近距 = 🟢 pass 窄版（6/04 trusted）**；顏色/80 類為 code 能力非 claim |
 | 版本/決策 | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16（不裝 ultralytics） |
-| 完成度 | 85%（顏色 / 中文 / 32 class TTS whitelist 落地；小物件距離問題未解）|
+| 完成度 | 85%（模組開發進度，非能力 pass — 見上方 caveat）|
 | 最後驗證 | 2026-05-06（chair brown/black、cup gray、person cyan 全鏈路觀察到 brain `object_remark` 觸發 zh TTS）|
 | 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（大小待實測） |
 | TRT Cache | `/home/jetson/trt_cache/`（首次啟動 3-10 分鐘，之後秒起） |

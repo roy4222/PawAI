@@ -1,5 +1,7 @@
 # 手勢辨識模型選型調查
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 3/21 選型調查，**不是能力 pass/fail 真相**。⚠️ **gesture.wave 6/04 trusted = 🔴 fail**（修法為 SPIKE_AFTER_FAIL 調參，不是換模型）；grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/)、claim 邊界以 [claim matrix `gesture.wave`](../../../../mission/2026-06-18-capability-claim-matrix.md#gesturewave) 為準。本檔不得覆寫 baseline-evidence / contracts。
+
 > 最後更新：2026-03-21
 
 ## 目標效果

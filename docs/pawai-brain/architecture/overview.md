@@ -1,17 +1,22 @@
 # PawAI Brain × PawAI Studio — 整合架構與功能總覽
 
-> **Status**: current
-> **Date**: 2026-04-27
+> 🧭 **怎麼讀這份檔（2026-06-05 註）**：本檔是 Brain × Studio 的**架構與資料流真相**（機制怎麼組、誰發誰收、單一動作出口、降級鏈）—— 這部分仍然有效，請當架構參考。但本檔內所有「5/16 demo / 7 場景通過率 ≥ 90% / Demo Storyboard」等**能力宣稱與時程**是 4/27 pre-scoreboard 框架，**已被取代**：
+> - **能力是否 pass / 哪段能不能講**：一律以 canonical Capability Claim Matrix（`docs/mission/2026-06-18-capability-claim-matrix.md`，判決來源 6/05 audit §B，基準 `docs/runbook/baseline-evidence/2026-06-04-hitl/`）為準，**不以本檔的場景通過率目標為準**。
+> - **scoreboard-first 原則**（6/05 教授會議起）：先量化能力（pass / degraded / fail / insufficient gate Brain）再決定換不換模型；本檔「7 場景 ≥ 90%」是 pre-scoreboard 目標，現以實測 grade 取代。
+> - **禁說邊界**：`docs/mission/2026-06-18-demo-north-star.md` §5。特別注意——本檔 §4.1/§6/§9 出現的「揮手觸發 / 跌倒偵測 / 陌生人警示 / nav demo point」**不等於已驗證**：gesture.wave / voice.stop = **fail**，pose / nav = **insufficient_data**，反幻覺 = **fail**（見 claim matrix）。把這些當「架構預留的鏈路」讀，不要當「現在能演的能力」。
+>
+> **Status**: 架構真相 active；能力宣稱與時程 superseded（見上）
+> **Date**: 2026-04-27（架構撰寫日；能力 framing 已被 6/04 baseline + 6/05 audit 取代）
 > **Scope**: 把 PawAI Brain（決策引擎）與 PawAI Studio（操作與觀測介面）視為一個整體，說明它們的目標、架構、模組職責、資料流、與 Demo 行為
-> **演進路線**：Phase A（Brain MVS，5/16 demo）→ Phase B（**PawClaw** Embodied Brain V1，5/16 後）
+> **演進路線**：Phase A（Brain MVS）→ Phase B（**PawClaw** Embodied Brain V1）。註：原文的 5/16 demo 日期是歷史時程，6/18 為當前 demo 目標。
 > **依據文件**：
 > - `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`（Brain MVS Spec — Phase A）
 > - `docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`（**PawClaw 演進** — Phase B）
 > - `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`（PawAI 系統設計）
 > - `docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md`（實作計畫 — Phase A）
 >
-> **Planned follow-up**（規劃中，尚未存在）：
-> - `docs/pawai-brain/specs/2026-05-05-conversation-engine-langgraph-design.md`（Phase A.5 Conversation Engine LangGraph spec — 含 graph node I/O、tools 分層、5-phase 遷移、dependency spike 步驟）
+> **Conversation Engine spec**（已存在）：
+> - `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（Phase A.5 Conversation Engine LangGraph spec — 含 graph node I/O、tools 分層、5-phase 遷移、dependency spike 步驟）
 
 ---
 
@@ -583,7 +588,10 @@ Jetson 斷電：
 | **本文件**（系統整合總覽） | `docs/pawai-brain/architecture/overview.md` |
 | **Phase A**：Brain MVS 設計 spec | `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md` |
 | **Phase A**：Brain MVS 實作 plan（34 tasks） | `docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md` |
-| **Phase A.5**：Conversation Engine LangGraph 演進 spec | `docs/pawai-brain/specs/2026-05-05-conversation-engine-langgraph-design.md`（待寫） |
+| **Phase A.5**：Conversation Engine LangGraph 演進 spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` |
+| **canonical Capability Claim Matrix**（能力分級真相源） | `docs/mission/2026-06-18-capability-claim-matrix.md`（判決來源：6/05 audit §B） |
+| **能力門檻 / 怎麼量** | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` |
+| **最新實測 trusted snapshot** | `docs/runbook/baseline-evidence/2026-06-04-hitl/` |
 | **Phase B**：PawClaw Embodied Brain V1 演進 spec | `docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md` |
 | PawAI 系統定位（4/11 三層 Brain 概念源） | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md` |
 | 專案方向、Demo、分工 | `docs/mission/README.md` |

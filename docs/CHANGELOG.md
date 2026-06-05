@@ -1,5 +1,7 @@
 # 文件修正記錄
 
+> **HISTORICAL — 凍結紀錄，不反映現況。** 本檔記錄 2025/11–2026/03 的文件修正歷史；其中提及的時程、技術策略（Isaac Sim / Gemini VLM / 尋物 FSM）、檔案路徑與決議多已被後續主線文件取代。能力現況與 demo claim 真相一律以 [`README.md` §衝突仲裁](README.md) 的 EVIDENCE_AUTHORITY（`runbook/baseline-evidence/2026-06-04-hitl/`）為準。以下內容僅供歷史追蹤。
+
 ## 2026/03/13 - Docs 結構級重構
 
 ### 背景
@@ -7,7 +9,7 @@
 docs/ 累積大量幽靈文件（無對應程式碼）、重複內容散佈在多個入口、缺乏文件治理規則。
 本輪重構目標：消除幽靈文件、建立責任邊界與衝突仲裁、讓所有入口指向單一真相來源。
 
-設計規格：[`superpowers/specs/2026-03-13-docs-restructure-design.md`](./superpowers/specs/2026-03-13-docs-restructure-design.md)
+設計規格（已歸檔）：[`archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md`](./archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md)
 
 ### 1. 主幹入口重寫
 

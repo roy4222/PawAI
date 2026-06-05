@@ -1,5 +1,7 @@
 # 2026-05-04 — Phase 2 開發順序 Spec
 
+> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+
 > **目的**:把 Phase 2 七個 PR 的執行順序、量測護欄、baseline 通過標準、scope cut 寫死,避免 5/4–5/12 期間每天反覆討論。
 > **前置**:[`2026-05-04-demo-scope-freeze.md`](2026-05-04-demo-scope-freeze.md) 已 commit `16dc384`。
 > **作者**:Roy + Claude(brainstorming session)

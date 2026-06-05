@@ -4,7 +4,7 @@
 > - `speech_processor` — 未採用 Clean Architecture 分層（扁平結構，無 domain/application/infrastructure 子目錄）
 > - `gesture_module` — 尚未建立
 >
-> 系統層架構見 [Pawai-studio/specs/system-architecture.md](../../pawai-brain/studio/specs/system-architecture.md)。
+> 系統層架構見 [studio/specs/system-architecture.md](../../studio/specs/system-architecture.md)。
 
 # Clean Architecture 分層原則
 
@@ -495,7 +495,7 @@ touch my_module/my_module/__init__.py
 ## 7. 參考資源
 
 - [The Clean Architecture by Robert C. Martin](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-- [go2_robot_sdk Clean Architecture 實作](../go2_robot_sdk/go2_robot_sdk/) - 參考範例
+- go2_robot_sdk Clean Architecture 實作 - 參考範例（source code 套件，在 repo 根：`/go2_robot_sdk/go2_robot_sdk/`，非 docs 內檔）
 
 ---
 

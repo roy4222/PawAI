@@ -1,17 +1,40 @@
 # 手勢辨識
 
-> Status: current
+> **Scope**：vision_perception 手勢子系統設計真相（MediaPipe Gesture Recognizer + 自製幾何/時序 detector）｜**Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `gesture.wave`
+> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（gesture.wave = 🔴 **fail**；caveats 凌駕本頁敘事）
+> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
+> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）。⚠️ **gesture.wave 現為 fail**；下方「5/5 PASS」是 4/04 開發期單測/局部觀察，**非 6/04 trusted baseline**。靜態手勢（thumbs_up/ok/palm）是 fallback/demo-only，**非** wave 能力。
 
-> MediaPipe Gesture Recognizer 辨識手勢，觸發 Go2 動作。
+> MediaPipe Gesture Recognizer 辨識手勢。**camera 動態 wave 6/04 量測為 fail**；靜態手勢可用作 fallback。
+
+## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+
+> 完整 8 欄位散文見 [claim matrix `gesture.wave`](../../../mission/2026-06-18-capability-claim-matrix.md#gesturewave)。本表為速查。
+
+| 欄位 | 值 |
+|---|---|
+| **Current Claim** | 揮手（camera 動態 wave）6/04 量到 **fail**；改用靜態 palm / 舉手或只在 Studio gesture panel 顯示 event |
+| **Claim Level** | DO_NOT_CLAIM（fail，需 fallback） |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（n=9, recall=0.0, 6/6 positive 全 none, wave_pub=False 全程） |
+| **Pass/Degraded/Fail/Insufficient** | 🔴 fail — 根因 = 1.5m hand detection 間歇 + WaveDetector 門檻過嚴 |
+| **Fallback** | camera 動態 wave 不演（已知 fail 非現場故障）；退靜態 palm / 舉手，或語音 `wave_hello(1016)`（**另一條路徑**），或只在 Studio 顯示並標 fail |
+| **Non-Claims** | 「揮手可觸發打招呼」 / 把 wave 演成可靠互動 / 手勢觸發 Go2 motion / 把 `wave_hello` 語音路徑混為 camera wave 已 pass |
+| **Model Candidates** | SPIKE_AFTER_FAIL（不是換模型；調 gesture_min_score / min_amplitude_px / vote_frames） |
+| **Next Retest** | HITL 調 gesture_min_score 0.1→0.05、min_amplitude_px 50→35、vote_frames/stable_s revert 後重測；否則腳本改 palm fallback |
+
+> **靜態手勢（palm / fist / index / thumbs_up / peace / ok）** 在 6/04 屬可用 fallback / demo-only，**不是 gesture.wave 能力**，也未經 trusted baseline 量測——除非重跑 baseline，不得宣稱靜態手勢「已 pass」。
 
 ## 狀態卡
 
+> **狀態卡 caveat（6/04 收斂）**：下表「4/04 5/5 PASS」是**靜態手勢開發期局部觀察**，**不是 gesture.wave 能力的 trusted baseline**。6/04 trusted 量測 **gesture.wave = 🔴 fail**（見上方能力卡）。完成度為模組開發進度，非能力 pass。
+
 | 項目 | 值 |
 |------|---|
-| 狀態 | **上機驗收 5/5 PASS** |
+| 狀態 | **gesture.wave = 🔴 fail（6/04 trusted）**；靜態手勢為 fallback/demo-only |
 | 版本/決策 | MediaPipe Gesture Recognizer (CPU 7.2 FPS) |
-| 完成度 | 90% |
-| 最後驗證 | 2026-04-04（stop/thumbs_up/非白名單/距離/dedup 全 PASS） |
+| 完成度 | 90%（模組開發進度，非能力 pass — 見上方 caveat） |
+| 最後驗證 | gesture.wave 最新 trusted = 2026-06-04 HITL（**fail**）；4/04 5/5 PASS 僅靜態手勢開發期局部觀察 |
 | 入口檔案 | `vision_perception/vision_perception/gesture_classifier.py` |
 | 測試 | `python3 -m pytest vision_perception/test/test_gesture_classifier.py -v` |
 
@@ -63,7 +86,8 @@ interaction_executive_node → Go2 動作
 | 🫴 | ComeHere | Follow | `follow_me`（Future）| 1018 | 手掌向內撥動（進階模式）|
 | 🔄 | Circle | Dance | `dance`（Future）| — | 畫圓軌跡 |
 
-> **Active**（5/12 demo 啟用，5/5 已實作）：Palm、OK、Thumb、Peace、Wave
+> **Active**（5/12 sprint 標記，**enum/skill 接線存在 ≠ 能力 pass**）：Palm、OK、Thumb、Peace、Wave
+> ⚠️ **Wave（camera 動態）6/04 trusted = 🔴 fail**（見能力卡）；6/18 demo 不演 camera 動態 wave，退靜態 palm/舉手或語音 `wave_hello`。其餘靜態手勢為 demo-only fallback，未經 trusted baseline 量測。
 > **Hidden**（registry 內、Studio grayed-out，enum 已實作但未綁 skill）：Fist、Index
 > **Future**（軌跡 detector 未實作）：ComeHere、Circle
 > 對應 sprint design §4 Skill Registry 26+1 條目。

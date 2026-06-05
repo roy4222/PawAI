@@ -1,4 +1,4 @@
-> **⚠️ OUTDATED** — 本文件與實作有結構性差異，以 [interaction_contract.md](./interaction_contract.md) v2.0 為準。已知偏差：
+> **⚠️ OUTDATED** — 本文件與實作有結構性差異，以 [interaction_contract.md](../../../contracts/interaction_contract.md)（v2.5 凍結）為準。已知偏差：
 > - `FacePerceptionNode` 已不存在；`face_perception` 套件已不在 repo 中
 > - `/audio/...` topic 不存在 — 語音走 USB 麥克風 ALSA 直接錄製，不經 ROS2 topic
 > - `/event/speech_intent` → 正確名稱為 `/event/speech_intent_recognized`
@@ -376,9 +376,9 @@ ros2 topic echo /webrtc_req
 
 ## 8. 相關文件
 
-- [README.md](./README.md) - 架構總覽
-- [face_perception.md](./face_perception.md) - 人臉模組詳細架構
-- [interaction_contract.md](./interaction_contract.md) - 介面規格
+- [架構索引 README.md](../README.md) - 架構總覽
+- [人臉模組](../../perception/face/README.md) - 人臉模組詳細架構
+- [interaction_contract.md](../../../contracts/interaction_contract.md) - 介面規格（v2.5 凍結，canonical）
 
 ---
 

@@ -1,5 +1,7 @@
 # PR #41 姿勢辨識功能提取計畫
 
+> **⚠️ research-only / 歷史（非真相）**：本檔是 4/25 PR extraction 計畫，**不是能力真相、不是現行 backlog**。⚠️ **pose.basic 6/04 = Studio-only / insufficient；跌倒 = future、非緊急**。grade 以 [`baseline-evidence/2026-06-04-hitl/`](../../../../runbook/baseline-evidence/2026-06-04-hitl/) + [claim matrix `pose.basic / pose.fall`](../../../../mission/2026-06-18-capability-claim-matrix.md#posebasic--posefall) 為準。
+
 **日期**：2026-04-25
 **來源 PR**：https://github.com/roy4222/PawAI/pull/41 (GuaGua0216 / 瓜瓜)
 **整體 PR review 結論**：REQUEST_CHANGES（不能直接 merge）— 詳見 `docs/mission/meetings/2026-04-25.md`

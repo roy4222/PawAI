@@ -1,6 +1,13 @@
 # PawAI Mission 入口頁
 
-> Status: current
+> **Governance header**
+> - **Scope**：產品方向 / Demo 劇本 / 八大功能的入口頁與摘要（不放技術細節，那是各模組 README 的事）。
+> - **Status**：active / source-of-truth（mission lane）。**注意**：本頁 §2 定位文字（v2.3, 2026-04-08）仍是「居家互動 + 守護」舊框架；**6/18 專題驗收的定位、禁說清單、能力分級以 [`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) v2 與 [`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md) 為準（後者勝出）**——6/18 一律用「守望」，不用「守護 / 陌生人警報」。
+> - **Owner lane**：mission（戰略邊界）。
+> - **Source-of-truth priority**：實測證據 ([`runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)) ＞ 收斂審計 ([`pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)) ＞ 能力規格 ([`pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)) ＞ 戰略邊界 (north-star v2) ＞ 本頁敘事。
+> - **Maintained child files**：[`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md)、[`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md)、[`2026-06-18-demo-flow-plan.md`](2026-06-18-demo-flow-plan.md)、[`2026-06-18-final-presentation-outline.md`](2026-06-18-final-presentation-outline.md)、[`sprint-b-prime.md`](sprint-b-prime.md)、[`demo-scope.md`](demo-scope.md)、[`handoff_316.md`](handoff_316.md)、[`meetings/`](meetings/)。
+> - **Archived / legacy boundary**：`meetings/*` 為歷史會議快照（各檔頂部已標 historical）；`archive/` 全 frozen。
+> - **What this README is NOT**：不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）、不是技術細節（見各模組 README）、不是能力 pass/fail 的最終事實依據（見 claim matrix + baseline-evidence）。
 
 **專案名稱**：老人與狗 (Elder and Dog) / PawAI
 **文件版本**：v2.3
@@ -30,7 +37,7 @@
 | 新成員 | 第 1、2、3、7 節 | [setup/README.md](../runbook/README.md) |
 | 手勢/姿勢研究 (黃旭、陳若恩) | 第 5、6、7 節 | [手勢辨識/README.md](../pawai-brain/perception/gesture/README.md) |
 | 前端開發 (魏宇同) | 第 5、6、7 節 | [Pawai-studio/README.md](../pawai-brain/studio/README.md) |
-| System Architect | 全篇 + 附錄 | [interaction_contract.md](../archive/2026-05-docs-reorg/architecture-misc/interaction_contract.md) |
+| System Architect | 全篇 + 附錄 | [interaction_contract.md](../contracts/interaction_contract.md) |
 
 ---
 
@@ -820,10 +827,10 @@ docs/
 | 目的 | 連結 |
 |------|------|
 | PawAI Studio 設計 | [Pawai-studio/README.md](../pawai-brain/studio/README.md) |
-| 介面契約規格 | [interaction_contract.md](../archive/2026-05-docs-reorg/architecture-misc/interaction_contract.md) |
+| 介面契約規格 | [interaction_contract.md](../contracts/interaction_contract.md) |
 | 人臉辨識 | [人臉辨識/README.md](../pawai-brain/perception/face/README.md) |
 | 語音功能 | [語音功能/README.md](../pawai-brain/speech/README.md) |
-| Jetson MVP 測試 | [語音功能/jetson-MVP測試.md](../pawai-brain/speech/jetson-MVP測試.md) |
+| Jetson MVP 測試 | [語音功能/jetson-MVP測試.md](../pawai-brain/speech/archive/jetson-MVP測試.md) |
 
 ---
 
@@ -863,7 +870,7 @@ docs/
 - **狀態**靠 latched state topic
 - **事件**靠 volatile + correlation id（session_id / track_id / request_id）
 - **控制**靠 req/ack（ack 必須帶回 request_id）
-- **所有跨 node 契約先在 [`interaction_contract.md`](../archive/2026-05-docs-reorg/architecture-misc/interaction_contract.md) 登記再實作**
+- **所有跨 node 契約先在 [`interaction_contract.md`](../contracts/interaction_contract.md) 登記再實作**
 
 **關鍵原則**：latched topic init 時發初始值、gate/mute 必須有 timeout 保護、新增 intent/event type 必須同步更新共享常數。
 

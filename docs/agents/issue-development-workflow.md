@@ -1,5 +1,11 @@
 # Issue Development Workflow
 
+> **Scope**：把 GitHub issue 轉成 `/goal` 固定執行規格（7 段）+ scope guard + PR template 對應。
+> **Status**：active / agent-config（開發流程護欄）。
+> **Owner lane**：agents。
+> **Related**：issue 操作見 [`issue-tracker.md`](issue-tracker.md)；triage label 見 [`triage-labels.md`](triage-labels.md)；HITL 取證見 [`hitl-verification-protocol.md`](hitl-verification-protocol.md)；evidence 背書原則見 north-star [`../mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) §9。
+> **What this file is NOT**：不是能力真相、不是 CI 自動 reject 規則。
+
 每個 `/goal` 開工前，先把 GitHub issue 轉成固定執行規格，清楚說明本次只做什麼、不准碰什麼、需要哪些驗證與產物。搭配 `.github/pull_request_template.md`，讓多張 issue 的 agent 開發品質一致、evidence 可稽核（North Star §9：每個判斷都要 evidence 背書）。
 
 ## `/goal` spec template

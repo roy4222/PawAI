@@ -1,5 +1,7 @@
 # Branch E — ElevenLabs Spike + TTS Dual Route Skeleton Plan
 
+> 🗄️ **HISTORICAL（ElevenLabs 已淘汰，3/26 會議確認；5 月 sprint skeleton）**。保留作歷史，**不再執行**。TTS 現役主線見 `speech/README.md`；現行計畫見 [`README.md`](README.md) current 區。
+
 > **Skeleton plan** — task list 列改哪檔做什麼，不寫 TDD step 細節。實際開工前 expand。
 
 **Goal:** 解 issue 1 音色（edge-tts 像 google 小姐 / Gemini 6-7s）。三段：(1) Spike-Mini 驗 ElevenLabs 音色 + latency；(2) Spike-Real 接 Megaphone Go2 實機；(3) 雙軌路由 fast/quality lane + audio_format/served_by 重構。
