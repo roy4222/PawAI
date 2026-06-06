@@ -1,7 +1,43 @@
 # 專案狀態
 
-**最後更新**：2026-06-04（第一份多能力 trusted baseline + 8 baseline issue 全清；HITL，Roy 在場 Go2+Jetson）
+**最後更新**：2026-06-06（docs 架構重構 + 6/18 demo 收斂 + 必成版距離評估；無 code 變更）
 **硬底線**：6/18 期末發表。Go2 目前在 Roy 手上做 HITL baseline。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/5–6/6：docs 架構重構 + 6/18 demo 收斂 + 必成版距離評估（無 code 變更）
+
+**當日主軸**：把昨天的多能力 baseline 收斂成「能上 6/18 的誠實 demo 計畫」——重構全 docs 真相源、釘出 6/18 可講/不可講、grill 出必成/加分版 demo、唯讀查 code 算出「離能錄到還有多遠」。**今天零 code 變更**（全 docs + 唯讀分析）。
+
+### 1. docs 架構重構（committed，未 merge）
+- **branch `docs/2026-06-05-architecture-refresh` @ `b4d6870`**（115 檔，+4055 −178；**尚未 merge 進 main / 未開 PR**）。
+- 建立 source-of-truth 階層（`docs/README.md` + ADR-0004）：程式碼 ＞ 6/04 baseline-evidence ＞ 6/05 audit ＞ capability-spec ＞ North Star ＞ contracts ＞ 模組 ＞ mission/README ＞ ADR ＞ runbook。
+- 新增 **canonical claim 真相源** `docs/mission/2026-06-18-capability-claim-matrix.md`（每能力 8 欄位，全 repo 引用它）。
+- 新增 ADR 0004-0007（真相階層 / evidence-first / 6/18 claim policy / WSL-vs-Jetson）；ADR-0001/0002 加 amendment note。
+- claim drift 修正：face 6/03 fail → 6/04 窄版 pass；nav 零自走；wave fail；brain 反幻覺 fail；修 `schema_validator_unavailable` stale caveat（現況 blocker=`sha_mismatch`）。
+- 歷史檔加 banner（不刪）+ brain 各層補索引。
+
+### 2. 6/18 demo 收斂審計（report committed）
+- **Readiness = `READY_WITH_BACKUP_SLIDE`**；模型錦標賽結論 = **6/18 不換任何模型**（cup@1m/face/voice 已 pass，gesture「舉手」走語音、pose=Studio-only）。
+- 報告：`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`。
+
+### 3. demo 計畫收斂（Roy 拍板）
+- 交付 = **錄製影片為主 + 現場直播**；成功標準 = 「**先能完成、能錄到、能交代清楚；不追求每段最高 claim**」。分**必成版 / 加分版 / fallback**。
+- 優先序：①安全拒絕 e2e → ②voice→Go2 坐下 → ③face 認Roy → ④object.cup 近距 → ⑤pose sitting → ⑥gesture → ⑦nav 移動畫面。
+- 計畫稿：`docs/mission/2026-06-18-demo-flow-plan.md`（S0–S7 雙案 + fallback）。
+
+### 4. 必成版距離評估（唯讀查 code，8-agent）
+**結論：必成版 0 行新 code，距離 = 約 1 次 HITL 錄製 session。**
+- 🟢 **只需錄（5）**：①安全拒絕（code 100% 接線+unit test）、③face（6/4 pass）、④object.cup（偵測+debug_image proven）、⑦nav 移動畫面（遙控 /cmd_vel，另起 nav stack）、⑧一鍵啟動。
+- 🟡 **需 config flip + colcon build（2，加分）**：⑤pose 出聲（`demo_video_silent_sit_along:false`）、⑥gesture palm 觸發（`gesture_direct_disabled:false`）。必成版（只顯示 / 語音替代）已 ready。
+- 🔴 **needs code+HITL（1）**：②voice→Go2 坐下（wired 但零真機驗證；有 Studio 按鈕 / 直發 webrtc 1005 保底）。
+- **6 個 demo-day footgun**（會靜默殺 shot）：`depth_clear=False` 擋所有 Go2 motion / greet+TTS 需 ENGAGED ≤1.6m+dwell 1.5s / `.env` CRLF 假 running（要數節點）/ TRT 冷 cache 3-10min / XL4015 供電 / config 預設關閉且 rsync 不 rebuild（要 colcon build）。
+
+### 5. 待辦（明天，2026-06-07）
+- docs branch 收尾：merge `b4d6870` 進 main（或開 PR）+ 建 10 個 follow-up issues（草稿 `docs/pawai-brain/plans/2026-06-05-docs-refresh-followup-issues.md`，未建）。
+- 排 HITL 錄製 session（排 6 footgun → 照優先序錄）。
+- 拍板：②voice→Go2 走哪條路徑、加分 config 要不要做、nav 用哪個 stack。
+- 定位決策（獨立）：`mission/README §2` 守護 30%/陌生人警報 → North Star v2 非接觸守望。
 
 ---
 
