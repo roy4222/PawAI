@@ -1,7 +1,41 @@
 # 專案狀態
 
-**最後更新**：2026-06-07（6/18 一鏡到底可行性 audit + 5 issues + 製作計畫；無 code 變更）
-**硬底線**：6/18 期末發表。Go2 目前在 Roy 手上做 HITL baseline。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+**最後更新**：2026-06-08（6/7 night HITL：nav 短距自走 work + object 像素限制活證 + nav/object deep research；無 code 變更）
+**硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。⚠️ 供電不穩：6/7 night session 中 Jetson 掉電重開 **2 次**。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/7 night → 6/8：nav/object HITL 實機 + 兩份 deep research + demo 流程跑通計畫（無 code 變更）
+
+**當日主軸**：聚焦 demo 兩大核心「導航避障 + 物體辨識」跑實機 HITL 拿決策數據，並用實機證據把「換不換模型」定案。**零 code 變更**（全 HITL 測試 + docs/research）。白話紀錄與 6/08 計畫見 [`docs/mission/2026-06-07-night-session-and-demo-bringup-plan.md`](../docs/mission/2026-06-07-night-session-and-demo-bringup-plan.md)。
+
+### 1. NAV 實機 HITL → 短距自走 work、F7 沒重現
+- `goto_relative 0.3m` **SUCCEEDED**、Go2 實際前進（actual 0.118m）、controller 出速度 ramp 到 0.46 m/s、速度真的到 driver、遇椅子在 danger 安全停（沒撞沒摔）。
+- **F7（5/12 goto 原地 ABORT）今晚沒重現** → nav 段從「只能 safe_stop」上修為 **「短距離自主移動 + 遇障自動停」**（可進 demo）。
+- reactive_stop 在當位置 = slow/inactive（**沒有**研究假說的 danger=1.1 誤判）；LiDAR 11.5Hz、odom 29Hz、depth_clear=true、AMCL 設 initialpose 後 nav_ready=true。
+- **動態繞障仍 = future work**（reactive_stop angular.z=0 只停不轉，硬轉重演 5/2 摔狗）。
+
+### 2. OBJECT 實機 HITL → 像素物理活證 + 不換模型定案
+- 白馬克杯 @~1.5m 沙發、人眼清楚，YOLO26n@conf0.5 **`Det:0`**（debug 圖存證）→ **遠距小物瓶頸是像素物理（9cm@2m≈21px），非模型笨**。
+- **不換模型定案**：PINTO 換誰都吃同樣 21px（白費）；`coco_detector`（`.tmp/go2_ros2_sdk/`，torchvision FasterRCNN-MobileNet320、CPU、mAP~22 < YOLO26n 40）**不採用為主偵測器**。
+- **真問題＝YOLO 用得爛**：demo 鎖 cup-only（`class_whitelist:[41]`）＝ 80 類只用 1 類。**快速 win＝打開白名單**（免費多物體）＋用大物體（椅/沙發/桌，像素多更穩）。
+
+### 3. 產出
+- `docs/pawai-brain/research/2026-06-07-report-positioning-and-hitl-derisk.md`（報告對外定位＋HITL de-risk，18-agent workflow）。
+- `docs/pawai-brain/research/2026-06-07-nav-and-object-deepdive.md`（nav/object 行動報告，13-agent workflow）。
+- `docs/pawai-brain/research/2026-06-07-evening-session-and-0608-demo-plan-review.md`（另一 agent 的 Cloud review，英文，結論一致）。
+- `docs/mission/2026-06-07-night-session-and-demo-bringup-plan.md`（白話紀錄＋6/08 流程跑通計畫）。
+- GitHub issues：建 #132（nav 前置 gate）/#133（安全拒絕 e2e）/#134（S2-S7 smoke）＋整理 #127/#131 標籤。
+- 簡報：open-slide deck 加 Roy 5 分鐘技術導讀 3 頁（`.tmp/`，git 未追蹤）。
+
+### 4. ⚠️ 硬限制／風險（實機確認）
+- **供電不穩**：session 中 Jetson **掉電重開 2 次**（uptime 證實）→ demo 前必做穩定電源＋60min 壓測（最高風險）。
+- **nav stack 與 brain stack 8GB 互斥**：完整 demo **不能一鏡** ＝ S1(nav 鏡)＋S2-S7(brain 鏡) 兩段。
+- 語音/Studio→走（#129 未接）＋全語音+nav 受 8GB 互斥；深度判地面（object 無 depth 整合）＝ 皆待開發。
+
+### 待辦（6/08，先跑通完整流程再迭代）
+- 起 nav stack 測 goto 0.5/1.0m（淨空處）＋遇障停 → 切 brain stack 跑 S2-S7 → 蒐集數據看哪段不行 → 排迭代。
+- 開發候選：打開 object 白名單(快速 win) / #129 Studio 按鈕→走 / 深度判地面(加分) / pose·手勢 smoke / 供電壓測。
 
 ---
 
