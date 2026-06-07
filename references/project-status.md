@@ -1,7 +1,36 @@
 # 專案狀態
 
-**最後更新**：2026-06-06（docs 架構重構 + 6/18 demo 收斂 + 必成版距離評估；無 code 變更）
+**最後更新**：2026-06-07（6/18 一鏡到底可行性 audit + 5 issues + 製作計畫；無 code 變更）
 **硬底線**：6/18 期末發表。Go2 目前在 Roy 手上做 HITL baseline。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/6 night → 6/7：6/18 一鏡到底 demo 可行性 audit + 5 issues + 製作計畫（無 code 變更）
+
+**當日主軸**：把「我對完成度的假設」換成「實機證據」——逐功能審計 `pawai demo start` 的真實能力、建 GitHub issue、產出一鏡到底可行性 verdict 與製作計畫。**零 code 變更**（全 read-only audit + docs）。
+
+### 1. 最終 verdict（report committed）
+- **`ONE_TAKE_POSSIBLE_BUT_NEEDS_P0_FIXES`**。關鍵區分：含真實移動的全流程一鏡=**不可能**（nav stack 與 brain stack 8GB/lock/cmd_vel 三重互斥、NAV executor no-op #129）；**S2-S7 互動鏈一鏡=可行**，補完 P0 才穩。
+- **demo 結構鎖定** = 「S2-S7 互動鏈一鏡到底」+「S1 移動另段純顯示」（不同 stack/不同鏡，口白標 insufficient_data）。
+- report：`docs/runbook/2026-06-06-one-take-demo-feasibility-audit.md`（Part A-E + 8 個錯誤假設 + 今晚 HITL checklist + backlog）。
+
+### 2. 揪出 8 個錯誤假設（之前「掌握不夠」的根因）
+- brain 下「前進 N 公尺」是 **no-op**（#129）；Studio 紅 BLOCKED badge **被綠 completed 蓋掉只閃一瞬**（主證據改 terminal `/brain/skill_result`）；pose 坐姿 **n=0 從沒上機量**；safety 23 test 綠 **≠ 真機端到端**（待 #127）；`✓ Demo running` 可能 .env CRLF 假成功；voice.command 0.875 只是**意圖分類**非語音 e2e。
+
+### 3. 建立 5 個 GitHub issue（roy4222/PawAI，目前 0→5 open）
+- **#127** 安全拒絕真機 HITL（P0）/ **#128** `pawai face` CLI（list/enroll/delete，6/15 enroll 用）/ **#129** Studio 前進N公尺（NAV executor no-op blocker）/ **#130** Studio depth panel / **#131** gesture camera wave wontfix（recall=0.0）。
+
+### 4. PINTO_model_zoo 研究 → 不換模型
+- 6/04 已有 `docs/pawai-brain/research/2026-06-04-pinto-model-zoo-full-analysis.md`（482 模型）。cup>1m 根因 = **像素預算不足**（9cm 杯 @2m≈21px 踩 YOLO26n 下限），**非模型問題** → 6/18 鎖 cup ≤1.5m、不換任何感知模型（face/pose 已 freeze、object KEEP_CURRENT）。
+
+### 5. 製作計畫 + 雙軌（doc committed）
+- `docs/mission/2026-06-18-demo-production-plan.md`：逐段「開發前置 / 資料收集（每段三層同框：第三人稱+Studio debug+terminal echo）/ 拍攝口白」。雙軌=家裡備片 Roy 主角為主體 / 學校 live 她主角求穩；6/15 enroll+smoke、6/16-17 錄、6/18 簡報+備片保底。
+- grill 鎖定：安全拒絕走語音 no-VAD（3/3 驗）、positive control 前先確認 `/capability/depth_clear`=true、6/15 她 enroll 後量 mini recall（正樣本+隊友負樣本）。
+
+### 待辦（接手即做）
+- **今晚/6-7 第一件**：#127 P0 session（sed .env CRLF → 數 4 node → depth_clear=true → PRE-0 wave_hello 1016 → 翻跟斗×3 出 banned_api:1301 → topic info -v 非 dry-run）。
+- **並行**：#128 face CLI 丟 Codex（Roy review）。
+- **Roy 4 決策**：S1 移動定位 / S6 觸發(語音vs文字) / S2 學校新主角 enroll / 互動鏈節拍授權（每段隔 ≥8s + 必要時關 auto-fire）。
 
 ---
 
