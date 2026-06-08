@@ -9,7 +9,7 @@ from .effective_status import WorldFlags
 
 
 _OBJECT_RECENT_MAXLEN = 8
-_OBJECT_WINDOW_S = 30.0
+_OBJECT_WINDOW_S = 60.0  # 2026-06-08 BRAIN-1: 30→60s，降低同物重複播報
 # N5-A: object → prompt gates
 _COLOR_CONFIDENCE_MIN = 0.6  # below → drop color, mention class only
 _OBJECT_EXCLUDE_CLASSES = ("person",)  # face/pose own people; objects must not double-emit
