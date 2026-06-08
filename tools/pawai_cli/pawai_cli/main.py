@@ -1288,5 +1288,83 @@ def contract_check(jetson: bool) -> None:
     sys.exit(rc)
 
 
+# ─── pawai face (人臉資料庫管理) ─────────────────────────────────────────
+# VIS-10-min: list / enroll / rebuild / test。face_db 住在 Jetson
+# (/home/jetson/face_db)，所以 list/enroll/rebuild 都走 shell.run_remote SSH；
+# test 跑 face_perception 本機單元測試（同樣在 Jetson repo 上）。
+# 所有子命令沿用 contract_check 的回傳處理慣例：echo res.stdout/res.stderr，
+# 再 sys.exit(res.code)，失敗才有非零退出碼可被 CI / 呼叫端偵測。
+
+
+def _echo_remote_result(label: str, res: "shell.Result") -> None:
+    """Print a run_remote Result the same way contract_check does, then exit."""
+    if res.stdout:
+        click.echo(res.stdout.rstrip())
+    if res.stderr:
+        click.echo(res.stderr.rstrip(), err=True)
+    if not res.ok:
+        click.echo(f"✗ {label} failed (code {res.code}).", err=True)
+    sys.exit(res.code)
+
+
+@cli.group("face")
+def face() -> None:
+    """人臉資料庫管理（list / enroll / rebuild / test）。"""
+
+
+@face.command("list")
+def face_list() -> None:
+    """列出 Jetson face_db 內的人物與樣本數（SSH 掃描）。"""
+    repo = shell.jetson_repo()
+    script = (
+        "import os; d='/home/jetson/face_db'; "
+        "ppl=([p for p in sorted(os.listdir(d)) "
+        "if os.path.isdir(os.path.join(d,p))] if os.path.isdir(d) else []); "
+        "print('（DB 未初始化或無樣本）') if not ppl else "
+        "[print(f'{p} ('+str(len([f for f in os.listdir(os.path.join(d,p)) "
+        "if f.endswith(\".png\")]))+')') for p in ppl]"
+    )
+    cmd = f"cd {shlex.quote(repo)} && python3 -c {shlex.quote(script)}"
+    _echo_remote_result("face list", shell.run_remote(cmd, timeout=30))
+
+
+@face.command("enroll")
+@click.option("--person-name", required=True, help="要註冊的人名（建 face_db 子資料夾）。")
+@click.option("--samples", default=30, show_default=True, help="採樣張數。")
+def face_enroll(person_name: str, samples: int) -> None:
+    """在 Jetson 上跑 face_identity_enroll_cv.py 採樣（headless）。"""
+    repo = shell.jetson_repo()
+    cmd = (
+        f"cd {shlex.quote(repo)} && source /opt/ros/humble/setup.zsh && "
+        f"source install/setup.zsh && "
+        f"python3 scripts/face_identity_enroll_cv.py "
+        f"--person-name {shlex.quote(person_name)} --samples {int(samples)} "
+        f"--output-dir /home/jetson/face_db --headless"
+    )
+    _echo_remote_result("face enroll", shell.run_remote(cmd, timeout=300))
+
+
+@face.command("rebuild")
+def face_rebuild() -> None:
+    """刪除 model_sface.pkl 觸發 face_identity_node 下次啟動重訓。"""
+    repo = shell.jetson_repo()
+    cmd = (
+        f"cd {shlex.quote(repo)} && rm -f /home/jetson/face_db/model_sface.pkl && "
+        f"echo 'model_sface.pkl removed; restart face_identity_node to retrain'"
+    )
+    _echo_remote_result("face rebuild", shell.run_remote(cmd, timeout=30))
+
+
+@face.command("test")
+def face_test() -> None:
+    """跑 face_perception 本機單元測試（在 Jetson repo 上）。"""
+    repo = shell.jetson_repo()
+    cmd = (
+        f"cd {shlex.quote(repo)} && source /opt/ros/humble/setup.zsh && "
+        f"source install/setup.zsh && python3 -m pytest face_perception/test -v"
+    )
+    _echo_remote_result("face test", shell.run_remote(cmd, timeout=300))
+
+
 if __name__ == "__main__":
     cli()
