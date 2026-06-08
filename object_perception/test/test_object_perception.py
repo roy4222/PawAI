@@ -346,3 +346,26 @@ class TestColorEventGate:
         if det.get("color") and det["color"] != "Unknown":
             obj["color"] = det["color"]
         assert "class_id" not in obj
+
+
+# ------------------------------------------------------------------
+# VIS-2: runtime class_whitelist parsing (pure function, CI-safe)
+# ------------------------------------------------------------------
+from object_perception.object_perception_node import _parse_whitelist
+
+
+class TestParseWhitelist:
+    def test_household_seven(self):
+        assert _parse_whitelist([39, 41, 45, 56, 63, 67, 73]) == {39, 41, 45, 56, 63, 67, 73}
+
+    def test_filters_dummy_over_79(self):
+        assert _parse_whitelist([41, 999]) == {41}
+
+    def test_empty_defaults_to_all_80(self):
+        out = _parse_whitelist([])
+        assert out == set(COCO_CLASSES.keys())
+        assert len(out) == 80
+
+    def test_sentinel_neg1_defaults_to_all_80(self):
+        # -1 不在 0..79 → 被過濾成空 → 回退全 80（sentinel 語意）
+        assert _parse_whitelist([-1]) == set(COCO_CLASSES.keys())
