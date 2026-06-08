@@ -796,3 +796,76 @@ def test_gesture_wave_fires_when_no_prior_chat(brain):
     proposals = _drain_proposals(brain)
     assert proposals
     assert proposals[-1]["selected_skill"] == "wave_hello"
+
+
+# ---------------------------------------------------------------------------
+# VIS-5: thumbs_up demo-ack mode (no wiggle confirm)
+# ---------------------------------------------------------------------------
+# NOTE (adapted from plan): the plan's snippet used helpers `make_brain`,
+# `_gesture_msg`, `_last_emitted_plan`, and asserted on `last.skill` /
+# `last.args`. None of those exist in this file. The real conventions are:
+#   - fixture/factory builds `BrainNode()` with `_emit` captured into
+#     `_captured_proposals` (dicts via `_plan_to_dict`)
+#   - gestures fed via `_msg({"gesture": ...})`
+#   - last plan via `_latest(node)` → dict with `selected_skill` + `steps`
+#     (text lives at steps[0]["args"]["text"])
+#   - ConfirmState imported from interaction_executive.pending_confirm
+# `make_brain` below builds the node through the real __init__ path so the
+# demo-mode mutation (production code) is exercised, not duplicated.
+
+def make_brain(thumbs_up_demo_ack: bool):
+    """Build a BrainNode with the VIS-5 demo flag set, wiring _emit capture
+    the same way the `brain` fixture does. Uses the production param path so
+    the init demo mutation runs for real."""
+    from rclpy.parameter import Parameter
+
+    node = BrainNode()
+    node.set_parameters(
+        [Parameter("thumbs_up_demo_ack", Parameter.Type.BOOL, thumbs_up_demo_ack)]
+    )
+    node.thumbs_up_demo_ack = thumbs_up_demo_ack
+    node._apply_gesture_demo_modes()
+
+    captured = []
+
+    def capture(plan):
+        captured.append(node._plan_to_dict(plan))
+
+    node._emit = capture
+    node._captured_proposals = captured
+    return node
+
+
+def test_thumbs_up_demo_ack_no_wiggle_confirm():
+    """VIS-5: demo mode 下 thumbs_up 不進 PendingConfirm、不問『比 OK 做 wiggle』，
+    改發輕量正向 say_canned。"""
+    from interaction_executive.pending_confirm import ConfirmState
+
+    node = make_brain(thumbs_up_demo_ack=True)
+    try:
+        assert "thumbs_up" not in node._GESTURE_CONFIRM
+        assert "thumbs_up" not in node._GESTURE_DIRECT  # 不一步觸發 wiggle
+        node._on_gesture(_msg({"gesture": "thumbs_up"}))
+        # 不進 PENDING
+        assert node._pending_confirm.state != ConfirmState.PENDING
+        # 發了一句正向 say_canned，且文字不含 wiggle/OK 提示
+        last = _latest(node)
+        assert last["selected_skill"] == "say_canned"
+        text = last["steps"][0]["args"]["text"]
+        assert "wiggle" not in text
+        assert "OK" not in text
+    finally:
+        for timer in list(node._chat_timeouts.values()):
+            node.destroy_timer(timer)
+        node.destroy_node()
+
+
+def test_thumbs_up_default_still_confirm():
+    """flag 關閉時維持既有 confirm 行為（不回歸）。"""
+    node = make_brain(thumbs_up_demo_ack=False)
+    try:
+        assert node._GESTURE_CONFIRM.get("thumbs_up") == "wiggle"
+    finally:
+        for timer in list(node._chat_timeouts.values()):
+            node.destroy_timer(timer)
+        node.destroy_node()
