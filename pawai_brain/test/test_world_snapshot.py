@@ -202,3 +202,38 @@ def test_missing_color_confidence_treated_as_zero():
     }))
     objs = s.get_recent_objects()
     assert objs[0]["color"] is None
+
+
+# ── BRAIN-1: object dedup window 30→60s + person-exclude regression ────────
+
+
+from pawai_brain.capability.world_snapshot import _OBJECT_WINDOW_S
+
+
+class TestBrain1ObjectPolicy:
+    def test_window_is_60s(self):
+        # BRAIN-1: object dedup window 延長到 60s
+        assert _OBJECT_WINDOW_S == 60.0
+
+    def test_person_excluded(self):
+        snap = WorldStateSnapshot()
+        payload = json.dumps({
+            "event_type": "object_detected",
+            "objects": [
+                {"class_name": "person", "confidence": 0.9, "bbox": [0, 0, 10, 10]},
+                {"class_name": "chair", "confidence": 0.9, "bbox": [0, 0, 10, 10]},
+            ],
+        })
+        snap.apply_object_detected_json(payload)
+        classes = {o["class"] for o in snap.get_recent_objects()}
+        assert "person" not in classes
+        assert "chair" in classes
+
+    def test_recent_object_within_60s_window(self):
+        snap = WorldStateSnapshot()
+        snap.apply_object_detected_json(json.dumps({
+            "event_type": "object_detected",
+            "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+        }))
+        # 預設 window 取回應含 cup
+        assert any(o["class"] == "cup" for o in snap.get_recent_objects())
