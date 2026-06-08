@@ -509,6 +509,12 @@ Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet �
 - **gesture `WaveDetector` config default=rtmpose 是 footgun**：`vision_perception.yaml` 預設 `gesture_backend: rtmpose`，rtmpose backend 不餵 WaveDetector → wave 永不觸發。**demo 主線靠 `start_full_demo_tmux.sh` 的 `gesture_backend:=recognizer` override**；直接 `ros2 launch` 不帶 override 會中招。
 - **voice `run_speech_test.sh` observer report-ack-timeout → 不產 CSV**（`test_results/` 只剩 `.gitkeep`）。terminal 仍有逐輪 intent 結果 → 可重建 CSV 給 `voice_csv_to_jsonl.py`（評分只看 success_rate，不需 latency）。
 
+### VIS-4 具名問候 gate 改「人臉+sitting+cooldown」+ face_db 衛生（6/8 HITL）
+
+- **greet 觸發條件已改**（commit `f2a0df4`，`interaction_executive/brain_node.py` `_on_face`）：原本 gate 在 attention `ENGAGED`（D435 depth ≤1.6m + dwell，深度在 1.5-2m 抖到逼使用者貼鏡頭不動、幾乎不觸發）→ 改成 **known face stable（`/event/face_identity` 的 `identity_stable` 事件）+ 最近 `greet_sitting_window_s`(預設 3s) 內偵測到 pose=sitting + `greet_cooldown_s`(預設 20s)/人 cooldown**。新 param `greet_require_sitting`/`greet_sitting_window_s`/`greet_cooldown_s` 全 declare 預設、不需 yaml。⟹ **pose=sitting 成為 greet 硬依賴**：sitting 不穩就 `ros2 param set /brain_node greet_require_sitting false` + 台詞去掉「坐下來了」。
+- **只在「進場（unknown→known 轉變）」觸發**，非 steady-state；要重現 greet 需遮臉/離框 ~5s 再回來。
+- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 [`docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md`](docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md)。
+
 ---
 
 ## 關鍵文件索引

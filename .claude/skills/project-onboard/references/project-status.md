@@ -1,12 +1,21 @@
 # 專案進度快照
 
-> 最後更新：2026-06-08（Track A #135 merged + Track B 導航 HITL；前次 5/12 night brain-freeze-v2）
+> 最後更新：2026-06-08 晚（Track A #135 merged + Track B 導航 HITL + VIS-4 具名問候 gate 重設計 + 視覺研究；前次 5/12 night brain-freeze-v2）
 
 ## 2026-06-08 — Track A 視覺/Brain merged + Track B 導航 HITL
 
 - **Track A merged（PR #135）**：object 家用 7 類 whitelist `[39,41,45,56,63,67,73]` + runtime `add_on_set_parameters_callback`（免重啟切類別）、BRAIN-1 object dedup 30→60s、VIS-5 thumbs_up demo 不引出 wiggle、VIS-10-min `pawai face list/enroll/rebuild/test`。issue #136（2 個 stale 測試 object 12 色 / pawai_cli health env）待清。
 - **Track B 導航 HITL（居家小空間，Foxglove 按鈕非語音）**：F7 解了（goto 0.3m→實走 0.27m `reached`，無 no_progress abort）；reactive_stop 安全停有效（0 撞 0 暴衝）；blocked-goal 撐 278s 不 timeout（stop-resume 有潛力）。**導航主力只用 2D RPLIDAR**（Go2 內建光達空轉、D435/相機未進 nav 迴路）。⭐ **誤擋根因**：`front_arc_deg=30`（±30° 寬錐）把右前角 off-path 家具誤判 danger（非 TF bug）→ **indoor-tight（±15-20° + danger 1.0 + 低速 0.2）修法已實機驗證**（zone clear、nav_paused false）。**orphaned-goal 為新 blocker**（goto client crash/SSH 斷 → single-goal server 留 active goal → 後續 goto 全拒）。`goto_named chair_front` 未成功（空間 + orphan）。
 - **導航判定**：降級為「**短距自走 + 遇障安全停 + indoor-tight 安全 profile**」可講；**不能講**走到椅子前 / 自由導航 / 動態繞障 / 視覺目標導航。完整實測 + nav backlog（6 票）見 `docs/navigation/research/2026-06-08-trackB-hitl-results.md`。
+
+### 2026-06-08 晚 — VIS-4 具名問候 + 視覺 HITL/研究（brain stack）
+
+- **VIS-4 具名問候 ✅ 完成（commit `f2a0df4`）**：實機驗證 TTS 講出「roy，歡迎回來。我看到你坐下來了。」。兩個 root cause 都修：① **enrollment 過期**（`roy/` 是舊 alice 圖、sim 0.18-0.24 判 unknown）→ re-enroll 30 張 + rebuild → **sim 0.73-0.81**、清掉 `_backup` 幽靈身份（face_db 剩 roy+grama）；② **距離 gate 是錯抽象**（D435 depth 抖）→ greet gate 從 ENGAGED 距離/dwell 改成 **人臉認對(identity_stable) + 最近 sitting + 20s/人 cooldown**，新 param `greet_require_sitting`/`greet_sitting_window_s`/`greet_cooldown_s`。interaction_executive **225/225**（Jetson install + WSL 兩環境）。⟹ **pose=sitting 成 greet 硬依賴**（明天要量 sitting 穩定度，不穩就 `greet_require_sitting=false`）。詳 CLAUDE.md「VIS-4 具名問候 gate」陷阱條。
+- **VIS-2 object runtime 切換 ✅ 實機驗證**：`ros2 param set class_whitelist` 不重啟生效——`[56]`→只 chair、家用7類→cup、`[-1]`→cup+**person**（person 只在全類出現＝白名單動態套用坐實）。
+- **VIS-7 後端確認**：gateway `/health` subs=10（face/object/gesture/pose/speech + brain conversation_trace 全訂）、Studio frontend `:3001` 連上（ws_clients=1）；正式截圖證據明天補。
+- **VIS-8 idle baseline**（13-window 全 stack、無人/物入框）：RAM 3.65/7.6GB、CPU ~80%(6核)、GPU 0-74% bursty、溫度 58.7°C、功耗 10.2W、MAXN_SUPER。under-load + per-stage latency 待測。
+- **夜間研究（2 份，明日養分）**：[`docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md`](../../../docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md)（object切換/VIS-3矩陣/VIS-8瓶頸/pose-gesture demo-safe/greet 後續 + open questions）、[`docs/pawai-brain/research/2026-06-08-supervision-vis3a-research.md`](../../../docs/pawai-brain/research/2026-06-08-supervision-vis3a-research.md)（Supervision 只當離線分析庫、VIS-3A harness Layer A+B 設計、PINTO 列 bonus）。
+- **最大缺口（明天）**：物體辨識矩陣（chair/laptop/cup × 距離 × 光線 × 角度，4/5 判定）尚未系統化收數據；sitting 可靠度未量。臨時 harness `obj_matrix_cap.py` 已就緒，正式 VIS-3A 進 `benchmarks/object_eval/`。
 
 ## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾
 
