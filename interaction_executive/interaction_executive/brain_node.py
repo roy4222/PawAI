@@ -271,6 +271,15 @@ class BrainNode(Node):
         self.declare_parameter("demo_video_silent_sit_along", False)
         self.declare_parameter("capability_gate_enabled", False)
         self.declare_parameter("baseline_snapshot_path", "")
+        # 2026-06-08 VIS-4 (Roy「不要距離限制，人臉+姿勢對就講+cooldown」):
+        # greet_known_person 原本 gate 在 attention ENGAGED（距離 ≤1.6m + dwell），
+        # 但 D435 depth 在 ~1.5-2m 太抖，逼使用者貼著鏡頭不動才觸發。改 gate 在
+        # 「known face stable + 最近 greet_sitting_window_s 秒內偵測到 sitting」，
+        # 跟台詞「我看到你坐下來了」一致；greet_cooldown_s 防止重複問候。
+        # greet_require_sitting=False → 只看人臉 stable(+cooldown)，不要求姿勢。
+        self.declare_parameter("greet_require_sitting", True)
+        self.declare_parameter("greet_sitting_window_s", 3.0)
+        self.declare_parameter("greet_cooldown_s", 20.0)
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -292,6 +301,9 @@ class BrainNode(Node):
         self._baseline_snapshot_path = str(
             self.get_parameter("baseline_snapshot_path").value or ""
         )
+        self.greet_require_sitting = bool(self.get_parameter("greet_require_sitting").value)
+        self.greet_sitting_window_s = float(self.get_parameter("greet_sitting_window_s").value)
+        self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
         self._capability_health_cache: dict[str, Any] | None = None
         self._apply_gesture_demo_modes()
 
@@ -1068,23 +1080,24 @@ class BrainNode(Node):
 
         self._state.unknown_face_first_seen = None
         # 5/8 [#F-confirm]: PENDING 期間不發 greet_known_person，避免蓋掉 confirm 流
-        # D-3: greet_known_person gates on ENGAGED (person stopped and dwelled).
-        # This fixes "路過比 OK 被打招呼" — person must be close + dwelling, not
-        # just walking past.
         if not stable or self._has_active_skill_or_sequence() \
                 or self._pending_confirm.state == ConfirmState.PENDING \
                 or self._world.snapshot().tts_playing:
             # 5/9 review: also block during TTS to avoid mid-sentence interrupt.
             return
-        # 5/9 review: greet_known_person is ENGAGED-only (NOT INTERACTING).
-        # When already INTERACTING (skill running / speech intent active),
-        # firing greet causes SAY interrupt. spec P2-1 originally said ENGAGED only.
-        if self._attention_state_snapshot() != AttentionState.ENGAGED:
-            return  # person just passing by, or already mid-interaction
-        # Issue 8: known-face stable + ENGAGED is real engagement → reset idle
+        # 2026-06-08 VIS-4 (Roy): drop the ENGAGED distance/dwell gate. D435 depth at
+        # ~1.5-2m is too noisy — a distance threshold forced the user to hold an exact
+        # spot and the greeting almost never fired. Replace with "known face stable +
+        # recently sitting" (matches the line「我看到你坐下來了」). greet_cooldown_s
+        # prevents repeating the greeting. greet_require_sitting=False → face-only.
+        if self.greet_require_sitting:
+            last_sit = self._state.last_sitting_seen_ts
+            if last_sit <= 0.0 or (time.time() - last_sit) > self.greet_sitting_window_s:
+                return  # not currently sitting → don't greet
+        # known face stable (+ sitting) is real engagement → reset idle clock
         self._touch_user_interaction()
         cooldown_key = f"greet_known_person:{identity}"
-        if self._in_cooldown(cooldown_key, 20.0):
+        if self._in_cooldown(cooldown_key, self.greet_cooldown_s):
             return
         self._mark_cooldown(cooldown_key)
         self._emit(

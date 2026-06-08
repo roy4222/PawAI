@@ -119,7 +119,7 @@ def _simulate_skill_done(brain, skill: str):
 # ---------------------------------------------------------------------------
 # Scenario 1: Roy 路過比 OK
 # Timeline:
-#   t=0   face stable → NOTICED (no greet — not ENGAGED)
+#   t=0   face stable while passing by (not sitting) → no greet
 #   t=0.5 thumbs_up → PendingConfirm (NOTICED allows gesture confirm)
 #   t=1.0 OK gesture → wiggle INTERACTING
 #   t=1.5 chair detected → state=INTERACTING ≠ ENGAGED → silenced
@@ -132,11 +132,11 @@ def test_scenario_passerby_no_greet_but_gesture_works(brain):
     _tick_am(brain, now=0.6, face=True, dist=2.0)
     assert brain._attention.state == AttentionState.NOTICED
 
-    # Known face stable event — should NOT greet (not ENGAGED)
+    # Known face stable event while passing by (not sitting) — should NOT greet
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     proposals = _drain(brain)
     greet_plans = [p for p in proposals if p["selected_skill"] == "greet_known_person"]
-    assert not greet_plans, "Should not greet when only NOTICED (person passing by)"
+    assert not greet_plans, "Should not greet a passer-by who is not sitting"
 
     # Thumbs_up gesture → should enter PendingConfirm (NOTICED allows gesture flow)
     brain._on_gesture(_msg({"gesture": "thumbs_up"}))
@@ -156,38 +156,53 @@ def test_scenario_passerby_no_greet_but_gesture_works(brain):
 
 
 # ---------------------------------------------------------------------------
-# Scenario 2: Roy stops to interact — dwell triggers ENGAGED → greet emits
+# Scenario 2: known face stable + recently sitting → greet emits
+# 2026-06-08 VIS-4 (Roy): greet no longer gates on ENGAGED distance/dwell — D435
+# depth was too noisy. New gate = recognized face + recent sitting + cooldown.
 # ---------------------------------------------------------------------------
 
-def test_scenario_person_stops_near_dog_gets_greet(brain):
-    """Person dwells close → ENGAGED → greet_known_person emits."""
-    # Reset attention
+def test_scenario_recognized_and_sitting_gets_greet(brain):
+    """Known face stable + recently sitting → greet_known_person emits (no distance gate)."""
     brain._attention.reset(now=0.0)
 
-    # Face appears (far away → NOTICED)
-    _tick_am(brain, now=0.0, face=True, dist=2.5)
-    _tick_am(brain, now=0.6, face=True, dist=2.5)
-    assert brain._attention.state == AttentionState.NOTICED
+    # Person is sitting → sets last_sitting_seen_ts (one event, no sit_along yet)
+    brain._on_pose(_msg({"pose": "sitting"}))
+    _drain(brain)
 
-    # Person moves close — dwell starts
-    _tick_am(brain, now=0.7, face=True, dist=1.2)
-
-    # Not long enough for ENGAGED
-    _tick_am(brain, now=1.5, face=True, dist=1.2)
-    assert brain._attention.state == AttentionState.NOTICED, \
-        "Should still be NOTICED (dwell 0.8s < 1.5s threshold)"
-
-    # Now dwell >= 1.5s → ENGAGED
-    _tick_am(brain, now=2.3, face=True, dist=1.2)
-    assert brain._attention.state == AttentionState.ENGAGED
-
-    # Send stable face event — now ENGAGED so greet should fire
+    # Known face stable event — recognized + sitting → greet should fire
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     proposals = _drain(brain)
     greet_plans = [p for p in proposals if p["selected_skill"] == "greet_known_person"]
-    assert greet_plans, "Should greet when ENGAGED (person stopped near dog)"
-    # greet_known_person uses text_template "歡迎回來，{name}" — plan carries the name arg
+    assert greet_plans, "Should greet when known face stable + recently sitting"
     assert greet_plans[0]["source"] == "rule:known_face"
+
+
+def test_scenario_recognized_but_not_sitting_no_greet(brain):
+    """Known face stable but never sitting → no greet (pose gate replaces distance gate)."""
+    brain._attention.reset(now=0.0)
+    # No pose=sitting event → last_sitting_seen_ts stays 0.0
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    proposals = _drain(brain)
+    greet_plans = [p for p in proposals if p["selected_skill"] == "greet_known_person"]
+    assert not greet_plans, "Should not greet when not sitting (greet_require_sitting gate)"
+
+
+def test_scenario_greet_cooldown_prevents_repeat(brain):
+    """Two recognitions within greet_cooldown_s → only the first greet fires."""
+    brain._attention.reset(now=0.0)
+
+    brain._on_pose(_msg({"pose": "sitting"}))
+    _drain(brain)
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    first = [p for p in _drain(brain) if p["selected_skill"] == "greet_known_person"]
+    assert first, "first greet should fire"
+
+    # Re-trigger immediately (well within the 20s cooldown)
+    brain._on_pose(_msg({"pose": "sitting"}))
+    _drain(brain)
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    second = [p for p in _drain(brain) if p["selected_skill"] == "greet_known_person"]
+    assert not second, "second greet within cooldown should be suppressed"
 
 
 # ---------------------------------------------------------------------------

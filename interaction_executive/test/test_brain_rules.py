@@ -161,12 +161,14 @@ def test_gesture_wave_acknowledges(brain):
 
 
 def test_known_face_greets_stable_identity(brain):
-    # D-3: greet_known_person now requires ENGAGED attention state.
-    _prime_attention_engaged(brain)
+    # 2026-06-08 VIS-4 (Roy): greet_known_person now requires known face stable +
+    # recently sitting (the ENGAGED distance/dwell gate was removed — D435 depth at
+    # ~1.5-2m was too noisy to gate on).
+    brain._on_pose(_msg({"pose": "sitting"}))
+    brain._captured_proposals.clear()
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "greet_known_person"
-    # 2026-05-23: greet TTS 從「歡迎回來，{name}」改成「嗨 {name}」(5/27 demo video mode)
     assert plan["steps"][0]["args"]["text"] == "alice，歡迎回來。我看到你坐下來了。"
 
 
