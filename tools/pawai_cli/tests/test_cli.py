@@ -1397,3 +1397,24 @@ def test_load_env_local_overrides_env(tmp_path, monkeypatch):
 
     import os
     assert os.environ["SHARED_KEY"] == "from-env-local"
+
+
+# ─── VIS-10-min: pawai face (list / enroll / rebuild / test) ──────────────
+
+
+def test_face_group_exists():
+    res = CliRunner().invoke(cli, ["face", "--help"])
+    assert res.exit_code == 0
+    for sub in ("list", "enroll", "rebuild", "test"):
+        assert sub in res.output
+
+
+def test_face_list_help():
+    res = CliRunner().invoke(cli, ["face", "list", "--help"])
+    assert res.exit_code == 0
+
+
+def test_face_enroll_requires_name():
+    # 缺 --person-name 應報錯（exit != 0）
+    res = CliRunner().invoke(cli, ["face", "enroll"])
+    assert res.exit_code != 0
