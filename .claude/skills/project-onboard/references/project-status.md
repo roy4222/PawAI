@@ -1,6 +1,12 @@
 # 專案進度快照
 
-> 最後更新：2026-05-12 night（**離線 fallback chain 實機驗證** + 5/12 brain-freeze-v2 / N3-N8 demo-host）
+> 最後更新：2026-06-08（Track A #135 merged + Track B 導航 HITL；前次 5/12 night brain-freeze-v2）
+
+## 2026-06-08 — Track A 視覺/Brain merged + Track B 導航 HITL
+
+- **Track A merged（PR #135）**：object 家用 7 類 whitelist `[39,41,45,56,63,67,73]` + runtime `add_on_set_parameters_callback`（免重啟切類別）、BRAIN-1 object dedup 30→60s、VIS-5 thumbs_up demo 不引出 wiggle、VIS-10-min `pawai face list/enroll/rebuild/test`。issue #136（2 個 stale 測試 object 12 色 / pawai_cli health env）待清。
+- **Track B 導航 HITL（居家小空間，Foxglove 按鈕非語音）**：F7 解了（goto 0.3m→實走 0.27m `reached`，無 no_progress abort）；reactive_stop 安全停有效（0 撞 0 暴衝）；blocked-goal 撐 278s 不 timeout（stop-resume 有潛力）。**導航主力只用 2D RPLIDAR**（Go2 內建光達空轉、D435/相機未進 nav 迴路）。⭐ **誤擋根因**：`front_arc_deg=30`（±30° 寬錐）把右前角 off-path 家具誤判 danger（非 TF bug）→ **indoor-tight（±15-20° + danger 1.0 + 低速 0.2）修法已實機驗證**（zone clear、nav_paused false）。**orphaned-goal 為新 blocker**（goto client crash/SSH 斷 → single-goal server 留 active goal → 後續 goto 全拒）。`goto_named chair_front` 未成功（空間 + orphan）。
+- **導航判定**：降級為「**短距自走 + 遇障安全停 + indoor-tight 安全 profile**」可講；**不能講**走到椅子前 / 自由導航 / 動態繞障 / 視覺目標導航。完整實測 + nav backlog（6 票）見 `docs/navigation/research/2026-06-08-trackB-hitl-results.md`。
 
 ## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾
 

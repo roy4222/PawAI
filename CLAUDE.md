@@ -485,6 +485,10 @@ Go2 sport mode 對 `Move (api_id=1008)` 有 `MIN_X = 0.50 m/s` 門檻 — `Move 
 
 `reactive_stop_node` 預設 `danger<0.6m`、`slow<1.0m` 是 LiDAR 視距，**未考慮 Go2 機身佔用** — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞。另外 `safety_only=true` 在 clear zone 完全不發訊號 → mux 在 obstacle 移開瞬間直接切「停 → 全速」，沒漸進減速。修法在 `docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4` B5 列。任何 nav motion 測試前確認此項已修。
 
+### reactive_stop 居家窄場「前面明明空卻被擋」+ orphaned-goal（6/8 Track B HITL）
+
+實機診斷（真實 `/scan_rplidar`）：正前方 ±15° 淨空 1.56m，卻被報 danger，根因是 `front_arc_deg=30`（±30° 寬錐）把**右前角 -30° off-path 家具**算進前方危險。**非 TF bug**（`front_offset_rad=π` 補 LiDAR 反裝 yaw=π 是對的）。**修法已實機驗證**：重啟 reactive_stop 收窄 `front_arc_deg:=15~20` + `danger_distance_m:=1.0` + 低速（`slow_speed:=0.2 normal_speed:=0.3`）→ zone clear/slow、`nav_paused=false`。⚠️ 窄錐**必須綁低速 ≤0.2 m/s**（側向覆蓋變少靠低速補反應時間）。注意 `front_arc_deg`/`danger_distance_m` 只在 `__init__` 讀一次，`ros2 param set` 改了無效 → **必須 kill 重啟帶參數**（runtime callback 只接 `enable_nav_pause`/`safety_only`/`mode`）。另一坑：goto client crash / SSH 斷線後 `nav_action_server`（single-goal）會留 **orphaned active goal** → 後續 goto 全被 `rejecting goto_* — another goto still active` 拒，需重啟 navcap launch 清除。完整實測 + backlog 見 `docs/navigation/research/2026-06-08-trackB-hitl-results.md`。
+
 ### 多 driver instance 殘留
 
 `ros2 launch` 啟動後，`killall python3` 只殺 launch parent，C++ 子 process（robot_state_publisher、pointcloud、joy 等）會殘留。下次 launch 會再生一組，導致多 instance 搶 WebRTC 連線和 topic。**必須用 `pkill -9 go2_driver; pkill -9 robot_state; pkill -9 pointcloud; pkill -9 joy_node; pkill -9 teleop; pkill -9 twist_mux` 逐一清除。**
