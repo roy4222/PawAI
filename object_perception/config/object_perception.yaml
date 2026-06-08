@@ -13,10 +13,11 @@ object_perception_node:
     tick_period: 0.067
     publish_fps: 8.0
     class_cooldown_sec: 5.0
-    # 5/27 demo video mode: 只認 cup (COCO #41)
-    # YAML parser pitfall: [41] 會被推成 BYTE_ARRAY (CLAUDE.md 警告)
-    # 加 dummy 999 (不存在 COCO class) 強制推成 INTEGER_ARRAY，999 被 filter 排除
-    # 5/28+ 視需求擴回 P0 subset [0, 16, 39, 41, 56, 60]
-    class_whitelist: [41, 999]
+    # 2026-06-08 VIS-1: 家用 7 類（Roy grill 鎖定）
+    # bottle=39 cup=41 bowl=45 chair=56 laptop=63 cell phone=67 book=73
+    # 皆 < 80、>1 個元素 → rclpy 正確推 INTEGER_ARRAY，不需 dummy 999
+    # 不含 person(0)：BRAIN-1「物體不講 person」，人由 face 路徑處理
+    # 現場容錯切換見 VIS-2（runtime callback）；全 80 類設 [-1]
+    class_whitelist: [39, 41, 45, 56, 63, 67, 73]
     # Original whitelist suggestion (P0 subset): [0, 16, 39, 41, 56, 60]
     # = [person, dog, bottle, cup, chair, dining_table]
