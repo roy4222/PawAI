@@ -260,6 +260,10 @@ class BrainNode(Node):
         # 預設 False 維持現有「peace 要 OK 二確認」安全行為
         # 設 true → peace 進入 _GESTURE_DIRECT={"peace":"stretch"}，一步觸發、不需 OK
         self.declare_parameter("peace_direct_stretch", False)
+        # 2026-06-08 VIS-5 demo gesture mode (Roy「thumbs_up 不要引出 wiggle」):
+        # True → thumbs_up 移出 _GESTURE_CONFIRM（不問「比 OK 我就做 wiggle」），
+        # 改發一句輕量正向 say_canned；不進 PendingConfirm、不一步觸發 wiggle。
+        self.declare_parameter("thumbs_up_demo_ack", False)
         # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
         # 設 true → 觸發複合句「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along TTS
         # 預設 False 維持現有 object_remark + sit_along 獨立行為
@@ -279,6 +283,7 @@ class BrainNode(Node):
         self.idle_max_per_hour = int(self.get_parameter("idle_max_per_hour").value)
         self.gesture_direct_disabled = bool(self.get_parameter("gesture_direct_disabled").value)
         self.peace_direct_stretch = bool(self.get_parameter("peace_direct_stretch").value)
+        self.thumbs_up_demo_ack = bool(self.get_parameter("thumbs_up_demo_ack").value)
         self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
         self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
         self._capability_gate_enabled = bool(
@@ -288,6 +293,16 @@ class BrainNode(Node):
             self.get_parameter("baseline_snapshot_path").value or ""
         )
         self._capability_health_cache: dict[str, Any] | None = None
+        self._apply_gesture_demo_modes()
+
+    def _apply_gesture_demo_modes(self) -> None:
+        """Apply demo-mode gesture mapping mutations from declared flags.
+
+        Idempotent instance-level shadows of the _GESTURE_DIRECT / _GESTURE_CONFIRM
+        class attributes — never touch other BrainNode instances or test fixtures.
+        Extracted from __init__ so unit tests can build a node and re-run the
+        mutation through the real production path (VIS-5).
+        """
         if self.gesture_direct_disabled:
             # Instance shadow class attribute — 不影響其他 BrainNode instances 或 test fixtures
             self._GESTURE_DIRECT = {}
@@ -297,6 +312,12 @@ class BrainNode(Node):
             self._GESTURE_DIRECT = {**self._GESTURE_DIRECT, "peace": "stretch"}
             self._GESTURE_CONFIRM = {
                 k: v for k, v in self._GESTURE_CONFIRM.items() if k != "peace"
+            }
+        if self.thumbs_up_demo_ack:
+            # 2026-06-08 VIS-5: thumbs_up 不走 confirm（不問 OK）、也不一步觸發 wiggle，
+            # 由 _on_gesture 的 demo-ack 分支發輕量正向回應。
+            self._GESTURE_CONFIRM = {
+                k: v for k, v in self._GESTURE_CONFIRM.items() if k != "thumbs_up"
             }
 
     def _emit(self, plan: SkillPlan) -> None:
@@ -744,6 +765,18 @@ class BrainNode(Node):
                     detail=f"{gesture}:{reason_str}",
                 )
                 return
+
+        if self.thumbs_up_demo_ack and gesture == "thumbs_up":
+            # VIS-5 demo: 簡單正向回應，不引出 wiggle confirmation
+            self._emit(
+                build_plan(
+                    "say_canned",
+                    args={"text": "[happy] 收到，謝謝你！"},
+                    source="rule:gesture",
+                    reason="gesture:thumbs_up:demo_ack",
+                )
+            )
+            return
 
         if gesture in self._GESTURE_DIRECT:
             skill = self._GESTURE_DIRECT[gesture]
