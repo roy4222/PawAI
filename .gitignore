@@ -28,6 +28,7 @@ coverage.xml
 ## Data files (should not be in repo)
 *.ply
 tts_cache/
+.tmp/
 
 ## Claude Code
 .claude/test_results/*.csv
