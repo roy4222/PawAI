@@ -135,6 +135,17 @@ def analyze_bbox_color(image_bgr, x1: int, y1: int, x2: int, y2: int) -> tuple[s
     return (peak, round(float(ratio), 3))
 
 
+def _parse_whitelist(raw) -> set:
+    """Parse class_whitelist param value → allowed COCO class id set.
+
+    Filters out-of-range (keeps 0..79; drops dummy ≥80 e.g. 999 and -1
+    sentinel). Empty result → all 80 classes (sentinel/empty = 全開).
+    Shared by __init__ and the runtime set_parameters callback (VIS-2).
+    """
+    wl_clean = [int(i) for i in (raw or []) if 0 <= int(i) <= 79]
+    return set(wl_clean) if wl_clean else set(COCO_CLASSES.keys())
+
+
 class ObjectPerceptionNode(Node):
     def __init__(self):
         super().__init__("object_perception_node")
@@ -171,10 +182,8 @@ class ObjectPerceptionNode(Node):
         self.class_cooldown = float(self.get_parameter("class_cooldown_sec").value)
 
         wl = list(self.get_parameter("class_whitelist").value or [])
-        # 2026-05-23: -1 sentinel = all classes (避開 empty [] rclpy type 推論問題)
-        # 並過濾 yaml dummy >=80 (e.g. 999) 不在 COCO 集合
-        wl_clean = [int(i) for i in wl if 0 <= int(i) <= 79]
-        self.allowed_classes: set = set(wl_clean) if wl_clean else set(COCO_CLASSES.keys())
+        # 2026-06-08 VIS-2: 解析邏輯抽到 _parse_whitelist，與 runtime callback 共用
+        self.allowed_classes: set = _parse_whitelist(wl)
 
         self.publish_period = 1.0 / max(1.0, publish_fps)
         self.last_publish_ts = 0.0
@@ -231,6 +240,22 @@ class ObjectPerceptionNode(Node):
             f"conf={self.conf_thresh}, tick={tick_period:.3f}s, "
             f"publish_fps={publish_fps}, {wl_desc}"
         )
+
+        # 2026-06-08 VIS-2: runtime 切換 whitelist 免重啟（現場某物效果差時切備援）
+        self.add_on_set_parameters_callback(self._on_param_changed)
+
+    def _on_param_changed(self, params):
+        """VIS-2: runtime class_whitelist 變更即時生效（detect 迴圈讀 self.allowed_classes）。"""
+        from rcl_interfaces.msg import SetParametersResult
+
+        for p in params:
+            if p.name == "class_whitelist":
+                self.allowed_classes = _parse_whitelist(list(p.value or []))
+                self.get_logger().info(
+                    f"class_whitelist updated → {len(self.allowed_classes)} classes "
+                    f"{sorted(self.allowed_classes) if len(self.allowed_classes) < 80 else '(all 80)'}"
+                )
+        return SetParametersResult(successful=True)
 
     # ------------------------------------------------------------------
     # ONNX init
