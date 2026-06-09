@@ -17,11 +17,11 @@ brain_node:
     # 5/28+ 改回 false 即可 revert
     peace_direct_stretch: true
     # 2026-06-08 VIS-5: thumbs_up demo mode — 簡單正向回應，不引出 wiggle 確認
-    thumbs_up_demo_ack: true
+    thumbs_up_demo_ack: false
     # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
     # 觸發「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along auto-TTS
     # 5/28+ 改回 false 即可 revert
-    demo_video_cup_compound: true
+    demo_video_cup_compound: false
     demo_video_silent_sit_along: true
 
 interaction_executive_node:

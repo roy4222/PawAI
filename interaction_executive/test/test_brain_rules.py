@@ -413,7 +413,7 @@ def test_object_detected_triggers_object_remark(brain):
     }))
     plan = _latest(brain)
     assert plan["selected_skill"] == "object_remark"
-    assert plan["steps"][0]["args"]["text"] == "看到紅色的杯子了，你要喝水嗎？"
+    assert plan["steps"][0]["args"]["text"] == "看到紅色的杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
 
 
 def test_object_legacy_flat_payload_still_works(brain):
@@ -433,7 +433,7 @@ def test_object_unknown_color_drops_color_preamble(brain):
     _prime_attention_engaged(brain)
     brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
     plan = _latest(brain)
-    assert plan["steps"][0]["args"]["text"] == "看到杯子了，你要喝水嗎？"
+    assert plan["steps"][0]["args"]["text"] == "看到杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
 
 
 def test_object_without_label_ignored(brain):
@@ -871,3 +871,68 @@ def test_thumbs_up_default_still_confirm():
         for timer in list(node._chat_timeouts.values()):
             node.destroy_timer(timer)
         node.destroy_node()
+
+
+# ---------------------------------------------------------------------------
+# Task C (2026-06-09 demo): cup demo wording + compound off → separate remark
+# ---------------------------------------------------------------------------
+
+
+def test_cup_tts_has_weather_reminder():
+    """build_object_tts cup suffix 加上腳本天氣補水句。"""
+    from interaction_executive.brain_node import build_object_tts
+
+    assert (
+        build_object_tts("cup", "Unknown")
+        == "看到杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
+    )
+
+
+def test_compound_off_uses_separate_cup_remark(brain):
+    """demo_video_cup_compound=False → 即使 Roy+sitting context 都齊，
+    cup 物體事件也走分開的簡單 object_remark（含「你要喝水嗎」），
+    不吐合併句「我看到 Roy 坐著拿著杯子」。"""
+    brain.demo_video_cup_compound = False
+    # object_remark emit gate 需要 ENGAGED + 無 active skill + 非 tts_playing
+    _prime_attention_engaged(brain)
+    # 故意把 compound 觸發條件全鋪好（Roy stable face + 最近 sitting），
+    # 證明 compound off 時仍不走複合句。
+    now = time.time()
+    with brain._lock:
+        brain._last_stable_identity_name = "Roy"
+        brain._last_stable_identity_ts = now
+        brain._state.last_sitting_seen_ts = now
+    brain._on_object(_msg({
+        "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10], "color": "Unknown"}],
+    }))
+    texts = [p["steps"][0]["args"].get("text", "") for p in brain._captured_proposals]
+    assert texts, "expected an object_remark plan to be emitted"
+    assert all("坐著拿著杯子" not in t for t in texts)
+    assert any("你要喝水嗎" in t for t in texts)
+    # 走的是分開的 object_remark，不是 compound say_canned
+    assert brain._captured_proposals[-1]["selected_skill"] == "object_remark"
+
+
+# ---------------------------------------------------------------------------
+# Task B (2026-06-09 demo): two-step thumbs_up WeGo prompt + gesture_enabled gate
+# ---------------------------------------------------------------------------
+
+
+def test_thumbs_up_two_step_wego_prompt(brain):
+    """thumbs_up_demo_ack=False → 走兩步確認；prompt 用 WeGo 特例台詞，
+    不再吐英文 skill 名「比 OK 我就做 wiggle」。"""
+    brain.thumbs_up_demo_ack = False
+    brain.gesture_enabled = True
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    texts = [p["steps"][0]["args"].get("text", "") for p in brain._captured_proposals]
+    assert any("你要我 WeGo 一下嗎" in t for t in texts)
+    assert all("比 OK 我就做 wiggle" not in t for t in texts)
+    # 仍進 PendingConfirm 等 OK（兩步確認）
+    assert brain._pending_confirm.pending_skill == "wiggle"
+
+
+def test_gesture_enabled_gate_suppresses(brain):
+    """gesture_enabled=False → thumbs_up 事件完全不發 plan。"""
+    brain.gesture_enabled = False
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    assert brain._captured_proposals == []

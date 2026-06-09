@@ -59,7 +59,7 @@ OBJECT_COLOR_ZH: dict[str, str] = {
 # user feedback). Never replace the preamble; user wants both colour
 # announcement and the playful phrase.
 OBJECT_TTS_SPECIAL_SUFFIX: dict[str, str] = {
-    "cup": "，你要喝水嗎？",
+    "cup": "，你要喝水嗎？今天天氣很熱，要記得補充水分。",
     "bottle": "，喝點水吧",
     "book": "，在看書啊",
 }
@@ -95,9 +95,9 @@ def build_object_tts(class_name: str, color: str | None) -> str | None:
     PawAI TTS whitelist (UI still shows it; PawAI just stays quiet).
 
     Examples:
-        build_object_tts("cup", "red")     == "看到紅色的杯子了，你要喝水嗎？"
+        build_object_tts("cup", "red")     == "看到紅色的杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
         build_object_tts("laptop", "blue") == "看到藍色的筆電了"
-        build_object_tts("cup", "Unknown") == "看到杯子了，你要喝水嗎？"
+        build_object_tts("cup", "Unknown") == "看到杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
         build_object_tts("frisbee", "red") is None
     """
     if not class_name or class_name not in OBJECT_CLASS_ZH:
@@ -235,10 +235,23 @@ class BrainNode(Node):
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
         self._confirm_tick_timer = self.create_timer(0.1, self._tick_pending_confirm)  # 10Hz
         self._attention_tick_timer = self.create_timer(0.1, self._tick_attention)  # 10Hz
+        # 2026-06-09 demo: runtime param callback（目前只處理 gesture_enabled，
+        # 操作員 `ros2 param set /brain_node gesture_enabled false/true` 即時生效）。
+        self.add_on_set_parameters_callback(self._on_set_params)
         self.get_logger().info(
             f"brain_node ready skills={len(SKILL_REGISTRY)} "
             f"chat_wait={self.chat_wait_ms}ms dedup={self.dedup_window_s}s"
         )
+
+    def _on_set_params(self, params):
+        """Runtime ros2-param callback. 目前僅支援 gesture_enabled 即時切換。"""
+        from rcl_interfaces.msg import SetParametersResult
+
+        for p in params:
+            if p.name == "gesture_enabled":
+                self.gesture_enabled = bool(p.value)
+                self.get_logger().info(f"gesture_enabled set to {self.gesture_enabled}")
+        return SetParametersResult(successful=True)
 
     def _declare_params(self) -> None:
         self.declare_parameter("chat_wait_ms", 1500)
@@ -264,6 +277,10 @@ class BrainNode(Node):
         # True → thumbs_up 移出 _GESTURE_CONFIRM（不問「比 OK 我就做 wiggle」），
         # 改發一句輕量正向 say_canned；不進 PendingConfirm、不一步觸發 wiggle。
         self.declare_parameter("thumbs_up_demo_ack", False)
+        # 2026-06-09 demo: gesture_enabled runtime gate（操作員可在錄影中前段關手勢、
+        # take 開）。True=正常處理手勢；False=_on_gesture 直接 early-return、完全不發 plan。
+        # 走 add_on_set_parameters_callback 支援 `ros2 param set` runtime 切換。
+        self.declare_parameter("gesture_enabled", True)
         # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
         # 設 true → 觸發複合句「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along TTS
         # 預設 False 維持現有 object_remark + sit_along 獨立行為
@@ -293,6 +310,7 @@ class BrainNode(Node):
         self.gesture_direct_disabled = bool(self.get_parameter("gesture_direct_disabled").value)
         self.peace_direct_stretch = bool(self.get_parameter("peace_direct_stretch").value)
         self.thumbs_up_demo_ack = bool(self.get_parameter("thumbs_up_demo_ack").value)
+        self.gesture_enabled = bool(self.get_parameter("gesture_enabled").value)
         self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
         self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
         self._capability_gate_enabled = bool(
@@ -726,6 +744,10 @@ class BrainNode(Node):
         if not gesture:
             return
 
+        # 2026-06-09 demo: runtime gate — 操作員關閉時手勢完全不發 plan（連 trace 也不發）。
+        if not self.gesture_enabled:
+            return
+
         # Issue 8: gesture is intentional user signal → reset idle clock
         self._touch_user_interaction()
 
@@ -807,10 +829,17 @@ class BrainNode(Node):
             self._pending_confirm.request_confirm(skill, {}, time.time())
             self.get_logger().info(f"PendingConfirm requested skill={skill} via gesture={gesture}")
             # Voice hint asking for OK (uses say_canned, has audio tag stripped).
+            # 2026-06-09 demo: thumbs_up→wiggle 改成口語化 WeGo 台詞（demo 錄影旁白用），
+            # 其餘手勢維持泛用句「比 OK 我就做 {skill}」。
+            confirm_text = (
+                "[curious] 你要我 WeGo 一下嗎？比 OK 我就開始。"
+                if gesture == "thumbs_up"
+                else f"[curious] 比 OK 我就做 {skill}"
+            )
             self._emit(
                 build_plan(
                     "say_canned",
-                    args={"text": f"[curious] 比 OK 我就做 {skill}"},
+                    args={"text": confirm_text},
                     source="rule:confirm_request",
                     reason=f"awaiting_ok:{skill}",
                 )
