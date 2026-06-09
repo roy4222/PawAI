@@ -43,7 +43,7 @@ ros2 topic echo /event/object_detected --once     # 放個物體在鏡頭前，�
 ros2 param get /object_perception_node confidence_threshold
 ```
 Expected: debug_image ~6-8 Hz、event 有資料、`confidence_threshold` = **0.35**。
-> ⚠️ 若 conf 回 `0.5`（launch 預設）→ cup 更易 FAIL → 先 `ros2 param set /object_perception_node confidence_threshold 0.35`（runtime callback `_on_param_changed` 有支援，line 247）再測。
+> ⚠️ **`confidence_threshold` 不是 runtime param**：`_on_param_changed`（line 247-258）**只處理 `class_whitelist`**，detect 迴圈讀 init 時快取的 `self.conf_thresh`（line 178）。`ros2 param set confidence_threshold 0.35` 會**回 success 但實際無效 → 數據作廢**。→ 若 `confidence_threshold` 回 `0.5`：**必須重啟 object_perception_node 讓 yaml/launch 的 0.35 生效**（**不要** param set）。`class_whitelist "[41]"` runtime set **可以**用（callback 有處理）。
 
 **Acceptance（0）：** object debug_image 有畫面、`/event/object_detected` 有事件、conf=0.35。
 
