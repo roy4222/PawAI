@@ -354,7 +354,12 @@ class ObjectPerceptionNode(Node):
 
         # --- Preprocess ---
         canvas, scale, pad_left, pad_top = self.letterbox(image, self.input_size)
-        blob = canvas.astype(np.float32) / 255.0
+        # YOLO26 expects RGB. Camera frames are decoded BGR (_cb_color, desired_encoding=bgr8)
+        # so cv2 draw ops + the HSV colour analysis (cv2.COLOR_BGR2HSV) stay correct. Convert
+        # ONLY the inference blob to RGB — feeding BGR swaps R/B and depresses confidence on
+        # colour-dependent classes (cup/bottle). Do NOT touch self.color (would break HSV colour).
+        rgb = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+        blob = rgb.astype(np.float32) / 255.0
         blob = blob.transpose(2, 0, 1)[np.newaxis, ...]  # (1,3,640,640)
 
         # --- Inference ---

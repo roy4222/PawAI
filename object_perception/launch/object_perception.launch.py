@@ -18,7 +18,11 @@ def generate_launch_description():
         DeclareLaunchArgument("config_file", default_value=default_config),
         DeclareLaunchArgument("model_path",
                               default_value="/home/jetson/models/yolo26n.onnx"),
-        DeclareLaunchArgument("confidence_threshold", default_value="0.5"),
+        # Default matches config/object_perception.yaml (0.35). This launch arg is
+        # ordered AFTER config_file in the Node parameters list below, so it OVERRIDES
+        # the yaml value — a 0.5 default silently shadowed yaml's 0.35 and dropped
+        # low-conf classes (cup/bottle). Keep in sync with the yaml.
+        DeclareLaunchArgument("confidence_threshold", default_value="0.35"),
         DeclareLaunchArgument("publish_fps", default_value="8.0"),
         DeclareLaunchArgument("tick_period", default_value="0.067"),
         Node(
