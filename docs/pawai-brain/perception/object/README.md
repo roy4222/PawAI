@@ -166,7 +166,7 @@ Saturation 過低或 ratio < 0.25 → 不寫 `color` / `color_confidence`（前�
 ### 觸發條件
 
 ```
-/event/object_detected: { class_name: "cup", color: "red", confidence: ≥0.5 }
+/event/object_detected: { class_name: "cup", color: "red", confidence: ≥0.35 }  # 6/9 b1f5058: launch 預設 0.5→0.35（原 0.5 靜默蓋 yaml 害近距 cup 不出）
     ↓
 brain_node 規則 `object_remark` 命中（class ∈ {cup, bottle, ...} + color 非空）
     ├─ class_name == "person" → return None（5/7 night demo silence，避開 face/stranger 路徑衝突；Studio chip 仍可見）

@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-06-09（6/9 nav HITL：indoor-tight 誤擋修正 + safe-stop 實證、orphan/stop-resume 降級、5 新工具 commit `a38ca96`；下午轉 vision 矩陣）
+**最後更新**：2026-06-09 晚（早:nav HITL + 5 工具 `a38ca96`；晚:demo-recording code 上線 `b1f5058`/`932b74e`/`b2d6500`（object 0.35+BGR / brain demo 行為 / studio nav 面板）+ brain/vision HITL 定位 → 真兇是 stranger_alert 霸佔）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。⚠️ 供電不穩：6/7 night session 中 Jetson 掉電重開 **2 次**。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
 
 ---
@@ -25,8 +25,21 @@
 ### 4. P2 backlog（今天不做）
 - D435 fusion（先 shadow test 不動狗 → Nav2 costmap → 靜障繞）、Reactive Patrol v0、DimOS 研究、orphan client signal fix、danger 1.1-1.2m tuning。
 
-### 待辦（6/9 下午，vision Phase 2）
-- 清 nav stack → 起 brain/vision → **object 矩陣 chair/laptop/cup × 0.7/1.0/1.5（最大缺口，定主秀物體）** → cup 專項 → sitting/greet → thumbs_up → Studio evidence → safety refusal → under-load。順序見 plan Phase 2。⚠️ object event 5s cooldown：每 trial 後要等。
+### 待辦（6/9 下午，vision Phase 2）→ 晚已執行（見下 §6）
+- 清 nav stack → 起 brain/vision → object 矩陣 → cup → sitting/greet → thumbs_up → Studio evidence → safety。⚠️ object event 5s cooldown。
+
+### 6. 6/9 晚：demo-recording code 上線 + brain/vision HITL 定位（`b1f5058` / `932b74e` / `b2d6500`）
+**Code shipped**（已 deploy Jetson + colcon build，demo stack 跑過）：
+- **object `b1f5058`**：launch `confidence_threshold` 預設 0.5→**0.35**（原 0.5 靜默蓋 yaml 害 cup 不出）；推論 blob **BGR→RGB**（YOLO 吃 RGB；HSV 顏色仍用 BGR）。cup @0.7m 5/5 conf 0.42-0.64。
+- **brain `932b74e`**：cup 台詞加天氣句、greet/cup **分開觸發**（`demo_video_cup_compound=false`）、thumbs_up **兩步 WeGo**（`thumbs_up_demo_ack=false`）、新 `gesture_enabled` runtime gate（param callback，可 `ros2 param set` 即時關手勢）。
+- **studio `b2d6500`**（Task A）：nav map 面板 — gateway 訂 `/amcl_pose`(**latched TRANSIENT_LOCAL**)+`/state/reactive_stop/status`+`/state/nav/paused` 轉 `source=nav` envelope；前端 `nav-map-canvas.tsx`（v8 map PNG+pose 三角形+固定 goal+直線+chip，Canvas2D 不引 ros3djs）。**未上機驗真實 pose**（需 nav stack）。
+- 施工圖：[`2026-06-09-demo-recording-impl.md`](../docs/superpowers/plans/2026-06-09-demo-recording-impl.md)（3 task）、[`2026-06-09-studio-nav-panel-buildspec.md`](../docs/superpowers/plans/2026-06-09-studio-nav-panel-buildspec.md)、brain 設計深挖 [`2026-06-09-pawai-brain-design-deepdive.md`](../docs/superpowers/plans/2026-06-09-pawai-brain-design-deepdive.md)。
+
+**HITL 定位（晚，0 build，3 test）**：
+- ✅ **cup/object 沒壞**（偵測 0.45-0.64、runtime log 有 `object:orangecup` 台詞）；✅ **face 沒壞**（framing 對時 roy sim 0.70-0.78 鐵穩；face_count=0 是 Go2 D435 太低 + 背景第二張臉）。
+- ❌ **真兇 = `stranger_alert` 霸佔 brain**（face 幻覺/背景臉餵爆 → active plan 卡 cup+greet 的 `not active_skill` gate）→ **拔掉它一刀解 cup+greet**。
+- ❌ **sitting/pose 壞**（`/event/pose_detected` 全空）；gesture 預設開著是另一污染源（thumbs_up recognizer 無信心門檻誤觸）。
+- **明天修法**（demo-blocking，見 brain 深挖 plan §3 + `project_demo_flow_0609` memory）：拔 stranger_alert → gesture 預設關 + Studio On/Off toggle → `greet_require_sitting=false`+台詞去坐姿 → pose 放寬 sitting（只留 sit/stand）→ gesture confidence 門檻 + peace → object 鎖 1m 內。
 
 ---
 

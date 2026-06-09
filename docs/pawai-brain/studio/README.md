@@ -91,13 +91,13 @@ MOCK_OPENROUTER=1 bash pawai-studio/start-live.sh --mock
 ```
 使用者操作（Chat / 技能按鈕 / 面板）
     ↓
-Studio Frontend (Next.js React) ← 5 panel 即時顯示 + Live View 三欄影像
+Studio Frontend (Next.js React) ← 5 panel + nav map 面板（6/9 Task A: map v8+pose 三角形+固定 goal+直線，Canvas2D，display-only 不宣稱自走/避障）+ Live View 三欄影像
     ↓ WebSocket /ws/events（JSON 事件流）
     ↓ WebSocket /ws/video/{source}（JPEG binary 影像流）
     ↓ WebSocket /ws/text + /ws/speech（瀏覽器→ROS2）
 Studio Gateway (FastAPI + rclpy, Jetson:8080)
-    ↓ rclpy subscribe 5 event topics + 3 Image topics + publish speech intent
-ROS2 Topics（face/speech/gesture/pose/object + 3 debug_image）
+    ↓ rclpy subscribe 5 event topics + 3 Image topics + 3 nav state topics（6/9 Task A，latched）+ publish speech intent
+ROS2 Topics（face/speech/gesture/pose/object + 3 debug_image + nav: /amcl_pose[latched TRANSIENT_LOCAL] · /state/reactive_stop/status · /state/nav/paused）
 ```
 
 ## 主畫面架構（5/4 chat-first redesign）

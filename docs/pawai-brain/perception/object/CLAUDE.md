@@ -56,6 +56,15 @@
    - 修法：list 內塞一個 ≥ 256 的 dummy 值（如 `[41, 999]`）強制 INTEGER_ARRAY；node 啟動 filter `>= 80` 丟掉
    - 不要把 dummy 寫成 999 以外的值 — 過濾邏輯 hard-coded `< 80`（COCO class count），用 999 是慣例
 
+8. **推論 blob 必須是 RGB，相機幀是 BGR**（2026-06-09 commit `b1f5058`）
+   - `_cb_color` 用 `desired_encoding="bgr8"` 解碼 → letterbox canvas 是 BGR。直接丟進 YOLO = 通道反了，**顏色相關類別（cup/bottle）信心被壓低**（chair 之類顏色不敏感的影響小，所以容易漏看）。
+   - 修法：**只把推論 blob `cv2.cvtColor(canvas, BGR→RGB)`**，不要動 `self.color`（HSV 顏色分析 `cv2.COLOR_BGR2HSV` 仍靠 BGR）。
+   - 實機:此修正是正確性改善;但對「遠距/小物 recall」幫助有限（cup 1m 不穩主因是 nano recall + framing，非通道）。
+
+9. **launch `confidence_threshold` 預設曾是 0.5、靜默蓋過 yaml 的 0.35**（2026-06-09 `b1f5058` 已修為 0.35）
+   - launch arg 排在 `config_file` 之後 → override yaml。0.5 下近距 cup（conf 0.42-0.64）常不出 event。
+   - 已改 launch 預設 0.35。**`confidence_threshold` 不是 runtime param**（`_on_param_changed` 只認 `class_whitelist`）→ 要改門檻必須 launch 帶 `-p` 重啟 node，`ros2 param set` 無效。
+
 ## 改之前先看
 
 - `docs/pawai-brain/perception/object/README.md`（模組現況）
