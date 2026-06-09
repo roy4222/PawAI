@@ -1,7 +1,32 @@
 # 專案狀態
 
-**最後更新**：2026-06-08（6/7 night HITL：nav 短距自走 work + object 像素限制活證 + nav/object deep research；無 code 變更）
+**最後更新**：2026-06-09（6/9 nav HITL：indoor-tight 誤擋修正 + safe-stop 實證、orphan/stop-resume 降級、5 新工具 commit `a38ca96`；下午轉 vision 矩陣）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。⚠️ 供電不穩：6/7 night session 中 Jetson 掉電重開 **2 次**。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/9：nav HITL 實機 + WSL 工具上線（commit `a38ca96`）+ 下午轉 vision
+
+**當日主軸**：把 6/9 早上寫的 nav 工具（orphan fix / indoor-tight profile / lidar sector / object matrix harness）上 Jetson 跑 HITL，誠實鎖定 nav demo 台詞。完整 HITL Log + 台詞見 [`docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md`](../docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md)；執行研究報告 [`docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md`](../docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md)。
+
+### 1. WSL 工具上線（commit `a38ca96`，9 檔，pre-commit 綠）
+- `send_relative_goal.py` cancel-on-interrupt + guarded shutdown；`nav_action_server` 加 `goto_max_duration_s=120` orphan safety net；`start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`；新 `scripts/lidar_front_sector.py`（±15/20/30° 扇區 debug）；新 `scripts/obj_matrix_cap.py` + `benchmarks/core/object_matrix.py`（object 矩陣 per-cell PASS/DEGRADED/FAIL CSV，11 tests）。
+
+### 2. nav HITL 結果（5 項，誠實落地）
+- **indoor-tight 誤擋修正 ✅**：open_space ±30° 把 +22.5°/0.97m 側前家具誤判 danger；切 ±18° → front_min 1.22m、zone slow → 誤擋解除（感測層證實，非硬體壞）。
+- **safe-stop ✅ HARDWARE_PROVEN**：indoor_tight 下 goto 0.5m 走 → 正前障礙 danger 停 @0.78m、不撞不暴衝。⚠️ margin 薄（機鼻 ~0.4m）。
+- **orphan-goal ⚠️ 降級**：Ctrl-C(SIGINT) 時 client cancel 沒送出（rclpy SIGINT 先關 context）→ orphan，但 `no_progress_timeout`(~10s) 自癒、不需重啟。client 正解 = `signal_handler_options=NO`（post-demo）。
+- **stop-resume ⚠️ 降級不採用**：auto-resume 機制成立，但 resume 以 0.5 m/s lunge（Go2 MIN_X floor）→ 短 goal 衝到貼牆 0.21m，**6/18 不 demo auto-resume**，台詞退「操作員確認/遙控輔助」。
+- **lidar_front_sector ✅** live 可用，當場定位側前家具。
+
+### 3. nav demo 台詞鎖定
+- **可講**：室內短距自走、正前 safe-stop、indoor-tight 降低側前誤擋。**不可講**：自由巡邏 / 自動繞障 / D435 已融合 / 淨空後自動續行 / 高速。
+
+### 4. P2 backlog（今天不做）
+- D435 fusion（先 shadow test 不動狗 → Nav2 costmap → 靜障繞）、Reactive Patrol v0、DimOS 研究、orphan client signal fix、danger 1.1-1.2m tuning。
+
+### 待辦（6/9 下午，vision Phase 2）
+- 清 nav stack → 起 brain/vision → **object 矩陣 chair/laptop/cup × 0.7/1.0/1.5（最大缺口，定主秀物體）** → cup 專項 → sitting/greet → thumbs_up → Studio evidence → safety refusal → under-load。順序見 plan Phase 2。⚠️ object event 5s cooldown：每 trial 後要等。
 
 ---
 

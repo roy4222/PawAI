@@ -23,6 +23,49 @@
 
 ---
 
+## 📊 HITL 執行結果 Log（唯一 scoreboard，每測一項就填）
+
+### Phase 0 ✅（2026-06-09）
+- 0.1 commit `a38ca96` pushed origin/main（9 檔，pre-commit 綠）。
+- 0.2 deploy：rsync + `colcon build nav_capability`；Jetson install/ 含 `goto_max_duration_s`、新 scripts 在、`REACTIVE_PROFILE` 在。
+
+### Task 1.1 orphan-goal — ⚠️ 降級，非完全解（HARDWARE 實測 6/9）
+- 重現：goto1 accepted(2.0s) → SIGINT → **client cancel 沒送出**（rclpy 預設 SIGINT 先關 context → RCLError，非 KeyboardInterrupt）→ `_goto_active` 卡 → followup ×2 rejected、server `still active` ×2。
+- 自癒：orphan 靠**既有 `no_progress_timeout`(~10-13s)** END 掉 goto1 → 之後 goto 又能 accept。**不需重啟 navcap**。`goto_max_duration_s=120` 是 jitter-progress 後備（本次未輪到）。
+- **結論**：致命版（永久卡死、要重啟）✅ 消除；client-side Ctrl-C cancel ⚠️ 未完全成功。**post-demo 修**：client `rclpy.init(signal_handler_options=NO)` 讓 KeyboardInterrupt 進自家 handler 才送得出 cancel。
+- demo 台詞：「client/SSH 掛掉約 10 秒內自動恢復、不需重啟」。**不可講**「即時恢復」。
+
+### Task 1.2 lidar_front_sector — ✅ live 可用
+- 輸出 `±15°=1.29 ±20°=1.05 ±30°=0.97 nearest=0.97@+22.5°`，當場定位側前家具 +22.5°/0.97m（= open_space ±30° 誤擋本案）。
+
+### Task 1.3 indoor-tight 誤擋修正 — ✅ 感測層已驗（HARDWARE 6/9）
+- 只重啟 reactive_stop_node 帶 `front_arc_deg:=18 danger:=1.0 slow:=1.4 slow_speed:=0.2 normal:=0.3 offset:=π`（保留 AMCL，免重設 initialpose）。
+- **before（±30°）**：zone=`danger`、front_min=0.97m（+22.5° 側前家具誤判）。
+- **after（±18°）**：zone=`slow`、front_min=**1.22m**（家具排除）→ **誤擋解除** ✅。enable_nav_pause 重設 true。
+- 台詞：「修正窄場誤擋感測原因（±30°→±18° 排除側前家具），zone 由 danger 變 slow」。**未講**「能自主穿越」（motion 待 safe-stop 重測一併證）。
+- 坑：tmux pane target 用 `$SESS:reactive` 被 zsh `:r` modifier 吃掉 → hardcode `nav-cap-demo:reactive`；param get racing 節點啟動會 hang（service timeout），等節點起完再查。
+
+### Task 1.5 safe-stop（indoor_tight）— ✅ 正前障礙安全停（HARDWARE 6/9）
+- goto 0.5m → Go2 **accepted（無誤擋，indoor-tight 也補上 motion 證據）** → 走 → zone `clear→slow→danger` → `reactive_stop_active=true`、Go2 停、**不撞不暴衝**。final `obstacle_distance=0.784m`。
+- ⚠️ **margin 薄**：danger 1.0m + Nav2 ~0.5 m/s 慣性 → 停 front 0.78m ≈ 機鼻離障礙 ~0.4m。窄錐+0.5 速度已知風險（progressive 下 indoor_tight 低速 0.2 **不套用**，速度由 Nav2 controller 設）。demo 障礙擺遠或 danger 調 1.1。
+- 台詞：「遇正前障礙會停下、不撞」。**不講**側向（±18-30° 不覆蓋）或低速續行（Nav2 仍受 Go2 MIN_X floor 影響）。
+
+### Task 1.6 stop-resume — ⚠️ 機制成立但 6/18 不採用 auto-resume（HARDWARE 6/9）
+- 障礙物擋 Go2（danger）→ goto active(paused) → **Roy 移開障礙 → Go2 自動續行走完 goal**（server-side resume，client 已死照樣 resume）→ **auto-resume 確認**。
+- 但 Roy 實測觀察：障礙移開後 Go2 resume 太急，容易貼近/撞到前方物體；不適合 6/18 現場主秀。
+- 台詞降級：「遇障會停，操作員確認安全後重新下達或遙控輔助」。**不可講**「淨空後自動續行」作為 demo 主能力。
+- ⚠️ **resume 速度偏快（Roy 實感）**：根因**不是** LiDAR rate（~11.3Hz，0.5m/s 下 ~4.5cm/frame 夠快），是 **Go2 sport MIN_X=0.5 m/s floor** → nav(progressive) Go2 只能 ~0.5 起步、resume 直接 lunge 到 0.5；indoor_tight 低速 0.2 **不套用於 nav**。
+- ⚠️⚠️ **實測 resume lunge 危險（6/9）**：resume 後 Go2 走完 0.5m goal **停在 front 0.21m（機鼻幾乎貼牆）** — 短 goal 在 reactive 來得及 danger-halt 前就走完、衝到 0.21m。reactive_stop 在「短距+0.5 floor+已近障礙」的 resume **擋不住**。
+- **結論台詞**：auto-resume 機制成立，但 **tight space 禁 demo auto-resume**（會 lunge 貼牆）。安全版退回「操作員確認安全後重新下達」；6/18 若空間緊或人多，直接遙控/Studio 輔助進場，不把避障續行當主秀。要再 demo 續行 → danger 調 1.2m + 留足空間 + 長 goal。真低速走 standalone/patrol v0。
+
+### 現況校正（別 overclaim）
+- **D435 沒融入導航主迴路**：`depth_safety_node` 只發 `/capability/depth_clear`（不發 cmd_vel、不 pause Nav2），launcher `pointcloud.enable:=false`。現在 = 2D LiDAR stop-based safety，**不是** depth+LiDAR fusion。fusion = §9 / 獨立 **P2**（depth→/scan_d435→costmap）。
+- **目前測的是 nav primitive（goto_relative），不是 patrol behavior** → 它不自己轉彎/掉頭是合理的。patrol = Phase 1.5 prototype。
+- **DimOS = 獨立 P2 研究（今天不切框架，避免雙 driver/runtime）**：docs（`docs/navigation/research/2026-05-02-dimos-analysis.md`）**未**證明「Go2 內建 3D LiDAR 直接可靠導航」；thesis 寫它用 **D435 + VoxelGrid costmap + spatial memory + 行為層** 做巡邏（繞過內建 LiDAR ~18% 覆蓋）。值得借的是 **D435 VoxelGrid + 行為層 + FollowHuman/ReplanLimiter**，非整包導入。精準待查：①用 utlidar 還 D435？②真接 Nav2/costmap 還自做 VoxelGrid？③patrol 是實機/影片/script？④能否只借 VoxelGrid/FollowHuman/spatial-memory？⑤怎麼處理 WebRTC LiDAR 低覆蓋。
+- **D435 fusion P2 進度序（Roy 6/9，現場不硬接，是新導航分支非小調參）**：① D435 shadow test（**不動狗**，錄 `/scan_d435_shadow` vs `/scan_rplidar` 比 D435 補到哪些 RPLIDAR 漏障）→ ② 接 Nav2 local costmap（D435 當 observation source 或 STVL voxel layer）→ ③ 靜態障礙 3/5 能否繞/更準停 → ④ reactive patrol。**今天不做、不准宣稱已融合。**
+
+---
+
 ## Phase 0 — Commit + Deploy（WSL → Jetson）
 
 ### Task 0.1: Commit 今日 WSL dev + 研究/計畫文件
@@ -222,27 +265,25 @@ Record: 停下距離、是否暴衝、profile。
 
 **Acceptance（1.5）：** 兩 profile 都能擋路安全停。
 
-### Task 1.6: stop-resume 實測（2s / 5s / 10s）
+### Task 1.6: stop-resume 實測（6/9 結論：停止擴測，降級）
 
 > reactive_stop 用一般 mode（`progressive`），**不要 hold_brake**（hold_brake 故意不發 /nav/resume）。
+> 6/9 HITL 已證明 auto-resume 機制會動，但 resume lunge 太急，停到 front 0.21m，Roy 判定 6/18 現場風險太高。**不要再花今天時間跑 2s/5s/10s 矩陣**；把 stop-resume 降級為「操作員確認安全後重新下達 / 遙控輔助」。
 
-- [ ] **Step 1: 行進中遮擋三種時長，填表**
+- [x] **Step 1: 記錄 6/9 實測結果並降級**
 
-Run: `python3 scripts/send_relative_goal.py --distance 1.0`，行進中遮擋 2s / 5s / 10s 後移開。
-填下表（複製自報告 §2c）:
+Observed: indoor_tight safe-stop 後移開障礙，Go2 會自動 resume，但 resume 後太急，最後 front 0.21m，機鼻幾乎貼牆。此行為不適合作為 6/18 demo 主能力。
 
-| 遮擋時長 | goto 存活(無 abort) | 移開後自動 resume | resume 後到點 | 觀測延遲(移開→重走 s) | 備註 |
-|---|---|---|---|---|---|
-| 2s | ⬜ | ⬜ | ⬜ | ⬜ | |
-| 5s | ⬜ | ⬜ | ⬜ | ⬜ | |
-| 10s | ⬜ | ⬜ | ⬜ | ⬜ | |
+| 測項 | 結果 | demo 判定 | 備註 |
+|---|---|---|---|
+| stop-resume | auto-resume 會動，但 lunge 過急 | 不採用 | safe-stop 可講；resume 不主秀 |
 
-- [ ] **Step 2: 若自動 resume 不通，測 fallback**
+- [ ] **Step 2: 準備 fallback**
 
-Run（自動不行時）: route_runner pause/resume，或手動 `send_relative_goal.py` re-send。
-Record: 哪條 fallback 能用。
+Runbook: 現場若要移動，障礙清除後由操作員手動 re-send、Studio button 或遙控輔助，不靠 auto-resume。
+Record: fallback 是否可控、是否能在 Studio/Foxglove 顯示理由。
 
-**Acceptance（1.6）：** 至少一條可控 fallback 通。台詞依結果（報告 §7）：自動成功→「障礙移開後會自己繼續」；只手動→「操作員確認安全後重新下達」。**禁止講「停了不會再走」（實際會 auto-resume，反向錯誤）。**
+**Acceptance（1.6）：** stop-resume 已降級，不再追 auto-resume demo-ready。6/18 台詞固定為「操作員確認安全後重新下達 / 遙控輔助」。**禁止講**「障礙移開後會自己繼續」與「停了不會再走」（實際會 auto-resume，但不安全）。
 
 ### Task 1.7（P1，有空才做）: skew 診斷錄製
 
@@ -259,6 +300,22 @@ python3 scripts/send_relative_goal.py --distance 0.8   # 來回 2-3 趟
 Record: 結論指出是哪一層。
 
 **Acceptance（1.7）：** 能指出歪斜是 TF/步態/DWB 哪一層，不只「走得歪」。
+
+---
+
+## Phase 1.5 — NAV-P1.5 Reactive Patrol v0（Bonus prototype，indoor-tight + safe-stop 過了才做）
+
+> 目的：讓 Go2 在小空間**低速自主巡視 30-60s**，前方有障礙時停下或選較空方向嘗試短距移動 — 比一直 `goto_relative 0.5m` 更像四足移動感。**不是**自由巡邏/建圖/動態繞障/SLAM 探索。
+
+**Files:** Create `scripts/reactive_patrol_v0.py`（讀 LiDAR sector → 選方向 → 發 `/nav/goto_relative`）
+
+- 實作：**不直接發 `/cmd_vel`**，優先用現有 `/nav/goto_relative` action。每步 0.2-0.3m；前方 ±15° clear → 直走；blocked → 比左前/右前哪邊空 → `yaw_offset` ±0.5~0.8rad + 短距前進；都不空 → 停、等清場或重發。
+- 安全硬閘：只在 `REACTIVE_PROFILE=indoor_tight`、`max_speed≤0.2`、`nav_ready=true`、`depth_clear=true`、e-stop 就位時允許。reactive_stop 永遠最高優先（safe-stop 不可被 patrol 蓋過）。
+- 成功標準：30s 內 ≥3 個短步/轉向決策、**0 撞、0 暴衝**、遇 danger 停下。
+- **能講**：低速自主巡視原型，依 LiDAR 選較安全方向。**不能講**：自由巡邏 / 完整建圖 / 動態繞障 / SLAM 探索。
+- WSL-doable：sector→方向決策 + goto_relative 迴圈可 WSL 寫 + 假 LiDAR 單元測；**真實 patrol 需硬體 + e-stop**。
+
+> Waypoint patrol（命名點 A/B/C）+ frontier exploration（邊建圖邊探索）= §9 future，今天不碰。
 
 ---
 
@@ -445,7 +502,7 @@ Record: 3/3 是否全 blocked、Go2 是否零移動、trace 截圖。
 
 ## Self-Review（對照剩餘工作清單）
 
-- ✅ nav orphan 驗證（1.1）、indoor-tight 實機（1.3）、LiDAR 扇區（1.2）、短距 smoke（1.4）、safe-stop（1.5）、stop-resume（1.6）、skew（1.7）— 涵蓋你「沒完成」清單的 nav 全部。
+- ✅ nav orphan 驗證（1.1）、LiDAR 扇區（1.2）、indoor-tight 實機（1.3）、短距 smoke（1.4）、safe-stop（1.5）已收；stop-resume（1.6）已**降級為不主秀 auto-resume**；skew（1.7）保留 optional，不阻擋今天切 vision。
 - ✅ object 矩陣（2.1）、cup（2.2）、sitting（2.3）、greet（2.4）、gesture（2.5）、Studio evidence（2.6）、under-load（2.7）— 涵蓋 vision 全部。
 - ✅ demo flow 收尾（4.2）— 對應「沒完成 demo flow」。
 - ✅ 工具部署（0.2）+ 結果寫回（4.1）。
