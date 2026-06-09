@@ -3,6 +3,7 @@
 import { useStateStore } from "@/stores/state-store";
 import { GateChip } from "@/components/shared/gate-chip";
 import { useTogglePlanMode } from "@/hooks/use-toggle-plan-mode";
+import { NavMapCanvas } from "@/components/navigation/nav-map-canvas";
 
 /**
  * NavigationPanel — Sheet content for the "navigation" feature button.
@@ -83,15 +84,8 @@ export function NavigationPanel() {
         </div>
       </section>
 
-      {/* Section 3 — Future content placeholder */}
-      <section className="flex flex-col gap-1 rounded-lg border border-dashed border-border/50 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
-          Coming next (B7 / D-day)
-        </h3>
-        <p className="text-[11px] text-muted-foreground/50 leading-relaxed">
-          最近 nav goal 列表、距離 / ETA chip、建圖 snapshot 預覽。
-        </p>
-      </section>
+      {/* Section 3 — Nav map (live pose + goal + status) */}
+      <NavMapCanvas />
     </div>
   );
 }

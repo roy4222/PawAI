@@ -30,6 +30,27 @@ export interface TtsMessage {
   source?: string; // skill_say | chat_reply | say_canned | undefined
 }
 
+// ── Nav panel (Task A) ─────────────────────────────────────────────
+export interface NavPose {
+  x: number; // world metres (map frame)
+  y: number;
+  yaw: number; // radians, map frame (+ = CCW)
+}
+
+export type NavZone = "clear" | "slow" | "danger";
+
+export interface NavReactiveStop {
+  zone: NavZone;
+  front_distance_m: number | null;
+  nav_paused: boolean;
+}
+
+export interface NavPatch {
+  pose?: NavPose;
+  reactiveStop?: NavReactiveStop;
+  paused?: boolean;
+}
+
 interface StateStore {
   faceState: FaceState | null;
   speechState: SpeechState | null;
@@ -46,6 +67,9 @@ interface StateStore {
   ttsMessages: TtsMessage[];
   capability: CapabilityState;
   planMode: PlanMode;
+  navPose: NavPose | null;
+  navReactiveStop: NavReactiveStop | null;
+  navPaused: boolean;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -61,6 +85,7 @@ interface StateStore {
   appendTtsMessage: (msg: TtsMessage) => void;
   updateCapability: (name: keyof CapabilityState, value: CapabilityTriState) => void;
   setPlanMode: (mode: PlanMode) => void;
+  updateNav: (patch: NavPatch) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -79,6 +104,9 @@ export const useStateStore = create<StateStore>((set) => ({
   ttsMessages: [],
   capability: { nav_ready: "unknown", depth_clear: "unknown" },
   planMode: "A",
+  navPose: null,
+  navReactiveStop: null,
+  navPaused: false,
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -137,4 +165,10 @@ export const useStateStore = create<StateStore>((set) => ({
   updateCapability: (name, value) =>
     set((state) => ({ capability: { ...state.capability, [name]: value } })),
   setPlanMode: (mode) => set({ planMode: mode }),
+  updateNav: (patch) =>
+    set((state) => ({
+      navPose: patch.pose ?? state.navPose,
+      navReactiveStop: patch.reactiveStop ?? state.navReactiveStop,
+      navPaused: patch.paused ?? state.navPaused,
+    })),
 }));

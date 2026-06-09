@@ -313,6 +313,26 @@ class TestTextNormalizationGateway:
         tn._converter = None  # restore
 
 
+class TestQuatToYaw:
+    """Tests for GatewayNode._quat_to_yaw (Task A nav panel — pure math, no ROS)."""
+
+    def test_yaw_zero(self):
+        sys.path.insert(0, str(Path(__file__).parent))
+        from studio_gateway import GatewayNode
+        # identity quaternion (qz=0, qw=1) → yaw ≈ 0
+        assert abs(GatewayNode._quat_to_yaw(0.0, 1.0)) < 1e-6
+
+    def test_yaw_90_deg(self):
+        from studio_gateway import GatewayNode
+        # 90° about z (qz=qw=0.70710678) → yaw ≈ π/2
+        assert abs(GatewayNode._quat_to_yaw(0.70710678, 0.70710678) - 1.5707963) < 1e-4
+
+    def test_yaw_180_deg(self):
+        from studio_gateway import GatewayNode
+        # 180° about z (qz=1, qw=0) → yaw ≈ ±π
+        assert abs(abs(GatewayNode._quat_to_yaw(1.0, 0.0)) - 3.14159265) < 1e-4
+
+
 class TestScoreboardEndpoint:
     """Tests for _read_scoreboard helper (issue #76 GET /api/scoreboard)."""
 

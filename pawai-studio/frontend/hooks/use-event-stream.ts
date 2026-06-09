@@ -39,6 +39,7 @@ export function useEventStream(): UseEventStreamResult {
   const updateTts = useStateStore((s) => s.updateTts);
   const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
   const updateCapability = useStateStore((s) => s.updateCapability);
+  const updateNav = useStateStore((s) => s.updateNav);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -116,6 +117,34 @@ export function useEventStream(): UseEventStreamResult {
             updateCapability(name, tri);
           }
           break;
+        case "nav":
+          // Task A nav panel — gateway sends short event_types pose / reactive_stop / paused.
+          if (event.event_type === "pose") {
+            if (typeof data.x === "number" && typeof data.y === "number") {
+              updateNav({
+                pose: {
+                  x: data.x as number,
+                  y: data.y as number,
+                  yaw: typeof data.yaw === "number" ? (data.yaw as number) : 0,
+                },
+              });
+            }
+          } else if (event.event_type === "reactive_stop") {
+            const z = data.zone;
+            updateNav({
+              reactiveStop: {
+                zone: z === "danger" || z === "slow" ? z : "clear",
+                front_distance_m:
+                  typeof data.obstacle_distance === "number"
+                    ? (data.obstacle_distance as number)
+                    : null,
+                nav_paused: Boolean(data.nav_paused),
+              },
+            });
+          } else if (event.event_type === "paused") {
+            updateNav({ paused: Boolean(data.paused) });
+          }
+          break;
         case "system":
           if ("jetson" in data) {
             updateSystemHealth(data as unknown as SystemHealth);
@@ -143,6 +172,7 @@ export function useEventStream(): UseEventStreamResult {
       updateTts,
       appendTtsMessage,
       updateCapability,
+      updateNav,
       evaluateEvent,
     ]
   );

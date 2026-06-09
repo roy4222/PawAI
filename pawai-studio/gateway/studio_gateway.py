@@ -31,6 +31,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Bool, Empty, String
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 from asr_client import resample_to_wav16k, transcribe
 
@@ -67,6 +68,17 @@ QOS_EVENT = QoSProfile(
     durability=DurabilityPolicy.VOLATILE,
     depth=10,
 )
+
+# Nav latched topics (/amcl_pose, /state/nav/paused) are published
+# RELIABLE + TRANSIENT_LOCAL. Subscribing with QOS_EVENT (VOLATILE) is
+# QoS-incompatible → the gateway would NEVER receive them (and rclpy does
+# not warn). This profile is load-bearing — do not change to VOLATILE.
+QOS_NAV_LATCHED = QoSProfile(
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    depth=1,
+)
+POSE_THROTTLE_S = 0.2  # /amcl_pose ~10Hz → throttle to 5Hz
 
 # ROS2 topic → frontend source mapping
 TOPIC_MAP: dict[str, str] = {
@@ -162,6 +174,7 @@ class GatewayNode(Node):
         super().__init__("studio_gateway_node")
         self._loop = loop
         self._last_face_broadcast = 0.0
+        self._last_pose_broadcast = 0.0
         # Capability gate state — tri-state (true / false / unknown).
         # `None` = no message ever received (unknown). Once a Bool arrives we
         # store True / False and surface it via /api/capability + /ws/events.
@@ -207,6 +220,22 @@ class GatewayNode(Node):
             Bool, "/capability/depth_clear",
             lambda msg: self._on_capability_msg("depth_clear", msg),
             QOS_EVENT,
+        )
+
+        # ── Nav panel subscribers (Task A — read-only, no publisher) ──
+        # /amcl_pose & /state/nav/paused are latched → MUST use QOS_NAV_LATCHED.
+        # /state/reactive_stop/status is VOLATILE depth=10 → QOS_EVENT is fine.
+        self.create_subscription(
+            PoseWithCovarianceStamped, "/amcl_pose",
+            self._on_amcl_pose, QOS_NAV_LATCHED,
+        )
+        self.create_subscription(
+            String, "/state/reactive_stop/status",
+            self._on_reactive_stop_status, QOS_EVENT,
+        )
+        self.create_subscription(
+            Bool, "/state/nav/paused",
+            self._on_nav_paused, QOS_NAV_LATCHED,
         )
 
         # ── Video subscribers — ROS2 Image → JPEG → WebSocket binary ──
@@ -274,6 +303,64 @@ class GatewayNode(Node):
             else:
                 out[name] = "true" if val else "false"
         return out
+
+    # ── Nav panel (Task A) ──────────────────────────────────────────
+    @staticmethod
+    def _quat_to_yaw(qz: float, qw: float, qx: float = 0.0, qy: float = 0.0) -> float:
+        """Yaw (rad) from a quaternion. Pure math, no ROS dependency."""
+        import math
+        return math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+
+    def _broadcast_nav(self, event_type: str, data: dict) -> None:
+        """Wrap nav data in a synthetic event envelope and broadcast.
+
+        source is always "nav"; event_type is a short name
+        (pose / reactive_stop / paused) the frontend `case "nav"` keys off.
+        """
+        envelope = {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now().astimezone().isoformat(),
+            "source": "nav",
+            "event_type": event_type,
+            "data": data,
+        }
+        asyncio.run_coroutine_threadsafe(ws_manager.broadcast(envelope), self._loop)
+
+    def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
+        now = time.monotonic()
+        if now - self._last_pose_broadcast < POSE_THROTTLE_S:
+            return
+        self._last_pose_broadcast = now
+        p = msg.pose.pose.position
+        q = msg.pose.pose.orientation
+        c = msg.pose.covariance
+        self._broadcast_nav("pose", {
+            "x": round(float(p.x), 4),
+            "y": round(float(p.y), 4),
+            "yaw": round(self._quat_to_yaw(q.z, q.w, q.x, q.y), 4),
+            "covariance_xy": round(float(c[0] + c[7]), 5),
+        })
+
+    def _on_reactive_stop_status(self, msg: String) -> None:
+        try:
+            payload = json.loads(msg.data)
+        except (json.JSONDecodeError, TypeError):
+            return
+        zone = payload.get("zone")
+        obstacle_distance = payload.get("obstacle_distance")
+        self._broadcast_nav("reactive_stop", {
+            "zone": zone if isinstance(zone, str) else "clear",
+            "obstacle_distance": (
+                float(obstacle_distance)
+                if isinstance(obstacle_distance, (int, float))
+                else None
+            ),
+            "reactive_stop_active": bool(payload.get("reactive_stop_active", False)),
+            "nav_paused": bool(payload.get("nav_paused", False)),
+        })
+
+    def _on_nav_paused(self, msg: Bool) -> None:
+        self._broadcast_nav("paused", {"paused": bool(msg.data)})
 
     def publish_speech_event(self, payload: dict) -> None:
         msg = String()
