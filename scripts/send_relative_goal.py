@@ -5,6 +5,11 @@ Phase 9.3 — 從直發 /goal_pose topic 改成 action client，等 result。
 v1 注意：server 不發 feedback，CLI 從 send 到 result 之間會靜默（這是預期行為，
 不是卡住）。Result 通常 5-15 秒到達取決於 distance 與 Nav2 plan 速度。
 
+6/9 robustness（demo blocker fix）：
+- Ctrl-C / SSH 斷線時主動 cancel 在途的 goal，避免 server 留 orphaned active goal
+  （否則後續 goto_* 全被 "another goto still active" 拒，需重啟整個 navcap stack）。
+- shutdown 走 `if rclpy.ok()` 防 double-shutdown（中斷時 context 可能已失效）。
+
 用法:
     python3 scripts/send_relative_goal.py --distance 0.5
     python3 scripts/send_relative_goal.py --distance 0.8 --yaw-offset 0.3
@@ -26,6 +31,9 @@ class GotoRelativeClient(Node):
     def __init__(self):
         super().__init__("send_relative_goal_cli")
         self._client = ActionClient(self, GotoRelative, "/nav/goto_relative")
+        # Handle of the in-flight goal, set once accepted and cleared once terminal.
+        # Used by cancel_active_goal() to release the server's active-goal lock on interrupt.
+        self._goal_handle = None
 
     def send(self, distance: float, yaw_offset: float, max_speed: float) -> bool:
         if not self._client.wait_for_server(timeout_sec=10.0):
@@ -54,15 +62,39 @@ class GotoRelativeClient(Node):
             self.get_logger().error("goal rejected by action server")
             return False
 
+        # Track the accepted goal so an interrupt (Ctrl-C / SSH drop) can cancel it.
+        self._goal_handle = handle
+
         self.get_logger().info("goal accepted; awaiting result...")
         result_future = handle.get_result_async()
         rclpy.spin_until_future_complete(self, result_future)
         result = result_future.result().result
+        # Goal is terminal now — no longer cancellable, so drop the handle.
+        self._goal_handle = None
         self.get_logger().info(
             f"result: success={result.success} message={result.message!r} "
             f"actual_distance={result.actual_distance:.3f}"
         )
         return result.success
+
+    def cancel_active_goal(self) -> None:
+        """Best-effort cancel of an in-flight goal on interrupt.
+
+        Without this, a Ctrl-C / SSH drop while the goal is executing leaves the server's
+        single-goal lock (`_goto_active`) held until its own timeout, so every later goto
+        is rejected as "another goto still active".
+        """
+        if self._goal_handle is None or not rclpy.ok():
+            return
+        self.get_logger().warn(
+            "interrupted; cancelling in-flight goto so nav_action_server releases its "
+            "active-goal lock"
+        )
+        try:
+            cancel_future = self._goal_handle.cancel_goal_async()
+            rclpy.spin_until_future_complete(self, cancel_future, timeout_sec=3.0)
+        except Exception as exc:  # best-effort: we are already tearing down
+            self.get_logger().warn(f"cancel-on-interrupt failed: {exc}")
 
 
 def main():
@@ -76,13 +108,24 @@ def main():
     args = parser.parse_args()
 
     rclpy.init()
+    node = None
+    exit_code = 1
     try:
         node = GotoRelativeClient()
         ok = node.send(args.distance, args.yaw_offset, args.max_speed)
-        node.destroy_node()
-        sys.exit(0 if ok else 1)
+        exit_code = 0 if ok else 1
+    except KeyboardInterrupt:
+        if node is not None:
+            node.cancel_active_goal()
+        exit_code = 130
     finally:
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+        # Guard against double-shutdown: rclpy raises if shutdown() runs twice or after
+        # the context is already invalid (e.g. on interrupt).
+        if rclpy.ok():
+            rclpy.shutdown()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

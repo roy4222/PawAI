@@ -26,6 +26,28 @@ NAV_NAMED="${NAV_NAMED:-$NAV_RUNTIME_DIR/named_poses/main.json}"
 NAV_ROUTES="${NAV_ROUTES:-$NAV_RUNTIME_DIR/routes}"
 ROS_SETUP='source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh 2>/dev/null && source ~/elder_and_dog/install/setup.zsh'
 
+# Reactive-stop safety profile (6/9 — 永久化 indoor-tight / open-space，免 ad-hoc kill/restart)。
+# reactive_stop_node 的 front_arc_deg / danger_distance_m / front_offset_rad 只在 __init__
+# 讀一次（ros2 param set 無效），所以「窄場安全模式」必須在啟動帶參數 → 用這個 env 選。
+#   open_space  (預設) — 寬 ±30° 錐、danger 1.1m / slow 1.7m（5/11 B0.3 calibration，開闊空間）。
+#   indoor_tight       — 窄 ±18° 錐、danger 1.0m / slow 1.4m + 低速 slow 0.2 / normal 0.3。
+#                        窄錐必須綁低速：側向覆蓋變少，靠低速補反應時間
+#                        （6/8 HITL，docs/navigation/research/2026-06-08-trackB-hitl-results.md）。
+# 用法：REACTIVE_PROFILE=indoor_tight bash scripts/start_nav_capability_demo_tmux.sh
+REACTIVE_PROFILE="${REACTIVE_PROFILE:-open_space}"
+case "$REACTIVE_PROFILE" in
+  open_space)
+    REACTIVE_PARAMS="-p mode:=progressive -p front_offset_rad:=3.14159 -p front_arc_deg:=30.0 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7"
+    ;;
+  indoor_tight)
+    REACTIVE_PARAMS="-p mode:=progressive -p front_offset_rad:=3.14159 -p front_arc_deg:=18.0 -p danger_distance_m:=1.0 -p slow_distance_m:=1.4 -p slow_speed:=0.2 -p normal_speed:=0.3"
+    ;;
+  *)
+    echo "ERROR: unknown REACTIVE_PROFILE='$REACTIVE_PROFILE' (use: open_space | indoor_tight)" >&2
+    exit 1
+    ;;
+esac
+
 mkdir -p "$(dirname "$NAV_NAMED")" "$NAV_ROUTES"
 
 echo "=== nav_capability Demo (Phase 10 KPI launcher) ==="
@@ -34,6 +56,8 @@ echo "  MAP=$MAP"
 echo "  SESSION=$SESSION"
 echo "  NAV_NAMED=$NAV_NAMED"
 echo "  NAV_ROUTES=$NAV_ROUTES"
+echo "  REACTIVE_PROFILE=$REACTIVE_PROFILE"
+echo "  REACTIVE_PARAMS=$REACTIVE_PARAMS"
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 ros2 daemon stop 2>/dev/null || true
@@ -71,7 +95,7 @@ tmux send-keys -t "$SESSION:robot" \
 echo "  Waiting 30s for nav stack lifecycle"
 sleep 30
 
-echo "[5/9] reactive_stop_node (mode=progressive → /cmd_vel_obstacle; nav 可驅動)"
+echo "[5/9] reactive_stop_node (profile=$REACTIVE_PROFILE, mode=progressive → /cmd_vel_obstacle; nav 可驅動)"
 # mode=progressive: danger 發 0、slow/clear 沉默讓 nav (priority 10) 透過
 # mux timeout 接管。⚠️ 使用前提：**必 kill teleop publisher**（demo discipline），
 # 不允許 hot-publish 到 /cmd_vel_joy。否則 mux 0.5s timeout 後 teleop 100 會贏
@@ -86,7 +110,7 @@ echo "[5/9] reactive_stop_node (mode=progressive → /cmd_vel_obstacle; nav 可�
 # docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
-    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p mode:=progressive -p front_offset_rad:=3.14159 -p danger_distance_m:=1.1 -p slow_distance_m:=1.7" Enter
+    "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args $REACTIVE_PARAMS" Enter
 sleep 3
 
 echo "[6/9] nav_capability.launch.py (6 nodes incl. capability_publisher + depth_safety)"

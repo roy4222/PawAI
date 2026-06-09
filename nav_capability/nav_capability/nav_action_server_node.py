@@ -64,6 +64,14 @@ class NavActionServerNode(Node):
         # the first goal keeps awaiting its (now-canceled) result, causing stuck states.
         self._goto_active = False
 
+        # Safety net against orphaned goals: if a goto client crashes / SSH drops mid-goal,
+        # the execute callback can keep _goto_active=True indefinitely (Nav2 oscillating near
+        # the goal keeps resetting the no-progress timer), so every later goto is rejected as
+        # "still active" and the stack must be restarted. Cap absolute execution wall-clock so
+        # the callback always returns and clears the flag. 120s >> any 0.3-1.0m demo goto.
+        self.declare_parameter("goto_max_duration_s", 120.0)
+        self._goto_max_duration_s = float(self.get_parameter("goto_max_duration_s").value)
+
         # Phase 8 — /odom watchdog as proxy for driver liveness.
         # If /odom hasn't been heard for >2s, refuse new goto goals (driver disconnected).
         self._last_odom_ns: int = 0
@@ -232,11 +240,20 @@ class NavActionServerNode(Node):
           * AMCL pose hasn't moved >= PROGRESS_THRESHOLD_M for PROGRESS_TIMEOUT_S → fail.
           * goal_handle.is_cancel_requested → propagate cancel to Nav2, return cancelled.
         """
+        exec_start_ns = self.get_clock().now().nanoseconds
+        max_active_ns = int(self._goto_max_duration_s * 1e9)
+
         while True:  # outer loop = pause/resume cycle
             # If paused at entry, wait until resumed (or client cancel)
             while self._paused:
                 if goal_handle.is_cancel_requested:
                     return (False, "cancelled")
+                if (self.get_clock().now().nanoseconds - exec_start_ns) > max_active_ns:
+                    self.get_logger().warn(
+                        f"goto exceeded goto_max_duration_s={self._goto_max_duration_s:.0f}s "
+                        f"while paused; releasing (orphan-goal safety net)"
+                    )
+                    return (False, "max_duration_exceeded")
                 time.sleep(0.1)
 
             send_future = self._nav_client.send_goal_async(nav_goal)
@@ -264,6 +281,17 @@ class NavActionServerNode(Node):
                     await nav_handle.cancel_goal_async()
                     await nav_result_future
                     break  # exit inner while → outer loop will wait for resume + re-send
+
+                # Orphan-goal safety net — absolute wall-clock cap (covers crashed/abandoned
+                # clients and Nav2 oscillation that keeps resetting the no-progress timer).
+                if (self.get_clock().now().nanoseconds - exec_start_ns) > max_active_ns:
+                    self.get_logger().warn(
+                        f"goto exceeded goto_max_duration_s={self._goto_max_duration_s:.0f}s; "
+                        f"cancelling Nav2 goal (orphan-goal safety net)"
+                    )
+                    await nav_handle.cancel_goal_async()
+                    await nav_result_future
+                    return (False, "max_duration_exceeded")
 
                 # Progress check via /amcl_pose
                 curr_xy = self._current_xy()
