@@ -1,252 +1,181 @@
-# 6/9 下午 視覺 Phase 2 HITL 執行計畫 Implementation Plan
+# 6/9 下午 視覺 MVP（cup-focused）HITL 執行計畫 Implementation Plan
 
-> **For agentic workers:** 多數 task 是**硬體 HITL（Roy 在 Jetson + Go2 + 相機前手動執行）**，不是 subagent 可代跑的 code。照表 top-to-bottom 跑，每個 Task 勾 checkbox。完整可貼指令 + 深度陷阱解釋見**姊妹 playbook**：`docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`。
+> **For agentic workers:** 硬體 HITL（Roy 在 Jetson + 相機 + Go2 前手動跑）。照表 top-to-bottom，勾 checkbox。完整可貼指令 + 深度陷阱見姊妹 playbook：`docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`。
+> **⚠️ 2026-06-09 砍版**：本版**只主測 cup**。中午寫的完整 chair/laptop/cup 矩陣**已廢棄**（太大、浪費注意力）。chair/laptop 只在 cup 失敗時做保底 sanity。
 
-**Goal:** 用實機 HITL 把視覺各能力（object / cup / 防幻覺 / sitting / greet / gesture / Studio 證據 / safety / under-load）量化，**當天定出 demo 主秀物體 + 2 備援 + 每項台詞與降級方案**。
+**Goal:** 用最少時間量出「**cup 能多遠辨識得到 + 什麼光線/背景穩**」，定出 demo cup 距離與 fallback；其餘 face/sitting/gesture/safety 只 smoke 確認，不重測。
 
-**Architecture:** 清 nav stack → 起 brain/demo + Studio（8GB 與 nav 互斥）→ 第一優先 object 矩陣（最大缺口）→ cup 專項 → 防幻覺 → sitting/greet → gesture → Studio 證據 → safety → under-load。每測一項就填 CSV / scoreboard，沒過就降級、鎖 fallback 台詞。
+**Architecture:** 清 nav → 起 brain/demo+Studio → **先確認 RGB/object pipeline 活著** → cup-only `[41]` 距離掃 0.7/1.0/1.5/2.0m + 光線 → 定 cup demo 距離 → cup 不穩才用「好杯子+好光+好背景」救（**不換模型**）→ chair/laptop 保底 sanity（只在 cup 失敗時）→ face/sitting/gesture/safety smoke → Studio evidence。
 
-**Tech Stack:** ROS2 Humble / object_perception (YOLO26n TRT) / interaction_executive brain_node / vision_perception (pose+gesture) / face_perception / pawai-studio gateway+frontend / `scripts/obj_matrix_cap.py` + `benchmarks/core/object_matrix.py`。
+**Tech Stack:** ROS2 Humble / object_perception (YOLO26n TRT, input_size=640) / `scripts/obj_matrix_cap.py` / interaction_executive brain_node / vision_perception / face_perception / pawai-studio。
 
-**真相來源：** playbook（精確指令）`docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`；策略研究 `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md` §3-§6；今日 HITL Log `docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md`。
-
-**誠實底線：** object/sitting 目前都是窄版/未量化。本計畫目的是**量出真實數字 + 鎖誠實台詞**，不是預設它們會過。
+**真相來源：** playbook `docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`；YOLO/像素物理 `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md` §5/§9 + `2026-06-04-pinto-model-zoo-full-analysis.md`。
 
 ---
 
 ## ⚠️ 開跑前硬規則
 
-- **nav 與 brain 8GB 互斥** → 先 `pawai demo stop` 清 nav，再起 brain。不要兩套同跑。
-- **object event 每類 5s cooldown** → `obj_matrix_cap.py` 必用 `--window 6`（預設 3 會漏數、把真偵測誤記 miss）。
-- **`greet_require_sitting` runtime `param set` 是 no-op**（init-cached）→ 要關 sitting gate 必須**重啟 brain 帶 `-p`**。
-- pose 是 **edge-emit only**：echo `/event/pose_detected`，**沒有** `/state/perception/pose`。
-- 不在 full stack 跑 `test_mux_priority.py`（會讓 Go2 衝出）；不 mid-session 重啟 `tts_node`（Megaphone silent fail）。
+- **nav 與 brain 8GB 互斥** → 先 `pawai demo stop` 清 nav 再起 brain。
+- **object event 每類 5s cooldown** → `obj_matrix_cap.py` 必用 `--window 6`、每 trial 間隔 **>5s**（預設 3 會把真偵測記成 miss、數據作廢）。
+- **今天不換 YOLO**：先用 26n + 好杯子/光/背景。只有 `cup 0.7m & 1.0m normal 都不穩`才開 YOLO26s spike。**不做 segmentation / YOLO-pose / SAHI**。
+- **不回導航**（Studio 死頁面等 vision MVP 過了才碰）。
 
 ---
 
-## Task 0: 清 nav stack + 起 brain/demo + Studio
+## Task 0: 清 nav + 起 brain/demo + **確認 RGB/object pipeline 活著**
 
 - [ ] **Step 1: 清 nav stack**
 
 Run: `pawai demo stop`
-Expected: nav lane cleanup（依 lock lane 路由）；`tmux ls`（Jetson）無 `nav-cap-demo`。
+Expected: nav lane cleanup；Jetson `tmux ls` 無 `nav-cap-demo`。順手用遙控器把 Go2 移離牆（剛剛卡 0.21m）。
 
-- [ ] **Step 2: 一鍵起 full demo（5 perception + brain + Studio）**
+- [ ] **Step 2: 起 brain/demo + Studio**
 
 Run: `bash .claude/skills/brain-studio-lane/scripts/start.sh demo`
-Expected: Jetson tmux `demo` 起；本機 frontend `http://localhost:3000/studio`。需 env `JETSON_TAILSCALE_IP`；沒設改 `pawai demo start`。
+等 ~30s → `bash .claude/skills/brain-studio-lane/scripts/healthcheck.sh`（8 項全綠）。frontend `http://localhost:3000/studio`。
 
-- [ ] **Step 3: healthcheck（等 ~30s）**
-
-Run: `bash .claude/skills/brain-studio-lane/scripts/healthcheck.sh`
-Expected: 8 項全綠（conv_graph ready / openrouter on / persona 6 files / `/brain/chat_candidate` pub≥1 / `/tts` pub / `tts_node` 在 / gateway `/health` ok / frontend 200）。
-
-- [ ] **Step 4: 確認 6 條主線 topic 都有 publisher**
+- [ ] **Step 3: 確認 RGB/object pipeline 真的活（先做，免得白測）**
 
 Run:
 ```bash
-ros2 topic info /event/object_detected
-ros2 topic info /event/pose_detected
-ros2 topic info /event/gesture_detected
-ros2 topic info /state/perception/face
-ros2 topic info /brain/skill_result
-ros2 topic info /tts
-```
-Expected: 每條 `Publisher count: ≥ 1`。任一 0 → 看 tmux pane，**不要只信 `✓ Demo running`**（CRLF 假成功前科）。補核：`ros2 node list`（含 brain_node/object_perception_node/vision_perception_node/face_identity_node/tts_node）。
-
-**Acceptance（0）：** 6 topic 全有 publisher、healthcheck 8 綠、frontend 開得起。
-
----
-
-## Task 1: Object 矩陣（第一優先 — 今天最大缺口）
-
-**Files:** `scripts/obj_matrix_cap.py`（量測）→ `artifacts/object_matrix/object_matrix.csv`（輸出）
-
-- [ ] **Step 1: 設 household 白名單 + 確認 conf 閾值**
-
-Run:
-```bash
-ros2 param set /object_perception_node class_whitelist "[39, 41, 45, 56, 63, 67, 73]"
+ros2 topic hz /perception/object/debug_image      # 應 ~6-8 Hz（有畫面）
+ros2 topic echo /event/object_detected --once     # 放個物體在鏡頭前，應有 JSON
 ros2 param get /object_perception_node confidence_threshold
 ```
-Expected: whitelist set 成功（39=bottle 41=cup 45=bowl 56=chair 63=laptop 67=phone 73=book；>1 元素 → 自動 INTEGER_ARRAY）。`confidence_threshold` 應是 **0.35**（yaml）；若回 `0.5`（launch 預設）→ cup 會偏 FAIL，先設法用 0.35 重啟 node 再量 cup。
+Expected: debug_image ~6-8 Hz、event 有資料、`confidence_threshold` = **0.35**。
+> ⚠️ 若 conf 回 `0.5`（launch 預設）→ cup 更易 FAIL → 先 `ros2 param set /object_perception_node confidence_threshold 0.35`（runtime callback `_on_param_changed` 有支援，line 247）再測。
 
-- [ ] **Step 2: 跑 chair → laptop → cup × 0.7/1.0/1.5m × normal（每格 5 trial，window 6）**
+**Acceptance（0）：** object debug_image 有畫面、`/event/object_detected` 有事件、conf=0.35。
 
-Run（每格一條；互動模式每 trial 按 Enter 前**停 >5s**；無人值守加 `--auto --gap 6`）:
+---
+
+## Task 1: 🥇 Cup 主測「能多遠辨識得到」
+
+- [ ] **Step 1: 切 cup-only**
+
+Run: `ros2 param set /object_perception_node class_whitelist "[41]"`
+Expected: set 成功（41=cup，單元素 runtime callback OK）。
+
+- [ ] **Step 2: cup × 距離 × 光線（每格 5 trial，window 6，間隔>5s）**
+
+Run（normal 4 距離 + backlit/dim 各近 2 格）:
 ```bash
-python3 scripts/obj_matrix_cap.py --object chair  --distance 0.7 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object chair  --distance 1.0 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object chair  --distance 1.5 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object laptop --distance 0.7 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object laptop --distance 1.0 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object laptop --distance 1.5 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup    --distance 0.7 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup    --distance 1.0 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup    --distance 1.5 --light normal --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
+# normal: 0.7 / 1.0 / 1.5 / 2.0m
+python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light normal  --trials 5 --window 6 --notes "size?/color?/bg?" --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object cup --distance 1.0 --light normal  --trials 5 --window 6 --notes "..." --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object cup --distance 1.5 --light normal  --trials 5 --window 6 --notes "..." --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object cup --distance 2.0 --light normal  --trials 5 --window 6 --notes "..." --out artifacts/object_matrix/cup_matrix.csv
+# backlit: 0.7 / 1.0
+python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light backlit --trials 5 --window 6 --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object cup --distance 1.0 --light backlit --trials 5 --window 6 --out artifacts/object_matrix/cup_matrix.csv
+# dim: 0.7 / 1.0
+python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light dim     --trials 5 --window 6 --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object cup --distance 1.0 --light dim     --trials 5 --window 6 --out artifacts/object_matrix/cup_matrix.csv
 ```
-Expected: 每格印 `CELL: PASS|DEGRADED|FAIL success=x/5 rate=... avg_conf=...`，append `artifacts/object_matrix/object_matrix.csv`。
-> ⚠️ false positive 太多 → 切單類對照：`ros2 param set /object_perception_node class_whitelist "[56]"`（chair）/ `"[63]"`（laptop）/ `"[41]"`（cup）。
+> 互動模式每 trial 按 Enter 前停 >5s；無人值守加 `--auto --gap 6`。
 
-- [ ] **Step 3: backlit 加 3 格（chair 1.0 / laptop 1.0 / cup 0.7）**
+- [ ] **Step 3: 3.0m 只做一次快速 sanity（不完整測）**
 
-Run:
+Run: `python3 scripts/obj_matrix_cap.py --object cup --distance 3.0 --light normal --trials 3 --window 6 --notes "sanity only" --out artifacts/object_matrix/cup_matrix.csv`
+> 預期 FAIL（9cm 杯 @3m ≈ 14px，像素物理）。確認「3m 看不到」就好，不糾結。
+
+- [ ] **Step 4: 手動記錄（CSV 不存的）**
+
+每格抄：**杯子大小/顏色、背景顏色與雜亂度、光線、是否反光、實測距離**（CSV 已自動存 success_rate/avg_conf/bbox/misclass）。顏色欄回 `Unknown`/`black`（杯子其實亮色）= 光太暗症狀。
+
+- [ ] **Step 5: 定 cup demo 距離**
+
+判定（CSV `cup_matrix.csv`）：`success_rate ≥0.8`(4/5)=**可用** / `≥0.6`(3/5)=**備援** / `<0.6`=**不主秀**；`avg_conf <0.45` 即使 pass 也不當頭牌。
+Record: **demo cup 鎖在哪個距離**（預期 ≤1.0-1.2m 最穩）。fallback 台詞（顏色不可靠）：「我看到桌上有杯子了，你要喝水嗎？」（**不帶顏色**）。
+
+**Acceptance（1）：** `cup_matrix.csv` 有 cup × 0.7/1.0/1.5/2.0(+3.0 sanity) × normal/backlit/dim；**demo cup 距離已定**。
+
+---
+
+## Task 2: Cup 救法（先 post-processing，不換模型）+ YOLO26s spike 條件
+
+- [ ] **Step 1: cup 不穩先試這些（比換模型快又可靠）**
+
+- 換**大、非透明、高對比**杯子（不要小/透明/亮面）。
+- 放**桌上**不放地上。
+- 背景用**深淺對比明顯**的布/紙（避免低對比、暗背景 → HSV V<50 顏色誤判 black）。
+- 光從**側前方**打，不要強逆光。
+- demo 距離鎖 **≤1.2m**。
+
+- [ ] **Step 2: YOLO26s spike — 只在這個條件才開**
+
+**觸發條件**：`cup 0.7m & 1.0m normal` 用好杯子/好光/好背景**都還 <0.8**。
+否則**不換**。原因（研究結論）：遠距小杯是**像素物理**（9cm@2m≈21-28px 逼近偵測下限），26s 在固定像素幫助有限；唯一物理槓桿是 **input 640→1280**（要 TRT 重匯出 ~3-10min，不是 param flip）。**今天不做 seg/pose/SAHI**。
+
+**Acceptance（2）：** cup 用 post-processing 救過一輪；spike 條件未達 → 不換模型，記 backlog。
+
+---
+
+## Task 3: chair/laptop 保底 sanity（**只在 cup 不穩時**）
+
+- [ ] **Step 1: cup 失敗才跑，各 1.0m × 3 次**
+
+Run（只在 cup demo 距離都 <0.8 時）:
 ```bash
-python3 scripts/obj_matrix_cap.py --object chair  --distance 1.0 --light backlit --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object laptop --distance 1.0 --light backlit --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup    --distance 0.7 --light backlit --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
+ros2 param set /object_perception_node class_whitelist "[56, 63]"   # chair+laptop
+python3 scripts/obj_matrix_cap.py --object chair  --distance 1.0 --light normal --trials 3 --window 6 --out artifacts/object_matrix/cup_matrix.csv
+python3 scripts/obj_matrix_cap.py --object laptop --distance 1.0 --light normal --trials 3 --window 6 --out artifacts/object_matrix/cup_matrix.csv
 ```
+> 目的只有一個：**確保 demo 有一個能用的物體**，不是研究所有物體。
 
-- [ ] **Step 4: 定主秀物體 + 2 備援**
-
-判定（CSV `verdict`/`low_conf` 欄）：`success_rate ≥0.8`(4/5)=**PASS** 主秀候選 / `≥0.6`(3/5)=**DEGRADED** 備援 / `<0.6`=**FAIL** 不上台。**`avg_confidence <0.45` → low_conf 旗標，即使 PASS 也不當頭牌**。
-Record: primary（normal 三距離 success_rate 最高且非 low_conf）+ 2 backup。預期 chair primary、cup 多半只 backup。
-
-**Acceptance（1）：** object_matrix.csv 有 chair/laptop/cup × 0.7/1.0/1.5 × normal + 3 backlit；**主秀物體 + 2 備援已定**。
+**Acceptance（3）：** cup 可用 → **跳過本 task**；cup 不可用 → chair 或 laptop 至少一個 ≥2/3 當 demo 物體。
 
 ---
 
-## Task 2: Cup 專項（有時間才做；決定 cup 能否當備援）
+## Task 4: face / sitting / gesture / safety — 只 smoke（不重測）
 
-- [ ] **Step 1: cup × light 三變數（0.7m）**
+- [ ] **Step 1: face 1 smoke**
 
-Run:
-```bash
-python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light normal  --trials 5 --window 6 --notes "front-light plain mid-V bg" --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light dim     --trials 5 --window 6 --notes "dim handheld" --out artifacts/object_matrix/object_matrix.csv
-python3 scripts/obj_matrix_cap.py --object cup --distance 0.7 --light backlit --trials 5 --window 6 --notes "window behind" --out artifacts/object_matrix/object_matrix.csv
-```
+做法：遮臉/離框 ~5s 再回框 → 應 emit `greet_known_person` + TTS「roy，歡迎回來…」。sim 明顯掉才 `pawai face enroll/rebuild`。
 
-- [ ] **Step 2: 手動補記（obj_matrix_cap 不存 debug image/lux/raw）**
+- [ ] **Step 2: sitting 5 次（不做 10-20）**
 
-Record（抄進 `--notes` 或筆記）：實際光源/lux、背景顏色與雜亂度、cup 真實顏色 vs CSV 顏色欄。若顏色欄回 `Unknown`/`black`（cup 其實亮色）= 光太暗的可見症狀（HSV V<50 強判 black）。
+Run: `ros2 topic echo /event/pose_detected`（pose 是 edge-emit，無 state topic）。坐 5 次數 `pose=="sitting"` 命中。
+判定：**≥4/5 → 台詞保留「我看到你坐下來了」**；<4/5 → 重啟 brain `-p greet_require_sitting:=false`（runtime set 是 no-op）+ 台詞改「Roy，歡迎回來，我看到你了」。
 
-**Acceptance（2）：** cup 降級決策有數據。cup normal <0.8 或 low_conf → **降 backup**，台詞限「近距桌上水杯」、**不講** 2m/地上/掉落/絆倒。fallback 台詞（顏色不可靠）：「我看到桌上有杯子了，你要喝水嗎？」（**不帶顏色**）。
+- [ ] **Step 3: gesture 只 thumbs_up（OK 可選）**
 
----
+Run: `ros2 topic echo /event/gesture_detected`（idle 應靜默）。比 thumbs_up → brain 回「收到，謝謝你！」。idle 30s false-trigger **必須=0**。OK 可當輔助確認，**不穩就丟**。wave/wiggle/多手勢今天不上台。
 
-## Task 3: Object → Brain 防幻覺
+- [ ] **Step 4: safety 快速 1 次（已驗過，當有了）**
 
-- [ ] **Step 1: ENGAGED 狀態放物體 + 放人/丟地上**
+Run（背景 `ros2 topic echo /brain/skill_result`）：對狗說「請翻跟斗」1 次 → 應 `blocked_by_safety`/`banned_api:1301`、`/webrtc_req` 無 1301、Go2 不動。確認一次即可。
 
-Run（背景開著）: `ros2 topic echo /event/object_detected`
-動作：人停在狗附近（ENGAGED）放杯子 → brain 應只說「看到…杯子了，你要喝水嗎？」；拿出一個人 / 往地上丟東西 → brain 應**保持沉默**。
-Record: brain plan/trace。
-
-**Acceptance（3）：** brain **不出現**任何含「人 / 掉了 / 在地上」的 object_remark；同類 60s 內只講一次（dedup 60s，key=class_name，person 在 build_object_tts 被 filter）。出現異常 = 記 bug。
+**Acceptance（4）：** face 講出問候；sitting 台詞鎖定（坐/不坐版）；thumbs_up 可動 + idle 0 誤觸；safety 1 次 blocked。
 
 ---
 
-## Task 4: Sitting 可靠度 + greet
+## Task 5: Studio evidence 截圖
 
-- [ ] **Step 1: sitting 可靠度（站/坐/站 10-20 組）**
+- [ ] **Step 1: 截一張同框圖**
 
-Run: `ros2 topic echo /event/pose_detected`（pose 是 edge-emit，沒有 state topic）
-做法：擺真實 sitting，數 10-20 次 emit 中 `pose != "sitting"` 佔比；`confidence` = label 在 20-frame 窗占比（非模型機率），<0.5 = buffer 不穩。交叉看 brain console 每 ~1s 印的 `pose: raw=... vote=...`。
-Record: misjudge 比例。
+跑一輪互動，截圖含：object(cup) + face + pose + gesture chip + brain trace(`/brain/skill_result`,`/state/pawai_brain`) + tts 氣泡。確認 gateway boot log「subscribed to 10 String topics + /tts + 2 capability Bool」（mock 不印 = 真 live）。
 
-- [ ] **Step 2: misjudge >10% → 關 sitting gate（須重啟 brain）**
-
-Run（runtime `param set` 是 no-op，必須重啟帶參數）:
-```bash
-# 重啟 brain_node 帶 -p greet_require_sitting:=false（改 start 腳本或單獨重啟 brain pane）
-ros2 run interaction_executive brain_node --ros-args -p greet_require_sitting:=false   # 視實際 launch 方式調整
-```
-fallback 台詞（不宣稱姿勢）：「Roy，歡迎回來，我看到你了」（去掉「坐下來了/坐著」）。
-
-- [ ] **Step 3: greet smoke**
-
-做法：遮臉/離框 ~5s 清掉 stable → 回框 → face 轉 stable 後應 emit `greet_known_person` + TTS。
-Expected: 進場觸發一次，20s cooldown 內不重複（steady-state 不觸發 = 正常）。
-
-**Acceptance（4）：** sitting misjudge 數字出來；greet 台詞鎖定（穩→可講坐；不穩→重啟關 gate + 去掉坐姿台詞）；greet smoke 實機講出「roy，歡迎回來…」。
+**Acceptance（5）：** 一張截圖同框證據鏈。
 
 ---
 
-## Task 5: Gesture thumbs_up（只測這個）
+## 今天不做 + 下一階段
 
-- [ ] **Step 1: idle 30s 零誤觸 + 正觸**
+**今天不做**：完整 chair/laptop/cup 矩陣 / 全 COCO / 換 YOLO26s（除非 cup 近距 normal 都不穩）/ segmentation / YOLO-pose / SAHI / D435 fusion / auto-resume / 回導航 / sitting 10-20 大測 / face 重測。
 
-Run: `ros2 topic echo /event/gesture_detected`（idle 應完全靜默）
-做法：idle 30s 數誤觸（必須=0）；比 thumbs_up → brain 應回「收到，謝謝你！」（demo-ack，不引 wiggle / 不要 OK 確認）。
-> demo-ack 模式：`ros2 param set /brain_node thumbs_up_demo_ack true`（runtime 可能同 init-cache 陷阱，建議 launch `-p`）。dedup `dedup_window_s=1.0` 防連發。
+**下一階段（vision MVP 收完才做）**：① 回 nav：**修 Studio 死掉的導航頁面**（改成至少有地圖/移動畫面，讓人看得出 Go2 在移動）② 繼續 nav 避障（物體辨識 + 導航避障是兩個最難項，先收 vision 再回頭）。
 
-**Acceptance（5）：** idle 30s thumbs_up plan = **0**；thumbs_up 可動、只簡單回應。台詞只講「靜態手勢」，**不可洗白失敗的 wave**（recall=0）。
+**收尾**：cup demo 距離 + fallback 台詞 + sitting 台詞版本 → 寫回 `references/project-status.md`，`/update-docs` commit。
 
 ---
 
-## Task 6: Studio 證據截圖
+## Self-Review
 
-- [ ] **Step 1: 確認 gateway 是真 node（非 mock）**
-
-Run: `curl -s http://localhost:8080/health`
-Expected: `"node":true`、subscriptions 列 10 條；gateway boot log 印「subscribed to 10 String topics + /tts + 2 capability Bool topics」（mock_server 不印這行）。
-
-- [ ] **Step 2: 一張截圖同框 4 感知 chip + brain trace + tts**
-
-跑一輪互動，截圖含：face(`/state/perception/face`) + gesture/pose(`/event/gesture_detected`或`/event/pose_detected`) + speech(`/event/speech_intent_recognized`) + object(`/event/object_detected`) + brain trace(`/brain/conversation_trace`+`/brain/skill_result`+`/state/pawai_brain`) + tts(`/tts` 氣泡)。
-> object chip 空 → 放近 chair/laptop/cup 並確認 whitelist。**不可宣稱** LED pass/fail chip wall（前端無 `/api/scoreboard`）。
-
-**Acceptance（6）：** 一張截圖同框完整證據鏈 + boot log 那行 = live 非 mock。
-
----
-
-## Task 7: Safety refusal（6/18 強亮點，不可被矩陣擠掉）
-
-- [ ] **Step 1: 「請翻跟斗」×3**
-
-Run（背景兩個 echo）:
-```bash
-ros2 topic echo /brain/skill_result    # 期望 status="blocked_by_safety" detail="banned_api:1301" selected_skill="request_backflip"
-ros2 topic echo /webrtc_req            # 全程「不可」出現 api_id: 1301
-```
-對狗說「請翻跟斗」連 3 次。
-Record: 3 次是否全 blocked、`/webrtc_req` 有無 1301、trace 截圖。安全台詞「這個動作不安全，我不能執行。」會照播（正常）。
-
-**Acceptance（7）：** 3/3 `blocked_by_safety`+`banned_api:1301`、`/webrtc_req` 全程**無** 1301、Go2 零移動。任一次 1301 上 `/webrtc_req` = **嚴重不通過，停下查 IE validate**。
-
----
-
-## Task 8: Under-load 效能
-
-- [ ] **Step 1: face+object+pose/gesture+Studio video 同跑量資源**
-
-Run: `jetson-status` skill 拿快照（RAM/GPU/Temp/Power/models/nodes）+ 手動吞吐：
-```bash
-ros2 topic hz /perception/object/debug_image    # ~6-8 Hz
-ros2 topic hz /face_identity/debug_image         # ~6.6 Hz
-```
-預算：RAM <5.5GB ok / >6.5 critical；GPU <95% ok；Temp <65 ok / >80 critical；Power <12W ok。
-
-- [ ] **Step 2: 隔離 Studio video-bridge 貢獻**
-
-做法：關掉瀏覽器 video 面板（停 `/ws/video` 訂閱）→ 再量一次 → 差值 = video-bridge 負載（對 3 條 debug image 各 `cv2.imencode` JPEG q70 5fps + WS 廣播）。
-Record: 加/不加負載前後 RAM/GPU/Temp/Power + debug_image Hz。
-
-**Acceptance（8）：** 一組 under-load 數字；卡頓**先懷疑 Studio video-bridge**，不要馬上換 YOLO。
-
----
-
-## 今天不做 + 判定速查表
-
-**今天不做**：換 YOLO / 全測 COCO 80 類 / D435 fusion / Reactive Patrol / DimOS live / 回頭刷短距 goto / auto-resume demo / segmentation / YOLO-pose。
-
-| 項目 | 通過門檻 | 不過怎麼辦 |
-|---|---|---|
-| **Object** | normal 任一物體 success_rate ≥0.8（4/5）且非 low_conf → primary | 全 <0.8 → 全降 backup，挑最高當開場 |
-| **Object cooldown** | `--window ≥6`、`--gap ≥6`、Enter 間隔 >5s | 用了預設 3s → 數據作廢重量 |
-| **Sitting** | misjudge ≤10% | >10% → **重啟** brain `-p greet_require_sitting:=false` + 台詞去掉「坐著」 |
-| **thumbs_up idle** | idle 30s thumbs_up plan = 0 | >0 → 記環境，調距離/光線重測 |
-| **Studio 證據鏈** | 一張截圖含 4 感知 chip + brain trace + tts + boot log「10 String + /tts + 2 Bool」 | 缺 boot log 行 → 看的是 mock_server，重起真 gateway |
-| **Safety** | 「請翻跟斗」×3 全 `blocked_by_safety`+`banned_api:1301`、`/webrtc_req` 無 1301 | 任一次 1301 上 `/webrtc_req` = 嚴重不通過，停下查 IE validate |
-
-**收尾（Phase 2 跑完）**：把 object 主秀/備援、sitting/greet 台詞、cup 降級、safety 結果寫回 `references/project-status.md` + demo flow 台詞鎖定，再 `/update-docs` commit。
-
----
-
-## Self-Review（對照下午需求）
-
-- ✅ stack bringup（0）、object 矩陣（1，含 cooldown gotcha + conf 0.35 check + 主秀決策）、cup 專項（2）、防幻覺（3）、sitting+greet（4，含 runtime no-op → 重啟）、gesture（5）、Studio 證據（6）、safety（7）、under-load（8）— 涵蓋使用者鎖定的下午全序。
-- ✅ 每 Task 有 exact 指令 + acceptance gate + fallback 台詞。
-- ✅ 關鍵陷阱內嵌：object 5s cooldown(window 6)、conf 0.35 vs 0.5、greet_require_sitting init-cached(重啟)、pose edge-emit-only、Studio boot-log、safety 1301。
-- 註：全為硬體 HITL（Roy 執行），無 subagent code task。完整可貼指令見姊妹 playbook。
+- ✅ 主線只 cup `[41]`（Task 1）；chair/laptop 只保底 sanity（Task 3，cup 失敗才跑）。
+- ✅ 距離 0.7/1.0/1.5/2.0m + 3.0 sanity（非 1/2/3 直跳）。
+- ✅ 先確認 RGB/object pipeline + conf 0.35（Task 0 Step 3）。
+- ✅ cooldown 防誤判：window 6 + 間隔>5s（硬規則 + Task 1）。
+- ✅ 不換 YOLO，spike 條件明確（Task 2）；seg/pose/SAHI 排除。
+- ✅ face/sitting/gesture/safety 只 smoke（Task 4，sitting 5 次非 10-20）。
+- ✅ Studio nav 死頁面 → 下一階段（不在今天）。
