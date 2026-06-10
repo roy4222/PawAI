@@ -40,6 +40,7 @@ export function useEventStream(): UseEventStreamResult {
   const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
   const updateCapability = useStateStore((s) => s.updateCapability);
   const updateNav = useStateStore((s) => s.updateNav);
+  const setGestureToggleEnabled = useStateStore((s) => s.setGestureToggleEnabled);
   const { evaluateEvent } = useLayoutManager();
 
   const onMessage = useCallback(
@@ -83,6 +84,11 @@ export function useEventStream(): UseEventStreamResult {
             event.event_type === "conversation_trace_shadow"
           ) {
             appendConversationTrace(data as unknown as ConversationTracePayload);
+          } else if (event.event_type === "gesture_enabled") {
+            // Demo-recording P0 手勢開關廣播（gateway /api/gesture_enabled）。
+            if (typeof data.enabled === "boolean") {
+              setGestureToggleEnabled(data.enabled);
+            }
           } else if ("executive_state" in data) {
             updateBrainState(toPawAIBrainState(data as unknown as LegacyBrainLike));
           }
@@ -173,6 +179,7 @@ export function useEventStream(): UseEventStreamResult {
       appendTtsMessage,
       updateCapability,
       updateNav,
+      setGestureToggleEnabled,
       evaluateEvent,
     ]
   );

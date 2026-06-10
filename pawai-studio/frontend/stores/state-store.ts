@@ -70,6 +70,9 @@ interface StateStore {
   navPose: NavPose | null;
   navReactiveStop: NavReactiveStop | null;
   navPaused: boolean;
+  // Demo-recording P0 手勢開關 — null = unknown（gateway 尚未回報；
+  // brain yaml 預設 OFF，UI 不可假設 ON）。
+  gestureToggleEnabled: boolean | null;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -86,6 +89,7 @@ interface StateStore {
   updateCapability: (name: keyof CapabilityState, value: CapabilityTriState) => void;
   setPlanMode: (mode: PlanMode) => void;
   updateNav: (patch: NavPatch) => void;
+  setGestureToggleEnabled: (enabled: boolean | null) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -107,6 +111,7 @@ export const useStateStore = create<StateStore>((set) => ({
   navPose: null,
   navReactiveStop: null,
   navPaused: false,
+  gestureToggleEnabled: null,
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -171,4 +176,5 @@ export const useStateStore = create<StateStore>((set) => ({
       navReactiveStop: patch.reactiveStop ?? state.navReactiveStop,
       navPaused: patch.paused ?? state.navPaused,
     })),
+  setGestureToggleEnabled: (enabled) => set({ gestureToggleEnabled: enabled }),
 }));

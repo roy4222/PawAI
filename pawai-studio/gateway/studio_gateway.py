@@ -196,6 +196,14 @@ class GatewayNode(Node):
         self._reset_pub = self.create_publisher(
             Empty, "/brain/reset_context", 10
         )
+        # Demo-recording P0 (6/9 plan): Studio 手勢開關 → brain_node 的
+        # /brain/gesture_enabled Bool subscriber（RELIABLE depth-10 VOLATILE，
+        # rclpy depth=10 預設 QoS 即相容）。data=true → 手勢啟用。
+        self._gesture_enabled_pub = self.create_publisher(
+            Bool, "/brain/gesture_enabled", 10
+        )
+        # 最後一次發布值的 cache（None = 本 session 尚未有人切換過）。
+        self._gesture_enabled_last: bool | None = None
 
         # Subscribers — ROS2 → browser
         for topic, source in TOPIC_MAP.items():
@@ -454,6 +462,20 @@ class GatewayNode(Node):
         self._reset_pub.publish(Empty())
         self.get_logger().info("Published reset_context to /brain/reset_context")
 
+    def publish_gesture_enabled(self, enabled: bool) -> None:
+        """Demo P0: publish Bool to /brain/gesture_enabled + cache last value."""
+        msg = Bool()
+        msg.data = bool(enabled)
+        self._gesture_enabled_pub.publish(msg)
+        self._gesture_enabled_last = bool(enabled)
+        self.get_logger().info(
+            f"Published gesture_enabled={enabled} to /brain/gesture_enabled"
+        )
+
+    def gesture_enabled_snapshot(self) -> bool | None:
+        """Last value published via Studio this session (None = untouched)."""
+        return self._gesture_enabled_last
+
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
         if video_clients is None:
@@ -495,6 +517,10 @@ class SkillRequestPayload(BaseModel):
 class TextInputPayload(BaseModel):
     text: str
     request_id: str | None = None
+
+
+class GestureEnabledPayload(BaseModel):
+    enabled: bool
 
 
 def _spin_ros2(ros_node: Node) -> None:
@@ -752,6 +778,38 @@ async def post_reset():
         return {"ok": False, "error": "ros_node_not_ready"}
     node.publish_reset_context()
     return {"ok": True}
+
+
+@app.post("/api/gesture_enabled")
+async def post_gesture_enabled(payload: GestureEnabledPayload):
+    """Demo-recording P0: Studio 手勢開關 → /brain/gesture_enabled Bool。
+
+    publish + cache + 廣播 brain:gesture_enabled 事件到 /ws/events，
+    讓所有開啟的 Studio 視窗同步 toggle 狀態。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    node.publish_gesture_enabled(payload.enabled)
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "gesture_enabled",
+        "data": {"enabled": payload.enabled},
+    })
+    return {"ok": True, "enabled": payload.enabled}
+
+
+@app.get("/api/gesture_enabled")
+async def get_gesture_enabled():
+    """回傳 gateway cache 的手勢開關值（null = 本 session 尚未切換過）。
+
+    注意：這是 gateway 端 cache，不是 brain 端真值 — brain yaml 預設
+    gesture_enabled: false，所以 null 應視為 OFF。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready", "enabled": None}
+    return {"ok": True, "enabled": node.gesture_enabled_snapshot()}
 
 
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────

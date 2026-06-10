@@ -6,6 +6,7 @@ import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
 import { Composer } from "@/components/chat/composer";
+import { GestureToggle } from "@/components/chat/gesture-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
@@ -380,7 +381,13 @@ export function ChatPanel() {
   if (!hasMessages) {
     return (
       <div className="flex h-full flex-col">
-        <BrainStatusPill />
+        {/* 空狀態也要看得到手勢開關（demo 錄影 P0 操作員控制，常駐 header）。 */}
+        <div className="flex items-center justify-between">
+          <BrainStatusPill />
+          <div className="mr-2 mt-2">
+            <GestureToggle />
+          </div>
+        </div>
         <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
           <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
             <div className="flex flex-col items-center gap-3 -mt-16">
@@ -416,16 +423,19 @@ export function ChatPanel() {
         className="flex items-center justify-between bg-background"
       >
         <BrainStatusPill />
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleNewConversation}
-          title="重置全局對話記憶（所有 device 共用）"
-          aria-label="新對話"
-          className="mr-2 h-8 w-8 text-muted-foreground hover:text-foreground"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
+        <div className="mr-2 flex items-center gap-1.5">
+          <GestureToggle />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleNewConversation}
+            title="重置全局對話記憶（所有 device 共用）"
+            aria-label="新對話"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <div
         ref={scrollContainerRef}

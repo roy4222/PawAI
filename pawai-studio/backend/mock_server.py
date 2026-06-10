@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import os
 import random
 import sys
@@ -231,6 +232,80 @@ async def periodic_mock_push() -> None:
             except Exception as e:
                 print(f"[mock] Error generating {source} event: {e}", flush=True)
 
+
+# ── Mock nav events（餵 nav-map-canvas，WSL 免 Jetson 可動畫）──────────
+# 事件 shape 鏡像 studio_gateway._broadcast_nav：source="nav"，event_type
+# pose {x,y,yaw,covariance_xy} / reactive_stop {zone,obstacle_distance,
+# reactive_stop_active,nav_paused} / paused {paused}。
+# 座標限制在 v8 地圖內（origin -2.41/-2.81、0.05 m/px、205×98px →
+# world 約 x∈[-2.41,7.84] y∈[-2.81,2.09]）。DEMO_GOAL = (1.2, 0.6)。
+
+def _nav_event(event_type: str, data: dict) -> dict:
+    return {
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "nav",
+        "event_type": event_type,
+        "data": data,
+    }
+
+
+# 小矩形迴圈（world metres，含 DEMO_GOAL 角落）。
+_NAV_LOOP_CORNERS = [(-0.5, -0.5), (1.2, -0.5), (1.2, 0.6), (-0.5, 0.6)]
+_NAV_STEP_M = 0.08  # 每 tick 0.08m @ 2Hz ≈ 0.16 m/s
+
+_ZONE_DISTANCE = {"clear": 1.8, "slow": 0.85, "danger": 0.45}
+
+# nav_demo scenario 進行中時，週期 nav loop 讓路（否則兩組 pose 互打，
+# 三角形會在地圖上跳來跳去）。
+_nav_demo_active = False
+
+
+async def periodic_nav_push() -> None:
+    """~2Hz pose 沿迴圈走 + reactive_stop zone 週期循環 + paused=false。"""
+    seg = 0
+    x, y = _NAV_LOOP_CORNERS[0]
+    tick = 0
+    while True:
+        await asyncio.sleep(0.5)
+        if not manager.active or _nav_demo_active:
+            continue
+        tick += 1
+        try:
+            tx, ty = _NAV_LOOP_CORNERS[(seg + 1) % len(_NAV_LOOP_CORNERS)]
+            dx, dy = tx - x, ty - y
+            dist = math.hypot(dx, dy)
+            if dist <= _NAV_STEP_M:
+                x, y = tx, ty
+                seg = (seg + 1) % len(_NAV_LOOP_CORNERS)
+            else:
+                x += dx / dist * _NAV_STEP_M
+                y += dy / dist * _NAV_STEP_M
+            yaw = math.atan2(dy, dx)
+            await manager.broadcast(_nav_event("pose", {
+                "x": round(x, 4),
+                "y": round(y, 4),
+                "yaw": round(yaw, 4),
+                "covariance_xy": 0.02,
+            }))
+            # zone 循環：20 tick (10s) 週期 — 12 clear / 4 slow / 4 danger，
+            # reactive_stop 每 2 tick 發一次（1Hz）。
+            if tick % 2 == 0:
+                phase = tick % 20
+                zone = "clear" if phase < 12 else ("slow" if phase < 16 else "danger")
+                await manager.broadcast(_nav_event("reactive_stop", {
+                    "zone": zone,
+                    "obstacle_distance": round(
+                        _ZONE_DISTANCE[zone] + random.uniform(-0.05, 0.05), 2
+                    ),
+                    "reactive_stop_active": zone == "danger",
+                    "nav_paused": False,
+                }))
+            if tick % 10 == 0:
+                await manager.broadcast(_nav_event("paused", {"paused": False}))
+        except Exception as e:
+            print(f"[mock] nav push error: {e}", flush=True)
+
 # ── Demo A 場景 ─────────────────────────────────────────────────────
 
 DEMO_A_SEQUENCE = [
@@ -302,8 +377,10 @@ async def broadcast_brain_event(event_type: str, data: dict) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(periodic_mock_push())
+    nav_task = asyncio.create_task(periodic_nav_push())
     yield
     task.cancel()
+    nav_task.cancel()
 
 app = FastAPI(title="PawAI Studio Gateway + Mock", lifespan=lifespan)
 
@@ -694,6 +771,34 @@ async def post_capability(payload: _CapabilityPayload):
     return {"ok": True, "name": payload.name, "state": payload.state}
 
 
+# ── Gesture toggle（demo-recording P0）— 鏡像 gateway /api/gesture_enabled ──
+# in-memory state；None = 本 session 尚未切換過（brain 預設 OFF）。
+_mock_gesture_enabled: dict[str, bool | None] = {"enabled": None}
+
+
+class _GestureEnabledPayload(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/gesture_enabled")
+async def get_gesture_enabled():
+    return {"ok": True, "enabled": _mock_gesture_enabled["enabled"]}
+
+
+@app.post("/api/gesture_enabled")
+async def post_gesture_enabled(payload: _GestureEnabledPayload):
+    """Mock 手勢開關 — 與 gateway 同 envelope，讓 toggle 可在 WSL 煙測。"""
+    _mock_gesture_enabled["enabled"] = payload.enabled
+    await manager.broadcast({
+        "id": _uid(),
+        "timestamp": _ts(),
+        "source": "brain",
+        "event_type": "gesture_enabled",
+        "data": {"enabled": payload.enabled},
+    })
+    return {"ok": True, "enabled": payload.enabled}
+
+
 @app.get("/api/plan_mode")
 async def get_plan_mode():
     return {"ok": True, "mode": _mock_plan_mode["mode"]}
@@ -729,6 +834,63 @@ async def mock_trigger(trigger: MockTrigger):
 async def mock_demo_a():
     asyncio.create_task(run_demo_a())
     return {"status": "started", "scenario": "demo_a", "steps": len(DEMO_A_SEQUENCE)}
+
+
+@app.post("/mock/scenario/nav_demo")
+async def mock_scenario_nav_demo():
+    """Scripted 10s nav 段（20 步 × 0.5s）：
+
+    直線朝 DEMO_GOAL (1.2, 0.6) 走 → 中途 slow → danger（nav_paused，
+    pose 停住）→ clear 後續走到 goal。給 nav-map-canvas 錄影排練用。
+    """
+    async def run() -> None:
+        global _nav_demo_active
+        _nav_demo_active = True
+        try:
+            start = (-0.5, -0.5)
+            goal = (1.2, 0.6)
+            yaw = math.atan2(goal[1] - start[1], goal[0] - start[0])
+            steps = 20
+            # zone 腳本：0-6 clear / 7-8 slow / 9-11 danger(pause) / 12-19 clear
+            moving_steps = sum(
+                1 for i in range(steps) if i <= 8 or i >= 12
+            )
+            progress = 0
+            for i in range(steps):
+                if i <= 6:
+                    zone, paused = "clear", False
+                elif i <= 8:
+                    zone, paused = "slow", False
+                elif i <= 11:
+                    zone, paused = "danger", True
+                else:
+                    zone, paused = "clear", False
+                if not paused:
+                    progress += 1
+                frac = progress / moving_steps
+                x = start[0] + (goal[0] - start[0]) * frac
+                y = start[1] + (goal[1] - start[1]) * frac
+                await manager.broadcast(_nav_event("pose", {
+                    "x": round(x, 4),
+                    "y": round(y, 4),
+                    "yaw": round(yaw, 4),
+                    "covariance_xy": 0.02,
+                }))
+                await manager.broadcast(_nav_event("reactive_stop", {
+                    "zone": zone,
+                    "obstacle_distance": round(
+                        _ZONE_DISTANCE[zone] + random.uniform(-0.05, 0.05), 2
+                    ),
+                    "reactive_stop_active": zone == "danger",
+                    "nav_paused": paused,
+                }))
+                await manager.broadcast(_nav_event("paused", {"paused": paused}))
+                await asyncio.sleep(0.5)
+        finally:
+            _nav_demo_active = False
+
+    asyncio.create_task(run())
+    return {"ok": True, "scenario": "nav_demo", "duration_s": 10}
 
 @app.post("/mock/scenario/self_introduce")
 async def mock_scenario_self_introduce():
