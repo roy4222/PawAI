@@ -163,7 +163,9 @@ tmux send-keys -t "$SESSION:vision" \
   "$ROS_SETUP && ros2 launch vision_perception vision_perception.launch.py \
     use_camera:=true \
     pose_backend:=mediapipe gesture_backend:=recognizer \
-    max_hands:=2 publish_fps:=8" Enter
+    max_hands:=2 publish_fps:=8 \
+    pose_two_class:=true pose_min_avg_score:=0.15 sitting_trunk_max_deg:=45.0 \
+    gesture_recognizer_min_conf:=0.7 gesture_min_votes:=3" Enter
 sleep 5
 
 # --- Window 4: Interaction Executive v0 (replaces router + bridge) ---

@@ -357,10 +357,11 @@ Expected: AMCL active（`ros2 lifecycle get /amcl`）、`/capability/nav_ready`=
 - [ ] thumbs_up → 「你要我 WeGo 一下嗎？」→ 比 OK → wiggle(1020) 真的扭
 - [ ] greet：Roy 坐下 → 「Roy，歡迎回來。我看到你坐下來了。」（sitting 抖 → `ros2 param set /brain_node greet_require_sitting false`）
 - [ ] Studio nav 驗收 B：起 nav stack（`REACTIVE_PROFILE=indoor_tight`）→ AMCL active → Studio 三角形對到 Go2 真實相對位置 + 朝向；推 0.3m 三角形同向移動；遮 LiDAR 變紅
+- [ ] **全系統 under-load 壓測（尚未完成，不能拿前面 brain-only 測試代替）**：同時啟 Go2 driver + camera + face + object + vision pose/gesture + Studio gateway/frontend + nav stack（RPLIDAR/AMCL/reactive_stop）+ D435/depth_safety；量 60 秒 FPS、TTS 延遲、Studio websocket 延遲、CPU/GPU/RAM/溫度、ROS topic 是否掉幀。若 OOM/卡頓/延遲過高，結論就是「錄影分 take，不宣稱全 stack 同跑」；若穩定，才可考慮一鏡同跑。
 - [ ] safety refusal：Studio text_input 打「翻跟斗」→ 紅 BLOCKED + 「這個動作不安全，我不能執行」+ Go2 不動
 - [ ] gesture_enabled gate：`ros2 param set /brain_node gesture_enabled false` → 比讚無反應；設 true → 恢復
 
-> nav stack 與 full demo **8GB 互斥**：S1 nav take 與 S2–S5 vision take **分開拍**，切 take 間 `pawai demo stop` + `ros2 node list` 歸零再起另一套。
+> nav stack 與 full demo **目前按互斥假設處理**，因為全系統 under-load 尚未測。S1 nav take 與 S2–S5 vision take 預設**分開拍**，切 take 間 `pawai demo stop` + `ros2 node list` 歸零再起另一套；只有全系統壓測通過後，才考慮同跑。
 
 ---
 

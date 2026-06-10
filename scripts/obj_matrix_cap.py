@@ -11,10 +11,10 @@ class 有沒有被偵測到。跑完 N trials 聚合成一筆 row：成功率 / 
 用法（互動：每 trial 擺好場景按 Enter）：
     python3 scripts/obj_matrix_cap.py --object chair --distance 1.0 --light normal --angle front
     python3 scripts/obj_matrix_cap.py --object cup --distance 1.5 --light backlit --angle side \\
-        --trials 5 --window 3 --out artifacts/object_matrix/object_matrix.csv
+        --trials 5 --window 6 --out artifacts/object_matrix/object_matrix.csv
 
 自動模式（不等 Enter，trial 間固定間隔）：
-    python3 scripts/obj_matrix_cap.py --object laptop --distance 1.0 --light normal --auto --gap 2
+    python3 scripts/obj_matrix_cap.py --object laptop --distance 1.0 --light normal --auto
 
 需先啟 object_perception（/event/object_detected 活著）。
 """
@@ -33,6 +33,27 @@ sys.path.insert(0, str(REPO_ROOT))
 from benchmarks.core.object_matrix import (  # noqa: E402
     CSV_HEADER, csv_row, other_labels, summarize_cell, summarize_trial,
 )
+
+OBJECT_EVENT_COOLDOWN_S = 5.0
+
+
+def validate_timing(window: float, gap: float, auto: bool,
+                    allow_short_window: bool = False) -> list[str]:
+    """Validate capture windows against object_perception's per-class cooldown."""
+    warnings: list[str] = []
+    if window < OBJECT_EVENT_COOLDOWN_S:
+        msg = f"window {window}s is below object cooldown {OBJECT_EVENT_COOLDOWN_S}s"
+        if allow_short_window:
+            warnings.append(msg)
+        else:
+            raise ValueError(msg)
+    if auto and gap < OBJECT_EVENT_COOLDOWN_S:
+        msg = f"gap {gap}s is below object cooldown {OBJECT_EVENT_COOLDOWN_S}s"
+        if allow_short_window:
+            warnings.append(msg)
+        else:
+            raise ValueError(msg)
+    return warnings
 
 
 def _capture_trials(args, events, lock):
@@ -83,15 +104,26 @@ def main(argv=None) -> int:
     p.add_argument("--light", required=True, help="light condition, e.g. normal/backlit/side/dim")
     p.add_argument("--angle", default="front", help="viewing angle, e.g. front/side/45")
     p.add_argument("--trials", type=int, default=5)
-    p.add_argument("--window", type=float, default=3.0, help="每 trial 收集窗 (秒)")
+    p.add_argument("--window", type=float, default=6.0, help="每 trial 收集窗 (秒)")
     p.add_argument("--conf-min", type=float, default=0.0,
                    help="harness 端額外信心門檻（node 預設已 0.5 過濾，預設 0=不再過濾）")
     p.add_argument("--object-topic", default="/event/object_detected")
     p.add_argument("--auto", action="store_true", help="不等 Enter，trial 間固定間隔自動跑")
-    p.add_argument("--gap", type=float, default=2.0, help="--auto 模式 trial 間隔 (秒)")
+    p.add_argument("--gap", type=float, default=6.0, help="--auto 模式 trial 間隔 (秒)")
     p.add_argument("--out", default="artifacts/object_matrix/object_matrix.csv")
     p.add_argument("--notes", default="")
+    p.add_argument("--allow-short-window", action="store_true",
+                   help="allow window/gap below object cooldown for debugging")
     args = p.parse_args(argv)
+
+    try:
+        for warning in validate_timing(
+            args.window, args.gap, args.auto, args.allow_short_window
+        ):
+            print(f"warning: {warning}", file=sys.stderr)
+    except ValueError as exc:
+        print(f"timing error: {exc}", file=sys.stderr)
+        return 2
 
     import rclpy
     from rclpy.node import Node
