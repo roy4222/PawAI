@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useEventStore } from "@/stores/event-store";
 import { useStateStore } from "@/stores/state-store";
+import type { NavControl, NavControlState } from "@/stores/state-store";
 import { useLayoutManager } from "@/hooks/use-layout-manager";
 import { normalizeObjectState } from "@/lib/object-event";
 import type {
@@ -40,6 +41,7 @@ export function useEventStream(): UseEventStreamResult {
   const appendTtsMessage = useStateStore((s) => s.appendTtsMessage);
   const updateCapability = useStateStore((s) => s.updateCapability);
   const updateNav = useStateStore((s) => s.updateNav);
+  const setNavControl = useStateStore((s) => s.setNavControl);
   const setGestureToggleEnabled = useStateStore((s) => s.setGestureToggleEnabled);
   const { evaluateEvent } = useLayoutManager();
 
@@ -149,6 +151,21 @@ export function useEventStream(): UseEventStreamResult {
             });
           } else if (event.event_type === "paused") {
             updateNav({ paused: Boolean(data.paused) });
+          } else if (event.event_type === "nav_control") {
+            // Operator nav-driving state machine (demo S1 "move to scene").
+            const s = data.state;
+            const validState: NavControlState =
+              s === "running" || s === "paused_confirm" || s === "done"
+                ? s
+                : "idle";
+            const control: NavControl = {
+              state: validState,
+              target_m: typeof data.target_m === "number" ? (data.target_m as number) : 0,
+              remaining_m:
+                typeof data.remaining_m === "number" ? (data.remaining_m as number) : 0,
+              reason: typeof data.reason === "string" ? (data.reason as string) : undefined,
+            };
+            setNavControl(control);
           }
           break;
         case "system":
@@ -179,6 +196,7 @@ export function useEventStream(): UseEventStreamResult {
       appendTtsMessage,
       updateCapability,
       updateNav,
+      setNavControl,
       setGestureToggleEnabled,
       evaluateEvent,
     ]

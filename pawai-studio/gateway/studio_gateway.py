@@ -12,7 +12,9 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
+import math
 import sys
 import threading
 import time
@@ -32,6 +34,16 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Bool, Empty, String
 from geometry_msgs.msg import PoseWithCovarianceStamped
+
+# Operator-controlled nav driving (S1 "move to scene"). go2_interfaces +
+# rclpy.action are absent on WSL dev boxes — guard so py_compile / pytest
+# still pass there. nav_start() fail-closes when GotoRelative is None.
+try:
+    from go2_interfaces.action import GotoRelative
+    from rclpy.action import ActionClient
+except ImportError:
+    GotoRelative = None
+    ActionClient = None
 
 from asr_client import resample_to_wav16k, transcribe
 
@@ -96,6 +108,22 @@ TOPIC_MAP: dict[str, str] = {
 
 FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
 MAX_AUDIO_BYTES = 5 * 1024 * 1024  # 5MB payload cap for speech
+
+# ── Operator-controlled nav driving (S1 "move to scene") ────────
+# Conservative clamps for a REAL 12kg robot dog. distance ≥0.2 so a click
+# never sends a sub-deadband micro-goal; ≤2.0 so one click never sends the
+# dog across the room. yaw_offset ±π/2.
+NAV_DISTANCE_MIN_M = 0.2
+NAV_DISTANCE_MAX_M = 2.0
+NAV_YAW_MAX_RAD = 1.57
+NAV_DEFAULT_DISTANCE_M = 1.2
+NAV_DANGER_ZONE = "danger"
+NAV_SERVER_WAIT_S = 2.0
+# rviz AMCL initial-pose default covariance diagonal (x, y var 0.25 m²;
+# yaw var 0.06853 rad²). Off-diagonals zero.
+NAV_INITIALPOSE_COV_X = 0.25
+NAV_INITIALPOSE_COV_Y = 0.25
+NAV_INITIALPOSE_COV_YAW = 0.06853892326654787
 
 
 def _parse_tts_payload(raw: str) -> dict:
@@ -204,6 +232,36 @@ class GatewayNode(Node):
         )
         # 最後一次發布值的 cache（None = 本 session 尚未有人切換過）。
         self._gesture_enabled_last: bool | None = None
+
+        # ── Operator-controlled nav driving (S1) ────────────────────
+        # /initialpose set from a frontend map click; /nav/goto_relative
+        # action drives a short relative walk. The danger-cancel hook in
+        # _on_reactive_stop_status CANCELS the goal on obstacle so the dog
+        # STAYS stopped — operator must click 繼續 to re-send (6/9 HITL
+        # lunge finding: NO auto-resume in tight space).
+        self._initialpose_pub = self.create_publisher(
+            PoseWithCovarianceStamped, "/initialpose", 10
+        )
+        self._nav_client = (
+            ActionClient(self, GotoRelative, "/nav/goto_relative")
+            if (ActionClient and GotoRelative)
+            else None
+        )
+        # nav-control state — mutated from FastAPI handler threads AND the
+        # reactive_stop ROS callback thread → ALL access under _nav_lock.
+        # states: idle | running | paused_confirm | done
+        # goal_handle holds the live ClientGoalHandle; goal_token is a fresh
+        # object per goal so stale callbacks (late CANCELED after preempt)
+        # can no-op via identity check.
+        self._nav_lock = threading.Lock()
+        self._nav_ctrl: dict = {
+            "state": "idle",
+            "goal_handle": None,
+            "goal_token": None,
+            "remaining_m": 0.0,
+            "target_m": 0.0,
+            "danger_cancel": False,
+        }
 
         # Subscribers — ROS2 → browser
         for topic, source in TOPIC_MAP.items():
@@ -356,8 +414,9 @@ class GatewayNode(Node):
             return
         zone = payload.get("zone")
         obstacle_distance = payload.get("obstacle_distance")
+        zone_str = zone if isinstance(zone, str) else "clear"
         self._broadcast_nav("reactive_stop", {
-            "zone": zone if isinstance(zone, str) else "clear",
+            "zone": zone_str,
             "obstacle_distance": (
                 float(obstacle_distance)
                 if isinstance(obstacle_distance, (int, float))
@@ -366,6 +425,255 @@ class GatewayNode(Node):
             "reactive_stop_active": bool(payload.get("reactive_stop_active", False)),
             "nav_paused": bool(payload.get("nav_paused", False)),
         })
+        # ── DANGER auto-cancel hook (runs in ROS executor thread) ──
+        # reactive_stop handles the PHYSICAL stop. We additionally CANCEL the
+        # nav goal so the dog will NOT auto-resume when the obstacle clears.
+        # Operator must click 繼續 → nav_resume() re-sends a fresh goto.
+        if zone_str == NAV_DANGER_ZONE:
+            self._nav_danger_cancel()
+
+    def _nav_danger_cancel(self) -> None:
+        """Obstacle entered danger zone while running → cancel + paused_confirm.
+
+        cancel_goal_async is non-blocking (safe in the ROS callback thread).
+        Holds _nav_lock; broadcasts outside? No — _broadcast_nav only schedules
+        a coroutine on the loop, it does not touch _nav_ctrl, so calling it
+        under the lock is fine and keeps the state snapshot consistent.
+        """
+        with self._nav_lock:
+            if self._nav_ctrl["state"] != "running":
+                return
+            handle = self._nav_ctrl.get("goal_handle")
+            # Invalidate token first so the (eventual) CANCELED result no-ops.
+            self._nav_ctrl["goal_token"] = None
+            self._nav_ctrl["goal_handle"] = None
+            self._nav_ctrl["state"] = "paused_confirm"
+            self._nav_ctrl["danger_cancel"] = True
+            target = self._nav_ctrl["target_m"]
+            remaining = self._nav_ctrl["remaining_m"]
+        if handle is not None:
+            try:
+                handle.cancel_goal_async()
+            except Exception as exc:  # pragma: no cover — best-effort cancel
+                self.get_logger().warn(f"nav danger cancel failed: {exc}")
+        self.get_logger().warn(
+            "Nav DANGER → goal cancelled, paused_confirm (operator must resume)"
+        )
+        self._broadcast_nav("nav_control", {
+            "state": "paused_confirm",
+            "target_m": round(target, 3),
+            "remaining_m": round(remaining, 3),
+            "reason": "obstacle",
+        })
+
+    # ── Operator-controlled nav driving — public API (FastAPI threads) ──
+    def publish_initialpose(self, x: float, y: float, yaw: float) -> dict:
+        """Publish /initialpose for AMCL (from a frontend map click)."""
+        msg = PoseWithCovarianceStamped()
+        msg.header.frame_id = "map"
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.pose.pose.position.x = float(x)
+        msg.pose.pose.position.y = float(y)
+        msg.pose.pose.position.z = 0.0
+        msg.pose.pose.orientation.z = math.sin(float(yaw) / 2.0)
+        msg.pose.pose.orientation.w = math.cos(float(yaw) / 2.0)
+        # rviz AMCL initial-pose default covariance: diag(x, y, 0,0,0, yaw).
+        cov = [0.0] * 36
+        cov[0] = NAV_INITIALPOSE_COV_X      # x var
+        cov[7] = NAV_INITIALPOSE_COV_Y      # y var
+        cov[35] = NAV_INITIALPOSE_COV_YAW   # yaw var
+        msg.pose.covariance = cov
+        self._initialpose_pub.publish(msg)
+        self.get_logger().info(
+            f"Published /initialpose x={x:.3f} y={y:.3f} yaw={yaw:.3f}"
+        )
+        return {"ok": True, "x": float(x), "y": float(y), "yaw": float(yaw)}
+
+    def _nav_broadcast_ctrl(self, snapshot: dict, reason: str | None = None) -> None:
+        data = {
+            "state": snapshot["state"],
+            "target_m": round(snapshot["target_m"], 3),
+            "remaining_m": round(snapshot["remaining_m"], 3),
+        }
+        if reason:
+            data["reason"] = reason
+        self._broadcast_nav("nav_control", data)
+
+    def _nav_send_goto(self, distance: float, yaw_offset: float) -> object:
+        """Build + dispatch a GotoRelative goal; return the fresh goal_token.
+
+        Caller must hold _nav_lock and have already set state="running".
+        Non-blocking: callbacks bound to the token via functools.partial.
+        """
+        goal = GotoRelative.Goal()
+        goal.distance = float(distance)
+        goal.yaw_offset = float(yaw_offset)
+        goal.max_speed = 0.0  # advisory — actual speed managed by nav stack
+        token = object()
+        self._nav_ctrl["goal_token"] = token
+        self._nav_ctrl["goal_handle"] = None
+        send_future = self._nav_client.send_goal_async(
+            goal,
+            feedback_callback=functools.partial(self._on_nav_feedback, token),
+        )
+        send_future.add_done_callback(
+            functools.partial(self._on_nav_goal_response, token)
+        )
+        return token
+
+    def nav_start(self, distance: float = NAV_DEFAULT_DISTANCE_M,
+                  yaw_offset: float = 0.0) -> dict:
+        """開始 — dispatch a short relative goto. Fail-closed if no server."""
+        if self._nav_client is None:
+            return {"ok": False, "error": "nav_server_unavailable"}
+        if not self._nav_client.wait_for_server(timeout_sec=NAV_SERVER_WAIT_S):
+            return {"ok": False, "error": "nav_server_unavailable"}
+        distance = max(NAV_DISTANCE_MIN_M, min(NAV_DISTANCE_MAX_M, float(distance)))
+        yaw_offset = max(-NAV_YAW_MAX_RAD, min(NAV_YAW_MAX_RAD, float(yaw_offset)))
+        with self._nav_lock:
+            self._nav_ctrl["state"] = "running"
+            self._nav_ctrl["target_m"] = distance
+            self._nav_ctrl["remaining_m"] = distance
+            self._nav_ctrl["danger_cancel"] = False
+            self._nav_send_goto(distance, yaw_offset)
+            snapshot = dict(self._nav_ctrl)
+        self.get_logger().info(
+            f"Nav START distance={distance:.2f}m yaw={yaw_offset:.2f}rad"
+        )
+        self._nav_broadcast_ctrl(snapshot)
+        return {"ok": True, "state": "running",
+                "target_m": round(distance, 3), "remaining_m": round(distance, 3)}
+
+    def nav_resume(self) -> dict:
+        """繼續 — operator-confirmed resume. Re-send goto for remaining_m.
+
+        Only valid from paused_confirm. If the obstacle is still in the danger
+        zone, the danger hook will immediately re-pause — that is correct/safe.
+        """
+        if self._nav_client is None:
+            return {"ok": False, "error": "nav_server_unavailable"}
+        with self._nav_lock:
+            if self._nav_ctrl["state"] != "paused_confirm":
+                return {"ok": False, "error": "not_paused",
+                        "state": self._nav_ctrl["state"]}
+            remaining = self._nav_ctrl["remaining_m"]
+            if remaining < NAV_DISTANCE_MIN_M:
+                # Already effectively there — finish rather than send a
+                # sub-deadband micro-goal the Go2 would silently ignore.
+                self._nav_ctrl["state"] = "done"
+                self._nav_ctrl["goal_token"] = None
+                self._nav_ctrl["goal_handle"] = None
+                snapshot = dict(self._nav_ctrl)
+                self._nav_broadcast_ctrl(snapshot, reason="remaining_below_min")
+                return {"ok": True, "state": "done",
+                        "remaining_m": round(remaining, 3)}
+            self._nav_ctrl["state"] = "running"
+            self._nav_ctrl["danger_cancel"] = False
+            self._nav_send_goto(remaining, 0.0)
+            snapshot = dict(self._nav_ctrl)
+        self.get_logger().info(f"Nav RESUME (operator) remaining={remaining:.2f}m")
+        self._nav_broadcast_ctrl(snapshot, reason="operator_resume")
+        return {"ok": True, "state": "running", "remaining_m": round(remaining, 3)}
+
+    def nav_stop(self) -> dict:
+        """停止 — cancel everything, back to idle."""
+        with self._nav_lock:
+            handle = self._nav_ctrl.get("goal_handle")
+            self._nav_ctrl["goal_token"] = None
+            self._nav_ctrl["goal_handle"] = None
+            self._nav_ctrl["state"] = "idle"
+            self._nav_ctrl["danger_cancel"] = False
+            snapshot = dict(self._nav_ctrl)
+        if handle is not None:
+            try:
+                handle.cancel_goal_async()
+            except Exception as exc:  # pragma: no cover — best-effort cancel
+                self.get_logger().warn(f"nav stop cancel failed: {exc}")
+        self.get_logger().info("Nav STOP → idle")
+        self._nav_broadcast_ctrl(snapshot, reason="operator_stop")
+        return {"ok": True, "state": "idle"}
+
+    def nav_control_snapshot(self) -> dict:
+        with self._nav_lock:
+            return {
+                "state": self._nav_ctrl["state"],
+                "target_m": round(self._nav_ctrl["target_m"], 3),
+                "remaining_m": round(self._nav_ctrl["remaining_m"], 3),
+                "danger_cancel": bool(self._nav_ctrl["danger_cancel"]),
+            }
+
+    # ── Nav action callbacks (run in ROS executor thread) ──────────
+    def _on_nav_goal_response(self, token, future) -> None:
+        # token identity guard — ignore if a newer goal / stop / danger-cancel
+        # has superseded this one (stale callback after preempt).
+        try:
+            goal_handle = future.result()
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warn(f"nav goal send error: {exc}")
+            with self._nav_lock:
+                if self._nav_ctrl["goal_token"] is token:
+                    self._nav_ctrl["state"] = "idle"
+                    self._nav_ctrl["goal_token"] = None
+                    snapshot = dict(self._nav_ctrl)
+                else:
+                    return
+            self._nav_broadcast_ctrl(snapshot, reason="send_error")
+            return
+        with self._nav_lock:
+            if self._nav_ctrl["goal_token"] is not token:
+                return  # superseded
+            if not getattr(goal_handle, "accepted", False):
+                self._nav_ctrl["state"] = "idle"
+                self._nav_ctrl["goal_token"] = None
+                self._nav_ctrl["goal_handle"] = None
+                snapshot = dict(self._nav_ctrl)
+                self.get_logger().warn("nav goal rejected by /nav/goto_relative")
+                self._nav_broadcast_ctrl(snapshot, reason="rejected")
+                return
+            self._nav_ctrl["goal_handle"] = goal_handle
+        result_future = goal_handle.get_result_async()
+        result_future.add_done_callback(
+            functools.partial(self._on_nav_result, token)
+        )
+
+    def _on_nav_feedback(self, token, feedback_msg) -> None:
+        """Track remaining distance from feedback.distance_to_goal."""
+        fb = getattr(feedback_msg, "feedback", None)
+        if fb is None:
+            return
+        dist_to_goal = getattr(fb, "distance_to_goal", None)
+        if dist_to_goal is None:
+            return
+        with self._nav_lock:
+            if self._nav_ctrl["goal_token"] is not token:
+                return
+            self._nav_ctrl["remaining_m"] = max(0.0, float(dist_to_goal))
+
+    def _on_nav_result(self, token, future) -> None:
+        try:
+            result = future.result().result
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warn(f"nav result error: {exc}")
+            return
+        success = bool(getattr(result, "success", False))
+        with self._nav_lock:
+            # Stale-result guard: a danger-cancel / stop has already moved us
+            # to paused_confirm / idle (token cleared). Do NOT flip that.
+            if self._nav_ctrl["goal_token"] is not token:
+                return
+            if self._nav_ctrl["state"] != "running":
+                return
+            if success:
+                self._nav_ctrl["state"] = "done"
+                self._nav_ctrl["remaining_m"] = 0.0
+                reason = "reached"
+            else:
+                self._nav_ctrl["state"] = "idle"
+                reason = "failed"
+            self._nav_ctrl["goal_token"] = None
+            self._nav_ctrl["goal_handle"] = None
+            snapshot = dict(self._nav_ctrl)
+        self._nav_broadcast_ctrl(snapshot, reason=reason)
 
     def _on_nav_paused(self, msg: Bool) -> None:
         self._broadcast_nav("paused", {"paused": bool(msg.data)})
@@ -521,6 +829,17 @@ class TextInputPayload(BaseModel):
 
 class GestureEnabledPayload(BaseModel):
     enabled: bool
+
+
+class NavInitialPosePayload(BaseModel):
+    x: float
+    y: float
+    yaw: float
+
+
+class NavStartPayload(BaseModel):
+    distance: float = NAV_DEFAULT_DISTANCE_M
+    yaw_offset: float = 0.0
 
 
 def _spin_ros2(ros_node: Node) -> None:
@@ -810,6 +1129,46 @@ async def get_gesture_enabled():
     if node is None:
         return {"ok": False, "error": "ros_node_not_ready", "enabled": None}
     return {"ok": True, "enabled": node.gesture_enabled_snapshot()}
+
+
+# ── Operator-controlled nav driving (S1 "move to scene") ────────
+# Workflow: /api/nav/initialpose (map click) → /api/nav/start (開始) →
+# obstacle in danger zone auto-cancels → paused_confirm → /api/nav/resume
+# (繼續, operator-confirmed) → /api/nav/stop (停止). NO auto-resume.
+
+@app.post("/api/nav/initialpose")
+async def post_nav_initialpose(payload: NavInitialPosePayload):
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return node.publish_initialpose(payload.x, payload.y, payload.yaw)
+
+
+@app.post("/api/nav/start")
+async def post_nav_start(payload: NavStartPayload):
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return node.nav_start(payload.distance, payload.yaw_offset)
+
+
+@app.post("/api/nav/resume")
+async def post_nav_resume():
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return node.nav_resume()
+
+
+@app.post("/api/nav/stop")
+async def post_nav_stop():
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return node.nav_stop()
+
+
+@app.get("/api/nav/control")
+async def get_nav_control():
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    return {"ok": True, **node.nav_control_snapshot()}
 
 
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────

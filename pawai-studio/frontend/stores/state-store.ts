@@ -51,6 +51,17 @@ export interface NavPatch {
   paused?: boolean;
 }
 
+// Operator nav-driving control state (demo S1 "move to scene").
+// state machine mirrors gateway: idle → running → paused_confirm → (resume)running → done.
+export type NavControlState = "idle" | "running" | "paused_confirm" | "done";
+
+export interface NavControl {
+  state: NavControlState;
+  target_m: number;
+  remaining_m: number;
+  reason?: string; // populated on paused_confirm (e.g. "偵測到障礙，已停止")
+}
+
 interface StateStore {
   faceState: FaceState | null;
   speechState: SpeechState | null;
@@ -70,6 +81,7 @@ interface StateStore {
   navPose: NavPose | null;
   navReactiveStop: NavReactiveStop | null;
   navPaused: boolean;
+  navControl: NavControl | null;
   // Demo-recording P0 手勢開關 — null = unknown（gateway 尚未回報；
   // brain yaml 預設 OFF，UI 不可假設 ON）。
   gestureToggleEnabled: boolean | null;
@@ -89,6 +101,7 @@ interface StateStore {
   updateCapability: (name: keyof CapabilityState, value: CapabilityTriState) => void;
   setPlanMode: (mode: PlanMode) => void;
   updateNav: (patch: NavPatch) => void;
+  setNavControl: (control: NavControl | null) => void;
   setGestureToggleEnabled: (enabled: boolean | null) => void;
 }
 
@@ -111,6 +124,7 @@ export const useStateStore = create<StateStore>((set) => ({
   navPose: null,
   navReactiveStop: null,
   navPaused: false,
+  navControl: null,
   gestureToggleEnabled: null,
 
   updateFaceState: (state) => set({ faceState: state }),
@@ -176,5 +190,6 @@ export const useStateStore = create<StateStore>((set) => ({
       navReactiveStop: patch.reactiveStop ?? state.navReactiveStop,
       navPaused: patch.paused ?? state.navPaused,
     })),
+  setNavControl: (control) => set({ navControl: control }),
   setGestureToggleEnabled: (enabled) => set({ gestureToggleEnabled: enabled }),
 }));

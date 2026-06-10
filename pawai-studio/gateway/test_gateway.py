@@ -376,3 +376,389 @@ class TestScoreboardEndpoint:
         target = tmp_path / "custom.json"
         monkeypatch.setenv("PAWAI_SCOREBOARD_PATH", str(target))
         assert _scoreboard_path() == target
+
+
+# ── Operator-controlled nav driving (S1 "move to scene") ────────
+
+
+class _FakeGoalHandle:
+    """Stand-in for rclpy ClientGoalHandle. Records cancel calls."""
+
+    def __init__(self, accepted: bool = True):
+        self.accepted = accepted
+        self.cancel_calls = 0
+
+    def cancel_goal_async(self):
+        self.cancel_calls += 1
+        return object()
+
+    def get_result_async(self):
+        # Return a future-like object that never fires in these tests; we drive
+        # _on_nav_result manually instead.
+        class _Fut:
+            def add_done_callback(self, cb):
+                pass
+        return _Fut()
+
+
+class _FakeActionClient:
+    """Stand-in for rclpy ActionClient. server_ready toggles fail-closed path."""
+
+    def __init__(self, server_ready: bool = True):
+        self._server_ready = server_ready
+        self.sent_goals = []
+
+    def wait_for_server(self, timeout_sec=2.0):
+        return self._server_ready
+
+    def server_is_ready(self):
+        return self._server_ready
+
+    def send_goal_async(self, goal, feedback_callback=None):
+        self.sent_goals.append(goal)
+
+        class _Fut:
+            def add_done_callback(self, cb):
+                pass
+        return _Fut()
+
+
+def _make_nav_node(server_ready: bool = True):
+    """Build a GatewayNode shell that exercises the REAL nav state machine
+    without an rclpy runtime. Bypasses Node.__init__; wires only the attrs the
+    nav methods touch. _broadcast_nav is stubbed to record envelopes.
+    """
+    import threading as _threading
+    from studio_gateway import GatewayNode, GotoRelative
+
+    node = GatewayNode.__new__(GatewayNode)
+    node._nav_lock = _threading.Lock()
+    node._nav_ctrl = {
+        "state": "idle", "goal_handle": None, "goal_token": None,
+        "remaining_m": 0.0, "target_m": 0.0, "danger_cancel": False,
+    }
+    node._nav_client = _FakeActionClient(server_ready=server_ready)
+    node._broadcasts = []
+    node._broadcast_nav = lambda et, data: node._broadcasts.append((et, data))
+
+    class _Logger:
+        def info(self, *a, **k):
+            pass
+
+        def warn(self, *a, **k):
+            pass
+    node.get_logger = lambda: _Logger()
+    # GotoRelative is None on WSL — give nav_start a goal-builder stub so the
+    # real dispatch path runs without go2_interfaces.
+    if GotoRelative is None:
+        import studio_gateway as sg
+
+        class _Goal:
+            distance = 0.0
+            yaw_offset = 0.0
+            max_speed = 0.0
+
+        class _GotoStub:
+            Goal = _Goal
+        sg.GotoRelative = _GotoStub
+        node._patched_goto = True
+    else:
+        node._patched_goto = False
+    return node
+
+
+def _unpatch_goto(node):
+    if getattr(node, "_patched_goto", False):
+        import studio_gateway as sg
+        sg.GotoRelative = None
+
+
+class TestNavStateMachine:
+    """Exercise the REAL nav danger-cancel → paused_confirm → resume FSM."""
+
+    def test_start_running(self):
+        node = _make_nav_node()
+        try:
+            out = node.nav_start(distance=1.2)
+            assert out["ok"] is True
+            assert out["state"] == "running"
+            assert node._nav_ctrl["state"] == "running"
+            assert node._nav_ctrl["target_m"] == 1.2
+            assert node._nav_ctrl["remaining_m"] == 1.2
+            assert len(node._nav_client.sent_goals) == 1
+        finally:
+            _unpatch_goto(node)
+
+    def test_start_clamps_distance(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=99.0)
+            assert node._nav_ctrl["target_m"] == 2.0  # NAV_DISTANCE_MAX_M
+            node._nav_ctrl["state"] = "idle"
+            node.nav_start(distance=0.01)
+            assert node._nav_ctrl["target_m"] == 0.2  # NAV_DISTANCE_MIN_M
+        finally:
+            _unpatch_goto(node)
+
+    def test_start_fail_closed_when_no_server(self):
+        node = _make_nav_node(server_ready=False)
+        try:
+            out = node.nav_start(distance=1.0)
+            assert out["ok"] is False
+            assert out["error"] == "nav_server_unavailable"
+            assert node._nav_ctrl["state"] == "idle"
+        finally:
+            _unpatch_goto(node)
+
+    def test_danger_cancels_and_paused_confirm(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.2)
+            handle = _FakeGoalHandle()
+            node._nav_ctrl["goal_handle"] = handle  # simulate accepted goal
+            node._nav_danger_cancel()
+            assert node._nav_ctrl["state"] == "paused_confirm"
+            assert node._nav_ctrl["danger_cancel"] is True
+            assert node._nav_ctrl["goal_token"] is None
+            assert handle.cancel_calls == 1  # goal cancelled — NO auto-resume
+        finally:
+            _unpatch_goto(node)
+
+    def test_danger_noop_when_not_running(self):
+        node = _make_nav_node()
+        try:
+            # idle → danger is a no-op (nothing to cancel)
+            node._nav_danger_cancel()
+            assert node._nav_ctrl["state"] == "idle"
+            assert node._nav_ctrl["danger_cancel"] is False
+        finally:
+            _unpatch_goto(node)
+
+    def test_resume_only_from_paused_confirm(self):
+        node = _make_nav_node()
+        try:
+            # running → resume rejected
+            node.nav_start(distance=1.0)
+            out = node.nav_resume()
+            assert out["ok"] is False
+            assert out["error"] == "not_paused"
+        finally:
+            _unpatch_goto(node)
+
+    def test_resume_resends_remaining(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.2)
+            node._nav_ctrl["remaining_m"] = 0.8  # simulate feedback progress
+            handle = _FakeGoalHandle()
+            node._nav_ctrl["goal_handle"] = handle
+            node._nav_danger_cancel()
+            assert node._nav_ctrl["state"] == "paused_confirm"
+            before = len(node._nav_client.sent_goals)
+            out = node.nav_resume()
+            assert out["ok"] is True
+            assert out["state"] == "running"
+            assert out["remaining_m"] == 0.8
+            assert len(node._nav_client.sent_goals) == before + 1
+            assert node._nav_client.sent_goals[-1].distance == 0.8
+        finally:
+            _unpatch_goto(node)
+
+    def test_resume_below_min_marks_done(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.2)
+            node._nav_ctrl["remaining_m"] = 0.05  # below NAV_DISTANCE_MIN_M
+            node._nav_danger_cancel()  # no handle → just transitions
+            node._nav_ctrl["state"] = "paused_confirm"
+            out = node.nav_resume()
+            assert out["ok"] is True
+            assert out["state"] == "done"  # no sub-deadband micro-goal
+        finally:
+            _unpatch_goto(node)
+
+    def test_stop_cancels_to_idle(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.0)
+            handle = _FakeGoalHandle()
+            node._nav_ctrl["goal_handle"] = handle
+            out = node.nav_stop()
+            assert out["ok"] is True
+            assert out["state"] == "idle"
+            assert handle.cancel_calls == 1
+        finally:
+            _unpatch_goto(node)
+
+    def test_feedback_tracks_remaining(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.2)
+            token = node._nav_ctrl["goal_token"]
+
+            class _FB:
+                class feedback:
+                    distance_to_goal = 0.45
+            node._on_nav_feedback(token, _FB())
+            assert node._nav_ctrl["remaining_m"] == 0.45
+        finally:
+            _unpatch_goto(node)
+
+    def test_stale_result_does_not_flip_paused_confirm(self):
+        """A late CANCELED result after danger-cancel must NOT resume the dog."""
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.0)
+            stale_token = node._nav_ctrl["goal_token"]
+            handle = _FakeGoalHandle()
+            node._nav_ctrl["goal_handle"] = handle
+            node._nav_danger_cancel()  # token cleared, state=paused_confirm
+
+            class _Inner:
+                class result:
+                    success = False
+
+            class _Fut:
+                def result(self):
+                    return _Inner()
+            # stale result for the cancelled goal arrives late
+            node._on_nav_result(stale_token, _Fut())
+            assert node._nav_ctrl["state"] == "paused_confirm"
+        finally:
+            _unpatch_goto(node)
+
+    def test_result_success_marks_done(self):
+        node = _make_nav_node()
+        try:
+            node.nav_start(distance=1.0)
+            token = node._nav_ctrl["goal_token"]
+
+            class _Inner:
+                class result:
+                    success = True
+
+            class _Fut:
+                def result(self):
+                    return _Inner()
+            node._on_nav_result(token, _Fut())
+            assert node._nav_ctrl["state"] == "done"
+            assert node._nav_ctrl["remaining_m"] == 0.0
+        finally:
+            _unpatch_goto(node)
+
+
+class TestNavEndpoints:
+    """FastAPI endpoint wiring: node-None fail-closed + delegation to node.
+
+    Route coroutines are driven via asyncio.run with the module-level `node`
+    monkeypatched — this avoids the lifespan (which would call rclpy.init).
+    The existing tests follow the same monkeypatch-`node` pattern.
+    """
+
+    def test_initialpose_node_none(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+        monkeypatch.setattr(sg, "node", None)
+        out = asyncio.run(sg.post_nav_initialpose(
+            sg.NavInitialPosePayload(x=1.0, y=2.0, yaw=0.0)))
+        assert out["ok"] is False
+        assert out["error"] == "ros_node_not_ready"
+
+    def test_initialpose_calls_publish(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        class _FakeNode:
+            def __init__(self):
+                self.calls = []
+
+            def publish_initialpose(self, x, y, yaw):
+                self.calls.append((x, y, yaw))
+                return {"ok": True, "x": x, "y": y, "yaw": yaw}
+        fn = _FakeNode()
+        monkeypatch.setattr(sg, "node", fn)
+        out = asyncio.run(sg.post_nav_initialpose(
+            sg.NavInitialPosePayload(x=1.5, y=-0.5, yaw=0.3)))
+        assert out["ok"] is True
+        assert fn.calls == [(1.5, -0.5, 0.3)]
+
+    def test_start_node_none_returns_not_ready(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+        monkeypatch.setattr(sg, "node", None)
+        out = asyncio.run(sg.post_nav_start(sg.NavStartPayload(distance=1.2)))
+        assert out["ok"] is False
+        assert out["error"] == "ros_node_not_ready"
+
+    def test_start_delegates(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        class _FakeNode:
+            def nav_start(self, distance, yaw_offset):
+                return {"ok": True, "state": "running",
+                        "target_m": distance, "remaining_m": distance}
+        monkeypatch.setattr(sg, "node", _FakeNode())
+        out = asyncio.run(sg.post_nav_start(
+            sg.NavStartPayload(distance=0.9, yaw_offset=0.2)))
+        assert out["ok"] is True
+        assert out["state"] == "running"
+        assert out["target_m"] == 0.9
+
+    def test_control_get_returns_state(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        class _FakeNode:
+            def nav_control_snapshot(self):
+                return {"state": "paused_confirm", "target_m": 1.2,
+                        "remaining_m": 0.6, "danger_cancel": True}
+        monkeypatch.setattr(sg, "node", _FakeNode())
+        out = asyncio.run(sg.get_nav_control())
+        assert out["ok"] is True
+        assert out["state"] == "paused_confirm"
+        assert out["remaining_m"] == 0.6
+
+    def test_control_get_node_none(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+        monkeypatch.setattr(sg, "node", None)
+        out = asyncio.run(sg.get_nav_control())
+        assert out["ok"] is False
+        assert out["error"] == "ros_node_not_ready"
+
+    def test_resume_only_works_in_paused_confirm(self, monkeypatch):
+        """Endpoint delegates; node returns not_paused outside paused_confirm."""
+        import asyncio
+        import studio_gateway as sg
+
+        class _FakeNode:
+            def __init__(self):
+                self.state = "running"
+
+            def nav_resume(self):
+                if self.state != "paused_confirm":
+                    return {"ok": False, "error": "not_paused",
+                            "state": self.state}
+                return {"ok": True, "state": "running"}
+        fn = _FakeNode()
+        monkeypatch.setattr(sg, "node", fn)
+        out = asyncio.run(sg.post_nav_resume())
+        assert out["ok"] is False
+        assert out["error"] == "not_paused"
+        fn.state = "paused_confirm"
+        out2 = asyncio.run(sg.post_nav_resume())
+        assert out2["ok"] is True
+        assert out2["state"] == "running"
+
+    def test_stop_delegates(self, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        class _FakeNode:
+            def nav_stop(self):
+                return {"ok": True, "state": "idle"}
+        monkeypatch.setattr(sg, "node", _FakeNode())
+        out = asyncio.run(sg.post_nav_stop())
+        assert out["ok"] is True
+        assert out["state"] == "idle"

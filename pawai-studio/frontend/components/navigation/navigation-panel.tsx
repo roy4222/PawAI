@@ -4,6 +4,7 @@ import { useStateStore } from "@/stores/state-store";
 import { GateChip } from "@/components/shared/gate-chip";
 import { useTogglePlanMode } from "@/hooks/use-toggle-plan-mode";
 import { NavMapCanvas } from "@/components/navigation/nav-map-canvas";
+import { NavControl } from "@/components/navigation/nav-control";
 
 /**
  * NavigationPanel — Sheet content for the "navigation" feature button.
@@ -84,8 +85,11 @@ export function NavigationPanel() {
         </div>
       </section>
 
-      {/* Section 3 — Nav map (live pose + goal + status) */}
+      {/* Section 3 — Nav map (live pose + goal + status + set initialpose) */}
       <NavMapCanvas />
+
+      {/* Section 4 — Operator nav-driving controls (demo S1 移動進場) */}
+      <NavControl />
     </div>
   );
 }
