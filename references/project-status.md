@@ -1,7 +1,30 @@
 # 專案狀態
 
-**最後更新**：2026-06-10（7 項 demo-blocking 修法全上線+上機驗證 `b1b1520`；vision/object `26c9f69`；studio gesture toggle `e0879c6`；工具+研究 `f0cb621`；S1 Studio 操作員導航控制 `295f917`；HITL 錄完 S2-S5、S1 卡在 AMCL covariance 閘）
+**最後更新**：2026-06-10 晚（**demo 影片全錄完（含 S1）→ 重構正式啟動**：Phase 1 architecture audit `3b964cb`、六項拍板 D1-D6、master plan + Plan A-E `c57786f`、baseline tag `post-demo-refactor-baseline-2026-06-10`=`b1f0bc4` 已 push）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/10 晚：demo 錄完 → 重構啟動（audit + 六拍板 + master plan + Plan A-E，4 commits）
+
+**晚場主軸**：Roy 確認 demo 影片全部錄完（含 S1；用哪個方案錄成待補記——影響 nav capability ladder 上 operator-confirm 迴圈的分級），拍板「不等 6/18，POST_DEMO_ONLY 解鎖」開始重構。整晚產出 = 盤點 → 拍板 → 施工圖，零 runtime 程式碼變更（唯一 .py 改動是一條過期測試修復）。
+
+### 1. Phase 0/1：凍結 + 全 repo 架構盤點（`24280ef` snapshot tag / `3b964cb` audit）
+- demo 凍結：`docs/pawai-demo/2026-06-10-demo-snapshot.md` + tag `demo-2026-06-snapshot`（回滾點）。
+- **Audit**（29 agents：10 子系統 mapper + 6 方向評估 + 13 批對抗性查證）：99 條 findings 逐條開證據檔核實（98 成立、OBJECT-1 部分駁回已修正、BRAIN skill 數勘誤 27→30）。產出 `docs/superpowers/specs/2026-06-10-pawai-architecture-audit.md`（15 節主報告 + Top 10 + 前 5 specs + 前 3 Codex plans）+ findings ledger。
+- 標籤分布：SAFE_TO_REFACTOR_NOW 32 / POST_DEMO_ONLY 47 / MUST_PRESERVE 13 / NEEDS_HITL 6 / NEEDS_RESEARCH 1。
+
+### 2. 六項拍板（grill-me 逐題，全文見 master plan §4）
+D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先行**兩層（Tier1=Brain/Studio/CLI、Tier2=感知硬體）+ 三入口（PR gate / pre-commit path-triggered <10s / runtime gate）｜D3 CLI 第一刀=deploy 安全+healthcheck **hard-block**(+`--skip-healthcheck`)+status；`~/sync` 降 opt-in；school 退役｜D4 **pawai_contracts 開工**，正式推翻「三份拷貝故意論」與「pawai_brain 不依賴 IE」→ 新規：兩者共同依賴 contracts｜D5 **Trace 邊界**：schema=contracts、發射=Brain/IE、落盤=gateway `runtime/traces/{session_id}.jsonl`、CLI 只讀（「不再發明第三套 trace」）｜D6 ISM 詳細 plan 延後（等 Router golden fixtures + Trace 實錄），設計約束已凍結。
+
+### 3. Plan 0 執行（`b1f0bc4`）+ 施工圖（`c57786f`）
+- Plan 0 塌縮成執行清單（working tree 本來就乾淨、commits 本來就分主題）：修 object 過期測試（COLOR_ZH 4 色 assert vs 實際 12 色，5/6 擴色時沒同步——**object 測試不在 CI 的活證據**，順手加分類器覆蓋不變量測試）→ 四套全綠（IE 258 / vision 138 / object 41 / studio tsc 0）→ push → tag **`post-demo-refactor-baseline-2026-06-10`**。
+- **Master plan + 五份 implementation plans**（`docs/superpowers/plans/2026-06-10-post-demo-refactor-master-plan.md` + plan-a~e）：A CI/CD Guardrails、B CLI v2 第一刀、C pawai_contracts 抽取、D Brain Router Phase 0（golden fixture 雙路徑等價）、E Brain Trace v1（每個 gate 早退發 suppressed + decision_id 串鏈）。每份含 scope/files/steps(含完整 code)/tests/rollback/forbidden scope。
+- 寫 plan 時核實的兩個坑已內建：gateway pytest 需 rclpy（只能跑 Tier-2 ROS container）；pawai_brain 2 個測試檔間接 import rclpy（CI 排除）。
+
+### 待辦（接手即做）
+- **執行 Plan A**（CI 護城河，Codex 串行、每 suite 一 PR + 紅綠驗證）→ B → C → D → E。
+- 待 Roy 決策殘項（不擋第一批，master plan §9）：dead-code 歸檔原則 / docs/hitl 治理 / **S1 錄製方式補記** / Studio operator enforcement / Ollama 層 / object A/B+pose observer HITL 排期 / stop-resume 終局。
 
 ---
 
@@ -41,10 +64,10 @@
 - 模型升級研究：`docs/pawai-brain/research/2026-06-10-model-upgrade-decision-research.md`（object/pose/D435 曝光 SOP）。
 - review 未修小事（不擋 demo）：gesture toggle `ros2 param get` stale、gateway cache VOLATILE 脫鉤、reset 沒清 active_step。
 
-### 待辦（接手即做）
-- **S1 收尾**：決定 0.5m / 放寬閘 / 設準 initialpose 三選一，補錄移動畫面。可補 gateway rejection-reason 廣播讓 Studio 不再靜默。
-- 收工：停 nav stack（`nav-avoidance-lane cleanup`）+ frontend、push 今天 5 commits。
-- demo 後：Brain v2 / CLI v2 PRD 審核 + 開工。
+### 待辦（→ 6/10 晚全數收掉）
+- ~~S1 收尾三選一 + 補錄~~ → ✅ 已錄成（方式待補記，見 6/10 晚段）；rejection-reason 廣播收進 Plan B/E。
+- ~~收工停 stack + push~~ → ✅ 已收、已 push + 雙 tag。
+- ~~Brain v2 / CLI v2 PRD 審核~~ → ✅ 升級為 audit + master plan + Plan A-E（6/10 晚段）。
 
 ---
 
