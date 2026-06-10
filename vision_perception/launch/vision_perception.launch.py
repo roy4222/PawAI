@@ -28,6 +28,13 @@ def generate_launch_description():
         DeclareLaunchArgument("gesture_every_n_ticks", default_value="3"),
         DeclareLaunchArgument("gesture_recognizer_model",
                               default_value="~/face_models/gesture_recognizer.task"),
+        # 6/9 HITL demo-blocking 參數（Roy 拍板）— 預設值 = 現行行為，
+        # demo 覆寫見 scripts/start_full_demo_tmux.sh
+        DeclareLaunchArgument("pose_min_avg_score", default_value="0.2"),
+        DeclareLaunchArgument("sitting_trunk_max_deg", default_value="35.0"),
+        DeclareLaunchArgument("pose_two_class", default_value="false"),
+        DeclareLaunchArgument("gesture_recognizer_min_conf", default_value="0.0"),
+        DeclareLaunchArgument("gesture_min_votes", default_value="1"),
         Node(
             package="vision_perception",
             executable="vision_perception_node",
@@ -46,6 +53,16 @@ def generate_launch_description():
                 {"publish_fps": ParameterValue(LaunchConfiguration("publish_fps"), value_type=float)},
                 {"gesture_every_n_ticks": ParameterValue(LaunchConfiguration("gesture_every_n_ticks"), value_type=int)},
                 {"gesture_recognizer_model": LaunchConfiguration("gesture_recognizer_model")},
+                {"pose_min_avg_score": ParameterValue(
+                    LaunchConfiguration("pose_min_avg_score"), value_type=float)},
+                {"sitting_trunk_max_deg": ParameterValue(
+                    LaunchConfiguration("sitting_trunk_max_deg"), value_type=float)},
+                {"pose_two_class": ParameterValue(
+                    LaunchConfiguration("pose_two_class"), value_type=bool)},
+                {"gesture_recognizer_min_conf": ParameterValue(
+                    LaunchConfiguration("gesture_recognizer_min_conf"), value_type=float)},
+                {"gesture_min_votes": ParameterValue(
+                    LaunchConfiguration("gesture_min_votes"), value_type=int)},
             ],
             output="screen",
         ),

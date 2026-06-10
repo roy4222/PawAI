@@ -23,8 +23,10 @@ from .dynamic_gesture_detector import WaveDetector
 from .event_builder import build_gesture_event, build_pose_event
 from .gesture_classifier import classify_gesture, detect_ok_circle
 from .mock_inference import MockInference
+from .voting import majority_vote as _majority
 from .pose_classifier import (
     classify_pose,
+    to_two_class,
     _angle_deg,
     _trunk_angle_deg,
     _mid,
@@ -59,14 +61,6 @@ _HAND_CONNECTIONS = [
     (0, 17), (17, 18), (18, 19), (19, 20), # pinky
     (5, 9), (9, 13), (13, 17),             # palm
 ]
-
-
-def _majority(buffer: deque) -> str | None:
-    """Return most common non-None element, or None if empty."""
-    items = [x for x in buffer if x is not None]
-    if not items:
-        return None
-    return max(set(items), key=items.count)
 
 
 def _bbox_ratio_from_kps(body_kps: np.ndarray) -> float | None:
@@ -111,6 +105,13 @@ class VisionPerceptionNode(Node):
         # /event/gesture_detected is published. Default 0.5 per MOC; set 0.0
         # for live-debug bypass (`ros2 param set ... gesture_stable_s 0.0`).
         self.declare_parameter("gesture_stable_s", 0.5)
+        # 6/9 HITL demo-blocking 參數（Roy 拍板）— pose 事件全空 + 手勢誤觸修正。
+        # 預設值維持現行行為；demo 由 scripts/start_full_demo_tmux.sh launch args 覆寫。
+        self.declare_parameter("pose_min_avg_score", 0.2)      # classify_pose avg score 門檻
+        self.declare_parameter("sitting_trunk_max_deg", 35.0)  # sitting 軀幹傾角上限
+        self.declare_parameter("pose_two_class", False)        # true=只發 sitting/standing
+        self.declare_parameter("gesture_recognizer_min_conf", 0.0)  # recognizer 手勢信心門檻
+        self.declare_parameter("gesture_min_votes", 1)         # 投票贏家最低票數
 
         backend = str(self.get_parameter("inference_backend").value or "mock")
         self.use_camera = bool(self.get_parameter("use_camera").value)
@@ -120,6 +121,11 @@ class VisionPerceptionNode(Node):
         pose_frames = int(self.get_parameter("pose_vote_frames").value or 20)
         mock_scenario = str(self.get_parameter("mock_scenario").value or "standing_idle")
         self.gesture_min_score = float(self.get_parameter("gesture_min_score").value or 0.1)
+        # 6/9 HITL params — 注意：不可用 `or` 補預設（會把合法的 0.0 蓋掉）。
+        self.pose_min_avg_score = float(self.get_parameter("pose_min_avg_score").value)
+        self.sitting_trunk_max_deg = float(self.get_parameter("sitting_trunk_max_deg").value)
+        self.pose_two_class = bool(self.get_parameter("pose_two_class").value)
+        self.gesture_min_votes = max(1, int(self.get_parameter("gesture_min_votes").value))
 
         # --- State ---
         self.shutting_down = False
@@ -208,9 +214,14 @@ class VisionPerceptionNode(Node):
             model_path = str(self.get_parameter("gesture_recognizer_model").value
                              or "~/face_models/gesture_recognizer.task")
             max_hands = int(self.get_parameter("max_hands").value or 2)
+            gesture_min_conf = float(self.get_parameter("gesture_recognizer_min_conf").value)
             self.gesture_recognizer = GestureRecognizerBackend(
-                model_path=model_path, max_hands=max_hands)
-            self.get_logger().info(f"Gesture backend: Gesture Recognizer Task API (max_hands={max_hands})")
+                model_path=model_path, max_hands=max_hands,
+                gesture_min_conf=gesture_min_conf)
+            self.get_logger().info(
+                f"Gesture backend: Gesture Recognizer Task API "
+                f"(max_hands={max_hands}, gesture_min_conf={gesture_min_conf}, "
+                f"min_votes={self.gesture_min_votes})")
         else:
             self.get_logger().info("Gesture backend: RTMPose wholebody")
 
@@ -291,16 +302,25 @@ class VisionPerceptionNode(Node):
         # (rare) fall through with None and skip the gate.
         image_height = float(image.shape[0]) if image is not None else None
         pose_raw, pose_conf = classify_pose(
-            body_kps, body_scores, bbox_ratio, image_height=image_height
+            body_kps, body_scores, bbox_ratio, image_height=image_height,
+            min_score=self.pose_min_avg_score,
+            sitting_trunk_max_deg=self.sitting_trunk_max_deg,
         )
-        if pose_raw is not None:
-            self.pose_buffer.append(pose_raw)
+        # Demo 模式（Roy 6/9 拍板）「腳稍彎/蹲/彎=坐、只發 sit/stand」；
+        # fallen 在 two_class 模式不發（demo 不展示跌倒）。
+        # 在 append 進 pose_buffer 前先粗分類，讓 20 幀投票直接在兩類上進行。
+        pose_label = to_two_class(pose_raw) if self.pose_two_class else pose_raw
+        if pose_label is not None:
+            self.pose_buffer.append(pose_label)
         pose_vote = _majority(self.pose_buffer)
 
-        # Pose debug log: print angles every ~1s (20 ticks)
+        # Pose debug log: print angles every ~1s (20 ticks).
+        # 6/9 HITL: avg_score 低於門檻時以前完全沉默 → /event/pose_detected
+        # 全空無從診斷。改為兩個分支都印 avg / raw / vote / buffer fill。
         if self._tick_counter % 20 == 0:
             avg_score = float(np.mean(body_scores))
-            if avg_score >= 0.2:
+            buf_fill = f"{len(self.pose_buffer)}/{self.pose_buffer.maxlen}"
+            if avg_score >= self.pose_min_avg_score:
                 shoulder = _mid(body_kps[_L_SHOULDER], body_kps[_R_SHOULDER])
                 hip = _mid(body_kps[_L_HIP], body_kps[_R_HIP])
                 knee = _mid(body_kps[_L_KNEE], body_kps[_R_KNEE])
@@ -321,9 +341,16 @@ class VisionPerceptionNode(Node):
                     body_scores[7], body_scores[8],    # L_ELBOW, R_ELBOW
                 ]))
                 self.get_logger().info(
-                    f"pose: raw={pose_raw} hip={h_a:.0f} knee={k_a:.0f} "
+                    f"pose: raw={pose_raw} label={pose_label} avg={avg_score:.2f} "
+                    f"hip={h_a:.0f} knee={k_a:.0f} "
                     f"trunk={t_a:.0f} bbox_r={br:.2f} torso_vis={torso_vis:.2f} "
-                    f"arm_vis={arm_vis:.2f} vote={pose_vote}"
+                    f"arm_vis={arm_vis:.2f} vote={pose_vote} buf={buf_fill}"
+                )
+            else:
+                self.get_logger().info(
+                    f"pose: raw={pose_raw} avg={avg_score:.2f} "
+                    f"(<pose_min_avg_score={self.pose_min_avg_score:.2f}) "
+                    f"vote={pose_vote} buf={buf_fill}"
                 )
 
         if pose_vote is not None and pose_vote != self.last_pose:
@@ -464,7 +491,12 @@ class VisionPerceptionNode(Node):
                 self.last_hand = hand
             else:
                 self.gesture_buffer.append(None)
-            gesture_vote = _majority(self.gesture_buffer)
+            # 6/9 HITL (Roy 拍板)：贏家票數須 >= gesture_min_votes（N3-5
+            # stable-frame 投票），否則視為 None — 防單幀誤判奪冠。
+            # OK 手勢（geometric override）也走同一 buffer → 同樣受此規則約束
+            # （OK 也誤觸，這是刻意的）。wave bypass 不經 buffer，不受影響。
+            gesture_vote = _majority(self.gesture_buffer,
+                                     min_votes=self.gesture_min_votes)
 
             # 5/5 MOC §3 0.5s temporal stable gate (param `gesture_stable_s`).
             # Only emit an event when the vote winner has held steady for at

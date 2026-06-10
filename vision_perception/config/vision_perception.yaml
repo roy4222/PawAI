@@ -27,3 +27,13 @@ vision_perception_node:
     gesture_every_n_ticks: 3      # run hands every N ticks (1=every, 3=skip 2)
     pose_vote_frames: 20
     mock_scenario: "standing_idle"
+    # 2026-06-09 HITL demo-blocking 參數（Roy 拍板）— pose 事件全空 + 手勢誤觸修正。
+    # 以下預設值 = 現行行為（不改變既有測試/行為）；demo 覆寫走
+    # scripts/start_full_demo_tmux.sh launch args：
+    #   pose_two_class:=true pose_min_avg_score:=0.15 sitting_trunk_max_deg:=45.0
+    #   gesture_recognizer_min_conf:=0.7 gesture_min_votes:=3
+    pose_min_avg_score: 0.2           # classify_pose 平均 keypoint 分數下限（低於 → None）
+    sitting_trunk_max_deg: 35.0       # sitting 軀幹傾角上限（demo 放寬 45 接住彎腰/前傾坐姿）
+    pose_two_class: false             # true = 只發 sitting/standing（蹲/跪/彎腰→坐；fallen 不發）
+    gesture_recognizer_min_conf: 0.0  # recognizer 手勢分類信心門檻（demo 0.7 防 OK/誤觸）
+    gesture_min_votes: 1              # 投票贏家最低票數（demo 3 = N3 stable-frame 投票）

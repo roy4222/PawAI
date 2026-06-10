@@ -482,3 +482,111 @@ class TestClassifyPose:
         scores = np.ones(17, dtype=np.float32) * 0.9
         pose, _ = classify_pose(kps, scores, bbox_ratio=1.5, image_height=0)
         assert pose == "fallen"  # gate skipped, fallen verdict stands
+
+
+# ── 6/9 HITL injectable thresholds (Roy 拍板, demo-blocking) ───────────────
+
+def _leaning_sitting_kps() -> np.ndarray:
+    """Chair-sitting silhouette but trunk leaning forward ~40° — between
+    the old hardcoded sitting gate (35°) and the demo override (45°)."""
+    kps = np.zeros((17, 2), dtype=np.float32)
+    # Trunk leaning 40° from vertical: shoulder = hip + (sin40, -cos40) * 100
+    kps[5] = [264.3, 223.4]   # L_SHOULDER
+    kps[6] = [284.3, 223.4]   # R_SHOULDER
+    kps[11] = [200, 300]      # L_HIP
+    kps[12] = [220, 300]      # R_HIP
+    kps[13] = [260, 295]      # L_KNEE (hip level — chair height)
+    kps[14] = [280, 295]      # R_KNEE
+    kps[15] = [260, 380]      # L_ANKLE (shins down)
+    kps[16] = [280, 380]      # R_ANKLE
+    kps[0] = [274, 195]       # NOSE
+    return kps
+
+
+class TestClassifyPoseInjectableThresholds:
+    """min_score / sitting_trunk_max_deg keyword injection — defaults must
+    preserve current behavior (all tests above run at defaults)."""
+
+    def test_min_score_default_rejects_low_scores(self):
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=175, knee_angle_deg=175, trunk_angle_deg=5)
+        scores = np.ones(17, dtype=np.float32) * 0.17  # below default 0.2
+        pose, conf = classify_pose(kps, scores, bbox_ratio=0.4)
+        assert pose is None
+        assert conf == 0.0
+
+    def test_min_score_relaxed_accepts_low_scores(self):
+        """Demo override pose_min_avg_score=0.15 must let avg=0.17 through."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=175, knee_angle_deg=175, trunk_angle_deg=5)
+        scores = np.ones(17, dtype=np.float32) * 0.17
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.4, min_score=0.15)
+        assert pose == "standing"
+
+    def test_min_score_tightened_rejects(self):
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=175, knee_angle_deg=175, trunk_angle_deg=5)
+        scores = np.ones(17, dtype=np.float32) * 0.4
+        pose, _ = classify_pose(kps, scores, bbox_ratio=0.4, min_score=0.5)
+        assert pose is None
+
+    def test_sitting_trunk_default_rejects_leaning_sit(self):
+        """trunk 40° > default 35° → NOT sitting (falls through to crouching)."""
+        from vision_perception.pose_classifier import classify_pose
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(_leaning_sitting_kps(), scores, bbox_ratio=0.6)
+        assert pose != "sitting"
+
+    def test_sitting_trunk_relaxed_accepts_leaning_sit(self):
+        """Demo override sitting_trunk_max_deg=45 → trunk 40° counts as sitting."""
+        from vision_perception.pose_classifier import classify_pose
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        pose, _ = classify_pose(_leaning_sitting_kps(), scores, bbox_ratio=0.6,
+                                sitting_trunk_max_deg=45.0)
+        assert pose == "sitting"
+
+    def test_explicit_defaults_match_implicit(self):
+        """Passing the documented defaults explicitly must not change results."""
+        from vision_perception.pose_classifier import classify_pose
+        kps = _body_from_angles(hip_angle_deg=175, knee_angle_deg=175, trunk_angle_deg=5)
+        scores = np.ones(17, dtype=np.float32) * 0.9
+        implicit = classify_pose(kps, scores, bbox_ratio=0.4)
+        explicit = classify_pose(kps, scores, bbox_ratio=0.4,
+                                 min_score=0.2, sitting_trunk_max_deg=35.0)
+        assert implicit == explicit
+
+
+class TestTwoClassMapping:
+    """Demo 粗分類（Roy 6/9 拍板）：蹲/跪/彎腰 → sitting；akimbo → standing；
+    fallen / None → None（two_class 模式不發 fallen）。"""
+
+    def test_sitting_family_maps_to_sitting(self):
+        from vision_perception.pose_classifier import to_two_class
+        for fine in ("sitting", "crouching", "knee_kneel", "bending"):
+            assert to_two_class(fine) == "sitting", fine
+
+    def test_standing_family_maps_to_standing(self):
+        from vision_perception.pose_classifier import to_two_class
+        for fine in ("standing", "akimbo"):
+            assert to_two_class(fine) == "standing", fine
+
+    def test_fallen_dropped(self):
+        from vision_perception.pose_classifier import to_two_class
+        assert to_two_class("fallen") is None
+
+    def test_none_dropped(self):
+        from vision_perception.pose_classifier import to_two_class
+        assert to_two_class(None) is None
+
+    def test_unknown_label_dropped(self):
+        from vision_perception.pose_classifier import to_two_class
+        assert to_two_class("moonwalk") is None
+
+    def test_map_covers_all_poses_except_fallen(self):
+        from vision_perception.pose_classifier import COARSE_POSE_MAP, POSES
+        expected = set(POSES) - {"fallen"}
+        assert expected == set(COARSE_POSE_MAP.keys())
+
+    def test_map_values_only_two_classes(self):
+        from vision_perception.pose_classifier import COARSE_POSE_MAP
+        assert set(COARSE_POSE_MAP.values()) == {"sitting", "standing"}

@@ -1,6 +1,7 @@
 """object_perception_node — YOLO26n ONNX object detection on D435 RGB."""
 
 import json
+import os
 import threading
 import time
 
@@ -12,6 +13,7 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+from std_msgs.msg import Empty
 
 from object_perception.coco_classes import (
     COCO_CLASSES,
@@ -220,6 +222,7 @@ class ObjectPerceptionNode(Node):
             history=HistoryPolicy.KEEP_LAST,
         )
         self.create_subscription(Image, color_topic, self._cb_color, image_qos)
+        self.create_subscription(Empty, "/brain/reset_context", self._on_reset_context, 10)
 
         # --- Publishers ---
         self.event_pub = self.create_publisher(String, "/event/object_detected", 10)
@@ -263,6 +266,12 @@ class ObjectPerceptionNode(Node):
     def _init_onnx(self, model_path: str, trt_cache_dir: str):
         try:
             import onnxruntime as ort
+
+            # 2026-06-10 model A/B: TRT engine cache 按模型 stem 分子目錄，
+            # 避免換模型（yolo26s / *_960）時撞同一個 cache 目錄拿到舊 engine。
+            model_stem = os.path.splitext(os.path.basename(model_path))[0]
+            trt_cache_dir = os.path.join(trt_cache_dir, model_stem)
+            os.makedirs(trt_cache_dir, exist_ok=True)
 
             sess_options = ort.SessionOptions()
             sess_options.graph_optimization_level = (
@@ -417,6 +426,11 @@ class ObjectPerceptionNode(Node):
     # ------------------------------------------------------------------
     # Event publishing with per-class cooldown dedup
     # ------------------------------------------------------------------
+    def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
+        """Clear per-class event cooldowns between demo takes."""
+        with self.lock:
+            self._cooldowns.clear()
+
     def _publish_events(self, detections: list):
         now = time.time()
         # Collect new classes that pass cooldown (strip internal class_id from payload).

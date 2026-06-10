@@ -1,10 +1,12 @@
 """Tests for object_perception — COCO 80 classes, letterbox, rescale, dedup."""
 
 import json
+import threading
 import time
 
 import numpy as np
 import pytest
+from std_msgs.msg import Empty
 
 from object_perception.coco_classes import COCO_CLASSES, class_color
 from object_perception.object_perception_node import ObjectPerceptionNode
@@ -244,6 +246,15 @@ class TestDedup:
         should_emit = (now - last) >= cooldown_sec
 
         assert should_emit is True
+
+    def test_reset_context_clears_class_cooldowns(self):
+        node = ObjectPerceptionNode.__new__(ObjectPerceptionNode)
+        node.lock = threading.Lock()
+        node._cooldowns = {"cup": time.time(), "bottle": time.time()}
+
+        node._on_reset_context(Empty())
+
+        assert node._cooldowns == {}
 
 
 # ------------------------------------------------------------------

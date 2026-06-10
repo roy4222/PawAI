@@ -40,6 +40,29 @@ _L_ANKLE, _R_ANKLE = 15, 16
 
 _MIN_SCORE = 0.2
 
+# Demo 粗分類（Roy 6/9 拍板）：「腳稍彎/蹲/彎腰 → 都算坐」，只發 sitting/standing
+# 兩類事件。fallen 在 two_class 模式不發（demo 不展示跌倒）。
+# 不在此表的 label（fallen、None）→ None（丟棄、不進投票 buffer）。
+COARSE_POSE_MAP = {
+    "sitting": "sitting",
+    "crouching": "sitting",
+    "knee_kneel": "sitting",
+    "bending": "sitting",
+    "standing": "standing",
+    "akimbo": "standing",
+}
+
+
+def to_two_class(pose: str | None) -> str | None:
+    """Map fine-grained pose label → demo two-class label (sitting/standing).
+
+    Pure function — unit-testable without ROS2. Labels not in
+    COARSE_POSE_MAP (e.g. "fallen", None) return None (dropped).
+    """
+    if pose is None:
+        return None
+    return COARSE_POSE_MAP.get(pose)
+
 
 def _angle_deg(a: np.ndarray, vertex: np.ndarray, b: np.ndarray) -> float:
     """Angle at vertex in degrees, formed by vectors vertex->a and vertex->b."""
@@ -68,6 +91,8 @@ def classify_pose(
     body_scores: np.ndarray,
     bbox_ratio: float | None = None,
     image_height: float | None = None,
+    min_score: float = 0.2,
+    sitting_trunk_max_deg: float = 35.0,
 ) -> tuple[str | None, float]:
     """Single-frame pose classification.
 
@@ -83,6 +108,10 @@ def classify_pose(
             over a cart that the silhouette projection still labels as
             horizontal). Skip the gate when image_height is None to preserve
             backward compatibility.
+        min_score: average-keypoint-score floor; below it → (None, 0.0).
+            6/9 HITL: 注入式門檻（原硬編 _MIN_SCORE=0.2），demo 可放寬 0.15。
+        sitting_trunk_max_deg: sitting 軀幹傾角上限（原硬編 35°）。
+            6/9 HITL demo 放寬到 45° 接住彎腰/前傾坐姿。
 
     Returns:
         (pose_name, confidence) or (None, 0.0).
@@ -91,7 +120,7 @@ def classify_pose(
         return None, 0.0
 
     avg_score = float(np.mean(body_scores))
-    if avg_score < _MIN_SCORE:
+    if avg_score < min_score:
         return None, 0.0
 
     shoulder = _mid(body_kps[_L_SHOULDER], body_kps[_R_SHOULDER])
@@ -205,7 +234,7 @@ def classify_pose(
             (hip_knee_y_diff < 0.12 * torso_len or knee[1] < hip[1])
             and ankle_above_hip > 0.5 * torso_len
         )
-        if (trunk_angle < 35
+        if (trunk_angle < sitting_trunk_max_deg
                 and is_seated_geometry
                 and knee_angle < 145):
             return "sitting", avg_score

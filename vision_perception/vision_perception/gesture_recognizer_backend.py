@@ -66,7 +66,12 @@ class GestureRecognizerBackend:
     """
 
     def __init__(self, model_path: str, max_hands: int = 2,
-                 min_confidence: float = 0.5):
+                 min_confidence: float = 0.5,
+                 gesture_min_conf: float = 0.0):
+        # 6/9 HITL (Roy 拍板)：gesture_min_conf 是「手勢分類分數」門檻，
+        # 與 min_confidence（手部偵測/追蹤門檻）語意分開、互不影響。
+        # 預設 0.0 = 現行行為（不過濾）；demo 用 0.7 防誤觸。
+        self._gesture_min_conf = float(gesture_min_conf)
         model_path = os.path.expanduser(model_path)
 
         if not os.path.exists(model_path):
@@ -113,6 +118,7 @@ class GestureRecognizerBackend:
         self._mp = mp
         self._t0 = time.monotonic()
         logger.info(f"GestureRecognizerBackend loaded: max_hands={max_hands}, "
+                     f"gesture_min_conf={self._gesture_min_conf}, "
                      f"model={model_path}")
 
     def detect(self, image_bgr: np.ndarray) -> tuple[
@@ -168,6 +174,12 @@ class GestureRecognizerBackend:
                 rh_kps, rh_scores = kps, scores
 
             if mp_name == "Unknown" or mp_name not in _GESTURE_MAP:
+                continue
+
+            # 6/9 HITL (Roy 拍板)：score 從未被檢查 → 低信心誤判直接進投票。
+            # 低於 gesture_min_conf 的偵測略過（keypoints 已在上方記錄，
+            # OK-circle / wave 軌跡偵測不受影響）。
+            if confidence < self._gesture_min_conf:
                 continue
 
             project_name = _GESTURE_MAP[mp_name]
