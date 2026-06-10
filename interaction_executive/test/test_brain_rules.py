@@ -4,6 +4,7 @@ import time
 
 import pytest
 import rclpy
+from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from interaction_executive.attention_machine import AttentionState
@@ -169,7 +170,7 @@ def test_known_face_greets_stable_identity(brain):
     brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
     plan = _latest(brain)
     assert plan["selected_skill"] == "greet_known_person"
-    assert plan["steps"][0]["args"]["text"] == "alice，歡迎回來。我看到你坐下來了。"
+    assert plan["steps"][0]["args"]["text"] == "alice，歡迎回來，我看到你了。"
 
 
 def test_unknown_face_stable_triggers_stranger_alert(brain):
@@ -181,6 +182,21 @@ def test_unknown_face_stable_triggers_stranger_alert(brain):
     plan = _latest(brain)
     assert plan["selected_skill"] == "stranger_alert"
     assert all(step["executor"] == "say" for step in plan["steps"])
+
+
+def test_stranger_alert_disabled_suppresses_unknown_face_and_preserves_active_plan(brain):
+    _prime_attention_noticed(brain)
+    brain.stranger_alert_enabled = False
+    active_plan = {"plan_id": "p-active", "selected_skill": "wave_hello"}
+    brain._state.active_plan = active_plan
+
+    brain._on_face(_msg({"identity": "unknown"}))
+    brain._state.unknown_face_first_seen -= 0.06
+    brain._on_face(_msg({"identity": "unknown"}))
+
+    assert brain._captured_proposals == []
+    assert brain._state.active_plan is active_plan
+    assert "stranger_alert" not in brain._state.last_alert_ts
 
 
 def test_pose_fallen_stable_triggers_fallen_alert(brain):
@@ -434,6 +450,21 @@ def test_object_unknown_color_drops_color_preamble(brain):
     brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
     plan = _latest(brain)
     assert plan["steps"][0]["args"]["text"] == "看到杯子了，你要喝水嗎？今天天氣很熱，要記得補充水分。"
+
+
+def test_reset_context_clears_object_remark_dedup_for_repeat_takes(brain):
+    _prime_attention_engaged(brain)
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    assert _latest(brain)["selected_skill"] == "object_remark"
+
+    brain._captured_proposals.clear()
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    assert brain._captured_proposals == []
+
+    brain._on_reset_context(Empty())
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+
+    assert _latest(brain)["selected_skill"] == "object_remark"
 
 
 def test_object_without_label_ignored(brain):
@@ -936,3 +967,192 @@ def test_gesture_enabled_gate_suppresses(brain):
     brain.gesture_enabled = False
     brain._on_gesture(_msg({"gesture": "thumbs_up"}))
     assert brain._captured_proposals == []
+
+
+def test_runtime_params_update_cached_demo_gates(brain):
+    from rclpy.parameter import Parameter
+
+    results = brain.set_parameters(
+        [
+            Parameter("greet_require_sitting", Parameter.Type.BOOL, False),
+            Parameter("greet_sitting_window_s", Parameter.Type.DOUBLE, 7.5),
+            Parameter("greet_cooldown_s", Parameter.Type.DOUBLE, 1.25),
+            Parameter("stranger_alert_enabled", Parameter.Type.BOOL, False),
+            Parameter("gesture_enabled", Parameter.Type.BOOL, False),
+        ]
+    )
+
+    assert all(result.successful for result in results)
+    assert brain.greet_require_sitting is False
+    assert brain.greet_sitting_window_s == 7.5
+    assert brain.greet_cooldown_s == 1.25
+    assert brain.stranger_alert_enabled is False
+    assert brain.gesture_enabled is False
+
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    plan = _latest(brain)
+    assert plan["selected_skill"] == "greet_known_person"
+
+
+# ---------------------------------------------------------------------------
+# 2026-06-10 demo: peace WeGo 兩步確認 + Studio gesture toggle topic
+# ---------------------------------------------------------------------------
+
+def make_brain_with_flags(**flags):
+    """同 make_brain，但接受任意 demo bool flag（peace_wego_confirm 等）。"""
+    from rclpy.parameter import Parameter
+
+    node = BrainNode()
+    node.set_parameters(
+        [Parameter(name, Parameter.Type.BOOL, value) for name, value in flags.items()]
+    )
+    for name, value in flags.items():
+        setattr(node, name, value)
+    node._apply_gesture_demo_modes()
+
+    captured = []
+
+    def capture(plan):
+        captured.append(node._plan_to_dict(plan))
+
+    node._emit = capture
+    node._captured_proposals = captured
+    return node
+
+
+def _destroy(node):
+    for timer in list(node._chat_timeouts.values()):
+        node.destroy_timer(timer)
+    node.destroy_node()
+
+
+def test_peace_wego_confirm_maps_peace_to_wiggle_two_step():
+    """peace_wego_confirm=True → peace 進 confirm（wiggle）、問 WeGo 句、不 direct。"""
+    from interaction_executive.pending_confirm import ConfirmState
+
+    node = make_brain_with_flags(peace_wego_confirm=True)
+    try:
+        assert node._GESTURE_CONFIRM.get("peace") == "wiggle"
+        assert "peace" not in node._GESTURE_DIRECT
+        node._on_gesture(_msg({"gesture": "peace"}))
+        assert node._pending_confirm.state == ConfirmState.PENDING
+        last = _latest(node)
+        assert last["selected_skill"] == "say_canned"
+        assert "WeGo" in last["steps"][0]["args"]["text"]
+    finally:
+        _destroy(node)
+
+
+def test_peace_default_still_confirms_stretch_with_generic_prompt():
+    """flag 關閉時 peace 維持既有 stretch confirm 行為（不回歸），泛用句不含 WeGo。"""
+    node = make_brain_with_flags(peace_wego_confirm=False)
+    try:
+        assert node._GESTURE_CONFIRM.get("peace") == "stretch"
+        node._on_gesture(_msg({"gesture": "peace"}))
+        last = _latest(node)
+        assert "WeGo" not in last["steps"][0]["args"]["text"]
+        assert "stretch" in last["steps"][0]["args"]["text"]
+    finally:
+        _destroy(node)
+
+
+def test_thumbs_up_wego_prompt_unchanged_with_peace_flag():
+    """peace_wego_confirm=True 時 thumbs_up 一樣問 WeGo（兩手勢都綁 wiggle）。"""
+    node = make_brain_with_flags(peace_wego_confirm=True)
+    try:
+        node._on_gesture(_msg({"gesture": "thumbs_up"}))
+        last = _latest(node)
+        assert "WeGo" in last["steps"][0]["args"]["text"]
+    finally:
+        _destroy(node)
+
+
+def test_gesture_enabled_topic_toggle_and_pending_cancel(brain):
+    """/brain/gesture_enabled Bool topic：off→手勢全擋 + 取消 in-flight confirm；on→恢復。"""
+    from std_msgs.msg import Bool
+
+    from interaction_executive.pending_confirm import ConfirmState
+
+    # 先進 confirm（thumbs_up → PENDING）
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    assert brain._pending_confirm.state == ConfirmState.PENDING
+
+    # Studio 關手勢 → gesture_enabled=False 且 pending confirm 被取消
+    brain._on_gesture_enabled_msg(Bool(data=False))
+    assert brain.gesture_enabled is False
+    assert brain._pending_confirm.state != ConfirmState.PENDING
+
+    # 關閉期間手勢完全不發 plan
+    brain._captured_proposals.clear()
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    assert brain._captured_proposals == []
+
+    # Studio 開回 → 恢復處理
+    brain._on_gesture_enabled_msg(Bool(data=True))
+    assert brain.gesture_enabled is True
+
+
+# ---------------------------------------------------------------------------
+# 2026-06-10 demo phase gate（最小版）— S2/S3/S4 不搶話
+# ---------------------------------------------------------------------------
+
+def test_demo_phase_default_all_changes_nothing(brain):
+    """demo_phase 預設 all → 三條社交路徑照常（既有行為由全套既有測試保證）。"""
+    assert brain.demo_phase == "all"
+    assert brain._phase_allows("greet") is True
+    assert brain._phase_allows("object") is True
+    assert brain._phase_allows("gesture") is True
+
+
+def test_demo_phase_s3_object_suppresses_greet_allows_cup(brain):
+    """s3_object：greet 被 phase 擋、cup remark 照講。"""
+    brain.demo_phase = "s3_object"
+
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    assert brain._captured_proposals == []
+
+    _prime_attention_engaged(brain)
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    assert _latest(brain)["selected_skill"] == "object_remark"
+
+
+def test_demo_phase_s2_face_suppresses_object(brain):
+    brain.demo_phase = "s2_face"
+    _prime_attention_engaged(brain)
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    assert brain._captured_proposals == []
+
+
+def test_demo_phase_s4_gesture_suppresses_object_allows_gesture(brain):
+    from interaction_executive.pending_confirm import ConfirmState
+
+    brain.demo_phase = "s4_gesture"
+    _prime_attention_engaged(brain)
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    assert brain._captured_proposals == []
+
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    assert brain._pending_confirm.state == ConfirmState.PENDING
+
+
+def test_demo_phase_quiet_suppresses_all_social(brain):
+    brain.demo_phase = "quiet"
+    _prime_attention_engaged(brain)
+    brain._on_face(_msg({"identity": "alice", "identity_stable": True}))
+    brain._on_object(_msg({"label": "cup", "color": "Unknown"}))
+    brain._on_gesture(_msg({"gesture": "thumbs_up"}))
+    assert brain._captured_proposals == []
+
+
+def test_demo_phase_runtime_param_validates_value(brain):
+    from rclpy.parameter import Parameter
+
+    results = brain.set_parameters(
+        [Parameter("demo_phase", Parameter.Type.STRING, "s4_gesture")]
+    )
+    assert all(r.successful for r in results)
+    assert brain.demo_phase == "s4_gesture"
+
+    # 未知值被拒、保留原值（typo 防呆）
+    brain.set_parameters([Parameter("demo_phase", Parameter.Type.STRING, "s9_nope")])
+    assert brain.demo_phase == "s4_gesture"

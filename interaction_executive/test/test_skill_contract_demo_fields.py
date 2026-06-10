@@ -47,7 +47,8 @@ def test_baseline_distribution_matches_spec_section_11():
     assert counts.get("available_execute") == 10
     assert counts.get("available_confirm") == 2
     # explain_only: 5/18 baseline 5 + request_backflip (5/23) = 6
-    assert counts.get("explain_only") == 6
+    # + move_forward (6/10 issue #129, nav baseline insufficient_data) = 7
+    assert counts.get("explain_only") == 7
     assert counts.get("studio_only") == 1
     assert counts.get("disabled") == 10
 

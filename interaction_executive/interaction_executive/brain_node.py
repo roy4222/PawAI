@@ -12,6 +12,7 @@ from typing import Any
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
+from std_msgs.msg import Bool
 from std_msgs.msg import Empty
 from std_msgs.msg import String
 
@@ -231,6 +232,13 @@ class BrainNode(Node):
         # P1-2: context reset — cancel PendingConfirm on page refresh / new-conversation
         self.create_subscription(Empty, "/brain/reset_context", self._on_reset_context, _RELIABLE_10)
 
+        # 2026-06-10 demo: Studio Gesture On/Off toggle — gateway POST /api/gesture_enabled
+        # → Bool(/brain/gesture_enabled)。與 `ros2 param set gesture_enabled` 同效，
+        # topic 版給 Studio 一鍵切換用（錄影 S4 段開、其餘段關）。
+        self.create_subscription(
+            Bool, "/brain/gesture_enabled", self._on_gesture_enabled_msg, _RELIABLE_10
+        )
+
         self._brain_state_timer = self.create_timer(0.5, self._publish_brain_state)
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
         self._confirm_tick_timer = self.create_timer(0.1, self._tick_pending_confirm)  # 10Hz
@@ -244,14 +252,84 @@ class BrainNode(Node):
         )
 
     def _on_set_params(self, params):
-        """Runtime ros2-param callback. 目前僅支援 gesture_enabled 即時切換。"""
+        """Runtime ros2-param callback. 支援 gesture_enabled / stranger_alert_enabled /
+        greet_require_sitting 即時切換（demo 現場免重啟）。"""
         from rcl_interfaces.msg import SetParametersResult
 
         for p in params:
             if p.name == "gesture_enabled":
-                self.gesture_enabled = bool(p.value)
-                self.get_logger().info(f"gesture_enabled set to {self.gesture_enabled}")
+                self._set_gesture_enabled(bool(p.value), via="param")
+            elif p.name == "stranger_alert_enabled":
+                self.stranger_alert_enabled = bool(p.value)
+                self.get_logger().info(
+                    f"stranger_alert_enabled set to {self.stranger_alert_enabled}"
+                )
+            elif p.name == "greet_require_sitting":
+                self.greet_require_sitting = bool(p.value)
+                self.get_logger().info(
+                    f"greet_require_sitting set to {self.greet_require_sitting}"
+                )
+            elif p.name == "greet_sitting_window_s":
+                self.greet_sitting_window_s = float(p.value)
+                self.get_logger().info(
+                    f"greet_sitting_window_s set to {self.greet_sitting_window_s}"
+                )
+            elif p.name == "greet_cooldown_s":
+                self.greet_cooldown_s = float(p.value)
+                self.get_logger().info(f"greet_cooldown_s set to {self.greet_cooldown_s}")
+            elif p.name == "demo_phase":
+                value = str(p.value).strip().lower()
+                if value not in self._DEMO_PHASES:
+                    self.get_logger().warn(
+                        f"unknown demo_phase {value!r} — keep {self.demo_phase!r} "
+                        f"(valid: {sorted(self._DEMO_PHASES)})"
+                    )
+                else:
+                    self.demo_phase = value
+                    self.get_logger().info(f"demo_phase set to {self.demo_phase}")
         return SetParametersResult(successful=True)
+
+    # 2026-06-10（Roy 拍板「demo flow controller / phase gate，S2/S3/S4 不搶話」的
+    # 最小外科版）：demo_phase 只 gate「自發性社交 proposal」（greet / object_remark /
+    # gesture）。安全鏈（fallen/stop/SafetyLayer）、語音/文字明確指令、Studio
+    # skill_request 一律不受 phase 影響 — priority: safety > explicit input > phase。
+    # 錄影 SOP：ros2 param set /brain_node demo_phase s3_object（換 take 再切）。
+    _DEMO_PHASES = frozenset({"all", "s2_face", "s3_object", "s4_gesture", "quiet"})
+    _PHASE_ALLOWED_KINDS = {
+        "all": frozenset({"greet", "object", "gesture"}),
+        "s2_face": frozenset({"greet"}),
+        "s3_object": frozenset({"object"}),
+        "s4_gesture": frozenset({"gesture"}),
+        "quiet": frozenset(),
+    }
+
+    def _phase_allows(self, kind: str) -> bool:
+        allowed = self._PHASE_ALLOWED_KINDS.get(self.demo_phase)
+        if allowed is None:  # defensive — 未知 phase 視同 all
+            return True
+        if kind in allowed:
+            return True
+        self.get_logger().info(
+            f"[phase] {kind} proposal suppressed (demo_phase={self.demo_phase})",
+            throttle_duration_sec=5.0,
+        )
+        return False
+
+    def _set_gesture_enabled(self, enabled: bool, via: str) -> None:
+        """gesture_enabled 切換共用路徑（param callback / Studio topic 兩入口）。
+
+        關閉時若有 PendingConfirm 在 flight 一併取消 — 不然 OK 手勢已收不到
+        （_on_gesture early-return），confirm 會掛到 30s timeout 才消失。
+        """
+        self.gesture_enabled = enabled
+        self.get_logger().info(f"gesture_enabled set to {enabled} (via {via})")
+        if not enabled and self._pending_confirm.state == ConfirmState.PENDING:
+            self._pending_confirm.cancel(reason="gesture_disabled")
+            self.get_logger().info("PendingConfirm cancelled by gesture_enabled=false")
+
+    def _on_gesture_enabled_msg(self, msg: Bool) -> None:
+        """Studio Gesture On/Off toggle（/brain/gesture_enabled Bool）。"""
+        self._set_gesture_enabled(bool(msg.data), via="/brain/gesture_enabled")
 
     def _declare_params(self) -> None:
         self.declare_parameter("chat_wait_ms", 1500)
@@ -281,6 +359,17 @@ class BrainNode(Node):
         # take 開）。True=正常處理手勢；False=_on_gesture 直接 early-return、完全不發 plan。
         # 走 add_on_set_parameters_callback 支援 `ros2 param set` runtime 切換。
         self.declare_parameter("gesture_enabled", True)
+        # 2026-06-10 demo（Roy 6/9 晚拍板）: stranger_alert 總開關。6/9 HITL 定位
+        # face 幻覺會在沒人處鎖 unknown → stranger_alert 的 active plan 卡死
+        # cup/greet 的 not-active gate（demo 全黑真兇）。False = _on_face 的
+        # unknown 分支整路略過（不累積、不發 plan）。fallen/stop 安全鏈不受影響
+        # （走 SafetyLayer hard_rule，不經這裡）。
+        self.declare_parameter("stranger_alert_enabled", True)
+        # 2026-06-10 demo（Roy 6/9 晚拍板）: WeGo 主手勢改 peace（比耶）。
+        # thumbs_up 握杯/托腮易誤觸；true → _GESTURE_CONFIRM["peace"]="wiggle"
+        # （兩步確認，禁 direct motion）。thumbs_up 的 confirm 路徑保留，
+        # 上機 A/B 後擇一。與 peace_direct_stretch 互斥使用。
+        self.declare_parameter("peace_wego_confirm", False)
         # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
         # 設 true → 觸發複合句「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along TTS
         # 預設 False 維持現有 object_remark + sit_along 獨立行為
@@ -297,6 +386,10 @@ class BrainNode(Node):
         self.declare_parameter("greet_require_sitting", True)
         self.declare_parameter("greet_sitting_window_s", 3.0)
         self.declare_parameter("greet_cooldown_s", 20.0)
+        # 2026-06-10 demo phase gate（最小版）：all=不 gate（預設、零行為改變）；
+        # s2_face / s3_object / s4_gesture = 只放行該段的自發 proposal；quiet=全擋。
+        # 只影響 greet/object_remark/gesture 三條社交路徑，safety 與明確指令不受影響。
+        self.declare_parameter("demo_phase", "all")
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -311,6 +404,10 @@ class BrainNode(Node):
         self.peace_direct_stretch = bool(self.get_parameter("peace_direct_stretch").value)
         self.thumbs_up_demo_ack = bool(self.get_parameter("thumbs_up_demo_ack").value)
         self.gesture_enabled = bool(self.get_parameter("gesture_enabled").value)
+        self.stranger_alert_enabled = bool(
+            self.get_parameter("stranger_alert_enabled").value
+        )
+        self.peace_wego_confirm = bool(self.get_parameter("peace_wego_confirm").value)
         self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
         self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
         self._capability_gate_enabled = bool(
@@ -322,6 +419,7 @@ class BrainNode(Node):
         self.greet_require_sitting = bool(self.get_parameter("greet_require_sitting").value)
         self.greet_sitting_window_s = float(self.get_parameter("greet_sitting_window_s").value)
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
+        self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
         self._capability_health_cache: dict[str, Any] | None = None
         self._apply_gesture_demo_modes()
 
@@ -349,6 +447,10 @@ class BrainNode(Node):
             self._GESTURE_CONFIRM = {
                 k: v for k, v in self._GESTURE_CONFIRM.items() if k != "thumbs_up"
             }
+        if self.peace_wego_confirm:
+            # 2026-06-10: peace 改走 WeGo 兩步確認（peace→wiggle），取代預設的
+            # peace→stretch 映射。仍要 OK 二確認，無 direct motion。
+            self._GESTURE_CONFIRM = {**self._GESTURE_CONFIRM, "peace": "wiggle"}
 
     def _emit(self, plan: SkillPlan) -> None:
         payload = self._plan_to_dict(plan)
@@ -747,6 +849,9 @@ class BrainNode(Node):
         # 2026-06-09 demo: runtime gate — 操作員關閉時手勢完全不發 plan（連 trace 也不發）。
         if not self.gesture_enabled:
             return
+        # 2026-06-10 demo phase gate（all=不擋）
+        if not self._phase_allows("gesture"):
+            return
 
         # Issue 8: gesture is intentional user signal → reset idle clock
         self._touch_user_interaction()
@@ -829,11 +934,12 @@ class BrainNode(Node):
             self._pending_confirm.request_confirm(skill, {}, time.time())
             self.get_logger().info(f"PendingConfirm requested skill={skill} via gesture={gesture}")
             # Voice hint asking for OK (uses say_canned, has audio tag stripped).
-            # 2026-06-09 demo: thumbs_up→wiggle 改成口語化 WeGo 台詞（demo 錄影旁白用），
+            # 2026-06-09 demo: WeGo 台詞綁在 wiggle 技能上（thumbs_up 或 peace 進來
+            # 都講同一句，6/10 改 keyed-on-skill 支援 peace_wego_confirm），
             # 其餘手勢維持泛用句「比 OK 我就做 {skill}」。
             confirm_text = (
                 "[curious] 你要我 WeGo 一下嗎？比 OK 我就開始。"
-                if gesture == "thumbs_up"
+                if skill == "wiggle"
                 else f"[curious] 比 OK 我就做 {skill}"
             )
             self._emit(
@@ -1089,8 +1195,12 @@ class BrainNode(Node):
                 # Safety override path (fallen / stop) is unchanged — that goes through
                 # SafetyLayer hard_rule, not this branch.
                 attention_state = self._attention_state_snapshot()
+                # 2026-06-10 demo: stranger_alert_enabled=False 時擋發射不擋累積
+                # （6/9 HITL：face 幻覺餵爆 unknown → active plan 霸佔 brain，
+                # cup/greet 全黑的根因）。runtime param set 開回時立即恢復。
                 if (
-                    not self._in_cooldown("stranger_alert", 30.0)
+                    self.stranger_alert_enabled
+                    and not self._in_cooldown("stranger_alert", 30.0)
                     and attention_state != AttentionState.IDLE
                     and not self._has_active_skill_or_sequence()
                     and self._pending_confirm.state != ConfirmState.PENDING
@@ -1108,6 +1218,9 @@ class BrainNode(Node):
             return
 
         self._state.unknown_face_first_seen = None
+        # 2026-06-10 demo phase gate（all=不擋）
+        if not self._phase_allows("greet"):
+            return
         # 5/8 [#F-confirm]: PENDING 期間不發 greet_known_person，避免蓋掉 confirm 流
         if not stable or self._has_active_skill_or_sequence() \
                 or self._pending_confirm.state == ConfirmState.PENDING \
@@ -1257,6 +1370,10 @@ class BrainNode(Node):
         #   2. not active_plan (no skill/sequence currently running — D-4 helper)
         #   3. not pending_confirm (middle of gesture confirmation flow)
         #   4. not tts_playing (TTS currently speaking — don't interrupt mid-SAY)
+        # 2026-06-10 demo phase gate（all=不擋；含 compound 句路徑）
+        if not self._phase_allows("object"):
+            return
+
         snap = self._world.snapshot()
         # 5/9 final review: was reading self._attention.state without lock —
         # 3rd race-condition hole alongside stranger_alert / greet_known_person
@@ -1353,7 +1470,10 @@ class BrainNode(Node):
     # PendingConfirm via Studio button (the button itself is the confirmation).
     # All other requires_confirmation skills must go through OK confirm even
     # when launched from Studio.
-    _STUDIO_BUTTON_BYPASS_CONFIRM = frozenset({"nav_demo_point"})
+    # 6/10 issue #129: move_forward 加入 bypass — 操作員按鈕本身就是 explicit
+    # confirm（NAV executor 另有 nav_executor_enabled + 4 重 world gate
+    # fail-closed 防線，預設不會動）。
+    _STUDIO_BUTTON_BYPASS_CONFIRM = frozenset({"nav_demo_point", "move_forward"})
 
     def _on_skill_request(self, msg: String) -> None:
         payload = self._load_json(msg)
@@ -1434,6 +1554,12 @@ class BrainNode(Node):
                 SkillResultStatus.COMPLETED.value,
                 SkillResultStatus.ABORTED.value,
                 SkillResultStatus.BLOCKED_BY_SAFETY.value,
+                # 2026-06-10 review blocker: STEP_FAILED 在 executive 端就是 plan 終結
+                # （兩條 STEP_FAILED 路徑都緊跟 self._queue.pop()，不會再有 terminal
+                # status）。若不在此清 active_plan，一次 NAV step 失敗（例如忘了開
+                # nav_executor_enabled / goal rejected / timeout）會讓 active_plan
+                # 永久卡住 → not-active gate 把 cup/greet/gesture/語音全黑（重演 6/9）。
+                SkillResultStatus.STEP_FAILED.value,
             ):
                 if self._state.active_plan and self._state.active_plan["plan_id"] == plan_id:
                     self._state.active_plan = None
@@ -1455,6 +1581,14 @@ class BrainNode(Node):
             if self._pending_confirm.state == ConfirmState.PENDING:
                 self._pending_confirm.cancel(reason="page_reset")
                 self.get_logger().info("PendingConfirm cancelled by /brain/reset_context")
+            # 2026-06-10 demo: 重錄 take 時 reset 也清 object_remark 的兩層 dedup
+            # （60s per-class seen + skill cooldown），不然第二個 take 的 cup 台詞
+            # 會被上一個 take 吃掉。其他 alert cooldown（stranger/greet）刻意保留。
+            if self._object_remark_seen:
+                self._object_remark_seen.clear()
+                self.get_logger().info("object_remark dedup cleared by /brain/reset_context")
+            self._state.last_alert_ts.pop("object_remark", None)
+            self._state.active_plan = None
 
     def _publish_brain_state(self) -> None:
         snap = self._world.snapshot()

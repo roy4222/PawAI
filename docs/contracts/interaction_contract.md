@@ -89,7 +89,8 @@
 | `/brain/proposal` | Event | 觸發式 | Brain → Executive SkillPlan proposal | **v2.5** active |
 | `/brain/skill_result` | Event | 觸發式 | Executive → Brain/Studio SkillResult lifecycle | **v2.5** active |
 | `/brain/conversation_trace` | Event | 觸發式 | Brain → Debug/Studio LLM proposal gate trace（skill_gate stage 完整 enum 見 §`/brain/conversation_trace` 章節，5/8 加 `needs_confirm` / `demo_guide`） | **v2.8** active |
-| `/brain/reset_context` | Command | 觸發式 | Studio → Brain context 重置（std_msgs/Empty）— `conversation_graph_node` 清 `_memory + _seen_sessions`；`brain_node` cancel `_pending_confirm`；**不清** `_active_plans` / `_state.attention` | **v2.10** active |
+| `/brain/reset_context` | Command | 觸發式 | Studio → Brain context 重置（std_msgs/Empty）— `conversation_graph_node` 清 `_memory + _seen_sessions`；`brain_node` cancel `_pending_confirm` + 清 object_remark dedup + 結束上一段 active plan（v2.11）；**不清** `_state.attention` | **v2.10** active |
+| `/brain/gesture_enabled` | Command | 觸發式 | Studio → Brain 手勢總開關（std_msgs/Bool）— demo 錄影分段控制，關閉時 cancel in-flight PendingConfirm | **v2.11** active |
 | `/tts` | Command | 觸發式 | TTS 輸入文字（v2.10：envelope 加 `source` 欄位 — chat_reply / say_canned / skill_say；純文字 backward compat） | active |
 | `/webrtc_req` | Command | 觸發式 | Go2 WebRTC 命令 | active |
 
@@ -776,9 +777,17 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 | Subscriber | 行為 |
 |---|---|
 | `conversation_graph_node._on_reset_context` | `self._memory.clear()`（ConversationMemory deque）+ `with self._seen_lock: self._seen_sessions.clear()`（session ID dedup set） |
-| `brain_node._on_reset_context` | `self._pending_confirm.cancel(reason="page_reset")`；**不**清 `_active_plans` / `_state.attention` / `_state.idle_emit_history` |
+| `brain_node._on_reset_context` | `self._pending_confirm.cancel(reason="page_reset")` + **(v2.11, 6/10)** 清 `_object_remark_seen`（60s per-class dedup）、`last_alert_ts["object_remark"]`、上一段 `active_plan`（重錄 take 時 cup/greet 不被上一段卡住）；**不**清 `_state.attention` / `_state.idle_emit_history` |
 
 Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=true` 才開（demo 預設 false 靠手動按鈕）。詳見 `docs/pawai-brain/studio/README.md` §「新對話」按鈕。
+
+#### `/brain/gesture_enabled`（v2.11，6/10 加）
+
+**說明**：Studio「手勢 ON/OFF」toggle（demo 錄影 P0 控制）— 前段 take 關手勢防 thumbs_up 誤觸搶 TTS / pending confirm，S4 手勢段才開。與 `ros2 param set /brain_node gesture_enabled` 同效；關閉時若有 in-flight PendingConfirm 一併 cancel（reason=`gesture_disabled`）。
+**發布者**：`studio_gateway`（POST `/api/gesture_enabled` endpoint，JSON `{"enabled": bool}`；GET 回 gateway-side cache）
+**訂閱者**：`brain_node._on_gesture_enabled_msg`
+**QoS**：Reliable, Volatile, depth=10（無 latch — gateway 重啟後 cache 歸 null，brain 保留最後值；demo SOP：起 demo 後在 Studio 按一次明確設定）
+**Message Type**：`std_msgs/Bool`（`data=true` 開、`false` 關）
 
 #### `/brain/proposal`
 

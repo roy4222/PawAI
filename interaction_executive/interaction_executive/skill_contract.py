@@ -348,10 +348,9 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
     "greet_known_person": SkillContract(
         name="greet_known_person",
         steps=[
-            # 2026-05-23 PM: 5/27 demo video mode 段 1 — face + sitting 合一句
-            # Roy 拍攝場景一定先坐下，brain greet 觸發時 implicit sitting ✅
-            # 嚴格的 if recent sitting 邏輯留 5/28+
-            SkillStep(ExecutorKind.SAY, {"text_template": "{name}，歡迎回來。我看到你坐下來了。"}),
+            # 2026-06-10 demo（Roy 6/9 拍板）: pose/sitting 事件 6/9 HITL 全空不可靠
+            # → 台詞去掉坐姿句（原「我看到你坐下來了」）。sitting 修穩後可改回。
+            SkillStep(ExecutorKind.SAY, {"text_template": "{name}，歡迎回來，我看到你了。"}),
             SkillStep(ExecutorKind.MOTION, {"name": "hello"}),
         ],
         priority_class=PriorityClass.SKILL,
@@ -462,6 +461,27 @@ SKILL_REGISTRY: dict[str, SkillContract] = {
         demo_status_baseline="explain_only",
         demo_value="medium",
         demo_reason="動態避障非主展示，需場地較大",
+    ),
+    # 2026-06-10 issue #129: 參數化短距前進（Studio /api/skill_request 觸發；
+    # NAV executor 預設關，需 nav stack + nav_executor_enabled=true 才會真走）。
+    # 不在 LLM_PROPOSABLE_SKILLS — LLM 不可提案 motion/nav。
+    "move_forward": SkillContract(
+        name="move_forward",
+        steps=[SkillStep(ExecutorKind.NAV, {"action": "goto_relative", "distance": 0.5})],
+        priority_class=PriorityClass.SKILL,
+        cooldown_s=10.0,
+        timeout_s=35.0,
+        safety_requirements=["nav_ready", "depth_clear"],
+        requires_confirmation=True,  # Studio button trigger 由 brain bypass
+        risk_level="high",
+        fallback_skill="say_canned",
+        description="Parameterized short forward goto (issue #129). Studio button bypass confirm.",
+        args_schema={"distance": "float (m, optional, clamp ±1.5)"},
+        bucket="active",
+        display_name="前進半步",
+        demo_status_baseline="explain_only",
+        demo_value="medium",
+        demo_reason="nav baseline insufficient_data — 未 HITL 前不口頭宣稱，Studio 顯示為主",
     ),
     "approach_person": SkillContract(
         name="approach_person",

@@ -11,11 +11,9 @@ brain_node:
     # _GESTURE_DIRECT 在 brain_node __init__ 被 instance shadow 成 {}
     # 5/28+ 改回 false 即可 revert（不需 code 改）
     gesture_direct_disabled: true
-    # 2026-05-23 PM: 5/27 demo video mode — peace 一步觸發 stretch (繞 PendingConfirm OK 二確認)
-    # 這條會 override gesture_direct_disabled 對 peace 的影響：peace 仍走 direct trigger
-    # 其他手勢 (wave/palm/fist/index) 仍被 gesture_direct_disabled 砍掉
-    # 5/28+ 改回 false 即可 revert
-    peace_direct_stretch: true
+    # 2026-06-10（Roy 6/9 拍板）: peace 不得一步觸發 stretch（繞過 OK 確認 = demo 禁手）。
+    # peace 改走下方 peace_wego_confirm 的兩步 WeGo 確認路徑。
+    peace_direct_stretch: false
     # 2026-06-08 VIS-5: thumbs_up demo mode — 簡單正向回應，不引出 wiggle 確認
     thumbs_up_demo_ack: false
     # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
@@ -23,8 +21,37 @@ brain_node:
     # 5/28+ 改回 false 即可 revert
     demo_video_cup_compound: false
     demo_video_silent_sit_along: true
+    # ---- 2026-06-10 demo-blocking 修法（Roy 6/9 晚拍板，handoff §明天最終修法）----
+    # 1. stranger_alert 整路停用：6/9 HITL 定位 face 幻覺鎖 unknown → active plan
+    #    霸佔 brain，cup/greet 的 not-active gate 全黑。demo 不展示陌生人警報。
+    #    現場可 `ros2 param set /brain_node stranger_alert_enabled true` 即時開回。
+    stranger_alert_enabled: false
+    # 2. gesture 預設關 — 只在 S4 手勢段由 Studio Gesture toggle（或
+    #    `ros2 param set /brain_node gesture_enabled true`）打開，防 thumbs_up
+    #    誤觸搶 TTS/pending confirm 污染 S2/S3。
+    gesture_enabled: false
+    # 3. greet 拔 sitting 依賴（pose 事件 6/9 全空）；台詞已改「我看到你了」
+    #    （skill_contract.py greet_known_person）。sitting 修穩後兩處一起改回。
+    greet_require_sitting: false
+    # 5. WeGo 主手勢改 peace（比耶，兩步確認 peace→OK→wiggle）。thumbs_up 的
+    #    confirm 路徑仍在，上機 A/B 後擇一。
+    peace_wego_confirm: true
+    # 6. demo phase gate（最小版，Roy 6/10 拍板「S2/S3/S4 不搶話」）：
+    #    all（預設，零行為改變）/ s2_face / s3_object / s4_gesture / quiet。
+    #    只 gate 自發社交 proposal（greet/object_remark/gesture）；safety 與
+    #    明確指令不受影響。換 take：ros2 param set /brain_node demo_phase s3_object
+    demo_phase: "all"
 
 interaction_executive_node:
   ros__parameters:
     step_settle_s: 0.4
     tts_idle_timeout_s: 6.0
+    # ---- 2026-06-10 issue #129: NAV executor（/nav/goto_relative bridge）----
+    # demo 安全預設關（false 時 NAV step 一律 fail-closed: nav_executor_disabled）。
+    # 上機 nav stack 測試時手動打開（runtime callback 即時生效）：
+    #   ros2 param set /interaction_executive_node nav_executor_enabled true
+    # 另需 nav_capability stack 在跑（nav_ready / depth_clear gate 才會開）。
+    nav_executor_enabled: false
+    # 單一 NAV step 的 action result 等待上限（秒）；超時 best-effort cancel
+    # 後回 STEP_FAILED: nav_timeout（防 orphaned active goal 卡 queue）。
+    nav_step_timeout_s: 30.0

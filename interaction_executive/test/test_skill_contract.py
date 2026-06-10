@@ -35,6 +35,8 @@ EXPECTED_ACTIVE = {
     "stranger_alert",
     "object_remark",
     "nav_demo_point",
+    "move_forward",  # 6/10 issue #129
+
     "approach_person",
     "fallen_alert",
     # 2026-05-23: 5/27 demo § 5 safety reject visualization
@@ -54,7 +56,8 @@ EXPECTED_RETIRED = {"acknowledge_gesture"}
 def test_registry_total_count():
     # 18 active (added stand 5/9 evening) + 5 hidden + 4 disabled + 1 retired = 28
     # + request_backflip (5/23 5/27 demo § 5) = 29
-    assert len(SKILL_REGISTRY) == 29
+    # + move_forward (6/10 issue #129 NAV executor) = 30
+    assert len(SKILL_REGISTRY) == 30
 
 
 def test_active_bucket_matches_inventory():
@@ -145,7 +148,7 @@ def test_meta_skills_dict_exposes_self_introduce():
 def test_greet_known_person_template_resolves():
     plan = build_plan("greet_known_person", args={"name": "alice"})
     # 2026-05-23: greet TTS 從「歡迎回來，{name}」改成「嗨 {name}」(5/27 demo video mode)
-    assert plan.steps[0].args["text"] == "alice，歡迎回來。我看到你坐下來了。"
+    assert plan.steps[0].args["text"] == "alice，歡迎回來，我看到你了。"
     assert plan.steps[1].args["name"] == "hello"
 
 
