@@ -1,7 +1,50 @@
 # 專案狀態
 
-**最後更新**：2026-06-09 晚（早:nav HITL + 5 工具 `a38ca96`；晚:demo-recording code 上線 `b1f5058`/`932b74e`/`b2d6500`（object 0.35+BGR / brain demo 行為 / studio nav 面板）+ brain/vision HITL 定位 → 真兇是 stranger_alert 霸佔）
-**硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。⚠️ 供電不穩：6/7 night session 中 Jetson 掉電重開 **2 次**。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+**最後更新**：2026-06-10（7 項 demo-blocking 修法全上線+上機驗證 `b1b1520`；vision/object `26c9f69`；studio gesture toggle `e0879c6`；工具+研究 `f0cb621`；S1 Studio 操作員導航控制 `295f917`；HITL 錄完 S2-S5、S1 卡在 AMCL covariance 閘）
+**硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/10：demo-blocking 7 修法全上線 + 上機驗證 + 錄 S2-S5 + S1 Studio 導航控制（5 commits）
+
+**當日主軸**：把 6/9 晚定位的真兇（stranger_alert 霸佔 brain）+ 6 項 demo-blocking 修法全部寫完、上 Jetson 驗證、錄影。下午臨時加碼 S1「Studio 操作員導航控制」（設 initialpose + 開始/繼續/停止）。完整修法決策見 memory `project_demo_flow_0609` + brain v2 PRD。
+
+### 1. 7 項 demo-blocking 修法（commit `b1b1520`，interaction_executive，258 tests pass）
+- **stranger_alert 停用**（真兇）：`stranger_alert_enabled` gate 預設 false（runtime param 可開回）→ 一刀解 cup+greet 全黑。
+- **gesture 預設關 + Studio toggle**：`/brain/gesture_enabled` Bool topic（gateway POST `/api/gesture_enabled`）+ runtime param 兩入口；關閉時 cancel in-flight PendingConfirm。
+- **greet 拔 sitting**：`greet_require_sitting` 預設 false + 台詞改「Roy，歡迎回來，我看到你了」（skill_contract + 2 測試斷言同步）。
+- **peace WeGo 兩步確認**：`peace_wego_confirm` 預設 true（peace→OK→wiggle），`peace_direct_stretch` 改 false（禁一步觸發）。WeGo 台詞改 keyed-on-skill。
+- **demo phase gate（最小版）**：`demo_phase`（all/s2_face/s3_object/s4_gesture/quiet）只 gate 自發社交 proposal（greet/object/gesture），safety 與明確指令不受影響 → 解「S2/S3/S4 搶話」。
+- **reset_context 清 object dedup**：重錄 take 時 cup 台詞能再觸發。
+- **NAV executor #129**：`move_forward` skill → `/nav/goto_relative`，預設 OFF（`nav_executor_enabled` false）+ 4 重 world gate fail-closed（nav_ready/depth_clear/nav_paused/emergency）。review 3 blocker 已修（STEP_FAILED 清 active_plan / 搶佔 cancel in-flight goal / callback functools.partial 綁 state 防串線）。
+
+### 2. vision + object（commit `26c9f69`，138 tests pass）
+- **pose**：根因定位 = `classify_pose` avg_score<0.2 + 嚴格幾何 → 20 幀 buffer 全 None 不發事件。修法：`pose_two_class`（蹲/跪/彎=坐、只發 sit/stand、fallen demo 模式不發）+ 注入式 `pose_min_avg_score`/`sitting_trunk_max_deg` + debug log 補診斷。預設維持原行為，demo 值由 `start_full_demo_tmux.sh` 翻開（two_class:=true / min_score:=0.15 / trunk:=45）。
+- **gesture**：`gesture_recognizer_min_conf` 0.7（原本 score 取了從沒檢查）+ `gesture_min_votes`（防 thumbs_up/OK 誤觸）。`voting.py` 抽出 majority_vote(min_votes)。
+- **object**：`OBJECT_MODEL`/`OBJECT_INPUT_SIZE` env 一行切模型 + TRT cache 按 model stem 分目錄。已匯出 A/B 候選 ONNX（yolo26s_640 / yolo26n_960 / yolo26s_960 / yolo26n-pose_640，`.tmp/yolo_export/`）。
+
+### 3. Studio（commit `e0879c6` gesture toggle / `295f917` nav 控制）
+- **gesture toggle**：gateway `/api/gesture_enabled` + 前端 `gesture-toggle.tsx` 常駐 header + mock nav 事件。
+- **S1 操作員導航控制**（Roy 拍板「操作員確認續走」，非 auto-resume）：gateway 與 nav stack 共跑（RAM 剩 5.2GB）。`/api/nav/initialpose`（點地圖設，px↔world 反轉含 y-flip）+ `/api/nav/start`（GotoRelative client）+ **danger 時 gateway 主動 cancel goal → paused_confirm → 操作員按「繼續」才重送**（避開 6/9 的 0.5m/s lunge）+ `/api/nav/stop`。前端 `nav-control.tsx`。51 gateway tests + 13 store tests。
+
+### 4. 上機驗證（HITL，全綠）
+- deploy 走**安全手動 rsync**（CLI 的 `~/sync once` 沒排除 `.env`/node_modules，會刪 → 繞過）。4 套件 colcon build OK。
+- brain demo 參數全部正確載入（stranger/gesture off、greet 拔 sitting、peace WeGo、demo_phase all、nav_executor off）。object debug image 7.3Hz。gesture toggle 端到端 OK（功能正常，但 `ros2 param get` 顯示 stale = review finding #4 cosmetic）。**S5 安全拒絕端到端驗證**：「請翻跟斗」→ `blocked_by_safety: banned_api:1301` + 拒絕台詞，Go2 不動。
+- **Roy 錄完 S2-S5**（認人/杯子/手勢/安全拒絕）。
+
+### 5. S1 卡點（誠實記錄，未解）
+- nav capability stack（indoor_tight profile）AMCL active / LiDAR 11.5Hz / reactive_stop clear 1.5m。gateway 共跑、`/api/nav/initialpose` 實測 amcl_pose 跳到設定點（重定位成功）。
+- **S1 移動沒錄成**：按「開始」狗不動，根因 = **AMCL covariance 在 0.45 門檻上下抖**（0.41-0.47），nav_action_server 安全閘規定 yellow（0.3-0.5）只准 ≤0.5m，Roy 要的 1.0/1.2m 被拒（非按鈕壞）。**未解選項**：(A) 距離改 0.5m（yellow 也准，最快）(B) 放寬 covariance 閘允許 yellow 跑 1.2m (C) 設準 initialpose 讓 cov 穩 green。Studio 目前 goal 被拒沒顯示原因（靜默回 idle）= Roy 看到的「沒反應」，可補 rejection reason 廣播。
+
+### 6. 產出 / backlog
+- **PawAI Brain v2 + CLI v2 PRD**（Roy 早上要的，draft 待審）：`docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md`。5 層架構（Perception Router / Interaction State Machine / Policy Guardrail / Skill Executor / Trace）+ 增量遷移 + CLI Typer/pipx + 外部框架（OpenClaw/NeMo/ROSClaw）定位（啟發 agent 層，不當 Go2 的腦）。
+- 模型升級研究：`docs/pawai-brain/research/2026-06-10-model-upgrade-decision-research.md`（object/pose/D435 曝光 SOP）。
+- review 未修小事（不擋 demo）：gesture toggle `ros2 param get` stale、gateway cache VOLATILE 脫鉤、reset 沒清 active_step。
+
+### 待辦（接手即做）
+- **S1 收尾**：決定 0.5m / 放寬閘 / 設準 initialpose 三選一，補錄移動畫面。可補 gateway rejection-reason 廣播讓 Studio 不再靜默。
+- 收工：停 nav stack（`nav-avoidance-lane cleanup`）+ frontend、push 今天 5 commits。
+- demo 後：Brain v2 / CLI v2 PRD 審核 + 開工。
 
 ---
 
