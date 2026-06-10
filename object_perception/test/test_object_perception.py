@@ -316,8 +316,36 @@ class TestZhLookup:
         assert class_name_zh(999) == "物件"
 
     def test_color_zh_complete(self):
+        # 5/6 expanded 4 → 12 colours; must stay in sync with analyze_bbox_color outputs.
         from object_perception.coco_classes import COLOR_ZH
-        assert COLOR_ZH == {"red": "紅色", "yellow": "黃色", "green": "綠色", "blue": "藍色"}
+        assert COLOR_ZH == {
+            "red": "紅色",
+            "orange": "橘色",
+            "yellow": "黃色",
+            "green": "綠色",
+            "cyan": "青色",
+            "blue": "藍色",
+            "purple": "紫色",
+            "pink": "粉紅色",
+            "brown": "咖啡色",
+            "black": "黑色",
+            "white": "白色",
+            "gray": "灰色",
+        }
+
+    def test_color_zh_covers_classifier_outputs(self):
+        """Every colour analyze_bbox_color can emit must have a zh entry (DEVOPS-1 lesson)."""
+        import re
+        from pathlib import Path
+
+        from object_perception.coco_classes import COLOR_ZH
+
+        src = Path(__file__).resolve().parents[1] / "object_perception" / "object_perception_node.py"
+        body = src.read_text(encoding="utf-8")
+        match = re.search(r"def analyze_bbox_color.*?(?=\ndef |\nclass )", body, re.DOTALL)
+        assert match, "analyze_bbox_color not found"
+        emitted = set(re.findall(r'"([a-z]+)"', match.group(0))) - {"bgr"}
+        assert emitted <= set(COLOR_ZH), f"missing zh for: {emitted - set(COLOR_ZH)}"
 
 
 # ------------------------------------------------------------------
