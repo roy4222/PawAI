@@ -14,7 +14,26 @@ echo "═══ brain-studio-lane healthcheck ═══"
 
 # ── conv_graph ready + openrouter on + persona 6 檔 ────────
 # `-J` joins wrapped lines（避免 80 字元換行讓 grep 抓不到 "loaded directory ... 6 files verified"）
-LOG=$(ssh $SSH_OPTS "$JETSON_HOST" "tmux capture-pane -t pawai_brain:conv_graph -pJ -S -300 2>/dev/null" || echo "")
+# 6/11 smoke Gap 2 修正：
+#   a) full mode 的 conv graph 跑在 demo:llm、brain-only mode 在 pawai_brain:conv_graph
+#      — 只抓後者會讓 full mode gate 永遠假失敗，兩個 pane 都抓。
+#   b) conv graph 冷啟 ~22s（LangGraph init）— 在 BRAIN_HC_WAIT_S 預算內輪詢等 ready；
+#      暖 stack 第一輪即通過，不付等待成本；stack 真死則等滿後照常 fail。
+BRAIN_HC_WAIT_S="${BRAIN_HC_WAIT_S:-60}"
+capture_brain_log() {
+  ssh $SSH_OPTS "$JETSON_HOST" \
+    "tmux capture-pane -t pawai_brain:conv_graph -pJ -S -300 2>/dev/null; \
+     tmux capture-pane -t demo:llm -pJ -S -300 2>/dev/null" || true
+}
+LOG=$(capture_brain_log)
+WAITED=0
+while ! echo "$LOG" | grep -q "conversation_graph_node ready"; do
+  if [ "$WAITED" -ge "$BRAIN_HC_WAIT_S" ]; then break; fi
+  echo "    … conv_graph 尚未 ready，等待中 (${WAITED}s/${BRAIN_HC_WAIT_S}s)"
+  sleep 5
+  WAITED=$((WAITED+5))
+  LOG=$(capture_brain_log)
+done
 echo -n "[1] conversation_graph_node ready ... "
 if echo "$LOG" | grep -q "conversation_graph_node ready"; then echo "✅"; else echo "❌"; FAILS=$((FAILS+1)); fi
 
