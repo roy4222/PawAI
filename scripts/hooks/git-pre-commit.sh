@@ -86,6 +86,7 @@ SUITES=(
   "pawai_brain/|pawai_contracts:pawai_brain|pawai_brain/test/"
   "nav_capability/|nav_capability|nav_capability/test/ --ignore=nav_capability/test/integration"
   "object_perception/|object_perception|object_perception/test/"
+  "pawai_contracts/|pawai_contracts:object_perception|pawai_contracts/test/"
 )
 
 for spec in "${SUITES[@]}"; do

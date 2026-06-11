@@ -24,7 +24,8 @@ def test_studio_ts_copy_matches_contracts():
     # without changing the intent (verify TS translations match contracts).
     pairs = dict(re.findall(r'(?<![a-z_])([a-z_]+)(?![a-z_])\s*:\s*["\']([^"\']+)["\']', ts))
     for key, zh in {**OBJECT_CLASS_ZH, **OBJECT_COLOR_ZH}.items():
-        if key in pairs:                      # TS may have extra UI entries; contract keys must match
+        # TS may have extra UI entries; contract keys must match.
+        if key in pairs:
             assert pairs[key] == zh, f"{key}: contracts={zh} ts={pairs[key]}"
     missing = [k for k in OBJECT_COLOR_ZH if k not in pairs]
     assert not missing, f"Studio object-config.ts missing colour keys: {missing}"

@@ -10,7 +10,7 @@ FORBIDDEN = re.compile(r"^\s*(import|from)\s+(rclpy|interaction_executive|pawai_
 def test_no_forbidden_imports():
     offenders = [
         f"{py.name}: {m.group(0).strip()}"
-        for py in PKG.glob("*.py")
+        for py in PKG.rglob("*.py")
         for m in FORBIDDEN.finditer(py.read_text(encoding="utf-8"))
     ]
     assert not offenders, offenders

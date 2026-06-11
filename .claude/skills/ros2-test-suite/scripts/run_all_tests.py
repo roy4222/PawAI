@@ -34,10 +34,14 @@ PACKAGES = {
     "interaction_executive": {
         "test_dir": "interaction_executive/test",
         "quick": False,
+        # skill_contract moved to pawai_contracts (Plan C2) — shim needs it on the path
+        "pythonpath": ["pawai_contracts"],
     },
     "pawai_brain": {
         "test_dir": "pawai_brain/test",
         "quick": False,
+        # skill_policy_gate + conversation_graph import pawai_contracts (Plan C3/C4)
+        "pythonpath": ["pawai_contracts"],
     },
     "nav_capability": {
         "test_dir": "nav_capability/test",
@@ -50,6 +54,12 @@ PACKAGES = {
         "test_dir": "object_perception/test",
         "quick": False,
     },
+    "pawai_contracts": {
+        "test_dir": "pawai_contracts/test",
+        "quick": True,
+        # object_perception on the path for the zh parity test (pure dict module)
+        "pythonpath": ["pawai_contracts", "object_perception"],
+    },
     # DELIBERATELY EXCLUDED:
     # tools/pawai_cli — ~300s on dev machines (tests leave real ssh probes waiting out timeouts;
     #   one test fails when .env.local exists). CI fast-gate invocation 4 covers it.
@@ -57,7 +67,8 @@ PACKAGES = {
 }
 
 
-def run_tests(pkg_name: str, test_dir: str, extra_args: list | None = None) -> dict:
+def run_tests(pkg_name: str, test_dir: str, extra_args: list | None = None,
+              pythonpath: list | None = None) -> dict:
     """Run pytest for a package and return results."""
     full_path = os.path.join(REPO_ROOT, test_dir)
     if not os.path.isdir(full_path):
@@ -70,10 +81,14 @@ def run_tests(pkg_name: str, test_dir: str, extra_args: list | None = None) -> d
     cmd = [sys.executable, "-m", "pytest", full_path, "-q", "--tb=line", "--no-header"]
     if extra_args:
         cmd.extend(extra_args)
+    env = os.environ.copy()
+    if pythonpath:
+        extra = ":".join(os.path.join(REPO_ROOT, p) for p in pythonpath)
+        env["PYTHONPATH"] = extra + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
     start = time.time()
     result = subprocess.run(
         cmd,
-        capture_output=True, text=True, cwd=REPO_ROOT, timeout=60
+        capture_output=True, text=True, cwd=REPO_ROOT, timeout=60, env=env
     )
     elapsed = time.time() - start
 
@@ -143,7 +158,8 @@ def main():
 
     for pkg_name, pkg_info in targets.items():
         print(f"\n  Running {pkg_name}...", end="", flush=True)
-        r = run_tests(pkg_name, pkg_info["test_dir"], pkg_info.get("extra_args"))
+        r = run_tests(pkg_name, pkg_info["test_dir"], pkg_info.get("extra_args"),
+                      pkg_info.get("pythonpath"))
         results[pkg_name] = r
         total_passed += r["passed"]
         total_failed += r["failed"]
