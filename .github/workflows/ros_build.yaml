@@ -178,6 +178,18 @@ jobs:
             speech_processor
             face_perception
             vision_perception
+      - name: Studio gateway tests (needs rclpy — Plan A4, Tier 1)
+        run: |
+          # ffmpeg: asr_client.resample_to_wav16k shells out to it; the
+          # rostooling image doesn't bundle it (TestResampleAudio needs it).
+          (sudo apt update && sudo apt install --no-install-recommends ffmpeg -y) || \
+          (apt update && apt install --no-install-recommends ffmpeg -y) || true
+          pip3 install -r pawai-studio/gateway/requirements.txt 'pytest>=7' \
+            opencv-python-headless numpy pydub || \
+          pip3 install --break-system-packages -r pawai-studio/gateway/requirements.txt \
+            'pytest>=7' opencv-python-headless numpy pydub
+          bash -c "source /opt/ros/humble/setup.bash && \
+            cd pawai-studio/gateway && python3 -m pytest -q --tb=short"
       - name: Python syntax check
         run: |
           find . -name '*.py' \
