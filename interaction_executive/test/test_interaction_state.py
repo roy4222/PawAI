@@ -137,13 +137,16 @@ def test_terminal_for_wrong_plan_id_ignored():
     assert m.state == InteractionState.EXECUTING
 
 
-def test_watchdog_timeout_to_recovery():
+def test_watchdog_timeout_two_step_recovery():
+    # §3.6: expiry → ERROR_RECOVERY (observable) → next tick → IDLE.
     m = InteractionStateMachine(now=0.0)
     m.apply_signal(TransitionSignal(T.SKILL_RESULT, {"status": "STARTED", "plan_id": "p1",
                                                      "timeout_s": 5.0}))
     d = m.tick(now=6.0)
-    assert m.state == InteractionState.IDLE
-    assert d is not None and "watchdog_timeout:executing" in d.reason
+    assert m.state == InteractionState.ERROR_RECOVERY
+    assert d is not None and d.next_state == InteractionState.ERROR_RECOVERY
+    assert "watchdog_timeout:executing" in d.reason
+    assert m.tick(now=6.1) is None and m.state == InteractionState.IDLE
 
 
 def test_watchdog_no_premature_fire():
@@ -167,8 +170,66 @@ def test_confirm_timeout_30s():
     m.propose(Candidate(kind="gesture_cmd", priority=P.SOCIAL, source="gesture",
                         skill="wiggle", requires_confirmation=True), now=0.0)
     assert m.state == InteractionState.CONFIRM_PENDING and m.deadline == 30.0
-    m.tick(now=31.0)
+    m.tick(now=31.0)                      # → ERROR_RECOVERY
+    assert m.state == InteractionState.ERROR_RECOVERY
+    m.tick(now=31.1)                      # → IDLE
     assert m.state == InteractionState.IDLE
+
+
+def test_executing_via_confirm_ok_has_watchdog():
+    # BUG fix: EXECUTING reached via confirm_ok must carry a grace deadline so a
+    # skill that is accepted but never launches can't deadlock (the 6/9 class).
+    m = InteractionStateMachine(now=0.0, state=InteractionState.CONFIRM_PENDING, deadline=30.0)
+    m.propose(Candidate(kind="confirm_ok", priority=P.CONFIRM, source="gesture",
+                        skill="wiggle"), now=1.0)
+    assert m.state == InteractionState.EXECUTING
+    assert m.deadline is not None                       # not a deadlock
+    m.tick(now=1.0 + 30.0 + 0.1)                         # never got STARTED → recover
+    assert m.state == InteractionState.ERROR_RECOVERY
+
+
+def test_tts_start_during_executing_does_not_clobber():
+    # BUG fix: a skill speaking mid-execution must not lose its state/plan/watchdog.
+    m = InteractionStateMachine(now=0.0)
+    m.apply_signal(TransitionSignal(T.SKILL_RESULT, {"status": "STARTED", "plan_id": "p1",
+                                                     "timeout_s": 10.0}))
+    dl = m.deadline
+    m.apply_signal(TransitionSignal(T.TTS_ACK, {"event": "start"}))
+    assert m.state == InteractionState.EXECUTING and m.deadline == dl
+    # the executing plan can still be terminated normally
+    m.apply_signal(TransitionSignal(T.SKILL_RESULT, {"status": "COMPLETED", "plan_id": "p1"}))
+    assert m.state == InteractionState.IDLE
+
+
+def test_safety_priority_skill_started_holds():
+    m = InteractionStateMachine(now=0.0)
+    m.apply_signal(TransitionSignal(T.SKILL_RESULT, {"status": "STARTED",
+                                                     "priority_class": int(P.SAFETY),
+                                                     "plan_id": "stop1", "timeout_s": 5.0}))
+    assert m.state == InteractionState.SAFETY_HOLD
+
+
+def test_safety_hold_exits_via_operator_reset():
+    m = InteractionStateMachine(now=0.0, state=InteractionState.SAFETY_HOLD)
+    m.apply_signal(TransitionSignal(T.OPERATOR, {"op": "reset"}))
+    assert m.state == InteractionState.IDLE
+
+
+def test_explicit_requiring_confirmation_still_confirms_not_bypassed():
+    # Safety semantics (§3.3): an explicit command that requires confirmation must
+    # NOT skip the confirm just because it is explicit — it re-arms CONFIRM_PENDING.
+    d = InteractionPolicy.evaluate(S.CONFIRM_PENDING,
+                                   _cand("dangerous", P.EXPLICIT, explicit=True,
+                                         skill="backflip", requires_confirmation=True))
+    assert d.verdict == V.ACCEPT and d.next_state == S.CONFIRM_PENDING
+
+
+def test_empty_plan_id_terminal_does_not_sentinel_match():
+    # BUG fix: a terminal with no plan_id must not clear a freshly-reset machine.
+    m = InteractionStateMachine(now=0.0)
+    m.apply_signal(TransitionSignal(T.SKILL_RESULT, {"status": "COMPLETED"}))  # no plan_id, fresh
+    assert m.state == InteractionState.IDLE  # unchanged, no spurious transition recorded
+    assert m.history == []
 
 
 def test_propose_confirm_ok_transitions_executing():
@@ -220,6 +281,8 @@ def test_6_9_replay_alert_stuck_then_social_suppressed_not_blackhole():
     for kind in ("object_remark", "greet"):
         d = m.propose(_cand(kind, P.SOCIAL), now=2.0)
         assert d.verdict == V.SUPPRESS and d.reason == "gate:alert_active"
-    # watchdog frees it (no terminal ever arrived).
+    # watchdog frees it (no terminal ever arrived): ALERT_ACTIVE → ERROR_RECOVERY → IDLE.
     m.tick(now=11.0)
+    assert m.state == InteractionState.ERROR_RECOVERY
+    m.tick(now=11.1)
     assert m.state == InteractionState.IDLE
