@@ -5,6 +5,7 @@ import json
 import random
 import threading
 import time
+import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,6 +52,7 @@ from pawai_contracts.zh_tables import (
 )
 # LLM proposal policy single-sourced in pawai_contracts (Plan C4, 2026-06-10).
 from pawai_contracts import llm_policy as _llm_policy
+from pawai_contracts.trace_schema import TraceEvent, TraceKind, Verdict, make_suppressed
 
 # Per-class speaking dedup (D-4: key = class_name only, color dropped to prevent
 # color-jitter bypass).  SkillContract.cooldown_s=5 only stops the *skill* from
@@ -192,6 +194,12 @@ class BrainNode(Node):
         self._last_chat_input_ts: float = 0.0
 
         self._pub_proposal = self.create_publisher(String, "/brain/proposal", _RELIABLE_10)
+        # Plan E (2026-06-10): decision-chain trace. Distinct from
+        # /brain/conversation_trace (LLM dialogue stages) — this one answers
+        # 「為什麼沒反應」. Persistence belongs to the Studio gateway, NOT here.
+        self._pub_trace = self.create_publisher(String, "/brain/trace", _RELIABLE_10)
+        self._plan_decision: dict[str, str] = {}   # plan_id → decision_id (GC in _gc_dedup)
+        self._current_decision_id: str = ""
         self._pub_brain_state = self.create_publisher(
             String, "/state/pawai_brain", _TRANSIENT_LOCAL_1
         )
@@ -473,6 +481,15 @@ class BrainNode(Node):
         self.get_logger().info(
             f"PROPOSAL {plan.selected_skill} src={plan.source} reason={plan.reason}"
         )
+        # Plan E: decision-chain bookkeeping + plan_emitted trace (additive).
+        self._plan_decision[plan.plan_id] = self._current_decision_id
+        self._trace(TraceEvent(
+            decision_id=self._current_decision_id, node="brain_node",
+            kind=TraceKind.PLAN_EMITTED, verdict=Verdict.ACCEPTED,
+            gate="", reason=plan.reason, plan_id=plan.plan_id,
+            detail={"skill": plan.selected_skill, "source": plan.source,
+                    "priority": int(plan.priority_class)},
+        ))
 
     def _plan_to_dict(self, plan: SkillPlan) -> dict[str, Any]:
         return {
@@ -486,7 +503,48 @@ class BrainNode(Node):
             "priority_class": int(plan.priority_class),
             "session_id": plan.session_id,
             "created_at": plan.created_at,
+            # Plan E (additive): chains this proposal to its triggering
+            # perception event; IE tolerates unknown fields.
+            "decision_id": self._current_decision_id,
         }
+
+    def _trace(self, ev: TraceEvent) -> None:
+        """Publish a TraceEvent. NEVER raises — tracing must not break callbacks."""
+        try:
+            msg = String()
+            msg.data = ev.to_json()
+            self._pub_trace.publish(msg)
+        except Exception as exc:  # noqa: BLE001 — additive instrumentation only
+            self.get_logger().debug(f"trace publish failed: {exc}")
+
+    def _suppressed(self, *, gate: str, reason: str, source_summary: str = "",
+                    cooldown_remaining_s: float | None = None) -> None:
+        """Emit a suppressed-verdict trace for a gate early-return (Plan E3).
+
+        Reads shared state for the Roy-required context fields; never raises
+        (the underlying _trace swallows publish errors, and the state reads are
+        guarded here)."""
+        try:
+            with self._lock:
+                active = self._state.active_plan or {}
+            pending = f"{self._pending_confirm.state.name}:" \
+                      f"{getattr(self._pending_confirm, 'skill', '') or ''}"
+            self._trace(make_suppressed(
+                decision_id=self._current_decision_id, node="brain_node",
+                gate=gate, reason=reason, demo_phase=self.demo_phase,
+                active_plan=str(active.get("selected_skill") or ""),
+                pending_confirm=pending,
+                cooldown_remaining_s=cooldown_remaining_s,
+                source_summary=source_summary,
+            ))
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"suppressed trace failed: {exc}")
+
+    def _cooldown_remaining(self, key: str, cooldown_s: float) -> float:
+        last = self._state.last_alert_ts.get(key)
+        if last is None:
+            return 0.0
+        return max(0.0, cooldown_s - (time.time() - last))
 
     def _in_cooldown(self, key: str, cooldown_s: float) -> bool:
         last = self._state.last_alert_ts.get(key)
@@ -548,6 +606,9 @@ class BrainNode(Node):
             self._state.dedup_cache = {
                 key: ts for key, ts in self._state.dedup_cache.items() if ts > cutoff
             }
+        # Plan E: bound the plan→decision map (insertion-ordered dict).
+        while len(self._plan_decision) > 200:
+            self._plan_decision.pop(next(iter(self._plan_decision)))
 
     def _has_active_skill_or_sequence(self) -> bool:
         """Return True when a SKILL or SEQUENCE priority plan is actively running.
@@ -567,6 +628,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"speech-{uuid.uuid4().hex[:12]}"
         if self.perception_router_enabled:
             ev = parse_speech(payload)
             transcript, session_id = ev.transcript, ev.session_id
@@ -662,6 +726,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"chat-{uuid.uuid4().hex[:12]}"
         session_id = str(payload.get("session_id") or "")
         reply_text = str(payload.get("reply_text") or "").strip()
         engine = str(payload.get("engine") or "legacy")
@@ -825,6 +892,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"gesture-{uuid.uuid4().hex[:12]}"
         if self.perception_router_enabled:
             gesture = parse_gesture(payload).gesture
         else:  # legacy parse — Phase 0 fallback, byte-identical semantics
@@ -1134,6 +1204,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"face-{uuid.uuid4().hex[:12]}"
         if self.perception_router_enabled:
             ev = parse_face(payload)
             identity, stable = ev.identity, ev.stable
@@ -1247,6 +1320,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"pose-{uuid.uuid4().hex[:12]}"
         if self.perception_router_enabled:
             pose = parse_pose(payload).pose
         else:  # legacy parse — Phase 0 fallback, byte-identical semantics
@@ -1339,6 +1415,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"object-{uuid.uuid4().hex[:12]}"
 
         if self.perception_router_enabled:
             ev = parse_object(payload)
@@ -1479,6 +1558,9 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
+        # Plan E: one decision_id per inbound event — chains gate verdicts,
+        # plan and skill_result (single-threaded executor → serial-safe).
+        self._current_decision_id = f"skill_request-{uuid.uuid4().hex[:12]}"
         skill = str(payload.get("skill") or "").strip()
         args = payload.get("args") or {}
         if skill not in SKILL_REGISTRY:
@@ -1570,6 +1652,23 @@ class BrainNode(Node):
                     if status == SkillResultStatus.BLOCKED_BY_SAFETY.value:
                         plan["accepted"] = False
                     break
+
+        # Plan E: skill_result trace on terminal/blocked statuses (additive).
+        if status in (
+            SkillResultStatus.COMPLETED.value,
+            SkillResultStatus.ABORTED.value,
+            SkillResultStatus.BLOCKED_BY_SAFETY.value,
+            SkillResultStatus.STEP_FAILED.value,
+        ):
+            blocked = status == SkillResultStatus.BLOCKED_BY_SAFETY.value
+            self._trace(TraceEvent(
+                decision_id=self._plan_decision.get(str(plan_id), ""),
+                node="brain_node", kind=TraceKind.SKILL_RESULT,
+                verdict=Verdict.BLOCKED if blocked else Verdict.ACCEPTED,
+                gate="safety" if blocked else "",
+                reason=str(payload.get("reason") or status), plan_id=str(plan_id or ""),
+                detail={"status": status},
+            ))
 
     def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
         """P1-2: Cancel PendingConfirm when browser requests a context reset.
