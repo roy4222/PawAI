@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install pytest pytest-cov flake8 numpy opencv-python-headless jsonschema pyyaml requests langgraph
+        run: pip install pytest pytest-cov flake8 numpy opencv-python-headless jsonschema pyyaml requests langgraph click python-dotenv
       - name: Flake8 lint (report-only)
         run: |
           flake8 speech_processor/ go2_robot_sdk/ face_perception/ \
@@ -115,6 +115,10 @@ jobs:
             interaction_executive/test/test_skill_queue.py \
             interaction_executive/test/test_state_machine.py \
             -v --tb=short
+          # Invocation 4 (Plan A2, Tier 1): pawai_cli — mock-based CLI tests.
+          # PYTHONPATH needed: the package is not pip-installed on the runner.
+          # tests/ dir name avoids the top-level 'test' package collision.
+          PYTHONPATH=tools/pawai_cli pytest tools/pawai_cli/tests -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
