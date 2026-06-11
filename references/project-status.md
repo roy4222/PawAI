@@ -1,7 +1,25 @@
 # 專案狀態
 
-**最後更新**：2026-06-11 晚（**第一批重構全執行 + S0 freeze-safe + ISM 詳細 plan + ISM Phase 0 實作 + 地基封閉 smoke**：Plan A-E 全 merge、B-E 上機 smoke 4/4、2 gap 修復、S0-1/S0-2、ISM plan + Phase 0 純模組，main `69ce1b8` 全綠；真機 9/9 closure smoke 通過 → 地基封閉）
+**最後更新**：2026-06-11 深夜（**重構 v2 五份計畫文件產出**：master + 系統 Phase 2-5 plans 落地 `docs/superpowers/plans/`，全部 Status: PLANNED 待 Roy 審核後開工；前一段：第一批重構全執行 + S0 freeze-safe + ISM Phase 0 + 地基封閉 9/9）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/11 深夜：全系統重構 v2 計畫套件（5 份，待審）
+
+**主軸**：地基封閉後，Roy 指示「不實作、只寫計畫」——產出 v2 總計畫 + 四份系統 phase plan（皆 `docs/superpowers/plans/`、Status: PLANNED，**待 Roy /grill-me 審核後才開工**）。零 code 變更。
+
+- **`2026-06-11-pawai-system-refactor-v2-master.md`**：北極星全文（demo 拼裝系統 → 安全/可觀測/可擴展/可部署/可驗證的具身 AI 平台）+ 系統 Phase 1 完成清單（PR #143-#159）+ Phase 2-5 摘要與依賴閘門 G1-G8 + **Roy 決策登記簿 A-1~A-14** + 全域 6/18 凍結表。
+- **系統 Phase 2（Core Brain/Ops）**：2A ISM 接入（shadow → staged enable 2a-2g → 權威化）+ 2B Studio Evidence Center（gateway JSONL 落盤/export/suppressed viewer）+ 2C CLI（smoke brain / evidence pull）。**硬規則：6/18 前只做 ISM Phase 1 shadow + evidence + 零行為 CLI 工具，不做 staged enable、不改 Brain runtime 行為**。
+- **系統 Phase 3（Vision Evidence + Model Benchmark）**：吸收 6/11 全部 7 條研究線；WSL 週（W2/W3/W4/W5 spikes，blocked on Roy 的 object JSONL + demo 錄影）→ 上機矩陣日（A-E + 色彩 54 格 bag）→ 兩條 GO 後才動 runtime/contract v2.6。
+- **系統 Phase 4（Robot Control / Nav Hardening）**：吸收 security hardening plan（P0-1 gateway flip 三件 bundle / P0-2 foxglove Roy 決策 / P1-1~P1-4 / P3-4）+ nav capability ladder 四標籤 + S1 簿記 + stop-resume 終局；全段 post-6/18、重 HITL。
+- **系統 Phase 5（Productization）**：CLI v2 完整化（Typer/smoke family/face delete/pipx/三平台安裝）+ dead code 歸檔 + shim 拆除（硬依賴 G7）+ Studio v2 收尾 + HITL 證據治理。
+- **品質流程**：5 writer + 5 adversarial verifier + 跨文件一致性 + fixer（16 agents）；抓掉 6 條 major 事實錯誤（CI Invocation 9 不存在、shadow 需 never-raises、PerceptionEvent 未對齊 sv.Detections、driver webrtc_req 現況零過濾、foxglove 8 處非 6 處、ledger 行號漂移）+ 13 條跨文件矛盾（刪碼歸屬、Studio 三延後能力落點等）全收斂。
+- **跨文件拍定**：19 個 `_suppressed` 死碼刪除單源歸系統 Phase 5 T5B-3（ISM Phase 3 只停用不刪碼）；smoke vision/object 的 script＝Phase 3、CLI wiring＝Phase 5；gateway nonce/HMAC 簽章落 Phase 4 T4A-1④；新增 Roy 決策 A-11（trace export endpoint auth 形態——GET 不受 token 擋）。
+
+### 待辦（下一步）
+- Roy 審 v2 計畫套件（/grill-me）→ 通過後第一刀＝ISM Phase 1 shadow + 2B first slice（G2 前置：A-4 PII 邊界 + A-11 export auth 雙拍板）。
+- local main 領先 origin 2 commits（6/11 project-status sync + 本次），待 Roy 決定 push。
 
 ---
 
