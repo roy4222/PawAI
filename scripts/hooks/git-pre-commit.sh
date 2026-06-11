@@ -82,8 +82,8 @@ SUITES=(
   "speech_processor/|speech_processor|speech_processor/test/"
   "vision_perception/|vision_perception|vision_perception/test/"
   "face_perception/|face_perception|face_perception/test/"
-  "interaction_executive/|interaction_executive|interaction_executive/test/test_attention_machine.py interaction_executive/test/test_pending_confirm.py interaction_executive/test/test_skill_contract.py interaction_executive/test/test_skill_contract_demo_fields.py interaction_executive/test/test_skill_queue.py interaction_executive/test/test_state_machine.py"
-  "pawai_brain/|pawai_brain|pawai_brain/test/"
+  "interaction_executive/|pawai_contracts:interaction_executive|interaction_executive/test/test_attention_machine.py interaction_executive/test/test_pending_confirm.py interaction_executive/test/test_skill_contract.py interaction_executive/test/test_skill_contract_demo_fields.py interaction_executive/test/test_skill_queue.py interaction_executive/test/test_state_machine.py"
+  "pawai_brain/|pawai_contracts:pawai_brain|pawai_brain/test/"
   "nav_capability/|nav_capability|nav_capability/test/ --ignore=nav_capability/test/integration"
   "object_perception/|object_perception|object_perception/test/"
 )
