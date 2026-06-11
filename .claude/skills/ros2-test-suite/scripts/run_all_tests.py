@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PawAI ROS2 Test Suite — run all package tests with summary."""
+"""PawAI ROS2 Test Suite — run all package tests with summary (8 packages)."""
 
 import argparse
 import os
@@ -28,11 +28,36 @@ PACKAGES = {
     "go2_robot_sdk": {
         "test_dir": "go2_robot_sdk/test",
         "quick": False,
+        # test_import.py: known-red on non-colcon envs (aioice guard SystemExit), POST_DEMO fix
+        "extra_args": ["--ignore=go2_robot_sdk/test/test_import.py"],
     },
+    "interaction_executive": {
+        "test_dir": "interaction_executive/test",
+        "quick": False,
+    },
+    "pawai_brain": {
+        "test_dir": "pawai_brain/test",
+        "quick": False,
+    },
+    "nav_capability": {
+        "test_dir": "nav_capability/test",
+        "quick": False,
+        # integration/ NEVER automated: test_mux_priority drives real
+        # 0.30 m/s through the mux (2026-04-26 incident)
+        "extra_args": ["--ignore=nav_capability/test/integration"],
+    },
+    "object_perception": {
+        "test_dir": "object_perception/test",
+        "quick": False,
+    },
+    # DELIBERATELY EXCLUDED:
+    # tools/pawai_cli — ~300s on dev machines (tests leave real ssh probes waiting out timeouts;
+    #   one test fails when .env.local exists). CI fast-gate invocation 4 covers it.
+    #   Re-add after the planned conftest env-isolation fix.
 }
 
 
-def run_tests(pkg_name: str, test_dir: str) -> dict:
+def run_tests(pkg_name: str, test_dir: str, extra_args: list | None = None) -> dict:
     """Run pytest for a package and return results."""
     full_path = os.path.join(REPO_ROOT, test_dir)
     if not os.path.isdir(full_path):
@@ -42,9 +67,12 @@ def run_tests(pkg_name: str, test_dir: str) -> dict:
     if not test_files:
         return {"status": "skipped", "reason": "no test files", "passed": 0, "failed": 0, "errors": []}
 
+    cmd = [sys.executable, "-m", "pytest", full_path, "-q", "--tb=line", "--no-header"]
+    if extra_args:
+        cmd.extend(extra_args)
     start = time.time()
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", full_path, "-q", "--tb=line", "--no-header"],
+        cmd,
         capture_output=True, text=True, cwd=REPO_ROOT, timeout=60
     )
     elapsed = time.time() - start
@@ -82,6 +110,8 @@ def run_tests(pkg_name: str, test_dir: str) -> dict:
     status = "passed" if failed == 0 and passed > 0 else "failed" if failed > 0 else "skipped"
     return {
         "status": status,
+        "reason": ("0 tests collected (collection error or all skipped)"
+                   if status == "skipped" else ""),
         "passed": passed,
         "failed": failed,
         "elapsed": round(elapsed, 2),
@@ -113,7 +143,7 @@ def main():
 
     for pkg_name, pkg_info in targets.items():
         print(f"\n  Running {pkg_name}...", end="", flush=True)
-        r = run_tests(pkg_name, pkg_info["test_dir"])
+        r = run_tests(pkg_name, pkg_info["test_dir"], pkg_info.get("extra_args"))
         results[pkg_name] = r
         total_passed += r["passed"]
         total_failed += r["failed"]
