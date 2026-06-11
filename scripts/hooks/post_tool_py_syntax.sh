@@ -33,9 +33,13 @@ if [[ "$FILE" == *.py ]]; then
     exit 2
   fi
   # 2. Quick import sanity: detect duplicate imports (warning only)
-  python3 -c "
+  # CI-03: pass the path via argv — NEVER interpolate $FILE into the python
+  # source, or a crafted filename (e.g. containing a single quote) becomes a
+  # code-injection vector.
+  python3 - "$FILE" <<'PY' 2>&1 || true
 import ast, sys
-with open('$FILE') as f:
+path = sys.argv[1]
+with open(path) as f:
     tree = ast.parse(f.read())
 seen = set()
 for node in ast.walk(tree):
@@ -46,7 +50,7 @@ for node in ast.walk(tree):
             names = ', '.join(a.name for a in node.names)
             print(f'DUPLICATE IMPORT: {mod}.{names} (line {node.lineno})', file=sys.stderr)
         seen.add(key)
-" 2>&1 || true
+PY
   exit 0
 fi
 

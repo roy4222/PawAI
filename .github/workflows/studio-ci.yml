@@ -12,6 +12,10 @@ on:
       - 'pawai-studio/**'
       - '.github/workflows/studio-ci.yml'
 
+# CI-05: least-privilege GITHUB_TOKEN — lint/build only, no repo writes.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend — lint + build
