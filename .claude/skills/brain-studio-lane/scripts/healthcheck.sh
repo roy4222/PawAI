@@ -5,7 +5,7 @@ set -uo pipefail
 
 JETSON_HOST="${JETSON_HOST:-jetson-nano}"
 SSH_OPTS="-o ConnectTimeout=8 -o ServerAliveInterval=5 -o ServerAliveCountMax=2"
-JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"
+JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:?JETSON_TAILSCALE_IP not set — run via pawai (env injected) or export it}"
 FAILS=0
 
 ros() { ssh $SSH_OPTS "$JETSON_HOST" "source /opt/ros/humble/setup.zsh && source ~/elder_and_dog/install/setup.zsh && $1" 2>/dev/null; }
