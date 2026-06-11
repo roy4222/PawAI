@@ -81,7 +81,8 @@ jobs:
           # PYTHONPATH to avoid the duplicate top-level 'test' package collision with
           # speech_processor/test. Excluded (local-only, rclpy via conversation_graph_node):
           # test_conversation_graph_node.py, test_user_message_builder.py.
-          PYTHONPATH=pawai_brain pytest \
+          # pawai_contracts prefix: skill_policy_gate imports from it (Plan C4).
+          PYTHONPATH=pawai_contracts:pawai_brain pytest \
             pawai_brain/test/test_capability_builder_node.py \
             pawai_brain/test/test_capability_health_gate.py \
             pawai_brain/test/test_capability_registry.py \
@@ -108,8 +109,9 @@ jobs:
           # world_state; world_state: std_msgs direct + rclpy via
           # world_state module). See docs/superpowers/plans/
           # 2026-06-10-plan-a-ci-guardrails.md. Isolated PYTHONPATH avoids the
-          # top-level 'test' package collision.
-          PYTHONPATH=interaction_executive pytest \
+          # top-level 'test' package collision. pawai_contracts prefix: the
+          # skill_contract compat shim imports from it (Plan C2).
+          PYTHONPATH=pawai_contracts:interaction_executive pytest \
             interaction_executive/test/test_attention_machine.py \
             interaction_executive/test/test_pending_confirm.py \
             interaction_executive/test/test_skill_contract.py \
@@ -136,6 +138,11 @@ jobs:
             go2_robot_sdk/test/test_robot_control_service.py \
             go2_robot_sdk/test/test_reactive_stop_release_gate.py \
             go2_robot_sdk/test/test_depth_geometry.py \
+            -v --tb=short
+          # Invocation 7 (Plan C5, Tier 1): pawai_contracts purity + parity tests.
+          # object_perception on the path for the zh parity test (coco_classes
+          # is a pure dict module, no ROS imports).
+          PYTHONPATH=pawai_contracts:object_perception pytest pawai_contracts/test/ \
             -v --tb=short
       - name: Upload coverage report
         if: always()
@@ -193,6 +200,7 @@ jobs:
           # TODO: fix rosdep keys or add a separate heavy-deps CI job.
           package-name: >-
             go2_interfaces
+            pawai_contracts
             speech_processor
             face_perception
             vision_perception
