@@ -121,6 +121,7 @@ jobs:
             interaction_executive/test/test_attention_machine.py \
             interaction_executive/test/test_pending_confirm.py \
             interaction_executive/test/test_perception_router.py \
+            interaction_executive/test/test_interaction_state.py \
             interaction_executive/test/test_skill_contract.py \
             interaction_executive/test/test_skill_contract_demo_fields.py \
             interaction_executive/test/test_skill_queue.py \
