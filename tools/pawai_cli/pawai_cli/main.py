@@ -771,6 +771,26 @@ def health_brain() -> None:
     sys.exit(rc)
 
 
+_LANE_HEALTHCHECK = {
+    "brain": ".claude/skills/brain-studio-lane/scripts/healthcheck.sh",
+    "nav_capability": ".claude/skills/nav-avoidance-lane/scripts/healthcheck.sh",
+}
+
+
+def _run_lane_healthcheck(lane: str) -> int:
+    """Post-start gate (Plan B4): start.sh rc==0 is NOT success — the 6/4
+    CRLF incident proved tmux can silently never spawn.  Returns healthcheck rc;
+    script-missing counts as failure (fail-closed)."""
+    rel = _LANE_HEALTHCHECK.get(lane, _LANE_HEALTHCHECK["brain"])
+    script = shell.repo_root() / rel
+    if not script.exists():
+        click.echo(f"✗ healthcheck script missing: {script} (fail-closed)")
+        return 1
+    env = _build_demo_env()
+    env["JETSON_HOST"] = shell.jetson_host()
+    return shell.stream(["bash", str(script)], cwd=shell.repo_root(), env=env)
+
+
 def _invoke_nav_start_sh() -> int:
     return shell.stream(
         ["bash", ".claude/skills/nav-avoidance-lane/scripts/start.sh", "capability"],
@@ -835,8 +855,10 @@ def _current_sha_short() -> str:
               help="Start nav capability lane. First version supports only: capability.")
 @click.option("-y", "yes", is_flag=True, help="Skip ordinary confirmation prompts (does NOT override another user's lock).")
 @click.option("--force", "force", is_flag=True, help="Take over another user's demo lock.")
+@click.option("--skip-healthcheck", is_flag=True,
+              help="Escape hatch: trust start.sh rc and skip the post-start healthcheck gate.")
 def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
-               yes: bool, force: bool) -> None:
+               yes: bool, force: bool, skip_healthcheck: bool) -> None:
     """Start brain demo or nav capability lane."""
     from .lock import LOCK_FLOCK_PATH, Lock, is_stale, is_own_lock
 
@@ -953,6 +975,27 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
         # we must NOT delete the new owner's lock.
         Lock.release_if_owned(user=user, host=host)
         sys.exit(rc)
+
+    if skip_healthcheck:
+        click.echo(
+            "⚠⚠ HEALTHCHECK SKIPPED (--skip-healthcheck) — start.sh rc is the "
+            "only evidence; demo may be silently broken (6/4-class failure). ⚠⚠"
+        )
+    else:
+        click.echo("Post-start healthcheck (hard gate — Plan B4)...")
+        hc_rc = _run_lane_healthcheck(lane)
+        if hc_rc != 0:
+            click.echo(
+                "✗ Demo processes were launched but healthcheck FAILED — "
+                "lock kept in 'starting' as evidence."
+            )
+            click.echo("  Inspect:  pawai logs <module>   |   pawai status")
+            click.echo("  Cleanup:  pawai demo stop")
+            click.echo(
+                "  Escape hatch (only if healthcheck itself is broken): "
+                "pawai demo start --skip-healthcheck"
+            )
+            sys.exit(1)
 
     if not lk.transition_if_owned("running", user=user, host=host):
         # Lock got force-taken (or vanished) while start.sh was running.

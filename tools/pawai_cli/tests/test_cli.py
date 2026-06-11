@@ -402,6 +402,7 @@ def test_demo_start_force_takes_over(monkeypatch):
                side_effect=lambda user, host: released.append((user, host)) or True), \
          patch("pawai_cli.lock.Lock.acquire", return_value=other_lock), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         runner.invoke(cli, ["demo", "start", "--force"])
@@ -435,6 +436,7 @@ def test_demo_start_force_cleans_old_nav_lane_before_takeover(monkeypatch):
                side_effect=lambda **kwargs: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kwargs: calls.append("brain_start") or 0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "start", "--force"])
@@ -871,9 +873,11 @@ def test_demo_start_nav_capability_invokes_nav_start(monkeypatch):
         return acquired
 
     with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
          patch("pawai_cli.lock.Lock.acquire", side_effect=fake_acquire), \
          patch("pawai_cli.main._invoke_nav_start_sh", return_value=0) as nav_start, \
          patch("pawai_cli.main._invoke_start_sh", return_value=0) as brain_start, \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "start", "--nav", "capability"])
@@ -1122,6 +1126,7 @@ def test_demo_start_orphan_driver_force_cleans_and_proceeds(monkeypatch):
                side_effect=lambda **kw: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kw: calls.append("start") or 0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start", "--force"])
     assert result.exit_code == 0, result.output
@@ -1143,6 +1148,7 @@ def test_demo_start_orphan_driver_interactive_yes_cleans(monkeypatch):
                side_effect=lambda **kw: calls.append("acquire") or new_lock), \
          patch("pawai_cli.main._invoke_start_sh",
                side_effect=lambda **kw: calls.append("start") or 0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start"], input="y\n")
     assert result.exit_code == 0, result.output
@@ -1183,6 +1189,7 @@ def test_demo_start_no_orphan_check_when_lock_present(monkeypatch):
          patch("pawai_cli.lock.Lock.release", return_value=True), \
          patch("pawai_cli.lock.Lock.acquire", return_value=own_lock), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True):
         result = CliRunner().invoke(cli, ["demo", "start"])
     assert result.exit_code == 0, result.output
@@ -1246,6 +1253,7 @@ def test_demo_start_transition_failure_does_not_corrupt_others_lock():
          patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
          patch("pawai_cli.lock.Lock.acquire", return_value=lk), \
          patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
          patch("pawai_cli.lock.Lock.transition_if_owned", return_value=False):
         result = CliRunner().invoke(cli, ["demo", "start"])
     assert result.exit_code == 2
@@ -1503,3 +1511,97 @@ def test_sync_script_uses_shared_exclude_contract():
     body = script.read_text()
     assert "--exclude-from=" in body and "tools/sync/rsync-excludes.txt" in body
     assert "--delete" in body
+
+
+# ─── Plan B4: post-start lane healthcheck hard gate ───────────────────────
+
+def _patch_demo_start_happy(monkeypatch, hc_rc: int):
+    """Common scaffolding: no existing lock, no orphan drivers, lock acquire OK,
+    start.sh rc=0, healthcheck rc=hc_rc.  Mirrors the full patch set of the
+    passing orphan tests so the happy path reaches the new gate."""
+    from pawai_cli import main as cli_main
+    from pawai_cli.lock import Lock
+
+    new_lock = Lock(user="bob", host="bob-mac", branch="main", sha="b",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat())
+
+    monkeypatch.setenv("USER", "bob")
+    monkeypatch.setattr("pawai_cli.lock.Lock.read", staticmethod(lambda: None))
+    monkeypatch.setattr("pawai_cli.status.collect_go2_drivers", lambda: [])
+    monkeypatch.setattr("pawai_cli.lock.Lock.acquire",
+                        staticmethod(lambda **kw: new_lock))
+    monkeypatch.setattr(cli_main, "_invoke_start_sh", lambda **kw: 0)
+    monkeypatch.setattr(cli_main, "_run_lane_healthcheck", lambda lane: hc_rc)
+    # transition_if_owned is a method on the lock instance; patch the class method
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned",
+                        lambda self, state, **kw: True)
+    return new_lock
+
+
+def test_demo_start_blocks_running_on_healthcheck_fail(monkeypatch):
+    """If healthcheck returns non-zero, demo_start must exit non-zero and must
+    NOT call transition_if_owned — lock stays in 'starting' as evidence."""
+    from pawai_cli import main as cli_main
+
+    transition_calls: list = []
+
+    def _fake_transition(self, state, **kw):
+        transition_calls.append(state)
+        return True
+
+    _patch_demo_start_happy(monkeypatch, hc_rc=1)
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned", _fake_transition)
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start"])
+
+    assert result.exit_code != 0, result.output
+    assert transition_calls == [], \
+        "lock must stay in 'starting' — transition_if_owned must not be called"
+    assert "healthcheck FAILED" in result.output, \
+        f"Expected 'healthcheck FAILED' in output, got:\n{result.output}"
+
+
+def test_demo_start_transitions_running_on_healthcheck_pass(monkeypatch):
+    """If healthcheck returns 0, demo_start must succeed and call
+    transition_if_owned exactly once to mark lock as 'running'."""
+    from pawai_cli import main as cli_main
+
+    transition_calls: list = []
+
+    def _fake_transition(self, state, **kw):
+        transition_calls.append(state)
+        return True
+
+    _patch_demo_start_happy(monkeypatch, hc_rc=0)
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned", _fake_transition)
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start"])
+
+    assert result.exit_code == 0, result.output
+    assert len(transition_calls) == 1, \
+        f"Expected exactly one transition_if_owned call, got {transition_calls}"
+
+
+def test_demo_start_skip_healthcheck_prints_loud_banner(monkeypatch):
+    """--skip-healthcheck must bypass the gate and print a loud warning banner;
+    even if healthcheck would fail, demo must succeed and transition lock."""
+    from pawai_cli import main as cli_main
+
+    transition_calls: list = []
+
+    def _fake_transition(self, state, **kw):
+        transition_calls.append(state)
+        return True
+
+    # hc_rc=1 would normally block — but --skip-healthcheck must override
+    _patch_demo_start_happy(monkeypatch, hc_rc=1)
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned", _fake_transition)
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start", "--skip-healthcheck"])
+
+    assert result.exit_code == 0, result.output
+    assert "HEALTHCHECK SKIPPED" in result.output, \
+        f"Expected 'HEALTHCHECK SKIPPED' in output, got:\n{result.output}"
+    assert len(transition_calls) == 1, \
+        f"Expected lock to be transitioned to running, got {transition_calls}"
