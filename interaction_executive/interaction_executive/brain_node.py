@@ -17,6 +17,13 @@ from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from .attention_machine import AttentionMachine, AttentionState
+from .perception_router import (
+    parse_face,
+    parse_gesture,
+    parse_object,
+    parse_pose,
+    parse_speech,
+)
 from .pending_confirm import (
     ConfirmOutcomeKind,
     ConfirmState,
@@ -312,6 +319,10 @@ class BrainNode(Node):
         self._set_gesture_enabled(bool(msg.data), via="/brain/gesture_enabled")
 
     def _declare_params(self) -> None:
+        # Plan D Phase 0 (2026-06-10): perception parsing extracted to
+        # perception_router. False = legacy inline parsing (kept one release
+        # as instant fallback). Flip via executive.yaml or ros2 param set.
+        self.declare_parameter("perception_router_enabled", True)
         self.declare_parameter("chat_wait_ms", 1500)
         self.declare_parameter("dedup_window_s", 1.0)
         self.declare_parameter("unknown_face_accumulate_s", 3.0)
@@ -370,6 +381,9 @@ class BrainNode(Node):
         # s2_face / s3_object / s4_gesture = 只放行該段的自發 proposal；quiet=全擋。
         # 只影響 greet/object_remark/gesture 三條社交路徑，safety 與明確指令不受影響。
         self.declare_parameter("demo_phase", "all")
+        self.perception_router_enabled = bool(
+            self.get_parameter("perception_router_enabled").value
+        )
         self.chat_wait_ms = int(self.get_parameter("chat_wait_ms").value)
         self.dedup_window_s = float(self.get_parameter("dedup_window_s").value)
         self.unknown_face_accumulate_s = float(
@@ -546,10 +560,15 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
-        transcript = str(payload.get("transcript") or payload.get("text") or "").strip()
-        session_id = str(
-            payload.get("session_id") or payload.get("request_id") or f"speech-{time.time_ns()}"
-        )
+        if self.perception_router_enabled:
+            ev = parse_speech(payload)
+            transcript, session_id = ev.transcript, ev.session_id
+        else:  # legacy parse — Phase 0 fallback, byte-identical semantics
+            transcript = str(payload.get("transcript") or payload.get("text") or "").strip()
+            session_id = str(
+                payload.get("session_id") or payload.get("request_id")
+                or f"speech-{time.time_ns()}"
+            )
 
         # Issue 8: speech is unambiguous user interaction → reset idle clock
         self._touch_user_interaction()
@@ -799,9 +818,12 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
-        gesture = str(
-            payload.get("gesture") or payload.get("type") or payload.get("label") or ""
-        ).strip().lower()
+        if self.perception_router_enabled:
+            gesture = parse_gesture(payload).gesture
+        else:  # legacy parse — Phase 0 fallback, byte-identical semantics
+            gesture = str(
+                payload.get("gesture") or payload.get("type") or payload.get("label") or ""
+            ).strip().lower()
         if not gesture:
             return
 
@@ -1105,28 +1127,32 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
-        identity = str(
-            payload.get("identity")
-            or payload.get("stable_name")
-            or payload.get("name")
-            or "unknown"
-        ).strip()
-        stable = bool(
-            payload.get("identity_stable")
-            or payload.get("stable")
-            or payload.get("event_type") == "identity_stable"
-        )
-
-        # D-2: Feed attention machine with face visibility and distance.
-        # distance_m may be in the payload (depth-equipped cameras); None if absent.
-        distance_m: float | None = None
-        raw_dist = payload.get("distance_m") or payload.get("depth_m")
-        if raw_dist is not None:
-            try:
-                distance_m = float(raw_dist)
-            except (TypeError, ValueError):
-                distance_m = None
-        event_type = str(payload.get("event_type") or "")
+        if self.perception_router_enabled:
+            ev = parse_face(payload)
+            identity, stable = ev.identity, ev.stable
+            distance_m, event_type = ev.distance_m, ev.event_type
+        else:  # legacy parse — Phase 0 fallback, byte-identical semantics
+            identity = str(
+                payload.get("identity")
+                or payload.get("stable_name")
+                or payload.get("name")
+                or "unknown"
+            ).strip()
+            stable = bool(
+                payload.get("identity_stable")
+                or payload.get("stable")
+                or payload.get("event_type") == "identity_stable"
+            )
+            # D-2: Feed attention machine with face visibility and distance.
+            # distance_m may be in the payload (depth cameras); None if absent.
+            distance_m = None
+            raw_dist = payload.get("distance_m") or payload.get("depth_m")
+            if raw_dist is not None:
+                try:
+                    distance_m = float(raw_dist)
+                except (TypeError, ValueError):
+                    distance_m = None
+            event_type = str(payload.get("event_type") or "")
         face_visible_now = bool(identity) and event_type != "track_lost"
         with self._lock:
             self._attention_face_visible = face_visible_now
@@ -1214,7 +1240,10 @@ class BrainNode(Node):
         payload = self._load_json(msg)
         if payload is None:
             return
-        pose = str(payload.get("pose") or payload.get("posture") or "").strip().lower()
+        if self.perception_router_enabled:
+            pose = parse_pose(payload).pose
+        else:  # legacy parse — Phase 0 fallback, byte-identical semantics
+            pose = str(payload.get("pose") or payload.get("posture") or "").strip().lower()
         now = time.time()
 
         # ---- fallen (highest priority among poses) ----
@@ -1304,20 +1333,25 @@ class BrainNode(Node):
         if payload is None:
             return
 
-        # Production format: take the first detection in the array.
-        # Legacy format: payload itself is the single-object dict.
-        objects = payload.get("objects")
-        if isinstance(objects, list) and objects:
-            det = objects[0]
-            class_name = str(
-                det.get("class_name") or det.get("label") or det.get("class") or ""
-            ).strip()
-            color = str(det.get("color") or "").strip()
-        else:
-            class_name = str(
-                payload.get("class_name") or payload.get("label") or payload.get("class") or ""
-            ).strip()
-            color = str(payload.get("color") or "").strip()
+        if self.perception_router_enabled:
+            ev = parse_object(payload)
+            class_name, color = ev.class_name, ev.color
+        else:  # legacy parse — Phase 0 fallback, byte-identical semantics
+            # Production format: take the first detection in the array.
+            # Legacy format: payload itself is the single-object dict.
+            objects = payload.get("objects")
+            if isinstance(objects, list) and objects:
+                det = objects[0]
+                class_name = str(
+                    det.get("class_name") or det.get("label") or det.get("class") or ""
+                ).strip()
+                color = str(det.get("color") or "").strip()
+            else:
+                class_name = str(
+                    payload.get("class_name") or payload.get("label")
+                    or payload.get("class") or ""
+                ).strip()
+                color = str(payload.get("color") or "").strip()
 
         if not class_name:
             return
