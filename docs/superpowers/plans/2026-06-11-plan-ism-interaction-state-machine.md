@@ -197,7 +197,9 @@ confirm 在飛時，**每個進來的 candidate 都要有明確去向**（這是
 
 ---
 
-## 5. Phase 0：純 ISM 核心（無接線、零行為變更）— 可立即執行
+## 5. Phase 0：純 ISM 核心（無接線、零行為變更）— ✅ 已實作（PR #159）
+
+> **狀態（2026-06-11）**：Phase 0 已實作並 merge — `interaction_executive/interaction_executive/interaction_state.py` + `test/test_interaction_state.py`（33 測試）。實作經 Linus 風格終審補強了下列本節初稿未涵蓋的邊界（以 repo 內程式為準）：① propose→EXECUTING 給 grace deadline（confirm_ok 後 skill 永不 STARTED 不死鎖）② TTS_ACK start 只從 IDLE/LISTENING 讓位（不洗掉 EXECUTING）③ 空 plan_id terminal 不誤觸 ④ ERROR_RECOVERY 改兩步（watchdog→ERROR_RECOVERY→IDLE，狀態真的會進入）⑤ SAFETY priority STARTED→SAFETY_HOLD。下列 Task 0.x 為原始設計步驟（歷史；實作以 repo 為準）。
 
 > 紀律同 Plan C/D 抽取：純模組、逐字對照現行語義、完整單測、**brain_node 尚未 import**。
 
