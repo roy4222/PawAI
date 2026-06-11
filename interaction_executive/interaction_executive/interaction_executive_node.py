@@ -24,6 +24,8 @@ try:
 except ImportError:  # pragma: no cover - local unit environments may lack generated actions
     GotoRelative = None
 
+from pawai_contracts.trace_schema import TraceEvent, TraceKind, Verdict
+
 from .safety_layer import SafetyLayer
 from .skill_contract import (
     BANNED_API_IDS,
@@ -89,6 +91,9 @@ class InteractionExecutiveNode(Node):
         self._pub_skill_result = self.create_publisher(
             String, "/brain/skill_result", _RELIABLE_20
         )
+        # Plan E: decision-chain trace mirror — IE reports safety BLOCKED
+        # verdicts on the same /brain/trace channel as brain_node.
+        self._pub_trace = self.create_publisher(String, "/brain/trace", _RELIABLE_20)
 
         # NAV action client lazy-created on first NAV step（避免無 nav stack 環境
         # 建 client 的 discovery 開銷）；_nav_state 是當前 in-flight goal 的狀態。
@@ -114,6 +119,25 @@ class InteractionExecutiveNode(Node):
                 self.get_logger().info(f"nav_step_timeout_s set to {self.nav_step_timeout_s}")
         return SetParametersResult(successful=True)
 
+    def _trace_safety_block(self, data: dict[str, Any], plan, reason) -> None:
+        """Plan E: mirror a safety BLOCKED verdict onto /brain/trace.
+
+        decision_id comes from the proposal payload (additive field, empty for
+        pre-Plan-E senders). NEVER raises — additive instrumentation only."""
+        try:
+            trace_msg = String()
+            trace_msg.data = TraceEvent(
+                decision_id=str(data.get("decision_id") or ""),
+                node="interaction_executive", kind=TraceKind.SKILL_RESULT,
+                verdict=Verdict.BLOCKED, gate="safety",
+                reason=str(reason or "blocked_by_safety"),
+                plan_id=str(plan.plan_id or ""),
+                detail={"skill": plan.selected_skill},
+            ).to_json()
+            self._pub_trace.publish(trace_msg)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"trace publish failed: {exc}")
+
     def _on_proposal(self, msg: String) -> None:
         data = self._load_json(msg)
         if data is None:
@@ -132,6 +156,7 @@ class InteractionExecutiveNode(Node):
                 SkillResultStatus.BLOCKED_BY_SAFETY,
                 detail=validation.reason,
             )
+            self._trace_safety_block(data, plan, validation.reason)
             return
 
         self._emit_result(plan, None, SkillResultStatus.ACCEPTED, detail=plan.selected_skill)

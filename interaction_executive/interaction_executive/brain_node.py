@@ -200,6 +200,7 @@ class BrainNode(Node):
         self._pub_trace = self.create_publisher(String, "/brain/trace", _RELIABLE_10)
         self._plan_decision: dict[str, str] = {}   # plan_id → decision_id (GC in _gc_dedup)
         self._current_decision_id: str = ""
+        self._trace_throttle: dict[str, float] = {}   # hot-gate trace rate limit
         self._pub_brain_state = self.create_publisher(
             String, "/state/pawai_brain", _TRANSIENT_LOCAL_1
         )
@@ -315,6 +316,8 @@ class BrainNode(Node):
             f"[phase] {kind} proposal suppressed (demo_phase={self.demo_phase})",
             throttle_duration_sec=5.0,
         )
+        self._suppressed(gate="demo_phase", reason=f"phase:{self.demo_phase}:{kind}",
+                         throttle_key=f"phase:{kind}")
         return False
 
     def _set_gesture_enabled(self, enabled: bool, via: str) -> None:
@@ -518,12 +521,18 @@ class BrainNode(Node):
             self.get_logger().debug(f"trace publish failed: {exc}")
 
     def _suppressed(self, *, gate: str, reason: str, source_summary: str = "",
-                    cooldown_remaining_s: float | None = None) -> None:
+                    cooldown_remaining_s: float | None = None,
+                    throttle_key: str | None = None, throttle_s: float = 5.0) -> None:
         """Emit a suppressed-verdict trace for a gate early-return (Plan E3).
 
         Reads shared state for the Roy-required context fields; never raises
         (the underlying _trace swallows publish errors, and the state reads are
         guarded here)."""
+        if throttle_key is not None:
+            now = time.time()
+            if now - self._trace_throttle.get(throttle_key, 0.0) < throttle_s:
+                return
+            self._trace_throttle[throttle_key] = now
         try:
             with self._lock:
                 active = self._state.active_plan or {}
@@ -595,10 +604,14 @@ class BrainNode(Node):
         bucket = int(now / max(self.dedup_window_s, 0.001))
         cache_key = (source, key, bucket)
         with self._lock:
-            if cache_key in self._state.dedup_cache:
-                return True
-            self._state.dedup_cache[cache_key] = now
-            return False
+            hit = cache_key in self._state.dedup_cache
+            if not hit:
+                self._state.dedup_cache[cache_key] = now
+        if hit:
+            self._suppressed(gate="dedup", reason=f"dedup:{source}:{key}",
+                             throttle_key=f"dedup:{source}:{key}")
+            return True
+        return False
 
     def _gc_dedup(self) -> None:
         cutoff = time.time() - 5.0
@@ -774,6 +787,8 @@ class BrainNode(Node):
             proposed_args = {}
 
         if proposed_skill not in self.LLM_PROPOSABLE_SKILLS:
+            self._suppressed(gate="llm_allowlist", reason=f"skill:{proposed_skill}",
+                             source_summary=f"session={session_id}")
             self._emit_trace(
                 session_id=session_id,
                 engine=engine,
@@ -785,6 +800,8 @@ class BrainNode(Node):
 
         reason = self._capability_health_block(proposed_skill)
         if reason:
+            self._suppressed(gate="capability_health", reason=str(reason),
+                             source_summary=f"skill:{proposed_skill}")
             self._emit_trace(
                 session_id=session_id,
                 engine=engine,
@@ -796,6 +813,10 @@ class BrainNode(Node):
 
         cd = SKILL_REGISTRY[proposed_skill].cooldown_s
         if self._in_cooldown(proposed_skill, cd):
+            self._suppressed(
+                gate="skill_cooldown", reason=f"{proposed_skill}:cooldown",
+                source_summary=f"skill:{proposed_skill}",
+                cooldown_remaining_s=self._cooldown_remaining(proposed_skill, cd))
             self._emit_trace(
                 session_id=session_id,
                 engine=engine,
@@ -904,8 +925,11 @@ class BrainNode(Node):
         if not gesture:
             return
 
-        # 2026-06-09 demo: runtime gate — 操作員關閉時手勢完全不發 plan（連 trace 也不發）。
+        # 2026-06-09 demo: runtime gate — 操作員關閉時手勢完全不發 plan。
+        # (Plan E: /brain/trace 的 suppressed 仍發 — 它就是回答「為什麼沒反應」的通道。)
         if not self.gesture_enabled:
+            self._suppressed(gate="gesture_enabled", reason="gesture_enabled=false",
+                             source_summary=f"gesture={gesture}")
             return
         # 2026-06-10 demo phase gate（all=不擋）
         if not self._phase_allows("gesture"):
@@ -922,9 +946,13 @@ class BrainNode(Node):
         # If a confirm is already in flight, gestures only feed the state machine
         # via the periodic tick — don't fire new skills.
         if self._pending_confirm.state == ConfirmState.PENDING:
+            self._suppressed(gate="pending_confirm", reason="confirm_in_flight",
+                             source_summary=f"gesture={gesture}")
             return
 
         if self._has_active_skill_or_sequence():
+            self._suppressed(gate="active_plan", reason="skill_or_sequence_active",
+                             source_summary=f"gesture={gesture}")
             return
         if self._check_dedup("gesture", gesture):
             return
@@ -954,6 +982,9 @@ class BrainNode(Node):
                 self.get_logger().info(
                     f"[gate] gesture={gesture} suppressed ({reason_str})"
                 )
+                self._suppressed(gate="conversation_gate",
+                                 reason=f"conversation_gate:{reason_str}",
+                                 source_summary=f"gesture={gesture}")
                 self._emit_trace(
                     session_id=f"gesture-{int(time.time())}",
                     engine="brain_node",
@@ -1160,6 +1191,11 @@ class BrainNode(Node):
         contract = SKILL_REGISTRY[skill]
         cd = contract.cooldown_s
         if cd > 0 and self._in_cooldown(skill, cd):
+            remaining = self._cooldown_remaining(skill, cd)
+            self._suppressed(
+                gate="skill_cooldown", reason=f"cooldown:{skill}:{remaining:.1f}s",
+                source_summary=f"skill:{skill}", cooldown_remaining_s=remaining,
+                throttle_key=f"skill_cd:{skill}")
             return False
         try:
             plan = build_plan(
@@ -1263,6 +1299,11 @@ class BrainNode(Node):
                 # 2026-06-10 demo: stranger_alert_enabled=False 時擋發射不擋累積
                 # （6/9 HITL：face 幻覺餵爆 unknown → active plan 霸佔 brain，
                 # cup/greet 全黑的根因）。runtime param set 開回時立即恢復。
+                if not self.stranger_alert_enabled:
+                    self._suppressed(gate="stranger_alert_enabled",
+                                     reason="stranger_alert_enabled=false",
+                                     source_summary=f"identity={identity}",
+                                     throttle_key="stranger_alert_enabled")
                 if (
                     self.stranger_alert_enabled
                     and not self._in_cooldown("stranger_alert", 30.0)
@@ -1291,6 +1332,18 @@ class BrainNode(Node):
                 or self._pending_confirm.state == ConfirmState.PENDING \
                 or self._world.snapshot().tts_playing:
             # 5/9 review: also block during TTS to avoid mid-sentence interrupt.
+            parts = []
+            if not stable:
+                parts.append("not_stable")
+            if self._has_active_skill_or_sequence():
+                parts.append("active_plan")
+            if self._pending_confirm.state == ConfirmState.PENDING:
+                parts.append("pending_confirm")
+            if self._world.snapshot().tts_playing:
+                parts.append("tts_playing")
+            self._suppressed(gate="greet_gate", reason=",".join(parts) or "greet_gate",
+                             source_summary=f"identity={identity}",
+                             throttle_key=f"greet_gate:{identity}")
             return
         # 2026-06-08 VIS-4 (Roy): drop the ENGAGED distance/dwell gate. D435 depth at
         # ~1.5-2m is too noisy — a distance threshold forced the user to hold an exact
@@ -1300,11 +1353,21 @@ class BrainNode(Node):
         if self.greet_require_sitting:
             last_sit = self._state.last_sitting_seen_ts
             if last_sit <= 0.0 or (time.time() - last_sit) > self.greet_sitting_window_s:
+                self._suppressed(gate="greet_sitting_window",
+                                 reason=f"sitting_window:{self.greet_sitting_window_s}s",
+                                 source_summary=f"identity={identity}",
+                                 throttle_key=f"greet_sitting:{identity}")
                 return  # not currently sitting → don't greet
         # known face stable (+ sitting) is real engagement → reset idle clock
         self._touch_user_interaction()
         cooldown_key = f"greet_known_person:{identity}"
         if self._in_cooldown(cooldown_key, self.greet_cooldown_s):
+            self._suppressed(
+                gate="greet_cooldown", reason=f"cooldown:greet:{identity}",
+                source_summary=f"identity={identity}",
+                cooldown_remaining_s=self._cooldown_remaining(
+                    cooldown_key, self.greet_cooldown_s),
+                throttle_key=f"greet_cooldown:{identity}")
             return
         self._mark_cooldown(cooldown_key)
         self._emit(
@@ -1458,12 +1521,24 @@ class BrainNode(Node):
         # 3rd race-condition hole alongside stranger_alert / greet_known_person
         # which already use _attention_state_snapshot(). Fix: same helper.
         if self._attention_state_snapshot() != AttentionState.ENGAGED:
+            self._suppressed(gate="attention_engaged",
+                             reason=f"attention:{self._attention_state_snapshot().name}",
+                             source_summary=f"class={class_name}",
+                             throttle_key=f"obj_engaged:{class_name}")
             return  # IDLE / NOTICED / INTERACTING — stay quiet
         if self._has_active_skill_or_sequence():
+            self._suppressed(gate="active_plan", reason="skill_or_sequence_active",
+                             source_summary=f"class={class_name}",
+                             throttle_key=f"obj_active:{class_name}")
             return
         if self._pending_confirm.state == ConfirmState.PENDING:
+            self._suppressed(gate="pending_confirm", reason="confirm_in_flight",
+                             source_summary=f"class={class_name}")
             return
         if snap.tts_playing:
+            self._suppressed(gate="tts_playing", reason="tts_playing",
+                             source_summary=f"class={class_name}",
+                             throttle_key=f"obj_tts:{class_name}")
             return  # Don't insert object remark while PAI is speaking
 
         # 2026-05-23 5/27 demo video mode: cup + Roy + recent sitting → 複合句
@@ -1510,6 +1585,12 @@ class BrainNode(Node):
         seen_key = (class_name,)
         last = self._object_remark_seen.get(seen_key, 0.0)
         if now - last < OBJECT_REMARK_DEDUP_S:
+            self._suppressed(
+                gate="object_remark_dedup",
+                reason=f"remark_dedup:{class_name}",
+                source_summary=f"class={class_name}",
+                cooldown_remaining_s=max(0.0, OBJECT_REMARK_DEDUP_S - (now - last)),
+                throttle_key=f"obj_dedup:{class_name}")
             return
         self._object_remark_seen[seen_key] = now
 
@@ -1654,21 +1735,28 @@ class BrainNode(Node):
                     break
 
         # Plan E: skill_result trace on terminal/blocked statuses (additive).
-        if status in (
-            SkillResultStatus.COMPLETED.value,
-            SkillResultStatus.ABORTED.value,
-            SkillResultStatus.BLOCKED_BY_SAFETY.value,
-            SkillResultStatus.STEP_FAILED.value,
-        ):
-            blocked = status == SkillResultStatus.BLOCKED_BY_SAFETY.value
-            self._trace(TraceEvent(
-                decision_id=self._plan_decision.get(str(plan_id), ""),
-                node="brain_node", kind=TraceKind.SKILL_RESULT,
-                verdict=Verdict.BLOCKED if blocked else Verdict.ACCEPTED,
-                gate="safety" if blocked else "",
-                reason=str(payload.get("reason") or status), plan_id=str(plan_id or ""),
-                detail={"status": status},
-            ))
+        self._trace_skill_result(status, plan_id, payload)
+
+    _TERMINAL_RESULT_STATUSES = frozenset({
+        SkillResultStatus.COMPLETED.value,
+        SkillResultStatus.ABORTED.value,
+        SkillResultStatus.BLOCKED_BY_SAFETY.value,
+        SkillResultStatus.STEP_FAILED.value,
+    })
+
+    def _trace_skill_result(self, status, plan_id, payload: dict[str, Any]) -> None:
+        """Plan E: emit a skill_result trace for terminal/blocked statuses."""
+        if status not in self._TERMINAL_RESULT_STATUSES:
+            return
+        blocked = status == SkillResultStatus.BLOCKED_BY_SAFETY.value
+        self._trace(TraceEvent(
+            decision_id=self._plan_decision.get(str(plan_id), ""),
+            node="brain_node", kind=TraceKind.SKILL_RESULT,
+            verdict=Verdict.BLOCKED if blocked else Verdict.ACCEPTED,
+            gate="safety" if blocked else "",
+            reason=str(payload.get("reason") or status), plan_id=str(plan_id or ""),
+            detail={"status": status},
+        ))
 
     def _on_reset_context(self, msg: Empty) -> None:  # noqa: ARG002
         """P1-2: Cancel PendingConfirm when browser requests a context reset.
