@@ -22,9 +22,11 @@ from pydantic import BaseModel
 
 # Import the real SKILL_REGISTRY (pure-Python dataclass module, no ROS deps)
 # so the mock skill_registry endpoint auto-syncs with brain_node's source of
-# truth. Path: <repo>/interaction_executive/interaction_executive/skill_contract.py
+# truth. The canonical module lives in pawai_contracts (Plan C2); the
+# interaction_executive path keeps the compat shim importable too.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO_ROOT / "interaction_executive"))
+sys.path.insert(0, str(_REPO_ROOT / "pawai_contracts"))
 try:
     from interaction_executive.skill_contract import SKILL_REGISTRY  # noqa: E402
 except ImportError as _exc:

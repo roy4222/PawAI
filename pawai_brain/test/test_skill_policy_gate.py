@@ -98,6 +98,19 @@ def test_allowlist_single_source_of_truth():
            / "interaction_executive/interaction_executive/brain_node.py").read_text("utf-8")
     assert "from pawai_contracts import llm_policy" in src or \
            "from pawai_contracts.llm_policy import" in src
+    # Guard against a local literal redefinition shadowing the contracts value
+    # (the import line alone would still be present and pass the check above).
+    import ast
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id in (
+                    "LLM_PROPOSABLE_SKILLS", "LLM_PROPOSAL_EXECUTE"
+                ):
+                    assert isinstance(node.value, ast.Attribute), (
+                        f"{t.id} redefined as a literal in brain_node.py — "
+                        "must stay an attribute reference to pawai_contracts"
+                    )
 
 
 # ── skill_policy_gate node integration ──────────────────────────────────
