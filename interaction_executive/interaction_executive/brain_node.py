@@ -42,6 +42,8 @@ from pawai_contracts.zh_tables import (
     OBJECT_COLOR_ZH,
     OBJECT_TTS_SPECIAL_SUFFIX,
 )
+# LLM proposal policy single-sourced in pawai_contracts (Plan C4, 2026-06-10).
+from pawai_contracts import llm_policy as _llm_policy
 
 # Per-class speaking dedup (D-4: key = class_name only, color dropped to prevent
 # color-jitter bypass).  SkillContract.cooldown_s=5 only stops the *skill* from
@@ -758,31 +760,10 @@ class BrainNode(Node):
 
     # Phase 0.5 LLM proposal gate (spec 2026-05-06 §6)
     # Phase A.6 (5/8 expansion): 8 skills + new "confirm" mode
-    LLM_PROPOSABLE_SKILLS = frozenset({
-        "show_status",
-        "self_introduce",
-        "wave_hello",
-        "sit_along",
-        "stand",
-        "greet_known_person",
-        "careful_remind",
-        "wiggle",
-        "stretch",
-    })
-    LLM_PROPOSAL_EXECUTE = {
-        # Bucket 1 — execute (direct)
-        "show_status": "execute",
-        "wave_hello": "execute",
-        "sit_along": "execute",
-        "stand": "execute",
-        "careful_remind": "execute",
-        # Bucket 2 — confirm (needs OK gesture)
-        "wiggle": "confirm",
-        "stretch": "confirm",
-        # Bucket 3 — trace_only (LLM can mention, system does not fire motion)
-        "self_introduce": "trace_only",
-        "greet_known_person": "trace_only",  # 1G: was execute; face stable detection handles greet
-    }
+    # Single-sourced in pawai_contracts (Plan C4). Class-attr assignment keeps
+    # self.LLM_PROPOSABLE_SKILLS / self.LLM_PROPOSAL_EXECUTE references unchanged.
+    LLM_PROPOSABLE_SKILLS = _llm_policy.LLM_PROPOSABLE_SKILLS
+    LLM_PROPOSAL_EXECUTE = _llm_policy.LLM_PROPOSAL_EXECUTE
 
     # Phase B v1 gesture mapping (spec §4.2 + impl notes 2026-05-04 §2;
     # 2026-05-12 added fist/index per 測試功能清單 6 static gestures):

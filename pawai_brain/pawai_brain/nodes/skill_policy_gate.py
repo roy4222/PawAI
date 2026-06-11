@@ -14,19 +14,10 @@ from __future__ import annotations
 from ..state import ConversationState
 
 
-# Canonical LLM proposal allowlist (single source of truth, issue #85).
-# brain_node.py mirrors this; test_allowlist_single_source_of_truth enforces parity.
-LLM_PROPOSABLE_SKILLS: frozenset[str] = frozenset({
-    "show_status",
-    "self_introduce",
-    "wave_hello",
-    "sit_along",
-    "stand",
-    "greet_known_person",
-    "careful_remind",
-    "wiggle",
-    "stretch",
-})
+# LLM proposal allowlist single-sourced in pawai_contracts (Plan C4).
+# brain_node.py now also imports from contracts; identity check in
+# test_allowlist_single_source_of_truth confirms gate_set is contracts_set.
+from pawai_contracts.llm_policy import LLM_PROPOSABLE_SKILLS
 
 # v1 passthrough names (unchanged); v2 uses the same set
 PASSTHROUGH_SKILLS: frozenset[str] = frozenset({"chat_reply", "say_canned"})
