@@ -622,6 +622,11 @@ class BrainNode(Node):
         # Plan E: bound the plan→decision map (insertion-ordered dict).
         while len(self._plan_decision) > 200:
             self._plan_decision.pop(next(iter(self._plan_decision)))
+        # Plan E: expire stale trace-throttle entries (same 5s horizon family).
+        tcut = time.time() - 60.0
+        self._trace_throttle = {
+            k: ts for k, ts in self._trace_throttle.items() if ts > tcut
+        }
 
     def _has_active_skill_or_sequence(self) -> bool:
         """Return True when a SKILL or SEQUENCE priority plan is actively running.
@@ -929,7 +934,8 @@ class BrainNode(Node):
         # (Plan E: /brain/trace 的 suppressed 仍發 — 它就是回答「為什麼沒反應」的通道。)
         if not self.gesture_enabled:
             self._suppressed(gate="gesture_enabled", reason="gesture_enabled=false",
-                             source_summary=f"gesture={gesture}")
+                             source_summary=f"gesture={gesture}",
+                             throttle_key=f"gesture_off:{gesture}")
             return
         # 2026-06-10 demo phase gate（all=不擋）
         if not self._phase_allows("gesture"):
@@ -1713,17 +1719,14 @@ class BrainNode(Node):
                         "executor": payload.get("detail"),
                         "args": payload.get("step_args", {}),
                     }
-            elif status in (
-                SkillResultStatus.COMPLETED.value,
-                SkillResultStatus.ABORTED.value,
-                SkillResultStatus.BLOCKED_BY_SAFETY.value,
-                # 2026-06-10 review blocker: STEP_FAILED 在 executive 端就是 plan 終結
-                # （兩條 STEP_FAILED 路徑都緊跟 self._queue.pop()，不會再有 terminal
-                # status）。若不在此清 active_plan，一次 NAV step 失敗（例如忘了開
-                # nav_executor_enabled / goal rejected / timeout）會讓 active_plan
-                # 永久卡住 → not-active gate 把 cup/greet/gesture/語音全黑（重演 6/9）。
-                SkillResultStatus.STEP_FAILED.value,
-            ):
+            # 2026-06-10 review blocker: STEP_FAILED 在 executive 端就是 plan 終結
+            # （兩條 STEP_FAILED 路徑都緊跟 self._queue.pop()，不會再有 terminal
+            # status）。若不在此清 active_plan，一次 NAV step 失敗（例如忘了開
+            # nav_executor_enabled / goal rejected / timeout）會讓 active_plan
+            # 永久卡住 → not-active gate 把 cup/greet/gesture/語音全黑（重演 6/9）。
+            # Status set shared with the Plan E skill_result trace
+            # (_TERMINAL_RESULT_STATUSES) so the two can never drift.
+            elif status in self._TERMINAL_RESULT_STATUSES:
                 if self._state.active_plan and self._state.active_plan["plan_id"] == plan_id:
                     self._state.active_plan = None
                     self._state.active_step = None
