@@ -30,7 +30,7 @@ MODULES: dict[str, ModuleInfo] = {
     "speech": ModuleInfo(
         key="speech",
         title="語音功能",
-        packages=("speech_processor",),
+        packages=("go2_interfaces", "speech_processor"),
         docs=("docs/pawai-brain/architecture/0511/speech.md",),
         tests=("python3 -m pytest speech_processor/test -v",),
         logs=("demo:asr", "demo:tts"),
@@ -40,7 +40,7 @@ MODULES: dict[str, ModuleInfo] = {
     "gesture": ModuleInfo(
         key="gesture",
         title="手勢辨識",
-        packages=("vision_perception",),
+        packages=("go2_interfaces", "vision_perception"),
         docs=("docs/pawai-brain/architecture/0511/gesture.md",),
         tests=("python3 -m pytest vision_perception/test -v -k gesture",),
         logs=("demo:vision",),
@@ -50,7 +50,7 @@ MODULES: dict[str, ModuleInfo] = {
     "pose": ModuleInfo(
         key="pose",
         title="姿勢辨識",
-        packages=("vision_perception",),
+        packages=("go2_interfaces", "vision_perception"),
         docs=("docs/pawai-brain/architecture/0511/pose.md",),
         tests=("python3 -m pytest vision_perception/test -v -k pose",),
         logs=("demo:vision",),
@@ -70,7 +70,7 @@ MODULES: dict[str, ModuleInfo] = {
     "nav": ModuleInfo(
         key="nav",
         title="導航避障功能",
-        packages=("go2_robot_sdk",),
+        packages=("go2_interfaces", "go2_robot_sdk"),
         docs=(".claude/skills/nav-avoidance-lane/SKILL.md", "docs/navigation/CLAUDE.md"),
         tests=("python3 -m pytest go2_robot_sdk/test -v",),
         logs=("demo:go2", "nav-cap-demo:nav_action", "reactive-stop:reactive"),
@@ -80,7 +80,7 @@ MODULES: dict[str, ModuleInfo] = {
     "brain": ModuleInfo(
         key="brain",
         title="PawAI Brain",
-        packages=("pawai_brain", "interaction_executive"),
+        packages=("go2_interfaces", "pawai_contracts", "pawai_brain", "interaction_executive"),
         docs=("docs/pawai-brain/architecture/0511/brain.md",),
         tests=(
             "python3 -m pytest pawai_brain/test -v",

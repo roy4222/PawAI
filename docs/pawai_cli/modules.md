@@ -12,12 +12,12 @@ CLI 內建 8 個 module，跟 ROS2 package、log target、test 命令對應。
 | Module | 中文 | ROS Packages | Demo Log Targets | Go2 控制 |
 |--------|------|--------------|------------------|---------|
 | `face` | 人臉辨識 | `face_perception` | `demo:face` | 無 |
-| `speech` | 語音 | `speech_processor` | `demo:asr`、`demo:tts` | 透過 Megaphone TTS |
-| `gesture` | 手勢辨識 | `vision_perception` | `demo:vision` | 透過互動 skill 間接 |
-| `pose` | 姿勢辨識 | `vision_perception` | `demo:vision` | `fallen_alert` 可停 Go2 |
+| `speech` | 語音 | `go2_interfaces`、`speech_processor` | `demo:asr`、`demo:tts` | 透過 Megaphone TTS |
+| `gesture` | 手勢辨識 | `go2_interfaces`、`vision_perception` | `demo:vision` | 透過互動 skill 間接 |
+| `pose` | 姿勢辨識 | `go2_interfaces`、`vision_perception` | `demo:vision` | `fallen_alert` 可停 Go2 |
 | `object` | 物體辨識 | `object_perception` | `demo:object` | 無 |
-| `nav` | 導航避障 | `go2_robot_sdk` | `demo:go2`、`nav-cap-demo:nav_action`、`reactive-stop:reactive` | 直接動作 |
-| `brain` | PawAI Brain | `pawai_brain`、`interaction_executive` | `demo:llm`、`demo:executive`、`pawai_brain:conv_graph` | 透過 `interaction_executive` |
+| `nav` | 導航避障 | `go2_interfaces`、`go2_robot_sdk` | `demo:go2`、`nav-cap-demo:nav_action`、`reactive-stop:reactive` | 直接動作 |
+| `brain` | PawAI Brain | `go2_interfaces`、`pawai_contracts`、`pawai_brain`、`interaction_executive` | `demo:llm`、`demo:executive`、`pawai_brain:conv_graph` | 透過 `interaction_executive` |
 | `studio` | Studio 前端/Gateway | （無 ROS package） | `local:/tmp/studio_frontend.log`、`demo:gateway` | 無 |
 
 ### 別名
@@ -51,7 +51,7 @@ pawai logs face
 
 ### speech — 語音
 
-- **Package**：`speech_processor`
+- **Packages**：`go2_interfaces`、`speech_processor`（介面依賴，fresh deploy 需一起 build）
 - **Doc**：[`docs/pawai-brain/architecture/0511/speech.md`](../pawai-brain/architecture/0511/speech.md)
 - **Tests**：`python3 -m pytest speech_processor/test -v`
 - **Logs**：`demo:asr`、`demo:tts`
@@ -67,7 +67,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 
 ### gesture — 手勢辨識
 
-- **Package**：`vision_perception`（與 pose 共用）
+- **Packages**：`go2_interfaces`、`vision_perception`（與 pose 共用）
 - **Doc**：[`docs/pawai-brain/architecture/0511/gesture.md`](../pawai-brain/architecture/0511/gesture.md)
 - **Tests**：`python3 -m pytest vision_perception/test -v -k gesture`
 - **Log**：`demo:vision`
@@ -78,7 +78,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 
 ### pose — 姿勢辨識
 
-- **Package**：`vision_perception`（與 gesture 共用）
+- **Packages**：`go2_interfaces`、`vision_perception`（與 gesture 共用）
 - **Doc**：[`docs/pawai-brain/architecture/0511/pose.md`](../pawai-brain/architecture/0511/pose.md)
 - **Tests**：`python3 -m pytest vision_perception/test -v -k pose`
 - **Log**：`demo:vision`
@@ -100,7 +100,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 
 ### nav — 導航避障
 
-- **Package**：`go2_robot_sdk`（含 nav2/AMCL/cartographer launch）
+- **Packages**：`go2_interfaces`、`go2_robot_sdk`（含 nav2/AMCL/cartographer launch）
 - **Docs**：
   - [`.claude/skills/nav-avoidance-lane/SKILL.md`](../../.claude/skills/nav-avoidance-lane/SKILL.md)
   - [`docs/navigation/CLAUDE.md`](../navigation/CLAUDE.md)
@@ -117,7 +117,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 
 ### brain — PawAI Brain
 
-- **Packages**：`pawai_brain`、`interaction_executive`
+- **Packages**：`go2_interfaces`、`pawai_contracts`、`pawai_brain`、`interaction_executive`
 - **Doc**：[`docs/pawai-brain/architecture/0511/brain.md`](../pawai-brain/architecture/0511/brain.md)
 - **Tests**：
   - `python3 -m pytest pawai_brain/test -v`
