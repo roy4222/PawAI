@@ -55,6 +55,8 @@ jobs:
             vision_perception/test/test_event_action_bridge.py \
             vision_perception/test/test_mediapipe_pose_mapping.py \
             vision_perception/test/test_gesture_recognizer_backend.py \
+            vision_perception/test/test_lidar_obstacle_detector.py \
+            vision_perception/test/test_obstacle_detector.py \
             benchmarks/test/test_criteria.py \
             benchmarks/test/test_base_adapter.py \
             benchmarks/test/test_reporter.py \
@@ -119,6 +121,22 @@ jobs:
           # PYTHONPATH needed: the package is not pip-installed on the runner.
           # tests/ dir name avoids the top-level 'test' package collision.
           PYTHONPATH=tools/pawai_cli pytest tools/pawai_cli/tests -v --tb=short
+          # Invocation 5 (Plan A5, Tier 2): nav_capability pure-lib tests.
+          # NEVER add test/integration/ — test_mux_priority drives a real
+          # 0.30 m/s through the mux (2026-04-26 runaway incident).
+          # Dir-based collection: any NEW test file added here that imports
+          # rclpy will be auto-collected and fail on this runner — keep rclpy
+          # tests in integration/ (never automated) or switch to a file list.
+          PYTHONPATH=nav_capability pytest nav_capability/test/ \
+            --ignore=nav_capability/test/integration -v --tb=short
+          # Invocation 6 (Plan A5, Tier 2): go2_robot_sdk safety-critical pure tests.
+          # test_import.py excluded (aioice guard SystemExit on non-colcon env);
+          # test_reactive_stop_node.py excluded (rclpy — local L1 tier).
+          PYTHONPATH=go2_robot_sdk pytest \
+            go2_robot_sdk/test/test_robot_control_service.py \
+            go2_robot_sdk/test/test_reactive_stop_release_gate.py \
+            go2_robot_sdk/test/test_depth_geometry.py \
+            -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
@@ -190,6 +208,18 @@ jobs:
             'pytest>=7' opencv-python-headless numpy pydub
           bash -c "source /opt/ros/humble/setup.bash && \
             cd pawai-studio/gateway && python3 -m pytest -q --tb=short"
+      - name: object_perception tests (needs ROS msgs — Plan A5, Tier 2)
+        run: |
+          # Plan's fast-gate placement was unimplementable: the test module
+          # imports std_msgs + ObjectPerceptionNode (rclpy) at module level.
+          # onnxruntime / cv_bridge are lazy imports — not needed for tests.
+          # No rclpy.init() needed: tests use @staticmethod calls and a
+          # __new__ bypass, so importable ROS modules suffice (no DDS daemon).
+          pip3 install 'pytest>=7' opencv-python-headless numpy || \
+          pip3 install --break-system-packages 'pytest>=7' opencv-python-headless numpy
+          bash -c "source /opt/ros/humble/setup.bash && \
+            PYTHONPATH=\"object_perception:\$PYTHONPATH\" \
+            python3 -m pytest object_perception/test/ -q --tb=short"
       - name: Python syntax check
         run: |
           find . -name '*.py' \
