@@ -60,31 +60,48 @@ fi
 # ════════════════════════════════════════
 # 3. Smart-scope package tests
 # ════════════════════════════════════════
-TEST_ARGS=""
-PYTHONPATH_EXTRA=""
+# One isolated invocation per affected package.  Several test/ dirs contain
+# __init__.py; a combined run collides on the top-level 'test' package and
+# produces "ModuleNotFoundError: No module named 'test.test_validator'".
+# Per-package isolation mirrors CI fast-gate behaviour.
+#
+# Format: "<staged-path-prefix>|<pythonpath-entry>|<pytest args>"
+#
+# Excluded by design:
+#   tools/pawai_cli     — ~300s real network timeouts on dev machines;
+#                         CI fast-gate invocation 4 covers it.
+#   go2_robot_sdk       — CI invocation 6 covers it; keeps hook <10s budget.
+#   nav_capability/test/integration — NEVER automate: test_mux_priority drives
+#                         a real 0.30 m/s cmd_vel through the mux
+#                         (2026-04-26 runaway incident).
+#
+# interaction_executive uses an explicit 6-file list: the remaining test files
+# import rclpy/std_msgs transitively and fail without ROS on PATH (mirrors CI
+# invocation 3).
+SUITES=(
+  "speech_processor/|speech_processor|speech_processor/test/"
+  "vision_perception/|vision_perception|vision_perception/test/"
+  "face_perception/|face_perception|face_perception/test/"
+  "interaction_executive/|interaction_executive|interaction_executive/test/test_attention_machine.py interaction_executive/test/test_pending_confirm.py interaction_executive/test/test_skill_contract.py interaction_executive/test/test_skill_contract_demo_fields.py interaction_executive/test/test_skill_queue.py interaction_executive/test/test_state_machine.py"
+  "pawai_brain/|pawai_brain|pawai_brain/test/"
+  "nav_capability/|nav_capability|nav_capability/test/ --ignore=nav_capability/test/integration"
+  "object_perception/|object_perception|object_perception/test/"
+)
 
-if echo "$STAGED" | grep -q '^speech_processor/'; then
-  TEST_ARGS="$TEST_ARGS speech_processor/test/"
-  PYTHONPATH_EXTRA="speech_processor"
-fi
-
-if echo "$STAGED" | grep -q '^vision_perception/'; then
-  TEST_ARGS="$TEST_ARGS vision_perception/test/"
-  PYTHONPATH_EXTRA="${PYTHONPATH_EXTRA:+$PYTHONPATH_EXTRA:}vision_perception"
-fi
-
-if echo "$STAGED" | grep -q '^face_perception/'; then
-  TEST_ARGS="$TEST_ARGS face_perception/test/"
-  PYTHONPATH_EXTRA="${PYTHONPATH_EXTRA:+$PYTHONPATH_EXTRA:}face_perception"
-fi
-
-if [[ -n "$TEST_ARGS" ]]; then
-  echo "[pre-commit] Running tests for affected packages..."
-  if ! PYTHONPATH="${PYTHONPATH_EXTRA}:${PYTHONPATH:-}" python3 -m pytest $TEST_ARGS -q --tb=line 2>&1; then
-    echo "[pre-commit] BLOCKED: tests failed." >&2
-    exit 1
+for spec in "${SUITES[@]}"; do
+  prefix="${spec%%|*}"
+  rest="${spec#*|}"
+  pp="${rest%%|*}"
+  args="${rest#*|}"
+  if echo "$STAGED" | grep -q "^${prefix}"; then
+    echo "[pre-commit] Running ${pp} tests..."
+    # shellcheck disable=SC2086
+    if ! PYTHONPATH="${pp}${PYTHONPATH:+:$PYTHONPATH}" python3 -m pytest $args -q --tb=line 2>&1; then
+      echo "[pre-commit] BLOCKED: tests failed (${pp})." >&2
+      exit 1
+    fi
   fi
-fi
+done
 
 echo "[pre-commit] All checks passed."
 exit 0
