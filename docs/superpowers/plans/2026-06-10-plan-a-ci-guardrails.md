@@ -42,7 +42,7 @@ revert 該 commit → 確認變綠。紅綠證據截圖/link 附在 PR。
 **Files:**
 - Modify: `.github/workflows/ros_build.yaml`（在 invocation 2 之後、`- name: Upload coverage report` 之前）
 
-- [ ] **Step 1: 本機先驗證 9 個 rclpy-free 檔案清單**
+- [x] **Step 1: 本機先驗證 9 個 rclpy-free 檔案清單**
 
 ```bash
 cd /home/roy422/newLife/elder_and_dog
@@ -50,7 +50,7 @@ grep -L "import rclpy" interaction_executive/test/test_*.py
 ```
 Expected：列出 9 檔 = `test_attention_machine.py test_idle_mvp.py test_pending_confirm.py test_safety_layer.py test_skill_contract.py test_skill_contract_demo_fields.py test_skill_queue.py test_state_machine.py test_world_state.py`（不含 attention_integration / brain_rules / mini_e2e / nav_executor 四個 rclpy 檔）。
 
-- [ ] **Step 2: 本機跑一次確認綠**
+- [x] **Step 2: 本機跑一次確認綠**
 
 ```bash
 PYTHONPATH=interaction_executive python3 -m pytest \
@@ -66,7 +66,7 @@ PYTHONPATH=interaction_executive python3 -m pytest \
 ```
 Expected: 全 PASS（~150+ tests，<3s）。
 
-- [ ] **Step 3: 在 ros_build.yaml invocation 2 區塊後面加 invocation 3**
+- [x] **Step 3: 在 ros_build.yaml invocation 2 區塊後面加 invocation 3**
 
 在 `pawai_brain/test/test_world_state_builder.py \`…`-v --tb=short` 之後（仍在同一個
 `Pure Python unit tests` run block 內）加：
@@ -89,7 +89,7 @@ Expected: 全 PASS（~150+ tests，<3s）。
             -v --tb=short
 ```
 
-- [ ] **Step 4: PR + 紅綠驗證 + merge**
+- [x] **Step 4: PR + 紅綠驗證 + merge**
 
 ```bash
 git checkout -b ci/ie-fast-gate && git add .github/workflows/ros_build.yaml
@@ -105,21 +105,21 @@ gh pr create --fill
 **Files:**
 - Modify: `.github/workflows/ros_build.yaml`（pip 依賴行 + invocation 4）
 
-- [ ] **Step 1: 本機確認 144 測試綠且依賴只有 click + python-dotenv**
+- [x] **Step 1: 本機確認 144 測試綠且依賴只有 click + python-dotenv**
 
 ```bash
 python3 -m pytest tools/pawai_cli/tests -q
 ```
 Expected: `144 passed`（~2s）。
 
-- [ ] **Step 2: fast-gate 的 Install dependencies 行加 click 與 python-dotenv**
+- [x] **Step 2: fast-gate 的 Install dependencies 行加 click 與 python-dotenv**
 
 ```yaml
       - name: Install dependencies
         run: pip install pytest pytest-cov flake8 numpy opencv-python-headless jsonschema pyyaml click python-dotenv
 ```
 
-- [ ] **Step 3: invocation 3 之後加 invocation 4**
+- [x] **Step 3: invocation 3 之後加 invocation 4**
 
 ```yaml
           # Invocation 4 (Plan A2, Tier 1): pawai_cli — pure mock tests, deps = click+dotenv
@@ -127,7 +127,7 @@ Expected: `144 passed`（~2s）。
 ```
 （pawai_cli 的 tests/ 目錄名不叫 `test`，無撞名問題，不需 PYTHONPATH。）
 
-- [ ] **Step 4: PR + 紅綠驗證 + merge**（同 A1 格式，branch `ci/cli-fast-gate`）
+- [x] **Step 4: PR + 紅綠驗證 + merge**（同 A1 格式，branch `ci/cli-fast-gate`）
 
 ---
 
@@ -143,7 +143,7 @@ test_user_message_builder——兩者 import `conversation_graph_node` → modul
 `import rclpy`（pawai_brain/pawai_brain/conversation_graph_node.py:26），runner 沒有
 rclpy，留在本機 L1 層。
 
-- [ ] **Step 1: 本機模擬 runner 依賴跑 7 檔**
+- [x] **Step 1: 本機模擬 runner 依賴跑 7 檔**
 
 ```bash
 PYTHONPATH=pawai_brain python3 -m pytest \
@@ -157,11 +157,11 @@ PYTHONPATH=pawai_brain python3 -m pytest \
 ```
 Expected: 全 PASS。若 graph_smoke 在 runner 因 langgraph 子依賴失敗 → 從本 PR 移除該檔並在 PR note 記錄（不修測試）。
 
-- [ ] **Step 2: pip 行加 `requests langgraph`**（接 A2 改過的行尾）
+- [x] **Step 2: pip 行加 `requests langgraph`**（接 A2 改過的行尾）
 
-- [ ] **Step 3: invocation 2 的檔案清單加上述 7 檔**（維持既有 `PYTHONPATH=pawai_brain pytest` 結構，按字母序插入）
+- [x] **Step 3: invocation 2 的檔案清單加上述 7 檔**（維持既有 `PYTHONPATH=pawai_brain pytest` 結構，按字母序插入）
 
-- [ ] **Step 4: PR + 紅綠驗證 + merge**（branch `ci/pawai-brain-fill`）
+- [x] **Step 4: PR + 紅綠驗證 + merge**（branch `ci/pawai-brain-fill`）
 
 ---
 
@@ -173,7 +173,7 @@ gateway import rclpy（studio_gateway.py:32），只能跑在有 ROS 的環境�
 **Files:**
 - Modify: `.github/workflows/ros_build.yaml`（`test_environment` job，`build and test` step 之後加一個 step）
 
-- [ ] **Step 1: 加 container step**
+- [x] **Step 1: 加 container step**
 
 ```yaml
       - name: Studio gateway tests (needs rclpy — Plan A4, Tier 1)
@@ -188,14 +188,14 @@ gateway import rclpy（studio_gateway.py:32），只能跑在有 ROS 的環境�
 （requirements.txt = fastapi/uvicorn/requests/opencc；video_bridge 另需 cv2+numpy；
 test_gateway 的 wav 處理需 pydub 已在 job 前段裝過，重複裝無害。）
 
-- [ ] **Step 2: 本機等價驗證**
+- [x] **Step 2: 本機等價驗證**
 
 ```bash
 cd pawai-studio/gateway && python3 -m pytest -q
 ```
 Expected: `64 passed, 1 skipped`（opencc 在本機沒裝會 skip 1；container 裝了 requirements 會 65 passed）。
 
-- [ ] **Step 3: PR + 紅綠驗證 + merge**（branch `ci/gateway-container-tests`；紅綠驗證改壞 `test_gateway.py` 一個 assert 即可）
+- [x] **Step 3: PR + 紅綠驗證 + merge**（branch `ci/gateway-container-tests`；紅綠驗證改壞 `test_gateway.py` 一個 assert 即可）
 
 ---
 
@@ -204,7 +204,7 @@ Expected: `64 passed, 1 skipped`（opencc 在本機沒裝會 skip 1；container 
 **Files:**
 - Modify: `.github/workflows/ros_build.yaml`（invocation 5/6/7 + invocation 1 補 2 檔）
 
-- [ ] **Step 1: 本機驗證各 suite 的 CI-safe 子集**
+- [x] **Step 1: 本機驗證各 suite 的 CI-safe 子集**
 
 ```bash
 # nav_capability：排除 integration/（mux 危險測試永不自動化）
@@ -222,7 +222,7 @@ python3 -m pytest object_perception/test/ -q
 Expected: 全 PASS（nav_cap ~49、go2 三檔依 grep 結果為準、object 41）。
 若 go2 的 release_gate 檔 grep 顯示 import rclpy → 從清單剔除並記錄於 PR note。
 
-- [ ] **Step 2: fast-gate 加 invocation 5/6/7**
+- [x] **Step 2: fast-gate 加 invocation 5/6/7**
 
 ```yaml
           # Invocation 5 (Plan A5, Tier 2): nav_capability pure-lib tests.
@@ -242,7 +242,7 @@ Expected: 全 PASS（nav_cap ~49、go2 三檔依 grep 結果為準、object 41�
           PYTHONPATH=object_perception pytest object_perception/test/ -v --tb=short
 ```
 
-- [ ] **Step 3: invocation 1 的 vision 區塊補 2 個 local-only 檔**
+- [x] **Step 3: invocation 1 的 vision 區塊補 2 個 local-only 檔**
 
 在 `vision_perception/test/test_gesture_recognizer_backend.py \` 之後加：
 
@@ -251,7 +251,7 @@ Expected: 全 PASS（nav_cap ~49、go2 三檔依 grep 結果為準、object 41�
             vision_perception/test/test_obstacle_detector.py \
 ```
 
-- [ ] **Step 4: PR + 紅綠驗證 + merge**（branch `ci/tier2-perception-hw`；本 task 一個 PR 可，PR note 列出每個 invocation 的測試數）
+- [x] **Step 4: PR + 紅綠驗證 + merge**（branch `ci/tier2-perception-hw`；本 task 一個 PR 可，PR note 列出每個 invocation 的測試數）
 
 ---
 
@@ -260,7 +260,7 @@ Expected: 全 PASS（nav_cap ~49、go2 三檔依 grep 結果為準、object 41�
 **Files:**
 - Modify: `scripts/hooks/git-pre-commit.sh:66-79`（smart-scope 區塊）
 
-- [ ] **Step 1: 在 face_perception 區塊之後追加**
+- [x] **Step 1: 在 face_perception 區塊之後追加**
 
 ```bash
 if echo "$STAGED" | grep -q '^interaction_executive/'; then
@@ -299,7 +299,7 @@ fi
 （pawai_brain 本機有 rclpy/langgraph，跑全 dir；go2_robot_sdk 刻意**不**進 pre-commit
 ——保 <10s 預算，CI 蓋。）
 
-- [ ] **Step 2: 量時間**
+- [x] **Step 2: 量時間**
 
 ```bash
 touch interaction_executive/touch.tmp tools/pawai_cli/touch.tmp && git add -A
@@ -307,12 +307,12 @@ time bash scripts/hooks/git-pre-commit.sh; git reset -q && rm -f interaction_exe
 ```
 Expected: 總時間 <10s（IE 子集 ~3s + CLI ~2s）。超過 → 回報，砍 pawai_brain 全 dir 改檔案清單。
 
-- [ ] **Step 3: 故意失敗驗證 BLOCKED 行為**
+- [x] **Step 3: 故意失敗驗證 BLOCKED 行為**
 
 改壞 `tools/pawai_cli/tests/test_cache.py` 一個 assert → stage → `git commit -m x` →
 Expected: `[pre-commit] BLOCKED: tests failed.`；revert。
 
-- [ ] **Step 4: PR + merge**（branch `ci/pre-commit-scope`）
+- [x] **Step 4: PR + merge**（branch `ci/pre-commit-scope`）
 
 ---
 
@@ -321,13 +321,13 @@ Expected: `[pre-commit] BLOCKED: tests failed.`；revert。
 **Files:**
 - Modify: `.claude/skills/ros2-test-suite/scripts/run_all_tests.py:15-32`
 
-- [ ] **Step 1: PACKAGES dict 從 4 目錄擴到 9**：speech_processor、face_perception、
+- [x] **Step 1: PACKAGES dict 從 4 目錄擴到 9**：speech_processor、face_perception、
 vision_perception、go2_robot_sdk（既有）+ interaction_executive、pawai_brain、
 nav_capability、object_perception、`tools/pawai_cli`（tests 路徑 `tools/pawai_cli/tests`）。
 每項沿用現有 dict 條目格式（path / test_dir / 備註）；nav_capability 條目註明
 `--ignore=test/integration`。同步修正檔頭過期註解（「4 packages」→「9」）。
 
-- [ ] **Step 2: 跑一次全套**
+- [x] **Step 2: 跑一次全套**
 
 ```bash
 python3 .claude/skills/ros2-test-suite/scripts/run_all_tests.py
@@ -336,7 +336,7 @@ Expected: 9 個 suite 各自回報，總結 PASS（go2_sdk 的 test_import 3 紅
 輸出需標示 known-fail 而非整體 FAIL——若 skill 腳本不支援 known-fail，該 suite
 加 ignore 參數）。
 
-- [ ] **Step 3: Commit**（可併入 A6 的 PR 或獨立小 PR）
+- [x] **Step 3: Commit**（可併入 A6 的 PR 或獨立小 PR）
 
 ---
 
@@ -350,3 +350,23 @@ Expected: 9 個 suite 各自回報，總結 PASS（go2_sdk 的 test_import 3 紅
 
 每個 Task 是獨立 PR → `git revert <merge-commit>` 即回滾單一 suite，互不影響。
 workflow 檔案無 runtime 影響，revert 零風險。
+
+---
+
+## 執行結果（2026-06-11，全數完成）
+
+7 PRs 全 merge，皆附紅綠驗證 Actions link（細節見各 PR description）：
+
+| Task | PR | 結果 | 與 plan 的偏差（皆已查證並記錄於 PR） |
+|------|----|----|----|
+| A1 | #143 | invocation 3 = **111 tests** | 9 檔 → **6 檔**：idle_mvp/safety_layer/world_state 間接 import rclpy/std_msgs（`grep -L "import rclpy"` 抓不到 transitive import） |
+| A2 | #146 | invocation 4 = **144 tests, 1.41s** | **需要 `PYTHONPATH=tools/pawai_cli`**；本機 300s+1 fail = `.env.local` 污染與真實 ssh timeout（runner 不受影響）→ follow-up #150 |
+| A3 | #144 | invocation 2 = **278 tests**（17 檔） | 無 |
+| A4 | #145 | container gateway step = **65 tests** | container 需先裝 **ffmpeg**（resample 測試）與 **`'pytest>=7'`**（apt pytest 6.x 撞 anyio plugin） |
+| A5 | #148 | invocation 5 = **67**、6 = **63**、invocation 1 +20；object **41** | nav_cap 實為 67 非 ~49；**object 進不了 fast gate**（module-level std_msgs/rclpy）→ 改 container step（A4 模式） |
+| A6 | #147 | hook 3→7 套件，worst-case **8.6s** | plan 的 TEST_ARGS 累加式會撞 top-level `test` package（多個 test/ 有 `__init__.py`）→ 改 **per-package 隔離 invocation**；pawai_cli 不進 hook（300s）；IE 用 6 檔版；順手修 PYTHONPATH 尾冒號 cwd 注入 |
+| A7 | #149 | skill 4→**8** 套件，本機全套 **1019 passed** | pawai_cli 暫不收（#150 修好再加回）；順手修 0-test KeyError |
+
+**驗收對照**：fast gate 總測試 643 → **1,038**（355+19sub/278/111/144/67/63）+ container 106（65+41）= **1,144+**；fast gate 仍 <2 分鐘；pre-commit 8.6s <10s。
+
+**執行紀錄上的發現**：A6 merge 後 hook 立即在本機攔下 A5 的 deliberate-break commit（紅綠驗證因此改用「workflow 指向不存在路徑」的 job 級 break，同一條 bash -e 傳播路徑）— 護欄上線當天就工作了。
