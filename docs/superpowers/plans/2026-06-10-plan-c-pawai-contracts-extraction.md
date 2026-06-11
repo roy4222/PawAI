@@ -49,7 +49,7 @@ Plan A merge（IE/pawai_brain/CLI 測試已在 CI）。本 plan 單一 PR、依 
   `pawai_contracts/resource/pawai_contracts`、`pawai_contracts/pawai_contracts/__init__.py`、
   `pawai_contracts/test/test_purity.py`
 
-- [ ] **Step 1: package.xml（注意：無 rclpy depend）**
+- [x] **Step 1: package.xml（注意：無 rclpy depend）**
 
 ```xml
 <?xml version="1.0"?>
@@ -68,7 +68,7 @@ Plan A merge（IE/pawai_brain/CLI 測試已在 CI）。本 plan 單一 PR、依 
 </package>
 ```
 
-- [ ] **Step 2: setup.py（仿 interaction_executive/setup.py，無 entry_points）**
+- [x] **Step 2: setup.py（仿 interaction_executive/setup.py，無 entry_points）**
 
 ```python
 from setuptools import find_packages, setup
@@ -93,7 +93,7 @@ setup(
 ```
 （`resource/pawai_contracts` 為空檔，`touch` 建立；`__init__.py` 空檔。）
 
-- [ ] **Step 3: purity failing test**
+- [x] **Step 3: purity failing test**
 
 ```python
 # pawai_contracts/test/test_purity.py
@@ -115,7 +115,7 @@ def test_no_forbidden_imports():
     assert not offenders, offenders
 ```
 
-- [ ] **Step 4: 跑（此刻只有 __init__，PASS）+ commit**
+- [x] **Step 4: 跑（此刻只有 __init__，PASS）+ commit**
 
 ```bash
 PYTHONPATH=pawai_contracts python3 -m pytest pawai_contracts/test/ -q
@@ -130,7 +130,7 @@ git add pawai_contracts/ && git commit -m "feat(contracts): pawai_contracts scaf
 - Move: `interaction_executive/interaction_executive/skill_contract.py` → `pawai_contracts/pawai_contracts/skill_contract.py`
 - Create(shim): `interaction_executive/interaction_executive/skill_contract.py`
 
-- [ ] **Step 1: git mv（byte-identical，零內容變更）**
+- [x] **Step 1: git mv（byte-identical，零內容變更）**
 
 ```bash
 git mv interaction_executive/interaction_executive/skill_contract.py \
@@ -138,7 +138,7 @@ git mv interaction_executive/interaction_executive/skill_contract.py \
 ```
 （已驗證該檔 imports 只有 time/uuid/dataclasses/enum/typing——純 Python，搬了就能跑。）
 
-- [ ] **Step 2: 原地建 shim**
+- [x] **Step 2: 原地建 shim**
 
 ```python
 # interaction_executive/interaction_executive/skill_contract.py
@@ -159,7 +159,7 @@ from pawai_contracts.skill_contract import (          # noqa: F401  (underscore/
 若搬移後發現檔內有底線開頭名稱被外部引用——grep `from .skill_contract import _`
 確認，有就逐一加進顯式段。）
 
-- [ ] **Step 3: 全量驗證（zero-behavior 的核心證明）**
+- [x] **Step 3: 全量驗證（zero-behavior 的核心證明）**
 
 ```bash
 PYTHONPATH=pawai_contracts:interaction_executive python3 -c \
@@ -171,7 +171,7 @@ PYTHONPATH=pawai_brain python3 -m pytest pawai_brain/test/ -q   # 348 passed
 （本機 colcon 環境外跑：repo-root 執行時 pytest 的 rootdir 插入讓兩個套件都可見；
 若 import 解析失敗，per-invocation 前綴 `PYTHONPATH=pawai_contracts`。）
 
-- [ ] **Step 4: commit**：`refactor(contracts): move skill_contract.py wholesale to pawai_contracts + compat shim — zero behavior change (Plan C2)`
+- [x] **Step 4: commit**：`refactor(contracts): move skill_contract.py wholesale to pawai_contracts + compat shim — zero behavior change (Plan C2)`
 
 ---
 
@@ -183,7 +183,7 @@ PYTHONPATH=pawai_brain python3 -m pytest pawai_brain/test/ -q   # 348 passed
 - Modify: `pawai_brain/pawai_brain/conversation_graph_node.py:77-99`
 - Test: `pawai_contracts/test/test_zh_parity.py`
 
-- [ ] **Step 1: failing parity test（遷移前先鎖三方一致）**
+- [x] **Step 1: failing parity test（遷移前先鎖三方一致）**
 
 ```python
 # pawai_contracts/test/test_zh_parity.py
@@ -215,12 +215,12 @@ def test_studio_ts_copy_matches_contracts():
     assert not missing, f"Studio object-config.ts missing colour keys: {missing}"
 ```
 
-- [ ] **Step 2: 建 `zh_tables.py`**——內容 = brain_node.py:41-66 的三個 dict
+- [x] **Step 2: 建 `zh_tables.py`**——內容 = brain_node.py:41-66 的三個 dict
 **逐字搬移**（OBJECT_CLASS_ZH 31 鍵、OBJECT_COLOR_ZH 12 鍵、OBJECT_TTS_SPECIAL_SUFFIX
 3 鍵），檔頭 docstring 註明「single source；producer canon 見
 object_perception/coco_classes.py；Studio TS 由 parity test 守」。
 
-- [ ] **Step 3: brain_node.py 換 import（gate/邏輯零改動）**
+- [x] **Step 3: brain_node.py 換 import（gate/邏輯零改動）**
 
 刪 :37-66 的三個 dict 定義（含「three copies on purpose」舊註解），改為：
 
@@ -235,7 +235,7 @@ from pawai_contracts.zh_tables import (
 )
 ```
 
-- [ ] **Step 4: conversation_graph_node.py 同款**——刪 :81-99 的 `_OBJECT_CLASS_ZH`/
+- [x] **Step 4: conversation_graph_node.py 同款**——刪 :81-99 的 `_OBJECT_CLASS_ZH`/
 `_OBJECT_COLOR_ZH` 局部副本與「duplication is intentional」註解，改：
 
 ```python
@@ -257,7 +257,7 @@ EOF
 ```
 實務上更簡單：**先加 import、跑 parity test 與全套件測試綠了才刪舊 dict、再跑一次**。
 
-- [ ] **Step 5: 全量驗證 + commit**
+- [x] **Step 5: 全量驗證 + commit**
 
 ```bash
 python3 -m pytest interaction_executive/test/ -q && \
@@ -278,7 +278,7 @@ git commit -m "refactor(contracts): zh tables single-sourced; brain_node + conve
 - Modify: `pawai_brain/test/test_skill_policy_gate.py`（AST parity → import 相等）
 - Test: `pawai_contracts/test/test_llm_policy.py`
 
-- [ ] **Step 1: 建 `llm_policy.py`**——內容 = brain_node.py:782-807 兩個結構**逐字搬移**：
+- [x] **Step 1: 建 `llm_policy.py`**——內容 = brain_node.py:782-807 兩個結構**逐字搬移**：
 
 ```python
 """LLM proposal policy — single source (Plan C4, 2026-06-10).
@@ -314,7 +314,7 @@ LLM_PROPOSAL_EXECUTE = {
 }
 ```
 
-- [ ] **Step 2: 消費端換 import**
+- [x] **Step 2: 消費端換 import**
 
 brain_node.py 的 class attribute 區改為（保持 class-attribute 形態 → 所有
 `self.LLM_PROPOSABLE_SKILLS` 引用零改動）：
@@ -329,7 +329,7 @@ brain_node.py 的 class attribute 區改為（保持 class-attribute 形態 → 
 `LLM_PROPOSABLE_SKILLS = _llm_policy.LLM_PROPOSABLE_SKILLS`，效果相同。）
 skill_policy_gate.py 刪本地 frozenset，改 `from pawai_contracts.llm_policy import LLM_PROPOSABLE_SKILLS`。
 
-- [ ] **Step 3: 測試升級**
+- [x] **Step 3: 測試升級**
 
 ```python
 # pawai_contracts/test/test_llm_policy.py
@@ -361,7 +361,7 @@ def test_allowlist_single_source_of_truth():
 （注意：import BrainNode 需 rclpy → 此測試屬本機 L1 層；若該測試檔在 CI 清單內，
 改用讀檔斷言「brain_node.py 含 `from pawai_contracts.llm_policy import`」保持 CI-safe。）
 
-- [ ] **Step 4: 全量驗證 + commit**：三套件測試綠 →
+- [x] **Step 4: 全量驗證 + commit**：三套件測試綠 →
 `refactor(contracts): LLM allowlist + execute-mode map single-sourced; retire AST parity hack (Plan C4)`
 
 ---
@@ -372,9 +372,9 @@ def test_allowlist_single_source_of_truth():
 - Modify: `interaction_executive/package.xml`、`pawai_brain/package.xml`（`<depend>pawai_contracts</depend>`）
 - Modify: `.github/workflows/ros_build.yaml`
 
-- [ ] **Step 1: package.xml 各加一行 depend**
+- [x] **Step 1: package.xml 各加一行 depend**
 
-- [ ] **Step 2: CI**——fast-gate 加 invocation：
+- [x] **Step 2: CI**——fast-gate 加 invocation：
 
 ```yaml
           # Invocation 8 (Plan C5): pawai_contracts parity + purity tests
@@ -383,7 +383,7 @@ def test_allowlist_single_source_of_truth():
 並把既有 IE / pawai_brain invocations 的 PYTHONPATH 前綴補上 `pawai_contracts:`
 （shim 需要找得到新套件）。Tier-2 `package-name` 清單加 `pawai_contracts`。
 
-- [ ] **Step 3: 本機 colcon 驗證（模擬 Jetson 部署鏈）**
+- [x] **Step 3: 本機 colcon 驗證（模擬 Jetson 部署鏈）**
 
 ```bash
 colcon build --packages-select pawai_contracts interaction_executive pawai_brain
@@ -392,7 +392,7 @@ python3 -c "from interaction_executive.skill_contract import SKILL_REGISTRY; pri
 ```
 Expected: build 三套件成功（colcon 依 package.xml 排序，contracts 先建）、輸出 30。
 
-- [ ] **Step 4: commit + PR**
+- [x] **Step 4: commit + PR**
 
 ```bash
 git add -u && git commit -m "build(contracts): package deps + CI invocation + colcon wiring (Plan C5)"
@@ -421,3 +421,11 @@ merge 後第一次部署：`pawai jetson deploy --module brain`（或手動 rsyn
 
 單 PR revert = 完整回滾（git mv 會還原、shim 消失、舊 dict 回來）。
 無 feature flag 需求——shim 本身就是相容層。
+
+---
+
+## 執行結果（2026-06-11）
+
+**PR #152 merged**（6 commits C1-C5 + review）。IE 258 + brain 348 + contracts 6 = **612 全綠**，零值變動（終審逐值核對）。
+Review 戰果：mock_server sys.path 漏 contracts（靜默空表）+ ros2-test-suite skill 裸跑炸 — 兩個 dev-path 行為改變實證後修復；pre-commit hook 在 C2 第一次 commit 當場攔截接線缺口。
+**Jetson 部署註記**：首次部署需 `colcon build --packages-select pawai_contracts interaction_executive pawai_brain` + 重啟 brain lane。

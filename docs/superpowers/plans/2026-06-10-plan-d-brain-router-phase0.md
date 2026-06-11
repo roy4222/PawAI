@@ -43,7 +43,7 @@ Plan C merged（contracts 存在、606 測試綠為 baseline）。單一 PR。
 - Create: `interaction_executive/interaction_executive/perception_router.py`
 - Test: `interaction_executive/test/test_perception_router.py`
 
-- [ ] **Step 1: 寫 failing tests（每 kind 至少：正常 payload、缺欄位、legacy 替代格式）**
+- [x] **Step 1: 寫 failing tests（每 kind 至少：正常 payload、缺欄位、legacy 替代格式）**
 
 ```python
 # interaction_executive/test/test_perception_router.py
@@ -102,7 +102,7 @@ def test_raw_payload_always_kept():
     assert parse_gesture(payload).raw is payload
 ```
 
-- [ ] **Step 2: 跑確認 fail**
+- [x] **Step 2: 跑確認 fail**
 
 ```bash
 PYTHONPATH=interaction_executive python3 -m pytest \
@@ -110,7 +110,7 @@ PYTHONPATH=interaction_executive python3 -m pytest \
 ```
 Expected: FAIL（ModuleNotFoundError: perception_router）。
 
-- [ ] **Step 3: 實作 `perception_router.py`**
+- [x] **Step 3: 實作 `perception_router.py`**
 
 ```python
 """Perception Event Router — Phase 0 (Plan D, 2026-06-10).
@@ -231,7 +231,7 @@ def parse_pose(payload: dict[str, Any]) -> PerceptionEvent:
 isinstance 防衛），有任何出入以原始碼為準改 parser，**不准反過來改語意**。
 golden suite（Task D3）是最終裁判。
 
-- [ ] **Step 4: 跑綠 + commit**
+- [x] **Step 4: 跑綠 + commit**
 
 ```bash
 PYTHONPATH=interaction_executive python3 -m pytest \
@@ -247,7 +247,7 @@ git commit -m "feat(brain): perception_router Phase 0 — PerceptionEvent + 5 pu
 **Files:**
 - Modify: `interaction_executive/interaction_executive/brain_node.py`
 
-- [ ] **Step 1: `_declare_params` 加 flag（預設 True；golden 證明等價後才合理）**
+- [x] **Step 1: `_declare_params` 加 flag（預設 True；golden 證明等價後才合理）**
 
 ```python
         # Plan D Phase 0 (2026-06-10): perception parsing extracted to
@@ -263,7 +263,7 @@ git commit -m "feat(brain): perception_router Phase 0 — PerceptionEvent + 5 pu
         )
 ```
 
-- [ ] **Step 2: 五個 callback 改造（模式一致；以 speech 為例）**
+- [x] **Step 2: 五個 callback 改造（模式一致；以 speech 為例）**
 
 ```python
     def _on_speech_intent(self, msg: String) -> None:
@@ -284,7 +284,7 @@ face/object/gesture/pose 同款：**只把「派生變數的計算」換成 rout
 callback 內所有 gate/timer/dedup/emit 邏輯原封不動。檔頭加
 `from .perception_router import parse_face, parse_gesture, parse_object, parse_pose, parse_speech`。
 
-- [ ] **Step 3: 既有測試全綠（第一道等價證據）**
+- [x] **Step 3: 既有測試全綠（第一道等價證據）**
 
 ```bash
 python3 -m pytest interaction_executive/test/ -q
@@ -292,7 +292,7 @@ python3 -m pytest interaction_executive/test/ -q
 Expected: 258 passed（test_brain_rules 73 條 gate 測試會穿過新路徑——它們綠 =
 解析語意沒變的強訊號）。
 
-- [ ] **Step 4: commit**：`feat(brain): wire perception_router into 5 callbacks behind perception_router_enabled (Plan D2)`
+- [x] **Step 4: commit**：`feat(brain): wire perception_router into 5 callbacks behind perception_router_enabled (Plan D2)`
 
 ---
 
@@ -301,7 +301,7 @@ Expected: 258 passed（test_brain_rules 73 條 gate 測試會穿過新路徑—�
 **Files:**
 - Create: `interaction_executive/test/test_router_golden.py`（rclpy — 本機 L1 層，**不進 CI 清單**）
 
-- [ ] **Step 1: 寫 golden 測試**
+- [x] **Step 1: 寫 golden 測試**
 
 ```python
 """Golden fixtures (Plan D3): same payload through router-ON vs router-OFF
@@ -377,7 +377,7 @@ def test_router_on_off_identical_proposals():
     assert _run_path(True) == _run_path(False)
 ```
 
-- [ ] **Step 2: 跑（本機）**
+- [x] **Step 2: 跑（本機）**
 
 ```bash
 python3 -m pytest interaction_executive/test/test_router_golden.py -q
@@ -385,17 +385,17 @@ python3 -m pytest interaction_executive/test/test_router_golden.py -q
 Expected: PASS。若 fail → diff 兩邊 normalized JSON，**修 parser 對齊 legacy**，
 不准動 legacy。
 
-- [ ] **Step 3: commit**：`test(brain): golden fixtures — router on/off byte-identical proposals (Plan D3)`
+- [x] **Step 3: commit**：`test(brain): golden fixtures — router on/off byte-identical proposals (Plan D3)`
 
 ---
 
 ### Task D4: CI / pre-commit 清單補檔 + PR
 
-- [ ] **Step 1**: `.github/workflows/ros_build.yaml` invocation 3 檔案清單 +
+- [x] **Step 1**: `.github/workflows/ros_build.yaml` invocation 3 檔案清單 +
 `scripts/hooks/git-pre-commit.sh` IE 檔案清單各加
 `interaction_executive/test/test_perception_router.py`（golden 檔**不加**——rclpy）。
 
-- [ ] **Step 2: 全量驗證 + PR**
+- [x] **Step 2: 全量驗證 + PR**
 
 ```bash
 python3 -m pytest interaction_executive/test/ -q && \
@@ -417,3 +417,11 @@ PR description 必含：golden suite 輸出截圖/log + 「258+348 零修改全�
 
 `ros2 param set /brain_node perception_router_enabled false`（runtime 即回 legacy 路徑，
 不用重佈）；或 revert PR。legacy 解析碼保留至 ISM Phase 1 落地後才刪（另開 PR）。
+
+---
+
+## 執行結果（2026-06-11）
+
+**PR #153 merged**（5 commits D1-D4 + review）。plan 草稿與現源 7 處出入，全以現源為準逐字搬移（終審 AST 級 10/10 等價）。IE **270** + brain 348 全綠、golden canary **5/5 有牙**（speech .strip() 為文件化盲區，unit test 覆蓋）。
+Review 戰果：**假 rollback 修復** — `ros2 param set perception_router_enabled` 原為 no-op，已補 `_on_set_params` 分支 + live flip 實證。
+**Jetson smoke 未做**（需 Roy）：brain lane 對真感知各觸發一輪比對 PROPOSAL。legacy 解析碼留至 ISM Phase 1。

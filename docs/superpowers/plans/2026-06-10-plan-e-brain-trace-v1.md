@@ -46,7 +46,7 @@ decision_id 源頭）但**不阻塞**——D 未合時 decision_id 在 callback 
 - Create: `pawai_contracts/pawai_contracts/trace_schema.py`
 - Test: `pawai_contracts/test/test_trace_schema.py`
 
-- [ ] **Step 1: failing tests**
+- [x] **Step 1: failing tests**
 
 ```python
 # pawai_contracts/test/test_trace_schema.py
@@ -83,7 +83,7 @@ def test_verdict_and_kind_enums_frozen():
     }
 ```
 
-- [ ] **Step 2: 實作 `trace_schema.py`**
+- [x] **Step 2: 實作 `trace_schema.py`**
 
 ```python
 """/brain/trace event schema — single source (Plan E, Roy ruling 2026-06-10 D5):
@@ -161,7 +161,7 @@ def make_suppressed(*, decision_id: str, node: str, gate: str, reason: str,
     )
 ```
 
-- [ ] **Step 3: 跑綠 + commit**
+- [x] **Step 3: 跑綠 + commit**
 
 ```bash
 PYTHONPATH=pawai_contracts python3 -m pytest pawai_contracts/test/ -q
@@ -175,7 +175,7 @@ git add pawai_contracts/ && git commit -m "feat(contracts): /brain/trace schema 
 **Files:**
 - Modify: `interaction_executive/interaction_executive/brain_node.py`
 
-- [ ] **Step 1: publisher + helper（`__init__` publisher 區 + `_emit_trace` 旁）**
+- [x] **Step 1: publisher + helper（`__init__` publisher 區 + `_emit_trace` 旁）**
 
 ```python
         # Plan E (2026-06-10): decision-chain trace. Distinct from
@@ -217,7 +217,7 @@ git add pawai_contracts/ && git commit -m "feat(contracts): /brain/trace schema 
         return max(0.0, cooldown_s - (time.time() - last))
 ```
 
-- [ ] **Step 2: decision_id 源頭**——五個 callback 入口（D 已合：`ev.event_id`；
+- [x] **Step 2: decision_id 源頭**——五個 callback 入口（D 已合：`ev.event_id`；
 D 未合：`decision_id = f"{kind}-{uuid.uuid4().hex[:12]}"`）。`_emit` 簽名不改，
 但 `_plan_to_dict` **additive** 加欄位（IE `_on_proposal` 容忍未知欄位）：
 
@@ -253,7 +253,7 @@ self._current_decision_id` 並發 `plan_emitted` trace：
 ```
 `_gc_dedup` 順手修剪 `self._plan_decision`（len > 200 時清最舊——dict 按插入序）。
 
-- [ ] **Step 3: commit**：`feat(brain): /brain/trace emitter + decision_id chain (Plan E2)`
+- [x] **Step 3: commit**：`feat(brain): /brain/trace emitter + decision_id chain (Plan E2)`
 
 ---
 
@@ -278,21 +278,21 @@ self._current_decision_id` 並發 `plan_emitted` trace：
 | `_check_dedup` 命中的呼叫點（speech/gesture/face/pose/object 各處） | `dedup` | `dedup:{source}:{key}` |
 | IE `interaction_executive_node` SafetyLayer block（發 blocked_by_safety 處） | `safety` | 沿用既有 reason（如 `banned_api:1301`），verdict=BLOCKED，node="interaction_executive" |
 
-- [ ] **Step 1: 按表逐點插入 `self._suppressed(...)`**——每點一行呼叫，**不改動
+- [x] **Step 1: 按表逐點插入 `self._suppressed(...)`**——每點一行呼叫，**不改動
 return 行為本身**；`source_summary` 用該 callback 的關鍵欄位
 （如 `f"gesture={gesture} conf={conf}"`、`f"class={class_name}"`、`f"identity={identity}"`）。
 
-- [ ] **Step 2: IE 鏡像**——IE node 加同款 `_pub_trace` publisher + 在 blocked_by_safety
+- [x] **Step 2: IE 鏡像**——IE node 加同款 `_pub_trace` publisher + 在 blocked_by_safety
 publish 處同步發 TraceEvent（decision_id 從 proposal payload 的 `decision_id` 欄位讀，
 缺省空字串——Plan E2 已 additive 加入）。
 
-- [ ] **Step 3: 行為不變驗證**
+- [x] **Step 3: 行為不變驗證**
 
 ```bash
 python3 -m pytest interaction_executive/test/ -q   # 258 passed — 零修改
 ```
 
-- [ ] **Step 4: commit**：`feat(brain): suppressed-trace instrumentation at every gate early-return (Plan E3)`
+- [x] **Step 4: commit**：`feat(brain): suppressed-trace instrumentation at every gate early-return (Plan E3)`
 
 ---
 
@@ -301,7 +301,7 @@ python3 -m pytest interaction_executive/test/ -q   # 258 passed — 零修改
 **Files:**
 - Create: `interaction_executive/test/test_trace_emission.py`
 
-- [ ] **Step 1: 三條代表性斷言（capture `_pub_trace.publish`）**
+- [x] **Step 1: 三條代表性斷言（capture `_pub_trace.publish`）**
 
 ```python
 """Trace emission tests (Plan E4) — rclpy local tier.
@@ -367,7 +367,7 @@ def test_plan_emitted_and_skill_result_share_decision_id(node):
 （若「停」走 SafetyLayer 直發路徑的 plan reason 與假設不符，依實際行為調整觸發
 fixture——用任何必發 plan 的輸入即可，斷言重點是 decision_id 串鏈。）
 
-- [ ] **Step 2: 跑綠 + commit**：`test(brain): trace emission + decision-chain assertions (Plan E4)`
+- [x] **Step 2: 跑綠 + commit**：`test(brain): trace emission + decision-chain assertions (Plan E4)`
 
 ---
 
@@ -377,13 +377,13 @@ fixture——用任何必發 plan 的輸入即可，斷言重點是 decision_id 
 - Modify: `pawai-studio/gateway/studio_gateway.py` TOPIC_MAP（:96-107）
 - Modify: `docs/contracts/interaction_contract.md`
 
-- [ ] **Step 1: TOPIC_MAP 加一行（橋接 only，不落盤——邊界紀律）**
+- [x] **Step 1: TOPIC_MAP 加一行（橋接 only，不落盤——邊界紀律）**
 
 ```python
     "/brain/trace":                     "brain:trace",
 ```
 
-- [ ] **Step 2: contract 登記（additive，v2.12）**——`interaction_contract.md` 的
+- [x] **Step 2: contract 登記（additive，v2.12）**——`interaction_contract.md` 的
 brain topic 段新增 `/brain/trace`（發布者 brain_node + interaction_executive_node、
 String JSON、schema 指向 `pawai_contracts/trace_schema.py`、用途「決策鏈 trace，
 回答為什麼做/不做」、QoS RELIABLE depth 10）。跑：
@@ -393,13 +393,13 @@ python3 scripts/ci/check_topic_contracts.py
 ```
 Expected: PASS（沒登記會被 ghost-topic 擋下——這就是同 PR 的原因）。
 
-- [ ] **Step 3: gateway 測試確認不破**
+- [x] **Step 3: gateway 測試確認不破**
 
 ```bash
 cd pawai-studio/gateway && python3 -m pytest -q   # 64 passed, 1 skipped
 ```
 
-- [ ] **Step 4: 全量 + PR**
+- [x] **Step 4: 全量 + PR**
 
 ```bash
 python3 -m pytest interaction_executive/test/ -q && \
@@ -429,3 +429,12 @@ brain 端發射。
 Studio Evidence Center plan 接手：gateway JSONL 落盤 `runtime/traces/{session_id}.jsonl`
 （retention ~20MB × 20 sessions）、`GET /api/trace/*` + export、decision trace panel、
 perception confidence panels。CLI 只讀同一份 JSONL。
+
+---
+
+## 執行結果（2026-06-11）
+
+**PR #154 merged**（6 commits E1-E5 + review）。IE **276**（+6 emission 測試）/ brain 348 / contracts 10 / gateway 64 全綠零修改；golden referee 不受擾動；flake8 持平。
+插樁 = plan 表 100%（15 點 + IE safety 鏡像）；熱路徑限流走獨立 `_trace_throttle`（不汙染 /brain/state）；contract v2.12 與 E2 同 commit（ghost-topic gate 攔截後前移）。
+表外 gap（v2 候選）：gesture confirm cooldown / stranger 內部 5 條件 / pose 路徑 / object whitelist / skill_request cooldown / chat stale drop。Timer 驅動 emission 的 decision_id 歸屬留 ISM。
+**Jetson smoke 未做**（需 Roy）：`ros2 topic echo /brain/trace` + gesture off / s3_object phase 兩情境驗 suppressed 即時可見。

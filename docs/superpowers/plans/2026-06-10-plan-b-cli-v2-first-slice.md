@@ -44,7 +44,7 @@ Plan A Task A2 已 merge（pawai_cli 144 測試在 CI 把關本 plan 的每個 c
 - Create: `tools/sync/rsync-excludes.txt`
 - Test: `tools/pawai_cli/tests/test_cli.py`
 
-- [ ] **Step 1: 寫 failing test（exclude 檔存在且含保命條目）**
+- [x] **Step 1: 寫 failing test（exclude 檔存在且含保命條目）**
 
 ```python
 # tools/pawai_cli/tests/test_cli.py — append to the deploy test section
@@ -62,14 +62,14 @@ def test_rsync_excludes_file_has_protected_entries():
         assert required in lines, f"protected exclude missing: {required}"
 ```
 
-- [ ] **Step 2: 跑確認 fail**
+- [x] **Step 2: 跑確認 fail**
 
 ```bash
 python3 -m pytest tools/pawai_cli/tests/test_cli.py::test_rsync_excludes_file_has_protected_entries -q
 ```
 Expected: FAIL（FileNotFoundError）。
 
-- [ ] **Step 3: 建 `tools/sync/rsync-excludes.txt`**（內容 = main.py:526-541 的 16 條，一行一條）
+- [x] **Step 3: 建 `tools/sync/rsync-excludes.txt`**（內容 = main.py:526-541 的 16 條，一行一條）
 
 ```text
 # Single source of truth for WSL→Jetson sync excludes.
@@ -93,7 +93,7 @@ node_modules/
 .DS_Store
 ```
 
-- [ ] **Step 4: 跑測試確認 PASS，commit**
+- [x] **Step 4: 跑測試確認 PASS，commit**
 
 ```bash
 python3 -m pytest tools/pawai_cli/tests/test_cli.py -q   # 144+1 passed
@@ -109,7 +109,7 @@ git commit -m "feat(cli): single rsync exclude contract file (Plan B1)"
 - Modify: `tools/pawai_cli/pawai_cli/main.py:508-563`
 - Test: `tools/pawai_cli/tests/test_cli.py`
 
-- [ ] **Step 1: 寫 failing tests（三條）**
+- [x] **Step 1: 寫 failing tests（三條）**
 
 ```python
 def test_deploy_prefers_builtin_rsync_even_when_home_sync_exists(tmp_path, monkeypatch):
@@ -149,9 +149,9 @@ def test_post_sync_guard_fails_loud_when_env_disappears(monkeypatch):
 （`main_mod` = 既有測試檔對 `pawai_cli.main` 的 import 別名；`SimpleNamespace`、
 `pytest`、`click` 檔頭已有或補 import。）
 
-- [ ] **Step 2: 跑確認 fail**（`_post_sync_guard` 不存在 → AttributeError）
+- [x] **Step 2: 跑確認 fail**（`_post_sync_guard` 不存在 → AttributeError）
 
-- [ ] **Step 3: 改寫 `_do_rsync_and_build` + 新增 guard**
+- [x] **Step 3: 改寫 `_do_rsync_and_build` + 新增 guard**
 
 ```python
 PROTECTED_REMOTE_FILES = (".env", ".env.local")
@@ -231,11 +231,11 @@ def _do_rsync_and_build(root: Path, packages: list[str], no_sync: bool, no_build
     return 0, sync_method
 ```
 
-- [ ] **Step 4: 更新既有 rsync exclude 測試（test_cli.py:785-821 區）**——原測試斷言
+- [x] **Step 4: 更新既有 rsync exclude 測試（test_cli.py:785-821 區）**——原測試斷言
 inline `--exclude=` 參數，改斷言 `--exclude-from=` + 檔案內容（B1 測試已蓋內容）。
 刪掉 `:800` 那個「故意 patch Path.home 繞過 ~/sync」的 hack（新預設已不需要繞）。
 
-- [ ] **Step 5: 全套跑綠 + commit**
+- [x] **Step 5: 全套跑綠 + commit**
 
 ```bash
 python3 -m pytest tools/pawai_cli/tests -q   # 147 passed
@@ -250,7 +250,7 @@ git add -u tools/ && git commit -m "fix(cli): deploy defaults to audited rsync; 
 - Create: `scripts/sync_to_jetson.sh`
 - Test: `tools/pawai_cli/tests/test_cli.py`
 
-- [ ] **Step 1: failing test（腳本必須用同一份 exclude 檔）**
+- [x] **Step 1: failing test（腳本必須用同一份 exclude 檔）**
 
 ```python
 def test_sync_script_uses_shared_exclude_contract():
@@ -260,7 +260,7 @@ def test_sync_script_uses_shared_exclude_contract():
     assert "--delete" in body
 ```
 
-- [ ] **Step 2: 建腳本**
+- [x] **Step 2: 建腳本**
 
 ```bash
 #!/usr/bin/env bash
@@ -278,7 +278,7 @@ rsync -az --delete \
 echo "✓ sync done. Remember: colcon build --packages-select <pkg> on Jetson if .py changed."
 ```
 
-- [ ] **Step 3: `chmod +x`、`bash -n` 語法檢查、測試綠、commit**
+- [x] **Step 3: `chmod +x`、`bash -n` 語法檢查、測試綠、commit**
 
 ```bash
 chmod +x scripts/sync_to_jetson.sh && bash -n scripts/sync_to_jetson.sh
@@ -295,7 +295,7 @@ git commit -m "feat(scripts): sync_to_jetson.sh sharing the rsync exclude contra
 - Modify: `tools/pawai_cli/pawai_cli/main.py`（demo start command：option 清單 + :899-919 區）
 - Test: `tools/pawai_cli/tests/test_cli.py`
 
-- [ ] **Step 1: failing tests（三條）**
+- [x] **Step 1: failing tests（三條）**
 
 ```python
 def _patch_demo_start_happy(monkeypatch, hc_rc: int):
@@ -330,7 +330,7 @@ def test_demo_start_skip_healthcheck_prints_loud_banner(monkeypatch, runner):
 （`runner` = 既有 CliRunner fixture；`lock_mod` = `pawai_cli.lock`。依既有 test_cli.py
 的 demo-start 測試 scaffolding 風格調整 patch 點。）
 
-- [ ] **Step 2: 實作 `_run_lane_healthcheck` + 插入 gate**
+- [x] **Step 2: 實作 `_run_lane_healthcheck` + 插入 gate**
 
 ```python
 _LANE_HEALTHCHECK = {
@@ -380,14 +380,14 @@ demo start command 加 option（與既有 options 並列）：
             sys.exit(1)
 ```
 
-- [ ] **Step 3: 跑綠 + commit**
+- [x] **Step 3: 跑綠 + commit**
 
 ```bash
 python3 -m pytest tools/pawai_cli/tests -q
 git add -u tools/ && git commit -m "feat(cli): demo start hard-blocks on lane healthcheck; --skip-healthcheck escape hatch (Plan B4, kills 6/4 fake-success)"
 ```
 
-- [ ] **Step 4: healthcheck.sh fallback IP 修正（獨立 commit）**
+- [x] **Step 4: healthcheck.sh fallback IP 修正（獨立 commit）**
 
 `.claude/skills/brain-studio-lane/scripts/healthcheck.sh:8` 的
 `JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"` 改為：
@@ -406,7 +406,7 @@ JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:?JETSON_TAILSCALE_IP not set — run 
 **Files:**
 - Modify: `tools/pawai_cli/pawai_cli/status.py`、`tools/pawai_cli/pawai_cli/main.py`
 
-- [ ] **Step 1: status.py 加 gateway probe + 模組 node 對照**
+- [x] **Step 1: status.py 加 gateway probe + 模組 node 對照**
 
 ```python
 _MODULE_NODE_HINTS: dict[str, str] = {
@@ -442,7 +442,7 @@ def module_presence(ros_nodes: str) -> list[tuple[str, bool]]:
         print(f"\nStudio gateway /health: {gateway_health()}")
 ```
 
-- [ ] **Step 2: main.py 加 `health nav`（鏡像 health brain，main.py:710-722 同款）**
+- [x] **Step 2: main.py 加 `health nav`（鏡像 health brain，main.py:710-722 同款）**
 
 ```python
 @health.command("nav")
@@ -460,7 +460,7 @@ def health_nav() -> None:
     sys.exit(rc)
 ```
 
-- [ ] **Step 3: tests（status helpers 純函數測試 + health nav 命令存在）**
+- [x] **Step 3: tests（status helpers 純函數測試 + health nav 命令存在）**
 
 ```python
 def test_module_presence_maps_nodes():
@@ -475,7 +475,7 @@ def test_health_nav_command_registered(runner):
     assert result.exit_code == 0
 ```
 
-- [ ] **Step 4: 跑綠 + commit**：`feat(cli): status shows gateway health + per-module node presence; add pawai health nav (Plan B5)`
+- [x] **Step 4: 跑綠 + commit**：`feat(cli): status shows gateway health + per-module node presence; add pawai health nav (Plan B5)`
 
 ---
 
@@ -487,7 +487,7 @@ def test_health_nav_command_registered(runner):
   那個 pattern 解的是真實 DDS one-shot-pub race，保留為可重用 script）
 - Modify: `tools/pawai_cli/pawai_cli/main.py`（school 命令本體改為 deprecation stub）
 
-- [ ] **Step 1: 搬移**——school 區塊的 python -c 內容落成獨立腳本（含 shebang +
+- [x] **Step 1: 搬移**——school 區塊的 python -c 內容落成獨立腳本（含 shebang +
   docstring 註明「5/16 招生活動產物，活動已過；pattern 可重用」），CLI 命令改為：
 
 ```python
@@ -500,7 +500,7 @@ def demo_school() -> None:
     )
 ```
 
-- [ ] **Step 2: 更新/刪除對應測試斷言、全套跑綠、commit**：
+- [x] **Step 2: 更新/刪除對應測試斷言、全套跑綠、commit**：
   `refactor(cli): retire demo school command; extract publisher pattern to scripts/ (Plan B6)`
 
 ---
@@ -516,7 +516,7 @@ def demo_school() -> None:
   school 標 deprecated
 - Modify: `docs/pawai_cli/troubleshooting.md` F3（~/sync precedence 從 feature 改為 opt-in）
 
-- [ ] **Step 1: 改寫三份文件對應段落、commit**：`docs(cli): sync safety + healthcheck gate + health nav (Plan B7)`
+- [x] **Step 1: 改寫三份文件對應段落、commit**：`docs(cli): sync safety + healthcheck gate + health nav (Plan B7)`
 
 ---
 
@@ -536,3 +536,12 @@ def demo_school() -> None:
 
 單 PR revert 即回 v1 行為。`PAWAI_SYNC_CMD=1` 是 ~/sync 的逃生口、
 `--skip-healthcheck` 是閘的逃生口——rollback 不需要動 code 也有降級路徑。
+
+---
+
+## 執行結果（2026-06-11）
+
+**PR #151 merged**（8 commits B1-B7 + B4 例外）。CLI 測試 144→**152**（CI 1.58s 全綠）。
+偏差與 review 戰果（細節見 PR）：B2 失敗路徑也跑 guard（review 補強）；B4 既有測試漏 mock 修復（40s 真實 healthcheck → 0.01s）；B6 school 是 group 非 command（整組退役）。
+**HITL gate 未做**（需 Roy+Jetson）：真機 deploy 驗 .env 存活 / demo start 正常路徑 / CRLF 弄壞驗 gate 擋下。
+Follow-ups：#150（CLI 測試隔離）、brain-studio-lane SKILL.md 裸跑指引、demo_start C901（Typer 二刀）。
