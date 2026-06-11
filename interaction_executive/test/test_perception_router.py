@@ -89,6 +89,23 @@ def test_parse_pose_or_chain_and_lowering():
     assert parse_pose({}).pose == ""
 
 
+def test_or_chain_order_first_key_wins():
+    # Both-keys-present fixtures freeze the or-chain ORDER, not just coverage —
+    # single-key fixtures cannot detect a reordered chain.
+    assert parse_speech({"transcript": "a", "text": "b"}).transcript == "a"
+    assert parse_speech({"session_id": "s", "request_id": "r"}).session_id == "s"
+    assert parse_face({"identity": "i", "stable_name": "s", "name": "n"}).identity == "i"
+    assert parse_face({"stable_name": "s", "name": "n"}).identity == "s"
+    assert parse_face({"distance_m": 1.0, "depth_m": 2.0}).distance_m == 1.0
+    assert parse_gesture({"gesture": "a", "type": "b", "label": "c"}).gesture == "a"
+    assert parse_gesture({"type": "b", "label": "c"}).gesture == "b"
+    assert parse_pose({"pose": "a", "posture": "b"}).pose == "a"
+    ev = parse_object({"objects": [{"class_name": "a", "label": "b", "class": "c"}]})
+    assert ev.class_name == "a"
+    assert parse_object({"objects": [{"label": "b", "class": "c"}]}).class_name == "b"
+    assert parse_object({"class_name": "a", "label": "b"}).class_name == "a"
+
+
 def test_raw_payload_always_kept():
     payload = {"gesture": "wave", "extra": 1}
     assert parse_gesture(payload).raw is payload

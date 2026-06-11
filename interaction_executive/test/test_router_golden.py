@@ -13,7 +13,9 @@ a de-lowered parse_pose canary passes a naive single-shot suite).
 
 Canary-verified sensitivity (mutating the parser makes this suite fail):
 pose lowering, face stable_name chain, object array label fallback, object
-color. Known structural blind spot: speech transcript .strip() — padding
+color, gesture lowering (the WAVE fixture lives on the speech-free node —
+conversation-gated gestures are swallowed within 30s of chat input).
+Known structural blind spot: speech transcript .strip() — padding
 never alters any emitted /brain/proposal (hard rules substring-match and the
 stop/safety plans don't echo the transcript), so no proposal-level referee
 can see it; the parser unit tests cover it instead."""
@@ -62,7 +64,6 @@ def _scenario_speech_gesture(router_on: bool) -> list[str]:
         _cb(node, "_on_speech_intent", {"transcript": "請你翻跟斗", "session_id": "g3"})
         _cb(node, "_on_gesture", {"gesture": "palm", "confidence": 0.9, "hand": "right"})
         _cb(node, "_on_gesture", {"gesture": "thumbs_up", "confidence": 0.95})
-        _cb(node, "_on_gesture", {"type": "WAVE"})
         return published
     finally:
         node.destroy_node()
@@ -83,6 +84,11 @@ def _scenario_face_pose(router_on: bool) -> list[str]:
         # that format surfaces in the proposal text. (Ordering matters: an
         # identity-keyed event after Roy would overwrite the cache through a
         # code path the canary mutations don't touch, masking the difference.)
+        # gesture wave first (mixed-case → lowering is golden-visible here:
+        # this node has no speech, so the 30s conversation gate that silently
+        # swallowed wave on the speech node does not apply).
+        _cb(node, "_on_gesture", {"type": "WAVE"})
+
         _cb(node, "_on_face", {"identity": "alice", "identity_stable": True})
         _cb(node, "_on_face", {"event_type": "track_lost"})
         _cb(node, "_on_face", {"identity": "   "})
