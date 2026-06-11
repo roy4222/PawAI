@@ -1,0 +1,19 @@
+# Single source of truth for WSL→Jetson sync excludes.
+# Consumers: pawai jetson deploy (_do_rsync_and_build) + scripts/sync_to_jetson.sh.
+# 2026-06-10 Plan B1 — born from the 6/10 incident where ~/sync deleted Jetson .env.
+.git/
+.env
+.env.*
+.env.local
+.ssh/
+build/
+install/
+log/
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+.next/
+.ruff_cache/
+.mypy_cache/
+.DS_Store

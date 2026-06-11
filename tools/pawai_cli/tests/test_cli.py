@@ -821,6 +821,21 @@ def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path):
     assert not missing, f"missing rsync excludes: {missing}"
 
 
+EXCLUDES_FILE = Path(__file__).resolve().parents[3] / "tools" / "sync" / "rsync-excludes.txt"
+
+
+def test_rsync_excludes_file_has_protected_entries():
+    lines = {
+        ln.strip() for ln in EXCLUDES_FILE.read_text().splitlines()
+        if ln.strip() and not ln.startswith("#")
+    }
+    for required in (".git/", ".env", ".env.*", ".env.local", ".ssh/",
+                     "build/", "install/", "log/", "__pycache__/",
+                     ".pytest_cache/", ".venv/", "node_modules/", ".next/",
+                     ".ruff_cache/", ".mypy_cache/", ".DS_Store"):
+        assert required in lines, f"protected exclude missing: {required}"
+
+
 def test_invoke_start_sh_injects_jetson_tailscale_ip(monkeypatch):
     """demo start wrapper should pass JETSON_TAILSCALE_IP to start.sh env."""
     from pawai_cli import main as cli_main
