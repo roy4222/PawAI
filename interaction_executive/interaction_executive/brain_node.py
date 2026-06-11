@@ -246,6 +246,13 @@ class BrainNode(Node):
         for p in params:
             if p.name == "gesture_enabled":
                 self._set_gesture_enabled(bool(p.value), via="param")
+            elif p.name == "perception_router_enabled":
+                # Plan D Phase 0 instant fallback — the whole point of this
+                # param is live rollback to legacy parsing without redeploy.
+                self.perception_router_enabled = bool(p.value)
+                self.get_logger().info(
+                    f"perception_router_enabled set to {self.perception_router_enabled}"
+                )
             elif p.name == "stranger_alert_enabled":
                 self.stranger_alert_enabled = bool(p.value)
                 self.get_logger().info(
