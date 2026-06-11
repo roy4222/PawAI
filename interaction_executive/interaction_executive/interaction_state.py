@@ -157,12 +157,16 @@ class InteractionPolicy:
             return Decision(Verdict.PREEMPT, f"preempt:{c.priority.name.lower()}",
                             _PRIORITY_TARGET[c.priority], c.skill, c.args)
 
-        # A skill needing confirmation always routes through CONFIRM_PENDING —
-        # never bypassed by a self-asserted source (§3.3 / security P2-1).
+        # A skill needing confirmation ALWAYS routes through CONFIRM_PENDING — this
+        # check is deliberately BEFORE the explicit-supersede below: an `explicit`
+        # command that itself requires confirmation must still confirm, never skip
+        # straight to EXECUTING just because it came from a trusted channel
+        # (§3.3 / security P2-1 — confirmation is not bypassable by source).
         if c.requires_confirmation:
             return Decision(Verdict.ACCEPT, "confirm_request", _S.CONFIRM_PENDING, c.skill, c.args)
 
-        # An explicit command supersedes an in-flight confirm (§3.5).
+        # A NON-confirming explicit command supersedes an in-flight confirm (§3.5):
+        # cancel the pending confirm and process the new command.
         if state is _S.CONFIRM_PENDING and c.explicit:
             return Decision(Verdict.PREEMPT, "confirm_superseded",
                             _S.EXECUTING if c.skill else _S.LISTENING, c.skill, c.args)
@@ -197,7 +201,16 @@ class InteractionStateMachine:
         """Arbitrate a candidate against the current state; apply any transition."""
         d = InteractionPolicy.evaluate(self.state, c)
         if d.next_state is not None and d.verdict in (Verdict.ACCEPT, Verdict.PREEMPT):
-            deadline = now + CONFIRM_TIMEOUT_S if d.next_state is _S.CONFIRM_PENDING else None
+            # CONFIRM_PENDING waits 30s for OK. EXECUTING reached via propose
+            # (confirm_ok / explicit-with-skill) is OPTIMISTIC: the authoritative
+            # skill watchdog arrives at skill_result STARTED (apply_signal overrides
+            # this deadline). Give it a grace deadline anyway so a skill that is
+            # accepted but never launches can't deadlock the machine — that is the
+            # exact 6/9 failure class this machine exists to prevent (§3.6).
+            if d.next_state in (_S.CONFIRM_PENDING, _S.EXECUTING):
+                deadline = now + CONFIRM_TIMEOUT_S
+            else:
+                deadline = None
             self._transition(self.state, d.next_state, f"candidate:{c.kind}", now, deadline=deadline)
         return d
 
@@ -207,17 +220,29 @@ class InteractionStateMachine:
             status = sig.detail.get("status", "")
             if status == "STARTED":
                 prio = int(sig.detail.get("priority_class", int(Priority.SOCIAL)))
-                nxt = _S.ALERT_ACTIVE if prio == int(Priority.ALERT) else _S.EXECUTING
+                if prio == int(Priority.SAFETY):
+                    nxt = _S.SAFETY_HOLD
+                elif prio == int(Priority.ALERT):
+                    nxt = _S.ALERT_ACTIVE
+                else:
+                    nxt = _S.EXECUTING
                 self._active_plan_id = sig.detail.get("plan_id", "")
                 t = float(sig.detail.get("timeout_s", 0) or 0)
                 self._transition(self.state, nxt, "skill_started", now,
                                  deadline=(now + t) if t > 0 else None)
-            elif status in _TERMINAL and sig.detail.get("plan_id", "") == self._active_plan_id:
+            # Terminal only clears when there IS an active plan AND its id matches —
+            # an empty plan_id must never sentinel-match a freshly-reset machine.
+            elif status in _TERMINAL and self._active_plan_id \
+                    and sig.detail.get("plan_id", "") == self._active_plan_id:
                 self._active_plan_id = ""
                 self._transition(self.state, _S.IDLE, f"skill_{status.lower()}", now)
         elif sig.trigger is TriggerKind.TTS_ACK:
             if sig.detail.get("event") == "start":
-                self._transition(self.state, _S.SPEAKING, "tts_start", now)
+                # TTS while EXECUTING / ALERT_ACTIVE / CONFIRM_PENDING is that
+                # interaction's own speech — do NOT clobber it (would orphan the
+                # active plan + watchdog). Only IDLE/LISTENING yield to SPEAKING.
+                if self.state in (_S.IDLE, _S.LISTENING):
+                    self._transition(self.state, _S.SPEAKING, "tts_start", now)
             elif self.state is _S.SPEAKING:
                 self._transition(self.state, _S.IDLE, "tts_end", now)
         elif sig.trigger is TriggerKind.OPERATOR and sig.detail.get("op") == "reset":
@@ -225,13 +250,17 @@ class InteractionStateMachine:
             self._transition(self.state, _S.IDLE, "operator_reset", now)
 
     def tick(self, now: float) -> Decision | None:
-        """Watchdog (§3.6): if the current interaction's deadline has passed, drop
-        to ERROR_RECOVERY → IDLE and return a watchdog Decision for tracing."""
+        """Watchdog (§3.6), two-step so ERROR_RECOVERY is a real, trace-observable
+        state (not a dead enum value): an expired interaction first drops to
+        ERROR_RECOVERY; the next tick returns it to IDLE."""
+        if self.state is _S.ERROR_RECOVERY:
+            self._transition(self.state, _S.IDLE, "recovery_complete", now)
+            return None
         if self._deadline is not None and now >= self._deadline:
             stuck = self.state
             self._active_plan_id = ""
-            self._transition(stuck, _S.IDLE, "watchdog", now)
-            return Decision(Verdict.PREEMPT, f"watchdog_timeout:{stuck.value}", _S.IDLE)
+            self._transition(stuck, _S.ERROR_RECOVERY, "watchdog", now)
+            return Decision(Verdict.PREEMPT, f"watchdog_timeout:{stuck.value}", _S.ERROR_RECOVERY)
         return None
 
     def _transition(self, frm: InteractionState, to: InteractionState, trigger: str,
