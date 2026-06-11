@@ -44,6 +44,14 @@ from .nodes import world_state_builder as world_state_builder_node
 from .rule_fallback import fallback_reply
 from .schemas import ChatCandidatePayload, TracePayload
 
+# zh tables single-sourced in pawai_contracts (Plan C3) — supersedes the old
+# "duplication is intentional" copy. Underscore aliases keep all existing
+# references unchanged.
+from pawai_contracts.zh_tables import (
+    OBJECT_CLASS_ZH as _OBJECT_CLASS_ZH,
+    OBJECT_COLOR_ZH as _OBJECT_COLOR_ZH,
+)
+
 
 TERMINAL_STATUSES = frozenset({"completed", "aborted", "blocked_by_safety", "step_failed"})
 
@@ -72,31 +80,6 @@ _INLINE_PERSONA = """\
 skill ∈ {chat_reply, say_canned, show_status, self_introduce, null}
 reply 用繁體中文，自然像在跟朋友聊天。
 """
-
-
-# N3-A: Chinese translation tables for /event/object_detected — duplicated
-# from interaction_executive/brain_node.py to avoid cross-package import
-# (pawai_brain must not depend on interaction_executive). When this dict
-# diverges from brain_node, the canonical source is brain_node — but the
-# duplication is intentional, in line with the package boundary.
-_OBJECT_CLASS_ZH: dict[str, str] = {
-    "cup": "杯子", "bottle": "瓶子", "book": "書",
-    "person": "人", "dog": "狗狗", "cat": "貓咪",
-    "chair": "椅子", "couch": "沙發", "bed": "床",
-    "dining_table": "餐桌", "tv": "電視", "laptop": "筆電",
-    "cell_phone": "手機", "remote": "遙控器", "keyboard": "鍵盤",
-    "mouse": "滑鼠", "backpack": "背包", "handbag": "手提包",
-    "umbrella": "雨傘", "clock": "時鐘", "vase": "花瓶",
-    "potted_plant": "盆栽", "teddy_bear": "玩偶", "scissors": "剪刀",
-    "wine_glass": "酒杯", "fork": "叉子", "knife": "刀子",
-    "spoon": "湯匙", "bowl": "碗", "banana": "香蕉",
-    "apple": "蘋果", "orange": "橘子",
-}
-_OBJECT_COLOR_ZH: dict[str, str] = {
-    "red": "紅色", "orange": "橘色", "yellow": "黃色", "green": "綠色",
-    "cyan": "青色", "blue": "藍色", "purple": "紫色", "pink": "粉紅色",
-    "brown": "咖啡色", "black": "黑色", "white": "白色", "gray": "灰色",
-}
 
 
 # N5-B: gesture / pose Chinese translation. Tables match canonical enums in

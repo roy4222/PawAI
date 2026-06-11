@@ -34,36 +34,14 @@ from .skill_contract import (
 from .world_state import WorldState
 
 
-# Mirror of object_perception/coco_classes.py:COCO_CLASSES_ZH (whitelist subset)
-# and pawai-studio/frontend/components/object/object-config.ts. Three copies are
-# self-contained on purpose — sharing a Python module across ROS2 packages would
-# couple build/install order. Keep all three in sync when whitelist changes.
-OBJECT_CLASS_ZH: dict[str, str] = {
-    "cup": "杯子", "bottle": "瓶子", "book": "書",
-    "person": "人", "dog": "狗狗", "cat": "貓咪",
-    "chair": "椅子", "couch": "沙發", "bed": "床",
-    "dining_table": "餐桌", "tv": "電視", "laptop": "筆電",
-    "cell_phone": "手機", "remote": "遙控器", "keyboard": "鍵盤",
-    "mouse": "滑鼠", "backpack": "背包", "handbag": "手提包",
-    "umbrella": "雨傘", "clock": "時鐘", "vase": "花瓶",
-    "potted_plant": "盆栽", "teddy_bear": "玩偶", "scissors": "剪刀",
-    "wine_glass": "酒杯", "fork": "叉子", "knife": "刀子",
-    "spoon": "湯匙", "bowl": "碗", "banana": "香蕉",
-    "apple": "蘋果", "orange": "橘子",
-}
-OBJECT_COLOR_ZH: dict[str, str] = {
-    "red": "紅色", "orange": "橘色", "yellow": "黃色", "green": "綠色",
-    "cyan": "青色", "blue": "藍色", "purple": "紫色", "pink": "粉紅色",
-    "brown": "咖啡色", "black": "黑色", "white": "白色", "gray": "灰色",
-}
-# Personality phrases — appended AFTER the colour-aware preamble (per 5/6
-# user feedback). Never replace the preamble; user wants both colour
-# announcement and the playful phrase.
-OBJECT_TTS_SPECIAL_SUFFIX: dict[str, str] = {
-    "cup": "，你要喝水嗎？今天天氣很熱，要記得補充水分。",
-    "bottle": "，喝點水吧",
-    "book": "，在看書啊",
-}
+# zh tables single-sourced in pawai_contracts (Plan C3, 2026-06-10 Roy ruling —
+# supersedes the old "three copies on purpose" comment). Producer canon:
+# object_perception/coco_classes.py; Studio TS copy guarded by parity test.
+from pawai_contracts.zh_tables import (
+    OBJECT_CLASS_ZH,
+    OBJECT_COLOR_ZH,
+    OBJECT_TTS_SPECIAL_SUFFIX,
+)
 
 # Per-class speaking dedup (D-4: key = class_name only, color dropped to prevent
 # color-jitter bypass).  SkillContract.cooldown_s=5 only stops the *skill* from
