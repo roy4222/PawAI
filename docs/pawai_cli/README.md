@@ -129,8 +129,9 @@ pawai demo stop                    # 6) 收工
 | [`pawai jetson deploy`](#jetson-deploy) | rsync 整個 repo + colcon build 指定模組 |
 | [`pawai demo start`](#demo-start) | 啟動 brain-studio-lane（Jetson tmux + 本機 Studio） |
 | [`pawai demo stop`](#demo-stop) | 清掉 demo session |
-| [`pawai demo school {list,ending}`](#demo-school) | 學校招生 demo：講稿提示 + 結尾固定詞 |
+| [`pawai demo school`](#demo-school) | **DEPRECATED**（5/16 活動已過；publisher 留在 `scripts/school_demo_ending.py`） |
 | [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
+| [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
@@ -252,13 +253,17 @@ pawai jetson deploy --module brain --no-sync   # 只 build 不 sync
 pawai jetson deploy --module brain -y          # 跳過 confirm
 ```
 
-**Sync 邏輯**：
-1. 如果你家 `~/sync` 是 executable（個人化 wrapper），用它
-2. 否則用內建 rsync，自動 exclude：`.git/`、`.env`、`.env.*`、`.env.local`、
-   `.ssh/`、`build/`、`install/`、`log/`、`__pycache__/`、`.pytest_cache/`、`.venv/`、`node_modules/`、`.next/`、
-   `.ruff_cache/`、`.mypy_cache/`、`.DS_Store`
+**Sync 邏輯**（Plan B2 優先序反轉，2026-06-10 `.env` 刪除事故後）：
+1. **預設一律用內建 audited rsync**，exclude 清單來自唯一契約檔
+   `tools/sync/rsync-excludes.txt`（`.git/`、`.env`、`.env.*`、`.env.local`、
+   `.ssh/`、`build/`、`install/`、`log/`、cache 目錄等 16 條，測試把守）
+2. `~/sync once` 改為 **opt-in**：需 `PAWAI_SYNC_CMD=1` 且 `~/sync` 存在可執行，
+   會印 `⚠ UNAUDITED` 警告（它沒有 exclude 契約，6/10 事故元兇）
+3. **Post-sync guard**：任一 sync 路徑後（成功或失敗皆然）檢查 Jetson
+   `.env`/`.env.local` 仍存在，消失即 fail-loud + 印還原 SOP
 
 Secrets 只留本機 `.env.local`，不會被 deploy 推到 Jetson。
+手動 sync 用 `scripts/sync_to_jetson.sh`（共用同一份 exclude 契約，不 build）。
 
 **Build 邏輯**：在 Jetson 上跑 `colcon build --packages-select <模組對應的 packages>`，
 build log 直接 stream 到本機。
@@ -280,6 +285,7 @@ pawai demo start --no-studio # full mode 但不開本機 Studio
 pawai demo start --brain-only # 只起 brain（minimal mode，無 perception）
 pawai demo start --nav capability # 起導航避障 capability stack（手動 action 場測）
 pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
+pawai demo start --skip-healthcheck # 逃生口：跳過 post-start healthcheck gate（見下）
 ```
 
 預設模式做的事：
@@ -306,6 +312,14 @@ pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 ✅ Gateway reachable from local: http://100.83.109.89:8080
 ✅ Frontend: http://localhost:3000/studio
 ```
+
+**Post-start healthcheck hard gate（Plan B4）**：`start.sh` rc==0 **不算成功**——
+6/4 `.env` CRLF 事故證明 tmux 可能根本沒 spawn 卻回報 `✓ Demo running`。
+`demo start` 在 start.sh 成功後會跑 lane 對應的 healthcheck
+（brain → `brain-studio-lane/scripts/healthcheck.sh`、nav capability →
+`nav-avoidance-lane/scripts/healthcheck.sh`），**pass 才把 lock 轉 `running`**。
+fail → exit 1、lock 留在 `starting` 當證據、印 inspect/cleanup 指引。
+逃生口（healthcheck 本身壞掉時才用）：`--skip-healthcheck`，會印大字警告。
 
 **`JETSON_TAILSCALE_IP` 解析優先序**（`demo start` / `health brain` 共用）：
 1. `PAWAI_TRUST_ENV_IP=1` → 信任 env 值不覆蓋（hand-crafted testing 的逃生口）
@@ -369,22 +383,17 @@ Brain cleanup 只會關閉 `/tmp/pawai-frontend.pid` 指向的本機 frontend，
 
 ### demo school
 
-學校招生 demo 工具。前三段（打招呼 / 自介 / 介紹輔大資管）由 brain 端
-`school_demo_request` mode 自然觸發，CLI 只負責**結尾固定詞 + Go2 比愛心**。
+**[DEPRECATED 2026-06-10，Plan B6]** 5/16 學校招生活動已過，命令已退役——
+`pawai demo school` 現在只回報 retired 訊息並 exit 非零。
 
-```bash
-pawai demo school list             # 印結尾固定詞 + brain 觸發講稿（給主持人）
-pawai demo school ending           # publish FingerHeart + 結尾語音
-pawai demo school ending --dry-run # 只印遠端指令，不 SSH
-```
+ending publisher 的 **wait-for-subscriber-then-publish pattern**（等 DDS
+discovery → publish → spin 1.5s 確保 RELIABLE QoS 投遞，解一次性
+`ros2 topic pub` 約 1/3 機率掉訊息的 race）保留在
+`scripts/school_demo_ending.py`，可在 Jetson 上直接執行、也可作為任何
+「可靠 one-shot publish」需求的參考實作。
 
-`ending` 繞過 brain，直接送 Go2 FingerHeart 動作（`/webrtc_req` api_id 1036）
-+ 結尾語音（`/tts`），保證原文播出、不入對話歷史。內部用 inline python rclpy
-publisher（等 subscriber discovery → publish → spin 1.5s 確保投遞），避免
-一次性 `ros2 topic pub` race 掉訊息。
-
-> brain 端 `school_demo_request`：使用者提到「資管 / 資訊管理」即注入輔大 5
-> 大亮點 facts；含 ASR 同音字錯字容錯（直管系 / 資詢管理系 等也能命中）。
+> brain 端 `school_demo_request` mode（資管同音字容錯等）不受影響，仍在
+> pawai_brain 內。
 
 ---
 
@@ -397,6 +406,14 @@ pawai health brain
 跑 `.claude/skills/brain-studio-lane/scripts/healthcheck.sh`，但由 CLI 注入
 `JETSON_HOST` 與 `JETSON_TAILSCALE_IP`，避免 healthcheck 寫死 hostname 或缺 env。
 Demo 跑起來後用它確認 Gateway 8080、Studio frontend、Jetson tmux 與 brain stack。
+
+`pawai health nav` 同款，跑 `nav-avoidance-lane/scripts/healthcheck.sh`
+（nav capability stack 的對應檢查）。兩者也是 `demo start` post-start hard
+gate（Plan B4）背後呼叫的同一批腳本。
+
+> brain 的 healthcheck.sh 已改 fail-hard：`JETSON_TAILSCALE_IP` 未設時立即
+> 報錯退出（不再 fallback 寫死 IP；nav 的 script 不用此變數）。走 `pawai`
+> 入口會自動注入；裸跑需自行 export。
 
 ---
 
