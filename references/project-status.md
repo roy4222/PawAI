@@ -1,7 +1,36 @@
 # 專案狀態
 
-**最後更新**：2026-06-10 晚（**demo 影片全錄完（含 S1）→ 重構正式啟動**：Phase 1 architecture audit `3b964cb`、六項拍板 D1-D6、master plan + Plan A-E `c57786f`、baseline tag `post-demo-refactor-baseline-2026-06-10`=`b1f0bc4` 已 push）
+**最後更新**：2026-06-11 晚（**第一批重構全執行 + S0 freeze-safe + ISM 詳細 plan + ISM Phase 0 實作 + 地基封閉 smoke**：Plan A-E 全 merge、B-E 上機 smoke 4/4、2 gap 修復、S0-1/S0-2、ISM plan + Phase 0 純模組，main `69ce1b8` 全綠；真機 9/9 closure smoke 通過 → 地基封閉）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/11：第一批重構全執行 + S0 + ISM Phase 0 + 地基封閉
+
+**主軸**：6/10 的五份施工圖（Plan A-E）全部落地 merge，再加 B-E 上機 smoke、2 個 smoke gap 修復、S0 安全硬化（freeze-safe 機制層）、ISM 詳細 plan + Phase 0 純模組實作，最後真機 closure smoke 確認地基乾淨可用。main 全程可部署。
+
+### 1. Plan A-E 全 merge（接 6/10 施工圖）
+- **A** CI guardrails（PR #143-#149）／**B** CLI v2 第一刀 #151／**C** pawai_contracts 抽取 #152／**D** Brain Router Phase 0 #153／**E** Brain Trace v1 #154。`/brain/trace`（contract v2.12）+ `perception_router_enabled` 雙路徑（預設 True）+ pawai_contracts 單源（skill_contract/zh/llm_policy/trace_schema）。
+- **B-E 上機 smoke 4/4 ✅**：deploy `.env` 存活、CRLF gate 攔截、contracts Jetson build、router live 回退、`/brain/trace` suppressed。
+
+### 2. 2 個 smoke gap 修復
+- **Gap 1**（#155）：CLI module build 清單缺 repo-local 依賴 → fresh `deploy --module brain` 必紅；`modules.py` 補閉包 + `test_modules_closure.py` 不變量測試。
+- **Gap 2**（#156）：healthcheck 寫死抓 `pawai_brain:conv_graph` pane → full mode gate 永假失敗；改兩 pane 都抓 + `BRAIN_HC_WAIT_S` 冷啟輪詢。**demo start full mode 首次走通 starting→running**。
+
+### 3. S0 Security Quick Hardening（freeze-safe 機制層）
+- **S0-1**（#157）：CI/hook hardening — secret guard dotted-env(`.env.local`)/Read matcher/py-syntax 去注入/Actions `permissions: contents: read` + `test_secret_guards.sh` 14 assert。
+- **S0-2**（#158）：gateway access-control 機制 — 抽 ROS-free `auth.py`（bind/token/CORS/Origin），**env-gated 預設全關 = 與現行 byte-identical**，真機雙模式驗證（default-off 開放／auth-on 401+403）。
+- **凍結期內刻意延後**（6/18 後）：gateway secure-default flip + 前端/probe token wiring；foxglove clientPublish（Roy 決策，會碰 nav initialpose 工作流 + 凍結腳本）。S0 安全研究三件套 docs 已 commit。
+
+### 4. ISM（Interaction State Machine = Brain v2 互動流程）
+- **詳細 plan**（`5e5795a`）：`docs/superpowers/plans/2026-06-11-plan-ism-interaction-state-machine.md`，遵守 master plan §7 八條凍結約束（感知只產 candidate／優先序鐵律／watchdog／confirm 非黑洞／TTS-ack／demo_phase=operator mask／8 態／ism_enabled flag）。Phase 0 純模組→1 shadow→2 逐 gate family→3 權威化。
+- **Phase 0 實作**（#159）：`interaction_executive/interaction_executive/interaction_state.py` 純 ROS-free 核心（state enum / candidate-decision model / preemption 表 / watchdog）+ 33 測試。**未接 runtime、brain_node 未 import、零行為變更**。Linus 終審抓 3 真 bug + 1 死狀態（watchdog/TTS/plan_id/ERROR_RECOVERY）全修；拒絕「explicit 越過 confirm」的不安全建議。
+
+### 5. 地基封閉 smoke（真機 9/9，main `b2b4a4e`→報告 `69ce1b8`）
+- `docs/runbook/2026-06-11-refactor-foundation-closure-report.md`：.env 存活／三件套 build／demo 進 running／contracts+brain ready／router 預設 True／`/brain/trace` 2 pub+suppressed／gateway default-off 不破壞／ISM Phase 0 未接 runtime（三重佐證）／stop 後 0 殘留。**地基封閉，可進下一階段。**
+
+### 待辦（等 Roy 指示，皆未開始）
+- ISM Phase 1（shadow 觀測）／Studio Evidence Center plan／Plan S1 Robot Control Hardening plan／Plan V（Vision Evidence + Model Benchmark，需 Roy object JSONL）。
 
 ---
 
