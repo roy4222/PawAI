@@ -1496,3 +1496,10 @@ def test_post_sync_guard_fails_loud_when_env_disappears(monkeypatch):
     with pytest.raises(click.ClickException) as exc:
         cli_main._post_sync_guard({"~/elder_and_dog/.env": True})
     assert ".env" in str(exc.value)
+
+
+def test_sync_script_uses_shared_exclude_contract():
+    script = Path(__file__).resolve().parents[3] / "scripts" / "sync_to_jetson.sh"
+    body = script.read_text()
+    assert "--exclude-from=" in body and "tools/sync/rsync-excludes.txt" in body
+    assert "--delete" in body
