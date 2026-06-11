@@ -8,6 +8,33 @@ from . import shell
 from .lock import Lock, is_stale
 
 
+_MODULE_NODE_HINTS: dict[str, str] = {
+    "face": "face_identity_node",
+    "vision(pose+gesture)": "vision_perception",
+    "object": "object_perception",
+    "speech(asr)": "stt_intent_node",
+    "tts": "tts_node",
+    "brain": "brain_node",
+    "executive": "interaction_executive",
+    "conv_graph": "conversation_graph_node",
+    "go2_driver": "go2_driver_node",
+}
+
+
+def gateway_health() -> str:
+    r = shell.run_remote(
+        "curl -s --max-time 3 http://localhost:8080/health || true",
+        timeout=8,
+    )
+    if r.ok and '"status":"ok"' in r.stdout:
+        return "ok " + r.stdout.strip()[:120]
+    return "down / not started"
+
+
+def module_presence(ros_nodes: str) -> list[tuple[str, bool]]:
+    return [(label, hint in ros_nodes) for label, hint in _MODULE_NODE_HINTS.items()]
+
+
 def _read_last_deploy_remote() -> dict | None:
     remote_path = f"{shell.jetson_repo()}/.pawai-last-deploy"
     result = shell.run_remote(
@@ -207,6 +234,11 @@ def print_status(short: bool = False) -> LiveStatus:
                 print(f"  ... +{len(nodes) - 14} more")
         else:
             print("  none")
+
+        print("\nModules (node presence):")
+        for label, present in module_presence(st.ros_nodes):
+            print(f"  {'✅' if present else '— '} {label}")
+        print(f"\nStudio gateway /health: {gateway_health()}")
 
         print("\nJetson git:")
         if st.git:

@@ -771,6 +771,21 @@ def health_brain() -> None:
     sys.exit(rc)
 
 
+@health.command("nav")
+def health_nav() -> None:
+    """Run nav-avoidance-lane healthcheck against Jetson."""
+    script = (
+        shell.repo_root() / ".claude" / "skills" / "nav-avoidance-lane" /
+        "scripts" / "healthcheck.sh"
+    )
+    if not script.exists():
+        raise click.ClickException(f"healthcheck script not found: {script}")
+    env = _build_demo_env()
+    env["JETSON_HOST"] = shell.jetson_host()
+    rc = shell.stream(["bash", str(script)], cwd=shell.repo_root(), env=env)
+    sys.exit(rc)
+
+
 _LANE_HEALTHCHECK = {
     "brain": ".claude/skills/brain-studio-lane/scripts/healthcheck.sh",
     "nav_capability": ".claude/skills/nav-avoidance-lane/scripts/healthcheck.sh",

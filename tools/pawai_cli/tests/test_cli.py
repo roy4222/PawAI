@@ -600,7 +600,8 @@ def test_status_shows_lock_state(monkeypatch):
               start_time=datetime.now(timezone.utc).isoformat())
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status.Lock.read", return_value=lk), \
-         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "alice" in result.output.lower()
@@ -643,7 +644,8 @@ def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status._read_last_deploy_remote", return_value=last_deploy), \
          patch("pawai_cli.status._current_branch", return_value="feat/new"), \
-         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "mismatch" in result.output.lower() or "feat/old" in result.output
@@ -657,7 +659,8 @@ def test_status_shows_stale_running_warning(monkeypatch):
               state="running", start_time=old)
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status.Lock.read", return_value=lk), \
-         patch("pawai_cli.status.collect_go2_drivers", return_value=[]):
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"):
         runner = CliRunner()
         result = runner.invoke(cli, ["status"])
     assert "stale" in result.output.lower()
@@ -703,7 +706,8 @@ def test_status_warns_when_driver_running_without_lock():
     )]
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status.Lock.read", return_value=None), \
-         patch("pawai_cli.status.collect_go2_drivers", return_value=procs):
+         patch("pawai_cli.status.collect_go2_drivers", return_value=procs), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"):
         result = CliRunner().invoke(cli, ["status"])
     assert "pid=12345" in result.output
     assert "kirk7" in result.output
@@ -726,7 +730,8 @@ def test_status_does_not_warn_on_user_mismatch_when_lock_present():
     )]
     with patch("pawai_cli.status.collect", return_value=_reachable_live_status()), \
          patch("pawai_cli.status.Lock.read", return_value=lk), \
-         patch("pawai_cli.status.collect_go2_drivers", return_value=procs):
+         patch("pawai_cli.status.collect_go2_drivers", return_value=procs), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"):
         result = CliRunner().invoke(cli, ["status"])
     # Driver is listed but no mismatch warning is emitted.
     assert "pid=12345" in result.output
@@ -1605,3 +1610,18 @@ def test_demo_start_skip_healthcheck_prints_loud_banner(monkeypatch):
         f"Expected 'HEALTHCHECK SKIPPED' in output, got:\n{result.output}"
     assert len(transition_calls) == 1, \
         f"Expected lock to be transitioned to running, got {transition_calls}"
+
+
+# ─── Plan B5: status module presence + health nav ─────────────────────────
+
+def test_module_presence_maps_nodes():
+    from pawai_cli import status as st_mod
+    nodes = "/face_identity_node\n/brain_node\n/go2_driver_node"
+    got = dict(st_mod.module_presence(nodes))
+    assert got["face"] and got["brain"] and got["go2_driver"]
+    assert not got["object"]
+
+
+def test_health_nav_command_registered():
+    result = CliRunner().invoke(cli, ["health", "nav", "--help"])
+    assert result.exit_code == 0
