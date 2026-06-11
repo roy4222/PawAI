@@ -151,6 +151,9 @@ jobs:
           # is a pure dict module, no ROS imports).
           PYTHONPATH=pawai_contracts:object_perception pytest pawai_contracts/test/ \
             -v --tb=short
+          # Invocation 8 (S0 hardening, Tier 1): gateway auth primitives (ROS-free).
+          PYTHONPATH=pawai-studio/gateway pytest pawai-studio/gateway/test_auth.py \
+            -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

@@ -26,7 +26,7 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import rclpy
@@ -59,10 +59,16 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".." / "speech_processor" / "speech_processor"))
 from intent_classifier import IntentClassifier
 
+# Access-control policy (S0 hardening) — pure module, env-gated, OFF by default.
+from auth import (
+    load_auth_config, requires_token, token_ok, token_query_ok, origin_ok,
+)
+
 # ── Config ───────────────────────────────────────────────────────
 import os
 
 PORT = int(os.getenv("GATEWAY_PORT", "8080"))
+AUTH = load_auth_config()
 # E.Mac/School pre-stage 2026-05-11: ASR_URL 改 env override 避免學校 Mac → Jetson
 # 時 127.0.0.1 指 Mac 自己。沿用 PAWAI_ENABLE_S2TWP（line 57）env-aware pattern。
 # 主環變 PAWAI_ASR_URL，向下相容 ASR_URL。
@@ -875,14 +881,43 @@ app = FastAPI(title="PawAI Studio Gateway", lifespan=lifespan)
 # Gateway at Jetson IP (192.168.0.222:8080). WebSocket bypasses CORS so
 # /ws/* worked, but /api/text_input was blocked by browser preflight.
 # 5/7 night fix per Roy's "Brain 文字通道未連線" report.
-# Demo internal network — allow_origins=["*"] is acceptable risk.
+# S0 hardening: allow_origins is the GATEWAY_ALLOWED_ORIGINS allowlist when set,
+# else the legacy ["*"] (unchanged demo behaviour). See auth.py.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=AUTH.cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Access control (S0 hardening, env-gated — OFF unless env set) ──────────
+@app.middleware("http")
+async def _access_control(request, call_next):
+    """Browser-Origin allowlist + Bearer token on state-changing methods.
+    Both checks are no-ops unless GATEWAY_ALLOWED_ORIGINS / GATEWAY_AUTH_TOKEN
+    are set, so default behaviour is byte-identical to the pre-hardening gateway.
+    OPTIONS (CORS preflight) and GET/HEAD are never token-gated."""
+    if AUTH.origin_check_enabled:
+        if not origin_ok(request.headers.get("origin"), AUTH.allowed_origins):
+            return JSONResponse({"error": "origin not allowed"}, status_code=403)
+    if AUTH.auth_enabled and requires_token(request.method):
+        if not token_ok(request.headers.get("authorization"), AUTH.token):
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+async def _ws_authorized(websocket) -> bool:
+    """WebSocket-handshake guard mirroring _access_control: Origin allowlist +
+    `?token=` query param. No-op unless the matching env is set."""
+    if AUTH.origin_check_enabled:
+        if not origin_ok(websocket.headers.get("origin"), AUTH.allowed_origins):
+            return False
+    if AUTH.auth_enabled:
+        if not token_query_ok(websocket.query_params.get("token"), AUTH.token):
+            return False
+    return True
 
 
 # ── Static & Health ─────────────────────────────────────────────
@@ -1179,6 +1214,9 @@ async def get_nav_control():
 @app.websocket("/ws/events")
 async def ws_events(ws: WebSocket):
     """Broadcast ROS2 perception events to all connected browsers."""
+    if not await _ws_authorized(ws):
+        await ws.close(code=1008)
+        return
     await ws_manager.connect(ws)
     try:
         while True:
@@ -1192,6 +1230,9 @@ async def ws_events(ws: WebSocket):
 @app.websocket("/ws/video/{source}")
 async def ws_video(ws: WebSocket, source: str):
     """Stream JPEG frames for a specific video source."""
+    if not await _ws_authorized(ws):
+        await ws.close(code=1008)
+        return
     if not _VIDEO_AVAILABLE or video_clients is None:
         await ws.close(code=4003, reason="Video streaming not available")
         return
@@ -1212,6 +1253,9 @@ async def ws_video(ws: WebSocket, source: str):
 @app.websocket("/ws/text")
 async def ws_text(ws: WebSocket):
     """Text-only mode: receive text, classify intent, publish to ROS2."""
+    if not await _ws_authorized(ws):
+        await ws.close(code=1008)
+        return
     await ws.accept()
     try:
         while True:
@@ -1259,6 +1303,9 @@ async def ws_text(ws: WebSocket):
 
 @app.websocket("/ws/speech")
 async def ws_speech(ws: WebSocket):
+    if not await _ws_authorized(ws):
+        await ws.close(code=1008)
+        return
     await ws.accept()
     try:
         while True:
@@ -1333,4 +1380,17 @@ async def ws_speech(ws: WebSocket):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=PORT, ws="wsproto")
+    # S0 hardening: bind host from GATEWAY_HOST (default 0.0.0.0 — unchanged).
+    # Loud startup banner so an unauthenticated, all-interfaces gateway is never
+    # a silent default (findings GW-01/EXP-01).
+    if not AUTH.auth_enabled:
+        print(
+            f"[gateway] ⚠ SECURITY: no GATEWAY_AUTH_TOKEN — state-changing "
+            f"endpoints are UNAUTHENTICATED (host={AUTH.host}). Set "
+            f"GATEWAY_AUTH_TOKEN + GATEWAY_ALLOWED_ORIGINS to lock down.",
+            flush=True,
+        )
+    else:
+        print(f"[gateway] auth ON (token required on POST, host={AUTH.host}, "
+              f"origins={list(AUTH.allowed_origins) or 'any'})", flush=True)
+    uvicorn.run(app, host=AUTH.host, port=PORT, ws="wsproto")
