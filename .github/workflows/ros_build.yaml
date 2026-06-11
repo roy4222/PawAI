@@ -89,6 +89,23 @@ jobs:
             pawai_brain/test/test_world_snapshot.py \
             pawai_brain/test/test_world_state_builder.py \
             -v --tb=short
+          # Invocation 3 (2026-06-10 Plan A, Tier 1): interaction_executive —
+          # CI-safe subset only. Excluded from CI, run locally instead: 4 files
+          # importing rclpy directly (attention_integration / brain_rules /
+          # mini_e2e / nav_executor) + 3 files needing ROS modules anyway
+          # (idle_mvp: rclpy via brain_node; safety_layer: rclpy via
+          # world_state; world_state: std_msgs direct + rclpy via
+          # world_state module). See docs/superpowers/plans/
+          # 2026-06-10-plan-a-ci-guardrails.md. Isolated PYTHONPATH avoids the
+          # top-level 'test' package collision.
+          PYTHONPATH=interaction_executive pytest \
+            interaction_executive/test/test_attention_machine.py \
+            interaction_executive/test/test_pending_confirm.py \
+            interaction_executive/test/test_skill_contract.py \
+            interaction_executive/test/test_skill_contract_demo_fields.py \
+            interaction_executive/test/test_skill_queue.py \
+            interaction_executive/test/test_state_machine.py \
+            -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
