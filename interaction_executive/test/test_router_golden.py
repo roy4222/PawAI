@@ -156,7 +156,7 @@ def _normalize(published: list[str]) -> list[dict]:
     out = []
     for raw in published:
         d = json.loads(raw)
-        for vol in ("plan_id", "created_at", "session_id"):
+        for vol in ("plan_id", "created_at", "session_id", "decision_id"):
             d.pop(vol, None)
         for step in d.get("steps", []):
             step.pop("step_id", None)
