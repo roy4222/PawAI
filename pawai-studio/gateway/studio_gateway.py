@@ -104,6 +104,9 @@ TOPIC_MAP: dict[str, str] = {
     "/brain/skill_result":             "brain:skill_result",
     "/brain/conversation_trace":        "brain:conversation_trace",
     "/brain/conversation_trace_shadow": "brain:conversation_trace_shadow",
+    # Plan E: decision-chain trace (bridge ONLY — persistence/export/panel
+    # belong to the Studio Evidence Center plan, not here).
+    "/brain/trace":                     "brain:trace",
 }
 
 FACE_THROTTLE_S = 0.5  # 10Hz → 2Hz
