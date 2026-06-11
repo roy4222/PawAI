@@ -149,18 +149,24 @@ Deploy complete.
 - **`-y` 不能搶別人 lock** —— 訊息：`-y does not override another user's demo. Use --force.`
 - **只有 `--force` 能在別人 running 時繞過 prompt**——而且必須先口頭溝通
 
-### 2.5 Phase 1 新行為：rsync 自動排除密鑰
+### 2.5 rsync 排除密鑰：保證來自契約檔 + post-sync guard（Plan B2 強化）
 
-下列檔名 **不會** 被推上 Jetson（避免 `.env.local` 裡的 `OPENROUTER_KEY` 等 secret 跨帳號漏出）：
+`.env` / `.env.*` / `.env.local` / `.ssh/` 等檔案 **不會** 被推上或刪除於 Jetson。
+這個保證有兩層（2026-06-10 `~/sync` 刪掉 Jetson `.env` 事故後建立）：
 
-```
-.env
-.env.*
-.env.local
-.ssh/
-```
+1. **Exclude 契約檔**：`tools/sync/rsync-excludes.txt` 是唯一真相源——
+   `pawai jetson deploy` 與 `scripts/sync_to_jetson.sh`（手動 sync）共用同一份，
+   測試（`test_rsync_excludes_file_has_protected_entries`）把守保命條目不可少。
+2. **Post-sync guard**：sync 之後（成功或失敗皆然）檢查 Jetson 上的
+   `.env` / `.env.local` 是否還在；sync 前存在、sync 後消失 → deploy 立刻
+   fail-loud 並印還原 SOP（`cp .env.local .env`）。
 
 每個人本機 `.env.local` 各自保留，**Jetson 端的 `.env` 由 Jetson owner 管理**，跟你的 .env.local 不衝突。
+
+> ⚠️ **`~/sync` 個人腳本已降為 opt-in**（優先序反轉）：預設一律用內建 audited
+> rsync。要用自己的 `~/sync once` 必須設 `PAWAI_SYNC_CMD=1`，輸出會印
+> `⚠ UNAUDITED` 警告——它沒有 exclude 契約，6/10 事故就是它造成的。
+> post-sync guard 對這條路徑同樣生效。
 
 ### 2.6 deploy 完該檢查什麼
 
@@ -478,6 +484,9 @@ CLI 的 user-actionable failure 字串對照。**不包含**正常 progress mess
 | `⚠ alice@xxx is running a demo on branch=X` + `Continue? [force/cancel]` | `jetson deploy` | 跟 alice 溝通；同意後輸入 `force` |
 | `` `-y` does not override another user's demo. Use --force. `` (exit 2) | `jetson deploy -y` | 拿掉 `-y`、加 `--force`、先溝通 |
 | `Existing lock is yours ({state}). Restarting demo.` | `demo start` | 正常訊息，CLI 會自動清理+重啟，無需動作 |
+| `✗ Demo processes were launched but healthcheck FAILED` (exit 1) | `demo start` | start.sh 起來了但 lane healthcheck 沒過（6/4 類假成功被擋下）；lock 留在 `starting` 當證據。`pawai logs <module>` / `pawai status` 查因 → `pawai demo stop` 清理。healthcheck 本身壞掉才用 `--skip-healthcheck` |
+| `⚠⚠ HEALTHCHECK SKIPPED (--skip-healthcheck)` | `demo start` | 你自己選的逃生口：只剩 start.sh rc 一層證據，demo 可能默壞，務必手動驗 |
+| `PROTECTED FILE(S) DELETED BY SYNC: ...` | `jetson deploy` | sync 把 Jetson 的 `.env`/`.env.local` 刪了（6/10 事故類）。照訊息還原：`ssh $JETSON_HOST 'cd ~/elder_and_dog && cp .env.local .env'` |
 | `Another user is in demo: alice@xxx branch=X state=Y` + `Take over? [force/cancel]` | `demo start` | 跟 alice 溝通；同意後輸入 `force` |
 | `` `-y` does not override another user's lock. Use --force to take over. `` (exit 2) | `demo start -y` | 拿掉 `-y`、加 `--force`、先溝通 |
 | `Failed to acquire lock after 3 retries…` (exit 2) | `demo start` | **不要重跑**。訊息會印出 `ssh $JETSON_HOST 'lsof /tmp/pawai-demo-lock.flock; cat .pawai-demo-lock'` 等可直接複製的指令；通常原因是上一個 start.sh 還沒跑完 |

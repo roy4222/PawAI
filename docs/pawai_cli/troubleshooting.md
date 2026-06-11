@@ -384,8 +384,17 @@ ls scripts/start_*.sh scripts/clean_*.sh
 
 ### F3. 我有自己的 ~/sync 腳本
 
-`pawai jetson deploy` 會優先用 `~/sync once`（如果存在且 executable），
-否則 fallback 到內建 rsync。內建 rsync exclude 已涵蓋 cache 目錄，多數情況不需要自訂腳本。
+2026-06-10 起 `~/sync` **不再有優先權**（當天它把 Jetson 的 `.env` 刪了，
+demo 假成功根因鏈之一）。`pawai jetson deploy` 預設一律用內建 audited rsync
+（exclude 契約：`tools/sync/rsync-excludes.txt`）。仍要用自己的腳本：
+
+```bash
+PAWAI_SYNC_CMD=1 pawai jetson deploy --module brain
+```
+
+會印 `⚠ UNAUDITED` 警告，且 post-sync guard 照樣檢查 `.env`/`.env.local`
+沒被刪（被刪會 fail-loud + 印還原 SOP）。多數情況不需要自訂腳本；
+手動 sync 走 `scripts/sync_to_jetson.sh`（共用 exclude 契約）。
 
 ---
 
