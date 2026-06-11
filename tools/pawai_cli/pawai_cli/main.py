@@ -1073,102 +1073,18 @@ def demo_stop(force: bool) -> None:
     sys.exit(rc)
 
 
-# ─── pawai demo school (學校招生 demo) ─────────────────────────────────
-# 2026-05-16: 配合 brain school_demo_request mode 設計。Brain 端負責由語音/
-# 文字自然觸發前三段（打招呼 / 自介 / 介紹輔大資管）；CLI 僅保留結尾固定
-# 詞的手動觸發，繞過 brain 直接 publish /tts，保證原文播出、不入對話歷史。
+# ─── pawai demo school（已退役）──────────────────────────────────────────
+# 2026-05-16 招生活動產物，活動已過（Plan B6 退役）。ending publisher 的
+# wait-for-subscriber-then-publish pattern（解 DDS one-shot-pub race）保留在
+# scripts/school_demo_ending.py，可重用。
 
-SCHOOL_DEMO_ENDING_TEXT = "最後~祝各位考生面試順利！請記得，輔大資管系填寫第一志願喔！"
-FINGER_HEART_API_ID = 1036  # Go2 sport action「比愛心」
-
-
-@demo.group("school")
-def school() -> None:
-    """學校招生 demo 工具（手動結尾 + 講稿提示）。"""
-
-
-@school.command("list")
-def school_list() -> None:
-    """印出結尾固定詞與 brain 觸發提示（給主持人對講稿用）。"""
-    click.echo("結尾固定詞（CLI 手動觸發，含 Go2 比愛心動作）：")
-    click.echo(f"  {SCHOOL_DEMO_ENDING_TEXT}")
-    click.echo("")
-    click.echo("Brain 觸發提示（直接對 PawAI 說／用 Studio 送文字）：")
-    click.echo("  打招呼：「跟現場家長和學生打個招呼」")
-    click.echo("  自介：「介紹一下你自己」")
-    click.echo("  輔大資管：「介紹輔大資管系的特色」")
-
-
-def _build_school_ending_remote_cmd() -> str:
-    """Compose the remote command for the ending: FingerHeart + /tts line.
-
-    Uses an inline python3 rclpy publisher rather than two one-shot
-    `ros2 topic pub` calls. A one-shot `ros2 topic pub` (even with `-w 1`)
-    tears the publisher down the instant publish() returns — DDS has not
-    necessarily flushed the message to the wire, so the /tts line is
-    silently dropped maybe 1-in-3 times (observed live 2026-05-15). The
-    python publisher instead: waits for both subscriptions to be discovered,
-    publishes, then spins 1.5s so the RELIABLE-QoS write actually lands
-    before the process exits.
-
-    Uses shell.jetson_repo() so it follows the repo-wide JETSON_REPO env.
-    json.dumps(ensure_ascii=False) embeds the 中文 ending line as a valid
-    python str literal; shlex.quote wraps the whole script for zsh.
-    """
-    repo = shell.jetson_repo()
-    data_literal = json.dumps(SCHOOL_DEMO_ENDING_TEXT, ensure_ascii=False)
-    script = "\n".join([
-        "import sys, time, rclpy",
-        "from std_msgs.msg import String",
-        "from go2_interfaces.msg import WebRtcReq",
-        "rclpy.init()",
-        "n = rclpy.create_node('pawai_school_ending')",
-        "heart = n.create_publisher(WebRtcReq, '/webrtc_req', 10)",
-        "tts = n.create_publisher(String, '/tts', 10)",
-        "deadline = time.time() + 15.0",
-        "while time.time() < deadline and "
-        "(heart.get_subscription_count() == 0 or tts.get_subscription_count() == 0):",
-        "    rclpy.spin_once(n, timeout_sec=0.1)",
-        "tts_subs = tts.get_subscription_count()",
-        "heart_subs = heart.get_subscription_count()",
-        "if tts_subs == 0:",
-        "    print('ERROR: no /tts subscriber discovered after 15s; not publishing', "
-        "file=sys.stderr)",
-        "    n.destroy_node(); rclpy.shutdown(); sys.exit(20)",
-        "if heart_subs == 0:",
-        "    print('WARN: no /webrtc_req subscriber discovered; publishing speech only', "
-        "file=sys.stderr)",
-        f"heart.publish(WebRtcReq(id=0, topic='rt/api/sport/request', "
-        f"api_id={FINGER_HEART_API_ID}, parameter='', priority=0))",
-        f"msg = String(); msg.data = {data_literal}",
-        "tts.publish(msg)",
-        "flush = time.time() + 1.5",
-        "while time.time() < flush:",
-        "    rclpy.spin_once(n, timeout_sec=0.1)",
-        "n.destroy_node(); rclpy.shutdown()",
-        "print(f'school ending published (tts_subs={tts_subs}, heart_subs={heart_subs})')",
-    ])
-    return (
-        f"cd {shlex.quote(repo)} && "
-        f"source /opt/ros/humble/setup.zsh && "
-        f"source install/setup.zsh && "
-        f"python3 -c {shlex.quote(script)}"
+@demo.command("school")
+def demo_school() -> None:
+    """[DEPRECATED 2026-06-10] 5/16 school demo is over."""
+    raise click.ClickException(
+        "demo school retired (event passed 5/16). "
+        "The ending publisher lives in scripts/school_demo_ending.py if ever needed."
     )
-
-
-@school.command("ending")
-@click.option("--dry-run", is_flag=True, help="只印將執行的指令，不實際 SSH。")
-def school_ending(dry_run: bool) -> None:
-    """Publish 固定結尾詞到 /tts，繞過 brain。"""
-    ros_cmd = _build_school_ending_remote_cmd()
-    if dry_run:
-        click.echo(ros_cmd)
-        return
-    res = shell.run_remote(ros_cmd, timeout=40)
-    if not res.ok:
-        click.echo(f"[school ending] SSH failed (code {res.code}): {res.stderr}", err=True)
-        sys.exit(res.code or 1)
-    click.echo("[school ending] published.")
 
 
 # ─── pawai net wifi ──────────────────────────────────────────────────────

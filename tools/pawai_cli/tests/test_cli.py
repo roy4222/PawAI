@@ -1346,71 +1346,34 @@ def test_load_env_missing_file_is_silent(tmp_path):
     _load_env_file(tmp_path / "does-not-exist.env", override=False)
 
 
-# ─── 學校招生 demo: pawai demo school subgroup ─────────────────────────
+# ─── 學校招生 demo（已退役，Plan B6）────────────────────────────────────
+
+SCHOOL_SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "school_demo_ending.py"
 
 
-def test_school_list_prints_ending_and_cues() -> None:
-    """`pawai demo school list` 必須印結尾固定詞與三段 brain cue 提示。"""
-    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
-    result = CliRunner().invoke(cli, ["demo", "school", "list"])
-    assert result.exit_code == 0, result.output
-    assert SCHOOL_DEMO_ENDING_TEXT in result.output
-    assert "輔大資管系的特色" in result.output
-    assert "介紹一下你自己" in result.output
+def test_demo_school_retired() -> None:
+    """`pawai demo school` 已退役：必須報錯並指向保留的腳本。"""
+    result = CliRunner().invoke(cli, ["demo", "school"])
+    assert result.exit_code != 0
+    assert "retired" in result.output
+    assert "scripts/school_demo_ending.py" in result.output
 
 
-def test_school_ending_dry_run_does_not_invoke_remote() -> None:
-    """`--dry-run` 必須印出 python publisher 整段且 0 次 SSH。"""
-    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
-    with patch.object(shell, "run_remote") as mock_remote:
-        result = CliRunner().invoke(cli, ["demo", "school", "ending", "--dry-run"])
-    assert result.exit_code == 0, result.output
-    assert mock_remote.call_count == 0
-    assert "python3 -c" in result.output
-    assert "/tts" in result.output
-    assert SCHOOL_DEMO_ENDING_TEXT in result.output
-
-
-def test_school_ending_invokes_remote_with_correct_command() -> None:
-    """無 dry-run 時必須呼叫 shell.run_remote 一次，且 command 含關鍵片段。"""
-    from pawai_cli.main import SCHOOL_DEMO_ENDING_TEXT
-    fake_result = shell.Result(code=0, stdout="", stderr="")
-    with patch.object(shell, "run_remote", return_value=fake_result) as mock_remote:
-        result = CliRunner().invoke(cli, ["demo", "school", "ending"])
-    assert result.exit_code == 0, result.output
-    assert mock_remote.call_count == 1
-    sent_cmd = mock_remote.call_args.args[0]
-    assert "setup.zsh" in sent_cmd
-    assert "setup.bash" not in sent_cmd
-    assert "/tts" in sent_cmd
-    assert SCHOOL_DEMO_ENDING_TEXT in sent_cmd
-    assert shell.jetson_repo() in sent_cmd
-    # Inline python rclpy publisher — NOT a one-shot `ros2 topic pub`. A
-    # one-shot pub tears down before DDS flushes the wire; the python path
-    # waits for discovery then spins to guarantee delivery.
-    assert "python3 -c" in sent_cmd
-    assert "ros2 topic pub" not in sent_cmd
-    # Load-bearing robustness markers: discovery wait + post-publish flush.
-    assert "get_subscription_count" in sent_cmd
-    assert "no /tts subscriber discovered" in sent_cmd
-    assert "sys.exit(20)" in sent_cmd
-    assert "time.time() + 15.0" in sent_cmd
-
-
-def test_school_ending_includes_finger_heart_action() -> None:
-    """ending 必須先 publish FingerHeart (api_id 1036) 到 /webrtc_req。"""
-    from pawai_cli.main import FINGER_HEART_API_ID
-    fake_result = shell.Result(code=0, stdout="", stderr="")
-    with patch.object(shell, "run_remote", return_value=fake_result) as mock_remote:
-        result = CliRunner().invoke(cli, ["demo", "school", "ending"])
-    assert result.exit_code == 0, result.output
-    sent_cmd = mock_remote.call_args.args[0]
-    assert FINGER_HEART_API_ID == 1036
-    assert "WebRtcReq" in sent_cmd
-    assert "/webrtc_req" in sent_cmd
-    assert "api_id=1036" in sent_cmd
-    # FingerHeart must precede the /tts line so the action and speech overlap.
-    assert sent_cmd.index("/webrtc_req") < sent_cmd.index("/tts")
+def test_school_ending_script_preserves_dds_pattern() -> None:
+    """Extracted script keeps the wait-for-subscriber-then-publish pattern —
+    the real DDS one-shot-pub race fix is the artifact B6 exists to preserve."""
+    import ast
+    body = SCHOOL_SCRIPT.read_text()
+    ast.parse(body)  # must parse without rclpy installed
+    # Load-bearing robustness markers (migrated from the retired CLI tests):
+    assert "get_subscription_count" in body
+    assert "time.time() + 15.0" in body            # discovery wait window
+    assert "time.time() + 1.5" in body             # post-publish flush spin
+    assert "no /tts subscriber discovered" in body
+    assert "FINGER_HEART_API_ID = 1036" in body
+    assert "/webrtc_req" in body and "/tts" in body
+    # FingerHeart must precede the /tts publish so action and speech overlap.
+    assert body.index("heart.publish") < body.index("tts.publish(msg)")
 
 
 def test_load_env_local_overrides_env(tmp_path, monkeypatch):
