@@ -4,7 +4,10 @@ import platform
 from click.testing import CliRunner
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
+import click
+import pytest
 from unittest.mock import patch
 
 from pawai_cli.main import _install_hint_map, _ssh_config_has_host, cli
@@ -782,8 +785,8 @@ def test_deploy_prompts_on_active_other_lock(monkeypatch):
     assert "alice" in result.output.lower()
 
 
-def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path):
-    """rsync invocation must include repo-relative excludes for secrets."""
+def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path, monkeypatch):
+    """rsync invocation must use --exclude-from= pointing at the contract file."""
     from pawai_cli import main as cli_main
     from pawai_cli.shell import Result
 
@@ -793,10 +796,14 @@ def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path):
         captured_argv.append(list(argv))
         return 0
 
+    monkeypatch.delenv("PAWAI_SYNC_CMD", raising=False)
+
     with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
          patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
          patch("pawai_cli.main.shell.jetson_host", return_value="jetson"), \
          patch("pawai_cli.main.shell.jetson_repo", return_value="/home/jetson/elder_and_dog"), \
+         patch("pawai_cli.main._post_sync_guard", return_value=None), \
+         patch("pawai_cli.main._snapshot_protected", return_value={}), \
          patch("pathlib.Path.home", return_value=tmp_path):
         code, method = cli_main._do_rsync_and_build(
             root=Path("/tmp/repo"),
@@ -810,15 +817,8 @@ def test_jetson_deploy_rsync_excludes_env_and_ssh(tmp_path):
     assert method == "rsync"
     rsync_argv = next((a for a in captured_argv if a and a[0] == "rsync"), None)
     assert rsync_argv is not None, f"no rsync invocation seen: {captured_argv}"
-    excludes = [arg for arg in rsync_argv if arg.startswith("--exclude=")]
-    required = {
-        "--exclude=.env",
-        "--exclude=.env.*",
-        "--exclude=.env.local",
-        "--exclude=.ssh/",
-    }
-    missing = required - set(excludes)
-    assert not missing, f"missing rsync excludes: {missing}"
+    exclude_from_args = [arg for arg in rsync_argv if arg.startswith("--exclude-from=")]
+    assert exclude_from_args, f"expected --exclude-from= arg in rsync call: {rsync_argv}"
 
 
 EXCLUDES_FILE = Path(__file__).resolve().parents[3] / "tools" / "sync" / "rsync-excludes.txt"
@@ -1433,3 +1433,66 @@ def test_face_enroll_requires_name():
     # 缺 --person-name 應報錯（exit != 0）
     res = CliRunner().invoke(cli, ["face", "enroll"])
     assert res.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Plan B2 — 6/10 .env-deletion regression tests
+# ---------------------------------------------------------------------------
+
+def test_deploy_prefers_builtin_rsync_even_when_home_sync_exists(tmp_path, monkeypatch):
+    """6/10 incident regression: ~/sync exists+executable → MUST still use rsync."""
+    from pawai_cli import main as cli_main
+
+    sync = tmp_path / "sync"
+    sync.write_text("#!/bin/sh\nexit 0\n")
+    sync.chmod(0o755)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("PAWAI_SYNC_CMD", raising=False)
+
+    calls = []
+    monkeypatch.setattr(cli_main.shell, "stream", lambda argv, **kw: calls.append(list(argv)) or 0)
+    monkeypatch.setattr(cli_main.shell, "stream_remote", lambda cmd, **kw: 0)
+    monkeypatch.setattr(cli_main, "_post_sync_guard", lambda pre: None)
+    monkeypatch.setattr(cli_main, "_snapshot_protected", lambda: {})
+
+    code, method = cli_main._do_rsync_and_build(
+        root=Path("/repo"), packages=[], no_sync=False, no_build=True, module_key="x"
+    )
+    assert method == "rsync"
+    assert calls and calls[0][0] == "rsync"
+    assert any(str(a).startswith("--exclude-from=") for a in calls[0])
+
+
+def test_deploy_opt_in_external_sync_requires_env(tmp_path, monkeypatch):
+    """PAWAI_SYNC_CMD=1 + ~/sync exists → use external sync."""
+    from pawai_cli import main as cli_main
+
+    sync = tmp_path / "sync"
+    sync.write_text("#!/bin/sh\nexit 0\n")
+    sync.chmod(0o755)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("PAWAI_SYNC_CMD", "1")
+
+    calls = []
+    monkeypatch.setattr(cli_main.shell, "stream", lambda argv, **kw: calls.append(list(argv)) or 0)
+    monkeypatch.setattr(cli_main, "_post_sync_guard", lambda pre: None)
+    monkeypatch.setattr(cli_main, "_snapshot_protected", lambda: {})
+
+    code, method = cli_main._do_rsync_and_build(
+        root=Path("/repo"), packages=[], no_sync=False, no_build=True, module_key="x"
+    )
+    assert method == "sync-once"
+
+
+def test_post_sync_guard_fails_loud_when_env_disappears(monkeypatch):
+    """Guard must raise ClickException when a previously-present file is gone."""
+    from pawai_cli import main as cli_main
+
+    monkeypatch.setattr(
+        cli_main.shell,
+        "run_remote",
+        lambda cmd, **kw: SimpleNamespace(ok=True, stdout="MISSING\n", stderr="", code=0),
+    )
+    with pytest.raises(click.ClickException) as exc:
+        cli_main._post_sync_guard({"~/elder_and_dog/.env": True})
+    assert ".env" in str(exc.value)

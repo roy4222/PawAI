@@ -505,47 +505,96 @@ def jetson() -> None:
     """Jetson deployment helpers."""
 
 
+PROTECTED_REMOTE_FILES = (".env", ".env.local")
+
+
+def _snapshot_protected() -> dict[str, bool]:
+    """Record which protected files exist on Jetson BEFORE sync.
+
+    Returns a mapping of remote absolute paths → existed-bool.
+    Used by _post_sync_guard to detect deletions caused by rsync --delete.
+    """
+    repo = shell.jetson_repo()
+    out: dict[str, bool] = {}
+    for name in PROTECTED_REMOTE_FILES:
+        path = f"{repo}/{name}"
+        r = shell.run_remote(f"test -f {path} && echo OK || echo MISSING", timeout=8)
+        out[path] = bool(r.ok and "OK" in r.stdout)
+    return out
+
+
+def _post_sync_guard(pre: dict[str, bool]) -> None:
+    """Fail loud if any protected file that existed pre-sync is gone post-sync.
+
+    Raises click.ClickException with a clear recovery SOP if any file that
+    was present before the sync is now missing.  This catches the 6/10-style
+    incident where rsync --delete silently removed Jetson's .env.
+    """
+    deleted = []
+    for path, existed in pre.items():
+        if not existed:
+            continue
+        r = shell.run_remote(f"test -f {path} && echo OK || echo MISSING", timeout=8)
+        if not (r.ok and "OK" in r.stdout):
+            deleted.append(path)
+    if deleted:
+        raise click.ClickException(
+            "PROTECTED FILE(S) DELETED BY SYNC: " + ", ".join(deleted) +
+            "\n  Restore now:  ssh $JETSON_HOST 'cd ~/elder_and_dog && cp .env.local .env'"
+            "\n  (CLAUDE.md §Demo 啟動/.env 環境陷阱 has the full SOP.)"
+        )
+
+
 def _do_rsync_and_build(root: Path, packages: list[str], no_sync: bool, no_build: bool,
                          module_key: str) -> tuple[int, str]:
-    """Perform rsync and/or colcon build. Returns (exit_code, sync_method)."""
+    """Perform rsync and/or colcon build. Returns (exit_code, sync_method).
+
+    Priority (6/10 incident fix — Plan B2):
+      DEFAULT: audited builtin rsync with --exclude-from=tools/sync/rsync-excludes.txt.
+      OPT-IN:  set PAWAI_SYNC_CMD=1 AND have ~/sync executable → use external sync.
+               Prints a loud warning; ~/sync is unaudited and caused the 6/10 .env deletion.
+
+    After any sync path, _post_sync_guard checks that .env/.env.local were not deleted.
+    """
     if not no_sync:
+        pre = _snapshot_protected()
+
         sync_once = Path.home() / "sync"
-        if sync_once.exists() and os.access(sync_once, os.X_OK):
-            print("Sync: ~/sync once")
+        use_external = (
+            os.environ.get("PAWAI_SYNC_CMD") == "1"
+            and sync_once.exists()
+            and os.access(sync_once, os.X_OK)
+        )
+
+        if use_external:
+            print("⚠ UNAUDITED external sync (PAWAI_SYNC_CMD=1) — ~/sync once")
             code = shell.stream([str(sync_once), "once"], cwd=root)
             if code != 0:
+                # Guard even on failure: a broken script may delete .env AND
+                # exit nonzero (the 6/10 incident class) — name the loss loudly
+                # instead of hiding it behind a generic exit code.
+                _post_sync_guard(pre)
                 return code, "sync-once"
             sync_method = "sync-once"
         else:
             print("Sync: rsync whole repo")
             dest = f"{shell.jetson_host()}:{shell.jetson_repo().rstrip('/')}/"
+            excludes = root / "tools" / "sync" / "rsync-excludes.txt"
             argv = [
                 "rsync",
                 "-az",
                 "--delete",
-                "--exclude=.git/",
-                "--exclude=.env",
-                "--exclude=.env.*",
-                "--exclude=.env.local",
-                "--exclude=.ssh/",
-                "--exclude=build/",
-                "--exclude=install/",
-                "--exclude=log/",
-                "--exclude=__pycache__/",
-                "--exclude=.pytest_cache/",
-                "--exclude=.venv/",
-                "--exclude=node_modules/",
-                "--exclude=.next/",
-                "--exclude=.ruff_cache/",
-                "--exclude=.mypy_cache/",
-                "--exclude=.DS_Store",
+                f"--exclude-from={excludes}",
                 f"{root}/",
                 dest,
             ]
             code = shell.stream(argv)
             if code != 0:
+                _post_sync_guard(pre)
                 return code, "rsync"
             sync_method = "rsync"
+
+        _post_sync_guard(pre)
     else:
         sync_method = "none"
 
