@@ -9,6 +9,12 @@
 build/
 install/
 log/
+# Jetson-side runtime data (6/12 真機 incident): the dev repo has no runtime/,
+# so rsync --delete wiped the whole Jetson tree — Evidence Center trace JSONL
+# AND nav_capability named_poses/routes — on every deploy since Plan B made
+# builtin rsync the default. Same class for pulled evidence under artifacts/.
+runtime/
+artifacts/
 __pycache__/
 .pytest_cache/
 .venv/
