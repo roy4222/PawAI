@@ -42,7 +42,7 @@ CI：三個 PR 的 Fast Gate + test_environment（+ #161 的 Frontend lint/build
 - `/runtime/traces/` 入 `.gitignore`（先前未涵蓋；JSONL 含 PII + 體積，永不入 repo）。
 - `_on_set_params` 三個純 bool param 合併單分支（log 逐字不變）——避免新 elif 推爆 C901 基線。
 
-## 5. 留給 Roy 的真機項（pre-6/18 Done criteria 的未竟部分）
+## 5. 真機項（6/12 晚 Roy 在場，**全數完成** — 結果見 §8）
 
 | 項 | 動作 | 備註 |
 |---|---|---|
@@ -64,3 +64,28 @@ CI：三個 PR 的 Fast Gate + test_environment（+ #161 的 Frontend lint/build
 
 - 全域：tag `post-demo-refactor-baseline-2026-06-10`（=`b1f0bc4`）；demo 行為：tag `demo-2026-06-snapshot`
 - 本批：`ros2 param set /brain_node ism_shadow_enabled false`（2A 即時退）；`PAWAI_TRACE_STORE_ENABLED=0`（2B 落盤退回純 bridge）；三 PR 各自獨立 revert 無交叉依賴
+
+## 8. 真機驗收結果（2026-06-12 晚，Roy 在場授權，Roy 10 步清單全過）
+
+| # | 步驟 | 結果 |
+|---|---|---|
+| 1-2 | deploy + build（contracts+IE+brain+go2_interfaces） | ✅ `.env` 存活、provenance=`2e47464` |
+| 3 | `pawai demo start` | ✅ healthcheck 8/8、13 windows、19 nodes |
+| 4 | shadow on（runtime param set） | ✅ 不碰凍結腳本 |
+| 5 | `/brain/trace` state_transition | ✅ `idle→executing:candidate:chat`→`skill_started`→`operator_reset` 完整軌跡；CANDIDATE 並排比對已收到 legacy/ISM 分歧樣本（legacy `attention_engaged` 擋、ISM accept） |
+| 6 | `runtime/traces/*.jsonl` 增長 | ✅ 46→192 行持續累積 |
+| 7 | `/api/trace/export` | ✅ redacted 200（27 行 `[private]`）；`redact=0` 無 auth → **403**；`since` 過濾正確 |
+| 8 | `pawai smoke brain` | ✅ **5/5**（經 3 個真機修復後，見下表） |
+| 9 | `pawai evidence pull` | ✅ 拉回 56 events / 27 suppressed / 34 shadow / 12 state_transition |
+| 10 | Suppressed viewer 資料路徑 | ✅ WS 流驗證：trace 事件 + shadow 標記 + `[private]` redaction（畫面 Roy 目視 `:3001/studio`） |
+
+**真機過程抓到並修掉的 4 個既有 bug（全部小 PR + CI + merge）**：
+
+| PR | 問題 | 修法 |
+|---|---|---|
+| #163 | `pawai smoke brain` SSH 非互動 shell 無 ROS env → 腳本 precheck 永遠 0 nodes | stream_remote 前 source setup.zsh（仿 deploy 先例）|
+| #164 | **凍結檔 `start_full_demo_tmux.sh:184`**（Roy 現場明示授權）：`.env` 的 ASR 陣列值經 bash source 剝引號 → zsh pane glob 炸 → **demo lane 的 stt_intent_node 長期靜默死亡**；+ smoke 腳本寫死 llm-e2e stack | 引號收斂到 send-keys 層；smoke precheck 接受 conversation_graph_node、播放證據接受 local playback |
+| #165 | `ros2 topic pub --once` 對 `/tts` 的 discovery race（3 訂閱者，`-w 1` 不夠、`-w 3` 因 QoS 不相容訂閱永久卡）→ smoke 3/5 | `--times 2 -r 1`（第二發必落在 discovery 後），真機 5/5 |
+| #166 | **deploy data-loss**：repo 無 `runtime/` → builtin rsync `--delete`（Plan B #151 起預設）每次 deploy 整棵刪 Jetson `runtime/`（吃掉第一個 trace session + **nav named_poses/routes**） | excludes 補 `runtime/` + `artifacts/`；重 deploy 後 trace 檔存活驗證 ✅ |
+
+**⚠ Roy 待辦**：① Jetson 端 nav `named_poses`/`routes` 已被 6/11 起的 deploy 清掉，下次 nav 場測前要重錄（`/log_pose`）或從備份還原；② shadow 現在是 ON（soak 進行中）——**demo 每次重啟 param 歸 False**，重啟後要重下 `ros2 param set /brain_node ism_shadow_enabled true`（6/18 發表日記得）。

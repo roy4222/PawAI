@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-06-12（**系統 Phase 2 pre-6/18 三 lane 全 merge**：ISM Phase 1 shadow #160 + Evidence Center first slice #161 + CLI smoke/evidence #162；AFK 自主執行，T2B-0 兩決策已照 Roy 指令落實；待 Roy：T2A-4 真機 shadow soak + 2B/2C 真機收尾 + Jetson 部署）
+**最後更新**：2026-06-12 晚（**Phase 2 真機驗收 Roy 10 步全過** + 真機修掉 4 既有 bug #163-#166：smoke SSH env／凍結檔 ASR zsh glob＝stt 長期死因（Roy 授權）／tts pub discovery race／**deploy rsync --delete 轟 runtime/ data-loss**；shadow soak 已開；⚠ nav named_poses/routes 被歷次 deploy 清掉需重錄、demo 重啟後 shadow param 要重開）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
 
 ---
@@ -15,10 +15,13 @@
 - **凍結遵循**：`ism_enabled` 不存在、19 個 `_suppressed` 零刪除、凍結三檔零接觸、未啟動 Phase 3/4/5、未碰 Go2。
 - **附錄 A 更新**：A-4（trace PII）+ A-11（export auth）→ RESOLVED（master plan 登記簿 + phase 2 plan 附錄已回填）。
 
-### 待 Roy（真機項，checkpoint report §5 有指令級細節）
-1. **Jetson 部署**：rsync + `colcon build --packages-select pawai_contracts interaction_executive`（gateway/CLI 純 Python 同步即生效）→ 重啟 demo/gateway。
-2. **T2A-4 shadow 驗證 + 6/18 soak**：`ros2 param set /brain_node ism_shadow_enabled true` → 跑 demo 動線 → `ros2 topic echo /brain/trace | grep state_transition`；OK 就發表全程開著收數據。
-3. 2B/2C 真機收尾：Jetson 端看 `runtime/traces/*.jsonl` 增長、`curl /api/trace/export` 拉回 redacted、`pawai smoke brain` 綠、`pawai evidence pull` 拉回第一批 JSONL、Studio DevPanel 看 Suppressed 區。
+### 6/12 晚追加：真機驗收（Roy 在場）— 10 步全過 ✅
+
+deploy→demo（healthcheck 8/8）→shadow on→`state_transition` 軌跡（`idle→executing:candidate:chat`→`operator_reset`）→JSONL 46→192 行→export（redacted 200 / full 無 auth **403** / since 過濾）→**`pawai smoke brain` 5/5**→`evidence pull`（56 events/27 suppressed/34 shadow）→viewer WS 流（shadow 標記 + `[private]`）。完整紀錄＝checkpoint report §8。
+
+**過程修掉 4 個既有 bug（PR #163-#166 全 merge）**：①smoke SSH 非互動無 ROS env；②**凍結檔 `start_full_demo_tmux.sh` ASR 陣列 zsh glob → demo lane stt_intent_node 長期靜默死亡**（Roy 現場授權修，引號收斂 send-keys 層）+ smoke 支援 brain stack/local playback；③`/tts` pub discovery race（3 訂閱者，`--times 2 -r 1` 解，5/5）；④**deploy rsync `--delete` 每次轟掉 Jetson `runtime/`**（Plan B 起的 data-loss 回歸；excludes 補 `runtime/`+`artifacts/`，重 deploy 驗證存活）。
+
+**⚠ 待 Roy**：① nav `named_poses`/`routes` 已被 6/11 起的 deploy 清掉，下次 nav 場測前重錄（`/log_pose`）；② demo 重啟後 shadow param 歸 False，要重下 `ros2 param set /brain_node ism_shadow_enabled true`（6/18 發表日 soak 記得開）。
 
 ---
 
