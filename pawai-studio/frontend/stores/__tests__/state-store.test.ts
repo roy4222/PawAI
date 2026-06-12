@@ -99,3 +99,49 @@ describe("ttsMessages rate-limit", () => {
     expect(useStateStore.getState().ttsMessages).toHaveLength(1);
   });
 });
+
+describe("brainTraces ring buffer (Evidence Center T2B-3)", () => {
+  beforeEach(() => {
+    useStateStore.setState({ brainTraces: [] });
+  });
+
+  const trace = (i: number, verdict: "accepted" | "suppressed" = "suppressed") => ({
+    v: 1,
+    ts: 1000 + i,
+    decision_id: `gesture-${i}`,
+    node: "brain_node",
+    kind: "policy_decision" as const,
+    verdict,
+    gate: "pending_confirm",
+    reason: "confirm_in_flight",
+    detail: { shadow: false },
+  });
+
+  it("appendBrainTrace prepends entries", () => {
+    useStateStore.getState().appendBrainTrace(trace(1));
+    useStateStore.getState().appendBrainTrace(trace(2));
+    const traces = useStateStore.getState().brainTraces;
+    expect(traces).toHaveLength(2);
+    expect(traces[0].decision_id).toBe("gesture-2"); // newest first
+  });
+
+  it("caps at 50 like conversationTraces", () => {
+    for (let i = 0; i < 55; i++) {
+      useStateStore.getState().appendBrainTrace(trace(i));
+    }
+    const traces = useStateStore.getState().brainTraces;
+    expect(traces).toHaveLength(50);
+    expect(traces[0].decision_id).toBe("gesture-54");
+    expect(traces[49].decision_id).toBe("gesture-5");
+  });
+
+  it("keeps verdict for suppressed-reason filtering", () => {
+    useStateStore.getState().appendBrainTrace(trace(1, "accepted"));
+    useStateStore.getState().appendBrainTrace(trace(2, "suppressed"));
+    const suppressed = useStateStore
+      .getState()
+      .brainTraces.filter((t) => t.verdict === "suppressed");
+    expect(suppressed).toHaveLength(1);
+    expect(suppressed[0].gate).toBe("pending_confirm");
+  });
+});

@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from auth import (  # noqa: E402
     AuthConfig,
+    export_access,
     load_auth_config,
     origin_ok,
     requires_token,
@@ -103,6 +104,27 @@ def test_origin_allowlist():
     assert origin_ok("http://100.83.109.89:3001", allowed) is True
     assert origin_ok("http://evil.example", allowed) is False
     assert origin_ok(None, allowed) is True             # curl/probe (no Origin) allowed
+
+
+# ── export_access: trace-export gate (A-11 + T2B-0 PII ruling, 2026-06-12) ──
+def test_export_access_auth_on_requires_token_even_for_get():
+    # A-11: export has NO safe-method bypass — auth on + bad/missing token = 401.
+    assert export_access(auth_enabled=True, header_token_ok=False, want_full=False) == 401
+    assert export_access(auth_enabled=True, header_token_ok=False, want_full=True) == 401
+    assert export_access(auth_enabled=True, header_token_ok=True, want_full=False) == 0
+    assert export_access(auth_enabled=True, header_token_ok=True, want_full=True) == 0
+
+
+def test_export_access_full_export_requires_auth_system_on():
+    # T2B-0: full (unredacted) export ALWAYS needs an authenticated caller —
+    # with the token system off nobody can authenticate → 403, PII stays redacted.
+    assert export_access(auth_enabled=False, header_token_ok=True, want_full=True) == 403
+    assert export_access(auth_enabled=False, header_token_ok=False, want_full=True) == 403
+
+
+def test_export_access_default_open_posture_redacted_only():
+    # S0-2 default-off posture: redacted export stays reachable without a token.
+    assert export_access(auth_enabled=False, header_token_ok=False, want_full=False) == 0
 
 
 def test_authconfig_is_frozen():

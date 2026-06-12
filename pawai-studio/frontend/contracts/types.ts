@@ -484,3 +484,28 @@ export interface ScoreboardResponse {
   generated_at?: string;
   capabilities: ScoreboardCapability[];
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Brain decision-chain trace (/brain/trace, Plan E + ISM shadow).
+// Evidence Center first slice (system Phase 2 T2B-3): the gateway broadcasts
+// these REDACTED (T2B-0 PII ruling) — detail PII keys arrive as "[private]".
+// ══════════════════════════════════════════════════════════════════
+export interface BrainTraceEvent {
+  v: number;
+  ts: number;
+  decision_id: string;
+  node: string;
+  kind:
+    | "perception_event"
+    | "candidate"
+    | "policy_decision"
+    | "plan_emitted"
+    | "skill_result"
+    | "tts_state"
+    | "state_transition";
+  verdict: "accepted" | "suppressed" | "blocked";
+  gate: string;
+  reason: string;
+  detail: Record<string, unknown>;
+  plan_id?: string;
+}

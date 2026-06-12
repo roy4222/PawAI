@@ -88,6 +88,26 @@ def token_query_ok(token_param: str | None, token: str) -> bool:
     return secrets.compare_digest(token_param.strip(), token)
 
 
+def export_access(*, auth_enabled: bool, header_token_ok: bool,
+                  want_full: bool) -> int:
+    """Access decision for GET /api/trace/export (A-11 + T2B-0, Roy 2026-06-12).
+
+    Returns 0 = allow, else the HTTP status to refuse with:
+    - 401: auth is ON and the Bearer token is missing/bad. Export gets NO
+      safe-method bypass — unlike the global middleware, a GET here still
+      needs the token, because the response body is the trace archive.
+    - 403: caller wants the FULL (unredacted) export but the token system is
+      OFF — nobody can be authenticated, so PII never leaves redacted.
+    Default-off posture stays usable: redacted export is open (matches the
+    S0-2 byte-identical-by-default principle; PII protected by redaction).
+    """
+    if auth_enabled and not header_token_ok:
+        return 401
+    if want_full and not auth_enabled:
+        return 403
+    return 0
+
+
 def origin_ok(origin: str | None, allowed: tuple[str, ...]) -> bool:
     """Validate a browser Origin header against the allowlist.
     - allowed==() → check disabled, always True.
