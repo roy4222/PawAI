@@ -525,6 +525,7 @@ def test_demo_stop_own_stale_lock_releases_without_force(monkeypatch):
     mock_rel.assert_called_once_with(user="lubaiyu", host="Roy422deMacBook-Pro.local")
 
 
+@pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)
 def test_health_brain_passes_jetson_host_env(monkeypatch):
     """Detected live Tailscale peer must override whatever JETSON_TAILSCALE_IP
     the env happened to have (e.g. stale .env.local from a previous Jetson
@@ -911,6 +912,7 @@ def test_demo_start_rejects_invalid_nav_modes():
 
 # ──────────────── L3 tests ────────────────
 
+@pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)
 def test_pawai_docs_brain_resolves_path():
     runner = CliRunner()
     result = runner.invoke(cli, ["docs", "brain"])
@@ -926,12 +928,14 @@ def test_pawai_docs_unknown_lists_valid():
     assert "brain" in result.output and "face" in result.output  # the list
 
 
+@pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)
 def test_pawai_docs_onboarding_alias():
     runner = CliRunner()
     result = runner.invoke(cli, ["docs", "onboarding"])
     assert "team-onboarding" in result.output
 
 
+@pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)
 def test_contract_check_runs_local_when_script_exists(tmp_path, monkeypatch):
     # Stage a fake repo root with the contract script
     script = tmp_path / "scripts/ci/check_topic_contracts.py"
