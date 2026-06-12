@@ -14,6 +14,7 @@ import type {
   GestureState,
   PoseState,
   BrainState,
+  BrainTraceEvent,
   PawAIBrainState,
   SkillPlan,
   SkillResult,
@@ -35,6 +36,7 @@ export function useEventStream(): UseEventStreamResult {
   const appendBrainProposal = useStateStore((s) => s.appendBrainProposal);
   const appendBrainResult = useStateStore((s) => s.appendBrainResult);
   const appendConversationTrace = useStateStore((s) => s.appendConversationTrace);
+  const appendBrainTrace = useStateStore((s) => s.appendBrainTrace);
   const updateSystemHealth = useStateStore((s) => s.updateSystemHealth);
   const updateObjectState = useStateStore((s) => s.updateObjectState);
   const updateTts = useStateStore((s) => s.updateTts);
@@ -86,6 +88,12 @@ export function useEventStream(): UseEventStreamResult {
             event.event_type === "conversation_trace_shadow"
           ) {
             appendConversationTrace(data as unknown as ConversationTracePayload);
+          } else if (event.event_type === "trace") {
+            // Evidence Center first slice (T2B-3): /brain/trace decision-chain
+            // events — answers「為什麼沒反應」(gate + reason per decision_id).
+            if ("decision_id" in data && "verdict" in data) {
+              appendBrainTrace(data as unknown as BrainTraceEvent);
+            }
           } else if (event.event_type === "gesture_enabled") {
             // Demo-recording P0 手勢開關廣播（gateway /api/gesture_enabled）。
             if (typeof data.enabled === "boolean") {
@@ -190,6 +198,7 @@ export function useEventStream(): UseEventStreamResult {
       appendBrainProposal,
       appendBrainResult,
       appendConversationTrace,
+      appendBrainTrace,
       updateSystemHealth,
       updateObjectState,
       updateTts,

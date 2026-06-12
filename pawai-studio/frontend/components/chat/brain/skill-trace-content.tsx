@@ -47,8 +47,12 @@ export function SkillTraceContent() {
   const brain = useStateStore((s) => s.brainState);
   const proposals = useStateStore((s) => s.brainProposals);
   const traces = useStateStore((s) => s.conversationTraces);
+  const brainTraces = useStateStore((s) => s.brainTraces);
   const capability = useStateStore((s) => s.capability);
   const { planMode, togglePlanMode } = useTogglePlanMode();
+  // Evidence Center first slice (T2B-3): 「為什麼沒反應」 = suppressed verdicts
+  // from /brain/trace (gateway-redacted; PII fields arrive as "[private]").
+  const suppressed = brainTraces.filter((t) => t.verdict === "suppressed");
 
   const planAclass =
     planMode === "A"
@@ -106,6 +110,37 @@ export function SkillTraceContent() {
               <span> · src={proposal.source}</span>
               <span> · prio={proposal.priority_class}</span>
               <span> · {proposal.reason}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 為什麼沒反應 — suppressed decision-chain verdicts (Evidence Center) */}
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+          為什麼沒反應 · Suppressed · {suppressed.length}
+        </div>
+        <div className="space-y-1">
+          {suppressed.length === 0 && (
+            <div className="italic text-muted-foreground/60">尚無 suppressed 決策</div>
+          )}
+          {suppressed.slice(0, 20).map((t, i) => (
+            <div
+              key={`${t.decision_id}-${t.ts}-${i}`}
+              className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-xs text-amber-200"
+              title={`${t.decision_id} · ${t.node} · ${t.kind}`}
+            >
+              <span className="font-semibold">{t.gate || t.kind}</span>
+              <span className="opacity-60"> · </span>
+              <span className="truncate">{t.reason || "(no reason)"}</span>
+              {t.detail?.shadow === true && (
+                <span className="ml-1 rounded border border-violet-500/40 bg-violet-500/10 px-1 text-[10px] text-violet-300">
+                  shadow
+                </span>
+              )}
+              <span className="ml-2 text-[10px] opacity-50">
+                {t.decision_id.split("-")[0]}
+              </span>
             </div>
           ))}
         </div>

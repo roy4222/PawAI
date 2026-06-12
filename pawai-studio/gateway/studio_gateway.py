@@ -23,10 +23,10 @@ from datetime import datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import rclpy
@@ -62,6 +62,12 @@ from intent_classifier import IntentClassifier
 # Access-control policy (S0 hardening) — pure module, env-gated, OFF by default.
 from auth import (
     load_auth_config, requires_token, token_ok, token_query_ok, origin_ok,
+    export_access,
+)
+# Evidence Center trace store (system Phase 2 T2B-1) — pure module; persistence
+# of /brain/trace JSONL + the T2B-0 PII redaction single source.
+from trace_store import (  # noqa: E402 — same-dir import after sys.path setup
+    TraceStore, iter_export_lines, redact_trace_event, store_enabled, trace_dir,
 )
 
 # ── Config ───────────────────────────────────────────────────────
@@ -710,6 +716,7 @@ class GatewayNode(Node):
                 return
             self._last_face_broadcast = now
 
+        payload = self._maybe_persist_trace(source, payload)
         data = dict(payload)
         if source.startswith("brain:"):
             event_source = "brain"
@@ -749,6 +756,21 @@ class GatewayNode(Node):
         asyncio.run_coroutine_threadsafe(
             ws_manager.broadcast(envelope), self._loop
         )
+
+    @staticmethod
+    def _maybe_persist_trace(source: str, payload: dict) -> dict:
+        """Evidence Center (T2B-1/T2B-0, 2026-06-12): /brain/trace is persisted
+        FULL to the local JSONL store (Jetson-disk evidence) and broadcast
+        REDACTED — Roy's PII ruling: safe summary visible; name / transcript /
+        image path / full text private by default. No frontend consumed this WS
+        event before this slice, so redaction breaks no existing consumer.
+        Non-trace sources pass through untouched."""
+        if source != "brain:trace":
+            return payload
+        store = _trace_store
+        if store is not None:
+            store.append(payload)
+        return redact_trace_event(payload)
 
     def _on_tts_msg(self, msg: String) -> None:
         """Parse /tts msg (plain text or JSON envelope) and broadcast."""
@@ -823,6 +845,9 @@ class GatewayNode(Node):
 # ── FastAPI App ──────────────────────────────────────────────────
 node: GatewayNode | None = None
 classifier: IntentClassifier | None = None
+# Evidence Center store — created in lifespan when PAWAI_TRACE_STORE_ENABLED
+# (default on; env off = pure bridge, byte-identical to the pre-T2B gateway).
+_trace_store: TraceStore | None = None
 
 
 class SkillRequestPayload(BaseModel):
@@ -862,16 +887,25 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global node, classifier
+    global node, classifier, _trace_store
     rclpy.init()
     loop = asyncio.get_running_loop()
     node = GatewayNode(loop)
     classifier = IntentClassifier()
+    if store_enabled():
+        _trace_store = TraceStore(trace_dir(repo_root=_REPO_ROOT))
+        print(f"[gateway] trace store ON → {_trace_store.current_path}", flush=True)
+    else:
+        print("[gateway] trace store OFF (PAWAI_TRACE_STORE_ENABLED) — pure bridge",
+              flush=True)
     spin_thread = threading.Thread(target=_spin_ros2, args=(node,), daemon=True)
     spin_thread.start()
     yield
     if node:
         node.destroy_node()
+    if _trace_store is not None:
+        _trace_store.close()
+        _trace_store = None
     rclpy.try_shutdown()
 
 
@@ -1082,6 +1116,34 @@ def _read_scoreboard(path: Path) -> dict:
 async def get_scoreboard():
     """Read-only frozen baseline_snapshot.json (issue #76). No live recompute."""
     return _read_scoreboard(_scoreboard_path())
+
+
+# ── Evidence Center: trace export (T2B-2, A-11 + T2B-0 rulings) ─────────────
+
+@app.get("/api/trace/export")
+async def get_trace_export(request: Request, since: float = 0.0, redact: int = 1):
+    """Stream persisted /brain/trace JSONL (application/x-ndjson).
+
+    Query: since=<unix ts> (events with ts >= since), redact=0 for the FULL
+    (unredacted) archive. Auth (A-11, Roy 2026-06-12): the global middleware
+    exempts GET — this endpoint deliberately does NOT get that bypass; when
+    auth is on, even redacted GET export needs the Bearer token, and the full
+    export refuses entirely while the token system is off (PII never leaves
+    the machine unredacted without an authenticated caller).
+    """
+    want_full = int(redact) == 0
+    status = export_access(
+        auth_enabled=AUTH.auth_enabled,
+        header_token_ok=token_ok(request.headers.get("authorization"), AUTH.token),
+        want_full=want_full,
+    )
+    if status == 401:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if status == 403:
+        return JSONResponse({"error": "full_export_requires_auth"}, status_code=403)
+    lines = iter_export_lines(trace_dir(repo_root=_REPO_ROOT),
+                              since=since or None, redact=not want_full)
+    return StreamingResponse(lines, media_type="application/x-ndjson")
 
 
 class PlanModePayload(BaseModel):

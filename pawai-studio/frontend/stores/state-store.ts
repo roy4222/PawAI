@@ -12,6 +12,7 @@ import type {
   GestureState,
   PoseState,
   BrainState,
+  BrainTraceEvent,
   SkillPlan,
   SkillResult,
   SystemHealth,
@@ -71,6 +72,9 @@ interface StateStore {
   brainProposals: SkillPlan[];
   brainResults: SkillResult[];
   conversationTraces: ConversationTracePayload[];
+  // Evidence Center first slice (T2B-3): /brain/trace decision-chain events
+  // (Plan E + ISM shadow), redacted by the gateway before broadcast.
+  brainTraces: BrainTraceEvent[];
   systemHealth: SystemHealth | null;
   objectState: ObjectState | null;
   lastTtsText: string | null;
@@ -94,6 +98,7 @@ interface StateStore {
   appendBrainProposal: (proposal: SkillPlan) => void;
   appendBrainResult: (result: SkillResult) => void;
   appendConversationTrace: (trace: ConversationTracePayload) => void;
+  appendBrainTrace: (trace: BrainTraceEvent) => void;
   updateSystemHealth: (state: SystemHealth) => void;
   updateObjectState: (state: ObjectState) => void;
   updateTts: (text: string) => void;
@@ -114,6 +119,7 @@ export const useStateStore = create<StateStore>((set) => ({
   brainProposals: [],
   brainResults: [],
   conversationTraces: [],
+  brainTraces: [],
   systemHealth: null,
   objectState: null,
   lastTtsText: null,
@@ -143,6 +149,10 @@ export const useStateStore = create<StateStore>((set) => ({
   appendConversationTrace: (trace) =>
     set((state) => ({
       conversationTraces: [trace, ...state.conversationTraces].slice(0, 50),
+    })),
+  appendBrainTrace: (trace) =>
+    set((state) => ({
+      brainTraces: [trace, ...state.brainTraces].slice(0, 50),
     })),
   updateSystemHealth: (state) => set({ systemHealth: state }),
   updateObjectState: (state) => set({ objectState: state }),
