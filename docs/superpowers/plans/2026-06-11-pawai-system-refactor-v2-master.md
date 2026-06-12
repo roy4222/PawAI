@@ -294,14 +294,15 @@ capability ladder 分級：`wired_only` / `hardware_proven` / `demo_ready` / `re
 | A-1 | S1 錄製方式簿記（最後用 0.5m / initialpose / 遙控輔助哪個錄成）→ 決定 nav ladder 上 operator-confirm 迴圈標 `hardware_proven` 還是 `wired_only` | 系統 Phase 4 | OPEN |
 | A-2 | foxglove clientPublish 降權（hardening P0-2；會斷 nav initialpose 工作流） | 系統 Phase 4 | OPEN |
 | A-3 | gateway secure-default flip 時點（機制已備，何時翻 + token 發放流程） | 系統 Phase 4 | OPEN |
-| A-4 | trace PII 邊界（hardening P3-1；**Phase 2B 動工前要決**） | 系統 Phase 2 | OPEN |
+| A-4 | trace PII 邊界（hardening P3-1；**Phase 2B 動工前要決**） | 系統 Phase 2 | **RESOLVED**（2026-06-12 AFK 指令）：保守預設——safe summary 可顯示、name/transcript/image path/full text 預設 private；磁碟全量僅本機、離機路徑一律 redact。落地 `trace_store.redact_trace_event()`；記錄見 phase 2 plan 附錄 |
+
 | A-5 | dead-code 歸檔原則（scripts → `scripts/archive/`；套件內模組 → git 刪除；不放 `docs/archive/`） | 系統 Phase 5 | OPEN |
 | A-6 | HITL 證據治理粒度（`docs/hitl/` 新樹 + raw artifacts 進 git 的大小門檻） | 系統 Phase 3 / 5 | OPEN |
 | A-7 | Studio operator enforcement 強度（token / 第二 port / 信任內網） | 系統 Phase 2（Evidence Center）/ 4 | OPEN |
 | A-8 | Ollama 本地 LLM 層去留（主線收編 / 留 legacy / 放棄離線智能） | 系統 Phase 5 | OPEN |
 | A-9 | stop-resume 終局（operator-confirm 永久化 vs `resume_policy=auto` 留大場地）+ 安全層投資方向（自製 reactive_stop 強化 vs nav2_collision_monitor） | 系統 Phase 4 | OPEN |
 | A-10 | object A/B + pose observer 第一場 HITL session 排期 | 系統 Phase 3 | OPEN |
-| A-11 | export endpoint auth 形態（POST vs GET＋例外 token-gate；phase 2 T2B-0②，**T2B-1 落盤動工前要決**，pre-6/18 時效） | 系統 Phase 2 | OPEN |
+| A-11 | export endpoint auth 形態（POST vs GET＋例外 token-gate；phase 2 T2B-0②，**T2B-1 落盤動工前要決**，pre-6/18 時效） | 系統 Phase 2 | **RESOLVED**（2026-06-12 AFK 指令）：GET＋例外 token-gate——auth-on 時 GET export 也要 token（401）；full export 在 token 系統關閉時一律 403。落地 `auth.export_access()`；記錄見 phase 2 plan 附錄 |
 | A-12 | lane scripts 永久位置（audit Open Question 11：CLI package data vs `scripts/lanes/`；phase 5 T5A-7 搬家目的地） | 系統 Phase 5 | OPEN |
 | A-13 | Studio Plan A/B 假開關處置（phase 5 T5C-5②：接線 publish `/brain/plan_mode` 或移除 UI，二選一） | 系統 Phase 5 | OPEN |
 | A-14 | 矩陣勝者採用 + E 存廢 + 色彩 GO/NO_GO verdict 採用（phase 3 V4-1，依階段 3-3 數據） | 系統 Phase 3 | OPEN |

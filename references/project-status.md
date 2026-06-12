@@ -1,7 +1,24 @@
 # 專案狀態
 
-**最後更新**：2026-06-11 深夜（**重構 v2 五份計畫文件產出**：master + 系統 Phase 2-5 plans 落地 `docs/superpowers/plans/`，全部 Status: PLANNED 待 Roy 審核後開工；前一段：第一批重構全執行 + S0 freeze-safe + ISM Phase 0 + 地基封閉 9/9）
+**最後更新**：2026-06-12（**系統 Phase 2 pre-6/18 三 lane 全 merge**：ISM Phase 1 shadow #160 + Evidence Center first slice #161 + CLI smoke/evidence #162；AFK 自主執行，T2B-0 兩決策已照 Roy 指令落實；待 Roy：T2A-4 真機 shadow soak + 2B/2C 真機收尾 + Jetson 部署）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/12：系統 Phase 2 pre-6/18 三 lane 全 merge（AFK 自主執行）
+
+**主軸**：Roy AFK 指令（「執行 Phase 2 additive-only，不開 Phase 3/4/5、不動 Go2」+ T2B-0 兩決策拍板）→ Step 0 push 五份 v2 plan → 三 lane 各走「小 PR + 紅綠 TDD + 獨立 Linus reviewer + CI 綠 + admin rebase merge」。**執行收據：[`docs/runbook/2026-06-12-phase2-pre618-checkpoint.md`](../docs/runbook/2026-06-12-phase2-pre618-checkpoint.md)**。
+
+- **2A ISM Phase 1 shadow（#160）**：`TraceKind.STATE_TRANSITION`（additive）+ `brain_node` shadow 接線——`ism_shadow_enabled` declare 預設 **False**（emit byte-identical）、runtime `ros2 param set` 可切（不碰凍結腳本）；接點照 ISM plan §6（`_emit`/`_suppressed` 漏斗/skill_result/TTS edge/confirm/operator reset/10Hz watchdog tick piggyback）；11 條 parity + 6/9 黑洞重演測試（stuck EXECUTING/ALERT/CONFIRM → cup/greet 得到 SUPPRESS-with-reason trace 非靜默 drop；watchdog → ERROR_RECOVERY → IDLE）。**工程修正**：SUPPRESS 側用純 `evaluate()` 不用 mutating `propose()`（反事實 ACCEPT 會汙染 soak 數據）。IE **320 passed** 零既有修改。
+- **2B Evidence Center first slice（#161）**：gateway `trace_store.py`（append=enqueue-only、daemon writer、`runtime/traces/{session_id}.jsonl`、20MB rotation、留 20 sessions、`PAWAI_TRACE_STORE_ENABLED=0` kill-switch）+ `GET /api/trace/export`（streaming x-ndjson、`since=`）+ 前端「為什麼沒反應 · Suppressed」viewer（`brainTraces` cap 50、shadow badge）。**T2B-0 落實**：磁碟存全量（僅本機）、離機路徑（WS+預設 export）一律 `redact_trace_event()`（A-4）；export GET 無 safe-method 豁免、full export 無 token 一律 403（A-11，`auth.export_access()`）。`/runtime/traces/` 入 .gitignore。gateway **93 passed**、前端 vitest 16 + tsc 乾淨。
+- **2C CLI 第二刀（#162）**：`pawai smoke brain`（**SSH 上 Jetson 跑** `smoke_test_e2e.sh`——本地 stream 會靜默 no-op，plan 文字已修正）+ `pawai evidence pull`（rsync 拉回 `artifacts/evidence/traces/`、無 --delete、印 files/events/suppressed 摘要）+ `errors.py` structured errors（每個失敗帶「↳」修法行）。**T2C-0 conftest**：repo_root 隔離 + 未 mock 的 ssh/rsync/scp 一律 `blocked-by-conftest` 即時失敗 + `real_repo` marker（該模式中和 `.env.local` 載入——真實 `JETSON_TAILSCALE_IP` 會蓋掉測試模擬值）。**CLI 套件 105s+ → 173 passed in ~0.7s**（doctor 類 ~10s 真 ssh probe ×6 + 27s topology 全拆）。
+- **凍結遵循**：`ism_enabled` 不存在、19 個 `_suppressed` 零刪除、凍結三檔零接觸、未啟動 Phase 3/4/5、未碰 Go2。
+- **附錄 A 更新**：A-4（trace PII）+ A-11（export auth）→ RESOLVED（master plan 登記簿 + phase 2 plan 附錄已回填）。
+
+### 待 Roy（真機項，checkpoint report §5 有指令級細節）
+1. **Jetson 部署**：rsync + `colcon build --packages-select pawai_contracts interaction_executive`（gateway/CLI 純 Python 同步即生效）→ 重啟 demo/gateway。
+2. **T2A-4 shadow 驗證 + 6/18 soak**：`ros2 param set /brain_node ism_shadow_enabled true` → 跑 demo 動線 → `ros2 topic echo /brain/trace | grep state_transition`；OK 就發表全程開著收數據。
+3. 2B/2C 真機收尾：Jetson 端看 `runtime/traces/*.jsonl` 增長、`curl /api/trace/export` 拉回 redacted、`pawai smoke brain` 綠、`pawai evidence pull` 拉回第一批 JSONL、Studio DevPanel 看 Suppressed 區。
 
 ---
 

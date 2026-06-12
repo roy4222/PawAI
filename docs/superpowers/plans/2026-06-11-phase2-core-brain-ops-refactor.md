@@ -1,6 +1,7 @@
 # 系統 Phase 2：Core Brain / Ops 重構（2A ISM 接入 + 2B Studio Evidence Center + 2C CLI v2 第二刀）
 
-> **日期**：2026-06-11　**狀態**：PLANNED
+> **日期**：2026-06-11　**狀態**：pre-6/18 範圍 **IMPLEMENTED**（2026-06-12，PR #160/#161/#162）；post-6/18 範圍維持設計鎖定
+> **執行收據**：[`docs/runbook/2026-06-12-phase2-pre618-checkpoint.md`](../../runbook/2026-06-12-phase2-pre618-checkpoint.md)——含 T2B-0 落實方式、三個對 plan 文字的工程修正（2A suppressed 側 evaluate() 取代 propose()／2C smoke 走 stream_remote／2C conftest real_repo + dotenv 中和）、留給 Roy 的真機項（T2A-4 soak 等）
 > **上游文件**：
 > - v2 統領文件：[`2026-06-11-pawai-system-refactor-v2-master.md`](2026-06-11-pawai-system-refactor-v2-master.md)（下稱「v2 master」；北極星全文 + 系統 Phase 1-5 編成）
 > - 6/10 Master plan：[`2026-06-10-post-demo-refactor-master-plan.md`](2026-06-10-post-demo-refactor-master-plan.md)（D1-D6 拍板 + §7 ISM 凍結約束）
@@ -198,9 +199,9 @@ pre-6/18 本 plan 對 source trust 只交付兩件事：**修法已寫進 ISM pl
 
 ---
 
-## 附錄：T2B-0 決策記錄（待填）
+## 附錄：T2B-0 決策記錄（2026-06-12 已拍板並落實）
 
 | 決策 | 選項 | Roy 拍板 | 日期 |
 |---|---|---|---|
-| trace PII 欄位政策 | 遮蔽 / 保留 / 僅本機 | （待） | （待） |
-| export auth 形態 | POST / GET+例外 token-gate | （待） | （待） |
+| trace PII 欄位政策 | 遮蔽 / 保留 / 僅本機 | **保守預設（混合）**：safe summary 可顯示；name/transcript/image path/full text 預設 private。落實＝磁碟 JSONL 存完整（僅本機）、離機路徑（WS 廣播 + 預設 export）一律過 `redact_trace_event()` | 2026-06-12（AFK 指令） |
+| export auth 形態 | POST / GET+例外 token-gate | **GET＋例外 token-gate**（「export 即使 GET 也要 auth」）：`auth.export_access()`——auth-on 時 GET 無 token → 401；`redact=0` 完整匯出在 token 系統關閉時一律 403；default-off 下 redacted export 開放（S0-2 byte-identical 原則） | 2026-06-12（AFK 指令） |

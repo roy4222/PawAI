@@ -535,7 +535,17 @@ git commit -m "ci(ism): fast-gate runs interaction_state pure tests (Plan ISM Ph
 
 ---
 
-## 6. Phase 1：Shadow 模式（觀測 + 比對 trace，零行為變更）— 可立即執行
+## 6. Phase 1：Shadow 模式（觀測 + 比對 trace，零行為變更）— ✅ 已實作（PR #160）
+
+> **狀態（2026-06-12）**：Phase 1 已實作並 merge — `TraceKind.STATE_TRANSITION`（additive）+
+> `brain_node` shadow 接線（`ism_shadow_enabled` declare 預設 False、runtime 可切）+
+> `test/test_ism_shadow_parity.py`（11 條：parity off/on、never-raises ×2、runtime param、
+> lifecycle、TTS edge、6/9 黑洞重演 ×3、watchdog 復原）。實作修正：**SUPPRESS 側（`_suppressed`
+> 漏斗）用純 `InteractionPolicy.evaluate()` 並排比對、不呼叫 mutating `propose()`**——legacy
+> 沒做的事不得推進 shadow 機，否則反事實 ACCEPT 會把狀態帶離現實、汙染 soak 數據；ACCEPT 側
+> （`_emit`）維持 `propose()`，由 skill_result/TTS 真實訊號持續校正。其餘接點照 §6 規格。
+> **T2A-4 真機 shadow 驗證 + 6/18 soak 待 Roy**（checkpoint report §5）。下列 Task 1.x 為原始
+> 設計步驟（歷史；實作以 repo 為準）。
 
 > 目標：brain_node **實例化 ISM、餵真實事件、發 STATE_TRANSITION/CANDIDATE shadow trace**，但**不依其裁決行動**。收集真實節奏數據驗證 ISM 與 legacy 一致/更好（§7.7「狀態草案可被 trace 數據修正」）。
 
