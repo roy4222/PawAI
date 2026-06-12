@@ -55,8 +55,14 @@ for i in $(seq 1 "$ROUNDS"); do
     | grep -c "Local playback completed" || true)
 
   # Send TTS
+  # 6/12: --once races RELIABLE-subscriber discovery (documented repo trap —
+  # /tts has 3 subscribers; a fresh pub can publish before tts_node matches,
+  # and -w N stalls forever when any one sub is QoS-incompatible). Publish
+  # twice 1s apart: the second copy always lands post-discovery. The phrase
+  # may play twice in a round — harmless for a smoke run (5/5 真機驗證).
   echo "  [SEND] /tts: \"$TEST_PHRASE\""
-  ros2 topic pub --once /tts std_msgs/msg/String "{data: \"$TEST_PHRASE\"}" >/dev/null 2>&1
+  timeout 15 ros2 topic pub -r 1 --times 2 /tts std_msgs/msg/String \
+    "{data: \"$TEST_PHRASE\"}" >/dev/null 2>&1
 
   # Wait for playback (TTS synthesis ~2.5s + Megaphone ~3s + tail)
   sleep 8
