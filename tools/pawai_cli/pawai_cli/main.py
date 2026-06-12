@@ -16,6 +16,8 @@ import click
 from dotenv import load_dotenv
 
 from . import __version__, shell
+from .errors import structured_error
+from .evidence import evidence as evidence_command
 from .modules import MODULES, existing_docs, get_module
 from .readiness import readiness as readiness_command
 from .status import print_status
@@ -159,6 +161,7 @@ def cli() -> None:
 
 
 cli.add_command(readiness_command)
+cli.add_command(evidence_command)
 
 
 @cli.command()
@@ -790,6 +793,56 @@ _LANE_HEALTHCHECK = {
     "brain": ".claude/skills/brain-studio-lane/scripts/healthcheck.sh",
     "nav_capability": ".claude/skills/nav-avoidance-lane/scripts/healthcheck.sh",
 }
+
+# ── smoke (system Phase 2 T2C-1) ────────────────────────────────────────────
+# Repo-relative scripts run ON THE JETSON over SSH: they publish ROS topics
+# into the live demo stack, so streaming them locally on a dev box would
+# silently no-op (different ROS world). vision/object/nav/full deliberately
+# absent — their 採集 scripts belong to system Phase 3/4/5 (phase 2 plan 2C).
+_SMOKE_SCRIPTS = {
+    "brain": "scripts/smoke_test_e2e.sh",
+}
+
+
+@cli.group()
+def smoke() -> None:
+    """End-to-end smoke runs（包既有腳本，零新 runtime 行為）。"""
+
+
+@smoke.command("brain")
+@click.option("--rounds", default=5, show_default=True, type=click.IntRange(1, 30),
+              help="E2E rounds (smoke_test_e2e.sh argument).")
+def smoke_brain(rounds: int) -> None:
+    """Run the speech E2E smoke (scripts/smoke_test_e2e.sh) on the Jetson.
+
+    前提：demo / llm-e2e tmux session 已在 Jetson 上跑（pawai demo start）。
+    """
+    rel = _SMOKE_SCRIPTS["brain"]
+    repo = shell.jetson_repo()
+    probe = shell.run_remote(f"test -f {repo}/{rel}", timeout=10)
+    if probe.code in (124, 127, 255):
+        raise structured_error(
+            f"SSH to {shell.jetson_host()} failed (exit {probe.code})",
+            [
+                "跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
+                "確認 JETSON_HOST / .env.local 沒有 CRLF（pawai doctor 會驗）",
+            ],
+        )
+    if not probe.ok:
+        raise structured_error(
+            f"{rel} not found on Jetson ({repo})",
+            [
+                "先同步腳本：pawai jetson deploy --module brain --no-build",
+                "或確認 JETSON_REPO 指向正確的 repo 路徑",
+            ],
+        )
+    rc = shell.stream_remote(f"cd {repo} && bash {rel} {rounds}")
+    if rc != 0:
+        click.echo(f"✗ smoke brain failed (exit {rc})")
+        click.echo("  ↳ demo lane 活著嗎？跑 `pawai health brain` 看哪個環節紅")
+        click.echo("  ↳ 沒起 demo 就先 `pawai demo start`，等 ready 再 smoke")
+        sys.exit(rc)
+    click.echo("✓ smoke brain passed")
 
 
 def _run_lane_healthcheck(lane: str) -> int:

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from click.testing import CliRunner
 
 from pawai_cli.main import cli
@@ -30,6 +32,7 @@ def _invoke_readiness(args, *, manifest=None):
         return CliRunner().invoke(cli, ["readiness", *args])
 
 
+@pytest.mark.real_repo  # needs real .claude/schemas (T2C-0)
 def test_readiness_json_ready(monkeypatch, tmp_path):
     monkeypatch.setenv("PAWAI_SCOREBOARD_PATH", str(_snapshot_path(tmp_path)))
 
@@ -41,6 +44,7 @@ def test_readiness_json_ready(monkeypatch, tmp_path):
     assert payload["reasons"] == []
 
 
+@pytest.mark.real_repo  # needs real .claude/schemas (T2C-0)
 def test_readiness_accept_warnings_records_override(monkeypatch, tmp_path):
     snapshot_path = _snapshot_path(
         tmp_path,
