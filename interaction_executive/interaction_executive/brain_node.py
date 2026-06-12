@@ -18,6 +18,20 @@ from std_msgs.msg import Empty
 from std_msgs.msg import String
 
 from .attention_machine import AttentionMachine, AttentionState
+# ISM Phase 1 shadow (system Phase 2 / 2A): aliased imports — interaction_state
+# has its own Verdict enum that collides with pawai_contracts.trace_schema.Verdict
+# (ACCEPT/SUPPRESS/QUEUE/PREEMPT vs ACCEPTED/SUPPRESSED/BLOCKED). Never mix them.
+from .interaction_state import (
+    Candidate as IsmCandidate,
+    Decision as IsmDecision,
+    InteractionPolicy as IsmPolicy,
+    InteractionState as IsmState,
+    InteractionStateMachine,
+    Priority as IsmPriority,
+    TransitionSignal as IsmSignal,
+    TriggerKind as IsmTrigger,
+    Verdict as IsmVerdict,
+)
 from .perception_router import (
     parse_face,
     parse_gesture,
@@ -157,6 +171,14 @@ class BrainNode(Node):
         self._state = BrainInternalState()
         self._safety = SafetyLayer()
         self._world = WorldState(self)
+        # ISM Phase 1 shadow (system Phase 2 / 2A, T2A-2): observe-only. The
+        # machine always exists (pure, cheap); every shadow hook early-returns
+        # unless ism_shadow_enabled (declared default False = byte-identical).
+        # Its Decision NEVER influences emit/return — staged enable is post-6/18
+        # behind a separate ism_enabled flag that deliberately does not exist.
+        self._ism = InteractionStateMachine(now=time.time())
+        self._ism_history_len = 0
+        self._ism_last_tts = False
         self._chat_timeouts: dict[str, rclpy.timer.Timer] = {}
         # 5/8 [#F-confirm-timeout]: 5s → 30s — 給 user 等 say_canned 講完 + 走過去比手勢的時間。
         # 新語音 intent 進來會主動 cancel（_on_speech_intent），所以 30s 只是硬尾線防止永久卡住。
@@ -262,16 +284,13 @@ class BrainNode(Node):
                 self.get_logger().info(
                     f"perception_router_enabled set to {self.perception_router_enabled}"
                 )
-            elif p.name == "stranger_alert_enabled":
-                self.stranger_alert_enabled = bool(p.value)
-                self.get_logger().info(
-                    f"stranger_alert_enabled set to {self.stranger_alert_enabled}"
-                )
-            elif p.name == "greet_require_sitting":
-                self.greet_require_sitting = bool(p.value)
-                self.get_logger().info(
-                    f"greet_require_sitting set to {self.greet_require_sitting}"
-                )
+            elif p.name in ("stranger_alert_enabled", "greet_require_sitting",
+                            "ism_shadow_enabled"):
+                # Plain-bool runtime params share one branch (logs byte-identical
+                # to the previous per-param branches). ism_shadow_enabled joined
+                # 2026-06-12 — ISM Phase 1 shadow (T2A-2) runtime switch.
+                setattr(self, p.name, bool(p.value))
+                self.get_logger().info(f"{p.name} set to {getattr(self, p.name)}")
             elif p.name == "greet_sitting_window_s":
                 self.greet_sitting_window_s = float(p.value)
                 self.get_logger().info(
@@ -399,6 +418,11 @@ class BrainNode(Node):
         # s2_face / s3_object / s4_gesture = 只放行該段的自發 proposal；quiet=全擋。
         # 只影響 greet/object_remark/gesture 三條社交路徑，safety 與明確指令不受影響。
         self.declare_parameter("demo_phase", "all")
+        # ISM Phase 1 shadow (system Phase 2 T2A-2): observe-only wiring, default
+        # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
+        # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
+        # T2A-4 turns shadow on at runtime without touching the frozen demo script.
+        self.declare_parameter("ism_shadow_enabled", False)
         self.perception_router_enabled = bool(
             self.get_parameter("perception_router_enabled").value
         )
@@ -432,6 +456,7 @@ class BrainNode(Node):
         self.greet_sitting_window_s = float(self.get_parameter("greet_sitting_window_s").value)
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
         self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
+        self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self._capability_health_cache: dict[str, Any] | None = None
         self._apply_gesture_demo_modes()
 
@@ -465,6 +490,9 @@ class BrainNode(Node):
             self._GESTURE_CONFIRM = {**self._GESTURE_CONFIRM, "peace": "wiggle"}
 
     def _emit(self, plan: SkillPlan) -> None:
+        # ISM shadow ACCEPT-side chokepoint (T2A-2): observe-only, no-op when
+        # disabled, runs outside self._lock, never raises, never alters emit.
+        self._ism_shadow_on_emit(plan)
         payload = self._plan_to_dict(plan)
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
@@ -548,6 +576,254 @@ class BrainNode(Node):
             ))
         except Exception as exc:  # noqa: BLE001
             self.get_logger().debug(f"suppressed trace failed: {exc}")
+        # ISM shadow SUPPRESS-side chokepoint (T2A-2): Plan E already funnels all
+        # 19 gate early-returns through here, so one pure evaluate() covers them.
+        # Throttled repeats return above — shadow volume mirrors legacy volume.
+        self._ism_shadow_on_suppressed(gate=gate, reason=reason,
+                                       source_summary=source_summary)
+
+    # ── ISM Phase 1 shadow (system Phase 2 / 2A) ─────────────────────────────
+    # Observe-only wiring: the shadow machine sees the same events legacy acts
+    # on; its verdicts/transitions are published as /brain/trace events with
+    # detail.shadow=true. The Decision NEVER influences emit/return. Every hook
+    #   - early-returns when ism_shadow_enabled is False (default);
+    #   - runs OUTSIDE self._lock (Plan E lock discipline);
+    #   - never raises (spec-外 payload shapes must not kill a brain callback).
+
+    def _ism_candidate_from_plan(self, plan: SkillPlan) -> IsmCandidate:
+        """Map an emitted SkillPlan to an advisory shadow Candidate.
+
+        priority_class first, then source. `explicit` mirrors §3.4 P2 (speech /
+        gesture command / studio / LLM proposal) — shadow metadata for
+        arbitration comparison, not an authorization (§3.3 source trust)."""
+        pc = int(plan.priority_class)
+        src = plan.source or ""
+        did = self._current_decision_id
+        if pc == int(PriorityClass.SAFETY):
+            return IsmCandidate(kind="stop", priority=IsmPriority.SAFETY, source=src,
+                                skill=plan.selected_skill, explicit=True,
+                                decision_id=did)
+        if pc == int(PriorityClass.ALERT):
+            return IsmCandidate(kind="alert", priority=IsmPriority.ALERT, source=src,
+                                skill=plan.selected_skill, decision_id=did)
+        if src == "rule:confirmed":
+            return IsmCandidate(kind="confirm_ok", priority=IsmPriority.CONFIRM,
+                                source=src, skill=plan.selected_skill,
+                                decision_id=did)
+        if src == "rule:confirm_request":
+            # The say_canned hint stands in for the confirm request itself; the
+            # underlying skill rides in reason "awaiting_ok:<skill>".
+            skill = plan.reason.split("awaiting_ok:", 1)[-1] \
+                if "awaiting_ok:" in plan.reason else ""
+            return IsmCandidate(kind="confirm_request", priority=IsmPriority.EXPLICIT,
+                                source=src, skill=skill, requires_confirmation=True,
+                                explicit=True, decision_id=did)
+        if src == "rule:gesture":
+            return IsmCandidate(kind="gesture_cmd", priority=IsmPriority.EXPLICIT,
+                                source=src, skill=plan.selected_skill, explicit=True,
+                                decision_id=did)
+        if src in ("llm_bridge", "rule:chat_fallback", "llm_proposal", "studio_button"):
+            return IsmCandidate(kind="chat", priority=IsmPriority.EXPLICIT, source=src,
+                                skill=plan.selected_skill, explicit=True,
+                                decision_id=did)
+        # Spontaneous social rules (greet / sit_along / object_remark / idle / …)
+        return IsmCandidate(kind=plan.selected_skill or "social",
+                            priority=IsmPriority.SOCIAL, source=src,
+                            skill=plan.selected_skill, decision_id=did)
+
+    def _ism_candidate_from_suppressed(self, gate: str, reason: str,
+                                       source_summary: str) -> IsmCandidate:
+        """Advisory candidate for an event legacy gated out (no plan object).
+        Family derived from the _suppressed source_summary conventions."""
+        ss = source_summary or ""
+        did = self._current_decision_id
+        if gate == "stranger_alert_enabled":
+            return IsmCandidate(kind="stranger_alert", priority=IsmPriority.ALERT,
+                                source="face", decision_id=did)
+        if ss.startswith("gesture="):
+            return IsmCandidate(kind="gesture_cmd", priority=IsmPriority.EXPLICIT,
+                                source="gesture", explicit=True, decision_id=did)
+        if ss.startswith("class="):
+            return IsmCandidate(kind="object_remark", priority=IsmPriority.SOCIAL,
+                                source="object", decision_id=did)
+        if ss.startswith("identity="):
+            return IsmCandidate(kind="greet", priority=IsmPriority.SOCIAL,
+                                source="face", decision_id=did)
+        if ss.startswith(("skill:", "session=")):
+            return IsmCandidate(kind="skill_request", priority=IsmPriority.EXPLICIT,
+                                source="speech", explicit=True, decision_id=did)
+        if gate == "demo_phase":
+            family = reason.rsplit(":", 1)[-1]
+            if family == "gesture":
+                return IsmCandidate(kind="gesture_cmd", priority=IsmPriority.EXPLICIT,
+                                    source="gesture", explicit=True, decision_id=did)
+            return IsmCandidate(kind=family or "social", priority=IsmPriority.SOCIAL,
+                                source=family or "unknown", decision_id=did)
+        if gate == "dedup":
+            family = reason.split(":")[1] if ":" in reason else "unknown"
+            if family in ("speech", "gesture"):
+                return IsmCandidate(kind=f"dedup:{family}",
+                                    priority=IsmPriority.EXPLICIT, source=family,
+                                    explicit=True, decision_id=did)
+            return IsmCandidate(kind=f"dedup:{family}", priority=IsmPriority.SOCIAL,
+                                source=family, decision_id=did)
+        return IsmCandidate(kind=gate or "unknown", priority=IsmPriority.SOCIAL,
+                            source="unknown", decision_id=did)
+
+    def _ism_shadow_on_emit(self, plan: SkillPlan) -> None:
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            cand = self._ism_candidate_from_plan(plan)
+            pre = self._ism.state.value
+            decision = self._ism.propose(cand, time.time())
+            self._ism_trace_candidate(cand, decision, pre, legacy_action="emitted")
+            self._ism_shadow_drain_transitions(cand.decision_id)
+        except Exception as exc:  # noqa: BLE001 — shadow must never break emit
+            self.get_logger().debug(f"ism shadow emit hook failed: {exc}")
+
+    def _ism_shadow_on_suppressed(self, gate: str, reason: str,
+                                  source_summary: str) -> None:
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            cand = self._ism_candidate_from_suppressed(gate, reason, source_summary)
+            # evaluate() is PURE — an event legacy dropped must not advance the
+            # shadow machine (a counterfactual ACCEPT would corrupt the shadow
+            # trajectory and poison the parity data the 6/18 soak collects).
+            decision = IsmPolicy.evaluate(self._ism.state, cand)
+            self._ism_trace_candidate(cand, decision, self._ism.state.value,
+                                      legacy_action="suppressed",
+                                      legacy_gate=gate, legacy_reason=reason)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow suppress hook failed: {exc}")
+
+    def _ism_shadow_confirm_requested(self, skill: str, source: str) -> None:
+        """request_confirm sites that emit no say_canned hint (llm confirm mode).
+        Gesture / skill_request confirm paths are covered by the
+        rule:confirm_request mapping in _ism_shadow_on_emit — do not double-feed."""
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            cand = IsmCandidate(kind="confirm_request", priority=IsmPriority.EXPLICIT,
+                                source=source, skill=skill, requires_confirmation=True,
+                                explicit=True, decision_id=self._current_decision_id)
+            pre = self._ism.state.value
+            decision = self._ism.propose(cand, time.time())
+            self._ism_trace_candidate(cand, decision, pre,
+                                      legacy_action="confirm_requested")
+            self._ism_shadow_drain_transitions(cand.decision_id)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow confirm hook failed: {exc}")
+
+    def _ism_shadow_confirm_cancelled(self, reason: str) -> None:
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            if self._ism.state is not IsmState.CONFIRM_PENDING:
+                return  # drifted — the 30s grace watchdog reconciles; don't fabricate
+            cand = IsmCandidate(kind="confirm_cancel", priority=IsmPriority.CONFIRM,
+                                source="confirm",
+                                decision_id=self._current_decision_id)
+            pre = self._ism.state.value
+            decision = self._ism.propose(cand, time.time())
+            self._ism_trace_candidate(cand, decision, pre,
+                                      legacy_action=f"confirm_cancelled:{reason}")
+            self._ism_shadow_drain_transitions(cand.decision_id)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow cancel hook failed: {exc}")
+
+    def _ism_shadow_on_skill_result(self, status, plan_id,
+                                    payload: dict[str, Any]) -> None:
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            # Wire statuses are lowercase ("started"/"completed"); the machine's
+            # lifecycle table is uppercase — normalize here, nowhere else.
+            st = str(status or "").upper()
+            detail: dict[str, Any] = {"status": st, "plan_id": str(plan_id or "")}
+            if st == "STARTED":
+                detail["priority_class"] = int(
+                    payload.get("priority_class", int(PriorityClass.SKILL))
+                )
+                contract = SKILL_REGISTRY.get(str(payload.get("selected_skill") or ""))
+                # §3.6 watchdog consumes SkillContract.timeout_s — the wire
+                # payload doesn't carry it, so look it up registry-side.
+                detail["timeout_s"] = float(contract.timeout_s) if contract else 0.0
+            did = self._plan_decision.get(str(plan_id), "")
+            self._ism.apply_signal(
+                IsmSignal(trigger=IsmTrigger.SKILL_RESULT, detail=detail,
+                          decision_id=did),
+                now=time.time())
+            self._ism_shadow_drain_transitions(did)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow skill_result hook failed: {exc}")
+
+    def _ism_shadow_signal(self, trigger: IsmTrigger, detail: dict[str, Any]) -> None:
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            self._ism.apply_signal(IsmSignal(trigger=trigger, detail=detail),
+                                   now=time.time())
+            self._ism_shadow_drain_transitions("")
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow signal hook failed: {exc}")
+
+    def _ism_shadow_tick(self) -> None:
+        """10Hz piggyback on the attention tick (no new timer, per spec):
+        /state/tts_playing Bool edge → TTS_ACK signal, then watchdog tick."""
+        if not self.ism_shadow_enabled:
+            return
+        try:
+            now = time.time()
+            tts = bool(self._world.snapshot().tts_playing)
+            if tts != self._ism_last_tts:
+                self._ism_last_tts = tts
+                self._ism.apply_signal(
+                    IsmSignal(trigger=IsmTrigger.TTS_ACK,
+                              detail={"event": "start" if tts else "end"}),
+                    now=now)
+            self._ism.tick(now)
+            self._ism_shadow_drain_transitions("")
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"ism shadow tick failed: {exc}")
+
+    def _ism_shadow_drain_transitions(self, decision_id: str) -> None:
+        """Emit STATE_TRANSITION traces for machine history appended since the
+        last drain. History is a 64-entry ring — on truncation just resync."""
+        hist = self._ism.history
+        if len(hist) < self._ism_history_len:
+            self._ism_history_len = max(0, len(hist) - 1)
+        for ts, frm, to, trigger in hist[self._ism_history_len:]:
+            self._trace(TraceEvent(
+                decision_id=decision_id, node="brain_node",
+                kind=TraceKind.STATE_TRANSITION, verdict=Verdict.ACCEPTED,
+                gate="ism_shadow", reason=f"{frm}->{to}:{trigger}",
+                detail={"shadow": True, "from_state": frm, "to_state": to,
+                        "trigger": trigger, "machine_ts": ts},
+            ))
+        self._ism_history_len = len(hist)
+
+    def _ism_trace_candidate(self, cand: IsmCandidate, decision: IsmDecision,
+                             pre_state: str, legacy_action: str,
+                             legacy_gate: str = "", legacy_reason: str = "") -> None:
+        verdict = (Verdict.ACCEPTED
+                   if decision.verdict in (IsmVerdict.ACCEPT, IsmVerdict.PREEMPT)
+                   else Verdict.SUPPRESSED)
+        self._trace(TraceEvent(
+            decision_id=cand.decision_id, node="brain_node",
+            kind=TraceKind.CANDIDATE, verdict=verdict, gate="ism_shadow",
+            reason=decision.reason,
+            detail={"shadow": True, "ism_state": pre_state,
+                    "ism_state_after": self._ism.state.value,
+                    "ism_verdict": decision.verdict.value,
+                    "ism_reason": decision.reason,
+                    "candidate_kind": cand.kind,
+                    "candidate_priority": int(cand.priority),
+                    "candidate_skill": cand.skill,
+                    "legacy_action": legacy_action,
+                    "legacy_gate": legacy_gate, "legacy_reason": legacy_reason},
+        ))
 
     def _cooldown_remaining(self, key: str, cooldown_s: float) -> float:
         last = self._state.last_alert_ts.get(key)
@@ -861,6 +1137,9 @@ class BrainNode(Node):
             self.get_logger().info(
                 f"PendingConfirm requested via llm_proposal skill={proposed_skill}"
             )
+            # ISM shadow: this request_confirm site emits no say_canned hint, so
+            # the rule:confirm_request emit mapping never sees it — feed directly.
+            self._ism_shadow_confirm_requested(proposed_skill, source="speech")
             self._emit_trace(
                 session_id=session_id,
                 engine=engine,
@@ -1071,6 +1350,8 @@ class BrainNode(Node):
             )
         elif outcome.kind == ConfirmOutcomeKind.CANCELLED:
             self.get_logger().info(f"PendingConfirm CANCELLED reason={outcome.reason}")
+            # ISM shadow: tick-driven cancel (timeout) has no emit to piggyback on.
+            self._ism_shadow_confirm_cancelled(outcome.reason)
 
     def _tick_attention(self) -> None:
         """10Hz attention machine tick. Uses time.monotonic() for fake-clock compatibility."""
@@ -1094,6 +1375,8 @@ class BrainNode(Node):
         # of brain_node cooldowns/timestamps; 5/9 final review). Cheap when
         # idle_enabled=False (early return).
         self._maybe_emit_idle(time.time())
+        # ISM shadow: TTS Bool edge + watchdog tick piggyback (outside _lock).
+        self._ism_shadow_tick()
 
     # ── Issue 8 (P3-1a) Idle MVP ──────────────────────────────────────────
     def _touch_user_interaction(self, now: float | None = None) -> None:
@@ -1739,6 +2022,8 @@ class BrainNode(Node):
 
         # Plan E: skill_result trace on terminal/blocked statuses (additive).
         self._trace_skill_result(status, plan_id, payload)
+        # ISM shadow: skill lifecycle is transition driver #1 (§3.2).
+        self._ism_shadow_on_skill_result(status, plan_id, payload)
 
     _TERMINAL_RESULT_STATUSES = frozenset({
         SkillResultStatus.COMPLETED.value,
@@ -1779,6 +2064,8 @@ class BrainNode(Node):
                 self.get_logger().info("object_remark dedup cleared by /brain/reset_context")
             self._state.last_alert_ts.pop("object_remark", None)
             self._state.active_plan = None
+        # ISM shadow: operator reset is transition driver #4 (outside _lock).
+        self._ism_shadow_signal(IsmTrigger.OPERATOR, {"op": "reset"})
 
     def _publish_brain_state(self) -> None:
         snap = self._world.snapshot()
