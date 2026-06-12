@@ -67,7 +67,11 @@ if [[ "$CONVERSATION_ENGINE" != "langgraph" && "$CONVERSATION_ENGINE" != "legacy
 fi
 
 # ── ASR ──
-ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-'[\"qwen_cloud\",\"sensevoice_local\",\"whisper_local\"]'}"
+# 值保持「乾淨的 yaml 陣列」（不內嵌殼層引號）— 引號統一在 send-keys 那層補
+# （window 5）。歷史坑（6/12 真機）：預設值內嵌 '...' 時預設路徑能跑，但 .env
+# 來的值經 bash source 剝掉引號後，未加引號展開進 zsh pane → `[` glob 炸掉
+# → stt_intent_node 靜默死亡（zsh: no matches found）。
+ASR_PROVIDER_ORDER="${ASR_PROVIDER_ORDER:-[\"qwen_cloud\",\"sensevoice_local\",\"whisper_local\"]}"
 QWEN_ASR_BASE_URL="${QWEN_ASR_BASE_URL:-http://127.0.0.1:8001/v1/audio/transcriptions}"
 QWEN_ASR_TIMEOUT="${QWEN_ASR_TIMEOUT:-3.0}"
 INPUT_DEVICE="${INPUT_DEVICE:-24}"
@@ -181,7 +185,7 @@ tmux new-window -t "$SESSION" -n asr
 tmux send-keys -t "$SESSION:asr" \
   "$ROS_SETUP && \
   ros2 run speech_processor stt_intent_node --ros-args \
-    -p provider_order:=$ASR_PROVIDER_ORDER \
+    -p provider_order:='$ASR_PROVIDER_ORDER' \
     -p qwen_asr.base_url:='$QWEN_ASR_BASE_URL' \
     -p qwen_asr.timeout_sec:=$QWEN_ASR_TIMEOUT \
     -p qwen_asr.model_name:=sensevoice \
