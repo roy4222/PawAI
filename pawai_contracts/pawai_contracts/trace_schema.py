@@ -23,6 +23,9 @@ class TraceKind(str, Enum):
     PLAN_EMITTED = "plan_emitted"
     SKILL_RESULT = "skill_result"
     TTS_STATE = "tts_state"
+    # ISM Phase 1 shadow (system Phase 2 T2A-1, additive): from/to/trigger of an
+    # InteractionStateMachine transition. Shadow events carry detail.shadow=true.
+    STATE_TRANSITION = "state_transition"
 
 
 class Verdict(str, Enum):

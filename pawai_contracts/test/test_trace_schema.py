@@ -27,8 +27,21 @@ def test_verdict_and_kind_enums_frozen():
     assert {v.value for v in Verdict} == {"accepted", "suppressed", "blocked"}
     assert {k.value for k in TraceKind} == {
         "perception_event", "candidate", "policy_decision",
-        "plan_emitted", "skill_result", "tts_state",
+        "plan_emitted", "skill_result", "tts_state", "state_transition",
     }
+
+
+def test_state_transition_kind_added_additively():
+    # ISM Phase 1 shadow (system Phase 2 T2A-1): new kind exists, prior six
+    # values stay byte-identical — consumers keyed on the old strings never see
+    # a rename.
+    assert TraceKind.STATE_TRANSITION.value == "state_transition"
+    for name, value in (
+        ("PERCEPTION_EVENT", "perception_event"), ("CANDIDATE", "candidate"),
+        ("POLICY_DECISION", "policy_decision"), ("PLAN_EMITTED", "plan_emitted"),
+        ("SKILL_RESULT", "skill_result"), ("TTS_STATE", "tts_state"),
+    ):
+        assert TraceKind[name].value == value
 
 
 def test_plan_id_only_when_set():
