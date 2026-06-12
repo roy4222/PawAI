@@ -836,7 +836,15 @@ def smoke_brain(rounds: int) -> None:
                 "或確認 JETSON_REPO 指向正確的 repo 路徑",
             ],
         )
-    rc = shell.stream_remote(f"cd {repo} && bash {rel} {rounds}")
+    # Non-interactive SSH loads no ROS env (zsh -c skips .zshrc) — the smoke
+    # script's `ros2 node list` precheck would see zero nodes and false-FAIL.
+    # Same sourcing precedent as the deploy-side colcon build (6/12 真機驗證).
+    rc = shell.stream_remote(
+        f"cd {repo} && "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"bash {rel} {rounds}"
+    )
     if rc != 0:
         click.echo(f"✗ smoke brain failed (exit {rc})")
         click.echo("  ↳ demo lane 活著嗎？跑 `pawai health brain` 看哪個環節紅")
