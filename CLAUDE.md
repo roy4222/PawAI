@@ -56,6 +56,8 @@ pawai demo start --nav capability         # 啟 nav stack（lane=nav_capability�
 pawai demo stop                           # 依 lock lane 路由 cleanup（只清自己的，--force 才能清別人）
 pawai docs <module>                       # 跳到 0511 架構文件
 pawai contract check                      # 跑 topic schema 驗證
+pawai smoke brain                         # SSH 上 Jetson 跑 5 輪語音 E2E（demo/llm-e2e 都吃，6/12）
+pawai evidence pull                       # 拉回 runtime/traces/*.jsonl 證據（只讀，6/12）
 ```
 
 **規矩**：一次只能一人 demo（lock），`-y` ≠ `--force`（前者跳一般 prompt、不能搶 lock；後者才能搶）。完整手冊：[`docs/pawai_cli/README.md`](docs/pawai_cli/README.md)、[`team-onboarding.md`](docs/pawai_cli/team-onboarding.md)、[`troubleshooting.md`](docs/pawai_cli/troubleshooting.md)。
@@ -191,10 +193,15 @@ ros2 topic pub --once /tts std_msgs/msg/String '{data: "測試播放"}'
 ### 5 輪 E2E Smoke Test
 
 ```bash
-# 前提：llm-e2e tmux session 已在跑
-bash scripts/smoke_test_e2e.sh      # 預設 5 輪
+# 前提：demo lane 或 llm-e2e session 已在跑（6/12 起雙 stack 相容）
+bash scripts/smoke_test_e2e.sh      # 預設 5 輪（Jetson 上跑）
 bash scripts/smoke_test_e2e.sh 3    # 指定輪數
+pawai smoke brain                   # 從開發機跑（自動 SSH + source ROS env）
 ```
+
+腳本 6/12 修了兩個坑：`/tts` 發布改 `--times 2 -r 1`（`--once` 會 race RELIABLE
+訂閱者 discovery、`-w N` 會因 QoS 不相容訂閱永久卡）；播放證據接受 Megaphone WAV
+**或** local playback log（demo lane 走 USB 喇叭沒有 WAV）。
 
 ### 30 輪驗收測試
 
@@ -440,7 +447,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 - **備用麥克風 HyperX SoloCast 是 stereo-only**（硬體 `CHANNELS: 2`），需 `channels:=2` + 手動 downmix
 - **Whisper 在 Jetson 走 CUDA 時必須用 `float16`**(`cuda + int8` 不支援會 silent fail);`speech_processor.yaml` 預設為 `cpu + int8` 可用但速度較慢,Demo 啟動腳本覆寫為 `cuda + float16`
 - `LD_LIBRARY_PATH` 必須含 `/home/jetson/.local/ctranslate2-cuda/lib`（啟動腳本已處理）
-- zsh 的 glob 會炸掉陣列參數：用 `'["whisper_local"]'` 加引號，或 `setopt nonomatch`
+- zsh 的 glob 會炸掉陣列參數：用 `'["whisper_local"]'` 加引號，或 `setopt nonomatch`。**`.env` 路徑的變體（6/12 真機）**：`.env` 裡 `VAR=["a","b"]` 被 bash source 剝掉引號 → 啟動腳本未加引號展開進 tmux zsh pane → node 靜默死亡（stt_intent_node 即此死法；`start_full_demo_tmux.sh` 已修為 send-keys 層單引號包覆）
 - `setup.bash` / `setup.zsh` 不可混用，否則環境不完整
 
 ### Jetson 測試規範
@@ -450,6 +457,7 @@ ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
 - 修改 Python 程式碼後必須 `colcon build` 再 `source install/setup.zsh`
 - **Jetson setuptools 必須 `<70`**（colcon 的 setup.py shim 用 `--editable`/`--uninstall`，setuptools 80+ 拿掉這兩個 flag → build 會 fail with `option --editable not recognized`）。修法：`pip install --user "setuptools<70"`（已知好版本：`69.5.1`）
 - **rsync 同步只搬源碼，不會 rebuild `install/`**：感覺到 brain 模式或新參數沒生效時，跑 `colcon build --packages-select <pkg>` 而不是只 `~/sync once`
+- **deploy 的 rsync `--delete` 曾整棵轟掉 Jetson `runtime/`**（6/12 真機抓到：開發機沒有 `runtime/` → 每次 deploy 刪光 trace JSONL + nav named_poses/routes）。`tools/sync/rsync-excludes.txt` 已補 `runtime/` + `artifacts/`；**新增 Jetson 端持久資料目錄時必須同步加進 excludes**
 
 ---
 

@@ -417,6 +417,40 @@ gate（Plan B4）背後呼叫的同一批腳本。
 
 ---
 
+### smoke brain（6/12 系統 Phase 2 / 2C 新增）
+
+```bash
+pawai smoke brain                # 預設 5 輪
+pawai smoke brain --rounds 3     # 1-30 輪
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_e2e.sh`（語音 E2E 固定話術驗收）。**前提：demo
+lane 或 llm-e2e session 已在跑**（腳本 6/12 起雙 stack 相容：brain demo 的
+`conversation_graph_node` 與 legacy 的 `llm_bridge_node` 都認；播放證據接受
+Megaphone WAV 或 USB 喇叭 local playback）。執行前先 probe 遠端腳本存在
+（fail-closed）；失敗時 exit code 原樣傳回並附「↳」修法提示（`pawai health brain`
+/ `pawai demo start`）。**真機 6/12 驗證 5/5**。
+
+`smoke vision|object|nav|full` 刻意不存在 —— 採集腳本歸系統 Phase 3/4、CLI
+wiring 歸系統 Phase 5（phase 2 plan 2C 範圍切分）。
+
+---
+
+### evidence pull（6/12 系統 Phase 2 / 2C 新增）
+
+```bash
+pawai evidence pull                      # → artifacts/evidence/traces/
+pawai evidence pull --dest /tmp/traces   # 自訂目的地
+```
+
+把 Jetson gateway trace store 的 `runtime/traces/*.jsonl`（Evidence Center 落盤，
+見 `docs/pawai-brain/studio/README.md`）rsync 回本機並印摘要
+（files / events / suppressed）。**只讀**：無 `--delete`、不動 Jetson 端、不改寫
+JSONL（Roy D5：CLI 只負責讀取與匯出）。失敗訊息附修法（`pawai doctor` 看
+Tailscale；Jetson 端沒檔案 = gateway 沒跑或 `PAWAI_TRACE_STORE_ENABLED=0`）。
+
+---
+
 ### logs
 
 ```bash

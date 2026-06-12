@@ -209,6 +209,35 @@ Foxglove 替代展示牆。三欄即時影像 + 精簡 overlay + 事件 ticker�
 | `WS /ws/video/{face,vision,object}` | ROS2→瀏覽器 | JPEG binary debug images | ✅ | ❌ |
 | `GET /speech` | — | push-to-talk 獨立測試頁 | ✅ | ✅ |
 | `POST /api/reset` | 瀏覽器→ROS2 | **5/9 加**：重置對話 context — publish `/brain/reset_context` (std_msgs/Empty)，conversation_graph_node 清 `_memory + _seen_sessions`，brain_node cancel `_pending_confirm`。**不清**`_active_plans` / `_state.attention`。| ✅ | ✅ |
+| `GET /api/trace/export` | — | **6/12 加（Evidence Center first slice）**：串流 `runtime/traces/*.jsonl`（x-ndjson）。`?since=<ts>` 過濾、`?redact=0` 完整匯出。Auth 例外規則見下節。| ✅ | ❌ |
+
+### 6/12 補充：Evidence Center first slice（系統 Phase 2 / 2B，PR #161）
+
+> 真相鏈（Roy D5）：schema=`pawai_contracts.trace_schema`、發射=Brain/IE、
+> **落盤=gateway、CLI 只讀**。本節是落盤/匯出/呈現三件事的文件。
+
+- **落盤**：`gateway/trace_store.py`（ROS-free 純模組）。`/brain/trace` 事件**全量**
+  寫 `runtime/traces/{session_id}.jsonl`（僅 Jetson 本機）；`append()` 只 enqueue
+  （ROS callback 零檔案 I/O），daemon writer 每秒 flush；每檔 ~20MB rotation、留新
+  20 檔。Env：`PAWAI_TRACE_STORE_ENABLED=0` 關（回純 bridge）、`PAWAI_TRACE_DIR`
+  改路徑。deploy 不會清掉它（6/12 起 `tools/sync/rsync-excludes.txt` 排除
+  `runtime/` + `artifacts/`）。
+- **PII 保守預設（T2B-0，Roy 6/12 拍板）**：任何**離機**路徑（`/ws/events` 廣播 +
+  預設 export）一律過 `redact_trace_event()` — `source_summary`/`transcript`/
+  `name`/`image_path` 等 → `[private]`，reason 內人名段遮蔽
+  （`cooldown:greet:Roy`→`cooldown:greet:[private]`）；gate/kind/verdict/ism_*
+  等 safe summary 照常可見。
+- **Export auth（A-11）**：`auth.export_access()` — auth-on 時 GET export **不吃**
+  S0-2 的 safe-method 豁免（無 token → 401）；`redact=0` 完整匯出在 token 系統
+  關閉時一律 **403**（PII 永不未經認證離機）；default-off 姿態 redacted export
+  開放。
+- **前端 viewer**：`/ws/events` 的 `brain:trace` 事件 → `brainTraces` store slice
+  （cap 50）→ `SkillTraceContent` 的「為什麼沒反應 · Suppressed」區
+  （DevPanel sheet 與 `/studio/dev` 共用；ISM shadow 事件帶紫色 `shadow` badge）。
+- **CLI 對接**：`pawai evidence pull`（見 `docs/pawai_cli/README.md`）。
+- **6/12 真機驗證**：JSONL 46→192 行、export redacted 200 / full 無 auth 403 /
+  `since` 過濾 ✓、WS 流含 shadow 標記與 `[private]` ✓（checkpoint report §8）。
+- Mock server 無此端點（STUDIO-4 trace 模擬列 optional follow-up，非 first slice）。
 
 ### 5/9 補充：「新對話」按鈕 + dev-only F5 auto-detect（issue 7）
 
