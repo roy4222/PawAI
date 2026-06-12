@@ -40,6 +40,10 @@ def test_smoke_brain_runs_remote_script_with_rounds():
     assert result.exit_code == 0, result.output
     assert "scripts/smoke_test_e2e.sh" in calls["probe"]
     assert "cd /home/jetson/elder_and_dog" in calls["stream"]
+    # Non-interactive SSH loads no ROS env — without sourcing, the script's
+    # `ros2 node list` precheck sees zero nodes and false-FAILs (6/12 真機).
+    assert "source /opt/ros/humble/setup.zsh" in calls["stream"]
+    assert "source install/setup.zsh" in calls["stream"]
     assert "bash scripts/smoke_test_e2e.sh 3" in calls["stream"]
 
 
