@@ -797,10 +797,11 @@ _LANE_HEALTHCHECK = {
 # ── smoke (system Phase 2 T2C-1) ────────────────────────────────────────────
 # Repo-relative scripts run ON THE JETSON over SSH: they publish ROS topics
 # into the live demo stack, so streaming them locally on a dev box would
-# silently no-op (different ROS world). vision/object/nav/full deliberately
-# absent — their 採集 scripts belong to system Phase 3/4/5 (phase 2 plan 2C).
+# silently no-op (different ROS world). Each entry below must have a
+# Jetson-side script plus CLI mock coverage before it is exposed.
 _SMOKE_SCRIPTS = {
     "brain": "scripts/smoke_test_e2e.sh",
+    "vision": "scripts/smoke_test_vision.sh",
 }
 
 
@@ -851,6 +852,51 @@ def smoke_brain(rounds: int) -> None:
         click.echo("  ↳ 沒起 demo 就先 `pawai demo start`，等 ready 再 smoke")
         sys.exit(rc)
     click.echo("✓ smoke brain passed")
+
+
+@smoke.command("vision")
+@click.option("--with-events", default=0, show_default=True, type=int,
+              help="Wait for N gesture/pose events after static checks (0 = static-only).")
+def smoke_vision(with_events: int) -> None:
+    """Run the vision smoke (scripts/smoke_test_vision.sh) on the Jetson.
+
+    前提：vision lane 已在 demo stack 中跑（pawai demo start）。
+    """
+    if with_events < 0:
+        raise click.ClickException("--with-events must be >= 0")
+
+    rel = _SMOKE_SCRIPTS["vision"]
+    repo = shell.jetson_repo()
+    probe = shell.run_remote(f"test -f {repo}/{rel}", timeout=10)
+    if probe.code in (124, 127, 255):
+        raise structured_error(
+            f"SSH to {shell.jetson_host()} failed (exit {probe.code})",
+            [
+                "跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
+                "確認 JETSON_HOST / .env.local 沒有 CRLF（pawai doctor 會驗）",
+            ],
+        )
+    if not probe.ok:
+        raise structured_error(
+            f"{rel} not found on Jetson ({repo})",
+            [
+                "先同步腳本：pawai jetson deploy --module gesture --no-build",
+                "或確認 JETSON_REPO 指向正確的 repo 路徑",
+            ],
+        )
+
+    event_args = f" --with-events {with_events}" if with_events > 0 else ""
+    rc = shell.stream_remote(
+        f"cd {repo} && "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"bash {rel}{event_args}"
+    )
+    if rc != 0:
+        click.echo(f"✗ smoke vision failed (exit {rc})")
+        click.echo("  ↳ vision lane 活著嗎？沒起 demo 就先 `pawai demo start`")
+        sys.exit(rc)
+    click.echo("✓ smoke vision passed")
 
 
 def _run_lane_healthcheck(lane: str) -> int:

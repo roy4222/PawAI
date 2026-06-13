@@ -132,6 +132,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai demo school`](#demo-school) | **DEPRECATED**（5/16 活動已過；publisher 留在 `scripts/school_demo_ending.py`） |
 | [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
 | [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
+| [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
@@ -431,8 +432,24 @@ Megaphone WAV 或 USB 喇叭 local playback）。執行前先 probe 遠端腳本
 （fail-closed）；失敗時 exit code 原樣傳回並附「↳」修法提示（`pawai health brain`
 / `pawai demo start`）。**真機 6/12 驗證 5/5**。
 
-`smoke vision|object|nav|full` 刻意不存在 —— 採集腳本歸系統 Phase 3/4、CLI
-wiring 歸系統 Phase 5（phase 2 plan 2C 範圍切分）。
+---
+
+### smoke vision
+
+```bash
+pawai smoke vision                  # static-only：node / status_image hz / event publishers
+pawai smoke vision --with-events 3  # HITL：static 綠後等待 3 個 gesture/pose event
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_vision.sh`。預設是 static-only：檢查
+`vision_perception` node、`/vision_perception/status_image` hz > 0，以及
+`/event/gesture_detected`、`/event/pose_detected` 兩個 topic 都有 publisher。
+`--with-events N` 會在 static 全綠後進入 HITL 模式，60 秒內累計收到 N 個
+gesture/pose event 才算 PASS。
+
+前提：vision lane 已由 `pawai demo start` 啟動；CLI 會先 source
+`/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`，避免 non-interactive SSH 看不到
+ROS 環境。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
 
 ---
 
