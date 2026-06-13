@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Download,
   FileJson,
   GitBranch,
   Radio,
@@ -20,6 +21,7 @@ import {
 import type { BrainTraceEvent } from "@/contracts/types";
 import { GateChip } from "@/components/shared/gate-chip";
 import { useEventStream } from "@/hooks/use-event-stream";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import { buildTimeline, type TraceGroup, verdictTone } from "@/lib/trace-timeline";
 import { gateZh, reasonZh } from "@/lib/trace-zh";
@@ -104,6 +106,32 @@ function safeJson(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function downloadErrorMessage(response: Response, label: string): Promise<string> {
+  let body = "";
+  try {
+    body = (await response.text()).trim();
+  } catch {
+    body = "";
+  }
+
+  const suffix = body ? `: ${body.slice(0, 160)}` : "";
+  return `${label} download failed (${response.status})${suffix}`;
 }
 
 function isBrainTraceEvent(value: unknown): value is BrainTraceEvent {
@@ -448,6 +476,8 @@ export default function EvidencePage() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<"jsonl" | "md" | null>(null);
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<BrainTraceEvent | null>(null);
 
@@ -533,6 +563,39 @@ export default function EvidencePage() {
     });
   }, []);
 
+  const downloadSessionArtifact = useCallback(
+    async (kind: "jsonl" | "md") => {
+      if (!selectedSession) return;
+
+      const encodedSession = encodeURIComponent(selectedSession);
+      const isJsonl = kind === "jsonl";
+      const label = isJsonl ? "redacted JSONL" : "session report";
+      const url = isJsonl
+        ? `${getGatewayHttpUrl()}/api/trace/export?session=${encodedSession}`
+        : `${getGatewayHttpUrl()}/api/trace/report?session=${encodedSession}&format=md`;
+
+      setDownloadError(null);
+      setDownloading(kind);
+      try {
+        const response = await fetch(url, { headers: { ...authHeaders() } });
+        if (!response.ok) {
+          throw new Error(await downloadErrorMessage(response, label));
+        }
+
+        const text = await response.text();
+        const blob = new Blob([text], {
+          type: isJsonl ? "application/x-ndjson;charset=utf-8" : "text/markdown;charset=utf-8",
+        });
+        downloadBlob(blob, `${selectedSession}.${kind}`);
+      } catch (err) {
+        setDownloadError(err instanceof Error ? err.message : `${label} download failed`);
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [selectedSession]
+  );
+
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-[var(--nav-border)] px-4 md:px-5">
@@ -603,6 +666,32 @@ export default function EvidencePage() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void downloadSessionArtifact("jsonl")}
+                disabled={!selectedSession || downloading !== null}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+              >
+                <Download className="h-4 w-4" />
+                {downloading === "jsonl" ? "下載中..." : "下載 redacted JSONL"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadSessionArtifact("md")}
+                disabled={!selectedSession || downloading !== null}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60"
+              >
+                <Download className="h-4 w-4" />
+                {downloading === "md" ? "下載中..." : "下載 session 報告 (md)"}
+              </button>
+              {downloadError && (
+                <span className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] text-rose-300">
+                  {downloadError}
+                </span>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
