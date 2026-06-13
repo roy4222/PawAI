@@ -114,6 +114,11 @@ def _enable_stage_2c(n: BrainNode) -> None:
     n.ism_stage_2c_executing = True
 
 
+def _enable_stage_2d(n: BrainNode) -> None:
+    n.ism_enabled = True
+    n.ism_stage_2d_speaking = True
+
+
 def _start_wiggle(n: BrainNode, plan_id: str = "p1") -> None:
     n._on_skill_result(_msg({
         "plan_id": plan_id,
@@ -158,6 +163,20 @@ def _legacy_suppressed_traces(n: BrainNode) -> list[dict]:
         t for t in n.traces
         if t["verdict"] == "suppressed" and not t.get("detail", {}).get("shadow")
     ]
+
+
+def _queue_marker_traces(n: BrainNode) -> list[dict]:
+    return [
+        t for t in n.traces
+        if t.get("detail", {}).get("queue_v2_pending") is True
+    ]
+
+
+def _has_legacy_suppress(n: BrainNode, *, gate: str, reason: str) -> bool:
+    return any(
+        t["gate"] == gate and t["reason"] == reason
+        for t in _legacy_suppressed_traces(n)
+    )
 
 
 def _stable_trace_payload(t: dict) -> dict:
@@ -506,6 +525,108 @@ def test_2c_watchdog_cleanup_never_raises(monkeypatch, node):
         _tick_after_deadline(monkeypatch, trace_node)
     finally:
         trace_node.destroy_node()
+
+
+def test_2d_object_speaking_suppress_with_queue_marker_flag_on(node):
+    _enable_stage_2d(node)
+    node._world._snap.tts_playing = True
+    node._attention._state = AttentionState.ENGAGED
+
+    node._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+
+    assert node.proposals == []
+    assert _has_legacy_suppress(node, gate="tts_playing", reason="tts_playing")
+    markers = _queue_marker_traces(node)
+    assert len(markers) == 1
+    assert markers[0]["reason"] == "gate:speaking"
+    assert markers[0]["gate"] == "speaking"
+    assert markers[0]["detail"]["ism_reason"] == "gate:speaking"
+    assert markers[0]["detail"]["source_summary"] == "class=cup"
+
+
+def test_2d_object_speaking_byte_identical_flag_off(node):
+    node._world._snap.tts_playing = True
+    node._attention._state = AttentionState.ENGAGED
+
+    node._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+
+    assert node.proposals == []
+    assert _has_legacy_suppress(node, gate="tts_playing", reason="tts_playing")
+    assert _queue_marker_traces(node) == []
+
+
+def test_2d_queue_marker_only_when_speaking(node):
+    _enable_stage_2d(node)
+    node._world._snap.tts_playing = False
+    _enter_pending_confirm(node)
+    node._attention._state = AttentionState.ENGAGED
+
+    node._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+
+    assert _has_legacy_suppress(node, gate="pending_confirm", reason="confirm_in_flight")
+    assert _queue_marker_traces(node) == []
+
+
+def test_2d_speaking_marker_never_raises(monkeypatch, node):
+    _enable_stage_2d(node)
+    node._world._snap.tts_playing = True
+    node._attention._state = AttentionState.ENGAGED
+
+    def _boom(_state, _candidate):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        interaction_state.InteractionPolicy,
+        "evaluate",
+        staticmethod(_boom),
+    )
+
+    node._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+
+    assert node.proposals == []
+    assert _has_legacy_suppress(node, gate="tts_playing", reason="tts_playing")
+    assert _queue_marker_traces(node) == []
+
+
+def test_2d_greet_and_gesture_marker_flag_on():
+    scenarios = (
+        (
+            "greet",
+            lambda n: n._on_face(_msg({"identity": "roy", "identity_stable": True})),
+            "greet_gate",
+            "tts_playing",
+            "identity=roy",
+        ),
+        (
+            "gesture",
+            lambda n: n._on_gesture(_msg({"gesture": "wave", "confidence": 0.95})),
+            "conversation_gate",
+            "conversation_gate:tts_playing",
+            "gesture=wave",
+        ),
+    )
+
+    for _name, fire, gate, reason, source_summary in scenarios:
+        for stage_2d_on in (True, False):
+            n = _make_node()
+            try:
+                if stage_2d_on:
+                    _enable_stage_2d(n)
+                n._world._snap.tts_playing = True
+
+                fire(n)
+
+                assert n.proposals == []
+                assert _has_legacy_suppress(n, gate=gate, reason=reason)
+                markers = _queue_marker_traces(n)
+                if stage_2d_on:
+                    assert len(markers) == 1
+                    assert markers[0]["reason"] == "gate:speaking"
+                    assert markers[0]["detail"]["source_summary"] == source_summary
+                else:
+                    assert markers == []
+            finally:
+                n.destroy_node()
 
 
 def test_legacy_sitting_skipped_during_pending_confirm(node):
