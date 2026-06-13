@@ -67,7 +67,8 @@ from auth import (
 # Evidence Center trace store (system Phase 2 T2B-1) — pure module; persistence
 # of /brain/trace JSONL + the T2B-0 PII redaction single source.
 from trace_store import (  # noqa: E402 — same-dir import after sys.path setup
-    TraceStore, iter_export_lines, redact_trace_event, store_enabled, trace_dir,
+    TraceStore, iter_export_lines, list_sessions, redact_trace_event,
+    store_enabled, trace_dir,
 )
 
 # ── Config ───────────────────────────────────────────────────────
@@ -1119,6 +1120,27 @@ async def get_scoreboard():
 
 
 # ── Evidence Center: trace export (T2B-2, A-11 + T2B-0 rulings) ─────────────
+
+@app.get("/api/trace/sessions")
+async def get_trace_sessions(request: Request):
+    """List persisted trace sessions with metadata only (Lane 2 T2-1).
+
+    No event payload is returned here, so there is no PII to redact. The access
+    posture deliberately matches trace export: when token auth is enabled,
+    this GET endpoint requires the Bearer token despite the global safe-method
+    bypass.
+    """
+    status = export_access(
+        auth_enabled=AUTH.auth_enabled,
+        header_token_ok=token_ok(request.headers.get("authorization"), AUTH.token),
+        want_full=False,
+    )
+    if status == 401:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return {
+        "ok": True,
+        "sessions": list_sessions(trace_dir(repo_root=_REPO_ROOT)),
+    }
 
 @app.get("/api/trace/export")
 async def get_trace_export(request: Request, since: float = 0.0, redact: int = 1):

@@ -378,6 +378,71 @@ class TestScoreboardEndpoint:
         assert _scoreboard_path() == target
 
 
+class TestTraceSessionsEndpoint:
+    """Lane 2 T2-1: read-only trace session list endpoint."""
+
+    def test_trace_sessions_lists_redaction_free_stats(self, tmp_path, monkeypatch):
+        import asyncio
+        from studio_gateway import get_trace_sessions
+
+        p = tmp_path / "20260613-010000.jsonl"
+        p.write_text(
+            json.dumps({
+                "v": 1,
+                "ts": 100.0,
+                "decision_id": "d1",
+                "node": "brain_node",
+                "kind": "policy_decision",
+                "verdict": "suppressed",
+                "gate": "greet_cooldown",
+                "reason": "cooldown:greet:Roy",
+                "detail": {"source_summary": "identity=Roy conf=0.9"},
+            }) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(get_trace_sessions(_Req()))
+
+        assert resp == {
+            "ok": True,
+            "sessions": [{
+                "session_id": "20260613-010000",
+                "started_ts": 100.0,
+                "line_count": 1,
+                "file_size": p.stat().st_size,
+                "parts": ["20260613-010000.jsonl"],
+            }],
+        }
+
+    def test_trace_sessions_uses_export_auth_posture(self, tmp_path, monkeypatch):
+        import asyncio
+        from auth import AuthConfig
+        import studio_gateway
+
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+        monkeypatch.setattr(
+            studio_gateway,
+            "AUTH",
+            AuthConfig(host="0.0.0.0", token="secret", allowed_origins=()),
+        )
+
+        class _Missing:
+            headers = {}
+
+        class _Authed:
+            headers = {"authorization": "Bearer secret"}
+
+        missing = asyncio.run(studio_gateway.get_trace_sessions(_Missing()))
+        authed = asyncio.run(studio_gateway.get_trace_sessions(_Authed()))
+
+        assert missing.status_code == 401
+        assert authed["ok"] is True
+
+
 # ── Operator-controlled nav driving (S1 "move to scene") ────────
 
 

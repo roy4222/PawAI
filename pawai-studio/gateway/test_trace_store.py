@@ -15,6 +15,7 @@ from trace_store import (  # noqa: E402
     PII_DETAIL_KEYS,
     TraceStore,
     iter_export_lines,
+    list_sessions,
     redact_trace_event,
     store_enabled,
     trace_dir,
@@ -202,3 +203,36 @@ def test_iter_export_lines_skips_garbage_and_missing_dir(tmp_path):
     lines = [json.loads(line) for line in iter_export_lines(tmp_path)]
     assert len(lines) == 1 and lines[0]["ts"] == 5
     assert list(iter_export_lines(tmp_path / "nope")) == []
+
+
+# ── session listing (Lane 2 T2-1) ───────────────────────────────────────────
+
+def test_list_sessions_groups_rotation_parts_and_counts_valid_events(tmp_path):
+    (tmp_path / "20260613-010000.jsonl").write_text(
+        json.dumps(_ev(ts=10.0)) + "\nnot-json\n" + json.dumps(_ev(ts=12.0)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "20260613-010000.2.jsonl").write_text(
+        json.dumps(_ev(ts=11.0)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "20260613-020000.jsonl").write_text(
+        json.dumps(_ev(ts=20.0)) + "\n",
+        encoding="utf-8",
+    )
+
+    sessions = list_sessions(tmp_path)
+
+    assert [s["session_id"] for s in sessions] == ["20260613-020000", "20260613-010000"]
+    older = sessions[1]
+    assert older["started_ts"] == 10.0
+    assert older["line_count"] == 3
+    assert older["file_size"] == (
+        (tmp_path / "20260613-010000.jsonl").stat().st_size
+        + (tmp_path / "20260613-010000.2.jsonl").stat().st_size
+    )
+    assert older["parts"] == ["20260613-010000.jsonl", "20260613-010000.2.jsonl"]
+
+
+def test_list_sessions_missing_dir_returns_empty(tmp_path):
+    assert list_sessions(tmp_path / "nope") == []
