@@ -134,6 +134,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
 | [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
 | [`pawai smoke object`](#smoke-object) | 跑 object lane static/HITL cup smoke |
+| [`pawai smoke nav`](#smoke-nav) | 跑 nav capability static-only smoke（零 motion + 8GB 互斥） |
 | [`pawai smoke full`](#smoke-full) | 跑 6/17 回穩主工具：brain + vision/object static + gateway/trace |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
@@ -507,6 +508,20 @@ SSH 到 Jetson 跑 `scripts/smoke_test_object.sh`。預設是 static-only：檢�
 
 前提：object lane 已由 `pawai demo start` 啟動；CLI 會先 source
 `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
+
+---
+
+### smoke nav
+
+```bash
+pawai smoke nav --static   # static-only：nodes / scan hz / AMCL / action list / reactive status
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_nav_static.sh`。`--static` 必須顯式帶上；不帶會直接拒絕，因為動態 nav 回歸屬於 HITL，不在 CLI 自動 smoke 範圍。
+
+此 smoke 是零 motion、唯讀檢查：只讀 `ros2 node list`、`ros2 topic hz /scan_rplidar`、`ros2 topic info /amcl_pose`、`ros2 action list`、`ros2 topic info /state/reactive_stop/status`。腳本不發 action，不 publish `/cmd_vel*`，也不碰 `/goal_pose`。
+
+執行前 CLI 會先讀 demo lock。若 brain demo lane 正在跑，或任何非 `nav_capability` lane 佔著 lock，會在遠端腳本前直接 fail，提示先 `pawai demo stop`；這是 8GB Jetson 上 brain 與 nav stack 的互斥防線。互斥通過後才 probe 遠端腳本存在並 source `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh` 執行。
 
 ---
 

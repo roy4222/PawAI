@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from . import __version__, shell
 from .errors import structured_error
 from .evidence import evidence as evidence_command
+from .lock import Lock
 from .modules import MODULES, existing_docs, get_module
 from .readiness import readiness as readiness_command
 from .status import print_status
@@ -795,14 +796,15 @@ _LANE_HEALTHCHECK = {
 }
 
 # ── smoke (system Phase 2 T2C-1) ────────────────────────────────────────────
-# Repo-relative scripts run ON THE JETSON over SSH: they publish ROS topics
-# into the live demo stack, so streaming them locally on a dev box would
+# Repo-relative scripts run ON THE JETSON over SSH: they inspect or publish
+# against the live demo stack, so streaming them locally on a dev box would
 # silently no-op (different ROS world). Each entry below must have a
 # Jetson-side script plus CLI mock coverage before it is exposed.
 _SMOKE_SCRIPTS = {
     "brain": "scripts/smoke_test_e2e.sh",
     "vision": "scripts/smoke_test_vision.sh",
     "object": "scripts/smoke_test_object.sh",
+    "nav": "scripts/smoke_test_nav_static.sh",
 }
 
 
@@ -940,6 +942,65 @@ def smoke_object(with_cup: bool) -> None:
         click.echo("  ↳ object lane 活著嗎？沒起 demo 就先 `pawai demo start`")
         sys.exit(rc)
     click.echo("✓ smoke object passed")
+
+
+@smoke.command("nav")
+@click.option("--static", "static_only", is_flag=True,
+              help="Run the static-only nav smoke. Required; dynamic nav regression is HITL.")
+def smoke_nav(static_only: bool) -> None:
+    """Run the nav static smoke (scripts/smoke_test_nav_static.sh) on the Jetson.
+
+    前提：nav capability lane 已在 Jetson 上跑。此 command 只做唯讀檢查。
+    """
+    if not static_only:
+        raise click.UsageError(
+            "smoke nav 目前僅支援 --static（motion 回歸屬 HITL，不在 CLI scope）"
+        )
+
+    lock = Lock.read()
+    lock_lane = getattr(lock, "lane", "brain") if lock is not None else None
+    if lock_lane is not None and lock_lane != "nav_capability":
+        lane_name = "brain" if lock_lane == "brain" else str(lock_lane)
+        raise structured_error(
+            f"{lane_name} demo lane 正在跑，nav stack 與其 8GB 互斥",
+            [
+                "先 `pawai demo stop` 停掉目前 demo lane",
+                "再起 nav lane：`pawai demo start --nav capability`",
+            ],
+        )
+
+    rel = _SMOKE_SCRIPTS["nav"]
+    repo = shell.jetson_repo()
+    probe = shell.run_remote(f"test -f {repo}/{rel}", timeout=10)
+    if probe.code in (124, 127, 255):
+        raise structured_error(
+            f"SSH to {shell.jetson_host()} failed (exit {probe.code})",
+            [
+                "跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
+                "確認 JETSON_HOST / .env.local 沒有 CRLF（pawai doctor 會驗）",
+            ],
+        )
+    if not probe.ok:
+        raise structured_error(
+            f"{rel} not found on Jetson ({repo})",
+            [
+                "先同步腳本：pawai jetson deploy --module nav --no-build",
+                "或確認 JETSON_REPO 指向正確的 repo 路徑",
+            ],
+        )
+
+    rc = shell.stream_remote(
+        f"cd {repo} && "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"bash {rel}"
+    )
+    if rc != 0:
+        click.echo(f"✗ smoke nav --static failed (exit {rc})")
+        click.echo("  ↳ nav lane 活著嗎？跑 `pawai status` / `pawai health nav` 看哪個環節紅")
+        click.echo("  ↳ 若 brain demo lane 還在跑，先 `pawai demo stop` 再起 nav lane")
+        sys.exit(rc)
+    click.echo("✓ smoke nav --static passed")
 
 
 def _smoke_remote_command(command: str) -> str:

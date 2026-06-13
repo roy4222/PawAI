@@ -8,7 +8,8 @@ no SSH, no rsync, no network, suite stays sub-second. Structured-error paths
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from click.testing import CliRunner
 
@@ -194,6 +195,90 @@ def test_smoke_object_with_cup_passes_flag_to_remote_script():
         result = _invoke(["smoke", "object", "--with-cup"])
     assert result.exit_code == 0, result.output
     assert "--with-cup" in calls["stream"]
+
+
+# -- pawai smoke nav (Lane 3 T3-3) ------------------------------------------
+
+def test_smoke_nav_static_runs_remote_static_script_with_nav_lock():
+    calls: dict = {}
+
+    def fake_run_remote(cmd, timeout=None):
+        calls["probe"] = cmd
+        return Result(0, "", "")
+
+    def fake_stream_remote(cmd):
+        calls["stream"] = cmd
+        return 0
+
+    with patch("pawai_cli.main.Lock.read",
+               return_value=SimpleNamespace(lane="nav_capability")), \
+         patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.stream_remote", side_effect=fake_stream_remote):
+        result = _invoke(["smoke", "nav", "--static"])
+
+    assert result.exit_code == 0, result.output
+    assert "scripts/smoke_test_nav_static.sh" in calls["probe"]
+    assert "scripts/smoke_test_nav_static.sh" in calls["stream"]
+    assert "source /opt/ros/humble/setup.zsh" in calls["stream"]
+    assert "source install/setup.zsh" in calls["stream"]
+
+
+def test_smoke_nav_static_allows_absent_lock():
+    calls: dict = {}
+    with patch("pawai_cli.main.Lock.read", return_value=None), \
+         patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.stream_remote",
+               side_effect=lambda cmd: calls.setdefault("stream", cmd) and 0):
+        result = _invoke(["smoke", "nav", "--static"])
+
+    assert result.exit_code == 0, result.output
+    assert "scripts/smoke_test_nav_static.sh" in calls["stream"]
+
+
+def test_smoke_nav_brain_lock_blocks_before_remote_script():
+    run_remote = Mock(return_value=Result(0, "", ""))
+    stream_remote = Mock(return_value=0)
+    with patch("pawai_cli.main.Lock.read", return_value=SimpleNamespace(lane="brain")), \
+         patch("pawai_cli.main.shell.run_remote", run_remote), \
+         patch("pawai_cli.main.shell.stream_remote", stream_remote):
+        result = _invoke(["smoke", "nav", "--static"])
+
+    assert result.exit_code != 0
+    assert "互斥" in result.output
+    assert "8GB" in result.output
+    assert "demo stop" in result.output
+    run_remote.assert_not_called()
+    stream_remote.assert_not_called()
+
+
+def test_smoke_nav_requires_explicit_static_flag():
+    with patch("pawai_cli.main.Lock.read", return_value=None), \
+         patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.stream_remote", return_value=0):
+        result = _invoke(["smoke", "nav"])
+
+    assert result.exit_code != 0
+    assert "--static" in result.output
+    assert "HITL" in result.output
+
+
+def test_smoke_nav_missing_remote_script_fail_closed():
+    with patch("pawai_cli.main.Lock.read", return_value=None), \
+         patch("pawai_cli.main.shell.run_remote", return_value=Result(1, "", "")):
+        result = _invoke(["smoke", "nav", "--static"])
+
+    assert result.exit_code != 0
+    assert "scripts/smoke_test_nav_static.sh" in result.output
+
+
+def test_smoke_nav_nonzero_rc_propagates_with_hint():
+    with patch("pawai_cli.main.Lock.read", return_value=None), \
+         patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.stream_remote", return_value=2):
+        result = _invoke(["smoke", "nav", "--static"])
+
+    assert result.exit_code == 2
+    assert "pawai demo stop" in result.output
 
 
 # -- pawai smoke full (Lane 3 T3-4) -----------------------------------------
