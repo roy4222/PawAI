@@ -1,7 +1,28 @@
 # 專案狀態
 
-**最後更新**：2026-06-12 晚（**Phase 2 真機驗收 Roy 10 步全過** + 真機修掉 4 既有 bug #163-#166：smoke SSH env／凍結檔 ASR zsh glob＝stt 長期死因（Roy 授權）／tts pub discovery race／**deploy rsync --delete 轟 runtime/ data-loss**；shadow soak 已開；⚠ nav named_poses/routes 被歷次 deploy 清掉需重錄、demo 重啟後 shadow param 要重開）
+**最後更新**：2026-06-13 晚（**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/13：Aggressive Pre-6/18 重構 batch1+2 + Post-Refactor 驗收 + HITL #2
+
+**主軸**：Roy 拍板「6/18 前 aggressive refactor（非保守 freeze）」→ 7 份計畫(master+lane1-6，nav 獨立成 lane6)→Workflow 多路 Codex 平行實作（codex 改檔+driver commit）→ 全面驗收。**報告：[`docs/runbook/2026-06-13-post-refactor-acceptance-report.md`](../docs/runbook/2026-06-13-post-refactor-acceptance-report.md)**。
+
+### 重構 batch1+2（8 PR #167-#175 全 merged，main `f0ed80c`，~955 tests）
+- L1 ISM 2a-2d staged-enable flag（預設 off）/ L2 Studio Evidence Center / L3 CLI smoke family + face CLI / L4 Vision benchmark harness ×5 / L5 Security 機制(webrtc filter/npz/消毒/token wiring，全 default-off) / L6 Nav(rejection reason/orphan/resume_policy/evidence 備份)+docs(ladder/3 spec/claim/HITL queue)。
+- 全行為變更 flag 預設 off、byte-identical；過程抓修 #171（driver 層誤 import pawai_contracts 致 CI 紅）。
+
+### Post-Refactor 驗收（軟體+感知層全回歸過）
+- Brain/ISM off=legacy+staged 不崩+no-blackhole ✅；Studio Evidence session/export(403)/report/frontend ✅；CLI smoke ✅（B1 vision smoke 查錯 topic、B2 evidence pull 撞缺失 nav 目錄 → 2 bug 修+真機閉環驗）；Vision cup0.7-1.5m 穩(距離不掉、**類別混淆**才是痛點)/手勢零誤觸/坐站 ✅；Security default-off+auth-on 401/403 ✅。
+
+### HITL #2（Roy e-stop 在場）
+- **Task 1 Face re-enroll ✅**：刪舊 roy→enroll 30 樣本→重訓→**sim 0.84/0.87/0.91（217 幀）**，unknown(0.23) 修好。新 **bug B4**：delete/rebuild 不刪 model_sface.npz（T5S-5 後 gap），需手動清。
+- **Task 2 Confirm flow ✅**：demo 現只剩 **peace→OK→WeGo**；trace 完整鏈 awaiting_ok:wiggle→confirmed_via_ok:wiggle、pending_confirm 不黑洞、Roy 親眼確認。
+- **Task 3 Nav motion ❌ CRASH**：nav stack 起、smoke nav --static 8/8、安全閘全綠後第一發 `goto_relative 0.3m` → **走歪撞牆**，e-stop 中止。根因研判＝AMCL initialpose 朝向不準→斜走撞 +25° 側家具（profile ±30° 非 indoor_tight）。**nav 短距 goto NOT_DEMO_READY，不可對外講自主移動。**
+
+### ⚠ 待辦
+- B4 npz hotfix；nav initialpose 朝向校正後重驗（高風險）；**nav stack 收工 `pawai demo stop`**（撞擊後清場）；face/demo 重啟後 ism flag 歸 off。
 
 ---
 

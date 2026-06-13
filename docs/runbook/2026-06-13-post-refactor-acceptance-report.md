@@ -26,7 +26,7 @@
 | 2 | Studio Evidence Center | 🟢 **PASS** | session/timeline/export/report/frontend 全綠 |
 | 3 | CLI smoke suite | 🟡 **PASS（2 bug）** | 多數綠；vision smoke + evidence pull 2 bug（已修，見 §hotfix）|
 | 4 | Vision baseline | 🟢 **PASS（face 例外）** | cup/gesture/pose 穩定；face 偵測+追蹤 OK 但辨識 unknown（enrollment 過期，**非回歸**）|
-| 5 | Go2 / Nav / Motion safety | ⏸ **PENDING-HITL** | 需 Roy e-stop 就位才做，本輪未做 |
+| 5 | Go2 / Nav / Motion safety | 🟡 **部分（見附錄 HITL #2）** | confirm flow ✅ / face re-enroll ✅ / **nav motion 撞牆走歪＝NOT_DEMO_READY** |
 | 6 | Security default-off regression | 🟢 **PASS** | default-off Studio 可用；auth-on enforcement 401/403 機制驗證；webrtc filter off byte-identical |
 
 ---
@@ -186,3 +186,32 @@
 ## 驗收結論
 
 **aggressive refactor（batch 1+2）後，PawAI 既有功能在軟體/感知層全面通過回歸**：Brain/ISM 不破壞既有互動（off=legacy、staged 不崩、不黑洞）、Studio Evidence 端到端可用、CLI smoke 可用（2 準確度 bug 已修）、Vision baseline 穩定（cup/gesture/pose；face 待 re-enroll）、Security default-off 不破壞 demo。**Go2 motion 安全驗收獨立 pending，需 Roy e-stop。** 完成度：① 軟體 95% / ② Pre-6/18 整體 ~63% / ③ v2 北極星 ~33%。
+
+---
+
+## 附錄：HITL #2 執行結果（2026-06-13 更晚，Roy e-stop 在場）
+
+報告寫成後，Roy 開 Go2+Jetson、batch1+2 deploy 上 Jetson（main `6b36b0c`/`f0ed80c`），續做 Go2/motion HITL。
+
+### Task 1 — Face re-enroll ✅ PASS
+- SOP：刪舊 roy(6/8 stale)→`pawai face enroll roy`(30 樣本)→清 model→重啟 face node 重訓→重驗。
+- 結果：**Roy 認出 `roy`、sim 0.84/0.87/0.91（217/217 幀 mode=stable）**，從 unknown(0.23) 修好。
+- **新 bug B4（待 hotfix）**：`pawai face delete`/`rebuild` 只刪 `model_sface.pkl`、**不刪 T5S-5 的 `model_sface.npz`** → 刪人/重訓不生效，需手動 `rm model_sface.npz`。修法：main.py:2017-2018/2045 補刪 npz。Lane5(npz)↔Lane3(face CLI) 協調 gap。
+- 坑：Go2 D435 低(~30cm)，Roy 多次不在框 face_count=0；enroll 殘留 `/face_identity_enroll_cv` node 採完要 pkill。
+
+### Task 2 — Confirm flow（peace→OK→WeGo）✅ PASS（Roy 親眼確認 + trace 佐證）
+- **demo 現在只剩 peace(YA)→OK→WeGo**（thumbs_up 等其他手勢已關；param `peace_wego_confirm=True`/`thumbs_up_demo_ack=False`）。
+- trace 完整鏈：peace→`plan_emitted awaiting_ok:wiggle`→TTS「你要我 WeGo 一下嗎？比 OK 我就開始」→OK→`confirmed_via_ok:wiggle`→TTS「看我扭一下！」→skill completed。**pending_confirm 不黑洞**（PENDING 期間 object 被 pending_confirm gate 擋且有 trace）。順帶證 face greet「roy 歡迎回來」。
+- instrumentation gap：webrtc 監聽與比手勢時段未重疊→未抓到 sport 指令，但 Roy 親眼確認動作發生。Task2 param：gesture_enabled/ism_enabled/ism_stage_2b_confirm=True。
+
+### Task 3 — Nav motion ❌ **CRASH / NOT_DEMO_READY**（安全事件）
+- nav stack 起來（LiDAR 0Hz healthcheck 早判→warmup 後 11.8Hz 健康；reactive_stop active；nav_ready=True 經 Foxglove initialpose 後）；`pawai smoke nav --static` **8/8 PASS**（順帶真機驗證 T3-3）。
+- 安全閘全綠後發第一個 `goto_relative 0.3m` → **Go2 走歪 + 撞牆**，Roy e-stop 中止。
+- **根因研判**：AMCL initialpose **朝向(orientation)不準** → 「前方 0.3m」算在地圖座標的歪方向 → Go2 朝斜邊走 → 撞上 reactive_stop 一直報的 **+25°/1.65m 側邊家具**（profile 是 ±30° open_space，非 home 的 indoor_tight ±18°）。
+- **誠實結論**：**nav 短距 goto 在目前 initialpose 精度下 NOT_DEMO_READY / NOT safe**——第一次真機 goto 就走歪撞牆。延續 6/10 S1 的 AMCL covariance/pose 老問題。對外**不可講「自主短距移動」**直到 initialpose 朝向校正 + n 次無撞重驗。
+- **後續修法方向**：① initialpose 朝向校正 SOP（LiDAR 紅點對齊牆面再確認）② 切 indoor_tight ±18° + 低速 ≤0.2 ③ goto 前加「朝向 sanity」或先小角度自轉對齊 ④ n=3 無撞才升 hardware_proven。
+
+### HITL #2 待辦
+- B4 npz hotfix（delete/rebuild 補刪 npz）。
+- nav motion root-cause：initialpose 朝向校正後重驗（高風險，需 e-stop + 淨空）。
+- nav stack 收工：`pawai demo stop`（撞擊事件後清場）。
