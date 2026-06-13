@@ -12,6 +12,7 @@ rclpy = pytest.importorskip("rclpy")
 from rclpy.parameter import Parameter  # noqa: E402
 from std_msgs.msg import Empty, String  # noqa: E402
 
+from interaction_executive import brain_node as brain_node_module  # noqa: E402
 from interaction_executive import interaction_state  # noqa: E402
 from interaction_executive.attention_machine import AttentionState  # noqa: E402
 from interaction_executive.brain_node import BrainNode  # noqa: E402
@@ -105,6 +106,37 @@ def _phase_trace(n: BrainNode) -> list[tuple[str, str]]:
 def _enable_stage_2b(n: BrainNode) -> None:
     n.ism_enabled = True
     n.ism_stage_2b_confirm = True
+
+
+def _enable_stage_2c(n: BrainNode) -> None:
+    n.ism_shadow_enabled = True
+    n.ism_enabled = True
+    n.ism_stage_2c_executing = True
+
+
+def _start_wiggle(n: BrainNode, plan_id: str = "p1") -> None:
+    n._on_skill_result(_msg({
+        "plan_id": plan_id,
+        "status": "started",
+        "selected_skill": "wiggle",
+        "priority_class": 3,
+    }))
+
+
+def _watchdog_reset_traces(n: BrainNode) -> list[dict]:
+    return [
+        t for t in n.traces
+        if t["reason"].startswith("watchdog_timeout:executing")
+        and t.get("detail", {}).get("cleanup") == "active_plan_reset"
+    ]
+
+
+def _tick_after_deadline(monkeypatch, n: BrainNode) -> None:
+    deadline = n._ism.deadline
+    assert deadline is not None
+    with monkeypatch.context() as m:
+        m.setattr(brain_node_module.time, "time", lambda: deadline + 1.0)
+        n._ism_shadow_tick()
 
 
 def _enter_pending_confirm(n: BrainNode) -> None:
@@ -378,6 +410,102 @@ def test_2b_explicit_speech_still_cancels_confirm():
             n.destroy_node()
 
     assert results == [ConfirmState.IDLE, ConfirmState.IDLE]
+
+
+def test_2c_watchdog_clears_stuck_active_plan_flag_on(monkeypatch, node):
+    _enable_stage_2c(node)
+
+    _start_wiggle(node, plan_id="p1")
+    with node._lock:
+        node._state.active_step = {"executor": "mock"}
+
+    assert node._state.active_plan is not None
+    assert node._ism.state is interaction_state.InteractionState.EXECUTING
+    assert node._ism.deadline is not None
+
+    _tick_after_deadline(monkeypatch, node)
+
+    assert node._state.active_plan is None
+    assert node._state.active_step is None
+    assert any(
+        "watchdog_timeout:executing" in t["reason"]
+        and t["detail"].get("watchdog") is True
+        for t in _watchdog_reset_traces(node)
+    )
+
+
+def test_2c_watchdog_no_clear_flag_off(monkeypatch, node):
+    node.ism_shadow_enabled = True
+
+    _start_wiggle(node, plan_id="p1")
+    assert node._state.active_plan is not None
+    assert node._ism.state is interaction_state.InteractionState.EXECUTING
+    assert node._ism.deadline is not None
+
+    _tick_after_deadline(monkeypatch, node)
+
+    assert node._state.active_plan is not None
+    assert _watchdog_reset_traces(node) == []
+
+
+def test_2c_healthy_skill_not_killed(monkeypatch, node):
+    _enable_stage_2c(node)
+
+    _start_wiggle(node, plan_id="p1")
+    deadline = node._ism.deadline
+    assert deadline is not None
+    node._on_skill_result(_msg({"plan_id": "p1", "status": "completed"}))
+
+    assert node._state.active_plan is None
+    assert node._ism.state is interaction_state.InteractionState.IDLE
+
+    with monkeypatch.context() as m:
+        m.setattr(brain_node_module.time, "time", lambda: deadline + 1.0)
+        node._ism_shadow_tick()
+
+    assert _watchdog_reset_traces(node) == []
+
+
+def test_2c_zero_timeout_not_armed():
+    machine = interaction_state.InteractionStateMachine(now=5.0)
+    machine.apply_signal(
+        interaction_state.TransitionSignal(
+            interaction_state.TriggerKind.SKILL_RESULT,
+            {"status": "STARTED", "plan_id": "p1", "timeout_s": 0},
+        ),
+        now=5.0,
+    )
+
+    assert machine.state is interaction_state.InteractionState.EXECUTING
+    assert machine.deadline is None
+    assert machine.tick(now=999999.0) is None
+    assert machine.state is interaction_state.InteractionState.EXECUTING
+
+
+def test_2c_watchdog_cleanup_never_raises(monkeypatch, node):
+    _enable_stage_2c(node)
+    _start_wiggle(node, plan_id="p1")
+    monkeypatch.setattr(
+        node._ism,
+        "tick",
+        lambda _now: (_ for _ in ()).throw(RuntimeError("tick boom")),
+    )
+
+    node._ism_shadow_tick()
+
+    trace_node = _make_node()
+    try:
+        _enable_stage_2c(trace_node)
+        _start_wiggle(trace_node, plan_id="p2")
+        monkeypatch.setattr(
+            trace_node,
+            "_trace",
+            lambda _event: (_ for _ in ()).throw(RuntimeError("trace boom")),
+        )
+
+        _tick_after_deadline(monkeypatch, trace_node)
+    finally:
+        trace_node.destroy_node()
 
 
 def test_legacy_sitting_skipped_during_pending_confirm(node):
