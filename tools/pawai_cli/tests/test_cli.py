@@ -335,6 +335,45 @@ def test_last_deploy_payload_has_new_fields(monkeypatch, tmp_path):
     assert isinstance(payload["dirty"], bool)
 
 
+def test_deploy_last_deploy_write_quotes_malicious_branch(monkeypatch):
+    dangerous_branch = "$(touch /tmp/pwn)"
+    captured_commands = []
+
+    def fake_git(argv, timeout=None):
+        if argv[-2:] == ["--abbrev-ref", "HEAD"]:
+            return shell.Result(0, f"{dangerous_branch}\n", "")
+        if argv[-2:] == ["rev-parse", "HEAD"]:
+            return shell.Result(0, "abcdef1234567890\n", "")
+        if argv[-2:] == ["status", "--porcelain"]:
+            return shell.Result(0, "", "")
+        return shell.Result(1, "", "unexpected command")
+
+    def fake_run_remote(command, timeout=None):
+        captured_commands.append(command)
+        return shell.Result(0, "", "")
+
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.main.print_status", return_value=SimpleNamespace(has_demo=False)), \
+         patch("pawai_cli.main._do_rsync_and_build", return_value=(0, "none")), \
+         patch("pawai_cli.main.shell.run", side_effect=fake_git), \
+         patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.local_identity", return_value="tester@workstation"):
+        result = CliRunner().invoke(
+            cli,
+            ["jetson", "deploy", "--module", "brain", "--no-sync", "--no-build", "-y"],
+        )
+
+    assert result.exit_code == 0, result.output
+    command = next(cmd for cmd in captured_commands if ".pawai-last-deploy" in cmd)
+    prefix = "printf '%s\\n' "
+    start = command.index(prefix) + len(prefix)
+    end = command.index(" > .pawai-last-deploy", start)
+    payload_arg = command[start:end]
+    assert dangerous_branch in payload_arg
+    assert payload_arg.startswith("'")
+    assert payload_arg.endswith("'")
+
+
 def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
     env_path = tmp_path / ".env.local"
     env_path.write_text("JETSON_TAILSCALE_IP=100.99.99.99\n")

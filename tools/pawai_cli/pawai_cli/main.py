@@ -785,7 +785,7 @@ def deploy(module_name: str, yes: bool, no_build: bool, no_sync: bool, all_modul
     payload["ts"] = payload["when"]
     remote_json = json.dumps(payload, ensure_ascii=False)
     shell.run_remote(
-        f"cd {shell.jetson_repo()} && printf '%s\\n' {json.dumps(remote_json)} > .pawai-last-deploy",
+        f"cd {shell.jetson_repo()} && printf '%s\\n' {shlex.quote(remote_json)} > .pawai-last-deploy",
         timeout=8,
     )
     print("Deploy complete.")
