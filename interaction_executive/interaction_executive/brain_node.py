@@ -380,6 +380,41 @@ class BrainNode(Node):
             self.get_logger().debug(f"ism confirm preempt check failed: {exc}")
             return False
 
+    def _ism_speaking_queue_marker(self, source_summary: str) -> None:
+        """Additive trace for stage 2d: social candidate QUEUE while SPEAKING.
+
+        Forbidden #6: QUEUE is not replayed in this lane. It is only marked as
+        suppress-with-trace evidence while legacy suppress behavior stays intact.
+        """
+        if not self._ism_stage_on("ism_stage_2d_speaking"):
+            return
+        try:
+            from .interaction_state import (
+                Candidate as _Candidate,
+                InteractionPolicy as _Policy,
+                InteractionState as _State,
+                Priority as _Priority,
+            )
+
+            decision = _Policy.evaluate(
+                _State.SPEAKING,
+                _Candidate(kind="social", priority=_Priority.SOCIAL, source="perception"),
+            )
+            if decision.verdict != IsmVerdict.QUEUE:
+                return
+            self._trace(TraceEvent(
+                decision_id=self._current_decision_id, node="brain_node",
+                kind=TraceKind.STATE_TRANSITION, verdict=Verdict.SUPPRESSED,
+                gate="speaking", reason="gate:speaking",
+                detail={
+                    "queue_v2_pending": True,
+                    "ism_reason": decision.reason,
+                    "source_summary": source_summary,
+                },
+            ))
+        except Exception as exc:  # noqa: BLE001 - takeover must never break callbacks
+            self.get_logger().debug(f"ism speaking queue marker failed: {exc}")
+
     def _set_gesture_enabled(self, enabled: bool, via: str) -> None:
         """gesture_enabled 切換共用路徑（param callback / Studio topic 兩入口）。
 
@@ -1363,6 +1398,8 @@ class BrainNode(Node):
                 self._suppressed(gate="conversation_gate",
                                  reason=f"conversation_gate:{reason_str}",
                                  source_summary=f"gesture={gesture}")
+                if tts_playing:
+                    self._ism_speaking_queue_marker(source_summary=f"gesture={gesture}")
                 self._emit_trace(
                     session_id=f"gesture-{int(time.time())}",
                     engine="brain_node",
@@ -1710,9 +1747,10 @@ class BrainNode(Node):
         if not self._phase_allows("greet"):
             return
         # 5/8 [#F-confirm]: PENDING 期間不發 greet_known_person，避免蓋掉 confirm 流
+        tts_in_parts = bool(self._world.snapshot().tts_playing)
         if not stable or self._has_active_skill_or_sequence() \
                 or self._pending_confirm.state == ConfirmState.PENDING \
-                or self._world.snapshot().tts_playing:
+                or tts_in_parts:
             # 5/9 review: also block during TTS to avoid mid-sentence interrupt.
             parts = []
             if not stable:
@@ -1721,11 +1759,13 @@ class BrainNode(Node):
                 parts.append("active_plan")
             if self._pending_confirm.state == ConfirmState.PENDING:
                 parts.append("pending_confirm")
-            if self._world.snapshot().tts_playing:
+            if tts_in_parts:
                 parts.append("tts_playing")
             self._suppressed(gate="greet_gate", reason=",".join(parts) or "greet_gate",
                              source_summary=f"identity={identity}",
                              throttle_key=f"greet_gate:{identity}")
+            if tts_in_parts:
+                self._ism_speaking_queue_marker(source_summary=f"identity={identity}")
             return
         # 2026-06-08 VIS-4 (Roy): drop the ENGAGED distance/dwell gate. D435 depth at
         # ~1.5-2m is too noisy — a distance threshold forced the user to hold an exact
@@ -1928,6 +1968,7 @@ class BrainNode(Node):
             self._suppressed(gate="tts_playing", reason="tts_playing",
                              source_summary=f"class={class_name}",
                              throttle_key=f"obj_tts:{class_name}")
+            self._ism_speaking_queue_marker(source_summary=f"class={class_name}")
             return  # Don't insert object remark while PAI is speaking
 
         # 2026-05-23 5/27 demo video mode: cup + Roy + recent sitting → 複合句
