@@ -357,6 +357,120 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
         assert "100.83.109.89" in env_path.read_text(), "--fix y must write detected IP"
 
 
+def _invoke_doctor_with_ros_env_probe(monkeypatch, run_remote_result):
+    from pawai_cli.shell import Result
+
+    monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
+    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+
+    def fake_run(argv, cwd=None, timeout=None):
+        argv = list(argv)
+        if argv and argv[0] == "ssh":
+            return Result(code=0, stdout="OK\n", stderr="")
+        if argv[:2] == ["git", "--version"]:
+            return Result(code=0, stdout="git version 2.40\n", stderr="")
+        if argv[:3] == ["git", "status", "--short"]:
+            return Result(code=0, stdout="", stderr="")
+        if argv and argv[0] == "tailscale":
+            return Result(code=0, stdout="tailscale ok\n", stderr="")
+        return Result(code=0, stdout="", stderr="")
+
+    run_remote = Mock(return_value=run_remote_result)
+    with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
+         patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
+         patch("pawai_cli.network.jetson_go2_link",
+               return_value={"iface": "eth0", "ip": "192.168.123.51/24"}), \
+         patch("pawai_cli.network.jetson_ping_go2", return_value=True), \
+         patch("pawai_cli.network.gateway_8080_status", return_value="SKIP"), \
+         patch("pawai_cli.shell.run", side_effect=fake_run), \
+         patch("pawai_cli.shell.run_remote", run_remote):
+        return CliRunner().invoke(cli, ["doctor", "--cache", "0"]), run_remote
+
+
+def test_doctor_jetson_ros_env_core_packages_ok(monkeypatch):
+    from pawai_cli.shell import Result
+
+    stdout = (
+        "__PAWAI_PKG_LIST__\n"
+        "pawai_contracts\n"
+        "interaction_executive\n"
+        "go2_interfaces\n"
+        "__PAWAI_TIMES__\n"
+        "install_mtime=200\n"
+        "commit_time=100\n"
+    )
+    result, run_remote = _invoke_doctor_with_ros_env_probe(
+        monkeypatch, Result(code=0, stdout=stdout, stderr="")
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Jetson ROS env" in result.output
+    assert "core packages present" in result.output
+    assert "0 blocking" in result.output
+    command = run_remote.call_args.args[0]
+    assert "source /opt/ros/humble/setup.zsh" in command
+    assert "source install/setup.zsh" in command
+
+
+def test_doctor_jetson_ros_env_missing_package_warns_not_blocking(monkeypatch):
+    from pawai_cli.shell import Result
+
+    stdout = (
+        "__PAWAI_PKG_LIST__\n"
+        "pawai_contracts\n"
+        "go2_interfaces\n"
+        "__PAWAI_TIMES__\n"
+        "install_mtime=200\n"
+        "commit_time=100\n"
+    )
+    result, _ = _invoke_doctor_with_ros_env_probe(
+        monkeypatch, Result(code=0, stdout=stdout, stderr="")
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "⚠" in result.output
+    assert "interaction_executive" in result.output
+    assert "pawai jetson deploy" in result.output or "colcon build" in result.output
+    assert "0 blocking" in result.output
+
+
+def test_doctor_jetson_ros_env_warns_when_install_older_than_commit(monkeypatch):
+    from pawai_cli.shell import Result
+
+    stdout = (
+        "__PAWAI_PKG_LIST__\n"
+        "pawai_contracts\n"
+        "interaction_executive\n"
+        "go2_interfaces\n"
+        "__PAWAI_TIMES__\n"
+        "install_mtime=100\n"
+        "commit_time=200\n"
+    )
+    result, _ = _invoke_doctor_with_ros_env_probe(
+        monkeypatch, Result(code=0, stdout=stdout, stderr="")
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "install" in result.output.lower()
+    assert "commit" in result.output.lower()
+    assert "rsync" in result.output.lower()
+    assert "colcon build" in result.output
+    assert "0 blocking" in result.output
+
+
+def test_doctor_jetson_ros_env_ssh_unreachable_skips_without_blocking(monkeypatch):
+    from pawai_cli.shell import Result
+
+    result, _ = _invoke_doctor_with_ros_env_probe(
+        monkeypatch, Result(code=255, stdout="", stderr="ssh: connect timed out")
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Jetson ROS env" in result.output
+    assert "⚠" in result.output
+    assert "skip" in result.output.lower() or "skipped" in result.output.lower()
+    assert "0 blocking" in result.output
+
 # ──────────────── L2 tests ────────────────
 
 def test_demo_start_prompts_on_cross_user_lock(monkeypatch):

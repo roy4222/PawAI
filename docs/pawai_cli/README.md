@@ -162,6 +162,7 @@ pawai doctor --verbose # SSH 失敗時印出 stderr 細節
 - git + repo 狀態（dirty/clean）
 - `.env.local` 是否存在；缺就提示 `cp .env.local.example .env.local`
 - SSH 到 `$JETSON_HOST` 是否通；不通會檢查 `~/.ssh/config` 給出 ssh-copy-id 或 tailscale up 提示
+- Jetson ROS env 唯讀抽查：source Humble + repo `install/setup.zsh`，確認核心 package 與 install tree 時間戳
 - `tailscale status` 是否能跑
 - `ROBOT_IP` 變數（不主動 ping）
 - `tmux` / `node` / `npm` 是否在 PATH；缺的給 `brew install` 或 `apt install` 指令
@@ -198,6 +199,23 @@ Reading guide:
 - `Jetson internet route: eth0` → **warning** — Ethernet likely hijacked for school uplink, Go2 link lost
 - `Jetson Go2 link: ✗` → Go2 Ethernet not connected to Jetson
 - `Gateway 8080: SKIP` → expected when no demo running; only red if `--expect-demo` or active demo lock
+
+### Jetson ROS env block
+
+`pawai doctor` also prints a non-blocking ROS environment sanity check before the final summary:
+
+```
+== Jetson ROS env ==
+  ✓ Jetson ROS core packages present: pawai_contracts, interaction_executive, go2_interfaces
+  ✓ Jetson install tree is up to date with latest commit
+```
+
+This check SSHes to Jetson with a short timeout and runs read-only commands only. It sources both `/opt/ros/humble/setup.zsh` and `$JETSON_REPO/install/setup.zsh`, then checks:
+
+- core packages: `pawai_contracts`, `interaction_executive`, `go2_interfaces`
+- whether the newest file under `install/` is older than the latest repo commit
+
+All findings in this block are **warnings only**. Missing packages or stale `install/` output means run `pawai jetson deploy` or `colcon build` on Jetson; it does not change the `0 blocking` green path. If SSH is unavailable, the block prints one `⚠ ... skipped` line and does not block.
 
 ---
 
