@@ -17,6 +17,7 @@ from std_msgs.msg import Bool
 from std_msgs.msg import Empty
 from std_msgs.msg import String
 
+from . import interaction_state
 from .attention_machine import AttentionMachine, AttentionState
 # ISM Phase 1 shadow (system Phase 2 / 2A): aliased imports — interaction_state
 # has its own Verdict enum that collides with pawai_contracts.trace_schema.Verdict
@@ -327,20 +328,19 @@ class BrainNode(Node):
     # gesture）。安全鏈（fallen/stop/SafetyLayer）、語音/文字明確指令、Studio
     # skill_request 一律不受 phase 影響 — priority: safety > explicit input > phase。
     # 錄影 SOP：ros2 param set /brain_node demo_phase s3_object（換 take 再切）。
-    _DEMO_PHASES = frozenset({"all", "s2_face", "s3_object", "s4_gesture", "quiet"})
-    _PHASE_ALLOWED_KINDS = {
-        "all": frozenset({"greet", "object", "gesture"}),
-        "s2_face": frozenset({"greet"}),
-        "s3_object": frozenset({"object"}),
-        "s4_gesture": frozenset({"gesture"}),
-        "quiet": frozenset(),
-    }
+    _DEMO_PHASES = frozenset(interaction_state.PHASE_ALLOWED_KINDS)
 
     def _phase_allows(self, kind: str) -> bool:
-        allowed = self._PHASE_ALLOWED_KINDS.get(self.demo_phase)
-        if allowed is None:  # defensive — 未知 phase 視同 all
-            return True
-        if kind in allowed:
+        allowed = interaction_state.PHASE_ALLOWED_KINDS.get(self.demo_phase)
+        legacy_allow = True if allowed is None else kind in allowed
+        allow = legacy_allow
+        if self._ism_stage_on("ism_stage_2a_demo_phase"):
+            try:
+                allow = interaction_state.phase_allows(self.demo_phase, kind)
+            except Exception as exc:  # noqa: BLE001 — takeover must never break callbacks
+                self.get_logger().debug(f"ism demo_phase policy failed: {exc}")
+                allow = legacy_allow
+        if allow:
             return True
         self.get_logger().info(
             f"[phase] {kind} proposal suppressed (demo_phase={self.demo_phase})",
