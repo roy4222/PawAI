@@ -412,6 +412,26 @@ def test_evidence_pull_also_backs_up_nav_capability():
     assert any(source.endswith("runtime/nav_capability/") for source in sources)
 
 
+def test_evidence_pull_skips_missing_nav_capability():
+    """nav_capability dir missing on Jetson (rsync exit 23) must NOT abort the
+    mandatory traces pull (2026-06-13 post-refactor acceptance regression fix)."""
+    calls = []
+
+    def fake_stream(argv, cwd=None, env=None):
+        calls.append(list(argv))
+        if argv[-2].endswith("runtime/nav_capability/"):
+            return 23          # missing optional source dir
+        return 0               # traces pull succeeds
+
+    with patch("pawai_cli.evidence.shell.stream", side_effect=fake_stream):
+        result = _invoke(["evidence", "pull"])
+
+    assert result.exit_code == 0, result.output       # missing nav did NOT abort
+    assert "skip optional pull" in result.output
+    sources = [argv[-2] for argv in calls]
+    assert any(s.endswith("runtime/traces/") for s in sources)   # traces still pulled
+
+
 def test_evidence_pull_prints_summary():
     calls, fake = _fake_rsync_writing({
         "s1.jsonl": '{"ts": 1, "verdict": "suppressed"}\n{"ts": 2, "verdict": "accepted"}\n',
