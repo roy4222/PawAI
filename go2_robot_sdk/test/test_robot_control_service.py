@@ -21,6 +21,7 @@ import types
 from unittest.mock import MagicMock
 
 import pytest
+from pawai_contracts.pawai_contracts.skill_contract import BANNED_API_IDS
 
 
 # --- Build stub package tree so robot_control_service relative imports resolve ---
@@ -56,6 +57,32 @@ def _setup_stubs():
 
     const = _make_pkg(f"{_STUB_ROOT}.domain.constants")
     const.RTC_TOPIC = {}  # not used by handle_cmd_vel
+    const.ROBOT_CMD = {
+        "BalanceStand": 1002,
+        "StopMove": 1003,
+        "StandUp": 1004,
+        "StandDown": 1005,
+        "RecoveryStand": 1006,
+        "Move": 1008,
+        "Sit": 1009,
+        "RiseSit": 1010,
+        "SpeedLevel": 1015,
+        "Hello": 1016,
+        "Stretch": 1017,
+        "Content": 1020,
+        "GetState": 1034,
+        "FingerHeart": 1036,
+        "FrontFlip": 1030,
+        "FrontJump": 1031,
+        "Handstand": 1301,
+    }
+    const.AUDIO_HUB_COMMANDS = {
+        "START_AUDIO": 4001,
+        "STOP_AUDIO": 4002,
+        "SEND_AUDIO_BLOCK": 4003,
+        "SET_VOLUME": 4004,
+        "GET_AUDIO_STATUS": 4005,
+    }
 
     _make_pkg(f"{_STUB_ROOT}.application")
     utils = _make_pkg(f"{_STUB_ROOT}.application.utils")
@@ -189,3 +216,75 @@ def test_move_resets_stop_dedupe(service, mock_controller, monkeypatch):
     service.handle_cmd_vel(0.0, 0.0, 0.0, "0")
     assert mock_controller.send_stop_move_command.call_count == 2
     assert mock_controller.send_movement_command.call_count == 1
+
+# --- WebRTC API filter (T5S-1) ---
+
+def test_webrtc_filter_off_is_pass_through_for_all_api_ids(mock_controller, monkeypatch):
+    """Default off mode forwards every api_id, including the canonical banned ids."""
+    service = RobotControlService(mock_controller)
+    logger_info = MagicMock()
+    logger_warning = MagicMock()
+    monkeypatch.setattr(RCS.logger, "info", logger_info)
+    monkeypatch.setattr(RCS.logger, "warning", logger_warning)
+
+    for api_id in sorted(BANNED_API_IDS) + [1008]:
+        service.handle_webrtc_request(
+            api_id, '{"ok": true}', "rt/api/sport/request", "msg", "0"
+        )
+
+    forwarded_api_ids = [
+        call.args[1] for call in mock_controller.send_webrtc_request.call_args_list
+    ]
+    assert forwarded_api_ids == sorted(BANNED_API_IDS) + [1008]
+    assert [call.args for call in logger_info.call_args_list] == [
+        ("WebRTC request sent to robot 0",),
+    ] * 4
+    logger_warning.assert_not_called()
+
+
+def test_webrtc_filter_blacklist_drops_banned_ids_and_forwards_move(
+    mock_controller, monkeypatch
+):
+    service = RobotControlService(mock_controller, webrtc_api_filter_mode="blacklist")
+    logger_warning = MagicMock()
+    monkeypatch.setattr(RCS.logger, "warning", logger_warning)
+
+    for api_id in sorted(BANNED_API_IDS) + [1008]:
+        service.handle_webrtc_request(api_id, "{}", "rt/api/sport/request", "msg", "0")
+
+    mock_controller.send_webrtc_request.assert_called_once_with(
+        "0", 1008, {}, "rt/api/sport/request"
+    )
+    rejected_messages = [call.args[0] for call in logger_warning.call_args_list]
+    for api_id in sorted(BANNED_API_IDS):
+        assert any(f"api_id={api_id}" in message for message in rejected_messages)
+
+
+def test_webrtc_filter_whitelist_drops_nonlisted_but_always_allows_stop_move(
+    mock_controller, monkeypatch
+):
+    service = RobotControlService(mock_controller, webrtc_api_filter_mode="whitelist")
+    logger_warning = MagicMock()
+    monkeypatch.setattr(RCS.logger, "warning", logger_warning)
+
+    service.handle_webrtc_request(4005, "{}", "rt/api/audiohub/request", "msg", "0")
+    service.handle_webrtc_request(1003, "{}", "rt/api/sport/request", "msg", "0")
+
+    mock_controller.send_webrtc_request.assert_called_once_with(
+        "0", 1003, {}, "rt/api/sport/request"
+    )
+    logger_warning.assert_called_once()
+    assert "api_id=4005" in logger_warning.call_args.args[0]
+
+
+def test_webrtc_rate_limit_zero_is_noop(mock_controller):
+    service = RobotControlService(
+        mock_controller,
+        webrtc_api_filter_mode="whitelist",
+        webrtc_api_rate_limit_per_sec=0,
+    )
+
+    service.handle_webrtc_request(1008, "{}", "rt/api/sport/request", "msg-1", "0")
+    service.handle_webrtc_request(1008, "{}", "rt/api/sport/request", "msg-2", "0")
+
+    assert mock_controller.send_webrtc_request.call_count == 2
