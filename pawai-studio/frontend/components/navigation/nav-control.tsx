@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Play, Pause, Square } from "lucide-react";
 import { useStateStore } from "@/stores/state-store";
 import type { NavControl, NavControlState } from "@/stores/state-store";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 
 /**
@@ -49,7 +50,9 @@ export function NavControl() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${getGatewayHttpUrl()}/api/nav/control`);
+        const res = await fetch(`${getGatewayHttpUrl()}/api/nav/control`, {
+          headers: { ...authHeaders() },
+        });
         if (!res.ok) return;
         const data = (await res.json().catch(() => null)) as
           | Partial<NavControl>
@@ -81,7 +84,7 @@ export function NavControl() {
     try {
       await fetch(`${getGatewayHttpUrl()}${path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: body != null ? JSON.stringify(body) : undefined,
       });
       // 不做 optimistic state — 一律等 gateway 的 nav_control WS 廣播更新。

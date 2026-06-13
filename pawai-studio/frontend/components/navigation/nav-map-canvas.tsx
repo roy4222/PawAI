@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStateStore } from "@/stores/state-store";
 import type { NavPose, NavReactiveStop, NavZone } from "@/stores/state-store";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 
 /**
@@ -210,7 +211,7 @@ export function NavMapCanvas() {
     try {
       const res = await fetch(`${getGatewayHttpUrl()}/api/nav/initialpose`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ x, y, yaw }),
       });
       if (!res.ok) return false;

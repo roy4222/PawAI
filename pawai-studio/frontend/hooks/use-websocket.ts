@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { PawAIEvent } from "@/contracts/types";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl, getGatewayWsUrl } from "@/lib/gateway-url";
 
 // Runtime fallback: env → same-origin hostname:8080 → localhost:8080
@@ -57,7 +58,10 @@ export function useWebSocket({ onMessage }: UseWebSocketOptions): UseWebSocketRe
       if (process.env.NEXT_PUBLIC_AUTO_RESET_ON_REFRESH === "true") {
         const refreshAt = sessionStorage.getItem("paw_refresh_at");
         if (refreshAt && Date.now() - parseInt(refreshAt) < 5000) {
-          fetch(`${getGatewayHttpUrl()}/api/reset`, { method: "POST" }).catch(() => {
+          fetch(`${getGatewayHttpUrl()}/api/reset`, {
+            method: "POST",
+            headers: { ...authHeaders() },
+          }).catch(() => {
             // Best-effort — ignore errors (gateway may not be ready yet)
           });
           sessionStorage.removeItem("paw_refresh_at");

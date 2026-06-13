@@ -485,7 +485,9 @@ export default function EvidencePage() {
     setSessionsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${getGatewayHttpUrl()}/api/trace/sessions`);
+      const response = await fetch(`${getGatewayHttpUrl()}/api/trace/sessions`, {
+        headers: { ...authHeaders() },
+      });
       if (!response.ok) {
         throw new Error(`sessions ${response.status}`);
       }
@@ -521,7 +523,10 @@ export default function EvidencePage() {
         const url = `${getGatewayHttpUrl()}/api/trace/export?session=${encodeURIComponent(
           selectedSession
         )}`;
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: { ...authHeaders() },
+        });
         if (!response.ok) {
           throw new Error(`export ${response.status}`);
         }

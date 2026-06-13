@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { ScoreboardResponse } from "@/contracts/types";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 
 interface UseScoreboardResult {
@@ -21,7 +22,9 @@ export function useScoreboard(): UseScoreboardResult {
 
     async function fetchScoreboard() {
       try {
-        const response = await fetch(`${getGatewayHttpUrl()}/api/scoreboard`);
+        const response = await fetch(`${getGatewayHttpUrl()}/api/scoreboard`, {
+          headers: { ...authHeaders() },
+        });
 
         if (!response.ok) {
           throw new Error(`Scoreboard request failed: ${response.status}`);

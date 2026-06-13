@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Hand } from "lucide-react";
 import { useStateStore } from "@/stores/state-store";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +26,9 @@ export function GestureToggle() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${getGatewayHttpUrl()}/api/gesture_enabled`);
+        const res = await fetch(`${getGatewayHttpUrl()}/api/gesture_enabled`, {
+          headers: { ...authHeaders() },
+        });
         if (!res.ok) return;
         const data = (await res.json().catch(() => null)) as
           | { enabled?: boolean | null }
@@ -50,7 +53,7 @@ export function GestureToggle() {
     try {
       const res = await fetch(`${getGatewayHttpUrl()}/api/gesture_enabled`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ enabled: next }),
       });
       if (!res.ok) return;
