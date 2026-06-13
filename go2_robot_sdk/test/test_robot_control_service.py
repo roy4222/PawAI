@@ -21,7 +21,11 @@ import types
 from unittest.mock import MagicMock
 
 import pytest
-from pawai_contracts.pawai_contracts.skill_contract import BANNED_API_IDS
+# Mirrors robot_control_service.BANNED_API_IDS (driver-layer deny list). Kept
+# self-contained so the go2_robot_sdk CI fast-gate runs without pawai_contracts
+# on PYTHONPATH; the behaviour assertions below still validate the driver's
+# actual reject list, so any divergence from this expected set fails the test.
+BANNED_API_IDS = frozenset({1030, 1031, 1301})
 
 
 # --- Build stub package tree so robot_control_service relative imports resolve ---
