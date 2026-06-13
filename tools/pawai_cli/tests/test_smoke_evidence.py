@@ -139,6 +139,63 @@ def test_smoke_vision_with_events_passes_count_to_remote_script():
     assert "--with-events 5" in calls["stream"]
 
 
+# ── pawai smoke object (Lane 3 T3-2) ───────────────────────────────────────
+
+def test_smoke_object_runs_remote_static_script():
+    calls: dict = {}
+
+    def fake_run_remote(cmd, timeout=None):
+        calls["probe"] = cmd
+        return Result(0, "", "")
+
+    def fake_stream_remote(cmd):
+        calls["stream"] = cmd
+        return 0
+
+    with patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.stream_remote", side_effect=fake_stream_remote):
+        result = _invoke(["smoke", "object"])
+
+    assert result.exit_code == 0, result.output
+    assert "scripts/smoke_test_object.sh" in calls["probe"]
+    assert "scripts/smoke_test_object.sh" in calls["stream"]
+    assert "source /opt/ros/humble/setup.zsh" in calls["stream"]
+    assert "source install/setup.zsh" in calls["stream"]
+
+
+def test_smoke_object_missing_remote_script_fail_closed():
+    with patch("pawai_cli.main.shell.run_remote", return_value=Result(1, "", "")):
+        result = _invoke(["smoke", "object"])
+    assert result.exit_code != 0
+    assert "scripts/smoke_test_object.sh" in result.output
+
+
+def test_smoke_object_ssh_unreachable_names_the_fix():
+    with patch("pawai_cli.main.shell.run_remote",
+               return_value=Result(255, "", "ssh: connect to host ... timed out")):
+        result = _invoke(["smoke", "object"])
+    assert result.exit_code != 0
+    assert "pawai doctor" in result.output
+
+
+def test_smoke_object_nonzero_rc_propagates_with_hint():
+    with patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.stream_remote", return_value=2):
+        result = _invoke(["smoke", "object"])
+    assert result.exit_code == 2
+    assert "pawai demo start" in result.output
+
+
+def test_smoke_object_with_cup_passes_flag_to_remote_script():
+    calls: dict = {}
+    with patch("pawai_cli.main.shell.run_remote", return_value=Result(0, "", "")), \
+         patch("pawai_cli.main.shell.stream_remote",
+               side_effect=lambda cmd: calls.setdefault("stream", cmd) and 0):
+        result = _invoke(["smoke", "object", "--with-cup"])
+    assert result.exit_code == 0, result.output
+    assert "--with-cup" in calls["stream"]
+
+
 # ── pawai evidence pull (T2C-2) ─────────────────────────────────────────────
 
 def _fake_rsync_writing(files: dict[str, str]):

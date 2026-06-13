@@ -133,6 +133,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
 | [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
 | [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
+| [`pawai smoke object`](#smoke-object) | 跑 object lane static/HITL cup smoke |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
@@ -450,6 +451,27 @@ gesture/pose event 才算 PASS。
 前提：vision lane 已由 `pawai demo start` 啟動；CLI 會先 source
 `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`，避免 non-interactive SSH 看不到
 ROS 環境。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
+
+---
+
+### smoke object
+
+```bash
+pawai smoke object              # static-only：node / debug_image hz>=3 / event publisher
+pawai smoke object --with-cup   # HITL：static 綠後等待 60 秒 cup event
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_object.sh`。預設是 static-only：檢查
+`object_perception` node、`/perception/object/debug_image` 平均 hz >= 3，以及
+`/event/object_detected` topic 至少有 1 個 publisher。
+
+`--with-cup` 會在 static 全綠後呼叫 `capture_baseline_round.py percep` 收 60 秒
+`object.cup` positive round，輸出到 `artifacts/baseline/smoke_object.jsonl`；只有寫入
+`pass_fail=pass` 且 `predicted_label=cup` 才算 PASS。HITL 模式固定帶
+`--gesture-topic /__no_gesture__`，避免 gesture event 污染 object 量測（反向污染也是已知坑）。
+
+前提：object lane 已由 `pawai demo start` 啟動；CLI 會先 source
+`/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
 
 ---
 
