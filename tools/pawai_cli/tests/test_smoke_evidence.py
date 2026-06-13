@@ -396,6 +396,22 @@ def test_evidence_pull_rsync_argv_read_only():
     assert argv[-1].endswith("artifacts/evidence/traces/")
 
 
+def test_evidence_pull_also_backs_up_nav_capability():
+    calls = []
+
+    def fake_stream(argv, cwd=None, env=None):
+        calls.append(list(argv))
+        return 0
+
+    with patch("pawai_cli.evidence.shell.stream", side_effect=fake_stream):
+        result = _invoke(["evidence", "pull"])
+
+    assert result.exit_code == 0, result.output
+    sources = [argv[-2] for argv in calls]
+    assert any(source.endswith("runtime/traces/") for source in sources)
+    assert any(source.endswith("runtime/nav_capability/") for source in sources)
+
+
 def test_evidence_pull_prints_summary():
     calls, fake = _fake_rsync_writing({
         "s1.jsonl": '{"ts": 1, "verdict": "suppressed"}\n{"ts": 2, "verdict": "accepted"}\n',
