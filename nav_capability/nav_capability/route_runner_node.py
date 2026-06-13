@@ -40,6 +40,11 @@ from nav_capability.lib.route_validator import (
     sanitize_route_name,
     validate_route,
 )
+from nav_capability.lib.resume_policy import (
+    DEFAULT_REACTIVE_PROFILE,
+    DEFAULT_RESUME_POLICY,
+    resolve_resume_policy,
+)
 from nav_capability.lib.tf_pose_helper import yaw_to_quat
 
 AMCL_QOS = QoSProfile(
@@ -63,6 +68,21 @@ class RouteRunnerNode(Node):
         self._cb = ReentrantCallbackGroup()
 
         self.declare_parameter("routes_dir", "")
+        self.declare_parameter("resume_policy", DEFAULT_RESUME_POLICY)
+        self.declare_parameter(
+            "reactive_profile",
+            os.environ.get("REACTIVE_PROFILE", DEFAULT_REACTIVE_PROFILE),
+        )
+        resume_policy_resolution = resolve_resume_policy(
+            self.get_parameter("resume_policy").value,
+            self.get_parameter("reactive_profile").value,
+        )
+        self._resume_policy = resume_policy_resolution.effective_policy
+        if resume_policy_resolution.rejected:
+            self.get_logger().warn(
+                f"{resume_policy_resolution.reason}; "
+                f"falling back to resume_policy='{self._resume_policy}'"
+            )
 
         # FSM + runtime state
         self._fsm = RouteFSM()
