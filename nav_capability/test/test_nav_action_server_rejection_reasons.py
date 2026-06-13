@@ -41,6 +41,12 @@ def _install_go2_action_stubs_if_needed():
 
 _install_go2_action_stubs_if_needed()
 
+# CI fast-gate runs this dir on a runner WITHOUT rclpy. nav_action_server_node
+# imports rclpy at module top, so guard collection to skip cleanly there.
+import pytest  # noqa: E402
+
+pytest.importorskip("rclpy")
+
 from nav_capability.nav_action_server_node import (  # noqa: E402
     NavActionServerNode,
     build_goto_rejection_reason,
