@@ -102,6 +102,76 @@ def _phase_trace(n: BrainNode) -> list[tuple[str, str]]:
     ]
 
 
+def _enable_stage_2b(n: BrainNode) -> None:
+    n.ism_enabled = True
+    n.ism_stage_2b_confirm = True
+
+
+def _enter_pending_confirm(n: BrainNode) -> None:
+    n._on_gesture(_msg({"gesture": "thumbs_up", "confidence": 0.95}))
+    assert n._pending_confirm.state == ConfirmState.PENDING
+    n.proposals.clear()
+    n.traces.clear()
+    n._trace_throttle.clear()
+
+
+def _fire_stable_fallen(n: BrainNode) -> None:
+    n._on_pose(_msg({"pose": "fallen"}))
+    n._state.fallen_first_seen = time.time() - n.fallen_accumulate_s - 0.1
+    n._on_pose(_msg({"pose": "fallen"}))
+
+
+def _legacy_suppressed_traces(n: BrainNode) -> list[dict]:
+    return [
+        t for t in n.traces
+        if t["verdict"] == "suppressed" and not t.get("detail", {}).get("shadow")
+    ]
+
+
+def _stable_trace_payload(t: dict) -> dict:
+    detail = t["detail"]
+    return {
+        "kind": t["kind"],
+        "verdict": t["verdict"],
+        "gate": t["gate"],
+        "reason": t["reason"],
+        "detail": {
+            "gate": detail["gate"],
+            "reason": detail["reason"],
+            "active_plan": detail["active_plan"],
+            "pending_confirm": detail["pending_confirm"],
+            "cooldown_remaining_s": detail["cooldown_remaining_s"],
+            "source_summary": detail["source_summary"],
+        },
+    }
+
+
+def _run_social_during_confirm(*, kind: str, stage_2b_on: bool) -> dict:
+    n = _make_node()
+    try:
+        if stage_2b_on:
+            _enable_stage_2b(n)
+        _enter_pending_confirm(n)
+        if kind == "object":
+            n._attention._state = AttentionState.ENGAGED
+            n._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+        elif kind == "gesture":
+            n._on_gesture(_msg({"gesture": "wave", "confidence": 0.95}))
+        else:
+            raise AssertionError(f"unknown social kind {kind!r}")
+        suppressed = [
+            t for t in _legacy_suppressed_traces(n)
+            if t["gate"] == "pending_confirm"
+        ]
+        assert len(suppressed) == 1
+        return {
+            "proposals": _normalize(n.proposals),
+            "trace": _stable_trace_payload(suppressed[0]),
+        }
+    finally:
+        n.destroy_node()
+
+
 def _run_phase_gate(n: BrainNode, *, phase: str, kind: str,
                     stage_2a_on: bool) -> tuple[bool, list[tuple[str, str]]]:
     n.demo_phase = phase
@@ -242,6 +312,72 @@ def test_legacy_fallen_fires_during_pending_confirm(node):
 
     assert any(p["selected_skill"] == "fallen_alert" for p in node.proposals)
     assert node._pending_confirm.state == ConfirmState.PENDING
+
+
+def test_2b_fallen_preempts_pending_confirm_flag_on(node):
+    _enable_stage_2b(node)
+    _enter_pending_confirm(node)
+
+    _fire_stable_fallen(node)
+
+    assert any(p["selected_skill"] == "fallen_alert" for p in node.proposals)
+    assert node._pending_confirm.state == ConfirmState.IDLE
+
+
+def test_2b_fallen_orphans_confirm_flag_off(node):
+    _enter_pending_confirm(node)
+
+    _fire_stable_fallen(node)
+
+    assert any(p["selected_skill"] == "fallen_alert" for p in node.proposals)
+    assert node._pending_confirm.state == ConfirmState.PENDING
+
+
+def test_2b_social_suppress_byte_identical_flag_on_vs_off():
+    for kind in ("object", "gesture"):
+        legacy = _run_social_during_confirm(kind=kind, stage_2b_on=False)
+        takeover = _run_social_during_confirm(kind=kind, stage_2b_on=True)
+
+        assert takeover == legacy
+        assert takeover["proposals"] == []
+        assert takeover["trace"]["gate"] == "pending_confirm"
+        assert takeover["trace"]["reason"] == "confirm_in_flight"
+        assert takeover["trace"]["detail"]["gate"] == "pending_confirm"
+        assert takeover["trace"]["detail"]["reason"] == "confirm_in_flight"
+
+
+def test_2b_confirm_preempt_never_raises(monkeypatch, node):
+    _enable_stage_2b(node)
+    _enter_pending_confirm(node)
+
+    def _boom(_state, _candidate):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(
+        interaction_state.InteractionPolicy,
+        "evaluate",
+        staticmethod(_boom),
+    )
+    _fire_stable_fallen(node)
+
+    assert any(p["selected_skill"] == "fallen_alert" for p in node.proposals)
+    assert node._pending_confirm.state == ConfirmState.PENDING
+
+
+def test_2b_explicit_speech_still_cancels_confirm():
+    results = []
+    for stage_2b_on in (False, True):
+        n = _make_node()
+        try:
+            if stage_2b_on:
+                _enable_stage_2b(n)
+            _enter_pending_confirm(n)
+            n._on_speech_intent(_msg({"transcript": "你好", "session_id": "s1"}))
+            results.append(n._pending_confirm.state)
+        finally:
+            n.destroy_node()
+
+    assert results == [ConfirmState.IDLE, ConfirmState.IDLE]
 
 
 def test_legacy_sitting_skipped_during_pending_confirm(node):

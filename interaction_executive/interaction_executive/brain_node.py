@@ -350,6 +350,36 @@ class BrainNode(Node):
                          throttle_key=f"phase:{kind}")
         return False
 
+    def _ism_confirm_preempt_active(self) -> bool:
+        """Return True when stage 2b policy preempts CONFIRM_PENDING for ALERT.
+
+        Pure policy check only. Any policy/import failure falls back to legacy
+        confirm behavior so pose callbacks never fail because of takeover logic.
+        """
+        if not self._ism_stage_on("ism_stage_2b_confirm"):
+            return False
+        try:
+            from .interaction_state import (
+                Candidate as _Candidate,
+                InteractionPolicy as _Policy,
+                InteractionState as _State,
+                Priority as _Priority,
+            )
+
+            decision = _Policy.evaluate(
+                _State.CONFIRM_PENDING,
+                _Candidate(
+                    kind="alert",
+                    priority=_Priority.ALERT,
+                    source="pose",
+                    skill="fallen_alert",
+                ),
+            )
+            return decision.verdict == IsmVerdict.PREEMPT
+        except Exception as exc:  # noqa: BLE001 - takeover must never break callbacks
+            self.get_logger().debug(f"ism confirm preempt check failed: {exc}")
+            return False
+
     def _set_gesture_enabled(self, enabled: bool, via: str) -> None:
         """gesture_enabled 切換共用路徑（param callback / Studio topic 兩入口）。
 
@@ -1728,6 +1758,13 @@ class BrainNode(Node):
                         if cached and cached_age <= 30.0:
                             raw_name = cached
                     name = raw_name or "有人"
+                    if self._pending_confirm.state == ConfirmState.PENDING \
+                            and self._ism_confirm_preempt_active():
+                        self._pending_confirm.cancel(reason="preempt:fallen")
+                        self._ism_shadow_confirm_cancelled("preempt:fallen")
+                        self.get_logger().info(
+                            "PendingConfirm preempted by fallen (ism_stage_2b)"
+                        )
                     self._emit(
                         build_plan(
                             "fallen_alert",
