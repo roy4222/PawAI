@@ -134,6 +134,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
 | [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
 | [`pawai smoke object`](#smoke-object) | 跑 object lane static/HITL cup smoke |
+| [`pawai object matrix`](#object-matrix) | 現場 object detection 矩陣採集，CSV 寫到 Jetson |
 | [`pawai smoke nav`](#smoke-nav) | 跑 nav capability static-only smoke（零 motion + 8GB 互斥） |
 | [`pawai smoke full`](#smoke-full) | 跑 6/17 回穩主工具：brain + vision/object static + gateway/trace |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
@@ -510,6 +511,29 @@ SSH 到 Jetson 跑 `scripts/smoke_test_object.sh`。預設是 static-only：檢�
 `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
 
 ---
+
+### object matrix
+
+```bash
+pawai object matrix --object cup --distance 0.7 --light normal
+pawai object matrix --object cup --distance 1.0 --light low --angle left --trials 3 --auto --gap 1.5
+pawai object matrix --object cup --distance 0.7 --light normal --out artifacts/object_matrix/cup.csv
+```
+
+SSH 到 Jetson 跑 `python3 scripts/obj_matrix_cap.py`，用於現場 object detection
+矩陣採集。CLI 只負責透傳參數、source ROS 環境並 stream 即時輸出；採集工具本身會訂閱
+`/event/object_detected`，逐 trial 收集後把 CSV 寫到 Jetson repo。
+
+常用透傳參數：`--object`、`--distance`、`--light`、`--angle`、`--trials`、
+`--window`、`--conf-min`、`--object-topic`、`--auto`、`--gap`、`--out`、
+`--notes`、`--allow-short-window`。`--out` 預設是
+`artifacts/object_matrix/object_matrix.csv`；成功後 CLI 會印出 Jetson 上的完整 CSV 路徑。
+需要拉回本機時用 `pawai evidence pull` 或 `scp`。
+
+上機矩陣日用：先 `pawai demo start` 起 object lane，依 object / distance / light /
+angle 組合逐條跑 `pawai object matrix ...`，每天收工前把
+`artifacts/object_matrix/*.csv` 拉回並放進 evidence。失敗時 exit code 原樣傳回；若 object
+lane 沒起，先重啟 demo 再採。
 
 ### smoke nav
 
