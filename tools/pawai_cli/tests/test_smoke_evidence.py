@@ -196,6 +196,90 @@ def test_smoke_object_with_cup_passes_flag_to_remote_script():
     assert "--with-cup" in calls["stream"]
 
 
+# -- pawai smoke full (Lane 3 T3-4) -----------------------------------------
+
+def _summary_line(output: str, segment: str) -> str:
+    prefix = f"{segment} "
+    return next(line for line in output.splitlines() if line.startswith(prefix))
+
+
+def test_smoke_full_success_prints_rc_summary_without_nav():
+    run_calls: list[str] = []
+    stream_calls: list[str] = []
+
+    def fake_run_remote(cmd, timeout=None):
+        run_calls.append(cmd)
+        if "test -f" in cmd:
+            return Result(0, "", "")
+        if "curl -s --max-time 3 http://localhost:8080/health" in cmd:
+            return Result(0, '{"status":"ok"}\n', "")
+        if "runtime/traces" in cmd:
+            return Result(0, "before=5 after=7\n", "")
+        return Result(99, "", f"unexpected command: {cmd}")
+
+    def fake_stream_remote(cmd):
+        stream_calls.append(cmd)
+        return 0
+
+    with patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.stream_remote", side_effect=fake_stream_remote):
+        result = _invoke(["smoke", "full", "--rounds", "3"])
+
+    assert result.exit_code == 0, result.output
+    for segment in ("brain", "vision", "object", "gateway", "trace"):
+        line = _summary_line(result.output, segment)
+        assert "PASS" in line
+        assert "0" in line
+
+    assert any("bash scripts/smoke_test_e2e.sh 3" in cmd for cmd in stream_calls)
+    assert any("bash scripts/smoke_test_vision.sh" in cmd for cmd in stream_calls)
+    assert all("--with-events" not in cmd for cmd in stream_calls)
+    assert any("bash scripts/smoke_test_object.sh" in cmd for cmd in stream_calls)
+    assert all("--with-cup" not in cmd for cmd in stream_calls)
+    assert any("runtime/traces" in cmd and "sleep" in cmd for cmd in run_calls)
+
+    for cmd in run_calls + stream_calls:
+        assert "source /opt/ros/humble/setup.zsh" in cmd
+        assert "source install/setup.zsh" in cmd
+
+    forbidden = result.output.lower()
+    assert "nav" not in forbidden
+    assert "goto" not in forbidden
+    assert "goal" not in forbidden
+
+
+def test_smoke_full_failure_rolls_up_rc_and_hint_without_nav():
+    def fake_run_remote(cmd, timeout=None):
+        if "test -f" in cmd:
+            return Result(0, "", "")
+        if "curl -s --max-time 3 http://localhost:8080/health" in cmd:
+            return Result(0, '{"status":"ok"}\n', "")
+        if "runtime/traces" in cmd:
+            return Result(0, "before=5 after=7\n", "")
+        return Result(99, "", f"unexpected command: {cmd}")
+
+    def fake_stream_remote(cmd):
+        if "scripts/smoke_test_vision.sh" in cmd:
+            return 2
+        return 0
+
+    with patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.stream_remote", side_effect=fake_stream_remote):
+        result = _invoke(["smoke", "full", "--rounds", "3"])
+
+    assert result.exit_code == 2
+    assert "vision" in result.output
+    line = _summary_line(result.output, "vision")
+    assert "FAIL" in line
+    assert "2" in line
+    assert "pawai demo start" in result.output
+
+    forbidden = result.output.lower()
+    assert "nav" not in forbidden
+    assert "goto" not in forbidden
+    assert "goal" not in forbidden
+
+
 # ── pawai evidence pull (T2C-2) ─────────────────────────────────────────────
 
 def _fake_rsync_writing(files: dict[str, str]):

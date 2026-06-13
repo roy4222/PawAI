@@ -134,6 +134,7 @@ pawai demo stop                    # 6) 收工
 | [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
 | [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
 | [`pawai smoke object`](#smoke-object) | 跑 object lane static/HITL cup smoke |
+| [`pawai smoke full`](#smoke-full) | 跑 6/17 回穩主工具：brain + vision/object static + gateway/trace |
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
@@ -493,6 +494,26 @@ SSH 到 Jetson 跑 `scripts/smoke_test_object.sh`。預設是 static-only：檢�
 
 前提：object lane 已由 `pawai demo start` 啟動；CLI 會先 source
 `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
+
+---
+
+### smoke full
+
+```bash
+pawai smoke full               # brain 3 輪 + vision/object static + gateway/trace
+pawai smoke full --rounds 5    # 調整 brain E2E 輪數（1-30）
+```
+
+6/17 回穩主工具。CLI 端逐段 SSH 到 Jetson 執行並彙總 rc：
+`brain` 跑既有 `scripts/smoke_test_e2e.sh`（預設 3 輪）、`vision` 跑
+`scripts/smoke_test_vision.sh` static-only、`object` 跑
+`scripts/smoke_test_object.sh` static-only，接著檢查 Studio gateway
+`http://localhost:8080/health` 必須含 `"status":"ok"`，最後比對
+`runtime/traces/*.jsonl` 總行數在短暫等待後是否增加。
+
+`smoke full` 明確不含 nav，也不發 goal：8GB Jetson 上 brain 與 nav 資源互斥，full
+只驗 demo 回穩所需的 brain / perception static / gateway evidence chain。任一段 FAIL
+會讓整體 exit 非 0；summary table 會列出每段 PASS/FAIL 與 rc，失敗段附「↳」修法提示。
 
 ---
 
