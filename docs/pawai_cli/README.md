@@ -209,6 +209,7 @@ pawai status --short # 跳過 ROS node list，適合快速看 lock/branch/tmux
 - `tmux ls` — 找 `demo:` / `pawai_brain:` / `studio_gw:` / `llm-e2e:` 等 session
 - `ros2 node list` — 看 perception/brain 是否亮
 - `ps -eo … | grep go2_driver_node|go2_robot_sdk` — 列出 Go2 driver 程序的 PID / user / tty / start time / cmd（P0）
+- Brain runtime 區塊 — 若 `brain_node` 在 ROS node list 中，顯示 shadow/ISM flags、`demo_phase`、gesture/stranger alert flags，並列出存在的 `ism_stage_2*` 參數；node 不在時顯示 `(brain not running)`
 - `$JETSON_REPO/.pawai-last-deploy` — JSON 紀錄誰、何時、deploy 了哪個 module、git SHA、用 `rsync` 還是 `~/sync once`
 
 **Go2 driver processes 區塊**（P0，五人共用 Jetson 時尤其重要）：

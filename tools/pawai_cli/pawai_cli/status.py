@@ -20,6 +20,15 @@ _MODULE_NODE_HINTS: dict[str, str] = {
     "go2_driver": "go2_driver_node",
 }
 
+_BRAIN_NODE = _MODULE_NODE_HINTS["brain"]
+_BRAIN_PARAM_NAMES = (
+    "ism_shadow_enabled",
+    "ism_enabled",
+    "demo_phase",
+    "gesture_enabled",
+    "stranger_alert_enabled",
+)
+
 
 def gateway_health() -> str:
     r = shell.run_remote(
@@ -88,6 +97,12 @@ class NavCapabilityStatus:
     depth_clear: str
     reactive_status: str
     cmd_vel_joy_publishers: str
+
+
+@dataclass
+class BrainRuntimeStatus:
+    running: bool
+    params: dict[str, str]
 
 
 def collect(short: bool = False) -> LiveStatus:
@@ -206,6 +221,56 @@ def collect_nav_capability_status(tmux_output: str) -> NavCapabilityStatus:
     )
 
 
+def _parse_ros_param_get(output: str) -> str | None:
+    out = output.strip()
+    if not out:
+        return None
+    lowered = out.lower()
+    if "parameter not set" in lowered or "not set" in lowered:
+        return None
+    for line in out.splitlines():
+        match = re.search(r"value is:\s*(.*)$", line.strip(), flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return out
+
+
+def _brain_stage_2_param_names() -> list[str]:
+    out = _ros_remote("ros2 param list /brain_node 2>/dev/null | grep ism_stage_2 || true")
+    names: list[str] = []
+    for line in out.splitlines():
+        name = line.strip().lstrip("- ").strip()
+        if not name or name.endswith(":") or "ism_stage_2" not in name:
+            continue
+        names.append(name)
+    return sorted(dict.fromkeys(names))
+
+
+def collect_brain_runtime(ros_nodes: str) -> BrainRuntimeStatus:
+    if _BRAIN_NODE not in ros_nodes:
+        return BrainRuntimeStatus(running=False, params={})
+
+    params: dict[str, str] = {}
+    for name in (*_BRAIN_PARAM_NAMES, *_brain_stage_2_param_names()):
+        value = _parse_ros_param_get(_ros_remote(f"ros2 param get /brain_node {name} 2>/dev/null"))
+        if value is not None:
+            params[name] = value
+    return BrainRuntimeStatus(running=True, params=params)
+
+
+def print_brain_runtime(ros_nodes: str) -> None:
+    brain = collect_brain_runtime(ros_nodes)
+    print("\nBrain runtime:")
+    if not brain.running:
+        print("  (brain not running)")
+        return
+    if not brain.params:
+        print("  (no runtime params found)")
+        return
+    for name, value in brain.params.items():
+        print(f"  {name}: {value}")
+
+
 def print_status(short: bool = False) -> LiveStatus:
     st = collect(short=short)
     host = shell.jetson_host()
@@ -238,6 +303,8 @@ def print_status(short: bool = False) -> LiveStatus:
         print("\nModules (node presence):")
         for label, present in module_presence(st.ros_nodes):
             print(f"  {'✅' if present else '— '} {label}")
+
+        print_brain_runtime(st.ros_nodes)
         print(f"\nStudio gateway /health: {gateway_health()}")
 
         print("\nJetson git:")

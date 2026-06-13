@@ -635,6 +635,103 @@ def test_status_shows_nav_capability_block(monkeypatch):
     assert "/cmd_vel_joy publishers: 0" in result.output
 
 
+def test_status_shows_brain_runtime_when_brain_node_is_running(monkeypatch):
+    from pawai_cli.shell import Result
+    from pawai_cli.status import LiveStatus
+
+    st = LiveStatus(
+        tmux="",
+        ros_nodes="/brain_node\n/conversation_graph_node",
+        git="",
+        last_deploy="",
+        reachable=True,
+    )
+
+    def fake_run_remote(cmd, timeout=None):
+        if "ros2 param list /brain_node" in cmd:
+            return Result(code=0, stdout="ism_stage_2_shadow_enabled\n", stderr="")
+        if "ism_shadow_enabled" in cmd:
+            return Result(code=0, stdout="Boolean value is: True\n", stderr="")
+        if "demo_phase" in cmd:
+            return Result(code=0, stdout="String value is: chat\n", stderr="")
+        if "ism_stage_2_shadow_enabled" in cmd:
+            return Result(code=0, stdout="Boolean value is: False\n", stderr="")
+        return Result(code=1, stdout="", stderr="Parameter not set")
+
+    with patch("pawai_cli.status.collect", return_value=st), \
+         patch("pawai_cli.status.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.status.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"), \
+         patch("pawai_cli.status._read_last_deploy_remote", return_value=None):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status"])
+
+    assert "Brain runtime" in result.output
+    assert "ism_shadow_enabled: True" in result.output
+    assert "demo_phase: chat" in result.output
+    assert "ism_stage_2_shadow_enabled: False" in result.output
+
+
+def test_status_shows_brain_not_running_without_param_get(monkeypatch):
+    from pawai_cli.shell import Result
+    from pawai_cli.status import LiveStatus
+
+    st = LiveStatus(
+        tmux="",
+        ros_nodes="/conversation_graph_node",
+        git="",
+        last_deploy="",
+        reachable=True,
+    )
+    run_remote = Mock(return_value=Result(code=0, stdout="", stderr=""))
+
+    with patch("pawai_cli.status.collect", return_value=st), \
+         patch("pawai_cli.status.shell.run_remote", run_remote), \
+         patch("pawai_cli.status.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"), \
+         patch("pawai_cli.status._read_last_deploy_remote", return_value=None):
+        result = CliRunner().invoke(cli, ["status"])
+
+    assert "Brain runtime" in result.output
+    assert "(brain not running)" in result.output
+    remote_commands = [call.args[0] for call in run_remote.call_args_list]
+    assert not any("ros2 param" in cmd for cmd in remote_commands)
+
+
+def test_status_skips_missing_brain_stage_2_params(monkeypatch):
+    from pawai_cli.shell import Result
+    from pawai_cli.status import LiveStatus
+
+    st = LiveStatus(
+        tmux="",
+        ros_nodes="/brain_node",
+        git="",
+        last_deploy="",
+        reachable=True,
+    )
+
+    def fake_run_remote(cmd, timeout=None):
+        if "ros2 param list /brain_node" in cmd:
+            return Result(code=0, stdout="ism_stage_1_enabled\n", stderr="")
+        if "ism_enabled" in cmd:
+            return Result(code=0, stdout="Boolean value is: False\n", stderr="")
+        return Result(code=1, stdout="", stderr="Parameter not set")
+
+    with patch("pawai_cli.status.collect", return_value=st), \
+         patch("pawai_cli.status.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.status.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.status.gateway_health", return_value="down / not started"), \
+         patch("pawai_cli.status._read_last_deploy_remote", return_value=None):
+        result = CliRunner().invoke(cli, ["status"])
+
+    assert "Brain runtime" in result.output
+    assert "ism_enabled: False" in result.output
+    assert "ism_stage_2" not in result.output
+
+
 def test_status_shows_branch_mismatch(monkeypatch, tmp_path):
     last_deploy = {
         "deployed_by": "alice", "branch": "feat/old",
