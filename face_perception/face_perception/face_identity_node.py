@@ -7,18 +7,37 @@ Original script retained as fallback.
 import json
 import os
 import pickle
+import tempfile
 import threading
 import time
 from pathlib import Path
 
-import cv2
 import numpy as np
-import rclpy
-from cv_bridge import CvBridge
-from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import Image
-from std_msgs.msg import String
+
+try:
+    import cv2
+except (ImportError, AttributeError):
+    cv2 = None
+
+try:
+    import rclpy
+    from rclpy.node import Node
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+    from sensor_msgs.msg import Image
+    from std_msgs.msg import String
+except (ImportError, AttributeError):
+    rclpy = None
+    HistoryPolicy = None
+    QoSProfile = None
+    ReliabilityPolicy = None
+    Image = None
+    String = None
+
+    class Node:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError(
+                "ROS2 Python dependencies are required to run FaceIdentityNode"
+            )
 
 
 def resolve_model_path(path: str, model_name: str) -> Path:
@@ -49,6 +68,133 @@ def compute_db_counts(db_dir: Path):
             continue
         counts[person_dir.name] = len(list(person_dir.glob("*.png")))
     return counts
+
+
+def model_npz_path(path) -> Path:
+    model_path = Path(path)
+    if model_path.suffix == ".npz":
+        return model_path
+    return model_path.with_suffix(".npz")
+
+
+def model_pickle_path(path) -> Path:
+    model_path = Path(path)
+    if model_path.suffix == ".npz":
+        return model_path.with_suffix(".pkl")
+    return model_path
+
+
+def _float32_vector(value) -> np.ndarray:
+    return np.asarray(value, dtype=np.float32).reshape(-1)
+
+
+def save_model_npz(model, path) -> Path:
+    target_path = model_npz_path(path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    names = list(model.get("counts", {}).keys())
+    embeddings_by_name = model.get("embeddings", {})
+    centroids_by_name = model.get("centroids", {})
+
+    embedding_vectors = []
+    embedding_counts = []
+    centroid_vectors = []
+    counts = []
+    for name in names:
+        person_embeddings = [
+            _float32_vector(embedding)
+            for embedding in embeddings_by_name.get(name, [])
+        ]
+        embedding_counts.append(len(person_embeddings))
+        embedding_vectors.extend(person_embeddings)
+        centroid_vectors.append(_float32_vector(centroids_by_name[name]))
+        counts.append(int(model["counts"][name]))
+
+    embeddings = (
+        np.stack(embedding_vectors, axis=0)
+        if embedding_vectors
+        else np.empty((0, 0), dtype=np.float32)
+    )
+    centroids = (
+        np.stack(centroid_vectors, axis=0)
+        if centroid_vectors
+        else np.empty((0, 0), dtype=np.float32)
+    )
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "wb",
+            dir=target_path.parent,
+            prefix=f"{target_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            np.savez(
+                tmp_file,
+                names=np.asarray(names, dtype=np.str_),
+                counts=np.asarray(counts, dtype=np.int64),
+                embedding_counts=np.asarray(embedding_counts, dtype=np.int64),
+                embeddings=np.asarray(embeddings, dtype=np.float32),
+                centroids=np.asarray(centroids, dtype=np.float32),
+            )
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(tmp_path, target_path)
+    except Exception:
+        if tmp_path is not None and tmp_path.exists():
+            tmp_path.unlink()
+        raise
+    return target_path
+
+
+def load_model_npz(path):
+    with np.load(Path(path), allow_pickle=False) as data:
+        names = [str(name) for name in data["names"].tolist()]
+        counts = data["counts"]
+        embedding_counts = data["embedding_counts"]
+        embeddings = np.asarray(data["embeddings"], dtype=np.float32)
+        centroids = np.asarray(data["centroids"], dtype=np.float32)
+
+    model = {"embeddings": {}, "centroids": {}, "counts": {}}
+    embedding_index = 0
+    for person_index, name in enumerate(names):
+        person_embedding_count = int(embedding_counts[person_index])
+        person_embeddings = []
+        for embedding in embeddings[
+            embedding_index : embedding_index + person_embedding_count
+        ]:
+            person_embeddings.append(np.asarray(embedding, dtype=np.float32).copy())
+        embedding_index += person_embedding_count
+
+        model["embeddings"][name] = person_embeddings
+        model["centroids"][name] = np.asarray(
+            centroids[person_index], dtype=np.float32
+        ).copy()
+        model["counts"][name] = int(counts[person_index])
+    return model
+
+
+def load_model(path):
+    npz_path = model_npz_path(path)
+    if npz_path.exists():
+        return load_model_npz(npz_path)
+
+    pickle_path = model_pickle_path(path)
+    if pickle_path.exists():
+        with pickle_path.open("rb") as f:
+            return pickle.load(f)
+
+    raise FileNotFoundError(f"Cannot find face identity model: {npz_path}")
+
+
+def load_cv_bridge():
+    try:
+        from cv_bridge import CvBridge
+    except (ImportError, AttributeError) as exc:
+        raise RuntimeError("cv_bridge is required to run FaceIdentityNode") from exc
+    return CvBridge
 
 
 def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
@@ -121,7 +267,8 @@ class FaceIdentityNode(Node):
         headless_param = self.get_parameter("headless").value
 
         # --- Derived state ---
-        self.bridge = CvBridge()
+        cv_bridge_cls = load_cv_bridge()
+        self.bridge = cv_bridge_cls()
         self.lock = threading.Lock()
         self.headless = not bool(os.environ.get("DISPLAY")) or headless_param
         self.last_log_ts = 0.0
@@ -139,7 +286,11 @@ class FaceIdentityNode(Node):
         self.depth_scale = 0.001
 
         # --- OpenCV face modules ---
-        if not hasattr(cv2, "FaceDetectorYN") or not hasattr(cv2, "FaceRecognizerSF"):
+        if (
+            cv2 is None
+            or not hasattr(cv2, "FaceDetectorYN")
+            or not hasattr(cv2, "FaceRecognizerSF")
+        ):
             raise RuntimeError(
                 "OpenCV build does not support FaceDetectorYN/FaceRecognizerSF; "
                 "please install OpenCV >= 4.8 with face module"
@@ -160,31 +311,31 @@ class FaceIdentityNode(Node):
 
         # --- Face DB / model ---
         self.model_path = Path(model_path_str)
+        self.model_npz_path = model_npz_path(self.model_path)
         current_counts = compute_db_counts(Path(db_dir))
-        if self.model_path.exists():
-            with self.model_path.open("rb") as f:
-                self.model = pickle.load(f)
+        try:
+            self.model = load_model(self.model_path)
             stored_counts = self.model.get("counts", {})
+        except FileNotFoundError:
+            self.model = self.train_model(Path(db_dir))
+            saved_path = save_model_npz(self.model, self.model_path)
+            self.get_logger().info(f"Trained and saved model to {saved_path}")
+        else:
             if stored_counts != current_counts:
                 self.get_logger().info(
                     "Enrollment DB changed; retraining model "
                     f"(stored={stored_counts}, current={current_counts})"
                 )
                 self.model = self.train_model(Path(db_dir))
-                self.model_path.parent.mkdir(parents=True, exist_ok=True)
-                with self.model_path.open("wb") as wf:
-                    pickle.dump(self.model, wf)
-                self.get_logger().info(
-                    f"Retrained and saved model to {self.model_path}"
-                )
+                saved_path = save_model_npz(self.model, self.model_path)
+                self.get_logger().info(f"Retrained and saved model to {saved_path}")
             else:
-                self.get_logger().info(f"Loaded model from {self.model_path}")
-        else:
-            self.model = self.train_model(Path(db_dir))
-            self.model_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.model_path.open("wb") as f:
-                pickle.dump(self.model, f)
-            self.get_logger().info(f"Trained and saved model to {self.model_path}")
+                loaded_path = (
+                    self.model_npz_path
+                    if self.model_npz_path.exists()
+                    else model_pickle_path(self.model_path)
+                )
+                self.get_logger().info(f"Loaded model from {loaded_path}")
 
         # --- Publishers (topic 名稱對齊 interaction_contract v2.0，不可改) ---
         self.debug_image_pub = self.create_publisher(
