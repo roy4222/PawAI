@@ -6,18 +6,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 import os
 import random
 import sys
 import time
 import uuid
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 # Import the real SKILL_REGISTRY (pure-Python dataclass module, no ROS deps)
@@ -219,6 +222,367 @@ MOCK_GENERATORS = {
     "pose": mock_pose_event,
     "object": mock_object_event,
 }
+
+
+# ── Mock Evidence Center trace data（T2-7, gateway-free WSL dev）──────
+
+_TRACE_SESSION_STARTS = {
+    "20260613-083000": 1781301000.0,
+    "20260612-100000": 1781229600.0,
+    "20260611-235959": 1781193599.0,
+}
+
+_SESSION_ID_CHARS = set(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+)
+
+
+def _valid_mock_session_id(session_id: str) -> bool:
+    return bool(session_id) and all(ch in _SESSION_ID_CHARS for ch in session_id)
+
+
+def build_mock_trace_events(session_id: str, n: int = 24) -> list[dict]:
+    """Build deterministic, redacted fake /brain/trace events for Studio dev."""
+    base_ts = _TRACE_SESSION_STARTS.get(session_id, 1781229600.0)
+    session_tag = session_id.replace("-", "")
+
+    def event(
+        idx: int,
+        decision_id: str,
+        kind: str,
+        verdict: str,
+        gate: str,
+        reason: str,
+        detail: dict,
+        *,
+        node: str = "mock_brain",
+    ) -> dict:
+        return {
+            "v": 1,
+            "ts": round(base_ts + idx * 0.73, 3),
+            "decision_id": f"{session_tag}-{decision_id}",
+            "node": node,
+            "kind": kind,
+            "verdict": verdict,
+            "gate": gate,
+            "reason": reason,
+            "detail": detail,
+        }
+
+    events = [
+        event(0, "greet-001", "candidate", "accepted", "greet_cooldown",
+              "candidate:greet_intent", {
+                  "source": "speech",
+                  "intent": "greet",
+                  "transcript": "[private]",
+                  "identity": "[private]",
+                  "confidence": 0.94,
+              }),
+        event(1, "greet-001", "policy_decision", "accepted", "safety",
+              "policy:allow:greet", {
+                  "nav_safe": True,
+                  "tts_playing": False,
+                  "source_summary": "[private]",
+              }),
+        event(2, "greet-001", "plan_emitted", "accepted", "active_plan",
+              "plan:greet_emitted", {
+                  "plan_id": "p-mock-greet-001",
+                  "selected_skill": "wave_hello",
+                  "step_total": 2,
+              }),
+        event(3, "greet-001", "skill_result", "accepted", "tts_playing",
+              "skill:completed", {
+                  "plan_id": "p-mock-greet-001",
+                  "status": "completed",
+                  "text": "[private]",
+              }),
+        event(4, "greet-002", "candidate", "suppressed", "greet_cooldown",
+              "cooldown:greet:[private]", {
+                  "cooldown_remaining_s": 5.2,
+                  "source": "face",
+                  "name": "[private]",
+              }),
+        event(5, "gesture-001", "candidate", "suppressed", "demo_phase",
+              "phase:s3_object:gesture", {
+                  "demo_phase": "s3_object",
+                  "gesture": "wave",
+                  "image_path": "[private]",
+              }),
+        event(6, "speech-001", "candidate", "suppressed", "tts_playing",
+              "gate:tts_playing", {
+                  "tts_playing": True,
+                  "transcript": "[private]",
+              }),
+        event(7, "confirm-001", "candidate", "suppressed", "pending_confirm",
+              "gate:confirm_pending", {
+                  "pending_confirm": True,
+                  "intent": "come_here",
+                  "source_summary": "[private]",
+              }),
+        event(8, "plan-001", "policy_decision", "suppressed", "active_plan",
+              "gate:active_plan", {
+                  "active_plan": "p-mock-greet-001",
+                  "candidate_skill": "dance",
+              }),
+        event(9, "gesture-002", "candidate", "blocked", "gesture_enabled",
+              "gate:gesture_disabled", {
+                  "gesture_enabled": False,
+                  "gesture": "point",
+                  "identity": "[private]",
+              }),
+        event(10, "nav-001", "candidate", "accepted", "safety",
+              "candidate:follow_request", {
+                  "intent": "follow",
+                  "source": "studio_button",
+              }),
+        event(11, "nav-001", "policy_decision", "blocked", "safety",
+              "gate:safety:obstacle", {
+                  "obstacle_distance_m": 0.28,
+                  "nav_safe": False,
+                  "source_summary": "[private]",
+              }),
+        event(12, "shadow-001", "candidate", "accepted", "ism_shadow",
+              "ism_shadow:legacy_suppressed_ism_accept", {
+                  "shadow": True,
+                  "ism_verdict": "accept",
+                  "legacy_action": "suppressed:greet_cooldown",
+                  "legacy_gate": "greet_cooldown",
+                  "legacy_reason": "cooldown:greet:[private]",
+                  "candidate_skill": "wave_hello",
+              }),
+        event(13, "shadow-002", "candidate", "suppressed", "ism_shadow",
+              "ism_shadow:legacy_emitted_ism_suppress", {
+                  "shadow": True,
+                  "ism_verdict": "suppress",
+                  "legacy_action": "emitted:wave_hello",
+                  "legacy_gate": "pending_confirm",
+                  "legacy_reason": "gate:confirm_pending",
+                  "candidate_skill": "wave_hello",
+              }),
+        event(14, "shadow-003", "candidate", "accepted", "ism_shadow",
+              "ism_shadow:agreement_accept", {
+                  "shadow": True,
+                  "ism_verdict": "accept",
+                  "legacy_action": "emitted:status_report",
+                  "legacy_gate": "",
+                  "candidate_skill": "status_report",
+              }),
+        event(15, "shadow-004", "candidate", "suppressed", "ism_shadow",
+              "ism_shadow:agreement_suppress", {
+                  "shadow": True,
+                  "ism_verdict": "suppress",
+                  "legacy_action": "suppressed:demo_phase",
+                  "legacy_gate": "demo_phase",
+                  "candidate_skill": "come_here",
+              }),
+        event(16, "status-001", "candidate", "accepted", "safety",
+              "candidate:status", {
+                  "intent": "status",
+                  "source": "text",
+                  "text": "[private]",
+              }),
+        event(17, "status-001", "policy_decision", "accepted", "active_plan",
+              "policy:allow:status", {
+                  "selected_skill": "status_report",
+                  "priority_class": 4,
+              }),
+        event(18, "status-001", "plan_emitted", "accepted", "active_plan",
+              "plan:status_emitted", {
+                  "plan_id": "p-mock-status-001",
+                  "selected_skill": "status_report",
+                  "step_total": 1,
+              }),
+        event(19, "status-001", "skill_result", "accepted", "tts_playing",
+              "skill:completed", {
+                  "plan_id": "p-mock-status-001",
+                  "status": "completed",
+                  "full_text": "[private]",
+              }),
+    ]
+
+    for idx in range(len(events), max(n, len(events))):
+        gate = ["greet_cooldown", "demo_phase", "pending_confirm", "safety"][idx % 4]
+        verdict = ["accepted", "suppressed", "blocked"][idx % 3]
+        kind = ["candidate", "policy_decision", "skill_result"][idx % 3]
+        reason = {
+            "accepted": "mock:accepted",
+            "suppressed": f"gate:{gate}",
+            "blocked": f"blocked:{gate}",
+        }[verdict]
+        events.append(event(idx, f"extra-{idx:03d}", kind, verdict, gate, reason, {
+            "mock_extra": True,
+            "source_summary": "[private]",
+        }))
+
+    return events[:n]
+
+
+MOCK_TRACE_EVENTS_BY_SESSION: dict[str, list[dict]] = {
+    session_id: build_mock_trace_events(session_id, n=n)
+    for session_id, n in {
+        "20260613-083000": 24,
+        "20260612-100000": 22,
+        "20260611-235959": 20,
+    }.items()
+}
+
+
+def _mock_trace_json_line(event: dict) -> str:
+    return json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+
+
+def _mock_trace_session_meta(session_id: str, events: list[dict]) -> dict:
+    started_ts = min((ev["ts"] for ev in events if isinstance(ev.get("ts"), (int, float))),
+                     default=0.0)
+    file_size = sum(len(_mock_trace_json_line(ev).encode("utf-8")) for ev in events)
+    return {
+        "session_id": session_id,
+        "started_ts": started_ts,
+        "line_count": len(events),
+        "file_size": file_size,
+        "parts": [f"{session_id}.jsonl"],
+    }
+
+
+def _mock_trace_events_for_export(session: str, since: float) -> list[dict]:
+    if session:
+        sessions = [(session, MOCK_TRACE_EVENTS_BY_SESSION[session])]
+    else:
+        sessions = sorted(
+            MOCK_TRACE_EVENTS_BY_SESSION.items(),
+            key=lambda item: _mock_trace_session_meta(item[0], item[1])["started_ts"],
+        )
+    events: list[dict] = []
+    for _, session_events in sessions:
+        for event in session_events:
+            ts = event.get("ts")
+            if isinstance(ts, (int, float)) and ts >= since:
+                events.append(event)
+    return events
+
+
+async def _iter_mock_trace_lines(events: list[dict]):
+    for event in events:
+        yield _mock_trace_json_line(event)
+
+
+def _empty_mock_trace_summary(session_id: str) -> dict:
+    return {
+        "session_id": session_id,
+        "event_count": 0,
+        "time_range": {"start": None, "end": None},
+        "verdict_distribution": {},
+        "top_suppressed_gates": [],
+        "shadow_divergence": {"total": 0, "by_gate": []},
+    }
+
+
+def _summarize_mock_trace_events(session_id: str, events: list[dict]) -> dict:
+    summary = _empty_mock_trace_summary(session_id)
+    verdicts: Counter[str] = Counter()
+    suppressed_gates: Counter[str] = Counter()
+    divergence_by_gate: Counter[str] = Counter()
+    start_ts: float | None = None
+    end_ts: float | None = None
+
+    for event in events:
+        summary["event_count"] += 1
+
+        ts = event.get("ts")
+        if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+            start_ts = float(ts) if start_ts is None else min(start_ts, float(ts))
+            end_ts = float(ts) if end_ts is None else max(end_ts, float(ts))
+
+        verdict = event.get("verdict")
+        if isinstance(verdict, str) and verdict:
+            verdicts[verdict] += 1
+            if verdict == "suppressed":
+                gate = event.get("gate")
+                if isinstance(gate, str) and gate:
+                    suppressed_gates[gate] += 1
+
+        if event.get("kind") != "candidate" or event.get("gate") != "ism_shadow":
+            continue
+        detail = event.get("detail")
+        if not isinstance(detail, dict) or detail.get("shadow") is not True:
+            continue
+        ism_verdict = detail.get("ism_verdict")
+        if not isinstance(ism_verdict, str) or not ism_verdict:
+            continue
+        would_act = ism_verdict in {"accept", "preempt"}
+        legacy_action = detail.get("legacy_action")
+        acted = isinstance(legacy_action, str) and (
+            legacy_action.startswith("emitted")
+            or legacy_action.startswith("confirm_requested")
+        )
+        if would_act == acted:
+            continue
+        legacy_gate = detail.get("legacy_gate")
+        gate_key = legacy_gate if isinstance(legacy_gate, str) and legacy_gate else "(none)"
+        divergence_by_gate[gate_key] += 1
+
+    summary["time_range"] = {"start": start_ts, "end": end_ts}
+    summary["verdict_distribution"] = dict(sorted(verdicts.items()))
+    summary["top_suppressed_gates"] = [
+        {"gate": gate, "count": count}
+        for gate, count in sorted(suppressed_gates.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    by_gate = [
+        {"gate": gate, "count": count}
+        for gate, count in sorted(divergence_by_gate.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    summary["shadow_divergence"] = {
+        "total": sum(divergence_by_gate.values()),
+        "by_gate": by_gate,
+    }
+    return summary
+
+
+def _render_mock_trace_report_md(summary: dict) -> str:
+    time_range = summary.get("time_range") if isinstance(summary.get("time_range"), dict) else {}
+    lines = [
+        "# Trace Session Report",
+        "",
+        f"- Session: `{summary.get('session_id', '')}`",
+        f"- Event count / 事件數: {summary.get('event_count', 0)}",
+        f"- Time range / 時間範圍: {time_range.get('start', 'n/a')} "
+        f"to {time_range.get('end', 'n/a')}",
+        "",
+        "## Verdict Distribution",
+    ]
+    verdict_distribution = summary.get("verdict_distribution")
+    if isinstance(verdict_distribution, dict) and verdict_distribution:
+        for verdict, count in sorted(verdict_distribution.items()):
+            lines.append(f"- `{verdict}`: {count}")
+    else:
+        lines.append("- (none): 0")
+
+    lines.extend(["", "## Top Suppressed Gates"])
+    top_suppressed_gates = summary.get("top_suppressed_gates")
+    if isinstance(top_suppressed_gates, list) and top_suppressed_gates:
+        for row in top_suppressed_gates:
+            if isinstance(row, dict):
+                lines.append(f"- `{row.get('gate', '')}`: {row.get('count', 0)}")
+    else:
+        lines.append("- (none): 0")
+
+    shadow_divergence = summary.get("shadow_divergence")
+    if not isinstance(shadow_divergence, dict):
+        shadow_divergence = {}
+    lines.extend([
+        "",
+        "## Shadow Divergence",
+        f"- Total / 總數: {shadow_divergence.get('total', 0)}",
+    ])
+    by_gate = shadow_divergence.get("by_gate")
+    if isinstance(by_gate, list) and by_gate:
+        for row in by_gate:
+            if isinstance(row, dict):
+                lines.append(f"- `{row.get('gate', '')}`: {row.get('count', 0)}")
+    else:
+        lines.append("- (none): 0")
+    return "\n".join(lines) + "\n"
+
 
 # ── 背景推送任務 ────────────────────────────────────────────────────
 
@@ -474,6 +838,42 @@ async def ws_text(ws: WebSocket):
         pass
 
 # ── REST: Gateway 端點 ──────────────────────────────────────────────
+
+@app.get("/api/trace/sessions")
+async def get_mock_trace_sessions():
+    sessions = [
+        _mock_trace_session_meta(session_id, events)
+        for session_id, events in MOCK_TRACE_EVENTS_BY_SESSION.items()
+    ]
+    sessions.sort(key=lambda row: (row["started_ts"], row["session_id"]), reverse=True)
+    return {"ok": True, "sessions": sessions}
+
+
+@app.get("/api/trace/export")
+async def get_mock_trace_export(session: str = "", since: float = 0.0, redact: int = 1):
+    _ = redact  # Mock events are already redacted; keep query parity with gateway.
+    if session and (
+        not _valid_mock_session_id(session) or session not in MOCK_TRACE_EVENTS_BY_SESSION
+    ):
+        return JSONResponse({"error": "invalid_session"}, status_code=400)
+    events = _mock_trace_events_for_export(session, since or 0.0)
+    return StreamingResponse(_iter_mock_trace_lines(events), media_type="application/x-ndjson")
+
+
+@app.get("/api/trace/report")
+async def get_mock_trace_report(session: str = "", format: str = "json"):
+    if (
+        not session
+        or not _valid_mock_session_id(session)
+        or session not in MOCK_TRACE_EVENTS_BY_SESSION
+    ):
+        return JSONResponse({"error": "invalid_session"}, status_code=400)
+
+    summary = _summarize_mock_trace_events(session, MOCK_TRACE_EVENTS_BY_SESSION[session])
+    if format.lower() in {"md", "markdown"}:
+        return PlainTextResponse(_render_mock_trace_report_md(summary), media_type="text/markdown")
+    return summary
+
 
 @app.get("/api/scoreboard")
 async def get_scoreboard():
