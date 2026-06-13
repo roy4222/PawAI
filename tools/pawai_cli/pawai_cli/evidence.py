@@ -17,6 +17,34 @@ from . import shell
 from .errors import structured_error
 
 EVIDENCE_DEST_REL = Path("artifacts/evidence/traces")
+NAV_CAPABILITY_DEST_NAME = "nav_capability"
+
+
+def _remote_runtime_dir(name: str) -> str:
+    return f"{shell.jetson_host()}:{shell.jetson_repo().rstrip('/')}/runtime/{name}/"
+
+
+def _pull_read_only(src: str, dest: Path) -> None:
+    # Read-only pull: -az, NO --delete (local extras stay; remote untouched).
+    argv = ["rsync", "-az", src, f"{dest}/"]
+    code = shell.stream(argv)
+    if code == 127:
+        raise structured_error(
+            "rsync not found on this machine",
+            ["install rsync: sudo apt install rsync (Linux/WSL) / "
+             "brew install rsync (Mac)"],
+        )
+    if code != 0:
+        raise structured_error(
+            f"evidence pull failed (rsync exit {code})",
+            [
+                "SSH 不通？跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
+                f"確認 Jetson 端有 trace：ssh {shell.jetson_host()} "
+                f"'ls {shell.jetson_repo()}/runtime/traces/'",
+                "gateway 沒跑、或 store 被 PAWAI_TRACE_STORE_ENABLED=0 關掉時，"
+                "Jetson 端不會有檔案",
+            ],
+        )
 
 
 def summarize_jsonl_dir(directory: Path) -> dict:
@@ -58,28 +86,11 @@ def pull(dest_str: str | None) -> None:
     """Pull runtime/traces/*.jsonl from the Jetson gateway trace store."""
     root = shell.repo_root()
     dest = Path(dest_str).expanduser() if dest_str else root / EVIDENCE_DEST_REL
+    nav_dest = dest.parent / NAV_CAPABILITY_DEST_NAME
+    nav_dest.mkdir(parents=True, exist_ok=True)
     dest.mkdir(parents=True, exist_ok=True)
-    src = f"{shell.jetson_host()}:{shell.jetson_repo().rstrip('/')}/runtime/traces/"
-    # Read-only pull: -az, NO --delete (local extras stay; remote untouched).
-    argv = ["rsync", "-az", src, f"{dest}/"]
-    code = shell.stream(argv)
-    if code == 127:
-        raise structured_error(
-            "rsync not found on this machine",
-            ["install rsync: sudo apt install rsync (Linux/WSL) / "
-             "brew install rsync (Mac)"],
-        )
-    if code != 0:
-        raise structured_error(
-            f"evidence pull failed (rsync exit {code})",
-            [
-                "SSH 不通？跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
-                f"確認 Jetson 端有 trace：ssh {shell.jetson_host()} "
-                f"'ls {shell.jetson_repo()}/runtime/traces/'",
-                "gateway 沒跑、或 store 被 PAWAI_TRACE_STORE_ENABLED=0 關掉時，"
-                "Jetson 端不會有檔案",
-            ],
-        )
+    _pull_read_only(_remote_runtime_dir("nav_capability"), nav_dest)
+    _pull_read_only(_remote_runtime_dir("traces"), dest)
     summary = summarize_jsonl_dir(dest)
     click.echo(
         f"✓ pulled {summary['files']} file(s), {summary['events']} event(s), "
