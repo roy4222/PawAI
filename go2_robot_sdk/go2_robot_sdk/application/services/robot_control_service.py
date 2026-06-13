@@ -6,11 +6,13 @@ import logging
 import time
 
 
-try:
-    from pawai_contracts.skill_contract import BANNED_API_IDS
-# Monorepo source tree fallback before pawai_contracts is installed.
-except ImportError:
-    from pawai_contracts.pawai_contracts.skill_contract import BANNED_API_IDS
+# Driver-layer (Layer 1) last-resort deny list. Mirrors
+# pawai_contracts.skill_contract.BANNED_API_IDS (1030 FrontFlip / 1031 FrontJump
+# / 1301 Handstand). The go2_robot_sdk driver must stay dependency-free of
+# pawai_contracts (Layer 3) — the CI fast-gate runs go2 tests without it on
+# PYTHONPATH — so the safety-critical subset is hardcoded here. pawai_contracts
+# remains the single source of truth; keep this in sync if it adds banned IDs.
+BANNED_API_IDS = frozenset({1030, 1031, 1301})
 
 from ...domain.interfaces import IRobotController
 from ..utils.command_generator import gen_mov_command
