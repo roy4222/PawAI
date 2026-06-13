@@ -1087,6 +1087,56 @@ def _run_lane_healthcheck(lane: str) -> int:
     return shell.stream(["bash", str(script)], cwd=shell.repo_root(), env=env)
 
 
+def _shadow_soak_manual_command() -> str:
+    return f"ssh {shell.jetson_host()} ros2 param set /brain_node ism_shadow_enabled True"
+
+
+def _shadow_soak_remote_command(command: str) -> str:
+    repo = shell.jetson_repo()
+    return (
+        "source /opt/ros/humble/setup.zsh 2>/dev/null; "
+        f"source {repo}/install/setup.zsh 2>/dev/null; "
+        f"{command}"
+    )
+
+
+def _parse_ros_param_get_value(output: str) -> str:
+    stripped = output.strip()
+    if not stripped:
+        return ""
+    for line in stripped.splitlines():
+        marker = "value is:"
+        if marker in line.lower():
+            return line.split(":", 1)[1].strip()
+    return stripped
+
+
+def _enable_shadow_soak() -> tuple[bool, str]:
+    set_command = "ros2 param set /brain_node ism_shadow_enabled True"
+    set_result = shell.run_remote(_shadow_soak_remote_command(set_command), timeout=8)
+    if not set_result.ok:
+        detail = (set_result.stderr or set_result.stdout or "no output").strip()
+        return False, f"param set failed (exit {set_result.code}): {detail}"
+
+    get_command = "ros2 param get /brain_node ism_shadow_enabled"
+    get_result = shell.run_remote(_shadow_soak_remote_command(get_command), timeout=8)
+    if not get_result.ok:
+        detail = (get_result.stderr or get_result.stdout or "no output").strip()
+        return False, f"param get failed (exit {get_result.code}): {detail}"
+
+    value = _parse_ros_param_get_value(get_result.stdout)
+    if value.lower() != "true":
+        return False, f"readback was {value or '<empty>'}, expected True"
+    return True, "ism_shadow_enabled=True"
+
+
+def _print_shadow_soak_reminder() -> None:
+    click.echo(
+        "↳ shadow soak 需手動開啟："
+        f"{_shadow_soak_manual_command()}（或用 --with-shadow）"
+    )
+
+
 def _invoke_nav_start_sh() -> int:
     return shell.stream(
         ["bash", ".claude/skills/nav-avoidance-lane/scripts/start.sh", "capability"],
@@ -1153,12 +1203,16 @@ def _current_sha_short() -> str:
 @click.option("--force", "force", is_flag=True, help="Take over another user's demo lock.")
 @click.option("--skip-healthcheck", is_flag=True,
               help="Escape hatch: trust start.sh rc and skip the post-start healthcheck gate.")
+@click.option("--with-shadow", is_flag=True,
+              help="After a healthy brain demo is running, enable ism_shadow_enabled.")
 def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
-               yes: bool, force: bool, skip_healthcheck: bool) -> None:
+               yes: bool, force: bool, skip_healthcheck: bool, with_shadow: bool) -> None:
     """Start brain demo or nav capability lane."""
     from .lock import LOCK_FLOCK_PATH, Lock, is_stale, is_own_lock
 
     nav_mode = _validate_nav_mode(nav_mode, brain_only)
+    if with_shadow and nav_mode == "capability":
+        raise click.UsageError("--with-shadow cannot be combined with --nav capability")
     lane = "nav_capability" if nav_mode == "capability" else "brain"
     tmux_session = "nav-cap-demo" if lane == "nav_capability" else "demo"
     demo_mode = "nav_capability" if lane == "nav_capability" else (
@@ -1305,6 +1359,16 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
         )
         sys.exit(2)
     click.echo(f"✓ Demo running (lane: {lane}, lock owner: {user}@{host})")
+    if lane == "brain":
+        if with_shadow:
+            ok, detail = _enable_shadow_soak()
+            if not ok:
+                click.echo(f"⚠ shadow soak enable failed: {detail}")
+                click.echo(f"  手動補救：{_shadow_soak_manual_command()}")
+                sys.exit(1)
+            click.echo("✓ shadow soak enabled (ism_shadow_enabled=True)")
+        else:
+            _print_shadow_soak_reminder()
 
 
 @demo.command("stop")
