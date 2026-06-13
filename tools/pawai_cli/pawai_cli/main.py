@@ -944,6 +944,103 @@ def smoke_object(with_cup: bool) -> None:
     click.echo("✓ smoke object passed")
 
 
+def _quote_argv(argv: list[object]) -> str:
+    return " ".join(shlex.quote(str(part)) for part in argv)
+
+
+def _append_matrix_option(argv: list[object], flag: str, value: object | None) -> None:
+    if value is None:
+        return
+    argv.extend([flag, value])
+
+
+_OBJECT_MATRIX_DEFAULT_OUT = "artifacts/object_matrix/object_matrix.csv"
+
+
+@cli.group("object")
+def object_group() -> None:
+    """Object perception field tools."""
+
+
+@object_group.command("matrix")
+@click.option("--object", "object_name", required=True,
+              help="Expected object label for this run.")
+@click.option("--distance", required=True, type=float, help="Object distance in meters.")
+@click.option("--light", required=True, help="Lighting condition label.")
+@click.option("--angle", help="Object angle label (script default: front).")
+@click.option("--trials", type=int, help="Trial count (script default: 5).")
+@click.option("--window", "window_seconds", type=float,
+              help="Seconds per trial (script default: 6.0).")
+@click.option("--conf-min", type=float, help="Minimum accepted confidence.")
+@click.option("--object-topic",
+              help="Object event topic (script default: /event/object_detected).")
+@click.option("--auto", "auto_run", is_flag=True,
+              help="Run trials automatically with --gap spacing.")
+@click.option("--gap", type=float, help="Seconds between auto trials.")
+@click.option("--out", "out_path",
+              help=f"CSV output path on the Jetson repo "
+                   f"(script default: {_OBJECT_MATRIX_DEFAULT_OUT}).")
+@click.option("--notes", help="Free-form notes written into the CSV.")
+@click.option("--allow-short-window", is_flag=True,
+              help="Accept trials with short capture windows.")
+def object_matrix(
+    object_name: str,
+    distance: float,
+    light: str,
+    angle: str | None,
+    trials: int | None,
+    window_seconds: float | None,
+    conf_min: float | None,
+    object_topic: str | None,
+    auto_run: bool,
+    gap: float | None,
+    out_path: str | None,
+    notes: str | None,
+    allow_short_window: bool,
+) -> None:
+    """Run scripts/obj_matrix_cap.py on the Jetson for field matrix capture."""
+    repo = shell.jetson_repo()
+    argv: list[object] = [
+        "python3",
+        "scripts/obj_matrix_cap.py",
+        "--object",
+        object_name,
+        "--distance",
+        distance,
+        "--light",
+        light,
+    ]
+    _append_matrix_option(argv, "--angle", angle)
+    _append_matrix_option(argv, "--trials", trials)
+    _append_matrix_option(argv, "--window", window_seconds)
+    _append_matrix_option(argv, "--conf-min", conf_min)
+    _append_matrix_option(argv, "--object-topic", object_topic)
+    if auto_run:
+        argv.append("--auto")
+    _append_matrix_option(argv, "--gap", gap)
+    _append_matrix_option(argv, "--out", out_path)
+    _append_matrix_option(argv, "--notes", notes)
+    if allow_short_window:
+        argv.append("--allow-short-window")
+
+    command = (
+        f"cd {shlex.quote(repo)} && "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"{_quote_argv(argv)}"
+    )
+    rc = shell.stream_remote(command)
+    if rc != 0:
+        click.echo(f"✗ object matrix failed (exit {rc})")
+        click.echo("  ↳ object lane 活著嗎？沒起 demo 就先 `pawai demo start`")
+        sys.exit(rc)
+
+    csv_out = out_path or _OBJECT_MATRIX_DEFAULT_OUT
+    csv_path = csv_out if csv_out.startswith("/") else f"{repo.rstrip('/')}/{csv_out}"
+    click.echo(f"✓ object matrix complete. 結果寫到 Jetson {csv_path}")
+    click.echo("  ↳ 用 `pawai evidence pull` 或 `scp` 拉回本機。")
+
+
 @smoke.command("nav")
 @click.option("--static", "static_only", is_flag=True,
               help="Run the static-only nav smoke. Required; dynamic nav regression is HITL.")
