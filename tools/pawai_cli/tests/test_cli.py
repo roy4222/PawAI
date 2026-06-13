@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import click
 import pytest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from pawai_cli.main import _install_hint_map, _ssh_config_has_host, cli
 from pawai_cli.modules import MODULES, get_module
@@ -1400,7 +1400,7 @@ def test_load_env_local_overrides_env(tmp_path, monkeypatch):
 def test_face_group_exists():
     res = CliRunner().invoke(cli, ["face", "--help"])
     assert res.exit_code == 0
-    for sub in ("list", "enroll", "rebuild", "test"):
+    for sub in ("list", "enroll", "delete", "rebuild", "test"):
         assert sub in res.output
 
 
@@ -1413,6 +1413,64 @@ def test_face_enroll_requires_name():
     # 缺 --person-name 應報錯（exit != 0）
     res = CliRunner().invoke(cli, ["face", "enroll"])
     assert res.exit_code != 0
+
+
+def test_face_delete_yes_removes_person_and_model(monkeypatch):
+    calls = []
+
+    def fake_run_remote(cmd, **kwargs):
+        calls.append(cmd)
+        return shell.Result(
+            code=0,
+            stdout="deleted alice; restart face_identity_node to retrain\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(shell, "run_remote", fake_run_remote)
+
+    res = CliRunner().invoke(cli, ["face", "delete", "alice", "-y"])
+
+    assert res.exit_code == 0
+    assert calls
+    cmd = calls[-1]
+    assert "rm -rf" in cmd
+    assert "/home/jetson/face_db/" in cmd
+    assert "alice" in cmd
+    assert "model_sface.pkl" in cmd
+
+
+def test_face_delete_rejects_slash_before_ssh(monkeypatch):
+    run_remote = Mock(return_value=shell.Result(code=0, stdout="", stderr=""))
+    monkeypatch.setattr(shell, "run_remote", run_remote)
+
+    res = CliRunner().invoke(cli, ["face", "delete", "a/b", "-y"])
+
+    assert res.exit_code != 0
+    run_remote.assert_not_called()
+
+
+def test_face_delete_declined_confirmation_does_not_rm(monkeypatch):
+    run_remote = Mock(
+        return_value=shell.Result(code=0, stdout="alice (3 samples)\n", stderr="")
+    )
+    monkeypatch.setattr(shell, "run_remote", run_remote)
+
+    res = CliRunner().invoke(cli, ["face", "delete", "alice"], input="n\n")
+
+    assert res.exit_code != 0
+    rm_calls = [call for call in run_remote.call_args_list if "rm -rf" in call.args[0]]
+    assert rm_calls == []
+
+
+def test_face_list_remote_script_flags_backup_directories(monkeypatch):
+    run_remote = Mock(return_value=shell.Result(code=0, stdout="", stderr=""))
+    monkeypatch.setattr(shell, "run_remote", run_remote)
+
+    res = CliRunner().invoke(cli, ["face", "list"])
+
+    assert res.exit_code == 0
+    cmd = run_remote.call_args.args[0]
+    assert "backup" in cmd
 
 
 # ---------------------------------------------------------------------------

@@ -137,6 +137,8 @@ pawai demo stop                    # 6) 收工
 | [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
 | [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
 | [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
+| [`pawai face list`](#face-db) | 列出 Jetson face_db 人物與樣本數，標出疑似備份目錄 |
+| [`pawai face delete <name>`](#face-db) | 刪除指定人物資料夾並清掉 face model，重啟後重訓 |
 | [`pawai net wifi {list,status,connect,forget}`](usage-guide.md#85-pawai-net-wifi--jetson-wi-fi-控制無需-ssh-手動) | Jetson Wi-Fi 控制（無需 SSH 手動 nmcli） |
 
 ---
@@ -241,6 +243,24 @@ pawai dev info gesture --open # 用 $EDITOR / code 開主文件
 別名：`vision` → `gesture`、`object-perception` → `object`、`pawai-brain` → `brain` 等。
 
 完整模組表在 [modules.md](modules.md)。
+
+---
+
+### face db
+
+`pawai face` 管 Jetson 上的 `/home/jetson/face_db`，所有資料庫操作都透過 SSH 執行。
+
+```bash
+pawai face list
+pawai face delete alice
+pawai face delete alice -y
+```
+
+`face list` 會列出人物子目錄與 `.png` 樣本數；若子目錄名稱看起來像備份
+（`_backup*`、`old*`、`_old*`，或名稱包含 `backup`），輸出尾端會加
+`⚠ 疑似備份目錄，建議移出 face_db`。這類目錄不應留在 `face_db`，否則訓練時會被當成身份。
+
+`face delete <name>` 只接受單層人物名稱；空字串、`.`、`..`、含 `/`、或以 `.` 開頭的名稱會在本機端直接拒絕，不會送 SSH。未加 `-y/--yes` 時會先列該目錄樣本數並要求二次確認；確認後刪除 `/home/jetson/face_db/<name>`，並清掉 `model_sface.pkl`，下次重啟 `face_identity_node` 會重訓。
 
 ---
 
