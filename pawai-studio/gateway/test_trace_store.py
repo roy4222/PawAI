@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import trace_store as trace_store_module  # noqa: E402
 from trace_store import (  # noqa: E402
     PII_DETAIL_KEYS,
     TraceStore,
@@ -203,6 +204,43 @@ def test_iter_export_lines_skips_garbage_and_missing_dir(tmp_path):
     lines = [json.loads(line) for line in iter_export_lines(tmp_path)]
     assert len(lines) == 1 and lines[0]["ts"] == 5
     assert list(iter_export_lines(tmp_path / "nope")) == []
+
+
+def test_iter_session_lines_parts_since_and_redact_default(tmp_path):
+    session_id = "20260612-101500"
+    (tmp_path / f"{session_id}.3.jsonl").write_text(
+        json.dumps(_ev(ts=30.0)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"{session_id}.jsonl").write_text(
+        json.dumps(_ev(ts=10.0)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"{session_id}.2.jsonl").write_text(
+        json.dumps(_ev(ts=20.0)) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "other.jsonl").write_text(json.dumps(_ev(ts=99.0)) + "\n", encoding="utf-8")
+
+    lines = [
+        json.loads(line)
+        for line in trace_store_module.iter_session_lines(tmp_path, session_id)
+    ]
+
+    assert [ev["ts"] for ev in lines] == [10.0, 20.0, 30.0]
+    assert all(ev["detail"]["source_summary"] == "[private]" for ev in lines)
+
+    since = [
+        json.loads(line)
+        for line in trace_store_module.iter_session_lines(tmp_path, session_id, since=15.0)
+    ]
+    assert [ev["ts"] for ev in since] == [20.0, 30.0]
+
+
+def test_valid_session_id_whitelist():
+    assert trace_store_module.valid_session_id("20260612-101500") is True
+    for session_id in ("", "../x", "a/b", "a.jsonl", "a b", ".", ".."):
+        assert trace_store_module.valid_session_id(session_id) is False
 
 
 # ── session listing (Lane 2 T2-1) ───────────────────────────────────────────
