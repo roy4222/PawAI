@@ -67,8 +67,8 @@ from auth import (
 # Evidence Center trace store (system Phase 2 T2B-1) — pure module; persistence
 # of /brain/trace JSONL + the T2B-0 PII redaction single source.
 from trace_store import (  # noqa: E402 — same-dir import after sys.path setup
-    TraceStore, iter_export_lines, list_sessions, redact_trace_event,
-    store_enabled, trace_dir,
+    TraceStore, iter_export_lines, iter_session_lines, list_sessions,
+    redact_trace_event, store_enabled, trace_dir, valid_session_id,
 )
 
 # ── Config ───────────────────────────────────────────────────────
@@ -1143,15 +1143,21 @@ async def get_trace_sessions(request: Request):
     }
 
 @app.get("/api/trace/export")
-async def get_trace_export(request: Request, since: float = 0.0, redact: int = 1):
+async def get_trace_export(
+    request: Request,
+    since: float = 0.0,
+    redact: int = 1,
+    session: str = "",
+):
     """Stream persisted /brain/trace JSONL (application/x-ndjson).
 
-    Query: since=<unix ts> (events with ts >= since), redact=0 for the FULL
-    (unredacted) archive. Auth (A-11, Roy 2026-06-12): the global middleware
-    exempts GET — this endpoint deliberately does NOT get that bypass; when
-    auth is on, even redacted GET export needs the Bearer token, and the full
-    export refuses entirely while the token system is off (PII never leaves
-    the machine unredacted without an authenticated caller).
+    Query: since=<unix ts> (events with ts >= since), session=<id> for one
+    persisted session, redact=0 for the FULL (unredacted) archive. Auth (A-11,
+    Roy 2026-06-12): the global middleware exempts GET — this endpoint
+    deliberately does NOT get that bypass; when auth is on, even redacted GET
+    export needs the Bearer token, and the full export refuses entirely while
+    the token system is off (PII never leaves the machine unredacted without an
+    authenticated caller).
     """
     want_full = int(redact) == 0
     status = export_access(
@@ -1163,8 +1169,13 @@ async def get_trace_export(request: Request, since: float = 0.0, redact: int = 1
         return JSONResponse({"error": "unauthorized"}, status_code=401)
     if status == 403:
         return JSONResponse({"error": "full_export_requires_auth"}, status_code=403)
-    lines = iter_export_lines(trace_dir(repo_root=_REPO_ROOT),
-                              since=since or None, redact=not want_full)
+    if session and not valid_session_id(session):
+        return JSONResponse({"error": "invalid_session"}, status_code=400)
+    directory = trace_dir(repo_root=_REPO_ROOT)
+    if session:
+        lines = iter_session_lines(directory, session, since=since or None, redact=not want_full)
+    else:
+        lines = iter_export_lines(directory, since=since or None, redact=not want_full)
     return StreamingResponse(lines, media_type="application/x-ndjson")
 
 

@@ -443,6 +443,119 @@ class TestTraceSessionsEndpoint:
         assert authed["ok"] is True
 
 
+def _trace_event(ts: float, decision_id: str) -> dict:
+    return {
+        "v": 1,
+        "ts": ts,
+        "decision_id": decision_id,
+        "node": "brain_node",
+        "kind": "policy_decision",
+        "verdict": "suppressed",
+        "gate": "greet_cooldown",
+        "reason": "cooldown:greet:Roy",
+        "detail": {"source_summary": "identity=Roy conf=0.9"},
+    }
+
+
+class _CaptureStreamingResponse:
+    def __init__(self, content, media_type=None, **_kwargs):
+        self.lines = list(content)
+        self.media_type = media_type
+
+
+def _captured_json_lines(resp):
+    return [json.loads(line) for line in resp.lines]
+
+
+class TestTraceExportEndpoint:
+    """Lane 2 T2-2: session-scoped trace export."""
+
+    def test_trace_export_session_returns_only_that_session(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        (tmp_path / "20260612-101500.jsonl").write_text(
+            json.dumps(_trace_event(10.0, "target-1")) + "\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "20260612-101500.2.jsonl").write_text(
+            json.dumps(_trace_event(20.0, "target-2")) + "\n",
+            encoding="utf-8",
+        )
+        (tmp_path / "20260612-102000.jsonl").write_text(
+            json.dumps(_trace_event(99.0, "other")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+        monkeypatch.setattr(sg, "StreamingResponse", _CaptureStreamingResponse)
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(sg.get_trace_export(_Req(), session="20260612-101500"))
+        lines = _captured_json_lines(resp)
+
+        assert resp.media_type == "application/x-ndjson"
+        assert [ev["decision_id"] for ev in lines] == ["target-1", "target-2"]
+        assert all(ev["detail"]["source_summary"] == "[private]" for ev in lines)
+
+    def test_trace_export_malicious_session_id_returns_400(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(sg.get_trace_export(_Req(), session="../x"))
+
+        assert resp.status_code == 400
+        assert json.loads(resp.body.decode("utf-8")) == {"error": "invalid_session"}
+
+    def test_trace_export_redact_zero_with_session_still_403_when_auth_off(
+        self, tmp_path, monkeypatch
+    ):
+        import asyncio
+        from auth import AuthConfig
+        import studio_gateway as sg
+
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+        monkeypatch.setattr(sg, "AUTH", AuthConfig(host="0.0.0.0", token="", allowed_origins=()))
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(
+            sg.get_trace_export(_Req(), redact=0, session="20260612-101500")
+        )
+
+        assert resp.status_code == 403
+        assert json.loads(resp.body.decode("utf-8")) == {"error": "full_export_requires_auth"}
+
+    def test_trace_export_session_composes_with_since(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        (tmp_path / "20260612-101500.jsonl").write_text(
+            json.dumps(_trace_event(10.0, "before")) + "\n"
+            + json.dumps(_trace_event(20.0, "after")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+        monkeypatch.setattr(sg, "StreamingResponse", _CaptureStreamingResponse)
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(
+            sg.get_trace_export(_Req(), since=15.0, session="20260612-101500")
+        )
+        lines = _captured_json_lines(resp)
+
+        assert [ev["decision_id"] for ev in lines] == ["after"]
+
+
 # ── Operator-controlled nav driving (S1 "move to scene") ────────
 
 

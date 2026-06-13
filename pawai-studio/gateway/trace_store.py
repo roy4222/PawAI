@@ -209,6 +209,11 @@ def _session_part(path: Path) -> tuple[str, int] | None:
     return m.group("session"), part
 
 
+def valid_session_id(session_id: str) -> bool:
+    """True when session_id matches the persisted trace filename session group."""
+    return bool(session_id and _SESSION_PART_RE.fullmatch(f"{session_id}.jsonl"))
+
+
 def _file_mtime(path: Path) -> float:
     try:
         return path.stat().st_mtime
@@ -279,6 +284,36 @@ def iter_export_lines(directory: Path | str, since: float | None = None,
     if not d.is_dir():
         return
     for path in sorted(d.glob("*.jsonl"), key=lambda p: p.stat().st_mtime):
+        for ev in _iter_file_events(path):
+            if since is not None:
+                ts = ev.get("ts")
+                if not isinstance(ts, (int, float)) or ts < since:
+                    continue
+            if redact:
+                ev = redact_trace_event(ev)
+            yield json.dumps(ev, ensure_ascii=False) + "\n"
+
+
+def iter_session_lines(directory: Path | str, session_id: str,
+                       since: float | None = None,
+                       redact: bool = True) -> Iterator[str]:
+    """Yield JSONL lines for one persisted session, in rotation part order."""
+    if not valid_session_id(session_id):
+        return
+    d = Path(directory)
+    if not d.is_dir():
+        return
+
+    part_paths: list[tuple[int, Path]] = []
+    for path in d.glob("*.jsonl"):
+        parsed = _session_part(path)
+        if parsed is None:
+            continue
+        parsed_session, part = parsed
+        if parsed_session == session_id:
+            part_paths.append((part, path))
+
+    for _, path in sorted(part_paths, key=lambda item: item[0]):
         for ev in _iter_file_events(path):
             if since is not None:
                 ts = ev.get("ts")
