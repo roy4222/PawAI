@@ -151,6 +151,112 @@ def _ssh_config_has_host(cfg_text: str, host: str) -> bool:
     return False
 
 
+JETSON_ROS_CORE_PACKAGES = (
+    "pawai_contracts",
+    "interaction_executive",
+    "go2_interfaces",
+)
+JETSON_ROS_ENV_PKG_MARKER = "__PAWAI_PKG_LIST__"
+JETSON_ROS_ENV_TIME_MARKER = "__PAWAI_TIMES__"
+JETSON_ROS_ENV_TIMEOUT_SECONDS = 10
+
+
+def _jetson_ros_env_probe_command() -> str:
+    repo = shlex.quote(shell.jetson_repo())
+    script = "\n".join([
+        "set -e",
+        f"cd {repo}",
+        "source /opt/ros/humble/setup.zsh",
+        "source install/setup.zsh",
+        f"printf '{JETSON_ROS_ENV_PKG_MARKER}\\n'",
+        "ros2 pkg list",
+        f"printf '{JETSON_ROS_ENV_TIME_MARKER}\\n'",
+        "set +e",
+        "install_mtime=$(find install -type f -printf '%T@\\n' 2>/dev/null | "
+        "sort -nr | head -n1)",
+        "if [ -z \"$install_mtime\" ]; then",
+        "  install_mtime=$(stat -c '%Y' install/setup.zsh 2>/dev/null || true)",
+        "fi",
+        "commit_time=$(git log -1 --format=%ct 2>/dev/null || true)",
+        "printf 'install_mtime=%s\\n' \"$install_mtime\"",
+        "printf 'commit_time=%s\\n' \"$commit_time\"",
+    ])
+    return f"zsh -lc {shlex.quote(script)}"
+
+
+def _parse_jetson_ros_env_probe(stdout: str) -> tuple[set[str], dict[str, str]]:
+    lines = [line.strip() for line in stdout.splitlines()]
+    packages: set[str] = set()
+    meta_lines = lines
+
+    if JETSON_ROS_ENV_PKG_MARKER in lines and JETSON_ROS_ENV_TIME_MARKER in lines:
+        pkg_start = lines.index(JETSON_ROS_ENV_PKG_MARKER) + 1
+        time_start = lines.index(JETSON_ROS_ENV_TIME_MARKER)
+        if pkg_start <= time_start:
+            packages = {line for line in lines[pkg_start:time_start] if line}
+            meta_lines = lines[time_start + 1:]
+    else:
+        packages = {
+            line for line in lines
+            if line and "=" not in line and not line.startswith("__PAWAI_")
+        }
+
+    meta: dict[str, str] = {}
+    for line in meta_lines:
+        key, sep, value = line.partition("=")
+        if sep:
+            meta[key.strip()] = value.strip()
+    return packages, meta
+
+
+def _parse_epoch_seconds(raw: str | None) -> float | None:
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _emit_jetson_ros_env_section(emit, ok, warn) -> None:
+    emit("\n== Jetson ROS env ==")
+    probe = shell.run_remote(
+        _jetson_ros_env_probe_command(),
+        timeout=JETSON_ROS_ENV_TIMEOUT_SECONDS,
+    )
+    if not probe.ok:
+        warn(
+            f"Jetson ROS env: skipped (SSH/probe unavailable rc={probe.code}; "
+            "no blocking)"
+        )
+        return
+
+    packages, meta = _parse_jetson_ros_env_probe(probe.stdout)
+    missing = [pkg for pkg in JETSON_ROS_CORE_PACKAGES if pkg not in packages]
+    if missing:
+        warn(
+            "Jetson ROS core packages missing: "
+            f"{', '.join(missing)}; run `pawai jetson deploy` or Jetson `colcon build`"
+        )
+    else:
+        ok("Jetson ROS core packages present: " + ", ".join(JETSON_ROS_CORE_PACKAGES))
+
+    install_mtime = _parse_epoch_seconds(meta.get("install_mtime"))
+    commit_time = _parse_epoch_seconds(meta.get("commit_time"))
+    if install_mtime is None or commit_time is None:
+        warn(
+            "Jetson install timestamp check unavailable; rerun after "
+            "`pawai jetson deploy` or Jetson `colcon build`"
+        )
+    elif install_mtime < commit_time:
+        warn(
+            "Jetson install tree is older than latest commit; rsync does not rebuild "
+            "install; run Jetson `colcon build`"
+        )
+    else:
+        ok("Jetson install tree is up to date with latest commit")
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__)
 def cli() -> None:
@@ -420,6 +526,8 @@ def doctor(verbose: bool, expect_demo: bool, fix: bool, deep: bool, cache_second
                 emit(f"  ✗ OpenRouter HTTP {exc.code}: {exc.reason}")
             except Exception as exc:
                 emit(f"  ✗ OpenRouter API call failed: {exc}")
+
+    _emit_jetson_ros_env_section(emit, ok, warn)
 
     emit(f"\n{blocking} blocking · {warnings} warnings")
 
