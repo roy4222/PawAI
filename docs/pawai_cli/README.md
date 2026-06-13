@@ -308,6 +308,7 @@ pawai demo start             # 預設 = full + Studio overlay（推薦）
 pawai demo start --no-studio # full mode 但不開本機 Studio
 pawai demo start --brain-only # 只起 brain（minimal mode，無 perception）
 pawai demo start --nav capability # 起導航避障 capability stack（手動 action 場測）
+pawai demo start --with-shadow # brain lane healthy/running 後啟用 shadow soak
 pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
 pawai demo start --skip-healthcheck # 逃生口：跳過 post-start healthcheck gate（見下）
 ```
@@ -344,6 +345,18 @@ pawai demo start --skip-healthcheck # 逃生口：跳過 post-start healthcheck 
 `nav-avoidance-lane/scripts/healthcheck.sh`），**pass 才把 lock 轉 `running`**。
 fail → exit 1、lock 留在 `starting` 當證據、印 inspect/cleanup 指引。
 逃生口（healthcheck 本身壞掉時才用）：`--skip-healthcheck`，會印大字警告。
+
+Brain lane 成功啟動後會額外提醒 shadow soak 尚需手動開啟：
+
+```text
+↳ shadow soak 需手動開啟：ssh <jetson> ros2 param set /brain_node ism_shadow_enabled True（或用 --with-shadow）
+```
+
+`--with-shadow` 只適用 brain lane；不能和 `--nav capability` 併用。它會在
+healthcheck 通過、且 demo lock 已轉成 `running` 之後，SSH 到 Jetson 對
+`/brain_node` 執行 `ros2 param set /brain_node ism_shadow_enabled True`，再
+`ros2 param get` 回讀確認值為 `True`。若 param set 或回讀失敗，CLI 會 exit
+非零並印手動補救命令；demo 本體已在跑，這個失敗不會清 lock，也不會 stop demo。
 
 **`JETSON_TAILSCALE_IP` 解析優先序**（`demo start` / `health brain` 共用）：
 1. `PAWAI_TRUST_ENV_IP=1` → 信任 env 值不覆蓋（hand-crafted testing 的逃生口）

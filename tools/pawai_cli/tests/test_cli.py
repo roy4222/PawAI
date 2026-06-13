@@ -1734,6 +1734,100 @@ def test_demo_start_skip_healthcheck_prints_loud_banner(monkeypatch):
         f"Expected lock to be transitioned to running, got {transition_calls}"
 
 
+def test_demo_start_brain_prints_shadow_reminder_without_flag(monkeypatch):
+    from pawai_cli import main as cli_main
+    from pawai_cli.shell import Result
+
+    remote_commands: list[str] = []
+
+    def _fake_run_remote(command, timeout=None):
+        remote_commands.append(command)
+        return Result(code=0, stdout="", stderr="")
+
+    _patch_demo_start_happy(monkeypatch, hc_rc=0)
+    monkeypatch.setattr(cli_main.shell, "run_remote", _fake_run_remote)
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start"])
+
+    assert result.exit_code == 0, result.output
+    assert "shadow soak" in result.output or "ism_shadow_enabled" in result.output
+    assert not any("param set" in cmd for cmd in remote_commands)
+
+
+def test_demo_start_with_shadow_sets_param_after_running(monkeypatch):
+    from pawai_cli import main as cli_main
+    from pawai_cli.shell import Result
+
+    calls: list[str] = []
+
+    def _fake_transition(self, state, **kw):
+        calls.append(f"transition:{state}")
+        return True
+
+    def _fake_run_remote(command, timeout=None):
+        if "ros2 param set /brain_node ism_shadow_enabled True" in command:
+            calls.append("param_set")
+            return Result(code=0, stdout="Set parameter successful", stderr="")
+        if "ros2 param get /brain_node ism_shadow_enabled" in command:
+            calls.append("param_get")
+            return Result(code=0, stdout="Boolean value is: True\n", stderr="")
+        return Result(code=1, stdout="", stderr="unexpected command")
+
+    _patch_demo_start_happy(monkeypatch, hc_rc=0)
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned", _fake_transition)
+    monkeypatch.setattr(cli_main.shell, "run_remote", _fake_run_remote)
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start", "--with-shadow"])
+
+    assert result.exit_code == 0, result.output
+    assert calls == ["transition:running", "param_set", "param_get"]
+    assert "✓ shadow soak enabled (ism_shadow_enabled=True)" in result.output
+
+
+def test_demo_start_with_shadow_failure_leaves_running_lock_and_demo(monkeypatch):
+    from pawai_cli import main as cli_main
+    from pawai_cli.shell import Result
+
+    calls: list[str] = []
+
+    def _fake_transition(self, state, **kw):
+        calls.append(f"transition:{state}")
+        return True
+
+    def _fake_run_remote(command, timeout=None):
+        if "ros2 param set /brain_node ism_shadow_enabled True" in command:
+            calls.append("param_set")
+            return Result(code=0, stdout="Set parameter successful", stderr="")
+        if "ros2 param get /brain_node ism_shadow_enabled" in command:
+            calls.append("param_get")
+            return Result(code=0, stdout="Boolean value is: False\n", stderr="")
+        return Result(code=1, stdout="", stderr="unexpected command")
+
+    _patch_demo_start_happy(monkeypatch, hc_rc=0)
+    monkeypatch.setattr("pawai_cli.lock.Lock.transition_if_owned", _fake_transition)
+    monkeypatch.setattr(cli_main.shell, "run_remote", _fake_run_remote)
+    monkeypatch.setattr(cli_main, "_invoke_cleanup_sh", lambda: calls.append("cleanup") or 0)
+    monkeypatch.setattr("pawai_cli.lock.Lock.release_if_owned",
+                        staticmethod(lambda **kw: calls.append("release") or True))
+
+    result = CliRunner().invoke(cli_main.cli, ["demo", "start", "--with-shadow"])
+
+    assert result.exit_code != 0, result.output
+    assert calls == ["transition:running", "param_set", "param_get"]
+    assert "shadow soak" in result.output
+    assert "manual" in result.output.lower() or "手動" in result.output
+    assert "cleanup" not in calls
+    assert "release" not in calls
+
+
+def test_demo_start_with_shadow_rejects_nav_capability(monkeypatch):
+    result = CliRunner().invoke(cli, ["demo", "start", "--nav", "capability", "--with-shadow"])
+
+    assert result.exit_code != 0
+    assert "--with-shadow" in result.output
+    assert "--nav capability" in result.output
+
+
 # ─── Plan B5: status module presence + health nav ─────────────────────────
 
 def test_module_presence_maps_nodes():
