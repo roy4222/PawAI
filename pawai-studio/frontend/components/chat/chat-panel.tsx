@@ -9,6 +9,7 @@ import { Composer } from "@/components/chat/composer";
 import { GestureToggle } from "@/components/chat/gesture-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import { cn } from "@/lib/utils";
 
@@ -252,7 +253,10 @@ export function ChatPanel() {
       "將清除目前所有對話記憶，包括其他開啟的 Studio 視窗。確定？"
     );
     if (!ok) return;
-    await fetch(`${getGatewayHttpUrl()}/api/reset`, { method: "POST" });
+    await fetch(`${getGatewayHttpUrl()}/api/reset`, {
+      method: "POST",
+      headers: { ...authHeaders() },
+    });
     setMessages([]);
     useStateStore.setState({ ttsMessages: [] });
     lastSeenTtsIdRef.current = null;
@@ -311,7 +315,7 @@ export function ChatPanel() {
     try {
       const response = await fetch(`${getGatewayHttpUrl()}/api/text_input`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ text, request_id: requestId }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);

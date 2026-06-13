@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useStateStore } from "@/stores/state-store";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import type { PlanMode } from "@/contracts/types";
 
@@ -24,7 +25,9 @@ export function useTogglePlanMode(): UseTogglePlanModeResult {
   // Hydrate from gateway once.
   useEffect(() => {
     let cancelled = false;
-    fetch(`${getGatewayHttpUrl()}/api/plan_mode`)
+    fetch(`${getGatewayHttpUrl()}/api/plan_mode`, {
+      headers: { ...authHeaders() },
+    })
       .then((r) => r.json())
       .then((d) => {
         if (!cancelled && d?.mode) setPlanMode(d.mode as PlanMode);
@@ -43,7 +46,7 @@ export function useTogglePlanMode(): UseTogglePlanModeResult {
     try {
       await fetch(`${getGatewayHttpUrl()}/api/plan_mode`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ mode: next }),
       });
     } catch {

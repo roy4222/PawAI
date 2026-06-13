@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Hand, Lock, Octagon, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { authHeaders } from "@/lib/gateway-auth";
 import { getGatewayHttpUrl } from "@/lib/gateway-url";
 import type { SkillRegistryEntry, SkillRegistryResponse } from "@/contracts/types";
 
@@ -39,7 +40,7 @@ const DEFAULT_ARGS: Record<string, Record<string, unknown>> = {
 async function postSkill(skill: string, args: Record<string, unknown> = {}) {
   await fetch(`${getGatewayHttpUrl()}/api/skill_request`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ skill, args, request_id: `btn-${Date.now()}` }),
   });
 }
@@ -57,7 +58,9 @@ export function SkillButtons() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${getGatewayHttpUrl()}/api/skill_registry`)
+    fetch(`${getGatewayHttpUrl()}/api/skill_registry`, {
+      headers: { ...authHeaders() },
+    })
       .then((r) => r.json())
       .then((data: SkillRegistryResponse) => {
         if (!cancelled) setRegistry(data);
