@@ -24,11 +24,12 @@ if echo "$INPUT" | grep -qE 'git\s+push\s+.*--force'; then
 fi
 
 # --- 2) Block secret file access (but allow .example / .sample / .template) ---
-# CI-01: the dotted-env variants (.env.local / .env.production — the REAL key
-# files) must be caught too. `(\.[A-Za-z0-9_]+)*` lets the match extend past
+# CI-01: the dotted-env variants (.env.local / .env.production - the REAL key
+# files) must be caught too, including token terminators like ; , : and shell
+# redirection/pipe chars. `(\.[A-Za-z0-9_]+)*` lets the match extend past
 # `.env` to `.env.local` etc. while a lone `.environment` (no dot after env)
 # stays un-blocked.
-if echo "$INPUT" | grep -qE '\.(env|pem|key)(\.[A-Za-z0-9_]+)*(\s|"|$|/)'; then
+if echo "$INPUT" | grep -qE '\.(env|pem|key)(\.[A-Za-z0-9_]+)*([[:space:]]|"|$|/|[;,:)&|><])'; then
   if ! echo "$INPUT" | grep -qE '\.(env|pem|key)\.(example|sample|template)'; then
     echo "BLOCK: Access to secret files (.env/.env.local/.pem/.key) is not allowed. Use .env.example instead." >&2
     exit 2
