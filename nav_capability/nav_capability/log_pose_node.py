@@ -16,6 +16,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from go2_interfaces.action import LogPose
+from nav_capability.lib.route_validator import RouteValidationError, sanitize_route_name
 from nav_capability.lib.tf_pose_helper import quat_to_yaw
 
 AMCL_QOS = QoSProfile(
@@ -83,28 +84,49 @@ class LogPoseNode(Node):
                 result.success = False
                 result.saved_path = ""
                 return result
-            self._upsert_named(path, goal.name, recorded_dict)
+            try:
+                pose_name = sanitize_route_name(goal.name)
+            except RouteValidationError as exc:
+                self.get_logger().warn(f"invalid named pose name {goal.name!r}: {exc}")
+                goal_handle.abort()
+                result.success = False
+                result.saved_path = ""
+                return result
+            self._upsert_named(path, pose_name, recorded_dict)
             result.saved_path = path
             self.get_logger().info(
-                f"logged named pose '{goal.name}' = {recorded_dict} -> {path}"
+                f"logged named pose '{pose_name}' = {recorded_dict} -> {path}"
             )
         elif goal.log_target == "route":
             routes_dir = self.get_parameter("routes_dir").value
-            if not routes_dir or not goal.route_id:
+            if not routes_dir:
                 self.get_logger().warn(
-                    f"routes_dir or route_id empty (dir={routes_dir!r} id={goal.route_id!r})"
+                    f"routes_dir empty; cannot log route (id={goal.route_id!r})"
                 )
                 goal_handle.abort()
                 result.success = False
                 result.saved_path = ""
                 return result
-            path = os.path.join(routes_dir, f"{goal.route_id}.json")
+            try:
+                route_id = sanitize_route_name(goal.route_id)
+                waypoint_name = sanitize_route_name(goal.name)
+            except RouteValidationError as exc:
+                self.get_logger().warn(
+                    f"invalid route log id/name "
+                    f"(route_id={goal.route_id!r} name={goal.name!r}): {exc}"
+                )
+                goal_handle.abort()
+                result.success = False
+                result.saved_path = ""
+                return result
+            path = os.path.join(routes_dir, f"{route_id}.json")
             self._append_waypoint(
-                path, goal.route_id, goal.name, goal.task_type or "normal", recorded_dict
+                path, route_id, waypoint_name, goal.task_type or "normal", recorded_dict
             )
             result.saved_path = path
             self.get_logger().info(
-                f"appended waypoint '{goal.name}' (task={goal.task_type or 'normal'}) -> {path}"
+                f"appended waypoint '{waypoint_name}' "
+                f"(task={goal.task_type or 'normal'}) -> {path}"
             )
         else:
             self.get_logger().warn(

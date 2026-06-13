@@ -34,6 +34,7 @@ from nav_capability.lib.progress_check import (
     has_progress,
 )
 from nav_capability.lib.relative_goal_math import compute_relative_goal
+from nav_capability.lib.route_validator import RouteValidationError, sanitize_route_name
 from nav_capability.lib.standoff_math import compute_standoff_goal
 from nav_capability.lib.tf_pose_helper import quat_to_yaw, yaw_to_quat
 
@@ -536,6 +537,15 @@ class NavActionServerNode(Node):
         goal = goal_handle.request
         result = GotoNamed.Result()
 
+        try:
+            pose_name = sanitize_route_name(goal.name)
+        except RouteValidationError as exc:
+            self.get_logger().warn(f"invalid goto_named name {goal.name!r}: {exc}")
+            goal_handle.abort()
+            result.success = False
+            result.message = f"invalid_name: {exc}"
+            return result
+
         # Phase 8 — driver liveness watchdog (E5) with 3s warmup (Phase 9 review #4).
         if not await self._wait_for_odom(timeout_s=3.0):
             self.get_logger().warn(
@@ -556,7 +566,7 @@ class NavActionServerNode(Node):
 
         # Lookup named pose
         try:
-            named = self._named_store.lookup(goal.name)
+            named = self._named_store.lookup(pose_name)
         except NamedPoseNotFound as exc:
             self.get_logger().warn(str(exc))
             goal_handle.abort()
@@ -605,13 +615,13 @@ class NavActionServerNode(Node):
             final_yaw = sgyaw_face if goal.align_yaw_to_target else target_yaw
             final_x, final_y = sgx, sgy
             self.get_logger().info(
-                f"goto_named '{goal.name}' standoff={goal.standoff:.2f} "
+                f"goto_named '{pose_name}' standoff={goal.standoff:.2f} "
                 f"target=({target_x:.2f},{target_y:.2f}) -> goal=({final_x:.2f},{final_y:.2f},{final_yaw:.2f})"
             )
         else:
             final_x, final_y, final_yaw = target_x, target_y, target_yaw
             self.get_logger().info(
-                f"goto_named '{goal.name}' direct -> ({final_x:.2f},{final_y:.2f},{final_yaw:.2f})"
+                f"goto_named '{pose_name}' direct -> ({final_x:.2f},{final_y:.2f},{final_yaw:.2f})"
             )
 
         # Yellow gate: when covariance is borderline, reject long approaches
