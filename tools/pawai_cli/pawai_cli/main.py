@@ -942,6 +942,137 @@ def smoke_object(with_cup: bool) -> None:
     click.echo("✓ smoke object passed")
 
 
+def _smoke_remote_command(command: str) -> str:
+    repo = shell.jetson_repo()
+    return (
+        f"cd {repo} && {{ "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"{command}; "
+        "}"
+    )
+
+
+def _smoke_full_add_result(
+    rows: list[dict[str, str | int]],
+    segment: str,
+    rc: int,
+    hint: str = "",
+) -> None:
+    rows.append({"segment": segment, "rc": rc, "hint": hint})
+
+
+def _smoke_full_script_segment(rows: list[dict[str, str | int]], segment: str,
+                               rel: str, command: str) -> None:
+    probe = shell.run_remote(_smoke_remote_command(f"test -f {shlex.quote(rel)}"), timeout=10)
+    if probe.code in (124, 127, 255):
+        _smoke_full_add_result(
+            rows,
+            segment,
+            probe.code,
+            f"SSH 到 {shell.jetson_host()} 失敗；先跑 `pawai doctor` 看 Tailscale / .env.local",
+        )
+        return
+    if not probe.ok:
+        _smoke_full_add_result(
+            rows,
+            segment,
+            probe.code or 1,
+            f"找不到 {rel}；先 `pawai jetson deploy --module {segment} --no-build` 同步腳本",
+        )
+        return
+
+    rc = shell.stream_remote(_smoke_remote_command(command))
+    hints = {
+        "brain": "demo lane 活著嗎？跑 `pawai health brain`；沒起 demo 就先 `pawai demo start`",
+        "vision": "vision lane 活著嗎？沒起 demo 就先 `pawai demo start`",
+        "object": "object lane 活著嗎？沒起 demo 就先 `pawai demo start`",
+    }
+    _smoke_full_add_result(rows, segment, rc, hints.get(segment, "") if rc != 0 else "")
+
+
+def _smoke_full_trace_command(wait_seconds: int = 3) -> str:
+    return _smoke_remote_command(
+        "trace_lines() { "
+        "find runtime/traces -maxdepth 1 -type f -name '*.jsonl' "
+        "-exec wc -l {} + 2>/dev/null | "
+        "awk '{if ($2 != \"total\") s += $1} END {print s+0}'; "
+        "}; "
+        "before=$(trace_lines); "
+        f"sleep {wait_seconds}; "
+        "after=$(trace_lines); "
+        "printf 'before=%s after=%s\\n' \"$before\" \"$after\"; "
+        "[ \"$after\" -gt \"$before\" ]"
+    )
+
+
+def _smoke_full_print_summary(rows: list[dict[str, str | int]]) -> int:
+    click.echo("pawai smoke full summary")
+    click.echo("segment  status  rc")
+    exit_code = 0
+    for row in rows:
+        rc = int(row["rc"])
+        status = "PASS" if rc == 0 else "FAIL"
+        click.echo(f"{row['segment']:<8} {status:<6} {rc}")
+        if rc != 0 and exit_code == 0:
+            exit_code = rc
+    for row in rows:
+        hint = str(row.get("hint") or "")
+        if int(row["rc"]) != 0 and hint:
+            click.echo(f"  ↳ {row['segment']}: {hint}")
+    return exit_code or 0
+
+
+@smoke.command("full")
+@click.option("--rounds", default=3, show_default=True, type=click.IntRange(1, 30),
+              help="Brain E2E rounds (kept short for full smoke).")
+def smoke_full(rounds: int) -> None:
+    """Run the pre-6/18 full smoke for brain, perception, gateway, and trace."""
+    rows: list[dict[str, str | int]] = []
+
+    _smoke_full_script_segment(
+        rows,
+        "brain",
+        _SMOKE_SCRIPTS["brain"],
+        f"bash {_SMOKE_SCRIPTS['brain']} {rounds}",
+    )
+    _smoke_full_script_segment(
+        rows,
+        "vision",
+        _SMOKE_SCRIPTS["vision"],
+        f"bash {_SMOKE_SCRIPTS['vision']}",
+    )
+    _smoke_full_script_segment(
+        rows,
+        "object",
+        _SMOKE_SCRIPTS["object"],
+        f"bash {_SMOKE_SCRIPTS['object']}",
+    )
+
+    gateway = shell.run_remote(
+        _smoke_remote_command("curl -s --max-time 3 http://localhost:8080/health"),
+        timeout=8,
+    )
+    gateway_ok = gateway.ok and '"status":"ok"' in gateway.stdout
+    _smoke_full_add_result(
+        rows,
+        "gateway",
+        0 if gateway_ok else (gateway.code or 1),
+        "確認 Studio gateway 已啟動：`pawai status` / `pawai demo start`" if not gateway_ok else "",
+    )
+
+    trace = shell.run_remote(_smoke_full_trace_command(), timeout=12)
+    _smoke_full_add_result(
+        rows,
+        "trace",
+        trace.code if trace.code != 0 else 0,
+        "確認 gateway trace store 有開：PAWAI_TRACE_STORE_ENABLED=1，並讓 demo lane 產生新事件"
+        if trace.code != 0 else "",
+    )
+
+    sys.exit(_smoke_full_print_summary(rows))
+
+
 def _run_lane_healthcheck(lane: str) -> int:
     """Post-start gate (Plan B4): start.sh rc==0 is NOT success — the 6/4
     CRLF incident proved tmux can silently never spawn.  Returns healthcheck rc;
