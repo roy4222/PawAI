@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PawAI CycloneDDS hardening TEMPLATE.
+
+  This file is intentionally NOT active unless an operator sets CYCLONEDDS_URI.
+  Do not wire it into launch files, shell scripts, or environment defaults as part
+  of T5S-9.
+
+  Deferred rollout: post-2026-06-18 system Phase 4 T4A-3 should combine this
+  template with ROS_DOMAIN_ID changes and SROS2. This template only reduces the
+  DDS attack surface for the current R2 root cause: no SROS2 plus an open DDS bus.
+
+  Operator placeholders below use the Go2 ethernet subnet examples:
+  - Jetson default Go2-side IP: 192.168.123.161
+  - Go2 / peer IP: 192.168.123.x
+  Replace every PLACEHOLDER before enabling.
+-->
+<CycloneDDS>
+  <Domain id="any">
+    <General>
+      <!--
+        PLACEHOLDER: set this to the real Jetson-to-Go2 ethernet interface.
+        Examples: name="eth0", name="enP8p1s0", or address="192.168.123.161".
+
+        Keeping one specific NetworkInterface prevents CycloneDDS from binding
+        DDS traffic on every interface, including Wi-Fi, Tailscale, or demo LANs.
+      -->
+      <Interfaces>
+        <NetworkInterface name="eth0" multicast="false" />
+      </Interfaces>
+
+      <!--
+        Disable multicast discovery. Discovery should only use the explicit
+        unicast Peers allowlist below.
+      -->
+      <AllowMulticast>false</AllowMulticast>
+    </General>
+
+    <Discovery>
+      <!--
+        PLACEHOLDER: allowlist only known DDS hosts on the Go2 ethernet segment.
+        Replace or remove these example addresses before use. Every machine that
+        must join the ROS2 DDS bus needs a corresponding explicit Peer entry on
+        every other participant using this template.
+      -->
+      <Peers>
+        <Peer address="192.168.123.161" />
+        <Peer address="192.168.123.x" />
+      </Peers>
+    </Discovery>
+  </Domain>
+</CycloneDDS>
