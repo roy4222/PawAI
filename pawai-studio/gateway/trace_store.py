@@ -48,6 +48,7 @@ PII_DETAIL_KEYS = frozenset({
 # "cooldown:greet:Roy". Mask the value segment, keep the structural prefix.
 # Structural reasons ("gate:executing", "phase:s3_object:gesture") never match.
 _PII_REASON_RE = re.compile(r"((?:identity|name|greet)[:=])[^:,\s]+")
+_SESSION_PART_RE = re.compile(r"^(?P<session>[A-Za-z0-9_-]+)(?:\.(?P<part>[2-9]\d*|1\d+))?\.jsonl$")
 
 
 def store_enabled(env: dict | None = None) -> bool:
@@ -198,6 +199,72 @@ def _iter_file_events(path: Path) -> Iterator[dict]:
             continue
         if isinstance(ev, dict):
             yield ev
+
+
+def _session_part(path: Path) -> tuple[str, int] | None:
+    m = _SESSION_PART_RE.match(path.name)
+    if not m:
+        return None
+    part = int(m.group("part") or "1")
+    return m.group("session"), part
+
+
+def _file_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def list_sessions(directory: Path | str) -> list[dict]:
+    """Return redaction-free session stats for runtime/traces/*.jsonl.
+
+    This endpoint needs only non-PII metadata: session_id, earliest event ts,
+    valid event count, aggregate file size and the rotation part filenames.
+    Raw trace payloads never leave this function.
+    """
+    d = Path(directory)
+    if not d.is_dir():
+        return []
+
+    grouped: dict[str, list[tuple[int, Path]]] = {}
+    for path in d.glob("*.jsonl"):
+        parsed = _session_part(path)
+        if parsed is None:
+            continue
+        session_id, part = parsed
+        grouped.setdefault(session_id, []).append((part, path))
+
+    sessions: list[dict] = []
+    for session_id, part_paths in grouped.items():
+        part_paths.sort(key=lambda item: item[0])
+        started_ts: float | None = None
+        line_count = 0
+        file_size = 0
+        parts: list[str] = []
+        fallback_started = min((_file_mtime(path) for _, path in part_paths), default=0.0)
+
+        for _, path in part_paths:
+            parts.append(path.name)
+            try:
+                file_size += path.stat().st_size
+            except OSError:
+                continue
+            for ev in _iter_file_events(path):
+                line_count += 1
+                ts = ev.get("ts")
+                if isinstance(ts, (int, float)):
+                    started_ts = float(ts) if started_ts is None else min(started_ts, float(ts))
+
+        sessions.append({
+            "session_id": session_id,
+            "started_ts": started_ts if started_ts is not None else fallback_started,
+            "line_count": line_count,
+            "file_size": file_size,
+            "parts": parts,
+        })
+
+    return sorted(sessions, key=lambda s: (s["started_ts"], s["session_id"]), reverse=True)
 
 
 def iter_export_lines(directory: Path | str, since: float | None = None,
