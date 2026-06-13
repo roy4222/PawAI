@@ -3,6 +3,7 @@ import pytest
 
 from nav_capability.lib.route_validator import (
     RouteValidationError,
+    sanitize_route_name,
     validate_route,
 )
 
@@ -109,3 +110,28 @@ def test_waypoint_tts_requires_tts_text():
     }
     with pytest.raises(RouteValidationError, match="tts_text"):
         validate_route(bad)
+
+
+@pytest.mark.parametrize("route_name", ["sample", "route_1", "my-route"])
+def test_sanitize_route_name_allows_legitimate_ids_unchanged(route_name):
+    assert sanitize_route_name(route_name) == route_name
+
+
+@pytest.mark.parametrize(
+    "route_name",
+    [
+        "../etc/passwd",
+        "..",
+        "/abs/path",
+        "a/b",
+        "a\\b",
+        "..%2f..%2fetc",
+        "%2e%2e%2froute",
+        "route;rm",
+        "",
+        ".",
+    ],
+)
+def test_sanitize_route_name_rejects_traversal_and_shelllike_ids(route_name):
+    with pytest.raises(RouteValidationError):
+        sanitize_route_name(route_name)

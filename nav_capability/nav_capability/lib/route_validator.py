@@ -1,8 +1,11 @@
 """Route JSON schema validator (schema_version=1)."""
+import os
+import re
 from typing import Any, Dict
 
 SUPPORTED_SCHEMA_VERSIONS = {1}
 ALLOWED_TASKS = {"normal", "wait", "tts"}
+ROUTE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 REQUIRED_TOP_KEYS = {
     "schema_version",
     "route_id",
@@ -16,6 +19,40 @@ REQUIRED_WAYPOINT_KEYS = {"id", "task", "pose", "tolerance", "timeout_sec"}
 
 class RouteValidationError(ValueError):
     """Raised when route JSON fails schema validation."""
+
+
+def sanitize_route_name(name: str) -> str:
+    """Return a filesystem-safe route_id / route name, or raise RouteValidationError.
+
+    T5S-2 source of truth: Lane 5 security hardening plan requires
+    os.path.basename plus whitelist [A-Za-z0-9_-] for nav route_id/name values.
+    Percent-encoded path separators are rejected by disallowing percent-encoding.
+    """
+    if not isinstance(name, str):
+        raise RouteValidationError("route name must be a string")
+
+    if not name or not name.strip():
+        raise RouteValidationError("route name must not be empty")
+
+    if "%" in name:
+        raise RouteValidationError("route name must not contain percent-encoding")
+
+    if name in {".", ".."}:
+        raise RouteValidationError("route name must not be '.' or '..'")
+
+    if "/" in name or "\\" in name:
+        raise RouteValidationError("route name must not contain path separators")
+
+    basename = os.path.basename(name)
+    if not basename or basename in {".", ".."}:
+        raise RouteValidationError("route name must not collapse to empty or traversal")
+
+    if not ROUTE_NAME_PATTERN.fullmatch(basename):
+        raise RouteValidationError(
+            "route name must contain only [A-Za-z0-9_-] characters"
+        )
+
+    return basename
 
 
 def validate_route(route: Dict[str, Any]) -> None:

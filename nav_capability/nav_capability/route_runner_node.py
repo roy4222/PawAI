@@ -35,7 +35,11 @@ from std_srvs.srv import Trigger
 from go2_interfaces.action import RunRoute
 from go2_interfaces.srv import Cancel
 from nav_capability.lib.route_fsm import IllegalTransition, RouteFSM, RouteState
-from nav_capability.lib.route_validator import RouteValidationError, validate_route
+from nav_capability.lib.route_validator import (
+    RouteValidationError,
+    sanitize_route_name,
+    validate_route,
+)
 from nav_capability.lib.tf_pose_helper import yaw_to_quat
 
 AMCL_QOS = QoSProfile(
@@ -206,6 +210,7 @@ class RouteRunnerNode(Node):
 
     # ── Helpers ──
     def _load_route(self, route_id: str) -> dict:
+        route_id = sanitize_route_name(route_id)
         routes_dir = self.get_parameter("routes_dir").value
         if not routes_dir:
             routes_dir = os.path.join(
