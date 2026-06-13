@@ -1462,8 +1462,8 @@ def contract_check(jetson: bool) -> None:
 
 
 # ─── pawai face (人臉資料庫管理) ─────────────────────────────────────────
-# VIS-10-min: list / enroll / rebuild / test。face_db 住在 Jetson
-# (/home/jetson/face_db)，所以 list/enroll/rebuild 都走 shell.run_remote SSH；
+# VIS-10-min: list / enroll / delete / rebuild / test。face_db 住在 Jetson
+# (/home/jetson/face_db)，所以 list/enroll/delete/rebuild 都走 shell.run_remote SSH；
 # test 跑 face_perception 本機單元測試（同樣在 Jetson repo 上）。
 # 所有子命令沿用 contract_check 的回傳處理慣例：echo res.stdout/res.stderr，
 # 再 sys.exit(res.code)，失敗才有非零退出碼可被 CI / 呼叫端偵測。
@@ -1482,23 +1482,82 @@ def _echo_remote_result(label: str, res: "shell.Result") -> None:
 
 @cli.group("face")
 def face() -> None:
-    """人臉資料庫管理（list / enroll / rebuild / test）。"""
+    """人臉資料庫管理（list / enroll / delete / rebuild / test）。"""
 
 
 @face.command("list")
 def face_list() -> None:
     """列出 Jetson face_db 內的人物與樣本數（SSH 掃描）。"""
     repo = shell.jetson_repo()
-    script = (
-        "import os; d='/home/jetson/face_db'; "
-        "ppl=([p for p in sorted(os.listdir(d)) "
-        "if os.path.isdir(os.path.join(d,p))] if os.path.isdir(d) else []); "
-        "print('（DB 未初始化或無樣本）') if not ppl else "
-        "[print(f'{p} ('+str(len([f for f in os.listdir(os.path.join(d,p)) "
-        "if f.endswith(\".png\")]))+')') for p in ppl]"
-    )
+    script = """
+import os
+
+d = '/home/jetson/face_db'
+if not os.path.isdir(d):
+    print('（DB 未初始化或無樣本）')
+else:
+    ppl = [p for p in sorted(os.listdir(d)) if os.path.isdir(os.path.join(d, p))]
+    if not ppl:
+        print('（DB 未初始化或無樣本）')
+    else:
+        for p in ppl:
+            person_dir = os.path.join(d, p)
+            samples = len([f for f in os.listdir(person_dir) if f.endswith('.png')])
+            lower = p.lower()
+            warn = (
+                ' ⚠ 疑似備份目錄，建議移出 face_db'
+                if lower.startswith('_backup')
+                or lower.startswith('old')
+                or lower.startswith('_old')
+                or 'backup' in lower
+                else ''
+            )
+            print(f'{p} ({samples}){warn}')
+""".strip()
     cmd = f"cd {shlex.quote(repo)} && python3 -c {shlex.quote(script)}"
     _echo_remote_result("face list", shell.run_remote(cmd, timeout=30))
+
+
+def _clean_face_name(name: str) -> str:
+    """Reject names that could escape /home/jetson/face_db/<name>."""
+    n = name.strip()
+    if n in ("", ".", "..") or "/" in n or n.startswith("."):
+        raise click.UsageError("非法人名，拒絕刪除")
+    return n
+
+
+@face.command("delete")
+@click.argument("name")
+@click.option("-y", "--yes", is_flag=True, help="跳過互動確認。")
+def face_delete(name: str, yes: bool) -> None:
+    """刪除 Jetson face_db 內指定人物資料夾，並觸發下次重訓。"""
+    n = _clean_face_name(name)
+    qname = shlex.quote(n)
+
+    if not yes:
+        probe_cmd = (
+            f"target=/home/jetson/face_db/{qname}; "
+            "if [ -d \"$target\" ]; then "
+            "count=$(find \"$target\" -maxdepth 1 -type f -name '*.png' | wc -l); "
+            f"printf '%s (%s samples)\\n' {qname} \"$count\"; "
+            "else "
+            f"printf '%s (directory not found)\\n' {qname}; "
+            "fi"
+        )
+        probe = shell.run_remote(probe_cmd, timeout=30)
+        if probe.stdout:
+            click.echo(probe.stdout.rstrip())
+        if probe.stderr:
+            click.echo(probe.stderr.rstrip(), err=True)
+        if not click.confirm(f"確定刪除 {n}？", default=False):
+            raise click.Abort()
+
+    cmd = (
+        f"rm -rf -- /home/jetson/face_db/{qname} && "
+        "rm -f /home/jetson/face_db/model_sface.pkl && "
+        f"echo {shlex.quote(f'deleted {n}; restart face_identity_node to retrain')}"
+    )
+    _echo_remote_result("face delete", shell.run_remote(cmd, timeout=30))
 
 
 @face.command("enroll")
