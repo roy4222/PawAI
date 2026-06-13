@@ -80,7 +80,17 @@ class Go2DriverNode(Node):
             event_loop=self.event_loop,
         )
 
-        self.robot_control_service = RobotControlService(self.webrtc_adapter)
+        self.robot_control_service = RobotControlService(
+            self.webrtc_adapter,
+            webrtc_api_filter_mode=self.get_parameter("webrtc_api_filter_mode")
+            .get_parameter_value()
+            .string_value,
+            webrtc_api_rate_limit_per_sec=self.get_parameter(
+                "webrtc_api_rate_limit_per_sec"
+            )
+            .get_parameter_value()
+            .integer_value,
+        )
 
         # Set callback for data
         self.webrtc_adapter.set_data_callback(self._on_robot_data_received)
@@ -122,6 +132,8 @@ class Go2DriverNode(Node):
                 ("enable_lidar", True),
                 ("minimal_state_topics", False),
                 ("lidar_point_stride", 1),
+                ("webrtc_api_filter_mode", "off"),
+                ("webrtc_api_rate_limit_per_sec", 0),
             ],
         )
 
@@ -351,6 +363,18 @@ class Go2DriverNode(Node):
 
         try:
             for p in params:
+                if p.name == "webrtc_api_filter_mode":
+                    self.robot_control_service.set_webrtc_api_filter_mode(p.value)
+                    result.successful = True
+                    result.reason = "Updated webrtc_api_filter_mode"
+                    continue
+
+                if p.name == "webrtc_api_rate_limit_per_sec":
+                    self.robot_control_service.set_webrtc_api_rate_limit_per_sec(p.value)
+                    result.successful = True
+                    result.reason = "Updated webrtc_api_rate_limit_per_sec"
+                    continue
+
                 if p.name == "obstacle_avoidance":
                     self.get_logger().info(f"New obstacle_avoidance value: {p.value}")
                     self.config.obstacle_avoidance = p.value

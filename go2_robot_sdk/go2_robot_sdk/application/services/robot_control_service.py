@@ -6,9 +6,15 @@ import logging
 import time
 
 
+try:
+    from pawai_contracts.skill_contract import BANNED_API_IDS
+# Monorepo source tree fallback before pawai_contracts is installed.
+except ImportError:
+    from pawai_contracts.pawai_contracts.skill_contract import BANNED_API_IDS
+
 from ...domain.interfaces import IRobotController
 from ..utils.command_generator import gen_mov_command
-from ...domain.constants import RTC_TOPIC
+from ...domain.constants import AUDIO_HUB_COMMANDS, ROBOT_CMD, RTC_TOPIC
 
 
 logger = logging.getLogger(__name__)
@@ -24,15 +30,57 @@ DEADBAND = 0.01
 # saw bufferedAmount 115KB+ in 2 min). Once StopMove is acknowledged, Go2 stays
 # stopped without refresh, so dedupe to 1 Hz refresh.
 STOP_REFRESH_INTERVAL_S = 1.0
+WEBRTC_API_FILTER_OFF = "off"
+WEBRTC_API_FILTER_BLACKLIST = "blacklist"
+WEBRTC_API_FILTER_WHITELIST = "whitelist"
+WEBRTC_API_FILTER_MODES = {
+    WEBRTC_API_FILTER_OFF,
+    WEBRTC_API_FILTER_BLACKLIST,
+    WEBRTC_API_FILTER_WHITELIST,
+}
+STOP_MOVE_API_ID = ROBOT_CMD["StopMove"]
+WEBRTC_WHITELIST_API_IDS = frozenset(
+    {
+        STOP_MOVE_API_ID,
+        ROBOT_CMD["BalanceStand"],
+        ROBOT_CMD["StandUp"],
+        ROBOT_CMD["StandDown"],
+        ROBOT_CMD["RecoveryStand"],
+        ROBOT_CMD["Move"],
+        ROBOT_CMD["Sit"],
+        ROBOT_CMD["RiseSit"],
+        ROBOT_CMD["SpeedLevel"],
+        ROBOT_CMD["Hello"],
+        ROBOT_CMD["Stretch"],
+        ROBOT_CMD["Content"],
+        ROBOT_CMD["GetState"],
+        ROBOT_CMD["FingerHeart"],
+        AUDIO_HUB_COMMANDS["START_AUDIO"],
+        AUDIO_HUB_COMMANDS["STOP_AUDIO"],
+        AUDIO_HUB_COMMANDS["SEND_AUDIO_BLOCK"],
+        AUDIO_HUB_COMMANDS["SET_VOLUME"],
+    }
+)
 
 
 class RobotControlService:
     """Service for robot control"""
 
-    def __init__(self, controller: IRobotController):
+    def __init__(
+        self,
+        controller: IRobotController,
+        webrtc_api_filter_mode: str = WEBRTC_API_FILTER_OFF,
+        webrtc_api_rate_limit_per_sec: int = 0,
+    ):
         self.controller = controller
         # Track last sent stop time for dedupe (None = no stop sent recently)
         self._last_stop_sent_at: float | None = None
+        self.webrtc_api_filter_mode = WEBRTC_API_FILTER_OFF
+        self.webrtc_api_rate_limit_per_sec = 0
+        self._webrtc_rate_window_started_at: float | None = None
+        self._webrtc_rate_window_count = 0
+        self.set_webrtc_api_filter_mode(webrtc_api_filter_mode)
+        self.set_webrtc_api_rate_limit_per_sec(webrtc_api_rate_limit_per_sec)
 
     def handle_cmd_vel(self, x: float, y: float, z: float, robot_id: str, obstacle_avoidance: bool = False) -> None:
         """Process movement command.
@@ -110,9 +158,23 @@ class RobotControlService:
     def _apply_deadband(value: float) -> float:
         return 0.0 if abs(value) < DEADBAND else value
 
-    def handle_webrtc_request(self, api_id: int, parameter_str: str, topic: str, msg_id: str, robot_id: str) -> None:
+    def handle_webrtc_request(
+        self, api_id: int, parameter_str: str, topic: str, msg_id: str, robot_id: str
+    ) -> None:
         """Process WebRTC request"""
         try:
+            if (
+                self.webrtc_api_filter_mode == WEBRTC_API_FILTER_OFF
+                and self.webrtc_api_rate_limit_per_sec <= 0
+            ):
+                parameter = "" if parameter_str == "" else json.loads(parameter_str)
+                self.controller.send_webrtc_request(robot_id, api_id, parameter, topic)
+                logger.info(f"WebRTC request sent to robot {robot_id}")
+                return
+
+            if self._should_drop_webrtc_request(api_id, robot_id):
+                return
+
             parameter = "" if parameter_str == "" else json.loads(parameter_str)
             self.controller.send_webrtc_request(robot_id, api_id, parameter, topic)
             logger.info(f"WebRTC request sent to robot {robot_id}")
@@ -120,6 +182,63 @@ class RobotControlService:
             logger.error(f"Invalid JSON in WebRTC request: {e}")
         except Exception as e:
             logger.error(f"Error handling WebRTC request: {e}")
+
+    def set_webrtc_api_filter_mode(self, mode: str) -> None:
+        normalized = str(mode).strip().lower()
+        if normalized not in WEBRTC_API_FILTER_MODES:
+            raise ValueError(
+                "webrtc_api_filter_mode must be one of "
+                f"{sorted(WEBRTC_API_FILTER_MODES)}"
+            )
+        self.webrtc_api_filter_mode = normalized
+
+    def set_webrtc_api_rate_limit_per_sec(self, rate_limit_per_sec: int) -> None:
+        rate_limit = int(rate_limit_per_sec)
+        if rate_limit < 0:
+            raise ValueError("webrtc_api_rate_limit_per_sec must be >= 0")
+        self.webrtc_api_rate_limit_per_sec = rate_limit
+        self._webrtc_rate_window_started_at = None
+        self._webrtc_rate_window_count = 0
+
+    def _should_drop_webrtc_request(self, api_id: int, robot_id: str) -> bool:
+        if self.webrtc_api_filter_mode == WEBRTC_API_FILTER_BLACKLIST:
+            if api_id in BANNED_API_IDS:
+                logger.warning(
+                    f"Rejected WebRTC request api_id={api_id} robot_id={robot_id}: blacklisted"
+                )
+                return True
+        elif self.webrtc_api_filter_mode == WEBRTC_API_FILTER_WHITELIST:
+            if api_id != STOP_MOVE_API_ID and api_id not in WEBRTC_WHITELIST_API_IDS:
+                logger.warning(
+                    f"Rejected WebRTC request api_id={api_id} robot_id={robot_id}: not whitelisted"
+                )
+                return True
+
+        if self._is_webrtc_rate_limited(api_id, robot_id):
+            return True
+
+        return False
+
+    def _is_webrtc_rate_limited(self, api_id: int, robot_id: str) -> bool:
+        if self.webrtc_api_rate_limit_per_sec <= 0:
+            return False
+
+        now = time.monotonic()
+        if (
+            self._webrtc_rate_window_started_at is None
+            or now - self._webrtc_rate_window_started_at >= 1.0
+        ):
+            self._webrtc_rate_window_started_at = now
+            self._webrtc_rate_window_count = 0
+
+        if self._webrtc_rate_window_count >= self.webrtc_api_rate_limit_per_sec:
+            logger.warning(
+                f"Rejected WebRTC request api_id={api_id} robot_id={robot_id}: rate limited"
+            )
+            return True
+
+        self._webrtc_rate_window_count += 1
+        return False
 
     def handle_joy_command(self, joy_buttons: list, robot_id: str) -> None:
         """Process joystick commands"""
