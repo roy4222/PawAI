@@ -842,10 +842,44 @@ class BrainNode(Node):
                     IsmSignal(trigger=IsmTrigger.TTS_ACK,
                               detail={"event": "start" if tts else "end"}),
                     now=now)
-            self._ism.tick(now)
+            prev_plan_id = str(getattr(self._ism, "_active_plan_id", "") or "")
+            decision = self._ism.tick(now)
             self._ism_shadow_drain_transitions("")
+            if (
+                decision is not None
+                and str(decision.reason).startswith("watchdog_timeout:executing")
+                and self._ism_stage_on("ism_stage_2c_executing")
+            ):
+                self._watchdog_reset_active_plan(prev_plan_id)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().debug(f"ism shadow tick failed: {exc}")
+
+    def _watchdog_reset_active_plan(self, plan_id: str) -> None:
+        try:
+            with self._lock:
+                active = self._state.active_plan
+                if active is not None and (not plan_id or active.get("plan_id") == plan_id):
+                    cleared_id = active.get("plan_id")
+                    self._state.active_plan = None
+                    self._state.active_step = None
+                else:
+                    cleared_id = None
+            if cleared_id is not None:
+                trace_plan_id = str(plan_id or cleared_id or "")
+                self._trace(TraceEvent(
+                    decision_id=self._plan_decision.get(trace_plan_id, ""),
+                    node="brain_node", kind=TraceKind.STATE_TRANSITION,
+                    verdict=Verdict.SUPPRESSED, gate="watchdog",
+                    reason=f"watchdog_timeout:executing:{trace_plan_id}",
+                    detail={"watchdog": True, "plan_id": trace_plan_id,
+                            "cleanup": "active_plan_reset"},
+                ))
+                self.get_logger().warn(
+                    "[watchdog] EXECUTING timeout - active_plan cleared "
+                    f"(plan_id={trace_plan_id})"
+                )
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"watchdog reset failed: {exc}")
 
     def _ism_shadow_drain_transitions(self, decision_id: str) -> None:
         """Emit STATE_TRANSITION traces for machine history appended since the
