@@ -38,6 +38,44 @@ from nav_capability.lib.standoff_math import compute_standoff_goal
 from nav_capability.lib.tf_pose_helper import quat_to_yaw, yaw_to_quat
 
 
+def _format_reason_value(value: float) -> str:
+    return f"{float(value):.6g}"
+
+
+def _format_goal_id(goal_id) -> str:
+    if goal_id is None:
+        return "unknown"
+
+    uuid = getattr(goal_id, "uuid", None)
+    if uuid is not None:
+        return "".join(f"{int(byte):02x}" for byte in uuid)
+
+    return str(goal_id)
+
+
+def build_goto_rejection_reason(
+    *,
+    covariance: Optional[float] = None,
+    active_goal_id=None,
+    paused: bool = False,
+    distance: Optional[float] = None,
+) -> str:
+    """Build structured goto rejection reason tokens from the Lane 6 T6-5 plan.
+
+    nav_capability is Layer-1, so these strings are mirrored locally instead of
+    importing contract constants from pawai_contracts.
+    """
+    if active_goal_id is not None:
+        return f"another_goto_active:{_format_goal_id(active_goal_id)}"
+    if paused:
+        return "paused"
+    if distance is not None:
+        return "yellow_band_limit:0.5m"
+    if covariance is not None:
+        return f"nav_not_ready:covariance={_format_reason_value(covariance)}"
+    return "nav_not_ready:covariance=unavailable"
+
+
 AMCL_QOS = QoSProfile(
     depth=10,
     reliability=ReliabilityPolicy.RELIABLE,
@@ -71,6 +109,7 @@ class NavActionServerNode(Node):
         # the callback always returns and clears the flag. 120s >> any 0.3-1.0m demo goto.
         self.declare_parameter("goto_max_duration_s", 120.0)
         self._goto_max_duration_s = float(self.get_parameter("goto_max_duration_s").value)
+        self._active_goto_goal_id: Optional[str] = None
 
         # Phase 8 — /odom watchdog as proxy for driver liveness.
         # If /odom hasn't been heard for >2s, refuse new goto goals (driver disconnected).
@@ -195,8 +234,12 @@ class NavActionServerNode(Node):
     # ── Goal callbacks ──
     def _accept_goal(self, _goal):
         if self._goto_active:
+            reason = build_goto_rejection_reason(
+                active_goal_id=self._active_goto_goal_id or "unknown"
+            )
             self.get_logger().warn(
-                "rejecting goto_* goal — another goto_relative/goto_named is still active"
+                "rejecting goto_* goal — "
+                f"another goto_relative/goto_named is still active ({reason})"
             )
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
@@ -274,8 +317,10 @@ class NavActionServerNode(Node):
                     return (False, "cancelled")
 
                 if self._paused:
+                    reason = build_goto_rejection_reason(paused=True)
                     self.get_logger().info(
-                        "paused detected; cancelling Nav2 goal, will re-send on resume"
+                        f"paused detected ({reason}); "
+                        "cancelling Nav2 goal, will re-send on resume"
                     )
                     paused_during_run = True
                     await nav_handle.cancel_goal_async()
@@ -323,10 +368,12 @@ class NavActionServerNode(Node):
     # ── Action handler ──
     async def _execute_relative(self, goal_handle):
         self._goto_active = True
+        self._active_goto_goal_id = _format_goal_id(getattr(goal_handle, "goal_id", None))
         try:
             return await self._execute_relative_inner(goal_handle)
         finally:
             self._goto_active = False
+            self._active_goto_goal_id = None
 
     async def _execute_relative_inner(self, goal_handle):
         goal = goal_handle.request
@@ -374,20 +421,23 @@ class NavActionServerNode(Node):
             result.message = "amcl_lost"
             return result
         if cov > 0.5:
+            reason = build_goto_rejection_reason(covariance=cov)
             self.get_logger().warn(
-                f"amcl covariance_xy={cov:.3f} > 0.5 (red); rejecting"
+                f"amcl covariance_xy={cov:.3f} > 0.5 (red); rejecting ({reason})"
             )
             goal_handle.abort()
             result.success = False
-            result.message = "amcl_lost"
+            result.message = reason
             return result
         if 0.3 < cov <= 0.5 and abs(goal.distance) > 0.5:
+            reason = build_goto_rejection_reason(distance=goal.distance)
             self.get_logger().warn(
-                f"amcl covariance_xy={cov:.3f} (yellow); only ≤0.5m allowed, got {goal.distance}"
+                f"amcl covariance_xy={cov:.3f} (yellow); "
+                f"only ≤0.5m allowed, got {goal.distance}; rejecting ({reason})"
             )
             goal_handle.abort()
             result.success = False
-            result.message = "amcl_lost"
+            result.message = reason
             return result
 
         # Compute map-frame goal
@@ -475,10 +525,12 @@ class NavActionServerNode(Node):
     # ── GotoNamed handler (Phase 5.1) ──
     async def _execute_named(self, goal_handle):
         self._goto_active = True
+        self._active_goto_goal_id = _format_goal_id(getattr(goal_handle, "goal_id", None))
         try:
             return await self._execute_named_inner(goal_handle)
         finally:
             self._goto_active = False
+            self._active_goto_goal_id = None
 
     async def _execute_named_inner(self, goal_handle):
         goal = goal_handle.request
@@ -521,13 +573,20 @@ class NavActionServerNode(Node):
 
         # AMCL gating (spec §8 E1: green / yellow / red)
         cov = self._amcl_covariance_xy()
-        if cov is None or cov > 0.5:
-            self.get_logger().warn(
-                f"amcl covariance unavailable or > 0.5 (got {cov}); rejecting"
-            )
+        if cov is None:
+            self.get_logger().warn("amcl covariance unavailable; rejecting")
             goal_handle.abort()
             result.success = False
             result.message = "amcl_lost"
+            return result
+        if cov > 0.5:
+            reason = build_goto_rejection_reason(covariance=cov)
+            self.get_logger().warn(
+                f"amcl covariance_xy={cov:.3f} > 0.5 (red); rejecting ({reason})"
+            )
+            goal_handle.abort()
+            result.success = False
+            result.message = reason
             return result
 
         # Determine final goal: with optional standoff transform
@@ -562,12 +621,14 @@ class NavActionServerNode(Node):
                 rx, ry, _ = cur
                 approach = math.hypot(final_x - rx, final_y - ry)
                 if approach > 0.5:
+                    reason = build_goto_rejection_reason(distance=approach)
                     self.get_logger().warn(
-                        f"amcl covariance_xy={cov:.3f} (yellow); approach {approach:.2f}m > 0.5m allowed; rejecting"
+                        f"amcl covariance_xy={cov:.3f} (yellow); "
+                        f"approach {approach:.2f}m > 0.5m allowed; rejecting ({reason})"
                     )
                     goal_handle.abort()
                     result.success = False
-                    result.message = "amcl_lost"
+                    result.message = reason
                     return result
 
         # Build Nav2 goal
