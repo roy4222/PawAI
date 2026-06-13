@@ -14,7 +14,11 @@ PASS=0
 FAIL=0
 
 VISION_NODE_PATTERN="vision_perception"
-STATUS_TOPIC="/vision_perception/status_image"
+# Liveness = debug_image (the annotated camera frame the demo actually publishes,
+# ~3-7Hz). NOT status_image: that Foxglove dashboard topic is published by the
+# separate vision_status_display node, which the full demo does NOT launch — so
+# it has 0 publishers and gave a false FAIL (2026-06-13 post-refactor acceptance).
+LIVENESS_TOPIC="/vision_perception/debug_image"
 GESTURE_TOPIC="/event/gesture_detected"
 POSE_TOPIC="/event/pose_detected"
 
@@ -89,15 +93,15 @@ else
   finish
 fi
 
-# ── Static check 2: status image is publishing ──
+# ── Static check 2: vision is processing frames (debug_image is publishing) ──
 echo ""
-echo "[STATIC] Checking status image rate..."
-HZ_OUTPUT=$(timeout 8 ros2 topic hz "$STATUS_TOPIC" 2>&1 || true)
+echo "[STATIC] Checking debug image rate..."
+HZ_OUTPUT=$(timeout 8 ros2 topic hz "$LIVENESS_TOPIC" 2>&1 || true)
 STATUS_RATE=$(printf "%s\n" "$HZ_OUTPUT" | awk '/average rate:/ {rate=$3} END {if (rate == "") rate=0; print rate}')
 if awk -v rate="$STATUS_RATE" 'BEGIN {exit !(rate > 0)}'; then
-  pass "$STATUS_TOPIC average rate: $STATUS_RATE Hz"
+  pass "$LIVENESS_TOPIC average rate: $STATUS_RATE Hz"
 else
-  fail "$STATUS_TOPIC has no measurable hz > 0"
+  fail "$LIVENESS_TOPIC has no measurable hz > 0"
 fi
 
 # ── Static check 3: event topics exist and have publishers ──

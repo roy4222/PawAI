@@ -24,7 +24,7 @@ def _remote_runtime_dir(name: str) -> str:
     return f"{shell.jetson_host()}:{shell.jetson_repo().rstrip('/')}/runtime/{name}/"
 
 
-def _pull_read_only(src: str, dest: Path) -> None:
+def _pull_read_only(src: str, dest: Path, *, required: bool = True) -> None:
     # Read-only pull: -az, NO --delete (local extras stay; remote untouched).
     argv = ["rsync", "-az", src, f"{dest}/"]
     code = shell.stream(argv)
@@ -35,6 +35,17 @@ def _pull_read_only(src: str, dest: Path) -> None:
              "brew install rsync (Mac)"],
         )
     if code != 0:
+        if not required:
+            # Optional source (e.g. runtime/nav_capability) may not exist yet on
+            # the Jetson — nav lane never ran, or poses/routes wiped. rsync exits
+            # 23/3 for a missing source dir. Skip gracefully; do NOT abort the
+            # mandatory traces pull (2026-06-13 post-refactor acceptance: this
+            # missing dir was failing the whole `pawai evidence pull`).
+            click.echo(
+                f"⚠ skip optional pull {src} (rsync exit {code}; "
+                "該 runtime 目錄可能尚未在 Jetson 產生，非錯誤)"
+            )
+            return
         raise structured_error(
             f"evidence pull failed (rsync exit {code})",
             [
@@ -89,7 +100,10 @@ def pull(dest_str: str | None) -> None:
     nav_dest = dest.parent / NAV_CAPABILITY_DEST_NAME
     nav_dest.mkdir(parents=True, exist_ok=True)
     dest.mkdir(parents=True, exist_ok=True)
-    _pull_read_only(_remote_runtime_dir("nav_capability"), nav_dest)
+    # nav_capability backup is optional/best-effort (the dir may not exist yet —
+    # nav lane never ran / poses wiped). required=False → a missing nav dir skips
+    # gracefully instead of aborting. Traces are the mandatory primary artifact.
+    _pull_read_only(_remote_runtime_dir("nav_capability"), nav_dest, required=False)
     _pull_read_only(_remote_runtime_dir("traces"), dest)
     summary = summarize_jsonl_dir(dest)
     click.echo(
