@@ -4,6 +4,7 @@ rclpy local tier - NOT in the CI fast gate. This file instantiates BrainNode,
 so environments without rclpy should skip at import time.
 """
 import json
+import time
 
 import pytest
 
@@ -14,6 +15,7 @@ from std_msgs.msg import Empty, String  # noqa: E402
 from interaction_executive import interaction_state  # noqa: E402
 from interaction_executive.attention_machine import AttentionState  # noqa: E402
 from interaction_executive.brain_node import BrainNode  # noqa: E402
+from interaction_executive.pending_confirm import ConfirmState  # noqa: E402
 
 
 _ISM_TAKEOVER_FLAGS = (
@@ -227,3 +229,61 @@ def test_demo_phase_stage_2a_takeover_fallback_never_raises(monkeypatch):
     finally:
         legacy.destroy_node()
         takeover.destroy_node()
+
+
+def test_legacy_fallen_fires_during_pending_confirm(node):
+    node._on_gesture(_msg({"gesture": "thumbs_up", "confidence": 0.95}))
+    assert node._pending_confirm.state == ConfirmState.PENDING
+    node.proposals.clear()
+
+    node._on_pose(_msg({"pose": "fallen"}))
+    node._state.fallen_first_seen = time.time() - node.fallen_accumulate_s - 0.1
+    node._on_pose(_msg({"pose": "fallen"}))
+
+    assert any(p["selected_skill"] == "fallen_alert" for p in node.proposals)
+    assert node._pending_confirm.state == ConfirmState.PENDING
+
+
+def test_legacy_sitting_skipped_during_pending_confirm(node):
+    node._on_gesture(_msg({"gesture": "thumbs_up", "confidence": 0.95}))
+    assert node._pending_confirm.state == ConfirmState.PENDING
+    node.proposals.clear()
+
+    node._on_pose(_msg({"pose": "sitting"}))
+    node._state.sitting_first_seen = time.time() - 1.1
+    node._on_pose(_msg({"pose": "sitting"}))
+
+    assert not any(p["selected_skill"] == "sit_along" for p in node.proposals)
+
+
+def test_legacy_object_suppressed_during_pending_confirm(node):
+    node._on_gesture(_msg({"gesture": "thumbs_up", "confidence": 0.95}))
+    assert node._pending_confirm.state == ConfirmState.PENDING
+    node.traces.clear()
+    node._attention._state = AttentionState.ENGAGED
+
+    node._on_object(_msg({"objects": [{"class_name": "cup", "confidence": 0.9}]}))
+
+    assert any(
+        t["verdict"] == "suppressed"
+        and t["gate"] == "pending_confirm"
+        and t["reason"] == "confirm_in_flight"
+        and not t.get("detail", {}).get("shadow")
+        for t in node.traces
+    )
+
+
+def test_legacy_gesture_suppressed_during_pending_confirm(node):
+    node._on_gesture(_msg({"gesture": "thumbs_up", "confidence": 0.95}))
+    assert node._pending_confirm.state == ConfirmState.PENDING
+    node.traces.clear()
+
+    node._on_gesture(_msg({"gesture": "wave", "confidence": 0.95}))
+
+    assert any(
+        t["verdict"] == "suppressed"
+        and t["gate"] == "pending_confirm"
+        and t["reason"] == "confirm_in_flight"
+        and not t.get("detail", {}).get("shadow")
+        for t in node.traces
+    )
