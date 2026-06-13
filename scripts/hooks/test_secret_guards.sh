@@ -31,14 +31,21 @@ echo "── CI-01: pre_tool_safety.sh dotted-env (Bash) ──"
 run_case "block cat .env"            2 "$SAFETY" '{"command":"cat .env"}'
 run_case "block cat .env.local"      2 "$SAFETY" '{"command":"cat .env.local"}'
 run_case "block cat .env.production" 2 "$SAFETY" '{"command":"cat .env.production"}'
+run_case "block source .env.local;export" 2 "$SAFETY" '{"command":"source .env.local;export"}'
+run_case "block cat .env.production:" 2 "$SAFETY" '{"command":"cat .env.production:"}'
+run_case "block cat .env.local,"     2 "$SAFETY" '{"command":"cat .env.local,"}'
 run_case "allow cat .env.example"    0 "$SAFETY" '{"command":"cat .env.example"}'
+run_case "allow source .envlocal"     0 "$SAFETY" '{"command":"source .envlocal"}'
+run_case "allow .environment file"    0 "$SAFETY" '{"command":"cat .environment"}'
 run_case "allow normal ls"           0 "$SAFETY" '{"command":"ls -la /tmp"}'
 run_case "still block rm -rf"        2 "$SAFETY" '{"command":"rm -rf /tmp/x"}'
 
 echo "── CI-02: pre_tool_secret_guard.sh used by Read ──"
 run_case "block read .env"           2 "$GUARD" '{"file_path":"/repo/.env"}'
 run_case "block read .env.local"     2 "$GUARD" '{"file_path":"/repo/.env.local"}'
+run_case "block read .ENV.LOCAL"     2 "$GUARD" '{"file_path":"/repo/.ENV.LOCAL"}'
 run_case "allow read .env.example"   0 "$GUARD" '{"file_path":"/repo/.env.example"}'
+run_case "allow read .ENV.EXAMPLE"   0 "$GUARD" '{"file_path":"/repo/.ENV.EXAMPLE"}'
 run_case "allow read normal.py"      0 "$GUARD" '{"file_path":"/repo/normal.py"}'
 run_case "block read id_rsa.key"     2 "$GUARD" '{"file_path":"/repo/id_rsa.key"}'
 

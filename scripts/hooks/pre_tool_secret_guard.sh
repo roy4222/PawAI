@@ -23,13 +23,14 @@ fi
 
 BASENAME=$(basename "$FILE")
 
+# CI-01: allow safe templates case-insensitively, then block real secret basenames case-insensitively.
 # Allow safe patterns: .env.example, .env.sample, .env.template, etc.
-if echo "$BASENAME" | grep -qE '\.(example|sample|template)$'; then
+if echo "$BASENAME" | grep -qiE '\.(example|sample|template)$'; then
   exit 0
 fi
 
 # Block real secret files
-if echo "$BASENAME" | grep -qE '^\.env$|^\.env\.' ; then
+if echo "$BASENAME" | grep -qiE '^\.env$|^\.env\.' ; then
   echo "BLOCK: Edit/Write to secret file '$BASENAME' is not allowed. Use .env.example instead." >&2
   exit 2
 fi
