@@ -284,8 +284,16 @@ class BrainNode(Node):
                 self.get_logger().info(
                     f"perception_router_enabled set to {self.perception_router_enabled}"
                 )
-            elif p.name in ("stranger_alert_enabled", "greet_require_sitting",
-                            "ism_shadow_enabled"):
+            elif p.name in (
+                "stranger_alert_enabled",
+                "greet_require_sitting",
+                "ism_shadow_enabled",
+                "ism_enabled",
+                "ism_stage_2a_demo_phase",
+                "ism_stage_2b_confirm",
+                "ism_stage_2c_executing",
+                "ism_stage_2d_speaking",
+            ):
                 # Plain-bool runtime params share one branch (logs byte-identical
                 # to the previous per-param branches). ism_shadow_enabled joined
                 # 2026-06-12 — ISM Phase 1 shadow (T2A-2) runtime switch.
@@ -310,6 +318,9 @@ class BrainNode(Node):
                     self.demo_phase = value
                     self.get_logger().info(f"demo_phase set to {self.demo_phase}")
         return SetParametersResult(successful=True)
+
+    def _ism_stage_on(self, stage_attr: str) -> bool:
+        return bool(self.ism_enabled) and bool(getattr(self, stage_attr, False))
 
     # 2026-06-10（Roy 拍板「demo flow controller / phase gate，S2/S3/S4 不搶話」的
     # 最小外科版）：demo_phase 只 gate「自發性社交 proposal」（greet / object_remark /
@@ -423,6 +434,11 @@ class BrainNode(Node):
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
         # T2A-4 turns shadow on at runtime without touching the frozen demo script.
         self.declare_parameter("ism_shadow_enabled", False)
+        self.declare_parameter("ism_enabled", False)
+        self.declare_parameter("ism_stage_2a_demo_phase", False)
+        self.declare_parameter("ism_stage_2b_confirm", False)
+        self.declare_parameter("ism_stage_2c_executing", False)
+        self.declare_parameter("ism_stage_2d_speaking", False)
         self.perception_router_enabled = bool(
             self.get_parameter("perception_router_enabled").value
         )
@@ -457,6 +473,19 @@ class BrainNode(Node):
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
         self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
+        self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
+        self.ism_stage_2a_demo_phase = bool(
+            self.get_parameter("ism_stage_2a_demo_phase").value
+        )
+        self.ism_stage_2b_confirm = bool(
+            self.get_parameter("ism_stage_2b_confirm").value
+        )
+        self.ism_stage_2c_executing = bool(
+            self.get_parameter("ism_stage_2c_executing").value
+        )
+        self.ism_stage_2d_speaking = bool(
+            self.get_parameter("ism_stage_2d_speaking").value
+        )
         self._capability_health_cache: dict[str, Any] | None = None
         self._apply_gesture_demo_modes()
 
