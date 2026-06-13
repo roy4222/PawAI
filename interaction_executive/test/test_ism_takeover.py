@@ -11,6 +11,7 @@ rclpy = pytest.importorskip("rclpy")
 from rclpy.parameter import Parameter  # noqa: E402
 from std_msgs.msg import Empty, String  # noqa: E402
 
+from interaction_executive import interaction_state  # noqa: E402
 from interaction_executive.attention_machine import AttentionState  # noqa: E402
 from interaction_executive.brain_node import BrainNode  # noqa: E402
 
@@ -88,6 +89,26 @@ def _shadow_traces(n: BrainNode) -> list[dict]:
 
 
 _CUP = {"objects": [{"class_name": "cup", "confidence": 0.9, "color": "red"}]}
+_PHASE_KINDS = ("greet", "object", "gesture")
+
+
+def _phase_trace(n: BrainNode) -> list[tuple[str, str]]:
+    return [
+        (t["gate"], t["reason"])
+        for t in n.traces
+        if t["gate"] == "demo_phase"
+    ]
+
+
+def _run_phase_gate(n: BrainNode, *, phase: str, kind: str,
+                    stage_2a_on: bool) -> tuple[bool, list[tuple[str, str]]]:
+    n.demo_phase = phase
+    n.ism_enabled = stage_2a_on
+    n.ism_stage_2a_demo_phase = stage_2a_on
+    n.traces.clear()
+    n._trace_throttle.clear()
+    allowed = n._phase_allows(kind)
+    return allowed, _phase_trace(n)
 
 
 def _run_representative_sequence(n: BrainNode) -> dict:
@@ -167,3 +188,42 @@ def test_all_off_parity_matches_shadow_off_behavior():
     finally:
         baseline.destroy_node()
         all_off.destroy_node()
+
+
+def test_demo_phase_stage_2a_takeover_matches_legacy_phase_kind_matrix():
+    legacy, takeover = _make_node(), _make_node()
+    try:
+        for phase in interaction_state.PHASE_ALLOWED_KINDS:
+            for kind in _PHASE_KINDS:
+                legacy_result = _run_phase_gate(
+                    legacy, phase=phase, kind=kind, stage_2a_on=False
+                )
+                takeover_result = _run_phase_gate(
+                    takeover, phase=phase, kind=kind, stage_2a_on=True
+                )
+                assert takeover_result == legacy_result
+    finally:
+        legacy.destroy_node()
+        takeover.destroy_node()
+
+
+def test_demo_phase_stage_2a_takeover_fallback_never_raises(monkeypatch):
+    legacy, takeover = _make_node(), _make_node()
+    try:
+        phase = "s3_object"
+        kind = "gesture"
+        legacy_result = _run_phase_gate(
+            legacy, phase=phase, kind=kind, stage_2a_on=False
+        )
+
+        def _boom(_demo_phase: str, _kind: str) -> bool:
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(interaction_state, "phase_allows", _boom)
+        takeover_result = _run_phase_gate(
+            takeover, phase=phase, kind=kind, stage_2a_on=True
+        )
+        assert takeover_result == legacy_result
+    finally:
+        legacy.destroy_node()
+        takeover.destroy_node()

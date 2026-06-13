@@ -16,11 +16,21 @@ from interaction_executive.interaction_state import (
     TransitionSignal,
     TriggerKind as T,
     Verdict as V,
+    phase_allows,
 )
 
 
 def _cand(kind, prio, **kw):
     return Candidate(kind=kind, priority=prio, source=kw.pop("source", "test"), **kw)
+
+
+# ── demo_phase scene-mask policy (T1-1 / stage 2a) ──────────────────────────
+def test_phase_allows_demo_phase_policy():
+    assert phase_allows("s3_object", "object") is True
+    assert phase_allows("s3_object", "gesture") is False
+    assert phase_allows("quiet", "greet") is False
+    assert phase_allows("unknown", "gesture") is True
+    assert all(phase_allows("all", k) is True for k in ("greet", "object", "gesture"))
 
 
 # ── InteractionPolicy: priority iron law + non-black-hole (§3.4 / §3.5) ──────

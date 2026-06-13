@@ -30,6 +30,27 @@ from enum import Enum, IntEnum
 from typing import Any
 
 
+PHASE_ALLOWED_KINDS = {
+    "all": frozenset({"greet", "object", "gesture"}),
+    "s2_face": frozenset({"greet"}),
+    "s3_object": frozenset({"object"}),
+    "s4_gesture": frozenset({"gesture"}),
+    "quiet": frozenset(),
+}
+
+
+def phase_allows(demo_phase: str, kind: str) -> bool:
+    """demo_phase scene-mask policy (ISM single source).
+
+    Unknown phases are treated like `all`, matching BrainNode's legacy
+    `allowed is None -> return True` defensive behavior.
+    """
+    allowed = PHASE_ALLOWED_KINDS.get(demo_phase)
+    if allowed is None:
+        return True
+    return kind in allowed
+
+
 class InteractionState(str, Enum):
     IDLE = "idle"                        # 無互動；接受任何候選
     LISTENING = "listening"              # 正在聽語音（chat_buffer 在飛）
