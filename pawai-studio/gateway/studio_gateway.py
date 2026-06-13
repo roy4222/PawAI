@@ -26,7 +26,7 @@ import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 import rclpy
@@ -68,7 +68,8 @@ from auth import (
 # of /brain/trace JSONL + the T2B-0 PII redaction single source.
 from trace_store import (  # noqa: E402 — same-dir import after sys.path setup
     TraceStore, iter_export_lines, iter_session_lines, list_sessions,
-    redact_trace_event, store_enabled, trace_dir, valid_session_id,
+    redact_trace_event, render_session_report_md, store_enabled,
+    summarize_session, trace_dir, valid_session_id,
 )
 
 # ── Config ───────────────────────────────────────────────────────
@@ -1177,6 +1178,25 @@ async def get_trace_export(
     else:
         lines = iter_export_lines(directory, since=since or None, redact=not want_full)
     return StreamingResponse(lines, media_type="application/x-ndjson")
+
+
+@app.get("/api/trace/report")
+async def get_trace_report(request: Request, session: str = "", format: str = "json"):
+    """Return a redacted, per-session trace report summary (Lane 2 T2-5)."""
+    status = export_access(
+        auth_enabled=AUTH.auth_enabled,
+        header_token_ok=token_ok(request.headers.get("authorization"), AUTH.token),
+        want_full=False,
+    )
+    if status == 401:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not session or not valid_session_id(session):
+        return JSONResponse({"error": "invalid_session"}, status_code=400)
+
+    summary = summarize_session(trace_dir(repo_root=_REPO_ROOT), session)
+    if format.lower() in {"md", "markdown"}:
+        return PlainTextResponse(render_session_report_md(summary), media_type="text/markdown")
+    return summary
 
 
 class PlanModePayload(BaseModel):

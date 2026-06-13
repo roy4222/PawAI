@@ -29,7 +29,7 @@ import os
 import re
 import threading
 import time
-from collections import deque
+from collections import Counter, deque
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -322,3 +322,168 @@ def iter_session_lines(directory: Path | str, session_id: str,
             if redact:
                 ev = redact_trace_event(ev)
             yield json.dumps(ev, ensure_ascii=False) + "\n"
+
+
+def _empty_session_summary(session_id: str) -> dict:
+    return {
+        "session_id": session_id,
+        "event_count": 0,
+        "time_range": {"start": None, "end": None},
+        "verdict_distribution": {},
+        "top_suppressed_gates": [],
+        "shadow_divergence": {"total": 0, "by_gate": []},
+    }
+
+
+def summarize_session(directory: Path | str, session_id: str) -> dict:
+    """Return a compact report summary for one persisted session.
+
+    The read path intentionally consumes iter_session_lines(redact=True), then
+    parses that redacted JSONL. Do not read fields from raw on-disk events here:
+    this report feeds operators and Lane 1 analysis, so it must inherit the
+    gateway redaction single source.
+    """
+    summary = _empty_session_summary(session_id)
+    if not valid_session_id(session_id):
+        return summary
+    d = Path(directory)
+    if not d.is_dir():
+        return summary
+
+    verdicts: Counter[str] = Counter()
+    suppressed_gates: Counter[str] = Counter()
+    divergence_by_gate: Counter[str] = Counter()
+    start_ts: float | None = None
+    end_ts: float | None = None
+
+    for line in iter_session_lines(d, session_id, redact=True):
+        try:
+            redacted_ev = json.loads(line)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(redacted_ev, dict):
+            continue
+
+        summary["event_count"] += 1
+
+        ts = redacted_ev.get("ts")
+        if isinstance(ts, (int, float)) and not isinstance(ts, bool):
+            ts_f = float(ts)
+            start_ts = ts_f if start_ts is None else min(start_ts, ts_f)
+            end_ts = ts_f if end_ts is None else max(end_ts, ts_f)
+
+        verdict = redacted_ev.get("verdict")
+        if isinstance(verdict, str) and verdict:
+            verdicts[verdict] += 1
+            if verdict == "suppressed":
+                gate = redacted_ev.get("gate")
+                if isinstance(gate, str) and gate:
+                    suppressed_gates[gate] += 1
+
+        if redacted_ev.get("kind") != "candidate" or redacted_ev.get("gate") != "ism_shadow":
+            continue
+        detail = redacted_ev.get("detail")
+        if not isinstance(detail, dict) or detail.get("shadow") is not True:
+            continue
+        ism_verdict = detail.get("ism_verdict")
+        if not isinstance(ism_verdict, str) or not ism_verdict:
+            continue
+
+        would_act = ism_verdict in {"accept", "preempt"}
+        legacy_action = detail.get("legacy_action")
+        acted = isinstance(legacy_action, str) and (
+            legacy_action.startswith("emitted")
+            or legacy_action.startswith("confirm_requested")
+        )
+        if would_act == acted:
+            continue
+        legacy_gate = detail.get("legacy_gate")
+        gate_key = legacy_gate if isinstance(legacy_gate, str) and legacy_gate else "(none)"
+        divergence_by_gate[gate_key] += 1
+
+    summary["time_range"] = {"start": start_ts, "end": end_ts}
+    summary["verdict_distribution"] = dict(sorted(verdicts.items()))
+    summary["top_suppressed_gates"] = [
+        {"gate": gate, "count": count}
+        for gate, count in sorted(suppressed_gates.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    divergence_rows = [
+        {"gate": gate, "count": count}
+        for gate, count in sorted(divergence_by_gate.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    summary["shadow_divergence"] = {
+        "total": sum(divergence_by_gate.values()),
+        "by_gate": divergence_rows,
+    }
+    return summary
+
+
+def render_session_report_md(summary: dict) -> str:
+    """Render summarize_session() output as compact Markdown. Pure, no I/O."""
+    session_id = summary.get("session_id") or ""
+    event_count = summary.get("event_count", 0)
+    time_range = summary.get("time_range")
+    if not isinstance(time_range, dict):
+        time_range = {}
+    start_ts = time_range.get("start")
+    end_ts = time_range.get("end")
+
+    lines = [
+        "# Trace Session Report",
+        "",
+        f"- Session: `{session_id}`",
+        f"- Event count / 事件數: {event_count}",
+        f"- Time range / 時間範圍: {start_ts if start_ts is not None else 'n/a'} "
+        f"to {end_ts if end_ts is not None else 'n/a'}",
+        "",
+        "## Verdict Distribution",
+        "",
+        "| Verdict | Count |",
+        "|---|---:|",
+    ]
+
+    verdict_distribution = summary.get("verdict_distribution")
+    if isinstance(verdict_distribution, dict) and verdict_distribution:
+        for verdict, count in sorted(verdict_distribution.items()):
+            lines.append(f"| `{verdict}` | {count} |")
+    else:
+        lines.append("| (none) | 0 |")
+
+    lines.extend([
+        "",
+        "## Top Suppressed Gates",
+        "",
+        "| Gate | Count |",
+        "|---|---:|",
+    ])
+    top_suppressed_gates = summary.get("top_suppressed_gates")
+    if isinstance(top_suppressed_gates, list) and top_suppressed_gates:
+        for row in top_suppressed_gates:
+            if not isinstance(row, dict):
+                continue
+            lines.append(f"| `{row.get('gate', '')}` | {row.get('count', 0)} |")
+    else:
+        lines.append("| (none) | 0 |")
+
+    shadow_divergence = summary.get("shadow_divergence")
+    if not isinstance(shadow_divergence, dict):
+        shadow_divergence = {}
+    lines.extend([
+        "",
+        "## Shadow Divergence",
+        "",
+        f"- Total / 總數: {shadow_divergence.get('total', 0)}",
+        "",
+        "| Legacy gate | Count |",
+        "|---|---:|",
+    ])
+    by_gate = shadow_divergence.get("by_gate")
+    if isinstance(by_gate, list) and by_gate:
+        for row in by_gate:
+            if not isinstance(row, dict):
+                continue
+            lines.append(f"| `{row.get('gate', '')}` | {row.get('count', 0)} |")
+    else:
+        lines.append("| (none) | 0 |")
+
+    return "\n".join(lines) + "\n"

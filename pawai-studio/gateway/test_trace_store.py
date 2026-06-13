@@ -18,6 +18,8 @@ from trace_store import (  # noqa: E402
     iter_export_lines,
     list_sessions,
     redact_trace_event,
+    render_session_report_md,
+    summarize_session,
     store_enabled,
     trace_dir,
 )
@@ -274,3 +276,100 @@ def test_list_sessions_groups_rotation_parts_and_counts_valid_events(tmp_path):
 
 def test_list_sessions_missing_dir_returns_empty(tmp_path):
     assert list_sessions(tmp_path / "nope") == []
+
+
+# ── session report (Lane 2 T2-5) ────────────────────────────────────────────
+
+def test_summarize_session_counts_redacted_multipart_trace(tmp_path):
+    session_id = "20260613-123456"
+    part1 = [
+        _ev(ts=10.0, verdict="accepted", gate="wake_gate"),
+        _ev(ts=11.0, verdict="suppressed", gate="cooldown"),
+        _ev(ts=12.0, verdict="suppressed", gate="confirm_pending"),
+        _ev(ts=13.0, verdict="suppressed", gate="cooldown"),
+    ]
+    part2 = [
+        _ev(ts=14.0, verdict="blocked", gate="safety"),
+        {
+            "v": 1,
+            "ts": 15.0,
+            "decision_id": "shadow-diverge",
+            "node": "brain_node",
+            "kind": "candidate",
+            "gate": "ism_shadow",
+            "detail": {
+                "shadow": True,
+                "ism_verdict": "accept",
+                "legacy_action": "suppressed",
+                "legacy_gate": "greet_cooldown",
+                "transcript": "Roy wants water",
+            },
+        },
+        {
+            "v": 1,
+            "ts": 16.0,
+            "decision_id": "shadow-agree",
+            "node": "brain_node",
+            "kind": "candidate",
+            "gate": "ism_shadow",
+            "detail": {
+                "shadow": True,
+                "ism_verdict": "suppress",
+                "legacy_action": "suppressed",
+                "legacy_gate": "confirm_pending",
+            },
+        },
+    ]
+    (tmp_path / f"{session_id}.jsonl").write_text(
+        "\n".join(json.dumps(ev, ensure_ascii=False) for ev in part1)
+        + "\nnot-json\n",
+        encoding="utf-8",
+    )
+    (tmp_path / f"{session_id}.2.jsonl").write_text(
+        "\n".join(json.dumps(ev, ensure_ascii=False) for ev in part2) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = summarize_session(tmp_path, session_id)
+
+    assert summary["session_id"] == session_id
+    assert summary["event_count"] == 7
+    assert summary["time_range"] == {"start": 10.0, "end": 16.0}
+    assert summary["verdict_distribution"] == {
+        "accepted": 1,
+        "blocked": 1,
+        "suppressed": 3,
+    }
+    assert summary["top_suppressed_gates"] == [
+        {"gate": "cooldown", "count": 2},
+        {"gate": "confirm_pending", "count": 1},
+    ]
+    assert summary["shadow_divergence"] == {
+        "total": 1,
+        "by_gate": [{"gate": "greet_cooldown", "count": 1}],
+    }
+    assert "Roy wants water" not in json.dumps(summary, ensure_ascii=False)
+
+
+def test_summarize_session_invalid_session_id_returns_empty(tmp_path):
+    assert summarize_session(tmp_path, "../x") == {
+        "session_id": "../x",
+        "event_count": 0,
+        "time_range": {"start": None, "end": None},
+        "verdict_distribution": {},
+        "top_suppressed_gates": [],
+        "shadow_divergence": {"total": 0, "by_gate": []},
+    }
+
+
+def test_render_session_report_md_contains_session_and_event_count(tmp_path):
+    session_id = "20260613-123456"
+    (tmp_path / f"{session_id}.jsonl").write_text(
+        json.dumps(_ev(ts=10.0, verdict="accepted", gate="wake_gate")) + "\n",
+        encoding="utf-8",
+    )
+    report = render_session_report_md(summarize_session(tmp_path, session_id))
+
+    assert isinstance(report, str)
+    assert session_id in report
+    assert "1" in report

@@ -556,6 +556,89 @@ class TestTraceExportEndpoint:
         assert [ev["decision_id"] for ev in lines] == ["after"]
 
 
+class TestTraceReportEndpoint:
+    """Lane 2 T2-5: per-session trace report endpoint."""
+
+    def test_trace_report_session_returns_summary_json(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        session_id = "20260613-123456"
+        (tmp_path / f"{session_id}.jsonl").write_text(
+            json.dumps(_trace_event(10.0, "target-1")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+
+        class _Req:
+            headers = {}
+
+        summary = asyncio.run(sg.get_trace_report(_Req(), session=session_id))
+
+        assert summary["session_id"] == session_id
+        assert summary["event_count"] == 1
+        assert {"time_range", "verdict_distribution", "top_suppressed_gates",
+                "shadow_divergence"} <= set(summary)
+
+    def test_trace_report_markdown_format_returns_text_markdown(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        session_id = "20260613-123456"
+        (tmp_path / f"{session_id}.jsonl").write_text(
+            json.dumps(_trace_event(10.0, "target-1")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(sg.get_trace_report(_Req(), session=session_id, format="md"))
+
+        assert resp.media_type == "text/markdown"
+        assert session_id in resp.body.decode("utf-8")
+
+    def test_trace_report_missing_or_invalid_session_returns_400(self, tmp_path, monkeypatch):
+        import asyncio
+        import studio_gateway as sg
+
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+
+        class _Req:
+            headers = {}
+
+        missing = asyncio.run(sg.get_trace_report(_Req()))
+        invalid = asyncio.run(sg.get_trace_report(_Req(), session="../x"))
+
+        assert missing.status_code == 400
+        assert invalid.status_code == 400
+        assert json.loads(missing.body.decode("utf-8")) == {"error": "invalid_session"}
+        assert json.loads(invalid.body.decode("utf-8")) == {"error": "invalid_session"}
+
+    def test_trace_report_uses_export_auth_posture(self, tmp_path, monkeypatch):
+        import asyncio
+        from auth import AuthConfig
+        import studio_gateway as sg
+
+        session_id = "20260613-123456"
+        (tmp_path / f"{session_id}.jsonl").write_text(
+            json.dumps(_trace_event(10.0, "target-1")) + "\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("PAWAI_TRACE_DIR", str(tmp_path))
+        monkeypatch.setattr(sg, "AUTH", AuthConfig(host="0.0.0.0", token="secret",
+                                                   allowed_origins=()))
+
+        class _Req:
+            headers = {}
+
+        resp = asyncio.run(sg.get_trace_report(_Req(), session=session_id))
+
+        assert resp.status_code == 401
+        assert json.loads(resp.body.decode("utf-8")) == {"error": "unauthorized"}
+
+
 # ── Operator-controlled nav driving (S1 "move to scene") ────────
 
 
