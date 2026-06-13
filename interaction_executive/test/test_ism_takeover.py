@@ -1,0 +1,169 @@
+"""ISM staged takeover flag skeleton tests.
+
+rclpy local tier - NOT in the CI fast gate. This file instantiates BrainNode,
+so environments without rclpy should skip at import time.
+"""
+import json
+
+import pytest
+
+rclpy = pytest.importorskip("rclpy")
+from rclpy.parameter import Parameter  # noqa: E402
+from std_msgs.msg import Empty, String  # noqa: E402
+
+from interaction_executive.attention_machine import AttentionState  # noqa: E402
+from interaction_executive.brain_node import BrainNode  # noqa: E402
+
+
+_ISM_TAKEOVER_FLAGS = (
+    "ism_enabled",
+    "ism_stage_2a_demo_phase",
+    "ism_stage_2b_confirm",
+    "ism_stage_2c_executing",
+    "ism_stage_2d_speaking",
+)
+
+_ISM_STAGE_FLAGS = _ISM_TAKEOVER_FLAGS[1:]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rclpy_ctx():
+    if not rclpy.ok():
+        rclpy.init()
+    yield
+    if rclpy.ok():
+        rclpy.shutdown()
+
+
+def _make_node() -> BrainNode:
+    n = BrainNode()
+    n.proposals = []
+    n._pub_proposal.publish = (  # type: ignore[method-assign]
+        lambda m: n.proposals.append(json.loads(m.data))
+    )
+    n.traces = []
+    n._pub_trace.publish = (  # type: ignore[method-assign]
+        lambda m: n.traces.append(json.loads(m.data))
+    )
+    return n
+
+
+@pytest.fixture
+def node():
+    n = _make_node()
+    yield n
+    n.destroy_node()
+
+
+def _msg(payload: dict) -> String:
+    m = String()
+    m.data = json.dumps(payload, ensure_ascii=False)
+    return m
+
+
+def _normalize(proposals: list[dict]) -> list[dict]:
+    """Strip volatile fields while keeping emitted proposal payload semantics."""
+    return [
+        {
+            "selected_skill": p["selected_skill"],
+            "steps": p["steps"],
+            "reason": p["reason"],
+            "source": p["source"],
+            "priority_class": p["priority_class"],
+        }
+        for p in proposals
+    ]
+
+
+def _legacy_traces(n: BrainNode) -> list[tuple]:
+    return [
+        (t["kind"], t["gate"], t["reason"])
+        for t in n.traces
+        if not t.get("detail", {}).get("shadow")
+    ]
+
+
+def _shadow_traces(n: BrainNode) -> list[dict]:
+    return [t for t in n.traces if t.get("detail", {}).get("shadow")]
+
+
+_CUP = {"objects": [{"class_name": "cup", "confidence": 0.9, "color": "red"}]}
+
+
+def _run_representative_sequence(n: BrainNode) -> dict:
+    """Run a stable event sequence and return payload-level parity evidence."""
+    n._on_speech_intent(_msg({"transcript": "停", "session_id": "s1"}))
+    n._attention._state = AttentionState.ENGAGED
+    n._on_object(_msg(_CUP))
+    n._on_object(_msg(_CUP))
+    first = n.proposals[0]
+    n._on_skill_result(_msg({
+        "plan_id": first["plan_id"],
+        "status": "started",
+        "selected_skill": first["selected_skill"],
+        "priority_class": first["priority_class"],
+    }))
+    n._on_skill_result(_msg({"plan_id": first["plan_id"], "status": "completed"}))
+    n.gesture_enabled = False
+    n._on_gesture(_msg({"gesture": "wave", "confidence": 0.9}))
+    n.gesture_enabled = True
+    n._on_reset_context(Empty())
+    return {
+        "proposals": _normalize(n.proposals),
+        "legacy_traces": _legacy_traces(n),
+        "shadow_traces": _shadow_traces(n),
+    }
+
+
+def test_stage_flags_declared_default_false(node):
+    for name in _ISM_TAKEOVER_FLAGS:
+        assert node.get_parameter(name).value is False
+        assert getattr(node, name) is False
+
+
+def test_ism_stage_on_requires_master_and_stage(node):
+    for stage in _ISM_STAGE_FLAGS:
+        node.ism_enabled = False
+        setattr(node, stage, True)
+        assert node._ism_stage_on(stage) is False
+
+        node.ism_enabled = True
+        setattr(node, stage, False)
+        assert node._ism_stage_on(stage) is False
+
+        setattr(node, stage, True)
+        assert node._ism_stage_on(stage) is True
+
+        node.ism_enabled = False
+        assert node._ism_stage_on(stage) is False
+
+
+def test_on_set_params_runtime_toggle(node):
+    for name in _ISM_TAKEOVER_FLAGS:
+        assert getattr(node, name) is False
+        result = node._on_set_params([Parameter(name, Parameter.Type.BOOL, True)])
+        assert result.successful is True
+        assert getattr(node, name) is True
+
+        result = node._on_set_params([Parameter(name, Parameter.Type.BOOL, False)])
+        assert result.successful is True
+        assert getattr(node, name) is False
+
+
+def test_all_off_parity_matches_shadow_off_behavior():
+    baseline, all_off = _make_node(), _make_node()
+    try:
+        all_off._on_set_params([
+            Parameter(name, Parameter.Type.BOOL, False)
+            for name in _ISM_TAKEOVER_FLAGS
+        ])
+
+        baseline_evidence = _run_representative_sequence(baseline)
+        all_off_evidence = _run_representative_sequence(all_off)
+
+        assert all_off_evidence["proposals"] == baseline_evidence["proposals"]
+        assert all_off_evidence["legacy_traces"] == baseline_evidence["legacy_traces"]
+        assert all_off_evidence["shadow_traces"] == []
+    finally:
+        baseline.destroy_node()
+        all_off.destroy_node()
