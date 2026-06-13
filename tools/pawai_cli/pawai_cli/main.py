@@ -802,6 +802,7 @@ _LANE_HEALTHCHECK = {
 _SMOKE_SCRIPTS = {
     "brain": "scripts/smoke_test_e2e.sh",
     "vision": "scripts/smoke_test_vision.sh",
+    "object": "scripts/smoke_test_object.sh",
 }
 
 
@@ -897,6 +898,48 @@ def smoke_vision(with_events: int) -> None:
         click.echo("  ↳ vision lane 活著嗎？沒起 demo 就先 `pawai demo start`")
         sys.exit(rc)
     click.echo("✓ smoke vision passed")
+
+
+@smoke.command("object")
+@click.option("--with-cup", is_flag=True,
+              help="After static checks, wait up to 60s for a cup object event.")
+def smoke_object(with_cup: bool) -> None:
+    """Run the object smoke (scripts/smoke_test_object.sh) on the Jetson.
+
+    前提：object lane 已在 demo stack 中跑（pawai demo start）。
+    """
+    rel = _SMOKE_SCRIPTS["object"]
+    repo = shell.jetson_repo()
+    probe = shell.run_remote(f"test -f {repo}/{rel}", timeout=10)
+    if probe.code in (124, 127, 255):
+        raise structured_error(
+            f"SSH to {shell.jetson_host()} failed (exit {probe.code})",
+            [
+                "跑 `pawai doctor` 看 Network topology / Tailscale 區塊",
+                "確認 JETSON_HOST / .env.local 沒有 CRLF（pawai doctor 會驗）",
+            ],
+        )
+    if not probe.ok:
+        raise structured_error(
+            f"{rel} not found on Jetson ({repo})",
+            [
+                "先同步腳本：pawai jetson deploy --module object --no-build",
+                "或確認 JETSON_REPO 指向正確的 repo 路徑",
+            ],
+        )
+
+    cup_args = " --with-cup" if with_cup else ""
+    rc = shell.stream_remote(
+        f"cd {repo} && "
+        "source /opt/ros/humble/setup.zsh 2>/dev/null || true; "
+        "source install/setup.zsh 2>/dev/null || true; "
+        f"bash {rel}{cup_args}"
+    )
+    if rc != 0:
+        click.echo(f"✗ smoke object failed (exit {rc})")
+        click.echo("  ↳ object lane 活著嗎？沒起 demo 就先 `pawai demo start`")
+        sys.exit(rc)
+    click.echo("✓ smoke object passed")
 
 
 def _run_lane_healthcheck(lane: str) -> int:
