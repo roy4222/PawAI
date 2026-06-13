@@ -105,14 +105,13 @@
 
 ## 5. Weekend Execution Queue（6/13 六 → 6/18 四）
 
-### 分類總表
+### 分類總表（**執行授權邊界**：Roy 不在場時只准做第一列；第二列需 Roy 授權 deploy 時段；第三列 Roy 不在**一律不做**）
 
-| 類別 | 內容 |
-|---|---|
-| **純軟體（WSL，可 AFK）** | Lane 3 全部 P0/P1；Lane 2 全部 P0/P1；Lane 1 各 stage 的 TDD 實作 + parity 測試；Lane 4 W1-W5 spike（W2 需 Roy 拍照素材後）；Lane 5 機制層（whitelist 機制 / token wiring / route_id 消毒 / CLI-01 修 / pickle→npz 雙格式）；Lane 6 純軟體面（ladder/claim 文件、rejection reason 分流、covariance probe、orphan client 修、resume_policy 防呆、三條研究 spec、evidence pull 納 nav runtime） |
-| **必須 Jetson（不需 Go2 motion）** | Lane 1 各 stage 真機 smoke（感知事件流）；Lane 2 瀏覽器驗證；Lane 3 smoke 真機綠 run；Lane 5 auth-on 全流程驗證、face npz 重訓驗證 |
-| **必須 Go2（motion / D435 機上視角）** | Lane 1 2b/2c 的 confirm→wiggle、卡死重演；Lane 4 上機矩陣日（D435 視角 + 溫度功耗）；Lane 5 webrtc whitelist 開啟後的動作回歸；**Lane 6 HITL matrix N1-N8 全部**（poses 重錄/短距 n=3/route 單圈/stop-resume——nav stack 與 brain lane 8GB 互斥，需專屬時段） |
-| **必須 Roy HITL** | 上述全部 Go2 項 + 每晚收尾驗收 + 決策拍板（§附錄 B） |
+| 類型 | 可做 | **不可宣稱** |
+|---|---|---|
+| **AFK pure software（WSL）** | Lane 3 全部 P0/P1；Lane 2 全部 P0/P1；Lane 1 各 stage TDD 實作 + parity 測試（flag 預設 off）；Lane 4 W1-W5 harness/spike（W2 需 Roy 素材）；Lane 5 機制層（whitelist 機制 / token wiring / 消毒 / CLI-01 / pickle→npz——**全部 default-off**）；Lane 6 純軟體面（ladder/claim 文件、reason 分流、covariance probe、orphan 修、resume_policy 防呆、三條 spec、evidence pull 納 nav runtime）；全部文件/docs | **不可說 HITL 通過**、不可說「功能完成」——只能說「code merged + 單測綠，待真機驗證」 |
+| **Jetson-only（不需 Go2 motion）** | deploy / colcon build / trace 觀測 / smoke（static）/ Lane 2 瀏覽器驗證 / Lane 5 auth-on 走查、face npz 重訓 / Lane 1 感知流 smoke | **不可說 Go2 motion 安全**——Jetson 綠 ≠ 機器人行為驗證 |
+| **Go2 HITL（Roy 在場才做）** | Lane 1 2b/2c（wiggle、卡死重演）；Lane 4 上機矩陣日；Lane 5 whitelist-on 動作回歸；Lane 6 HITL matrix N1-N8（nav / safe-stop / patrol / stop-resume——與 brain lane 8GB 互斥，需專屬時段） | **Roy 不在不可做、不可預跑、不可「先試一下」**；做完才能把 proven table 對應格升級 |
 
 **Roy 時段預算（稀缺資源，先講清楚）**：固定兩個晚間 HITL（#1、#2，各 ~2h，demo lane）＋**兩個可選大時段**——Lane 4 上機矩陣日（B-3，半天～全天）與 Lane 6 nav 場測（B-9，~半天）。四天內兩個大時段都排會非常硬；**建議至多選一個排 6/15-16、另一個 post-6/18**（nav 場測對 6/18 的直接價值較高：poses 不重錄則 route/goto_named 全空轉、nav 段只能走影片 fallback）。
 

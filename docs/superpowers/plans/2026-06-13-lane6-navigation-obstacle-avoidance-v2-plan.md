@@ -13,20 +13,22 @@
 
 ## 2. Current state（誠實盤點，全部有出處）
 
-**目前真正 HARDWARE_PROVEN 的（有 HITL 證據）**：
+**Navigation evidence table（current label 是 6/18 claim 的唯一依據；標籤升級只能透過 HITL matrix 結果）**：
 
-| 能力 | 證據 | 限制條款 |
+| Capability | Evidence | **Current label** |
 |---|---|---|
-| 短距 goto_relative 0.3m | 6/7 SUCCEEDED（actual 0.118m）；6/8 Track B `reached actual=0.270m` | 各一次，無重複性數據 |
-| 正前 safe-stop | 6/9 indoor_tight：goto 0.5m → danger 停 @0.78m，0 撞 0 暴衝 | margin 薄（機鼻 ~0.4m）；**stop-based，不繞行** |
-| indoor_tight 誤擋修正 | 6/9：±18° → front 0.97→1.22m、zone danger→slow | 窄錐必綁低速 ≤0.2 m/s |
-| AMCL initialpose 重定位 | 6/10：`/api/nav/initialpose` 實測 amcl_pose 跳到設定點 | covariance 收斂無 SOP |
-| orphan goal 自癒 | 6/9：`no_progress_timeout`(~10s) + `goto_max_duration_s=120` backstop | client 側 cancel 仍沒送出（降級） |
-| blocked-goal 存活 | 6/8：278s 不崩 | — |
-
-**降級 / 不採用**：stop-resume **auto**-resume（resume 以 Go2 MIN_X ~0.5 m/s lunge、短 goal 貼牆 0.21m → tight space 禁用；操作員確認版在 6/10 S1 gateway 已實作 paused_confirm 流程）；動態繞障 = future work（reactive_stop `angular.z=0` 只停不轉，硬轉重演 5/2 摔狗）。
-
-**0.3 / 0.5 / 1.0m 現在可靠嗎？**——0.3/0.5 各只有**單次**成功證據，重複性未量；**1.0m 從未成功**（S1 卡點：AMCL covariance 在 0.45 黃帶抖、nav 閘 yellow 只准 ≤0.5m → 1.0/1.2m 被拒，Studio 還靜默回 idle 看不到原因）。
+| 0.3m short goto | 6/7 SUCCEEDED（actual 0.118m）；6/8 Track B `reached actual=0.270m`——少量 HITL 證據、無重複性數據 | **HARDWARE_PROVEN_LOW_SAMPLE** |
+| 0.5m short goto | 6/9 indoor_tight 走過一次（safe-stop 場景中），樣本不足 | **NEEDS_RETEST** |
+| 1.0m goto | 從未成功——AMCL covariance 0.45 黃帶抖、nav 閘 yellow 只准 ≤0.5m → 被拒且 Studio 靜默回 idle | **NOT_DEMO_READY** |
+| safe stop（正前停障） | 6/9：goto 0.5m → danger 停 @0.78m、0 撞 0 暴衝；但 margin 薄（機鼻 ~0.4m）；**stop-based 不繞行** | **HARDWARE_PROVEN_WITH_LIMIT** |
+| stop-resume | auto-resume 以 Go2 MIN_X ~0.5 m/s lunge、短 goal 貼牆 0.21m（6/9）；operator-confirm 流程 gateway 已實作（6/10 S1）未完整驗 | **NEEDS_FIX_OR_OPERATOR_CONFIRM** |
+| indoor_tight profile（±18° 誤擋修正） | 6/9：front 0.97→1.22m、zone danger→slow；窄錐必綁低速 ≤0.2 m/s | HARDWARE_PROVEN_WITH_LIMIT |
+| AMCL initialpose 重定位 | 6/10：`/api/nav/initialpose` 實測 amcl_pose 跳到設定點；covariance 收斂無 SOP | HARDWARE_PROVEN_LOW_SAMPLE |
+| orphan goal 自癒 | 6/9：`no_progress_timeout`(~10s) + `goto_max_duration_s=120` backstop；client cancel 仍沒送出 | HARDWARE_PROVEN_WITH_LIMIT（client 側 NEEDS_FIX） |
+| patrol（固定 route 單圈） | run_route action 存在；routes 資料已遺失、從未跑過完整單圈 | **PROTOTYPE**（T6-3 後才可講） |
+| goto_named / run_route | code 在、poses/routes 被 deploy 清掉 → 目前空轉 | NOT_DEMO_READY（T6-2 恢復後 NEEDS_RETEST） |
+| free roam / dynamic detour（自由巡邏 / 動態繞障） | 不存在——reactive_stop `angular.z=0` 只停不轉；硬轉曾摔狗（5/2） | **DO_NOT_CLAIM** |
+| D435+LiDAR fusion / approach person | 僅 depth_clear gate（Brain 層）；fusion 5/3 L3 FAIL；approach 未開發 | **DO_NOT_CLAIM**（research spec only） |
 
 **Nav2 / AMCL / map 現況**：nav2_bringup + AMCL + `home_living_room` map（Studio nav panel 用 v8 map PNG + px↔world 轉換）；`REACTIVE_PROFILE=open_space|indoor_tight` 一鍵 profile 已在 `start_nav_capability_demo_tmux.sh`；covariance 閘 0.3/0.5 門檻 hardcoded。
 
@@ -87,7 +89,16 @@ T6-1、T6-2①②（SOP 文件 + CLI include）、T6-5①②（reason 分流 + p
 
 ## 8. Jetson / Go2 HITL tasks（Roy 在場；全部需要 nav stack = 與 brain demo lane 互斥，需專屬時段 **B-9**）
 
-**HITL matrix（場地：客廳 indoor_tight；開場儀式：`pawai smoke nav --static`（Lane 3 T3-3）→ goto 0.3m 一發暖身）：**
+### 硬性 abort criteria（任一觸發 = 當場中止該項，整段場測重新評估後才續；寫進現場 checklist 逐條勾）
+
+1. **Go2 出現非預期加速 / 非命令方向移動 → abort**（emergency_stop engage，當日該能力標 FAIL）。
+2. **reactive_stop 該觸發沒觸發**（障礙進 danger 區未停）→ **abort 全部後續 motion 項**，先用 `lidar_front_sector.py` 診斷。
+3. **AMCL covariance 在黃/紅區（>0.3）卻要送 >0.5m goal → 禁送**（先走 T6-5 covariance SOP 收斂進 green；黃區只准 ≤0.5m）。
+4. **stop-resume 放開後衝速明顯過快（lunge 重現）→ abort**，resume 項當日不再試、退 operator-confirm only。
+5. **狗與障礙/牆距離小於安全距離（機鼻 <0.3m）仍在動 → abort**。
+6. **operator 的 e-stop（`emergency_stop.py` engage 終端）未就位 → 不開始任何 motion 項**；每項開始前口頭確認「e-stop ready」。
+
+**HITL matrix（場地：客廳 indoor_tight；開場儀式：`pawai smoke nav --static`（Lane 3 T3-3）→ goto 0.3m 一發暖身；abort criteria 全程生效）：**
 
 | # | 項 | 內容 | 依賴 | 估時 |
 |---|---|---|---|---|

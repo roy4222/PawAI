@@ -3,6 +3,10 @@
 > **日期**：2026-06-13　**狀態**：PLANNED — 待 Roy 審核
 > **上游**：[aggressive master](2026-06-13-aggressive-pre618-master-plan.md)、[hardening plan](../../security/2026-06-11-pawai-hardening-plan.md)（P0-P3 修法權威）、[threat model](../../security/2026-06-11-pawai-threat-model.md)（3 根因 R1/R2/R3、5 條未認證→motion 路徑）、[findings ledger](../../security/2026-06-11-pawai-security-findings-ledger.md)（94 筆，7 critical）、[系統 Phase 4 plan](2026-06-11-phase4-robot-control-nav-hardening.md)（本 plan 把其中**可機制先行**的子集提前；HITL 最重的 enforcement 仍歸 Phase 4）
 > **執行哲學**：**機制先行**（S0-2 先例：env/param-gated、預設關 = byte-identical、真機雙模式驗證）→ enforcement flip 逐項 Roy 決策。最危險的（DDS / twist_mux / driver cmd_vel 收斂）整段 post-6/18。
+>
+> **enforcement 六步硬順序（每個安全項各自走完才能進下一步；跳步禁止）**：
+> ① **default-off mechanism**（code 入庫、預設關 = byte-identical）→ ② **tests**（off parity + on 行為單測，紅綠）→ ③ **dry-run / audit mode**（如適用：只 log 不擋，觀察會擋到誰）→ ④ **CLI smoke 確認**（off 模式下既有 CLI/probe 全綠）→ ⑤ **Jetson smoke**（auth-on / filter-on 測試模式真機走查，含 demo 流程回歸）→ ⑥ **secure-default flip**（Roy 逐項拍板 + 可一鍵退）。
+> **本批（pre-6/18 AFK）只做 ①-④；⑤ 在 Roy 的 HITL 時段；⑥ 最快也是 6/15 後 Roy 決策（B-5/B-6），gateway / Foxglove / DDS 一個都不准先翻。**
 > **與 Lane 6 的分界**：本 lane 管「**誰可以**命令機器人」（gateway auth / webrtc whitelist / nav action 授權與消毒 / cmd_vel 邊界）；nav **能力本身**（poses/routes、短距可靠性、safe-stop、stop-resume、fusion/patrol/approach、capability ladder、claim wording）歸 [Lane 6 Navigation / Obstacle Avoidance v2](2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md)。
 
 ---
@@ -69,7 +73,7 @@
 | **T5S-5 face pickle → npz** | P2-4 / GEN-01 | `face_identity_node`：讀取改「npz 優先、pickle fallback（過渡期）」；`train_model` 寫 npz；`pawai face rebuild` 後自然轉格式；fallback 移除排 post-6/18 | 需 Jetson 驗證（重訓+辨識不退化） | P1 |
 | **T5S-6 security smoke** | 滲透清單自動化 | 新 `scripts/security_smoke.sh`（auth-on 測試模式下跑）：無 token curl 狀態變更 endpoint → 401；WS 偽 Origin → 拒；`redact=0` 無 token → 403；（whitelist-on 時）pub banned api_id → 拒絕 log；route_id `../` → 拒。可選 wiring `pawai smoke security`（P2） | 否（只讀驗證） | P1 |
 | **T5S-7 foxglove 降權** | P0-2 / EXP-02 / A-2→B-5 | **B-5 通過後**：demo lane foxglove 行加 `-p capabilities:='["connectionGraph"]'`（唯讀）——凍結腳本逐改知情程序（單獨 PR + demo smoke + Roy 點頭）；nav lane 腳本是否同步降權看發表是否還需 Foxglove 設 initialpose（Studio `/api/nav/initialpose` 已存在可替代） | **是**（碰凍結腳本） | Roy 決策 |
-| **T5S-8 auth flip 彩排** | P0-1 / A-3→B-6 | T5S-3 完成後：Jetson 上開 auth-on（env）→ 跑 Studio 全流程（按鈕/push-to-talk/video/nav panel/Evidence 頁）+ `pawai status`/smoke + security smoke → 全綠則 B-6 可選發表日 on；任何紅 → 記錄、發表日維持 default-off | 翻 env 期間 | P1 |
+| **T5S-8 auth flip 彩排** | P0-1 / A-3→B-6 | **= 六步順序的第 ⑤ 步，只能在 Roy HITL 時段做**：Jetson 上開 auth-on（env）→ 跑 Studio 全流程（按鈕/push-to-talk/video/nav panel/Evidence 頁）+ `pawai status`/smoke + security smoke → 全綠則 B-6 **才有資格**選發表日 on（第 ⑥ 步）；任何紅 → 記錄、發表日維持 default-off | 翻 env 期間 | P1（HITL） |
 | **T5S-9 cyclonedds.xml 範本** | P1-1 預備 | 寫範本 + 接線文件（`CYCLONEDDS_URI` 用法、interface 限定、AllowMulticast=false、Peers 白名單）入庫**不接線**——post-6/18 的 T4A-3 直接拿去用 | 否（純檔案） | P2 |
 
 ## 7. Pure software tasks（WSL，可 AFK）
