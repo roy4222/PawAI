@@ -130,6 +130,11 @@ def brain():
     finally:
         for timer in list(node._chat_timeouts.values()):
             node.destroy_timer(timer)
+        if getattr(node, "_phase_wait_timer", None) is not None:
+            try:
+                node.destroy_timer(node._phase_wait_timer)
+            except Exception:  # noqa: BLE001
+                pass
         node.destroy_node()
 
 
@@ -409,3 +414,113 @@ def test_entry_greet_stale_face_no_fire(brain):
     brain.demo_phase = "s2_greet"
     brain._maybe_fire_phase_entry_greet()
     assert brain._captured == []
+
+
+# ---------------------------------------------------------------------------
+# T2-5 — gotcha #2 sitting save/restore + max_wait timer + timeout canned-rescue
+# ---------------------------------------------------------------------------
+
+
+def test_greet_sitting_state_machine_auto(brain, monkeypatch):
+    """3-stage state machine (precise vars), auto-advance path."""
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet", lambda: None)
+    brain.auto_advance_phases = ["s2_greet"]
+    brain.greet_require_sitting = True
+    assert brain._greet_sitting_pre_s2 is True  # init = default
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")
+    assert brain._greet_sitting_pre_s2 is True       # remembered pre-s2 value
+    assert brain.greet_require_sitting is False       # face-only inside s2
+    brain._set_demo_phase("s3_pose_object")
+    assert brain.greet_require_sitting is True         # restored == pre value
+
+
+def test_greet_sitting_state_machine_manual_not_gated_by_auto(brain, monkeypatch):
+    """Manual entry (auto OFF) must ALSO toggle — solves hardlock-on-sitting."""
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet", lambda: None)
+    brain.auto_advance_phases = []   # auto OFF
+    brain.greet_require_sitting = True
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")   # simulate manual Studio button / param set
+    assert brain.greet_require_sitting is False  # s2 not hardlocked on sitting
+    brain._set_demo_phase("s3_pose_object")
+    assert brain.greet_require_sitting is True
+
+
+def test_greet_sitting_untouched_when_never_leaves_all(brain):
+    """demo_phase never leaves all → greet_require_sitting stays default True."""
+    brain.greet_require_sitting = True
+    brain.demo_phase = "all"
+    brain._set_demo_phase("all")  # no-op
+    assert brain.greet_require_sitting is True
+
+
+def test_phase_max_wait_table_has_five_phases(brain):
+    from interaction_executive.brain_node import BrainNode
+    for k in ("s1_nav", "s2_greet", "s3_pose_object", "s4_gesture", "s5_safety"):
+        assert k in BrainNode._PHASE_MAX_WAIT_S
+
+
+def test_auto_on_arms_max_wait_timer(brain, monkeypatch):
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet", lambda: None)
+    brain.auto_advance_phases = ["s3_pose_object"]
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s3_pose_object")
+    assert brain._phase_wait_timer is not None  # armed
+
+
+def test_auto_off_does_not_arm_timer(brain, monkeypatch):
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet", lambda: None)
+    brain.auto_advance_phases = []  # OFF → no timer (byte-identical)
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s3_pose_object")
+    assert brain._phase_wait_timer is None
+
+
+def test_phase_switch_cancels_previous_timer(brain, monkeypatch):
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet", lambda: None)
+    brain.auto_advance_phases = ["s2_greet", "s3_pose_object"]
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")
+    t1 = brain._phase_wait_timer
+    assert t1 is not None
+    cancelled = {"v": False}
+    orig_cancel = t1.cancel
+    monkeypatch.setattr(t1, "cancel", lambda: (cancelled.__setitem__("v", True),
+                                               orig_cancel())[1])
+    brain._set_demo_phase("s3_pose_object")
+    # old timer must be cancelled (not crossing phases) and replaced
+    assert cancelled["v"] is True
+    assert brain._phase_wait_timer is not t1
+
+
+def test_max_wait_timeout_emits_canned_rescue(brain):
+    brain.demo_phase = "s3_pose_object"
+    brain._on_phase_max_wait("s3_pose_object")
+    assert len(brain._captured) == 1
+    assert _say_text_pc(brain._captured[0]) == "記得多喝水、休息一下。"
+    assert brain._captured[0]["reason"] == "timeout_canned_rescue"
+
+
+def test_max_wait_timeout_stale_phase_no_emit(brain):
+    """Timer for an old phase must not fire canned after we already switched."""
+    brain.demo_phase = "s4_gesture"
+    brain._on_phase_max_wait("s3_pose_object")  # stale callback
+    assert brain._captured == []
+
+
+def test_s5_rescue_does_not_call_llm(brain, monkeypatch):
+    """s5 rescue is rule-first; must not open chat window / call LLM."""
+    # any chat-window creation would land in _chat_timeouts; assert none.
+    n_before = len(brain._chat_timeouts)
+    brain.demo_phase = "s5_safety"
+    brain._on_phase_max_wait("s5_safety")
+    assert len(brain._chat_timeouts) == n_before
+    assert _say_text_pc(brain._captured[0]) == "為了安全，我不能執行這個動作。"
+
+
+def _say_text_pc(plan_dict):
+    for step in plan_dict.get("steps", []):
+        if "text" in step.get("args", {}):
+            return step["args"]["text"]
+    return None
