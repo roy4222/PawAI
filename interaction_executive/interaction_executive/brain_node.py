@@ -397,6 +397,12 @@ class BrainNode(Node):
                 self.get_logger().info(
                     f"auto_advance_phases set to {self.auto_advance_phases}"
                 )
+            elif p.name == "object_remark_priority":
+                # B1: STRING_ARRAY runtime toggle ([] = legacy objects[0] order).
+                self.object_remark_priority = list(p.value or [])
+                self.get_logger().info(
+                    f"object_remark_priority set to {self.object_remark_priority}"
+                )
         return SetParametersResult(successful=True)
 
     def _ism_stage_on(self, stage_attr: str) -> bool:
@@ -792,6 +798,17 @@ class BrainNode(Node):
             "auto_advance_phases", [],
             ParameterDescriptor(type=_RclParameter.Type.STRING_ARRAY.value),
         )
+        # B1 (2026-06-14): object_remark class priority. Empty [] (default) =
+        # legacy "take objects[0]" = byte-identical. When non-empty, incoming
+        # object detections are stably reordered so the listed classes float to
+        # the front (in list order) before the first-detection pick. demo sets
+        # [cup,bottle,bowl,wine_glass] so the drink remark wins over background
+        # clutter (cell_phone/chair). Empty [] needs the same explicit
+        # STRING_ARRAY descriptor.
+        self.declare_parameter(
+            "object_remark_priority", [],
+            ParameterDescriptor(type=_RclParameter.Type.STRING_ARRAY.value),
+        )
         # ISM Phase 1 shadow (system Phase 2 T2A-2): observe-only wiring, default
         # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
@@ -838,6 +855,10 @@ class BrainNode(Node):
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
         self.auto_advance_phases = list(
             self.get_parameter("auto_advance_phases").value or []
+        )
+        # B1: class-priority order for object_remark selection ([] = byte-identical).
+        self.object_remark_priority = list(
+            self.get_parameter("object_remark_priority").value or []
         )
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
@@ -2218,6 +2239,33 @@ class BrainNode(Node):
         self._state.sitting_first_seen = None
         self._state.bending_first_seen = None
 
+    @staticmethod
+    def _det_class_name(det: dict) -> str:
+        """Best-effort class_name for one detection dict (mirrors parse_object)."""
+        return str(
+            det.get("class_name") or det.get("label") or det.get("class") or ""
+        ).strip()
+
+    def _prioritized_objects(self, objects: list) -> list:
+        """B1: stably reorder detections so object_remark_priority classes float
+        to the front (in list order); others keep their relative order.
+
+        object_remark_priority == [] (default) → returns the SAME list object
+        untouched (byte-identical: no copy, no reorder). Both the router path
+        (parse_object reads objects[0]) and the legacy inline path (objects[0])
+        consume the reordered list, so a single sort covers both.
+        """
+        priority = self.object_remark_priority
+        if not priority or not isinstance(objects, list) or len(objects) < 2:
+            return objects
+        rank = {cls: i for i, cls in enumerate(priority)}
+        # Stable sort: listed classes by their priority index, the rest pushed
+        # after (len(priority)) keeping their original relative order.
+        return sorted(
+            objects,
+            key=lambda det: rank.get(self._det_class_name(det), len(priority)),
+        )
+
     def _on_object(self, msg: String) -> None:
         """Handle /event/object_detected.
 
@@ -2235,6 +2283,15 @@ class BrainNode(Node):
         # Plan E: one decision_id per inbound event — chains gate verdicts,
         # plan and skill_result (single-threaded executor → serial-safe).
         self._current_decision_id = f"object-{uuid.uuid4().hex[:12]}"
+
+        # B1: when object_remark_priority is set, reorder the detection array so
+        # the preferred class wins the "first detection" pick below. Empty
+        # priority (default) returns the list unchanged → byte-identical.
+        _objs = payload.get("objects")
+        if isinstance(_objs, list) and _objs:
+            reordered = self._prioritized_objects(_objs)
+            if reordered is not _objs:
+                payload["objects"] = reordered
 
         if self.perception_router_enabled:
             ev = parse_object(payload)
