@@ -1160,6 +1160,179 @@ def test_demo_start_rejects_invalid_nav_modes():
         assert "--nav" in result.output
 
 
+# ──────────────── B5: --with-lidar (raw LiDAR monitor add-on) ─────────────
+
+def _patch_brain_start_path(monkeypatch):
+    """Common patches for a clean no-lock brain demo start (returns context list)."""
+    from pawai_cli.lock import Lock
+    acquired = Lock(user="bob", host="bob-mac", branch="main", sha="abc",
+                    state="starting",
+                    start_time=datetime.now(timezone.utc).isoformat(),
+                    lane="brain", tmux_session="demo")
+    monkeypatch.setenv("USER", "bob")
+    return acquired
+
+
+def test_demo_start_default_does_not_start_lidar(monkeypatch):
+    """Default-off: no --with-lidar / no env → lidar monitor never invoked (byte-identical)."""
+    acquired = _patch_brain_start_path(monkeypatch)
+    monkeypatch.delenv("PAWAI_DEMO_WITH_LIDAR", raising=False)
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=acquired), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
+         patch("pawai_cli.main._print_shadow_soak_reminder"), \
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True), \
+         patch("pawai_cli.main._start_lidar_monitor", return_value=0) as lidar_start:
+        result = CliRunner().invoke(cli, ["demo", "start"])
+    assert result.exit_code == 0
+    assert not lidar_start.called
+
+
+def test_demo_start_with_lidar_flag_starts_monitor(monkeypatch):
+    """--with-lidar → lidar monitor started AFTER healthy brain demo."""
+    acquired = _patch_brain_start_path(monkeypatch)
+    monkeypatch.delenv("PAWAI_DEMO_WITH_LIDAR", raising=False)
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=acquired), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
+         patch("pawai_cli.main._print_shadow_soak_reminder"), \
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True), \
+         patch("pawai_cli.main._start_lidar_monitor", return_value=0) as lidar_start:
+        result = CliRunner().invoke(cli, ["demo", "start", "--with-lidar"])
+    assert result.exit_code == 0
+    assert lidar_start.called
+    assert "LiDAR monitor running" in result.output
+
+
+def test_demo_start_with_lidar_env_alias_starts_monitor(monkeypatch):
+    """PAWAI_DEMO_WITH_LIDAR=1 behaves exactly like --with-lidar."""
+    acquired = _patch_brain_start_path(monkeypatch)
+    monkeypatch.setenv("PAWAI_DEMO_WITH_LIDAR", "1")
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=acquired), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
+         patch("pawai_cli.main._print_shadow_soak_reminder"), \
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True), \
+         patch("pawai_cli.main._start_lidar_monitor", return_value=0) as lidar_start:
+        result = CliRunner().invoke(cli, ["demo", "start"])
+    assert result.exit_code == 0
+    assert lidar_start.called
+
+
+def test_demo_start_with_lidar_failure_does_not_teardown_demo(monkeypatch):
+    """Failed lidar monitor must NOT fail the command — brain demo stays up."""
+    acquired = _patch_brain_start_path(monkeypatch)
+    monkeypatch.delenv("PAWAI_DEMO_WITH_LIDAR", raising=False)
+    with patch("pawai_cli.lock.Lock.read", return_value=None), \
+         patch("pawai_cli.status.collect_go2_drivers", return_value=[]), \
+         patch("pawai_cli.lock.Lock.acquire", return_value=acquired), \
+         patch("pawai_cli.main._invoke_start_sh", return_value=0), \
+         patch("pawai_cli.main._run_lane_healthcheck", return_value=0), \
+         patch("pawai_cli.main._print_shadow_soak_reminder"), \
+         patch("pawai_cli.lock.Lock.transition_if_owned", return_value=True), \
+         patch("pawai_cli.main._start_lidar_monitor", return_value=1):
+        result = CliRunner().invoke(cli, ["demo", "start", "--with-lidar"])
+    assert result.exit_code == 0
+    assert "LiDAR monitor start failed" in result.output
+    assert "手動補救" in result.output
+
+
+def test_demo_start_with_lidar_rejects_nav_capability():
+    """--with-lidar + --nav capability is a usage error (nav lane owns the LiDAR)."""
+    result = CliRunner().invoke(
+        cli, ["demo", "start", "--nav", "capability", "--with-lidar"]
+    )
+    assert result.exit_code == 2
+    assert "--with-lidar" in result.output
+
+
+def test_start_lidar_monitor_runs_script_over_ssh(monkeypatch):
+    """_start_lidar_monitor must SSH cd into Jetson repo and run the monitor script."""
+    from pawai_cli import main as cli_main
+    captured = {}
+
+    def fake_run_remote(command, timeout=None):
+        captured["command"] = command
+        captured["timeout"] = timeout
+        return shell.Result(0, "", "")
+
+    with patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote), \
+         patch("pawai_cli.main.shell.jetson_repo", return_value="/home/jetson/elder_and_dog"):
+        rc = cli_main._start_lidar_monitor()
+
+    assert rc == 0
+    assert "scripts/start_lidar_monitor_tmux.sh" in captured["command"]
+    assert "/home/jetson/elder_and_dog" in captured["command"]
+    # Must NOT touch nav2/amcl/2nd driver — script name is the only entry point.
+    assert "nav2" not in captured["command"]
+    assert "amcl" not in captured["command"]
+
+
+def test_stop_lidar_monitor_kills_only_lidarmon(monkeypatch):
+    """_stop_lidar_monitor kills the lidarmon session + sllidar/static TF only — not go2_driver."""
+    from pawai_cli import main as cli_main
+    captured = {}
+
+    def fake_run_remote(command, timeout=None):
+        captured["command"] = command
+        return shell.Result(0, "", "")
+
+    with patch("pawai_cli.main.shell.run_remote", side_effect=fake_run_remote):
+        cli_main._stop_lidar_monitor()
+
+    cmd = captured["command"]
+    assert "tmux kill-session -t lidarmon" in cmd
+    assert "sllidar_node" in cmd
+    assert "static_transform_publisher" in cmd
+    # Critical: must NOT pkill the brain demo's single go2_driver here.
+    assert "go2_driver" not in cmd
+
+
+def test_demo_stop_brain_lane_tears_down_lidar_monitor(monkeypatch):
+    """demo stop on a brain lock cleans the lidar monitor before brain cleanup."""
+    from pawai_cli.lock import Lock
+    brain_lock = Lock(user="bob", host="bob-mac", branch="x", sha="a",
+                      state="running",
+                      start_time=datetime.now(timezone.utc).isoformat(),
+                      lane="brain", tmux_session="demo")
+    monkeypatch.setenv("USER", "bob")
+    order: list[str] = []
+    with patch("pawai_cli.lock.Lock.read", return_value=brain_lock), \
+         patch("pawai_cli.main.platform.node", return_value="bob-mac"), \
+         patch("pawai_cli.main._stop_lidar_monitor",
+               side_effect=lambda: order.append("lidar")), \
+         patch("pawai_cli.main._invoke_cleanup_sh",
+               side_effect=lambda: order.append("brain") or 0), \
+         patch("pawai_cli.lock.Lock.release_if_owned", return_value=True):
+        result = CliRunner().invoke(cli, ["demo", "stop"])
+    assert result.exit_code == 0
+    assert order == ["lidar", "brain"]
+
+
+def test_demo_stop_nav_lane_does_not_touch_lidar_monitor(monkeypatch):
+    """nav lane stop routes to nav cleanup and must NOT call the brain lidar teardown."""
+    from pawai_cli.lock import Lock
+    nav_lock = Lock(user="bob", host="bob-mac", branch="x", sha="a",
+                    state="running",
+                    start_time=datetime.now(timezone.utc).isoformat(),
+                    lane="nav_capability", tmux_session="nav-cap-demo")
+    monkeypatch.setenv("USER", "bob")
+    with patch("pawai_cli.lock.Lock.read", return_value=nav_lock), \
+         patch("pawai_cli.main.platform.node", return_value="bob-mac"), \
+         patch("pawai_cli.main._stop_lidar_monitor") as lidar_stop, \
+         patch("pawai_cli.main._invoke_nav_cleanup_sh", return_value=0), \
+         patch("pawai_cli.lock.Lock.release_if_owned", return_value=True):
+        result = CliRunner().invoke(cli, ["demo", "stop"])
+    assert result.exit_code == 0
+    assert not lidar_stop.called
+
+
 # ──────────────── L3 tests ────────────────
 
 @pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)
