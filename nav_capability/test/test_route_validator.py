@@ -127,6 +127,7 @@ def test_sanitize_route_name_allows_legitimate_ids_unchanged(route_name):
         "a\\b",
         "..%2f..%2fetc",
         "%2e%2e%2froute",
+        "%2e%2e",
         "route;rm",
         "",
         ".",
