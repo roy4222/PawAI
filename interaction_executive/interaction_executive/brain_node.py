@@ -345,6 +345,11 @@ class BrainNode(Node):
         self._attention_tick_timer = self.create_timer(0.1, self._tick_attention)  # 10Hz
         # 2026-06-09 demo: runtime param callback（目前只處理 gesture_enabled，
         # 操作員 `ros2 param set /brain_node gesture_enabled false/true` 即時生效）。
+        # B4 (2026-06-14): re-entrancy guard. True only while inside _on_set_params
+        # so the offline_mode/demo_phase setters know NOT to call set_parameters
+        # (ROS commits the value itself after the callback returns) — prevents the
+        # topic→setter→set_parameters→callback→setter recursion.
+        self._in_param_callback = False
         self.add_on_set_parameters_callback(self._on_set_params)
         self.get_logger().info(
             f"brain_node ready skills={len(SKILL_REGISTRY)} "
@@ -356,6 +361,17 @@ class BrainNode(Node):
         greet_require_sitting 即時切換（demo 現場免重啟）。"""
         from rcl_interfaces.msg import SetParametersResult
 
+        # B4: mark that we're inside the param callback so the shared setters skip
+        # their set_parameters writeback (ROS commits these values itself once the
+        # callback returns) — breaks the topic→setter→set_parameters recursion.
+        self._in_param_callback = True
+        try:
+            self._dispatch_set_params(params)
+        finally:
+            self._in_param_callback = False
+        return SetParametersResult(successful=True)
+
+    def _dispatch_set_params(self, params):
         for p in params:
             if p.name == "gesture_enabled":
                 self._set_gesture_enabled(bool(p.value), via="param")
@@ -415,7 +431,27 @@ class BrainNode(Node):
                 self.get_logger().info(
                     f"object_remark_attention_min set to {self.object_remark_attention_min}"
                 )
-        return SetParametersResult(successful=True)
+
+    def _sync_param(self, name: str, value) -> None:
+        """B4: write a setter's new value back into the ROS param store so
+        `ros2 param get` reflects topic-driven changes (offline_mode / demo_phase).
+
+        Skips when:
+          * inside _on_set_params (the change already came via param → ROS commits
+            it; calling set_parameters here would recurse), OR
+          * the stored param value already equals `value` (no-op → byte-identical,
+            no spurious set / second callback).
+        """
+        if self._in_param_callback:
+            return
+        try:
+            current = self.get_parameter(name).value
+            if current == value:
+                return
+            from rclpy.parameter import Parameter
+            self.set_parameters([Parameter(name, value=value)])
+        except Exception as exc:  # noqa: BLE001 — param sync must never break the setter
+            self.get_logger().debug(f"_sync_param({name}) skipped: {exc}")
 
     def _ism_stage_on(self, stage_attr: str) -> bool:
         return bool(self.ism_enabled) and bool(getattr(self, stage_attr, False))
@@ -469,6 +505,11 @@ class BrainNode(Node):
             return  # no-op — same value, byte-identical (no cleanup, no trace)
         self.demo_phase = value
         self.get_logger().info(f"demo_phase set to {self.demo_phase} (was {old_phase})")
+        # B4: reflect topic-driven changes (canonicalized) in the ROS param store
+        # so `ros2 param get demo_phase` matches the live phase. No-op via the
+        # param path (guarded) and on unchanged value (handled by the early
+        # return above + the equality check inside _sync_param).
+        self._sync_param("demo_phase", value)
         self._apply_phase_transition(value, old_phase)
         # plan2 T2-5 gotcha #2: greet_require_sitting precise save/restore. This
         # toggle applies to BOTH auto AND manual entry (NOT gated by
@@ -728,6 +769,10 @@ class BrainNode(Node):
         """
         self.offline_mode = enabled
         self.get_logger().info(f"offline_mode set to {enabled} (via {via})")
+        # B4: reflect topic-driven changes in the ROS param store so
+        # `ros2 param get offline_mode` no longer lies. No-op via the param path
+        # (guarded inside _sync_param) and when the value is unchanged.
+        self._sync_param("offline_mode", bool(enabled))
 
     def _on_offline_mode_msg(self, msg: Bool) -> None:
         """Studio Offline toggle（/brain/offline_mode Bool）。"""

@@ -229,6 +229,13 @@ def _bool_msg(value):
     return m
 
 
+def _string_msg(value):
+    from std_msgs.msg import String
+    m = String()
+    m.data = value
+    return m
+
+
 def test_offline_mode_topic_sets_true(brain):
     assert brain.offline_mode is False
     brain._on_offline_mode_msg(_bool_msg(True))
@@ -496,3 +503,112 @@ def test_object_remark_attention_min_runtime_set_accepted(brain):
     assert brain.object_remark_attention_min == "NOTICED"
     brain._on_set_params([_FakeParam("object_remark_attention_min", "ENGAGED")])
     assert brain.object_remark_attention_min == "ENGAGED"
+
+
+# ---------------------------------------------------------------------------
+# B4 — offline_mode / demo_phase setters write the value back to the ROS param
+#      store so `ros2 param get` reflects topic-driven changes (no lying).
+#      Default (value unchanged) = byte-identical (no set_parameters, no recurse).
+# ---------------------------------------------------------------------------
+
+
+def test_offline_mode_topic_writes_back_to_param(brain):
+    """Topic path → get_parameter('offline_mode') reflects the true value."""
+    assert brain.get_parameter("offline_mode").value is False
+    brain._on_offline_mode_msg(_bool_msg(True))
+    assert brain.offline_mode is True
+    assert brain.get_parameter("offline_mode").value is True  # no longer lies
+    # back to False via topic
+    brain._on_offline_mode_msg(_bool_msg(False))
+    assert brain.offline_mode is False
+    assert brain.get_parameter("offline_mode").value is False
+
+
+def test_offline_mode_param_path_still_works_after_writeback(brain):
+    """param-set path still flips offline_mode (and the param value)."""
+    brain._on_set_params([_FakeParam("offline_mode", True)])
+    assert brain.offline_mode is True
+    # real param-set commits the value too; simulate by reading instance attr.
+    brain._on_set_params([_FakeParam("offline_mode", False)])
+    assert brain.offline_mode is False
+
+
+def test_offline_mode_topic_no_infinite_recursion(brain, monkeypatch):
+    """Topic→setter→set_parameters→param-callback→setter must not recurse.
+
+    The nested param callback runs with _in_param_callback=True, so the setter's
+    _sync_param short-circuits and does NOT call set_parameters again. Counting
+    set_parameters proves the writeback fires exactly once (no runaway).
+    """
+    seen = []
+    real = brain.set_parameters
+
+    def spy(params):
+        seen.append([p.name for p in params])
+        assert len(seen) < 20, "recursion guard failed — set_parameters runaway"
+        return real(params)
+
+    monkeypatch.setattr(brain, "set_parameters", spy)
+    brain._on_offline_mode_msg(_bool_msg(True))
+    assert brain.offline_mode is True
+    assert brain.get_parameter("offline_mode").value is True
+    # exactly one writeback for offline_mode; the nested callback was guarded.
+    assert seen == [["offline_mode"]]
+
+
+def test_offline_mode_unchanged_value_no_set_parameters(brain, monkeypatch):
+    """Setting the same value via topic must NOT call set_parameters (byte-id)."""
+    seen = []
+    real = brain.set_parameters
+
+    def spy(params):
+        seen.append([p.name for p in params])
+        return real(params)
+
+    monkeypatch.setattr(brain, "set_parameters", spy)
+    # already False → topic False is a no-op writeback
+    brain._on_offline_mode_msg(_bool_msg(False))
+    assert seen == []
+    assert brain.offline_mode is False
+
+
+def test_demo_phase_topic_writes_back_to_param(brain):
+    """Topic path → get_parameter('demo_phase') reflects the canonical phase."""
+    assert brain.get_parameter("demo_phase").value == "all"
+    brain._on_demo_phase_msg(_string_msg("s2_greet"))
+    assert brain.demo_phase == "s2_greet"
+    assert brain.get_parameter("demo_phase").value == "s2_greet"  # no longer lies
+
+
+def test_demo_phase_topic_alias_canonicalized_in_param(brain):
+    """Alias s2_face via topic → param store holds canonical s2_greet."""
+    brain._on_demo_phase_msg(_string_msg("s2_face"))
+    assert brain.demo_phase == "s2_greet"
+    assert brain.get_parameter("demo_phase").value == "s2_greet"
+
+
+def test_demo_phase_same_value_no_writeback(brain, monkeypatch):
+    """demo_phase=all (already) via topic → no set_parameters (byte-identical)."""
+    seen = []
+    real = brain.set_parameters
+
+    def spy(params):
+        seen.append([p.name for p in params])
+        return real(params)
+
+    monkeypatch.setattr(brain, "set_parameters", spy)
+    brain._on_demo_phase_msg(_string_msg("all"))
+    assert seen == []
+    assert brain.demo_phase == "all"
+
+
+def test_sync_param_guarded_inside_param_callback(brain):
+    """When _in_param_callback is True, _sync_param is a no-op (recursion guard)."""
+    brain._in_param_callback = True
+    try:
+        # would otherwise change the param; guard must short-circuit it.
+        brain._sync_param("offline_mode", True)
+    finally:
+        brain._in_param_callback = False
+    # param store untouched by the guarded call
+    assert brain.get_parameter("offline_mode").value is False
