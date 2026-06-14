@@ -2459,29 +2459,32 @@ class BrainNode(Node):
         #   - last_sitting_seen_ts 在最近 10s 內 (Roy 真的坐著且 brain 看到)
         # 5/28+ 設 demo_video_cup_compound=false 即可 revert
         now = time.time()
-        if (
-            self.demo_video_cup_compound
-            and class_name == "cup"
-        ):
-            with self._lock:
-                cached_name = self._last_stable_identity_name
-                cached_age = now - self._last_stable_identity_ts
+        # 2026-06-14 HITL: drink-class merged 補水提醒. When demo_video_cup_compound
+        # is on, ANY drink class (cup/bottle/bowl/wine_glass) → one generic 補水
+        # line that does NOT insist on the (often mis-classified, e.g. cup→bottle)
+        # object name. A recent sitting (≤10s) adds a sitting clause — pose is a
+        # BONUS, never a hard gate (sitting absent → drink line still fires). Off
+        # (default) → legacy build_object_tts below (byte-identical).
+        if self.demo_video_cup_compound and class_name in OBJECT_REMARK_RELAX_CLASSES:
             recent_sitting = (now - self._state.last_sitting_seen_ts) < 10.0
-            if cached_name == "Roy" and cached_age <= 30.0 and recent_sitting:
-                # 直接 emit say_canned 固定句，跳過 object_remark
-                compound_key = ("cup_compound_roy_sitting",)
-                last_compound = self._object_remark_seen.get(compound_key, 0.0)
-                if now - last_compound >= 60.0:
-                    self._object_remark_seen[compound_key] = now
-                    self._emit(
-                        build_plan(
-                            "say_canned",
-                            args={"text": "我看到 Roy 坐著拿著杯子，是口渴了嗎？"},
-                            source="rule:demo_video_cup_compound",
-                            reason="cup+Roy+sitting",
-                        )
+            drink_text = (
+                "我看到你坐下了，也看到你手邊有杯子，記得補充水分。"
+                if recent_sitting
+                else "我看到你手邊有飲水用品，記得補充水分。"
+            )
+            drink_key = ("drink_remark",)  # one key for all drink classes → no 瓶/杯 spam
+            last_drink = self._object_remark_seen.get(drink_key, 0.0)
+            if now - last_drink >= OBJECT_REMARK_DEDUP_S:
+                self._object_remark_seen[drink_key] = now
+                self._emit(
+                    build_plan(
+                        "say_canned",
+                        args={"text": drink_text},
+                        source="rule:demo_drink_remark",
+                        reason=f"drink:{class_name}:sitting={recent_sitting}",
                     )
-                    return
+                )
+            return  # drink handled (emitted or within dedup) — no fall-through
 
         # Compose zh-TW TTS — None means class is outside the speaking whitelist.
         text = build_object_tts(class_name, color)

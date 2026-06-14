@@ -1,6 +1,9 @@
 brain_node:
   ros__parameters:
-    chat_wait_ms: 20000
+    # 2026-06-14 HITL: 20000 強制等 LLM 20s → 慢/斷網時長 dead-air。改 2000:
+    # 主線 LLM gpt-5.4-mini P50 ~1.85s,2000ms 接得到中位自然回覆、慢的退 canned。
+    # （1500 會切掉 P50 1.85s → 幾乎全 canned,失去自然感,故取 2000。）
+    chat_wait_ms: 2000
     dedup_window_s: 1.0
     # 5/8: 3.0 → 5.0. Adds 2s of confirmation before stranger_alert fires,
     # cutting transient mis-recognitions (hand / glass / object). For full
@@ -19,7 +22,9 @@ brain_node:
     # 2026-05-23 PM: 5/27 demo video mode — cup+Roy+sitting 複合句
     # 觸發「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along auto-TTS
     # 5/28+ 改回 false 即可 revert
-    demo_video_cup_compound: false
+    # 2026-06-14 HITL: true → 啟用 drink-class 合併補水提醒（cup/bottle/bowl/
+    # wine_glass 通用句、不糾結物名；recent sitting 加坐姿句，pose 缺席不卡）。
+    demo_video_cup_compound: true
     demo_video_silent_sit_along: true
     # ---- 2026-06-10 demo-blocking 修法（Roy 6/9 晚拍板，handoff §明天最終修法）----
     # 1. stranger_alert 整路停用：6/9 HITL 定位 face 幻覺鎖 unknown → active plan
@@ -29,10 +34,20 @@ brain_node:
     # 2. gesture 預設關 — 只在 S4 手勢段由 Studio Gesture toggle（或
     #    `ros2 param set /brain_node gesture_enabled true`）打開，防 thumbs_up
     #    誤觸搶 TTS/pending confirm 污染 S2/S3。
-    gesture_enabled: false
+    # 2026-06-14 HITL: 預設 true（之前 false 讓 S4 peace silent-drop）。手勢範圍
+    # 靠 demo_phase 控（s4_gesture 才放行）；操作員換幕管 phase 即可，不靠這個總開關。
+    gesture_enabled: true
     # 3. greet 拔 sitting 依賴（pose 事件 6/9 全空）；台詞已改「我看到你了」
     #    （skill_contract.py greet_known_person）。sitting 修穩後兩處一起改回。
     greet_require_sitting: false
+    # 2026-06-14 HITL: 90s/人 cooldown（預設 20s 太短,連續打招呼很干擾）。
+    greet_cooldown_s: 90.0
+    # 2026-06-14 HITL: 飲水類(cup/bottle/bowl/wine_glass) object_remark 放寬到
+    # NOTICED 即可講（不必 ENGAGED 貼近）；其他類仍需 ENGAGED。
+    object_remark_attention_min: "NOTICED"
+    # 2026-06-14 HITL: 飲水類優先排序 — drink 浮到 objects[0],配 drink-merge 句,
+    # 確保「拿杯子時講補水」而非被 phone/chair 搶話。dynamic_typing 可吃 yaml list。
+    object_remark_priority: ["cup", "bottle", "bowl", "wine_glass"]
     # 5. WeGo 主手勢改 peace（比耶，兩步確認 peace→OK→wiggle）。thumbs_up 的
     #    confirm 路徑仍在，上機 A/B 後擇一。
     peace_wego_confirm: true
