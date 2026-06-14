@@ -332,6 +332,7 @@ class BrainNode(Node):
             elif p.name in (
                 "stranger_alert_enabled",
                 "greet_require_sitting",
+                "offline_mode",
                 "ism_shadow_enabled",
                 "ism_enabled",
                 "ism_stage_2a_demo_phase",
@@ -578,6 +579,11 @@ class BrainNode(Node):
         # s2_face / s3_object / s4_gesture = 只放行該段的自發 proposal；quiet=全擋。
         # 只影響 greet/object_remark/gesture 三條社交路徑，safety 與明確指令不受影響。
         self.declare_parameter("demo_phase", "all")
+        # plan3 T4 (2026-06-13): offline_mode — default False = byte-identical.
+        # True short-circuits the chat/LLM path straight to phase-aware canned
+        # (no chat_wait_ms window). Safety is NEVER short-circuited (rule-first
+        # always). Runtime-switchable via `ros2 param set offline_mode true`.
+        self.declare_parameter("offline_mode", False)
         # ISM Phase 1 shadow (system Phase 2 T2A-2): observe-only wiring, default
         # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
@@ -621,6 +627,7 @@ class BrainNode(Node):
         self.greet_sitting_window_s = float(self.get_parameter("greet_sitting_window_s").value)
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
         self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
+        self.offline_mode = bool(self.get_parameter("offline_mode").value)
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
         self.ism_stage_2a_demo_phase = bool(
@@ -1197,6 +1204,24 @@ class BrainNode(Node):
         if self._pending_confirm.state == ConfirmState.PENDING:
             self._pending_confirm.cancel(reason="new_speech_intent")
             self.get_logger().info("PendingConfirm cancelled by new speech intent")
+
+        # plan3 T4: offline_mode short-circuits the cloud chat/LLM path straight
+        # to canned (0s, no chat_wait_ms window, no LLM request). Reached only
+        # AFTER safety hard_rule + unsafe-keyword + explicit paths above, so
+        # safety stays rule-first. demo_phase=all/quiet (no table entry) keeps
+        # the legacy 「我聽不太懂」fallback string.
+        if self.offline_mode:
+            text = self._phase_canned(self.demo_phase, "generic") or "我聽不太懂"
+            self._emit(
+                build_plan(
+                    "say_canned",
+                    args={"text": text},
+                    source="rule:chat_fallback",
+                    reason="offline_mode",
+                    session_id=session_id,
+                )
+            )
+            return
 
         with self._lock:
             self._state.chat_buffer[session_id] = BufferedSpeech(
