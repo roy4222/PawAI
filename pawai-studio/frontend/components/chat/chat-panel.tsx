@@ -6,7 +6,6 @@ import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
 import { Composer } from "@/components/chat/composer";
-import { GestureToggle } from "@/components/chat/gesture-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { authHeaders } from "@/lib/gateway-auth";
@@ -385,12 +384,9 @@ export function ChatPanel() {
   if (!hasMessages) {
     return (
       <div className="flex h-full flex-col">
-        {/* 空狀態也要看得到手勢開關（demo 錄影 P0 操作員控制，常駐 header）。 */}
+        {/* D4：手勢開關移至 hidden dev-panel（?dev=1），主/觀眾視圖不再出現。 */}
         <div className="flex items-center justify-between">
           <BrainStatusPill />
-          <div className="mr-2 mt-2">
-            <GestureToggle />
-          </div>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
           <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
@@ -427,8 +423,8 @@ export function ChatPanel() {
         className="flex items-center justify-between bg-background"
       >
         <BrainStatusPill />
+        {/* D4：手勢開關移至 hidden dev-panel（?dev=1）；header 只留新對話。 */}
         <div className="mr-2 flex items-center gap-1.5">
-          <GestureToggle />
           <Button
             variant="ghost"
             size="icon"
