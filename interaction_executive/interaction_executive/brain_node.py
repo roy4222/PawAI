@@ -325,6 +325,14 @@ class BrainNode(Node):
             String, "/brain/demo_phase", self._on_demo_phase_msg, _RELIABLE_10
         )
 
+        # plan3 T4: Studio Offline toggle — gateway POST → Bool(/brain/offline_mode).
+        # Shares _set_offline_mode with the `ros2 param set offline_mode` path so
+        # the topic and param never drift (no-op until explicitly set → default-off
+        # byte-identical).
+        self.create_subscription(
+            Bool, "/brain/offline_mode", self._on_offline_mode_msg, _RELIABLE_10
+        )
+
         self._brain_state_timer = self.create_timer(0.5, self._publish_brain_state)
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
         self._confirm_tick_timer = self.create_timer(0.1, self._tick_pending_confirm)  # 10Hz
@@ -345,6 +353,10 @@ class BrainNode(Node):
         for p in params:
             if p.name == "gesture_enabled":
                 self._set_gesture_enabled(bool(p.value), via="param")
+            elif p.name == "offline_mode":
+                # plan3 T4: param + /brain/offline_mode topic share _set_offline_mode
+                # so the two entry points never diverge.
+                self._set_offline_mode(bool(p.value), via="param")
             elif p.name == "perception_router_enabled":
                 # Plan D Phase 0 instant fallback — the whole point of this
                 # param is live rollback to legacy parsing without redeploy.
@@ -355,7 +367,6 @@ class BrainNode(Node):
             elif p.name in (
                 "stranger_alert_enabled",
                 "greet_require_sitting",
-                "offline_mode",
                 "ism_shadow_enabled",
                 "ism_enabled",
                 "ism_stage_2a_demo_phase",
@@ -690,6 +701,19 @@ class BrainNode(Node):
     def _on_gesture_enabled_msg(self, msg: Bool) -> None:
         """Studio Gesture On/Off toggle（/brain/gesture_enabled Bool）。"""
         self._set_gesture_enabled(bool(msg.data), via="/brain/gesture_enabled")
+
+    def _set_offline_mode(self, enabled: bool, via: str) -> None:
+        """offline_mode 切換共用路徑（param callback / Studio topic 兩入口）。
+
+        plan3 T4: param-set AND /brain/offline_mode topic route through here so
+        the two entry points never drift. Default False = byte-identical.
+        """
+        self.offline_mode = enabled
+        self.get_logger().info(f"offline_mode set to {enabled} (via {via})")
+
+    def _on_offline_mode_msg(self, msg: Bool) -> None:
+        """Studio Offline toggle（/brain/offline_mode Bool）。"""
+        self._set_offline_mode(bool(msg.data), via="/brain/offline_mode")
 
     def _declare_params(self) -> None:
         # Plan D Phase 0 (2026-06-10): perception parsing extracted to

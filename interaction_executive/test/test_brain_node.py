@@ -217,6 +217,64 @@ def test_offline_mode_does_not_short_circuit_safety(brain):
 
 
 # ---------------------------------------------------------------------------
+# T4b — /brain/offline_mode Bool subscriber (Studio toggle) sharing
+#       _set_offline_mode with the param-set path. plan3 T4 wiring.
+# ---------------------------------------------------------------------------
+
+
+def _bool_msg(value):
+    from std_msgs.msg import Bool
+    m = Bool()
+    m.data = value
+    return m
+
+
+def test_offline_mode_topic_sets_true(brain):
+    assert brain.offline_mode is False
+    brain._on_offline_mode_msg(_bool_msg(True))
+    assert brain.offline_mode is True
+
+
+def test_offline_mode_topic_sets_false(brain):
+    brain.offline_mode = True
+    brain._on_offline_mode_msg(_bool_msg(False))
+    assert brain.offline_mode is False
+
+
+def test_offline_mode_param_still_flips_through_shared_setter(brain):
+    """param-set continues to flip offline_mode (now via _set_offline_mode)."""
+    brain._on_set_params([_FakeParam("offline_mode", True)])
+    assert brain.offline_mode is True
+    brain._on_set_params([_FakeParam("offline_mode", False)])
+    assert brain.offline_mode is False
+
+
+def test_offline_mode_never_set_stays_false_byte_identical(brain):
+    """Default-off byte-identical: untouched node has offline_mode False."""
+    assert brain.offline_mode is False
+
+
+def test_offline_mode_param_and_topic_share_set_offline_mode(brain, monkeypatch):
+    """Both param-set and the /brain/offline_mode topic route through the same
+    single setter _set_offline_mode (no drift)."""
+    seen = []
+    real = brain._set_offline_mode
+
+    def spy(enabled, via):
+        seen.append((enabled, via))
+        return real(enabled, via)
+
+    monkeypatch.setattr(brain, "_set_offline_mode", spy)
+    # topic path
+    brain._on_offline_mode_msg(_bool_msg(True))
+    # param path
+    brain._on_set_params([_FakeParam("offline_mode", False)])
+    assert (True, "/brain/offline_mode") in seen
+    assert (False, "param") in seen
+    assert brain.offline_mode is False
+
+
+# ---------------------------------------------------------------------------
 # T5 — _on_chat_timeout phase-aware (generic tier); demo_phase=all byte-identical
 # ---------------------------------------------------------------------------
 
