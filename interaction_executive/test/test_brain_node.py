@@ -322,3 +322,91 @@ def test_fallback_reason_enum_exists_with_low_confidence_hook():
     assert "CHAT_CANDIDATE_TIMEOUT" in names
     assert "LOW_CONFIDENCE" in names  # declared hook (unused for now)
     assert "OFFLINE_MODE" in names
+
+
+# ---------------------------------------------------------------------------
+# B1 — object_remark_priority: stable class-priority reorder before first pick.
+#       Default [] = byte-identical "take objects[0]".
+# ---------------------------------------------------------------------------
+
+from interaction_executive.attention_machine import AttentionState  # noqa: E402
+
+
+def _object_msg(objects):
+    from std_msgs.msg import String
+    m = String()
+    m.data = json.dumps({"event_type": "object_detected", "objects": objects})
+    return m
+
+
+def _force_object_gates_open(node, monkeypatch):
+    """Open every emit gate so _on_object reaches build_object_tts/emit, leaving
+    ONLY the priority selection under test."""
+    monkeypatch.setattr(node, "_attention_state_snapshot",
+                        lambda: AttentionState.ENGAGED)
+    monkeypatch.setattr(node, "_has_active_skill_or_sequence", lambda: False)
+    monkeypatch.setattr(node, "_phase_allows", lambda kind: True)
+
+
+def test_object_remark_priority_param_default_empty(brain):
+    assert brain.object_remark_priority == []
+
+
+def test_prioritized_objects_default_empty_is_same_list_identity(brain):
+    """[] priority → returns the SAME list object untouched (byte-identical)."""
+    assert brain.object_remark_priority == []
+    objs = [{"class_name": "cell_phone"}, {"class_name": "cup"}]
+    assert brain._prioritized_objects(objs) is objs
+
+
+def test_prioritized_objects_floats_priority_class_to_front(brain):
+    brain.object_remark_priority = ["cup", "bottle"]
+    objs = [{"class_name": "cell_phone"}, {"class_name": "cup"}]
+    out = brain._prioritized_objects(objs)
+    assert [d["class_name"] for d in out] == ["cup", "cell_phone"]
+
+
+def test_prioritized_objects_respects_priority_list_order(brain):
+    brain.object_remark_priority = ["cup", "bottle"]
+    objs = [{"class_name": "bottle"}, {"class_name": "chair"}, {"class_name": "cup"}]
+    out = brain._prioritized_objects(objs)
+    # cup before bottle (priority order); chair last (not listed) keeps tail.
+    assert [d["class_name"] for d in out] == ["cup", "bottle", "chair"]
+
+
+def test_prioritized_objects_unlisted_keep_relative_order(brain):
+    brain.object_remark_priority = ["cup"]
+    objs = [{"class_name": "chair"}, {"class_name": "keyboard"}, {"class_name": "cup"}]
+    out = brain._prioritized_objects(objs)
+    assert [d["class_name"] for d in out] == ["cup", "chair", "keyboard"]
+
+
+def test_on_object_priority_selects_cup_over_cell_phone(brain, monkeypatch):
+    """priority=[cup,bottle] + objects=[cell_phone,cup] → cup remark."""
+    _force_object_gates_open(brain, monkeypatch)
+    brain.object_remark_priority = ["cup", "bottle"]
+    brain._on_object(_object_msg([
+        {"class_name": "cell_phone"}, {"class_name": "cup"},
+    ]))
+    assert len(brain._captured) == 1
+    assert "杯子" in _say_text(brain._captured[0])  # cup, not 手機 (cell_phone)
+    assert "手機" not in _say_text(brain._captured[0])
+
+
+def test_on_object_empty_priority_selects_first_byte_identical(brain, monkeypatch):
+    """priority=[] (default) + objects=[cell_phone,cup] → cell_phone (unchanged)."""
+    _force_object_gates_open(brain, monkeypatch)
+    assert brain.object_remark_priority == []
+    brain._on_object(_object_msg([
+        {"class_name": "cell_phone"}, {"class_name": "cup"},
+    ]))
+    assert len(brain._captured) == 1
+    assert "手機" in _say_text(brain._captured[0])  # cell_phone wins (objects[0])
+    assert "杯子" not in _say_text(brain._captured[0])
+
+
+def test_object_remark_priority_runtime_set_accepted(brain):
+    brain._on_set_params([_FakeParam("object_remark_priority", ["cup", "bottle"])])
+    assert brain.object_remark_priority == ["cup", "bottle"]
+    brain._on_set_params([_FakeParam("object_remark_priority", [])])
+    assert brain.object_remark_priority == []
