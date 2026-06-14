@@ -8,8 +8,20 @@ dependencies = [
     "python-dotenv>=1.0",
 ]
 
+[project.optional-dependencies]
+# v2 (Typer + Rich) parallel front-end. Kept optional so the legacy `pawai`
+# binary has ZERO new runtime dependencies — install with
+# `pip install -e 'tools/pawai_cli[v2]'` to get `pawai2`.
+v2 = [
+    "typer>=0.12",
+    "rich>=13.0",
+]
+
 [project.scripts]
 pawai = "pawai_cli.main:cli"
+# v2 parallel binary. Additive: does NOT replace `pawai`. Requires the [v2]
+# extra (typer/rich). Legacy `pawai` stays byte-identical and is the rollback.
+pawai2 = "pawai_cli.v2.app:app"
 
 [build-system]
 requires = ["setuptools>=68"]
