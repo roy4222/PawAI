@@ -14,13 +14,14 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-pytest.importorskip("typer")  # v2 deps are an optional [v2] extra; skip when absent (CI base install)
+# v2 deps are an optional [v2] extra; skip when absent (CI base install).
+pytest.importorskip("typer")
 
-from typer.testing import CliRunner
+from typer.testing import CliRunner  # noqa: E402
 
-from pawai_cli import platform as plat
-from pawai_cli.shell import Result
-from pawai_cli.v2.app import app
+from pawai_cli import platform as plat  # noqa: E402
+from pawai_cli.shell import Result  # noqa: E402
+from pawai_cli.v2.app import app  # noqa: E402
 
 runner = CliRunner()
 
