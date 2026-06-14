@@ -145,3 +145,72 @@ def test_phase_canned_helper_canonicalizes_alias(brain):
     # legacy alias should resolve to canonical phase table entry
     assert brain._phase_canned("s2_face", "generic") == "哈囉，很高興見到你。"
     assert brain._phase_canned("s3_object", "success") == "我看到杯子了，記得補充水分。"
+
+
+# ---------------------------------------------------------------------------
+# T4 — offline_mode param: short-circuit chat/LLM path straight to canned
+# ---------------------------------------------------------------------------
+
+import json  # noqa: E402
+
+
+def _speech_msg(transcript="今天天氣如何", session_id="off-1"):
+    from std_msgs.msg import String
+    m = String()
+    m.data = json.dumps({"transcript": transcript, "session_id": session_id})
+    return m
+
+
+def test_offline_mode_param_default_false(brain):
+    assert brain.offline_mode is False
+
+
+class _FakeParam:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+
+def test_offline_mode_runtime_set_accepted(brain):
+    brain._on_set_params([_FakeParam("offline_mode", True)])
+    assert brain.offline_mode is True
+    brain._on_set_params([_FakeParam("offline_mode", False)])
+    assert brain.offline_mode is False
+
+
+def test_offline_mode_true_emits_canned_no_timer(brain):
+    """offline_mode=True → speech intent emits phase-aware canned, 0 LLM, no
+    chat_wait_ms timer (0s window)."""
+    brain.offline_mode = True
+    brain.demo_phase = "s2_greet"
+    n_timers_before = len(brain._chat_timeouts)
+    brain._on_speech_intent(_speech_msg(session_id="off-1"))
+    # canned emitted from s2 generic bucket
+    assert len(brain._captured) == 1
+    assert _say_text(brain._captured[0]) == "哈囉，很高興見到你。"
+    # no chat-wait timer was created (no LLM window opened)
+    assert len(brain._chat_timeouts) == n_timers_before
+    assert "off-1" not in brain._state.chat_buffer
+
+
+def test_offline_mode_false_uses_legacy_chat_window(brain):
+    """offline_mode=False (default) → byte-identical: buffers speech + timer."""
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(_speech_msg(session_id="on-1"))
+    # legacy path: buffered + timer created, no immediate emit
+    assert brain._captured == []
+    assert "on-1" in brain._state.chat_buffer
+    assert "on-1" in brain._chat_timeouts
+
+
+def test_offline_mode_does_not_short_circuit_safety(brain):
+    """Safety (hard_rule '停') still wins even with offline_mode=True."""
+    brain.offline_mode = True
+    brain.demo_phase = "s2_greet"
+    brain._on_speech_intent(_speech_msg(transcript="停", session_id="stop-1"))
+    # safety plan emitted, NOT the s2 greet canned
+    assert len(brain._captured) >= 1
+    assert _say_text(brain._captured[0]) != "哈囉，很高興見到你。"
+    assert brain._captured[0]["selected_skill"] != "say_canned" or \
+        brain._captured[0]["source"] != "rule:chat_fallback"
