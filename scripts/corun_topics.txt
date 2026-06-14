@@ -1,0 +1,18 @@
+# Co-run profiling watch-topic list (plan1 T1, §9.1)
+# Format: topic,expected_hz,configs
+#   - topic       : ROS2 topic name (verbatim; verified against CLAUDE.md / nav monitor block)
+#   - expected_hz : numeric centre value, or "~N" hint, or "evt" for event-driven topics
+#   - configs     : which profiling configs watch this topic (subset of A/B/C, no separators)
+# NO-MOTION: this file lists only perception/state/health topics; zero motion topics.
+/state/perception/face,10,ABC
+/face_identity/debug_image,~7,ABC
+/perception/object/debug_image,~7,ABC
+/event/object_detected,evt,ABC
+/tts,evt,ABC
+/capability/depth_clear,5,ABC
+/vision_perception/status_image,8,ABC
+/scan_rplidar,~10,BC
+/state/nav/heartbeat,1,C
+/state/nav/status,10,C
+/state/nav/safety,10,C
+/capability/nav_ready,~1,C
