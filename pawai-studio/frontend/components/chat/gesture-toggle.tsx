@@ -15,7 +15,25 @@ import { cn } from "@/lib/utils";
  * （所有開啟的 Studio 視窗同步）。session 啟動預設 OFF（brain yaml
  * gesture_enabled: false），初始 null 顯示中性「手勢 ?」，不假設 ON。
  * 操作流程：只在手勢段 take 開 ON，其餘時間保持 OFF。
+ *
+ * D4（pre-6/18 iter2）：從主操作/觀眾視圖移除，改掛在 hidden dev-panel
+ * （?dev=1）作為操作員 fallback。手勢偵測 runtime 全程 ON，由 brain
+ * demo_phase=s4_gesture 的 phase gate 管範圍 —— 本元件只是 gateway override，
+ * 不改 gesture runtime / phase gate / 後端。Mirrors components/operator/
+ * offline-toggle.tsx 的 DevPanel section 慣例。
  */
+
+/** Pure helper — the request shape handleToggle POSTs (testable without DOM). */
+export function buildGestureRequest(enabled: boolean): {
+  url: string;
+  body: string;
+} {
+  return {
+    url: `${getGatewayHttpUrl()}/api/gesture_enabled`,
+    body: JSON.stringify({ enabled }),
+  };
+}
+
 export function GestureToggle() {
   const enabled = useStateStore((s) => s.gestureToggleEnabled);
   const setEnabled = useStateStore((s) => s.setGestureToggleEnabled);
@@ -51,10 +69,11 @@ export function GestureToggle() {
     const next = enabled !== true;
     setBusy(true);
     try {
-      const res = await fetch(`${getGatewayHttpUrl()}/api/gesture_enabled`, {
+      const { url, body } = buildGestureRequest(next);
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ enabled: next }),
+        body,
       });
       if (!res.ok) return;
       const data = (await res.json().catch(() => null)) as
