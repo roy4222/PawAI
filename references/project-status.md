@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-06-13 晚（**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
+**最後更新**：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
 
 ---
@@ -23,6 +23,38 @@
 
 ### ⚠ 待辦
 - B4 npz hotfix；nav initialpose 朝向校正後重驗（高風險）；**nav stack 收工 `pawai demo stop`**（撞擊後清場）；face/demo 重啟後 ism flag 歸 off。
+
+---
+
+## 6/13 深夜：Pre-6/18 最終執行計畫（三大研究收斂 + Q1-Q6 grill + 7-doc workflow）
+
+**主軸**：把三條規劃線（Cloud A 保守 demo flow、Cloud B 進階能力、Nav 撞牆根因）先收斂成單一 final plan，再經 Q1-Q6 grill 拍板，最後用 17-agent / 6-phase dynamic workflow（reader×4→writer×6→integrator→reviewer×5→fixer）產出 **1 總綱 + 6 子計畫**。**零 code、全部 untracked（待 Roy 審；commit/freeze 是 plan 內 P0-2、Roy 決定）。**
+
+### 產出 7 份（`docs/superpowers/plans/`）
+- **總綱**：[`2026-06-13-pawai-pre618-final-execution-plan.md`](../docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md)（Q1-Q6 憲法 §3、merged board §4、shared-file merge order §8、6/17 gate、6/18 live path；§2 supersede 所有 source）。
+- **plan1** runtime-layout-corun-profiling / **plan2** demo-conductor-auto-advance / **plan3** online-offline-llm-hybrid-speech / **plan4** operator-controls-studio-runbook / **plan5** post-refactor-hitl-rehearsal / **plan6** navigation-safety-s1-fallback。每份含 Codex Implementation Packet + Cloud Review Checklist + Stop Conditions + Required Evidence + Rollback。
+
+### Q1-Q6 拍板（憲法，不再辯）
+- **Q1** 6/18 = live 連續五幕（s1_nav→s2_greet→s3_pose_object→s4_gesture→s5_safety）；影片=最後 fallback。
+- **Q2** S1 runtime 不預設換不換 stack → **P0 NO-MOTION co-run profiling**（3 配置）→ 4-branch 決策樹定 S1 形態；永不押 `goto_relative`。
+- **Q3** auto-advance = 主線視覺效果，但**交付保證永遠是 manual FLOOR**（Studio hidden 五幕鈕 + `ros2 param set`）；CLI wrapper post-6/18。
+- **Q4** 失速 = 快觸發 + canned rescue + skip/影片，鐵律 **never dead air**；每幕 max_wait（S1 10-20/S2 3-5/S3 5-8/S4 8-10/S5 3-5s）。
+- **Q5** 語音 = LLM-enabled hybrid 非阻塞（beat 1.5-2s / Q&A 4-6s / safety 0s rule-first）。
+- **Q6** 分層：FLOOR 保證 ship + `auto_advance_enabled` per-phase flag 預設 OFF + 6/17 彩排逐幕決定 + 四階 rollback ladder。
+
+### 對抗驗證（已過）
+- 5 lens：overclaim/safety/scope = CLEAN；implementation 5 blocker + 5 major、demo-flow 3 major → fixer **全修、0 deferred**，未動 Q1-Q6、未改 code、未引入 forbidden claim。
+
+### 3 個實作陷阱（已內建 plan）
+1. greet 須**進幕觸發**（非 unknown→known transition），否則 auto-S2 永不講話。
+2. `greet_require_sitting=false` 於 s2（face-only），sitting 移 s3 當 bonus，auto+manual 兩路都生效。
+3. face `model_sface.npz` 是 Jetson runtime 產物（repo 無）；HITL 現場 `ls /home/jetson/face_db/` 確認檔名。
+
+### ⚠ 待辦 / 待 Roy
+- **唯一必要 Go2 motion** = S4 confirm→wiggle（P4-12，需 e-stop）；nav 短走=選配 upside、6/18 不依賴。
+- **第一個 Jetson 任務** = plan1 co-run profiling（同驗 brain 健康 + 定 S1）。
+- **Roy 簽核**：15 句 canned 台詞（plan3 §9.3，6/15 前；未簽 Codex 用 `LOCKED_CANNED` placeholder）、D-1 claim wording（plan6 NS-6）。
+- **26 個 P0 可 AFK 即開工**（純軟體/docs）；shared `brain_node.py` 鎖定 merge 順序：plan2 phase 機制 → plan3 canned/offline → plan2 auto。
 
 ---
 
