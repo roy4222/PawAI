@@ -150,7 +150,13 @@ class TTSConfig:
     # (timeout 6.0s = baseline + ~30% headroom).
     openrouter_gemini_voice: str = "Despina"
     openrouter_gemini_model: str = "google/gemini-3.1-flash-tts-preview"
-    openrouter_gemini_timeout_s: float = 60.0
+    # plan3 T1 (2026-06-13): consistency fix — was a 60.0 dead-default. The
+    # actual effective value already comes from the env declare default 6.0
+    # (_env_float("OPENROUTER_GEMINI_TIMEOUT_S", 6.0) at the param read site);
+    # this dataclass default is only hit if some path reads the dataclass
+    # without going through the param, so align it to 6.0 to remove the 60s
+    # black-hole landmine. No read path changed. Rollback: restore 60.0.
+    openrouter_gemini_timeout_s: float = 6.0
 
 
 class AudioCache:
