@@ -862,9 +862,14 @@ class BrainNode(Node):
         # [cup,bottle,bowl,wine_glass] so the drink remark wins over background
         # clutter (cell_phone/chair). Empty [] needs the same explicit
         # STRING_ARRAY descriptor.
+        # dynamic_typing: an empty-list default `[]` makes rclpy infer BYTE_ARRAY
+        # and silently defeats a fixed STRING_ARRAY descriptor (runtime `param set`
+        # then fails "expected BYTE_ARRAY"; 2026-06-14 HITL). dynamic_typing=True
+        # keeps the initialized `[]` default (startup read stays exception-free =
+        # off) yet allows setting a string array at runtime.
         self.declare_parameter(
             "object_remark_priority", [],
-            ParameterDescriptor(type=_RclParameter.Type.STRING_ARRAY.value),
+            ParameterDescriptor(dynamic_typing=True),
         )
         # B2 (2026-06-14): minimum attention level that lets object_remark speak.
         # "ENGAGED" (default) = byte-identical (gate stays "only when ENGAGED").
