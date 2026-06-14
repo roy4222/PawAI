@@ -94,3 +94,132 @@ def test_phase_allowed_kinds_has_canonical_five_plus_aliases():
     # aliases + legacy keys preserved (byte-identical)
     for k in ("all", "quiet", "s2_face", "s3_object"):
         assert k in keys, f"missing legacy/alias phase {k}"
+
+
+# ---------------------------------------------------------------------------
+# Node-level fixtures (T2-2..T2-5) — rclpy required, skip cleanly otherwise.
+# ---------------------------------------------------------------------------
+
+rclpy = pytest.importorskip("rclpy", reason="brain_node tests require ROS env")
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rclpy_context():
+    if not rclpy.ok():
+        rclpy.init()
+    yield
+    if rclpy.ok():
+        rclpy.shutdown()
+
+
+@pytest.fixture
+def brain():
+    from interaction_executive.brain_node import BrainNode
+
+    node = BrainNode()
+    captured = []
+
+    def capture(plan):
+        captured.append(node._plan_to_dict(plan))
+
+    node._emit = capture
+    node._captured = captured
+
+    try:
+        yield node
+    finally:
+        for timer in list(node._chat_timeouts.values()):
+            node.destroy_timer(timer)
+        node.destroy_node()
+
+
+def _set_pending(node, skill="wiggle"):
+    """Drive PendingConfirm into PENDING via the real API."""
+    import time as _t
+    from interaction_executive.pending_confirm import ConfirmState
+    node._pending_confirm.request_confirm(skill, {}, _t.time())
+    assert node._pending_confirm.state == ConfirmState.PENDING
+
+
+# ---------------------------------------------------------------------------
+# T2-2 — _apply_phase_transition cleanup helper + trace
+# ---------------------------------------------------------------------------
+
+
+def test_phase_transition_clears_pending_confirm(brain):
+    from interaction_executive.pending_confirm import ConfirmState
+    _set_pending(brain, "wiggle")
+    brain._apply_phase_transition("s5_safety", "s4_gesture")
+    assert brain._pending_confirm.state != ConfirmState.PENDING
+
+
+def test_phase_transition_clears_active_plan(brain):
+    brain._state.active_plan = {"selected_skill": "wiggle"}
+    brain._apply_phase_transition("s5_safety", "s4_gesture")
+    assert brain._state.active_plan is None
+
+
+def test_phase_transition_clears_gesture_cooldown(brain):
+    import time as _t
+    # gesture-driven skill cooldowns + gesture-source dedup + live tracker
+    brain._state.last_alert_ts["wiggle"] = _t.time()
+    brain._state.last_alert_ts["stretch"] = _t.time()
+    brain._state.dedup_cache[("gesture", "thumbs_up", 1)] = _t.time()
+    brain._state.current_gesture = "thumbs_up"
+    brain._state.current_gesture_ts = _t.time()
+    brain._apply_phase_transition("s5_safety", "s4_gesture")
+    assert "wiggle" not in brain._state.last_alert_ts
+    assert "stretch" not in brain._state.last_alert_ts
+    assert ("gesture", "thumbs_up", 1) not in brain._state.dedup_cache
+    assert brain._state.current_gesture is None
+
+
+def test_phase_transition_preserves_attention(brain):
+    # attention object identity must be preserved (not reset on phase switch)
+    attn_before = brain._attention
+    state_before = brain._attention.state
+    brain._apply_phase_transition("s5_safety", "s4_gesture")
+    assert brain._attention is attn_before
+    assert brain._attention.state == state_before
+
+
+def test_phase_transition_clear_object_false_keeps_dedup(brain):
+    brain._object_remark_seen[("cup",)] = 123.0
+    import time as _t
+    brain._state.last_alert_ts["object_remark"] = _t.time()
+    brain._apply_phase_transition("s4_gesture", "s3_pose_object", clear_object=False)
+    assert ("cup",) in brain._object_remark_seen
+    assert "object_remark" in brain._state.last_alert_ts
+
+
+def test_phase_transition_clear_object_true_clears_dedup(brain):
+    brain._object_remark_seen[("cup",)] = 123.0
+    import time as _t
+    brain._state.last_alert_ts["object_remark"] = _t.time()
+    brain._apply_phase_transition("s3_pose_object", "s4_gesture", clear_object=True)
+    assert ("cup",) not in brain._object_remark_seen
+    assert "object_remark" not in brain._state.last_alert_ts
+
+
+def test_phase_transition_clear_greet_true_clears_person_keys(brain):
+    import time as _t
+    brain._state.last_alert_ts["greet_known_person:Roy"] = _t.time()
+    brain._state.last_alert_ts["stranger_alert"] = _t.time()  # other alert preserved
+    brain._apply_phase_transition("s2_greet", "all", clear_greet=True)
+    assert "greet_known_person:Roy" not in brain._state.last_alert_ts
+    assert "stranger_alert" in brain._state.last_alert_ts
+
+
+def test_phase_transition_never_raises_on_substep_failure(brain, monkeypatch):
+    # Force the pending_confirm cancel substep to raise; helper must swallow it.
+    from interaction_executive.pending_confirm import ConfirmState
+    _set_pending(brain, "wiggle")
+
+    def _boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(brain._pending_confirm, "cancel", _boom)
+    # Must not raise; later substeps (active_plan) still run.
+    brain._state.active_plan = {"selected_skill": "x"}
+    brain._apply_phase_transition("s5_safety", "s4_gesture")
+    assert brain._state.active_plan is None

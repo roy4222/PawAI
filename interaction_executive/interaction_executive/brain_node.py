@@ -2208,6 +2208,108 @@ class BrainNode(Node):
         # ISM shadow: operator reset is transition driver #4 (outside _lock).
         self._ism_shadow_signal(IsmTrigger.OPERATOR, {"op": "reset"})
 
+    # Gesture-driven skills whose stale cooldown could shadow a re-fire after a
+    # phase switch (e.g. switching back into s4 to re-record a take). Union of
+    # _GESTURE_DIRECT + _GESTURE_CONFIRM values.
+    _GESTURE_SKILL_COOLDOWN_KEYS = frozenset(
+        {"wave_hello", "system_pause", "enter_mute_mode", "enter_listen_mode",
+         "wiggle", "stretch", "content", "stop_move"}
+    )
+
+    @staticmethod
+    def _guarded(fn, logger, label):
+        """Run a cleanup substep; swallow + debug-log any failure (never raises)."""
+        try:
+            fn()
+            return True
+        except Exception as exc:  # noqa: BLE001 — cleanup must never break callback
+            logger.debug(f"phase transition {label} failed: {exc}")
+            return False
+
+    def _clear_pending_confirm_for_phase(self, canon_new: str, cleared: list) -> None:
+        if self._pending_confirm.state == ConfirmState.PENDING:
+            self._pending_confirm.cancel(reason=f"phase_switch:{canon_new}")
+            cleared.append("pending_confirm")
+
+    def _clear_gesture_cooldown(self, cleared: list) -> None:
+        for key in self._GESTURE_SKILL_COOLDOWN_KEYS:
+            self._state.last_alert_ts.pop(key, None)
+        self._state.dedup_cache = {
+            k: ts for k, ts in self._state.dedup_cache.items()
+            if not (isinstance(k, tuple) and k and k[0] == "gesture")
+        }
+        self._state.current_gesture = None
+        self._state.current_gesture_ts = 0.0
+        cleared.append("gesture_cd")
+
+    def _clear_object_dedup(self, cleared: list) -> None:
+        if self._object_remark_seen:
+            self._object_remark_seen.clear()
+        self._state.last_alert_ts.pop("object_remark", None)
+        cleared.append("object_remark")
+
+    def _clear_greet_cooldown_keys(self, cleared: list) -> None:
+        for key in [k for k in self._state.last_alert_ts
+                    if k.startswith("greet_known_person:")]:
+            self._state.last_alert_ts.pop(key, None)
+        cleared.append("greet_cooldown")
+
+    def _apply_phase_transition(self, new_phase, old_phase, *,
+                                clear_object=None, clear_greet=None) -> None:
+        """plan2 T2-2: clear stale interaction state on a real phase change.
+
+        MUST clear: pending_confirm (if PENDING) + active_plan + gesture
+        cooldown. MUST NOT clear attention (人在框不需重進場 — same rule as
+        _on_reset_context :2193). clear_object/clear_greet default to None ->
+        decided by the *target* phase (entering/recording s3 clears object dedup;
+        entering s2 clears per-person greet cooldown). Emits ONE STATE_TRANSITION
+        trace via the existing channel (no new schema). Never raises — every
+        substep is independently guarded so the calling param/topic callback
+        cannot be broken by cleanup.
+        """
+        canon_new = interaction_state.canonicalize_phase(str(new_phase))
+        if clear_object is None:
+            clear_object = canon_new == "s3_pose_object"
+        if clear_greet is None:
+            clear_greet = canon_new == "s2_greet"
+        log = self.get_logger()
+        cleared: list[str] = []
+
+        # ① pending_confirm — cancel if PENDING (equiv _on_reset_context :2197).
+        self._guarded(lambda: self._clear_pending_confirm_for_phase(canon_new, cleared),
+                      log, "pending_confirm clear")
+
+        with self._lock:
+            # ② active_plan (:2207).
+            self._guarded(lambda: (setattr(self._state, "active_plan", None),
+                                   cleared.append("active_plan")),
+                          log, "active_plan clear")
+            # ③ gesture cooldown — skill cooldowns + gesture dedup + live tracker.
+            self._guarded(lambda: self._clear_gesture_cooldown(cleared),
+                          log, "gesture_cd clear")
+            # ④ clear_object — object_remark dedup (:2203-2206).
+            if clear_object:
+                self._guarded(lambda: self._clear_object_dedup(cleared),
+                              log, "object_remark clear")
+            # ⑤ clear_greet — per-person greet cooldown keys (greet_known_person:*).
+            if clear_greet:
+                self._guarded(lambda: self._clear_greet_cooldown_keys(cleared),
+                              log, "greet_cooldown clear")
+            # NOTE: attention intentionally NOT cleared (:2193).
+
+        # Transition trace (existing STATE_TRANSITION schema; never raises via _trace).
+        self._guarded(lambda: self._trace(TraceEvent(
+            decision_id=self._current_decision_id, node="brain_node",
+            kind=TraceKind.STATE_TRANSITION, verdict=Verdict.ACCEPTED,
+            gate="demo_phase",
+            reason=f"transition:{old_phase}->{canon_new}",
+            detail={"from_phase": str(old_phase), "to_phase": canon_new,
+                    "cleared": cleared, "transition_type": "real_trigger"},
+        )), log, "transition trace")
+
+        # ISM shadow: phase switch is an operator reset (transition driver #4).
+        self._ism_shadow_signal(IsmTrigger.OPERATOR, {"op": "reset"})
+
     def _publish_brain_state(self) -> None:
         snap = self._world.snapshot()
         with self._lock:
