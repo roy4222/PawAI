@@ -139,3 +139,41 @@ def test_chat_candidate_proposal_fields_default_to_none_when_omitted():
     assert p["proposed_args"] == {}
     assert p["proposal_reason"] == ""
     assert p["engine"] == "legacy"
+
+
+# ---------------------------------------------------------------------------
+# plan3 T2 — llm_timeout 15 -> 6 (demo fuse). Capture the declared default by
+# running _declare_parameters against a recording stub (no full node / ROS env).
+# ---------------------------------------------------------------------------
+
+
+class _RecordingParamNode:
+    """Stub recording every declare_parameter(name, default) call."""
+
+    def __init__(self):
+        self.declared = {}
+
+    def declare_parameter(self, name, default=None, *a, **k):
+        self.declared[name] = default
+        return default
+
+
+def _declared_defaults():
+    from speech_processor.llm_bridge_node import LlmBridgeNode
+
+    stub = _RecordingParamNode()
+    LlmBridgeNode._declare_parameters.__get__(stub)()
+    return stub.declared
+
+
+def test_llm_timeout_default_is_6():
+    """plan3 T2: vLLM/local-path llm_timeout fuse tightened 15.0 -> 6.0."""
+    defaults = _declared_defaults()
+    assert defaults["llm_timeout"] == 6.0
+
+
+def test_openrouter_timeouts_unchanged_byte_identical():
+    """T2 must NOT touch openrouter_request_timeout_s(4) / overall_budget(5)."""
+    defaults = _declared_defaults()
+    assert defaults["openrouter_request_timeout_s"] == 4.0
+    assert defaults["openrouter_overall_budget_s"] == 5.0
