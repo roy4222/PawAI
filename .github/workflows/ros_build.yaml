@@ -224,10 +224,15 @@ jobs:
           # rostooling image doesn't bundle it (TestResampleAudio needs it).
           (sudo apt update && sudo apt install --no-install-recommends ffmpeg -y) || \
           (apt update && apt install --no-install-recommends ffmpeg -y) || true
-          pip3 install -r pawai-studio/gateway/requirements.txt 'pytest>=7' \
+          pip3 install -r pawai-studio/gateway/requirements.txt 'pytest>=7,<8' \
             opencv-python-headless numpy pydub || \
           pip3 install --break-system-packages -r pawai-studio/gateway/requirements.txt \
-            'pytest>=7' opencv-python-headless numpy pydub
+            'pytest>=7,<8' opencv-python-headless numpy pydub
+          # pytest<8: with ROS sourced the humble launch_testing plugin family
+          # (launch_testing + launch_testing_ros_pytest_entrypoint) auto-loads and
+          # is incompatible with pytest>=8 (PluginValidationError on its makemodule
+          # hookspec, aborting collection). Pin <8 = pre-pytest-8 known-good;
+          # these plain FastAPI/pytest unit tests are unaffected.
           bash -c "source /opt/ros/humble/setup.bash && \
             cd pawai-studio/gateway && python3 -m pytest -q --tb=short"
       - name: object_perception tests (needs ROS msgs — Plan A5, Tier 2)
@@ -237,8 +242,10 @@ jobs:
           # onnxruntime / cv_bridge are lazy imports — not needed for tests.
           # No rclpy.init() needed: tests use @staticmethod calls and a
           # __new__ bypass, so importable ROS modules suffice (no DDS daemon).
-          pip3 install 'pytest>=7' opencv-python-headless numpy || \
-          pip3 install --break-system-packages 'pytest>=7' opencv-python-headless numpy
+          pip3 install 'pytest>=7,<8' opencv-python-headless numpy || \
+          pip3 install --break-system-packages 'pytest>=7,<8' opencv-python-headless numpy
+          # pytest<8: same humble launch_testing-vs-pytest8 incompatibility as
+          # the gateway step (ROS-sourced pytest); pin restores known-good.
           bash -c "source /opt/ros/humble/setup.bash && \
             PYTHONPATH=\"object_perception:\$PYTHONPATH\" \
             python3 -m pytest object_perception/test/ -q --tb=short"
