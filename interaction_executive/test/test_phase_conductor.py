@@ -328,3 +328,84 @@ class _FakeParam:
     def __init__(self, name, value):
         self.name = name
         self.value = value
+
+
+# ---------------------------------------------------------------------------
+# T2-4 — auto_advance_phases + gotcha #1 (phase-entry known-face greet)
+# ---------------------------------------------------------------------------
+
+
+def _set_fresh_known_face(node, name="Roy", age_s=0.5):
+    import time as _t
+    node._last_stable_identity_name = name
+    node._last_stable_identity_ts = _t.time() - age_s
+
+
+def test_auto_advance_phases_default_empty(brain):
+    assert list(brain.auto_advance_phases) == []
+
+
+def test_auto_advance_on_canonicalizes(brain):
+    brain.auto_advance_phases = ["s2_greet"]
+    assert brain._auto_advance_on("s2_greet") is True
+    assert brain._auto_advance_on("s2_face") is True  # alias
+    assert brain._auto_advance_on("s3_pose_object") is False
+
+
+def test_auto_off_does_not_fire_entry_greet(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet",
+                        lambda: calls.append(1))
+    monkeypatch.setattr(brain, "_apply_phase_transition", lambda *a, **k: None)
+    brain.auto_advance_phases = []
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")
+    assert calls == []  # byte-identical: entry-greet not invoked when auto OFF
+
+
+def test_auto_on_s2_calls_entry_greet(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_maybe_fire_phase_entry_greet",
+                        lambda: calls.append(1))
+    monkeypatch.setattr(brain, "_apply_phase_transition", lambda *a, **k: None)
+    brain.auto_advance_phases = ["s2_greet"]
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")
+    assert calls == [1]
+
+
+def test_entry_greet_emits_when_fresh_known_face(brain):
+    brain.greet_cooldown_s = 20.0
+    brain.greet_sitting_window_s = 3.0
+    _set_fresh_known_face(brain, "Roy", age_s=0.5)
+    brain.demo_phase = "s2_greet"
+    brain._maybe_fire_phase_entry_greet()
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["selected_skill"] == "greet_known_person"
+
+
+def test_entry_greet_respects_cooldown(brain):
+    import time as _t
+    brain.greet_cooldown_s = 20.0
+    _set_fresh_known_face(brain, "Roy", age_s=0.5)
+    brain._state.last_alert_ts["greet_known_person:Roy"] = _t.time()  # in cooldown
+    brain.demo_phase = "s2_greet"
+    brain._maybe_fire_phase_entry_greet()
+    assert brain._captured == []  # cooldown blocks re-greet
+
+
+def test_entry_greet_no_known_face_no_fire(brain):
+    brain._last_stable_identity_name = None
+    brain._last_stable_identity_ts = 0.0
+    brain.demo_phase = "s2_greet"
+    brain._maybe_fire_phase_entry_greet()
+    assert brain._captured == []
+
+
+def test_entry_greet_stale_face_no_fire(brain):
+    # churn / expired snapshot: known name but timestamp far outside freshness.
+    brain.greet_sitting_window_s = 3.0
+    _set_fresh_known_face(brain, "Roy", age_s=999.0)
+    brain.demo_phase = "s2_greet"
+    brain._maybe_fire_phase_entry_greet()
+    assert brain._captured == []
