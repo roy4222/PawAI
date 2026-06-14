@@ -258,6 +258,12 @@ class BrainNode(Node):
             Bool, "/brain/gesture_enabled", self._on_gesture_enabled_msg, _RELIABLE_10
         )
 
+        # plan2 T2-3: demo phase control (plan4 hidden buttons publish here).
+        # Shares _set_demo_phase with the `ros2 param set demo_phase` path.
+        self.create_subscription(
+            String, "/brain/demo_phase", self._on_demo_phase_msg, _RELIABLE_10
+        )
+
         self._brain_state_timer = self.create_timer(0.5, self._publish_brain_state)
         self._dedup_gc_timer = self.create_timer(2.0, self._gc_dedup)
         self._confirm_tick_timer = self.create_timer(0.1, self._tick_pending_confirm)  # 10Hz
@@ -309,15 +315,9 @@ class BrainNode(Node):
                 self.greet_cooldown_s = float(p.value)
                 self.get_logger().info(f"greet_cooldown_s set to {self.greet_cooldown_s}")
             elif p.name == "demo_phase":
-                value = str(p.value).strip().lower()
-                if value not in self._DEMO_PHASES:
-                    self.get_logger().warn(
-                        f"unknown demo_phase {value!r} — keep {self.demo_phase!r} "
-                        f"(valid: {sorted(self._DEMO_PHASES)})"
-                    )
-                else:
-                    self.demo_phase = value
-                    self.get_logger().info(f"demo_phase set to {self.demo_phase}")
+                # plan2 T2-3: param + /brain/demo_phase topic share _set_demo_phase
+                # so cleanup logic never diverges between the two entry points.
+                self._set_demo_phase(str(p.value))
         return SetParametersResult(successful=True)
 
     def _ism_stage_on(self, stage_attr: str) -> bool:
@@ -349,6 +349,38 @@ class BrainNode(Node):
         self._suppressed(gate="demo_phase", reason=f"phase:{self.demo_phase}:{kind}",
                          throttle_key=f"phase:{kind}")
         return False
+
+    def _set_demo_phase(self, raw_value: str) -> None:
+        """plan2 T2-3: single source of truth for demo_phase changes.
+
+        Shared by the param-set callback AND the /brain/demo_phase topic so the
+        cleanup path (_apply_phase_transition) is identical regardless of entry
+        point. Canonicalizes aliases (s2_face->s2_greet); an invalid phase warns
+        and keeps the old value. Only a *real* change (new != old after
+        canonicalization) runs the cleanup helper — same-value is a no-op
+        (byte-identical).
+        """
+        value = interaction_state.canonicalize_phase(str(raw_value).strip().lower())
+        if value not in self._DEMO_PHASES:
+            self.get_logger().warn(
+                f"unknown demo_phase {raw_value!r} — keep {self.demo_phase!r} "
+                f"(valid: {sorted(self._DEMO_PHASES)})"
+            )
+            return
+        old_phase = self.demo_phase
+        if value == old_phase:
+            return  # no-op — same value, byte-identical (no cleanup, no trace)
+        self.demo_phase = value
+        self.get_logger().info(f"demo_phase set to {self.demo_phase} (was {old_phase})")
+        self._apply_phase_transition(value, old_phase)
+
+    def _on_demo_phase_msg(self, msg: String) -> None:
+        """plan2 T2-3: /brain/demo_phase String subscriber (plan4 hidden buttons).
+
+        Contract for plan4: gateway publishes std_msgs/String{data:"s2_greet"}.
+        This lane owns only the brain-side subscriber, never the gateway/UI.
+        """
+        self._set_demo_phase(msg.data)
 
     def _ism_confirm_preempt_active(self) -> bool:
         """Return True when stage 2b policy preempts CONFIRM_PENDING for ALERT.
