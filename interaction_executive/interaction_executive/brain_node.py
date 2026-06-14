@@ -372,6 +372,12 @@ class BrainNode(Node):
                 # plan2 T2-3: param + /brain/demo_phase topic share _set_demo_phase
                 # so cleanup logic never diverges between the two entry points.
                 self._set_demo_phase(str(p.value))
+            elif p.name == "auto_advance_phases":
+                # plan2 T2-4: STRING_ARRAY runtime toggle ([] = all OFF).
+                self.auto_advance_phases = list(p.value or [])
+                self.get_logger().info(
+                    f"auto_advance_phases set to {self.auto_advance_phases}"
+                )
         return SetParametersResult(successful=True)
 
     def _ism_stage_on(self, stage_attr: str) -> bool:
@@ -427,6 +433,10 @@ class BrainNode(Node):
         self.demo_phase = value
         self.get_logger().info(f"demo_phase set to {self.demo_phase} (was {old_phase})")
         self._apply_phase_transition(value, old_phase)
+        # plan2 T2-4 gotcha #1: when auto-advance is ON for s2, fire the
+        # phase-entry known-face greet (auto OFF -> not invoked -> byte-identical).
+        if value == "s2_greet" and self._auto_advance_on("s2_greet"):
+            self._maybe_fire_phase_entry_greet()
 
     def _on_demo_phase_msg(self, msg: String) -> None:
         """plan2 T2-3: /brain/demo_phase String subscriber (plan4 hidden buttons).
@@ -449,6 +459,64 @@ class BrainNode(Node):
         if not tiers:
             return None
         return tiers.get(tier)
+
+    # plan2 T2-4: per-phase guard table (data only — timer/timeout lives in
+    # T2-5). Documents each phase's auto-advance trigger; only s2 entry-greet is
+    # wired here.
+    _PHASE_GUARD = {
+        "s2_greet": {"trigger": "face_known", "min_dwell_s": 0.5},
+        "s3_pose_object": {"trigger": "object_cup", "min_dwell_s": 0.5,
+                           "pose_bonus": True},
+        "s4_gesture": {"trigger": "gesture_highconf", "scope": "s4_only"},
+        "s5_safety": {"trigger": "keyword_safety"},
+    }
+
+    def _auto_advance_on(self, phase: str) -> bool:
+        """plan2 T2-4: is auto-advance enabled for this (canonical) phase?"""
+        canon = interaction_state.canonicalize_phase(str(phase).strip().lower())
+        return canon in {
+            interaction_state.canonicalize_phase(str(p).strip().lower())
+            for p in (self.auto_advance_phases or [])
+        }
+
+    def _maybe_fire_phase_entry_greet(self) -> None:
+        """plan2 T2-4 gotcha #1: greet on phase-entry-when-known (NOT on the
+        unknown->known transition). Reads the most-recent stable known-face
+        snapshot (_last_stable_identity_*, populated by _on_face from the
+        identity_stable event); only fires if it is fresh (within the
+        greet_sitting_window_s freshness window, default ~3s) and the person is
+        not in greet_cooldown_s cooldown. No fresh known face -> no false fire
+        (detection churn covered by T2-5 timeout canned-rescue). Never raises.
+        """
+        try:
+            name = self._last_stable_identity_name
+            ts = self._last_stable_identity_ts
+            if not name or name == "unknown":
+                return
+            fresh_window = max(float(self.greet_sitting_window_s), 0.0)
+            if ts <= 0.0 or (time.time() - ts) > fresh_window:
+                return  # stale / churn — don't false-fire
+            cooldown_key = f"greet_known_person:{name}"
+            if self._in_cooldown(cooldown_key, self.greet_cooldown_s):
+                self._suppressed(
+                    gate="greet_cooldown", reason=f"cooldown:greet:{name}",
+                    source_summary=f"entry_greet:{name}",
+                    cooldown_remaining_s=self._cooldown_remaining(
+                        cooldown_key, self.greet_cooldown_s),
+                    throttle_key=f"entry_greet_cd:{name}")
+                return
+            self._touch_user_interaction()
+            self._mark_cooldown(cooldown_key)
+            self._emit(
+                build_plan(
+                    "greet_known_person",
+                    args={"name": name},
+                    source="rule:phase_entry_greet",
+                    reason=f"phase_entry:{name}",
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 — never break the phase callback
+            self.get_logger().debug(f"phase entry greet failed: {exc}")
 
     def _ism_confirm_preempt_active(self) -> bool:
         """Return True when stage 2b policy preempts CONFIRM_PENDING for ALERT.
@@ -599,6 +667,15 @@ class BrainNode(Node):
         # (no chat_wait_ms window). Safety is NEVER short-circuited (rule-first
         # always). Runtime-switchable via `ros2 param set offline_mode true`.
         self.declare_parameter("offline_mode", False)
+        # plan2 T2-4 (2026-06-13): auto_advance_phases STRING_ARRAY — empty list
+        # = ALL auto-advance OFF = byte-identical. An empty [] default needs an
+        # explicit descriptor type (yaml/CLI can't infer element type from []).
+        from rcl_interfaces.msg import ParameterDescriptor
+        from rclpy.parameter import Parameter as _RclParameter
+        self.declare_parameter(
+            "auto_advance_phases", [],
+            ParameterDescriptor(type=_RclParameter.Type.STRING_ARRAY.value),
+        )
         # ISM Phase 1 shadow (system Phase 2 T2A-2): observe-only wiring, default
         # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
@@ -643,6 +720,9 @@ class BrainNode(Node):
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
         self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
+        self.auto_advance_phases = list(
+            self.get_parameter("auto_advance_phases").value or []
+        )
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
         self.ism_stage_2a_demo_phase = bool(
