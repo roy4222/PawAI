@@ -262,6 +262,14 @@ class BrainNode(Node):
         self._last_stable_identity_name: str | None = None
         self._last_stable_identity_ts: float = 0.0
 
+        # plan2 T2-5: gotcha #2 — remembers greet_require_sitting from before
+        # entering s2_greet so it can be restored on entering s3_pose_object.
+        # init = default True (so a never-entered-s2 -> s3 restore is byte-id).
+        self._greet_sitting_pre_s2: bool = True
+        # plan2 T2-5: per-phase one-shot max_wait timer (auto-ON only; never
+        # crosses phases — cancelled on every phase switch).
+        self._phase_wait_timer = None
+
         # N6: conversation-active gate — only chat input (speech/text) updates
         # this, NOT face/gesture. Used by _on_gesture to suppress
         # wave/fist/index auto-fire while user is actively talking, so the
@@ -433,6 +441,21 @@ class BrainNode(Node):
         self.demo_phase = value
         self.get_logger().info(f"demo_phase set to {self.demo_phase} (was {old_phase})")
         self._apply_phase_transition(value, old_phase)
+        # plan2 T2-5 gotcha #2: greet_require_sitting precise save/restore. This
+        # toggle applies to BOTH auto AND manual entry (NOT gated by
+        # auto_advance) so a manual entry to s2 never hardlocks on sitting. The
+        # only byte-identical exception is "never leaving all", handled by the
+        # same-value no-op above.
+        if value == "s2_greet":
+            self._greet_sitting_pre_s2 = self.greet_require_sitting
+            self.greet_require_sitting = False  # face-only inside s2
+        elif value == "s3_pose_object":
+            self.greet_require_sitting = self._greet_sitting_pre_s2  # restore
+        # plan2 T2-5: per-phase one-shot max_wait timer — auto-ON only, never
+        # crosses phases. Always cancel the previous phase's timer first.
+        self._cancel_phase_wait_timer()
+        if self._auto_advance_on(value):
+            self._arm_phase_wait_timer(value)
         # plan2 T2-4 gotcha #1: when auto-advance is ON for s2, fire the
         # phase-entry known-face greet (auto OFF -> not invoked -> byte-identical).
         if value == "s2_greet" and self._auto_advance_on("s2_greet"):
@@ -517,6 +540,75 @@ class BrainNode(Node):
             )
         except Exception as exc:  # noqa: BLE001 — never break the phase callback
             self.get_logger().debug(f"phase entry greet failed: {exc}")
+
+    # plan2 T2-5: per-phase max_wait (runbook takes a single value from the
+    # documented range; we use the lower bound as the demo-safe default).
+    _PHASE_MAX_WAIT_S = {
+        "s1_nav": 10.0,
+        "s2_greet": 3.0,
+        "s3_pose_object": 5.0,
+        "s4_gesture": 8.0,
+        "s5_safety": 3.0,
+    }
+
+    def _cancel_phase_wait_timer(self) -> None:
+        """plan2 T2-5: cancel + drop the previous phase max_wait timer (never
+        crosses phases). Never raises."""
+        timer = self._phase_wait_timer
+        self._phase_wait_timer = None
+        if timer is None:
+            return
+        try:
+            timer.cancel()
+            self.destroy_timer(timer)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"phase wait timer cancel failed: {exc}")
+
+    def _arm_phase_wait_timer(self, phase: str) -> None:
+        """plan2 T2-5: arm a one-shot max_wait timer for an auto-ON phase. If no
+        real trigger arrives within max_wait_s, fire timeout canned-rescue."""
+        wait_s = self._PHASE_MAX_WAIT_S.get(phase)
+        if wait_s is None:
+            return
+        try:
+            self._phase_wait_timer = self.create_timer(
+                float(wait_s), lambda ph=phase: self._on_phase_max_wait(ph)
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"phase wait timer arm failed: {exc}")
+            self._phase_wait_timer = None
+
+    def _on_phase_max_wait(self, phase: str) -> None:
+        """plan2 T2-5: max_wait elapsed with no real trigger -> rule-based canned
+        rescue (0s, NOT waiting on LLM; s5 never calls LLM either). One-shot:
+        cancels itself. Stale callbacks (we already switched phase) are ignored.
+        Trace transition_type=timeout_canned_rescue (existing schema)."""
+        # one-shot: tear the timer down regardless of outcome
+        self._cancel_phase_wait_timer()
+        # ignore stale fire (already moved on to another phase)
+        if interaction_state.canonicalize_phase(self.demo_phase) != \
+                interaction_state.canonicalize_phase(phase):
+            return
+        text = self._phase_canned(phase, "generic")
+        if not text:
+            return
+        self._emit(
+            build_plan(
+                "say_canned",
+                args={"text": text},
+                source="rule:phase_rescue",
+                reason="timeout_canned_rescue",
+            )
+        )
+        try:
+            self._trace(TraceEvent(
+                decision_id=self._current_decision_id, node="brain_node",
+                kind=TraceKind.STATE_TRANSITION, verdict=Verdict.ACCEPTED,
+                gate="demo_phase", reason=f"rescue:{phase}",
+                detail={"to_phase": phase, "transition_type": "timeout_canned_rescue"},
+            ))
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().debug(f"phase rescue trace failed: {exc}")
 
     def _ism_confirm_preempt_active(self) -> bool:
         """Return True when stage 2b policy preempts CONFIRM_PENDING for ALERT.
