@@ -95,6 +95,44 @@ _IDLE_CANNED: tuple[str, ...] = (
     "[thinking] 等等～剛剛在想什麼來著。",
     "[curious] 嗨～有人在嗎？",
 )
+
+
+# plan3 T3 (2026-06-13): five-phase 3-tier canned phrase table for the 6/18 live
+# demo. Only consulted on offline_mode / fallback (online still uses LLM reply /
+# existing say_canned). success = real-trigger natural line; degraded =
+# detected-but-low-confidence / cloud-slow; generic = no-detection full fallback.
+# s5_safety is ALWAYS rule-first reject across all three tiers (LLM may never
+# override it).
+# PENDING Roy sign-off (6/15) — provisional wording, do not treat as final.
+DEMO_CANNED_TABLE: dict[str, dict[str, str]] = {
+    "s1_nav": {
+        "success": "我正在移動到巡檢位置。",
+        "degraded": "我正在前往巡檢位置，請稍等。",
+        "generic": "我先在這裡待命。",
+    },
+    "s2_greet": {
+        "success": "Roy，歡迎回來，我看到你了。",
+        "degraded": "嗨，歡迎回來。",
+        "generic": "哈囉，很高興見到你。",
+    },
+    "s3_pose_object": {
+        "success": "我看到杯子了，記得補充水分。",
+        "degraded": "我看到桌上有東西，記得喝水喔。",
+        "generic": "記得多喝水、休息一下。",
+    },
+    "s4_gesture": {
+        "success": "你要我 WeGo 一下嗎？比 OK 我就開始。",
+        "degraded": "我看到你的手勢了，比 OK 我就開始。",
+        "generic": "你可以比個手勢跟我互動。",
+    },
+    "s5_safety": {
+        "success": "這個動作不安全，我不能執行。",
+        "degraded": "這個指令我不能做，太危險了。",
+        "generic": "為了安全，我不能執行這個動作。",
+    },
+}
+
+
 def build_object_tts(class_name: str, color: str | None) -> str | None:
     """Compose object_remark TTS string, or None when class is outside the
     PawAI TTS whitelist (UI still shows it; PawAI just stays quiet).
@@ -381,6 +419,20 @@ class BrainNode(Node):
         This lane owns only the brain-side subscriber, never the gateway/UI.
         """
         self._set_demo_phase(msg.data)
+
+    def _phase_canned(self, phase: str, tier: str) -> str | None:
+        """plan3 T3: look up a canned demo line for (phase, tier).
+
+        Canonicalizes legacy aliases first. Returns None when the phase is not
+        in DEMO_CANNED_TABLE (e.g. demo_phase=all / quiet) so callers can fall
+        back to their existing behavior (byte-identical). tier ∈
+        {success, degraded, generic}.
+        """
+        canon = interaction_state.canonicalize_phase(str(phase).strip().lower())
+        tiers = DEMO_CANNED_TABLE.get(canon)
+        if not tiers:
+            return None
+        return tiers.get(tier)
 
     def _ism_confirm_preempt_active(self) -> bool:
         """Return True when stage 2b policy preempts CONFIRM_PENDING for ALERT.
