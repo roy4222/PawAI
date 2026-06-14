@@ -77,6 +77,12 @@ from pawai_contracts.trace_schema import TraceEvent, TraceKind, Verdict, make_su
 # Cleared by _gc_dedup (via _dedup_gc_timer).
 OBJECT_REMARK_DEDUP_S = 60.0
 
+# B2 (2026-06-14): classes for which object_remark_attention_min="NOTICED" may
+# relax the ENGAGED gate (drink reminders). All other classes still require
+# ENGAGED even when the min level is lowered, so a passer-by NOTICED face never
+# triggers chair/laptop/etc. chatter. Has no effect at the default min=ENGAGED.
+OBJECT_REMARK_RELAX_CLASSES = frozenset({"cup", "bottle", "bowl", "wine_glass"})
+
 
 # Issue 8 (P3-1a) Idle MVP — canned phrases pool. Selected by random.choice
 # with avoid-recent dedup (BrainInternalState.recent_idle_phrases ring buffer).
@@ -402,6 +408,12 @@ class BrainNode(Node):
                 self.object_remark_priority = list(p.value or [])
                 self.get_logger().info(
                     f"object_remark_priority set to {self.object_remark_priority}"
+                )
+            elif p.name == "object_remark_attention_min":
+                # B2: runtime toggle ("ENGAGED" = legacy gate; "NOTICED" relaxes).
+                self.object_remark_attention_min = str(p.value or "ENGAGED").strip().upper()
+                self.get_logger().info(
+                    f"object_remark_attention_min set to {self.object_remark_attention_min}"
                 )
         return SetParametersResult(successful=True)
 
@@ -809,6 +821,14 @@ class BrainNode(Node):
             "object_remark_priority", [],
             ParameterDescriptor(type=_RclParameter.Type.STRING_ARRAY.value),
         )
+        # B2 (2026-06-14): minimum attention level that lets object_remark speak.
+        # "ENGAGED" (default) = byte-identical (gate stays "only when ENGAGED").
+        # "NOTICED" relaxes the gate so a drink remark (cup/bottle/bowl/wine_glass)
+        # can fire while the person is merely NOTICED (face stable, not yet within
+        # the ENGAGED distance/dwell) — other classes still require ENGAGED so a
+        # passer-by doesn't trigger chair/laptop chatter. Ordering: NOTICED <
+        # ENGAGED; IDLE/INTERACTING are never relaxed.
+        self.declare_parameter("object_remark_attention_min", "ENGAGED")
         # ISM Phase 1 shadow (system Phase 2 T2A-2): observe-only wiring, default
         # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
@@ -860,6 +880,10 @@ class BrainNode(Node):
         self.object_remark_priority = list(
             self.get_parameter("object_remark_priority").value or []
         )
+        # B2: min attention level for object_remark emit ("ENGAGED" = byte-identical).
+        self.object_remark_attention_min = str(
+            self.get_parameter("object_remark_attention_min").value or "ENGAGED"
+        ).strip().upper()
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
         self.ism_stage_2a_demo_phase = bool(
@@ -2266,6 +2290,26 @@ class BrainNode(Node):
             key=lambda det: rank.get(self._det_class_name(det), len(priority)),
         )
 
+    def _object_remark_attention_ok(self, state: "AttentionState", class_name: str) -> bool:
+        """B2: does the current attention `state` clear the object_remark gate?
+
+        ENGAGED always passes (legacy behavior). The only relaxation is:
+        object_remark_attention_min == "NOTICED" AND state == NOTICED AND class is
+        a drink-remark class — then a remark may fire while merely NOTICED. Every
+        other state (IDLE/INTERACTING) and every non-drink class still requires
+        ENGAGED. At the default min == "ENGAGED" this returns True iff
+        state == ENGAGED → byte-identical to the old `state != ENGAGED: suppress`.
+        """
+        if state == AttentionState.ENGAGED:
+            return True
+        if (
+            self.object_remark_attention_min == "NOTICED"
+            and state == AttentionState.NOTICED
+            and class_name in OBJECT_REMARK_RELAX_CLASSES
+        ):
+            return True
+        return False
+
     def _on_object(self, msg: String) -> None:
         """Handle /event/object_detected.
 
@@ -2331,12 +2375,16 @@ class BrainNode(Node):
         # 5/9 final review: was reading self._attention.state without lock —
         # 3rd race-condition hole alongside stranger_alert / greet_known_person
         # which already use _attention_state_snapshot(). Fix: same helper.
-        if self._attention_state_snapshot() != AttentionState.ENGAGED:
+        # B2: gate via _object_remark_attention_ok — default min=ENGAGED keeps the
+        # legacy "only when ENGAGED" semantics byte-for-byte (suppressed reason +
+        # throttle_key unchanged); min=NOTICED relaxes drink remarks only.
+        _att = self._attention_state_snapshot()
+        if not self._object_remark_attention_ok(_att, class_name):
             self._suppressed(gate="attention_engaged",
-                             reason=f"attention:{self._attention_state_snapshot().name}",
+                             reason=f"attention:{_att.name}",
                              source_summary=f"class={class_name}",
                              throttle_key=f"obj_engaged:{class_name}")
-            return  # IDLE / NOTICED / INTERACTING — stay quiet
+            return  # below required attention level — stay quiet
         if self._has_active_skill_or_sequence():
             self._suppressed(gate="active_plan", reason="skill_or_sequence_active",
                              source_summary=f"class={class_name}",
