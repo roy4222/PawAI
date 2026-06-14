@@ -8,6 +8,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any
 
 import rclpy
@@ -131,6 +132,20 @@ DEMO_CANNED_TABLE: dict[str, dict[str, str]] = {
         "generic": "為了安全，我不能執行這個動作。",
     },
 }
+
+
+class FallbackReason(str, Enum):
+    """plan3 T5: why a chat/LLM turn fell back to canned. Trace/diagnostic value
+    only — broadening the trigger set from 'no reply' to slow/broken/unstable.
+    LOW_CONFIDENCE is a declared hook (not wired yet — perception events would
+    need a confidence field) to avoid scope creep now.
+    """
+    CHAT_CANDIDATE_TIMEOUT = "chat_candidate_timeout"  # LLM slow / no reply (legacy)
+    LOW_CONFIDENCE = "low_confidence"                   # hook, unused for now
+    LLM_ERROR = "llm_error"
+    TTS_ERROR = "tts_error"
+    OFFLINE_MODE = "offline_mode"
+    OPERATOR_FALLBACK = "operator_fallback"
 
 
 def build_object_tts(class_name: str, color: str | None) -> str | None:
@@ -1243,12 +1258,17 @@ class BrainNode(Node):
             self._state.fallback_active = buffered is not None
         if buffered is None:
             return
+        # plan3 T5: phase-aware fallback (rule-based, 0s — NOT waiting on LLM).
+        # demo_phase=all / quiet (no table entry) keeps the verbatim legacy
+        # 「我聽不太懂」for byte-identical behavior. Timeout mechanism/values
+        # (chat_wait_ms) are unchanged — only the played text is phase-aware.
+        text = self._phase_canned(self.demo_phase, "generic") or "我聽不太懂"
         self._emit(
             build_plan(
                 "say_canned",
-                args={"text": "我聽不太懂"},
+                args={"text": text},
                 source="rule:chat_fallback",
-                reason="chat_candidate_timeout",
+                reason=FallbackReason.CHAT_CANDIDATE_TIMEOUT.value,
                 session_id=session_id,
             )
         )

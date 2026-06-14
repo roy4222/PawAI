@@ -214,3 +214,53 @@ def test_offline_mode_does_not_short_circuit_safety(brain):
     assert _say_text(brain._captured[0]) != "哈囉，很高興見到你。"
     assert brain._captured[0]["selected_skill"] != "say_canned" or \
         brain._captured[0]["source"] != "rule:chat_fallback"
+
+
+# ---------------------------------------------------------------------------
+# T5 — _on_chat_timeout phase-aware (generic tier); demo_phase=all byte-identical
+# ---------------------------------------------------------------------------
+
+
+def test_chat_timeout_phase_aware_generic_bucket(brain):
+    """demo_phase=s2_greet + chat timeout → s2 generic canned."""
+    brain.offline_mode = False
+    brain.demo_phase = "s2_greet"
+    _buffer_speech(brain, "ph-1")
+    brain._on_chat_timeout("ph-1")
+    assert len(brain._captured) == 1
+    assert _say_text(brain._captured[0]) == "哈囉，很高興見到你。"
+
+
+def test_chat_timeout_s3_generic_bucket(brain):
+    brain.offline_mode = False
+    brain.demo_phase = "s3_pose_object"
+    _buffer_speech(brain, "ph-3")
+    brain._on_chat_timeout("ph-3")
+    assert _say_text(brain._captured[0]) == "記得多喝水、休息一下。"
+
+
+def test_chat_timeout_all_phase_byte_identical(brain):
+    """demo_phase=all → still verbatim 我聽不太懂 (byte-identical)."""
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    _buffer_speech(brain, "ph-all")
+    brain._on_chat_timeout("ph-all")
+    assert _say_text(brain._captured[0]) == "我聽不太懂"
+
+
+def test_chat_timeout_quiet_phase_byte_identical(brain):
+    """demo_phase=quiet (no table entry) → legacy string too."""
+    brain.offline_mode = False
+    brain.demo_phase = "quiet"
+    _buffer_speech(brain, "ph-q")
+    brain._on_chat_timeout("ph-q")
+    assert _say_text(brain._captured[0]) == "我聽不太懂"
+
+
+def test_fallback_reason_enum_exists_with_low_confidence_hook():
+    """T5: fallback-reason enum present; low_confidence is a declared hook."""
+    from interaction_executive.brain_node import FallbackReason
+    names = {m.name for m in FallbackReason}
+    assert "CHAT_CANDIDATE_TIMEOUT" in names
+    assert "LOW_CONFIDENCE" in names  # declared hook (unused for now)
+    assert "OFFLINE_MODE" in names
