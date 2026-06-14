@@ -89,6 +89,11 @@ interface StateStore {
   // Demo-recording P0 手勢開關 — null = unknown（gateway 尚未回報；
   // brain yaml 預設 OFF，UI 不可假設 ON）。
   gestureToggleEnabled: boolean | null;
+  // plan4 operator FLOOR — 隱藏五幕鈕 / offline 切換的 gateway cache 鏡像。
+  // demoPhase null = 本 session 尚未切換（brain 預設 demo_phase=all）。
+  // offlineMode null = unknown（brain 預設線上模式，null 視為 OFF）。
+  demoPhase: string | null;
+  offlineMode: boolean | null;
 
   updateFaceState: (state: FaceState) => void;
   updateSpeechState: (state: SpeechState) => void;
@@ -108,6 +113,8 @@ interface StateStore {
   updateNav: (patch: NavPatch) => void;
   setNavControl: (control: NavControl | null) => void;
   setGestureToggleEnabled: (enabled: boolean | null) => void;
+  setDemoPhase: (phase: string | null) => void;
+  setOfflineMode: (enabled: boolean | null) => void;
 }
 
 export const useStateStore = create<StateStore>((set) => ({
@@ -132,6 +139,8 @@ export const useStateStore = create<StateStore>((set) => ({
   navPaused: false,
   navControl: null,
   gestureToggleEnabled: null,
+  demoPhase: null,
+  offlineMode: null,
 
   updateFaceState: (state) => set({ faceState: state }),
   updateSpeechState: (state) => set({ speechState: state }),
@@ -202,4 +211,6 @@ export const useStateStore = create<StateStore>((set) => ({
     })),
   setNavControl: (control) => set({ navControl: control }),
   setGestureToggleEnabled: (enabled) => set({ gestureToggleEnabled: enabled }),
+  setDemoPhase: (phase) => set({ demoPhase: phase }),
+  setOfflineMode: (enabled) => set({ offlineMode: enabled }),
 }));
