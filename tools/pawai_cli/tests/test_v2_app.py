@@ -12,6 +12,10 @@ import inspect
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import pytest
+
+pytest.importorskip("typer")  # v2 deps are an optional [v2] extra; skip when absent (CI base install)
+
 from typer.testing import CliRunner
 
 from pawai_cli import platform as plat
