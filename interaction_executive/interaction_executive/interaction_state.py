@@ -30,22 +30,50 @@ from enum import Enum, IntEnum
 from typing import Any
 
 
+# plan2 T2-1 (2026-06-13): five canonical demo phases for the 6/18 live demo
+# Conductor. s1_nav / s5_safety mask all spontaneous social (quiet-equivalent
+# allow-sets); the safety chain itself is phase-independent (gated upstream in
+# brain_node — s5_safety=∅ does NOT suppress SafetyLayer reject). Legacy keys
+# s2_face / s3_object are kept as byte-identical aliases of s2_greet /
+# s3_pose_object (operators/runbook use canonical names; aliases resolve via
+# canonicalize_phase below).
 PHASE_ALLOWED_KINDS = {
     "all": frozenset({"greet", "object", "gesture"}),
-    "s2_face": frozenset({"greet"}),
-    "s3_object": frozenset({"object"}),
+    "s1_nav": frozenset(),
+    "s2_greet": frozenset({"greet"}),
+    "s2_face": frozenset({"greet"}),            # legacy alias of s2_greet
+    "s3_pose_object": frozenset({"object"}),
+    "s3_object": frozenset({"object"}),         # legacy alias of s3_pose_object
     "s4_gesture": frozenset({"gesture"}),
+    "s5_safety": frozenset(),
     "quiet": frozenset(),
 }
+
+# plan2 T2-1: legacy phase name -> canonical name. Everything else passes
+# through unchanged (including unknown phases, so phase_allows stays permissive).
+_PHASE_ALIAS = {
+    "s2_face": "s2_greet",
+    "s3_object": "s3_pose_object",
+}
+
+
+def canonicalize_phase(phase: str) -> str:
+    """Resolve a legacy phase alias to its canonical name; pass others through.
+
+    `s2_face -> s2_greet`, `s3_object -> s3_pose_object`; any other value
+    (including unknown phases) is returned unchanged.
+    """
+    return _PHASE_ALIAS.get(phase, phase)
 
 
 def phase_allows(demo_phase: str, kind: str) -> bool:
     """demo_phase scene-mask policy (ISM single source).
 
     Unknown phases are treated like `all`, matching BrainNode's legacy
-    `allowed is None -> return True` defensive behavior.
+    `allowed is None -> return True` defensive behavior. Legacy aliases are
+    canonicalized first so they share their canonical phase's allow-set.
     """
-    allowed = PHASE_ALLOWED_KINDS.get(demo_phase)
+    allowed = PHASE_ALLOWED_KINDS.get(canonicalize_phase(demo_phase))
     if allowed is None:
         return True
     return kind in allowed
