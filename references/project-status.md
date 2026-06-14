@@ -1,7 +1,34 @@
 # 專案狀態
 
-**最後更新**：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
+**最後更新**：2026-06-15（**6/15 live HITL 續** — S3 複合句修好：pose 是 **edge-triggered**（非 6/14 誤判的 raw=None；模型有吐 sitting conf 0.55）、寫死 10s 窗太短抓不到稀疏 sitting event → 新 param `drink_sitting_window_s`(default 10 byte-identical／demo 45s)，實機驗 `sitting=True` 端到端有據；**S5 自主驗** Go2 0 動作命令(`/webrtc_req`=0)；**Act1 誠實結論**=depth 未接 control／語音無法觸發 motion／`--with-lidar` 只是 raw monitor／sllidar 硬體 timeout；fix 在 worktree `codex/s3-sitting-window` e45364a 待 merge — 詳 §6/15）。前次：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/15：live HITL 續測 — S3 複合句修好（有據）+ S5 自主驗證 + Act1 誠實結論
+
+**主軸**：接 6/14，Roy 在場續測五幕。從 main 乾淨重 deploy + 起 brain demo（healthcheck 全綠、20 nodes、感知 event topics 全有 publisher），逐幕收斂。
+
+### 五幕戰況
+- **S2 人臉** ✅ / **S4 手勢** ✅（偵測+OK 確認 OK；wiggle = Go2 motion，待 e-stop）/ **S5 安全拒絕** ✅ / **S3 姿勢+物體** ✅（修好）。
+- **S5 自主驗證**（注入合成 intent，無需 Roy、無 motion）：「翻跟斗/後空翻」→ TTS 秒拒「這個動作不安全，我不能執行」+ backflip `verdict=blocked`(IE) + **`/webrtc_req`=0（Go2 收到 0 個動作命令）**。rule-first、在 phase gate/LLM/offline 之前、不進 pending — 三點全證。
+
+### S3 根因 + 修法（推翻 6/14「pose raw=None」判斷）
+- **真因不是 raw=None**：recorder 證據顯示 pose 模型**有**吐 sitting（conf 0.55 ×2）。問題是 `/event/pose_detected` 是 **edge-triggered**（穩定坐著時整段只發數次 sitting event），且**無連續 `/state/perception/pose` topic**；brain drink-merge 複合句的「最近 sitting」窗**寫死 10s**，抓不到那唯一一個稀疏事件 → 三次 emission 全 `sitting=False`、只講通用句。**非 pose↔object 打架**（sit_along 已靜音、單執行緒序列、不搶 TTS）。
+- **次因**：物體 remark attention 閘（遠時 attention=IDLE 被擋 → Roy 體感「只有靠近才講」）。
+- **修法**（worktree `codex/s3-sitting-window` / commit `e45364a`，**待 merge main**）：寫死 10s → param `drink_sitting_window_s`（**default 10.0 byte-identical**，`executive.yaml` 設 **45.0** 給 demo＝坐下後 45s 內舉杯都算坐著）。+2 regression（default 10.0／窗控制複合句 in-out）；pre-commit 156 + brain 120 tests 綠。deploy 後 `ros2 param get` 確認 live=45.0。
+- **實機驗證有據**：emission `drink:cup:sitting=True` + pose event sitting(0.55) + TTS 實播「我看到你坐下了，也看到你手邊有杯子，記得補充水分」。`sitting=True` 只在收到真實 sitting event 時成立 → 非腦補。
+
+### Act1（前進避障）— 誠實結論（碼層查證，附證據）
+- **語音/LLM 無法觸發 forward motion**：`move_forward` 不在 `LLM_PROPOSABLE_SKILLS`、`requires_confirmation=True`，只接 Studio button / skill_request。
+- **D435 depth 未接進 stop/safety control**：`depth_safety_node` 只發 `/capability/depth_clear` Bool gate、**不發 cmd_vel、不停車**（自註解「is NOT a controller」）。
+- **obstacle-stop 只有 LiDAR `reactive_stop`**（訂 `/scan_rplidar`、發 `/cmd_vel_obstacle`），full demo 預設不啟（`enable_lidar:=false`）；`nav_executor_enabled=false`。
+- **`pawai demo start --with-lidar` = raw LiDAR monitor 證據窗**（static TF + sllidar → `/scan_rplidar`），**無 nav2/amcl/reactive_stop/motion/2nd driver**。今晚起來但 sllidar **`SL_RESULT_OPERATION_TIMEOUT`=硬體**（供電/馬達/USB），`/scan_rplidar` 無資料。
+- → Act1 live motion 結構上做不到 → 走 fallback（影片／遙控／raw LiDAR 證據）。`pawai2` 仍是 skeleton、demo 主線走舊 `pawai`。
+
+### 教訓 + 待辦
+- **手動切 phase 是 footgun**：本輪「S3 卡住」真兇＝operator 漏把 demo_phase 從 s2_greet 推進到 s3_pose_object → object 被 `gate=demo_phase` 全 suppress（trace 鐵證）。**驗證 arbiter(#191) 的必要性**（讓 demo_phase=all 自排隊、免手動切、不再因漏切像 bug）。
+- 待辦：① merge `e45364a` 進 main ② social-pending #191 deploy+驗 ③ `grama` 舊 enrollment 清理（Roy 決定；face_db 仍有 roy+grama）④ S3 是否限縮 object remark 只飲水類（去掉 chair 插話）⑤ LiDAR 硬體 ⑥ 五幕完整彩排（Act4 wiggle 需 e-stop）。
 
 ---
 
