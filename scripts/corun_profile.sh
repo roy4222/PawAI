@@ -171,7 +171,7 @@ while [ "${elapsed}" -lt "${DURATION}" ]; do
   emit "SAMPLE config=${CONFIG} idx=${sample_idx} ts=${NOW_TS} ram_gb=${RAM_GB} gpu_pct=${GPU_PCT} temp_c=${TEMP_C}"
 
   # --- ps aux snapshot (count of profiled model processes, for the raw record) ---
-  PROC_COUNT="$(ps aux | grep -E '(realsense|face_identity|vision_perception|speech_processor|foxglove|object_perception|nav_capability|reactive_stop|sllidar|tts_node)' | grep -v grep | wc -l | tr -d ' ')"
+  PROC_COUNT="$( { ps aux | grep -E '(realsense|face_identity|vision_perception|speech_processor|foxglove|object_perception|nav_capability|reactive_stop|sllidar|tts_node)' | grep -v grep || true; } | wc -l | tr -d ' ')"
   emit "PROC config=${CONFIG} idx=${sample_idx} proc_count=${PROC_COUNT}"
 
   # --- Node list snapshot ---
