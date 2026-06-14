@@ -253,6 +253,25 @@ class BrainNode(Node):
         # See OBJECT_REMARK_DEDUP_S.
         self._object_remark_seen: dict[tuple[str, ...], float] = {}
 
+        # 2026-06-14 social-pending arbiter (social_pending_enabled, default OFF).
+        # One slot per family ∈ {"object","greet"}; each holds only the LATEST
+        # would-be proposal (coalesce). Value = (emit_thunk, expiry_monotonic)
+        # where emit_thunk is a zero-arg callable that re-checks dedup/cooldown
+        # and emits at flush time (so pending never advances dedup state — only
+        # the flush does). Filled when a self-initiated social proposal is blocked
+        # by busy (tts_playing / active_plan); drained in _tick_attention once
+        # PawAI frees up. Priority on flush: object > greet (one per tick).
+        self._pending_social: dict[str, tuple] = {}
+        # Monotonic ts of the LAST tick that observed tts_playing=True. Used by
+        # the flush settle window (only flush ≥0.5s after TTS last seen busy).
+        self._last_tts_busy_ts: float = 0.0
+        # Priority order for the single-emit-per-tick flush (highest first).
+        self._social_family_priority: tuple[str, ...] = ("object", "greet")
+        # Per-family pending TTL (seconds, monotonic).
+        self._social_pending_ttl_s: dict[str, float] = {"object": 8.0, "greet": 5.0}
+        # Settle window after TTS goes idle before flushing (seconds, monotonic).
+        self._social_flush_settle_s: float = 0.5
+
         # D-1/D-2 Attention Machine — 4-state pure Python state machine.
         # Driven by 10Hz tick timer; face callback feeds face_visible + distance.
         # Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-1
@@ -389,6 +408,7 @@ class BrainNode(Node):
             elif p.name in (
                 "stranger_alert_enabled",
                 "greet_require_sitting",
+                "social_pending_enabled",
                 "ism_shadow_enabled",
                 "ism_enabled",
                 "ism_stage_2a_demo_phase",
@@ -883,6 +903,14 @@ class BrainNode(Node):
         # OFF = emit byte-identical. Runtime-switchable via `ros2 param set`
         # (_on_set_params) — 6/8 reactive_stop "param read once in __init__" lesson;
         # T2A-4 turns shadow on at runtime without touching the frozen demo script.
+        # 2026-06-14 social-pending arbiter: one-slot per-family pending so a
+        # self-initiated social proposal (object_remark / greet) that arrives
+        # while PawAI is busy (tts_playing or active_plan) is NOT dropped — it
+        # is coalesced into a per-family slot and flushed once PawAI frees up.
+        # Default False = byte-identical (busy → drop, exactly as before).
+        # Runtime-switchable via `ros2 param set social_pending_enabled true`.
+        # Safety is NEVER pended (rule-first path is untouched).
+        self.declare_parameter("social_pending_enabled", False)
         self.declare_parameter("ism_shadow_enabled", False)
         self.declare_parameter("ism_enabled", False)
         self.declare_parameter("ism_stage_2a_demo_phase", False)
@@ -934,6 +962,10 @@ class BrainNode(Node):
         self.object_remark_attention_min = str(
             self.get_parameter("object_remark_attention_min").value or "ENGAGED"
         ).strip().upper()
+        # social-pending arbiter (default False = byte-identical).
+        self.social_pending_enabled = bool(
+            self.get_parameter("social_pending_enabled").value
+        )
         self.ism_shadow_enabled = bool(self.get_parameter("ism_shadow_enabled").value)
         self.ism_enabled = bool(self.get_parameter("ism_enabled").value)
         self.ism_stage_2a_demo_phase = bool(
@@ -1925,6 +1957,9 @@ class BrainNode(Node):
         # of brain_node cooldowns/timestamps; 5/9 final review). Cheap when
         # idle_enabled=False (early return).
         self._maybe_emit_idle(time.time())
+        # social-pending flush — emits ≤1 coalesced social proposal once PawAI
+        # frees up. No-op when social_pending_enabled=False (default).
+        self._flush_social_pending()
         # ISM shadow: TTS Bool edge + watchdog tick piggyback (outside _lock).
         self._ism_shadow_tick()
 
@@ -2181,6 +2216,18 @@ class BrainNode(Node):
                 parts.append("pending_confirm")
             if tts_in_parts:
                 parts.append("tts_playing")
+            # social-pending: pend greet when the ONLY thing blocking it is busy
+            # (active_plan / tts_playing). not_stable / pending_confirm are
+            # "legitimately quiet" → keep dropping (do NOT pend). Default-off path
+            # is byte-identical (guard on social_pending_enabled). stable is a
+            # precondition for a meaningful greet so we require it to pend.
+            if (
+                self.social_pending_enabled
+                and stable
+                and self._pending_confirm.state != ConfirmState.PENDING
+                and (self._has_active_skill_or_sequence() or tts_in_parts)
+            ):
+                self._maybe_pend_greet(identity)
             self._suppressed(gate="greet_gate", reason=",".join(parts) or "greet_gate",
                              source_summary=f"identity={identity}",
                              throttle_key=f"greet_gate:{identity}")
@@ -2435,7 +2482,16 @@ class BrainNode(Node):
                              source_summary=f"class={class_name}",
                              throttle_key=f"obj_engaged:{class_name}")
             return  # below required attention level — stay quiet
+        # now is needed both for the busy-gate pend path (would-be plan) and for
+        # the emit path below; compute once here (was below before social-pending).
+        now = time.time()
         if self._has_active_skill_or_sequence():
+            # social-pending: busy with an active skill/sequence → pend instead of
+            # drop (only when enabled; default-off path is byte-identical). Only
+            # active_plan / tts_playing pend; attention / pending_confirm / dedup /
+            # whitelist are "legitimately quiet" and keep dropping as before.
+            if self.social_pending_enabled:
+                self._maybe_pend_object(class_name, color, now)
             self._suppressed(gate="active_plan", reason="skill_or_sequence_active",
                              source_summary=f"class={class_name}",
                              throttle_key=f"obj_active:{class_name}")
@@ -2445,6 +2501,8 @@ class BrainNode(Node):
                              source_summary=f"class={class_name}")
             return
         if snap.tts_playing:
+            if self.social_pending_enabled:
+                self._maybe_pend_object(class_name, color, now)
             self._suppressed(gate="tts_playing", reason="tts_playing",
                              source_summary=f"class={class_name}",
                              throttle_key=f"obj_tts:{class_name}")
@@ -2458,7 +2516,6 @@ class BrainNode(Node):
         #   - last_stable_identity_name == "Roy" (5/12 face cache, ≤30s 算 fresh)
         #   - last_sitting_seen_ts 在最近 10s 內 (Roy 真的坐著且 brain 看到)
         # 5/28+ 設 demo_video_cup_compound=false 即可 revert
-        now = time.time()
         # 2026-06-14 HITL: drink-class merged 補水提醒. When demo_video_cup_compound
         # is on, ANY drink class (cup/bottle/bowl/wine_glass) → one generic 補水
         # line that does NOT insist on the (often mis-classified, e.g. cup→bottle)
@@ -2513,6 +2570,135 @@ class BrainNode(Node):
             source="rule:object_detected",
             reason=f"object:{color}{class_name}",
         )
+
+    # ── social-pending arbiter (social_pending_enabled, default OFF) ────────
+    def _object_emit_thunk(self, class_name: str, color: str):
+        """Return a zero-arg callable that performs the *exact* object_remark emit
+        for (class_name, color), or None if the object would not speak anyway
+        (outside the drink-merge classes AND outside the build_object_tts
+        whitelist). The thunk re-checks dedup at flush time (when it actually
+        fires) so a coalesced pending never bypasses the 60s remark dedup.
+
+        Pure (no state mutation) until the returned thunk is called — so pending
+        a proposal does NOT advance dedup; only the flush does. This mirrors the
+        two live emit paths in _on_object (drink-merge say_canned vs legacy
+        object_remark) byte-for-byte."""
+        if self.demo_video_cup_compound and class_name in OBJECT_REMARK_RELAX_CLASSES:
+            def _drink_thunk() -> None:
+                now = time.time()
+                recent_sitting = (now - self._state.last_sitting_seen_ts) < 10.0
+                drink_text = (
+                    "我看到你坐下了，也看到你手邊有杯子，記得補充水分。"
+                    if recent_sitting
+                    else "我看到你手邊有飲水用品，記得補充水分。"
+                )
+                drink_key = ("drink_remark",)
+                last_drink = self._object_remark_seen.get(drink_key, 0.0)
+                if now - last_drink >= OBJECT_REMARK_DEDUP_S:
+                    self._object_remark_seen[drink_key] = now
+                    self._emit(
+                        build_plan(
+                            "say_canned",
+                            args={"text": drink_text},
+                            source="rule:demo_drink_remark",
+                            reason=f"drink:{class_name}:sitting={recent_sitting}",
+                        )
+                    )
+            return _drink_thunk
+
+        text = build_object_tts(class_name, color)
+        if text is None:
+            return None
+
+        def _remark_thunk() -> None:
+            now = time.time()
+            seen_key = (class_name,)
+            last = self._object_remark_seen.get(seen_key, 0.0)
+            if now - last < OBJECT_REMARK_DEDUP_S:
+                return  # within dedup at flush time → silently drop
+            self._object_remark_seen[seen_key] = now
+            self._emit_with_cooldown(
+                "object_remark",
+                args={"text": text, "label": class_name, "color": color},
+                source="rule:object_detected",
+                reason=f"object:{color}{class_name}",
+            )
+        return _remark_thunk
+
+    def _maybe_pend_object(self, class_name: str, color: str, now: float) -> None:
+        """Coalesce the would-be object_remark into the one 'object' slot when busy.
+
+        Caller guards on self.social_pending_enabled. No-op when the object would
+        not speak anyway (keeps default-quiet classes from filling the slot)."""
+        thunk = self._object_emit_thunk(class_name, color)
+        if thunk is None:
+            return
+        expiry = time.monotonic() + self._social_pending_ttl_s["object"]
+        self._pending_social["object"] = (thunk, expiry)
+
+    def _maybe_pend_greet(self, identity: str) -> None:
+        """Coalesce the would-be greet_known_person into the one 'greet' slot.
+
+        Caller guards on self.social_pending_enabled and on the busy condition
+        (active_plan / tts_playing). The greet cooldown is re-checked inside the
+        flush thunk so a pended greet still respects greet_cooldown_s."""
+        def _greet_thunk() -> None:
+            cooldown_key = f"greet_known_person:{identity}"
+            if self._in_cooldown(cooldown_key, self.greet_cooldown_s):
+                return  # within cooldown at flush time → drop
+            self._mark_cooldown(cooldown_key)
+            self._emit(
+                build_plan(
+                    "greet_known_person",
+                    args={"name": identity},
+                    source="rule:known_face",
+                    reason=f"identity:{identity}",
+                )
+            )
+        expiry = time.monotonic() + self._social_pending_ttl_s["greet"]
+        self._pending_social["greet"] = (_greet_thunk, expiry)
+
+    def _flush_social_pending(self) -> None:
+        """10Hz drain (called from _tick_attention). Emits at most ONE pended
+        social proposal per tick, highest-priority non-expired first
+        (object > greet). Only runs when free: not tts_playing, not active_plan,
+        not pending_confirm, and ≥ settle window since TTS was last busy.
+
+        Default-off: this is a no-op (self.social_pending_enabled is False and
+        the pending dict is always empty because nothing ever pends)."""
+        if not self.social_pending_enabled:
+            return
+        now_mono = time.monotonic()
+        # Track when TTS was last busy so we only flush after a settle window —
+        # avoids racing the TTS Bool edge straight back into a fresh remark.
+        if self._world.snapshot().tts_playing:
+            self._last_tts_busy_ts = now_mono
+            return
+        if self._has_active_skill_or_sequence():
+            return
+        if self._pending_confirm.state == ConfirmState.PENDING:
+            return
+        if (now_mono - self._last_tts_busy_ts) < self._social_flush_settle_s:
+            return
+        if not self._pending_social:
+            return
+        self._drop_expired_social(now_mono)
+        # Emit at most one, highest priority first.
+        for family in self._social_family_priority:
+            entry = self._pending_social.get(family)
+            if entry is None:
+                continue
+            thunk, _expiry = entry
+            del self._pending_social[family]  # clear before emit (no double-fire)
+            thunk()
+            return
+
+    def _drop_expired_social(self, now_mono: float) -> None:
+        """Discard pending social slots whose TTL has elapsed (monotonic)."""
+        for family in list(self._pending_social.keys()):
+            _, expiry = self._pending_social[family]
+            if now_mono >= expiry:
+                del self._pending_social[family]
 
     def _on_text_input(self, msg: String) -> None:
         payload = self._load_json(msg)

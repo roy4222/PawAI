@@ -612,3 +612,249 @@ def test_sync_param_guarded_inside_param_callback(brain):
         brain._in_param_callback = False
     # param store untouched by the guarded call
     assert brain.get_parameter("offline_mode").value is False
+
+
+# ---------------------------------------------------------------------------
+# social-pending arbiter (social_pending_enabled, default OFF). When busy
+# (tts_playing / active_plan) a self-initiated social proposal (object_remark /
+# greet) is coalesced into a one-slot-per-family pending and flushed once free.
+# Default-off is byte-identical (busy → drop).
+# ---------------------------------------------------------------------------
+
+
+def _set_tts_playing(node, monkeypatch, value):
+    """Force the world snapshot's tts_playing flag for gate tests."""
+    from interaction_executive.world_state import WorldStateSnapshot
+    monkeypatch.setattr(
+        node._world, "snapshot", lambda: WorldStateSnapshot(tts_playing=value)
+    )
+
+
+def _set_active_plan(node, monkeypatch, value):
+    monkeypatch.setattr(node, "_has_active_skill_or_sequence", lambda: value)
+
+
+def _face_msg(identity="Roy", stable=True):
+    from std_msgs.msg import String
+    m = String()
+    m.data = json.dumps({
+        "identity": identity,
+        "identity_stable": stable,
+        "event_type": "identity_stable" if stable else "track",
+    })
+    return m
+
+
+def _open_object_attention(node, monkeypatch):
+    """Open the attention + phase gates so _on_object reaches the busy gate."""
+    monkeypatch.setattr(node, "_attention_state_snapshot",
+                        lambda: AttentionState.ENGAGED)
+    monkeypatch.setattr(node, "_phase_allows", lambda kind: True)
+
+
+def test_social_pending_param_default_false(brain):
+    assert brain.social_pending_enabled is False
+    assert brain._pending_social == {}
+
+
+def test_social_pending_runtime_set_accepted(brain):
+    brain._on_set_params([_FakeParam("social_pending_enabled", True)])
+    assert brain.social_pending_enabled is True
+    brain._on_set_params([_FakeParam("social_pending_enabled", False)])
+    assert brain.social_pending_enabled is False
+
+
+# ── default-off: byte-identical drop ──────────────────────────────────────
+
+
+def test_object_tts_busy_default_off_drops_no_pending(brain, monkeypatch):
+    """social_pending_enabled=False + object blocked by tts_playing → dropped,
+    NOTHING pended (byte-identical)."""
+    assert brain.social_pending_enabled is False
+    _open_object_attention(brain, monkeypatch)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert brain._captured == []
+    assert brain._pending_social == {}
+
+
+def test_greet_busy_default_off_drops_no_pending(brain, monkeypatch):
+    """social_pending_enabled=False + greet blocked by tts_playing → dropped,
+    NOTHING pended (byte-identical)."""
+    assert brain.social_pending_enabled is False
+    monkeypatch.setattr(brain, "_phase_allows", lambda kind: True)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_face(_face_msg("Roy", stable=True))
+    assert brain._captured == []
+    assert brain._pending_social == {}
+
+
+# ── on: pend then flush ───────────────────────────────────────────────────
+
+
+def test_object_tts_busy_pends_then_flush_emits_once(brain, monkeypatch):
+    """ON: object blocked by tts_playing → pend; free + tick → emit once, slot
+    cleared."""
+    brain.social_pending_enabled = True
+    _open_object_attention(brain, monkeypatch)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    # pended, not emitted
+    assert brain._captured == []
+    assert "object" in brain._pending_social
+    # free up TTS, advance past the settle window, then tick
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    brain._tick_attention()
+    assert len(brain._captured) == 1
+    assert "杯子" in _say_text(brain._captured[0])
+    assert brain._pending_social == {}
+    # second tick → no double-fire
+    brain._tick_attention()
+    assert len(brain._captured) == 1
+
+
+def test_object_active_plan_busy_pends(brain, monkeypatch):
+    """ON: object blocked by active_plan → pend (not just tts_playing)."""
+    brain.social_pending_enabled = True
+    _open_object_attention(brain, monkeypatch)
+    _set_active_plan(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert brain._captured == []
+    assert "object" in brain._pending_social
+    # free up active plan, settle, tick → emit
+    _set_active_plan(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    brain._tick_attention()
+    assert len(brain._captured) == 1
+    assert "object" not in brain._pending_social
+
+
+def test_greet_tts_busy_pends_then_flush_emits_once(brain, monkeypatch):
+    """ON: greet blocked by tts_playing → pend; free + tick → greet emit once."""
+    brain.social_pending_enabled = True
+    brain.greet_require_sitting = False
+    monkeypatch.setattr(brain, "_phase_allows", lambda kind: True)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_face(_face_msg("Roy", stable=True))
+    assert brain._captured == []
+    assert "greet" in brain._pending_social
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    brain._tick_attention()
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["selected_skill"] == "greet_known_person"
+    assert brain._pending_social == {}
+
+
+# ── TTL expiry ────────────────────────────────────────────────────────────
+
+
+def test_pending_ttl_expires_no_emit(brain, monkeypatch):
+    """ON: pended object whose TTL elapsed before flush → dropped, slot cleared,
+    nothing emitted."""
+    brain.social_pending_enabled = True
+    _open_object_attention(brain, monkeypatch)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert "object" in brain._pending_social
+    # force the slot expiry into the past (simulate > object TTL of 8.0s)
+    thunk, _expiry = brain._pending_social["object"]
+    brain._pending_social["object"] = (thunk, time.monotonic() - 1.0)
+    # free up + settle + tick → expired slot discarded, no emit
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    brain._tick_attention()
+    assert brain._captured == []
+    assert brain._pending_social == {}
+
+
+# ── coalesce: only latest survives ────────────────────────────────────────
+
+
+def test_coalesce_keeps_only_latest_object(brain, monkeypatch):
+    """ON: repeated blocked object detections coalesce → ONE slot, latest wins."""
+    brain.social_pending_enabled = True
+    _open_object_attention(brain, monkeypatch)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    brain._on_object(_object_msg([{"class_name": "bottle"}]))
+    brain._on_object(_object_msg([{"class_name": "laptop"}]))
+    # exactly one object slot regardless of how many were blocked
+    assert list(brain._pending_social.keys()) == ["object"]
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    brain._tick_attention()
+    # one emit; it is the LATEST (laptop), not cup/bottle
+    assert len(brain._captured) == 1
+    assert "筆電" in _say_text(brain._captured[0])
+
+
+# ── priority: object before greet on flush ────────────────────────────────
+
+
+def test_flush_priority_object_before_greet(brain, monkeypatch):
+    """ON: object + greet both pending → flush emits object FIRST (one per tick)."""
+    brain.social_pending_enabled = True
+    brain.greet_require_sitting = False
+    _open_object_attention(brain, monkeypatch)
+    monkeypatch.setattr(brain, "_phase_allows", lambda kind: True)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    brain._on_face(_face_msg("Roy", stable=True))
+    assert set(brain._pending_social.keys()) == {"object", "greet"}
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic() - 5.0
+    # first tick → object only
+    brain._tick_attention()
+    assert len(brain._captured) == 1
+    assert "杯子" in _say_text(brain._captured[0])
+    assert list(brain._pending_social.keys()) == ["greet"]
+    # second tick → greet
+    brain._tick_attention()
+    assert len(brain._captured) == 2
+    assert brain._captured[1]["selected_skill"] == "greet_known_person"
+    assert brain._pending_social == {}
+
+
+# ── settle window: do not flush immediately after TTS frees ────────────────
+
+
+def test_flush_waits_for_settle_window(brain, monkeypatch):
+    """ON: within the 0.5s settle window after TTS busy → no flush yet."""
+    brain.social_pending_enabled = True
+    _open_object_attention(brain, monkeypatch)
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert "object" in brain._pending_social
+    # TTS just freed (this tick) → _last_tts_busy_ts becomes ~now, settle not met
+    _set_tts_playing(brain, monkeypatch, False)
+    brain._last_tts_busy_ts = time.monotonic()  # 0s ago → within settle
+    brain._tick_attention()
+    assert brain._captured == []          # held back by settle window
+    assert "object" in brain._pending_social  # still pending
+
+
+# ── safety NEVER pends ────────────────────────────────────────────────────
+
+
+def test_safety_unsafe_request_never_pends_even_when_tts_busy(brain, monkeypatch):
+    """ON + tts_playing: an unsafe_request still rejects IMMEDIATELY and never
+    touches the social-pending slot (safety is rule-first)."""
+    brain.social_pending_enabled = True
+    brain.demo_phase = "all"
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_speech_intent(_speech_msg(transcript="後空翻", session_id="unsafe-1"))
+    # safety reject emitted immediately (not deferred / pended)
+    assert len(brain._captured) >= 1
+    assert brain._pending_social == {}
+
+
+def test_safety_hard_rule_stop_never_pends(brain, monkeypatch):
+    """ON + tts_playing: a hard-rule '停' emits immediately, nothing pended."""
+    brain.social_pending_enabled = True
+    brain.demo_phase = "all"
+    _set_tts_playing(brain, monkeypatch, True)
+    brain._on_speech_intent(_speech_msg(transcript="停", session_id="stop-1"))
+    assert len(brain._captured) >= 1
+    assert brain._pending_social == {}
