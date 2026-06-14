@@ -2015,7 +2015,8 @@ def face_delete(name: str, yes: bool) -> None:
 
     cmd = (
         f"rm -rf -- /home/jetson/face_db/{qname} && "
-        "rm -f /home/jetson/face_db/model_sface.pkl && "
+        "rm -f /home/jetson/face_db/model_sface.pkl "
+        "/home/jetson/face_db/model_sface.npz && "
         f"echo {shlex.quote(f'deleted {n}; restart face_identity_node to retrain')}"
     )
     _echo_remote_result("face delete", shell.run_remote(cmd, timeout=30))
@@ -2039,11 +2040,13 @@ def face_enroll(person_name: str, samples: int) -> None:
 
 @face.command("rebuild")
 def face_rebuild() -> None:
-    """刪除 model_sface.pkl 觸發 face_identity_node 下次啟動重訓。"""
+    """刪除 model_sface.pkl + .npz embedding cache 觸發 face_identity_node 下次啟動重訓。"""
     repo = shell.jetson_repo()
     cmd = (
-        f"cd {shlex.quote(repo)} && rm -f /home/jetson/face_db/model_sface.pkl && "
-        f"echo 'model_sface.pkl removed; restart face_identity_node to retrain'"
+        f"cd {shlex.quote(repo)} && "
+        "rm -f /home/jetson/face_db/model_sface.pkl "
+        "/home/jetson/face_db/model_sface.npz && "
+        f"echo 'model_sface.pkl/.npz removed; restart face_identity_node to retrain'"
     )
     _echo_remote_result("face rebuild", shell.run_remote(cmd, timeout=30))
 
