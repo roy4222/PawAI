@@ -217,7 +217,6 @@ def test_phase_transition_clear_greet_true_clears_person_keys(brain):
 
 def test_phase_transition_never_raises_on_substep_failure(brain, monkeypatch):
     # Force the pending_confirm cancel substep to raise; helper must swallow it.
-    from interaction_executive.pending_confirm import ConfirmState
     _set_pending(brain, "wiggle")
 
     def _boom(*a, **k):
