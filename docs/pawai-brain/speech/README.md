@@ -273,6 +273,19 @@ sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx in
 
 **Fallback 行為**：cloud 斷 → `Connection refused` warn → 自動切 sensevoice_local（`degraded=True`）→ 如模型缺失再切 whisper_local。
 
+**⚠ 兩條語音路徑 fallback 不對稱（6/14 HITL 實證）**：
+- **stt_intent_node（Jetson USB 麥）** 有上述三級 fallback。
+- **Studio 筆電收音（`gateway/studio_gateway.py` `/ws/speech` L627）只 POST 到 cloud 8001、無 local fallback** → 雲端 ASR 一死，Studio 語音就全斷（gateway log: `Speech error: ConnectionResetError(104, Connection reset by peer)`、前端顯示 `processing_failed`）。demo 走 Studio 收音時這是單點故障。6/18 前 follow-up：gateway 加 8001 不通退本地 sensevoice/whisper。臨時 fallback = operator 改用 Studio 文字輸入補打同句。
+
+**Cloud server 重啟程序（6/14 HITL：SSH tunnel 活著但遠端 server 進程死＝`Connection reset`，非 `Connection refused`）**：
+```bash
+# 1. 確認是 server 進程死（非 tunnel）：Jetson 上 curl 8001 = 000/reset，但 8000(LLM) 正常
+ssh jetson-nano "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health"   # 200=活
+# 2. 在 RTX 8000（roy422@140.136.155.5）重啟（掛 tmux 持久化、用 pawai_gpu env、GPU1）
+ssh roy422@140.136.155.5 "tmux new-session -d -s sensevoice 'cd ~ && CUDA_VISIBLE_DEVICES=1 ~/miniconda3/envs/pawai_gpu/bin/python sensevoice_server.py --port 8001 > ~/sensevoice_restart.log 2>&1'"
+# 3. ~15-40s model 載入後，Jetson curl 8001/health 應回 200（FunASR log 那句 "Loading remote code failed: No module named 'model'" 是無害 warning）
+```
+
 ## 已知問題
 
 - **Go2 機身 USB 麥克風已廢棄**（4/8 決定）：Go2 風扇噪音極大，辨識率 ~20%。Demo 改用筆電麥克風 via Studio

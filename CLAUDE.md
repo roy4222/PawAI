@@ -53,6 +53,7 @@ pawai status                              # 看 demo lock owner / branch / 網�
 pawai jetson deploy --module <module>     # rsync + colcon build（含 lock collision prompt）
 pawai demo start                          # 啟 brain demo（registry lock，lane=brain）
 pawai demo start --nav capability         # 啟 nav stack（lane=nav_capability，scope 限手動 action 場測）
+pawai demo start --with-lidar             # brain demo + raw LiDAR 證據窗（/scan_rplidar，無 nav2/2nd driver/motion，6/14）
 pawai demo stop                           # 依 lock lane 路由 cleanup（只清自己的，--force 才能清別人）
 pawai docs <module>                       # 跳到 0511 架構文件
 pawai contract check                      # 跑 topic schema 驗證
@@ -61,6 +62,10 @@ pawai evidence pull                       # 拉回 runtime/traces/*.jsonl 證據
 ```
 
 **規矩**：一次只能一人 demo（lock），`-y` ≠ `--force`（前者跳一般 prompt、不能搶 lock；後者才能搶）。完整手冊：[`docs/pawai_cli/README.md`](docs/pawai_cli/README.md)、[`team-onboarding.md`](docs/pawai_cli/team-onboarding.md)、[`troubleshooting.md`](docs/pawai_cli/troubleshooting.md)。
+
+**6/14 HITL demo 調校（已持久化進 `interaction_executive/config/executive.yaml`，重啟自動帶）**：`chat_wait_ms 2000`（原 20000=LLM 慢時 dead-air）、`greet_cooldown_s 90`、`gesture_enabled true`、`object_remark_attention_min NOTICED`、`object_remark_priority`=飲水類、`demo_video_cup_compound true`（**drink-merge**：cup/bottle/bowl/wine_glass 講通用「手邊有飲水用品，記得補充水分」**不糾結物名**、recent sitting≤10s 加坐姿句、**pose 缺席不卡**）。
+- **防「打架」（社交事件互搶 TTS）**：每幕 `ros2 param set /brain_node demo_phase {s2_greet|s3_pose_object|s4_gesture}` 讓該幕只剩一個模組講話（`demo_phase=all` = greet/object/gesture 三者全搶＝最易卡）。更治本的 `social_pending_enabled`（one-slot pending+TTL+flush，PR #191 default-off）讓 all 模式也不丟話 — **尚待上機驗**。操作細節見 [`docs/runbook/2026-06-18-operator-runbook.md`](docs/runbook/2026-06-18-operator-runbook.md)。
+- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/pawai-brain/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ `pawai demo start --with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` = 雷達**硬體**（供電/馬達/USB），非軟體。
 
 ### 基本建構
 

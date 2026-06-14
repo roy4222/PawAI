@@ -1,7 +1,27 @@
 # 專案狀態
 
-**最後更新**：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
+**最後更新**：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/14：Pre-6/18 純軟體 P0 全 merge + live HITL deploy 收斂
+
+**主軸**：dynamic-workflow + 多 worktree 把 pre-6/18 純軟體 P0 全做完並 merge（PR #176-#190），Roy 上機實測一輪邊測邊修。
+
+### 已 merge（main `946f291`）
+- **brain/S3**：`object_remark_priority`（cup>bottle 排序，dynamic_typing 修空-list BYTE_ARRAY bug #189）/ `object_remark_attention_min`=NOTICED / offline_mode param 寫回 / **drink-merge**（cup/bottle/bowl/wine_glass 講通用「手邊有飲水用品，記得補充水分」、recent sitting 加坐姿、pose 缺席不卡）/ `chat_wait_ms` 20000→2000（dead-air 修）/ 5-phase PHASE_ALLOWED_KINDS。全持久化進 `executive.yaml`。
+- **studio**：GestureToggle 藏進 dev-panel FLOOR；gateway demo_phase/offline_mode FLOOR routes。**cli**：`pawai demo start --with-lidar`（raw LiDAR 證據窗，無 nav2/2nd driver）+ `pawai2` Typer/Rich parallel skeleton（舊 CLI byte-identical）+ face delete/rebuild 補刪 .npz。**bench**：object confusion-matrix harness（offline）。**nav**：no-motion SOP + S1 fallback + A3 raw-LiDAR-monitor plan。
+
+### live HITL 實測結果（Roy 在場）
+- **S2 人臉問候** ✅（greet_cooldown_s 90 持久化，不再連續招呼）。**S4 手勢** ✅（gesture_enabled 之前 yaml 預設 false→silent drop=S4 沒反應真兇，改 true）。**S5 安全拒絕** ✅。**S3** ✅（drink-merge 端到端：TTS 實播「手邊有飲水用品」，模型常把 cup 誤判 bottle 故不糾結物名）。
+- **ASR processing_failed 修好**：遠端 RTX 8000 sensevoice server（8001）進程死了（tunnel+LLM 8000 正常）→ 重啟（見 speech README）。
+- **「打架」根因**：social 事件（greet/object/gesture）忙碌時互搶 TTS、被 drop。短期解＝每幕切 demo_phase 隔離；治本＝social-pending arbiter（PR #191 default-off，one-slot+TTL+flush，**Jetson 連線斷未及部署**）。
+
+### ⚠ 待辦
+- **pose 模型 raw=None**（vision `pose: raw=None avg=0.00`，MediaPipe 抓不到身體/取景）→ sitting 偵測不到、複合句「坐下了」不觸發；需取景/模型調。
+- **LiDAR sllidar `SL_RESULT_OPERATION_TIMEOUT`**＝雷達硬體（供電/馬達/USB），Act1 motion 未測。Roy 新 Act1 構想：不掃圖、reactive_stop 前進+遇障停、Foxglove 顯示 /scan_rplidar（建圖純 viz 另跑）。
+- social-pending #191 待 Jetson 回線後 deploy+驗。class_whitelist drink-only 未進 yaml（runtime）。Jetson USB 麥 device 24 漂到 APE（demo 走 Studio 收音）。
 
 ---
 
