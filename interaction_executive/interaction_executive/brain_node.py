@@ -825,6 +825,12 @@ class BrainNode(Node):
         # 設 true → 觸發複合句「我看到 Roy 坐著拿著杯子，是口渴了嗎」+ 砍 sit_along TTS
         # 預設 False 維持現有 object_remark + sit_along 獨立行為
         self.declare_parameter("demo_video_cup_compound", False)
+        # 2026-06-15 HITL S3: drink-merge 複合句的「最近 sitting」回看窗（秒）。
+        # /event/pose_detected 是 edge-triggered（姿勢變化才發、整段只發數次），
+        # 穩定坐著時那唯一一個 sitting event 跟 cup remark 對不上原本寫死的 10s 窗
+        # → 每次 sitting=False、只講通用句。放寬窗讓「坐下後 N 秒內舉杯」都算坐著。
+        # 預設 10.0 維持 byte-identical 舊行為；demo 由 executive.yaml/param 設 45.0。
+        self.declare_parameter("drink_sitting_window_s", 10.0)
         self.declare_parameter("demo_video_silent_sit_along", False)
         self.declare_parameter("capability_gate_enabled", False)
         self.declare_parameter("baseline_snapshot_path", "")
@@ -911,6 +917,7 @@ class BrainNode(Node):
         )
         self.peace_wego_confirm = bool(self.get_parameter("peace_wego_confirm").value)
         self.demo_video_cup_compound = bool(self.get_parameter("demo_video_cup_compound").value)
+        self.drink_sitting_window_s = float(self.get_parameter("drink_sitting_window_s").value)
         self.demo_video_silent_sit_along = bool(self.get_parameter("demo_video_silent_sit_along").value)
         self._capability_gate_enabled = bool(
             self.get_parameter("capability_gate_enabled").value
@@ -2462,11 +2469,11 @@ class BrainNode(Node):
         # 2026-06-14 HITL: drink-class merged 補水提醒. When demo_video_cup_compound
         # is on, ANY drink class (cup/bottle/bowl/wine_glass) → one generic 補水
         # line that does NOT insist on the (often mis-classified, e.g. cup→bottle)
-        # object name. A recent sitting (≤10s) adds a sitting clause — pose is a
+        # object name. A recent sitting (≤drink_sitting_window_s) adds a sitting clause — pose is a
         # BONUS, never a hard gate (sitting absent → drink line still fires). Off
         # (default) → legacy build_object_tts below (byte-identical).
         if self.demo_video_cup_compound and class_name in OBJECT_REMARK_RELAX_CLASSES:
-            recent_sitting = (now - self._state.last_sitting_seen_ts) < 10.0
+            recent_sitting = (now - self._state.last_sitting_seen_ts) < self.drink_sitting_window_s
             drink_text = (
                 "我看到你坐下了，也看到你手邊有杯子，記得補充水分。"
                 if recent_sitting

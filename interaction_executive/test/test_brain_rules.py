@@ -944,6 +944,46 @@ def test_compound_off_uses_separate_cup_remark(brain):
     assert brain._captured_proposals[-1]["selected_skill"] == "object_remark"
 
 
+def test_drink_sitting_window_default_byte_identical(brain):
+    """2026-06-15 HITL S3: 新 param 預設 = 10.0，維持 byte-identical 舊行為。"""
+    assert brain.drink_sitting_window_s == 10.0
+
+
+def test_drink_sitting_window_controls_compound(brain):
+    """drink_sitting_window_s 控制「最近 sitting」回看窗。
+
+    pose /event/pose_detected 是 edge-triggered（穩定坐著時 sitting event 稀疏，
+    整段只發數次）。窗太短 → 那唯一一個 sitting event 跟 cup remark 對不上 →
+    複合句永遠 sitting=False、只講通用句。放寬窗 → 坐下後 N 秒內舉杯都算坐著。
+    """
+    brain.demo_video_cup_compound = True
+    _prime_attention_engaged(brain)
+    now = time.time()
+
+    # 窗=45s、sitting 在 30s 前（窗內）→ 走複合句「坐下了」
+    brain.drink_sitting_window_s = 45.0
+    brain._object_remark_seen.clear()
+    with brain._lock:
+        brain._state.last_sitting_seen_ts = now - 30.0
+    brain._on_object(_msg({
+        "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10], "color": "Unknown"}],
+    }))
+    text_in = brain._captured_proposals[-1]["steps"][0]["args"]["text"]
+    assert "坐下了" in text_in, f"30s<45s 窗內應走複合句, got {text_in!r}"
+
+    # 窗=10s（舊預設）、同樣 sitting 30s 前（窗外）→ 走通用句
+    brain.drink_sitting_window_s = 10.0
+    brain._object_remark_seen.clear()
+    with brain._lock:
+        brain._state.last_sitting_seen_ts = now - 30.0
+    brain._on_object(_msg({
+        "objects": [{"class_name": "cup", "confidence": 0.9, "bbox": [0, 0, 10, 10], "color": "Unknown"}],
+    }))
+    text_out = brain._captured_proposals[-1]["steps"][0]["args"]["text"]
+    assert "坐下了" not in text_out and "飲水用品" in text_out, \
+        f"30s>10s 窗外應走通用句, got {text_out!r}"
+
+
 # ---------------------------------------------------------------------------
 # Task B (2026-06-09 demo): two-step thumbs_up WeGo prompt + gesture_enabled gate
 # ---------------------------------------------------------------------------

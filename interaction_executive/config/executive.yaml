@@ -25,6 +25,10 @@ brain_node:
     # 2026-06-14 HITL: true → 啟用 drink-class 合併補水提醒（cup/bottle/bowl/
     # wine_glass 通用句、不糾結物名；recent sitting 加坐姿句，pose 缺席不卡）。
     demo_video_cup_compound: true
+    # 2026-06-15 HITL S3: pose /event/pose_detected 是 edge-triggered（穩定坐著時
+    # 整段只發數次 sitting event）；寫死的 10s「最近 sitting」窗抓不到那唯一一個
+    # 事件 → 複合句永遠 sitting=False。放寬到 45s：坐下後 45 秒內舉杯都算坐著。
+    drink_sitting_window_s: 45.0
     demo_video_silent_sit_along: true
     # ---- 2026-06-10 demo-blocking 修法（Roy 6/9 晚拍板，handoff §明天最終修法）----
     # 1. stranger_alert 整路停用：6/9 HITL 定位 face 幻覺鎖 unknown → active plan
