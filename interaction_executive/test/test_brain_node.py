@@ -410,3 +410,89 @@ def test_object_remark_priority_runtime_set_accepted(brain):
     assert brain.object_remark_priority == ["cup", "bottle"]
     brain._on_set_params([_FakeParam("object_remark_priority", [])])
     assert brain.object_remark_priority == []
+
+
+# ---------------------------------------------------------------------------
+# B2 — object_remark_attention_min: relax the ENGAGED gate to NOTICED for drink
+#      remarks. Default "ENGAGED" = byte-identical (gate only when ENGAGED).
+# ---------------------------------------------------------------------------
+
+
+def _set_attention(node, monkeypatch, state):
+    monkeypatch.setattr(node, "_attention_state_snapshot", lambda: state)
+
+
+def _open_non_attention_object_gates(node, monkeypatch):
+    """Open every object_remark gate EXCEPT the attention gate under test."""
+    monkeypatch.setattr(node, "_has_active_skill_or_sequence", lambda: False)
+    monkeypatch.setattr(node, "_phase_allows", lambda kind: True)
+
+
+def test_object_remark_attention_min_default_engaged(brain):
+    assert brain.object_remark_attention_min == "ENGAGED"
+
+
+def test_attention_ok_default_only_engaged_passes(brain):
+    """Default min=ENGAGED → only ENGAGED clears the gate (byte-identical)."""
+    assert brain.object_remark_attention_min == "ENGAGED"
+    assert brain._object_remark_attention_ok(AttentionState.ENGAGED, "cup") is True
+    assert brain._object_remark_attention_ok(AttentionState.NOTICED, "cup") is False
+    assert brain._object_remark_attention_ok(AttentionState.IDLE, "cup") is False
+    assert brain._object_remark_attention_ok(AttentionState.INTERACTING, "cup") is False
+
+
+def test_attention_ok_noticed_relaxes_drink_class_only(brain):
+    """min=NOTICED → NOTICED+cup passes; NOTICED+chair still requires ENGAGED."""
+    brain.object_remark_attention_min = "NOTICED"
+    assert brain._object_remark_attention_ok(AttentionState.NOTICED, "cup") is True
+    assert brain._object_remark_attention_ok(AttentionState.NOTICED, "bottle") is True
+    assert brain._object_remark_attention_ok(AttentionState.NOTICED, "chair") is False
+    # IDLE / INTERACTING are never relaxed, even for a drink class.
+    assert brain._object_remark_attention_ok(AttentionState.IDLE, "cup") is False
+    assert brain._object_remark_attention_ok(AttentionState.INTERACTING, "cup") is False
+    # ENGAGED still always passes.
+    assert brain._object_remark_attention_ok(AttentionState.ENGAGED, "chair") is True
+
+
+def test_on_object_default_engaged_suppresses_noticed(brain, monkeypatch):
+    """param=ENGAGED (default) + state=NOTICED → suppress (byte-identical)."""
+    _open_non_attention_object_gates(brain, monkeypatch)
+    _set_attention(brain, monkeypatch, AttentionState.NOTICED)
+    assert brain.object_remark_attention_min == "ENGAGED"
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert brain._captured == []
+
+
+def test_on_object_noticed_min_allows_noticed_cup(brain, monkeypatch):
+    """param=NOTICED + state=NOTICED + class=cup → remark emitted."""
+    _open_non_attention_object_gates(brain, monkeypatch)
+    _set_attention(brain, monkeypatch, AttentionState.NOTICED)
+    brain.object_remark_attention_min = "NOTICED"
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert len(brain._captured) == 1
+    assert "杯子" in _say_text(brain._captured[0])
+
+
+def test_on_object_noticed_min_still_suppresses_noticed_chair(brain, monkeypatch):
+    """param=NOTICED + state=NOTICED + class=chair (non-drink) → still suppress."""
+    _open_non_attention_object_gates(brain, monkeypatch)
+    _set_attention(brain, monkeypatch, AttentionState.NOTICED)
+    brain.object_remark_attention_min = "NOTICED"
+    brain._on_object(_object_msg([{"class_name": "chair"}]))
+    assert brain._captured == []
+
+
+def test_on_object_engaged_always_emits_regardless_of_min(brain, monkeypatch):
+    """ENGAGED clears the gate for any class even at min=ENGAGED (unchanged)."""
+    _open_non_attention_object_gates(brain, monkeypatch)
+    _set_attention(brain, monkeypatch, AttentionState.ENGAGED)
+    brain._on_object(_object_msg([{"class_name": "cup"}]))
+    assert len(brain._captured) == 1
+    assert "杯子" in _say_text(brain._captured[0])
+
+
+def test_object_remark_attention_min_runtime_set_accepted(brain):
+    brain._on_set_params([_FakeParam("object_remark_attention_min", "NOTICED")])
+    assert brain.object_remark_attention_min == "NOTICED"
+    brain._on_set_params([_FakeParam("object_remark_attention_min", "ENGAGED")])
+    assert brain.object_remark_attention_min == "ENGAGED"
