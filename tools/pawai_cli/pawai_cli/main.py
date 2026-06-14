@@ -1420,7 +1420,54 @@ def _invoke_nav_cleanup_sh() -> int:
 def _cleanup_for_lock(lock) -> int:
     if getattr(lock, "lane", "brain") == "nav_capability":
         return _invoke_nav_cleanup_sh()
+    # Brain lane: tear down the opt-in LiDAR monitor (no-op if it was never
+    # started — kill-session + pkill are best-effort). Done before driver
+    # cleanup so we only ever touch lidarmon's own sllidar/static TF.
+    _stop_lidar_monitor()
     return _invoke_cleanup_sh()
+
+
+# ── raw LiDAR monitor (B5, brain lane add-on, opt-in --with-lidar) ───────────
+# A 2-window tmux session on the Jetson (base_link→laser TF + sllidar) that
+# publishes /scan_rplidar as a demo evidence window. It is strictly additive to
+# the brain demo: NO nav2/amcl/nav_action_server/2nd go2_driver, NO motion.
+_LIDAR_MONITOR_SESSION = "lidarmon"
+_LIDAR_MONITOR_SCRIPT_REL = "scripts/start_lidar_monitor_tmux.sh"
+
+
+def _lidar_monitor_manual_command() -> str:
+    repo = shell.jetson_repo()
+    return (
+        f"ssh {shell.jetson_host()} 'cd {repo} && "
+        f"bash {_LIDAR_MONITOR_SCRIPT_REL}'"
+    )
+
+
+def _start_lidar_monitor() -> int:
+    """Start the raw LiDAR monitor on the Jetson over SSH (additive to brain demo)."""
+    repo = shell.jetson_repo()
+    res = shell.run_remote(
+        f"cd {shlex.quote(repo)} && bash {_LIDAR_MONITOR_SCRIPT_REL}",
+        timeout=30,
+    )
+    return 0 if res.ok else (res.code or 1)
+
+
+def _stop_lidar_monitor() -> None:
+    """Tear down ONLY the lidarmon session + its processes we started.
+
+    Best-effort: brain cleanup already ran, so a failure here must not block
+    lock release. We kill the named tmux session, then pkill the two long-lived
+    processes the monitor script launches (sllidar + static TF). We do NOT
+    pkill go2_driver here — that belongs to brain cleanup.
+    """
+    shell.run_remote(
+        f"tmux kill-session -t {_LIDAR_MONITOR_SESSION} 2>/dev/null; "
+        "pkill -9 -f sllidar_node 2>/dev/null; "
+        "pkill -9 -f 'static_transform_publisher.*--child-frame-id laser' 2>/dev/null; "
+        "true",
+        timeout=12,
+    )
 
 
 def _validate_nav_mode(nav_mode: str | None, brain_only: bool) -> str | None:
@@ -1471,14 +1518,31 @@ def _current_sha_short() -> str:
               help="Escape hatch: trust start.sh rc and skip the post-start healthcheck gate.")
 @click.option("--with-shadow", is_flag=True,
               help="After a healthy brain demo is running, enable ism_shadow_enabled.")
+@click.option("--with-lidar", "with_lidar", is_flag=True,
+              help="After a healthy brain demo is running, also start a raw LiDAR "
+                   "monitor (/scan_rplidar evidence window). NO nav2/amcl/2nd driver/motion. "
+                   "Same as PAWAI_DEMO_WITH_LIDAR=1.")
 def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
-               yes: bool, force: bool, skip_healthcheck: bool, with_shadow: bool) -> None:
+               yes: bool, force: bool, skip_healthcheck: bool, with_shadow: bool,
+               with_lidar: bool) -> None:
     """Start brain demo or nav capability lane."""
     from .lock import LOCK_FLOCK_PATH, Lock, is_stale, is_own_lock
+
+    # PAWAI_DEMO_WITH_LIDAR=1 is an env-level alias for --with-lidar so the same
+    # opt-in works from .env / start scripts without re-plumbing every caller.
+    if os.environ.get("PAWAI_DEMO_WITH_LIDAR") == "1":
+        with_lidar = True
 
     nav_mode = _validate_nav_mode(nav_mode, brain_only)
     if with_shadow and nav_mode == "capability":
         raise click.UsageError("--with-shadow cannot be combined with --nav capability")
+    if with_lidar and nav_mode == "capability":
+        # nav capability lane already brings its own sllidar + TF; a second
+        # monitor would race the serial port. Refuse rather than double-start.
+        raise click.UsageError(
+            "--with-lidar cannot be combined with --nav capability "
+            "(nav lane already owns the LiDAR)"
+        )
     lane = "nav_capability" if nav_mode == "capability" else "brain"
     tmux_session = "nav-cap-demo" if lane == "nav_capability" else "demo"
     demo_mode = "nav_capability" if lane == "nav_capability" else (
@@ -1635,6 +1699,16 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
             click.echo("✓ shadow soak enabled (ism_shadow_enabled=True)")
         else:
             _print_shadow_soak_reminder()
+        if with_lidar:
+            lr = _start_lidar_monitor()
+            if lr != 0:
+                # The brain demo is healthy and remains the source of truth; a
+                # failed evidence-window start must NOT tear it down. Surface it
+                # loudly and hand back the manual command instead of exiting non-zero.
+                click.echo("⚠ LiDAR monitor start failed (brain demo still running).")
+                click.echo(f"  手動補救：{_lidar_monitor_manual_command()}")
+            else:
+                click.echo("✓ LiDAR monitor running (session: lidarmon, topic: /scan_rplidar)")
 
 
 @demo.command("stop")
@@ -1648,6 +1722,9 @@ def demo_stop(force: bool) -> None:
     existing = Lock.read()
     if existing is None:
         click.echo("No demo lock present.")
+        # No lock → assume brain-class cleanup. Also tear down a possibly
+        # orphaned LiDAR monitor (best-effort, no-op if absent).
+        _stop_lidar_monitor()
         rc = _invoke_cleanup_sh()
         sys.exit(rc)
 
