@@ -223,3 +223,108 @@ def test_phase_transition_never_raises_on_substep_failure(brain, monkeypatch):
     brain._state.active_plan = {"selected_skill": "x"}
     brain._apply_phase_transition("s5_safety", "s4_gesture")
     assert brain._state.active_plan is None
+
+
+# ---------------------------------------------------------------------------
+# T2-3 — _set_demo_phase shared helper + /brain/demo_phase String subscriber
+# ---------------------------------------------------------------------------
+
+
+def test_set_demo_phase_same_value_does_not_call_helper(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "all"
+    brain._set_demo_phase("all")
+    assert calls == []  # no-op transition (same value) → byte-identical
+    assert brain.demo_phase == "all"
+
+
+def test_set_demo_phase_real_change_calls_helper(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_greet")
+    assert len(calls) == 1
+    assert brain.demo_phase == "s2_greet"
+
+
+def test_set_demo_phase_canonicalizes_alias(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "all"
+    brain._set_demo_phase("s2_face")
+    assert brain.demo_phase == "s2_greet"  # alias canonicalized
+    assert len(calls) == 1
+
+
+def test_set_demo_phase_invalid_keeps_old(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "s3_pose_object"
+    brain._set_demo_phase("bogus")
+    assert brain.demo_phase == "s3_pose_object"  # unchanged
+    assert calls == []  # helper not called for invalid
+
+
+def _make_str_msg(data):
+    from std_msgs.msg import String
+    m = String()
+    m.data = data
+    return m
+
+
+def test_demo_phase_topic_canonicalizes_alias(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "all"
+    brain._on_demo_phase_msg(_make_str_msg("s2_face"))
+    assert brain.demo_phase == "s2_greet"
+    assert len(calls) == 1
+
+
+def test_demo_phase_topic_handles_case_and_whitespace(brain, monkeypatch):
+    monkeypatch.setattr(brain, "_apply_phase_transition", lambda *a, **k: None)
+    brain.demo_phase = "all"
+    brain._on_demo_phase_msg(_make_str_msg("  S5_SAFETY "))
+    assert brain.demo_phase == "s5_safety"
+
+
+def test_demo_phase_topic_invalid_keeps_old(brain, monkeypatch):
+    calls = []
+    monkeypatch.setattr(brain, "_apply_phase_transition",
+                        lambda *a, **k: calls.append((a, k)))
+    brain.demo_phase = "s4_gesture"
+    brain._on_demo_phase_msg(_make_str_msg("nonsense"))
+    assert brain.demo_phase == "s4_gesture"
+    assert calls == []
+
+
+def test_param_and_topic_share_set_demo_phase(brain, monkeypatch):
+    """Both param-set and topic route through the same _set_demo_phase."""
+    seen = []
+    real = brain._set_demo_phase
+
+    def spy(value):
+        seen.append(value)
+        return real(value)
+
+    monkeypatch.setattr(brain, "_set_demo_phase", spy)
+    monkeypatch.setattr(brain, "_apply_phase_transition", lambda *a, **k: None)
+    # topic path
+    brain.demo_phase = "all"
+    brain._on_demo_phase_msg(_make_str_msg("s2_greet"))
+    # param path
+    from rcl_interfaces.msg import Parameter as _PMsg  # noqa: F401
+    brain._on_set_params([_FakeParam("demo_phase", "s3_pose_object")])
+    assert "s2_greet" in seen and "s3_pose_object" in seen
+
+
+class _FakeParam:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
