@@ -86,3 +86,62 @@ def test_chat_timeout_no_buffer_emits_nothing(brain):
     brain.demo_phase = "all"
     brain._on_chat_timeout("never-buffered")
     assert brain._captured == []
+
+
+# ---------------------------------------------------------------------------
+# T3 — five-phase 3-tier DEMO_CANNED_TABLE + _phase_canned helper
+# ---------------------------------------------------------------------------
+
+_EXPECTED_CANNED = {
+    "s1_nav": {
+        "success": "我正在移動到巡檢位置。",
+        "degraded": "我正在前往巡檢位置，請稍等。",
+        "generic": "我先在這裡待命。",
+    },
+    "s2_greet": {
+        "success": "Roy，歡迎回來，我看到你了。",
+        "degraded": "嗨，歡迎回來。",
+        "generic": "哈囉，很高興見到你。",
+    },
+    "s3_pose_object": {
+        "success": "我看到杯子了，記得補充水分。",
+        "degraded": "我看到桌上有東西，記得喝水喔。",
+        "generic": "記得多喝水、休息一下。",
+    },
+    "s4_gesture": {
+        "success": "你要我 WeGo 一下嗎？比 OK 我就開始。",
+        "degraded": "我看到你的手勢了，比 OK 我就開始。",
+        "generic": "你可以比個手勢跟我互動。",
+    },
+    "s5_safety": {
+        "success": "這個動作不安全，我不能執行。",
+        "degraded": "這個指令我不能做，太危險了。",
+        "generic": "為了安全，我不能執行這個動作。",
+    },
+}
+
+
+def test_demo_canned_table_has_five_phases_three_tiers_nonempty():
+    from interaction_executive.brain_node import DEMO_CANNED_TABLE
+    assert set(DEMO_CANNED_TABLE) == set(_EXPECTED_CANNED)
+    for phase, tiers in DEMO_CANNED_TABLE.items():
+        assert set(tiers) == {"success", "degraded", "generic"}, phase
+        for tier, text in tiers.items():
+            assert isinstance(text, str) and text.strip(), f"{phase}/{tier} empty"
+
+
+def test_demo_canned_table_text_verbatim():
+    from interaction_executive.brain_node import DEMO_CANNED_TABLE
+    assert DEMO_CANNED_TABLE == _EXPECTED_CANNED
+
+
+def test_phase_canned_helper_returns_tier_text(brain):
+    assert brain._phase_canned("s3_pose_object", "success") == "我看到杯子了，記得補充水分。"
+    assert brain._phase_canned("s2_greet", "generic") == "哈囉，很高興見到你。"
+    assert brain._phase_canned("s5_safety", "degraded") == "這個指令我不能做，太危險了。"
+
+
+def test_phase_canned_helper_canonicalizes_alias(brain):
+    # legacy alias should resolve to canonical phase table entry
+    assert brain._phase_canned("s2_face", "generic") == "哈囉，很高興見到你。"
+    assert brain._phase_canned("s3_object", "success") == "我看到杯子了，記得補充水分。"
