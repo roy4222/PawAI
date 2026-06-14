@@ -250,6 +250,24 @@ class GatewayNode(Node):
         # 最後一次發布值的 cache（None = 本 session 尚未有人切換過）。
         self._gesture_enabled_last: bool | None = None
 
+        # ── Operator manual FLOOR controls (pre-6/18 plan4) ──────────
+        # demo_phase: Studio 隱藏五幕鈕 → brain_node 的 /brain/demo_phase
+        # String subscriber（契約來自 plan2；subscriber 未合前 publisher 先
+        # 對該 topic 發布）。每次切幕 publish_demo_phase 會「先 reset_context
+        # 清場、再發 phase」避免換幕污染（PendingConfirm / dedup / active_plan）。
+        self._demo_phase_pub = self.create_publisher(
+            String, "/brain/demo_phase", 10
+        )
+        self._demo_phase_last: str | None = None
+        # offline_mode: Studio 隱藏切換 → brain offline 短路。
+        # TODO(integration): plan3 owns offline_mode as a brain param; reconcile
+        # topic-vs-param-service at integration. 本 plan 先以 std_msgs/Bool 發布
+        # 到 /brain/offline_mode 作為假設 topic 契約（route/WS/cache 結構先就緒）。
+        self._offline_mode_pub = self.create_publisher(
+            Bool, "/brain/offline_mode", 10
+        )
+        self._offline_mode_last: bool | None = None
+
         # ── Operator-controlled nav driving (S1) ────────────────────
         # /initialpose set from a frontend map click; /nav/goto_relative
         # action drives a short relative walk. The danger-cancel hook in
@@ -817,6 +835,45 @@ class GatewayNode(Node):
         """Last value published via Studio this session (None = untouched)."""
         return self._gesture_enabled_last
 
+    def publish_demo_phase(self, phase: str) -> None:
+        """plan4 FLOOR: Studio 隱藏五幕鈕 → /brain/demo_phase String。
+
+        換幕不污染的核心：**先發 reset_context（Empty）清場、再發 phase
+        （String）**。順序不可顛倒 — 反了會讓上一幕的 PendingConfirm /
+        object dedup / active_plan 殘留進新幕。caller 須先過白名單驗證。
+        """
+        self._reset_pub.publish(Empty())
+        msg = String()
+        msg.data = phase
+        self._demo_phase_pub.publish(msg)
+        self._demo_phase_last = phase
+        self.get_logger().info(
+            f"Published reset_context then demo_phase={phase} to /brain/demo_phase"
+        )
+
+    def demo_phase_snapshot(self) -> str | None:
+        """Last phase published via Studio this session (None = untouched)."""
+        return self._demo_phase_last
+
+    def publish_offline_mode(self, enabled: bool) -> None:
+        """plan4 FLOOR: Studio 隱藏 offline 切換 → /brain/offline_mode Bool。
+
+        TODO(integration): plan3 owns offline_mode as a brain param; reconcile
+        topic-vs-param-service at integration. Publisher 形態先以 Bool topic
+        就緒，route/WS/cache 結構與 gesture toggle byte-identical。預設 OFF。
+        """
+        msg = Bool()
+        msg.data = bool(enabled)
+        self._offline_mode_pub.publish(msg)
+        self._offline_mode_last = bool(enabled)
+        self.get_logger().info(
+            f"Published offline_mode={enabled} to /brain/offline_mode"
+        )
+
+    def offline_mode_snapshot(self) -> bool | None:
+        """Last value published via Studio this session (None = untouched)."""
+        return self._offline_mode_last
+
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
         if video_clients is None:
@@ -864,6 +921,26 @@ class TextInputPayload(BaseModel):
 
 
 class GestureEnabledPayload(BaseModel):
+    enabled: bool
+
+
+# plan4 FLOOR: server-side demo_phase whitelist. The 5 canonical demo phases
+# are the button/publish set; s2_face/s3_object are accepted as aliases; all/
+# quiet are the conservative fallbacks. The brain side validates authoritatively
+# against interaction_state.PHASE_ALLOWED_KINDS — we do NOT import that
+# cross-package; this list mirrors it and rejects unknown with 400 so a typo
+# never silently passes (plan2 G3/G6 risk). Keep in sync if brain phases change.
+DEMO_PHASE_WHITELIST = frozenset({
+    "s1_nav", "s2_greet", "s3_pose_object", "s4_gesture", "s5_safety",
+    "all", "quiet", "s2_face", "s3_object",
+})
+
+
+class DemoPhasePayload(BaseModel):
+    phase: str
+
+
+class OfflineModePayload(BaseModel):
     enabled: bool
 
 
@@ -1282,6 +1359,78 @@ async def get_gesture_enabled():
     if node is None:
         return {"ok": False, "error": "ros_node_not_ready", "enabled": None}
     return {"ok": True, "enabled": node.gesture_enabled_snapshot()}
+
+
+# ── Operator manual FLOOR: demo_phase + offline_mode (plan4) ────
+# Hidden operator surface (dev-panel). Mirrors the gesture_enabled plumbing.
+# These are the manual fallback that ALWAYS works when auto-advance fails.
+
+@app.post("/api/demo_phase")
+async def post_demo_phase(payload: DemoPhasePayload):
+    """plan4 FLOOR: Studio 隱藏五幕鈕 → /brain/demo_phase String。
+
+    server-side 白名單擋非法 phase（不發布、不靜默變全開）。合法 phase
+    走 node.publish_demo_phase（先 reset_context 清場、再發 phase）+ cache
+    + 廣播 brain:demo_phase 事件到 /ws/events，讓所有 Studio 視窗同步。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    if payload.phase not in DEMO_PHASE_WHITELIST:
+        return {"ok": False, "error": "invalid_phase"}
+    node.publish_demo_phase(payload.phase)
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "demo_phase",
+        "data": {"phase": payload.phase},
+    })
+    return {"ok": True, "phase": payload.phase}
+
+
+@app.get("/api/demo_phase")
+async def get_demo_phase():
+    """回傳 gateway cache 的當前幕（null = 本 session 尚未切換過）。
+
+    注意：這是 gateway 端 cache，不是 brain 端真值 — brain 預設
+    demo_phase=all。落地前操作員以 `ros2 param get /brain_node demo_phase`
+    確認 brain 真值。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready", "phase": None}
+    return {"ok": True, "phase": node.demo_phase_snapshot()}
+
+
+@app.post("/api/offline_mode")
+async def post_offline_mode(payload: OfflineModePayload):
+    """plan4 FLOOR: Studio 隱藏 offline 切換 → /brain/offline_mode Bool。
+
+    publish + cache + 廣播 brain:offline_mode。預設 OFF = byte-identical。
+    TODO(integration): plan3 owns offline_mode as a brain param; reconcile
+    topic-vs-param-service at integration.
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    node.publish_offline_mode(payload.enabled)
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "offline_mode",
+        "data": {"enabled": payload.enabled},
+    })
+    return {"ok": True, "enabled": payload.enabled}
+
+
+@app.get("/api/offline_mode")
+async def get_offline_mode():
+    """回傳 gateway cache 的 offline 切換值（null = 本 session 尚未切換過）。
+
+    null 應視為 OFF（brain 預設線上模式）。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready", "enabled": None}
+    return {"ok": True, "enabled": node.offline_mode_snapshot()}
 
 
 # ── Operator-controlled nav driving (S1 "move to scene") ────────
