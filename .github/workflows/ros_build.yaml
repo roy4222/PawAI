@@ -158,6 +158,9 @@ jobs:
           PYTHONPATH=pawai-studio/gateway pytest pawai-studio/gateway/test_auth.py \
             pawai-studio/gateway/test_trace_store.py \
             -v --tb=short
+          # Invocation 9 (plan1 T1, Tier 1): co-run profiling parser — stdlib-only,
+          # ROS-free; self-bootstraps sys.path to its own scripts/ dir.
+          pytest scripts/test_corun_profile_parse.py -v --tb=short
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
