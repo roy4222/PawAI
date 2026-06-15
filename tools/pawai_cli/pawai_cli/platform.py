@@ -38,11 +38,12 @@ def detect() -> PlatformInfo:
     if system == "Darwin":
         return PlatformInfo(kind="macos", supported=True, reason="")
     if system == "Windows":
-        return PlatformInfo(
-            kind="windows_native",
-            supported=False,
-            reason="Windows native unsupported (PowerShell / CMD / Git Bash).",
-        )
+        # Windows native (PowerShell/CMD) is supported for the SSH-passthrough
+        # commands (doctor/status/face */logs) — shell.run uses a subprocess LIST
+        # (no shell=True) + OpenSSH ssh.exe, so remote commands run on the Jetson
+        # regardless of the local shell. `demo start` / `health` run LOCAL bash
+        # scripts → those still need WSL2 or Git Bash (guarded at the command).
+        return PlatformInfo(kind="windows_native", supported=True, reason="")
     if system == "Linux":
         proc = _read_proc_version().lower()
         wsl_distro = _env_wsl_distro()

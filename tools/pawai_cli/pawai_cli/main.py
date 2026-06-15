@@ -800,6 +800,12 @@ def demo() -> None:
 
 def _invoke_start_sh(no_studio: bool, brain_only: bool) -> int:
     """Thin wrapper for tests — calls existing start.sh path."""
+    from . import platform as _plat
+    if _plat.detect().kind == "windows_native":
+        click.echo("✗ demo start 需要 bash（start.sh）— Windows 原生 PowerShell/CMD 沒有 bash。")
+        click.echo("  → demo 生命週期（start/stop/health）請用 WSL2 / Git Bash / Mac，或在 Jetson 端起。")
+        click.echo("  → Windows 原生可直接用（純 SSH）：pawai face enroll/list/delete/rebuild、status、logs、doctor。")
+        return 10
     args = ["bash", ".claude/skills/brain-studio-lane/scripts/start.sh"]
     if brain_only:
         args.append("minimal")

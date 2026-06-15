@@ -52,7 +52,9 @@ def test_detect_windows_native():
     with patch("pawai_cli.platform._uname_system", return_value="Windows"):
         info = plat.detect()
     assert info.kind == "windows_native"
-    assert info.supported is False
+    # Windows native now supported for SSH-passthrough commands (face/status/
+    # logs/doctor). demo start/health need bash → guarded at the command, not here.
+    assert info.supported is True
 
 
 def test_mnt_c_repo_path_rejected():
@@ -77,19 +79,28 @@ def test_assert_supported_passes_on_macos():
         plat.assert_supported(Path("/Users/foo/repo"))
 
 
-def test_assert_supported_exits_on_windows_native(capsys):
+def test_assert_supported_passes_on_windows_native():
+    # Windows native is supported (SSH-passthrough); assert_supported must NOT exit.
+    info = plat.PlatformInfo(kind="windows_native", supported=True, reason="")
+    with patch("pawai_cli.platform.detect", return_value=info), patch(
+        "pawai_cli.platform.check_repo_path", return_value=None
+    ):
+        plat.assert_supported(Path("C:/Users/foo/repo"))
+
+
+def test_assert_supported_exits_on_wsl1(capsys):
     info = plat.PlatformInfo(
-        kind="windows_native",
+        kind="wsl1",
         supported=False,
-        reason="Windows native unsupported",
+        reason="WSL1 unsupported - upgrade to WSL2.",
     )
     with patch("pawai_cli.platform.detect", return_value=info):
         with pytest.raises(SystemExit) as excinfo:
-            plat.assert_supported(Path("C:/Users/foo/repo"))
+            plat.assert_supported(Path("/home/foo/repo"))
     assert excinfo.value.code == 10
     captured = capsys.readouterr()
-    assert "Windows native unsupported" in captured.out
-    assert "wsl --install" in captured.out
+    assert "WSL1 unsupported" in captured.out
+    assert "wsl --set-version" in captured.out
 
 
 def test_assert_supported_exits_on_mnt_c(capsys):
