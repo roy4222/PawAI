@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Act1 語音 fast-path 觸發器 — rule-based、窄 intent、safety-gated。NO LLM / NO LangGraph。
 
-訂 /asr_result（raw ASR transcript）→ 命中固定中文關鍵字 → safety gate →
-觸發 scripts/act1_forward.sh（reactive demo_forward：短距直行 + 正前障礙安全停車）。
+雙訂 /brain/text_input（Studio 收音，JSON envelope）＋ /asr_result（Jetson 麥 raw）→
+命中固定中文關鍵字 → safety gate → 觸發 scripts/act1_forward.sh
+（reactive demo_forward **standalone /cmd_vel 直連**：短距直行 + 正前障礙安全停車）。
+
+⚠️ NEEDS_ROY_ESTOP_TEST（6/15）：底層 motion 已從撞過車的整合 mux 路徑改回 standalone
+   /cmd_vel 直連（見 start_reactive_forward_demo.sh header）。第一次 live 必須 Roy 手持
+   實體 e-stop + Go2 確認無損。本節點只是窄觸發 + 軟 safety gate，不是停車唯一來源。
 
 設計約束（6/15 Roy 拍板）：
   - 不接 LLM 決策、不走自由對話、不解析任意距離、不走到人面前。
-  - 固定短距：until obstacle / timeout（act1_forward.sh 內含 ~4s 上限）。
+  - 固定短距：until obstacle / timeout（act1_forward.sh 內含 ~2.4s 上限）。
   - 不建圖、不 AMCL、不 Nav2、不 goto_relative。只做短距直行 + 正前方停障。
 
 safety gate 直接訂 /scan_rplidar 自算前方最近距離（±18°、front_offset=π 補 LiDAR 反裝），

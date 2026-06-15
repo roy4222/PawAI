@@ -1,55 +1,92 @@
 #!/usr/bin/env bash
 # scripts/start_reactive_forward_demo.sh
-# ⚠️⚠️ NOT_DEMO_SAFE（6/15 實機撞車）：demo_forward 在 standalone 直發 /cmd_vel 時會停，
-#     但本腳本走「整合路徑」reactive → /cmd_vel_obstacle → twist_mux(200) → driver 時，
-#     reactive danger-stop **沒攔截到**、6/15 狗以 0.6m/s 直撞障礙。整合 motion 鎖 fallback，
-#     待查清 mux 路徑為何 danger-stop 不可靠（standalone 會、整合不會）才可再用。
-# Act1 demo_forward — 短距直行 + 正前障礙安全停車，整合進 PawAI brain demo stack。
+# Act1 demo_forward — 短距直行 + 正前障礙安全停車（STANDALONE /cmd_vel 直連路徑）。
+#
+# ⚠️⚠️ NEEDS_ROY_ESTOP_TEST（6/15 重做，根因見下）：
+#   上一版走「整合 mux」路徑（reactive → /cmd_vel_obstacle → twist_mux → driver）6/15 撞車。
+#   根因（Cloud 唯讀調查）＝ twist_mux 4.x **沒有 output timer、純 event-driven**，每個 input
+#   有 0.5s timeout：一旦 reactive 對 /cmd_vel_obstacle 的供給中斷 0.5s（enable=false 變沉默 /
+#   node 被殺 / enable 開太久後才 force-stop），mux 完全停止輸出 → driver 收不到新 /cmd_vel →
+#   Go2 繼續執行上一個 Move(0.6) 滑行 2-3s（sport timeout）→ 撞。standalone 直連沒有這層。
+#
+#   本版改回 **6/15 已實機驗過會停的 standalone /cmd_vel 直連**（reactive 每個 0 直達 driver →
+#   StopMove）。但「這個 build」尚未經真機 motion 驗證 → **第一次 live 必須 Roy 手持實體
+#   e-stop、且先確認 Go2 撞後無實體損壞**。不穩立刻走 fallback（遙控輔助 / 影片）。
 #
 # 定位（誠實 claim）：
-#   ✅ 短距離直行 + 正前方障礙安全停車（front-stop）
-#   ❌ 不是完整自主避障導航 / 不是動態繞障 / 不是走到人面前
+#   ✅ 短距直行 + 正前方障礙安全停車（front-stop）
+#   ❌ 不是自主避障導航 / 不是動態繞障 / 不是走到人面前
 #
-# 前提：先跑 `pawai demo start --with-lidar`，它提供：
-#   - brain demo（face/object/gesture/safety/Studio）
-#   - raw LiDAR /scan_rplidar（start_lidar_monitor_tmux.sh，已含 --ros-args fix）
-#   - 單一 go2_driver + twist_mux（robot.launch.py，mux 預設 on）
+# 前提：先 `pawai demo start --with-lidar`（提供唯一 go2_driver + raw LiDAR /scan_rplidar）。
 #
-# 本腳本只加 reactive_stop_node，**不開第二 driver / 不開 Nav2 / AMCL / 建圖 / goto**。
-# 它發 /cmd_vel_obstacle（twist_mux priority 200）→ mux 輸出 remap /cmd_vel_out→/cmd_vel
-# → brain demo 那個唯一 go2_driver 執行。S2-S5 走 /webrtc_req，與本路徑不衝突。
+# ⚠️ /cmd_vel 唯一 publisher 鐵則：
+#   brain demo 預設起 twist_mux + joy(teleop)，兩者也發 /cmd_vel → 與本版 standalone reactive
+#   衝突（且 hot /cmd_vel_joy 是 5/11 撞牆源）。brain 本身**不用 /cmd_vel**（動作走 /webrtc_req），
+#   所以殺 twist_mux/teleop/joy 不影響 face/object/gesture/safety/TTS。
+#   - 預設：本腳本**只提醒不自動殺**，並在 verify window 印出 /cmd_vel publisher 數讓你確認。
+#   - `ACT1_KILL_COMPETITORS=1 bash scripts/start_reactive_forward_demo.sh` → 自動 pkill 三者。
+#   ⮕ 啟動後務必看 verify window：/cmd_vel 必須剛好 1 個 publisher（reactive），否則別觸發 motion。
 #
-# enable=false 起步鎖住 → 無 motion，直到 operator 觸發：
-#   bash scripts/act1_forward.sh        # enable=true → 走 → 遇障停 → force-stop + lock
-#   bash scripts/act1_forward.sh hold   # 立刻 force-stop + lock
+# 觸發（三層共用同一條 act1_forward.sh，本腳本一併啟語音節點）：
+#   - 語音 / Studio 文字「往前走」→ act1_voice_trigger.py（window "voice"）→ act1_forward.sh
+#   - operator 手動：bash scripts/act1_forward.sh        # 短距前進 + 遇障停 + 鎖回
+#                    bash scripts/act1_forward.sh hold   # 立即急停 + 鎖回
 #
-# demo_forward 參數＝6/15 實機驗證版（Go2 走 ~0.75m、正前障礙前 ~30cm 停）：
-#   front_arc_deg=18（只看正前、忽略側牆）/ danger=1.1 / slow=1.3
-#   slow_speed=0.6（=normal，跳過 slow 區避開 Go2 MIN_X 0.5 卡住）/ normal=0.6
-#   front_offset_rad=π（LiDAR 反裝 yaw=π 補正）
+# demo_forward 參數＝6/15 實機驗證版（standalone 走 ~0.75m、正前障礙前 ~30cm 停）：
+#   front_arc_deg=18 / danger=1.1 / slow=1.3 / slow_speed=0.6(=normal,跳過 slow 避 Go2 MIN_X)
+#   normal_speed=0.6 / front_offset_rad=π(LiDAR 反裝補正)
 set -euo pipefail
 
 SESSION="act1react"
 ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh && source ~/elder_and_dog/install/setup.zsh"
-CMD_VEL_TOPIC="${ACT1_CMD_VEL_TOPIC:-/cmd_vel_obstacle}"   # mux input (priority 200); 改 /cmd_vel 才是 standalone
+# standalone 直連（已驗證會停）。改成 /cmd_vel_obstacle 會回到 6/15 撞過車的 mux 路徑 — 別改。
+CMD_VEL_TOPIC="${ACT1_CMD_VEL_TOPIC:-/cmd_vel}"
 FRONT_ARC="${ACT1_FRONT_ARC_DEG:-18.0}"
 DANGER="${ACT1_DANGER_M:-1.1}"
 SLOW="${ACT1_SLOW_M:-1.3}"
+KILL_COMPETITORS="${ACT1_KILL_COMPETITORS:-0}"
+VOICE_NODE="$HOME/elder_and_dog/scripts/act1_voice_trigger.py"
 
-echo "=== Act1 demo_forward reactive_stop (整合 brain stack via twist_mux) ==="
-echo "    publish=${CMD_VEL_TOPIC}  arc=±${FRONT_ARC}°  danger=${DANGER}m  slow=${SLOW}m  speed=0.6  enable=FALSE(locked)"
+echo "=== Act1 demo_forward reactive_stop (STANDALONE /cmd_vel 直連) ==="
+echo "    publish=${CMD_VEL_TOPIC}  arc=±${FRONT_ARC}°  danger=${DANGER}m  speed=0.6  enable=FALSE(locked)"
+
+# --- /cmd_vel 競爭 publisher 處置（pkill 不需 ROS env，shell-agnostic）---
+if [ "$KILL_COMPETITORS" = "1" ]; then
+  echo "[act1] ACT1_KILL_COMPETITORS=1 → 清掉 /cmd_vel 競爭 publisher（twist_mux/teleop/joy）"
+  echo "       brain 動作走 /webrtc_req，不受影響；go2_driver / 感知 / brain 不動。"
+  pkill -f twist_mux 2>/dev/null || true
+  pkill -f teleop_twist 2>/dev/null || true
+  pkill -f joy_node 2>/dev/null || true
+  sleep 1
+else
+  echo "[act1] ⚠ 未自動殺競爭 publisher（預設）。若 brain demo 有 twist_mux/joy，/cmd_vel 會有"
+  echo "       多個 publisher → motion 會打架。要嘛重跑帶 ACT1_KILL_COMPETITORS=1，要嘛確認"
+  echo "       brain demo 起時已關 mux+joystick。啟動後看 verify window 的 publisher 數。"
+fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 trap 'echo "Caught signal, killing tmux..."; tmux kill-session -t "$SESSION" 2>/dev/null || true' INT TERM
 
+# window 0: reactive_stop standalone /cmd_vel（無 mode/safety_only → standalone 0/slow/normal）
 tmux new-session -d -s "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args -p cmd_vel_topic:=${CMD_VEL_TOPIC} -p front_offset_rad:=3.14159 -p front_arc_deg:=${FRONT_ARC} -p danger_distance_m:=${DANGER} -p slow_distance_m:=${SLOW} -p slow_speed:=0.6 -p normal_speed:=0.6 -p enable:=false" Enter
-sleep 3
 
+# window 1: 語音 / Studio 文字 fast-path 觸發器（rule-based、scan-gated、NO LLM）
+tmux new-window -t "$SESSION" -n voice
+tmux send-keys -t "$SESSION:voice" "$ROS_SETUP && python3 ${VOICE_NODE}" Enter
+
+# window 2: verify — /cmd_vel 唯一 publisher 確認 + reactive 狀態（每 2s 刷新）
+tmux new-window -t "$SESSION" -n verify
+tmux send-keys -t "$SESSION:verify" "$ROS_SETUP && watch -n 2 'echo \"=== /cmd_vel publishers (期望剛好 1 = reactive) ===\"; ros2 topic info ${CMD_VEL_TOPIC} | grep -i \"publisher count\"; echo; echo \"=== 競爭者 (期望空) ===\"; ros2 node list | grep -E \"twist_mux|teleop|joy_node\" || echo \"(none)\"; echo; echo \"=== reactive enable (期望 False 直到觸發) ===\"; ros2 param get /reactive_stop_node enable'" Enter
+
+sleep 3
 echo ""
-echo "=== Started (LOCKED — 無 motion 直到 operator 觸發) ==="
-echo "  驗證: ros2 param get /reactive_stop_node enable        # 應為 False"
-echo "       ros2 node list | grep -c go2_driver               # 應為 1（brain demo 的，不應變 2）"
-echo "  觸發: bash ~/elder_and_dog/scripts/act1_forward.sh      # 短距前進 + 遇障停"
-echo "       bash ~/elder_and_dog/scripts/act1_forward.sh hold  # 立即停 + 鎖"
-echo "  Attach: tmux attach -t $SESSION   Kill: tmux kill-session -t $SESSION"
+echo "=== Started (LOCKED — 無 motion 直到觸發) ==="
+echo "  ⮕ 先看 verify window：/cmd_vel publisher 必須=1、競爭者=none，才可進行 motion。"
+echo "  驗證: tmux attach -t $SESSION   （window: reactive / voice / verify）"
+echo "  觸發(語音/Studio): 說「往前走」/ Studio 文字「往前走一點」"
+echo "  觸發(手動): bash ~/elder_and_dog/scripts/act1_forward.sh        # 前進+遇障停"
+echo "            bash ~/elder_and_dog/scripts/act1_forward.sh hold   # 立即急停+鎖"
+echo "  Kill: tmux kill-session -t $SESSION"
+echo ""
+echo "  ⚠️ 第一次 live = Roy 手持實體 e-stop + Go2 確認無損。不穩立刻 fallback。"
