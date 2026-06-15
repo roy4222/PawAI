@@ -159,3 +159,74 @@ ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative \
 - **secrets 只留本機 `.env.local`** — `pawai jetson deploy` 會排除 `.env` / `.env.*` / `.env.local` / `.ssh/`
 - **brain stack 起來後可跑 `pawai health brain`** — 它比手打 healthcheck 少踩 SSH alias / IP env 的坑
 - **nav capability 是手動 action 場測，不是語音導航 demo** — 不要對外說 Brain 已能導航
+## Future: PawAI CLI GUI installer / onboarding app
+
+> Status: post-6/18 follow-up. Do not block the live demo.
+
+Roy's later goal is to turn the PawAI CLI onboarding flow into a small GUI-style
+installer/launcher, closer to a downloadable executable than a manual terminal
+setup. The target audience is teachers, classmates, and future PawAI developers
+who should not need to hand-edit every environment variable or remember setup
+commands.
+
+### Desired user experience
+
+1. User downloads and opens the PawAI setup app.
+2. The app guides them through:
+   - selecting platform: macOS / Windows / WSL / Linux
+   - installing or checking required tools
+   - logging in or binding Tailscale
+   - entering Jetson / Go2 connection information
+   - generating `.env.local`
+   - running `pawai doctor`
+3. If checks pass, the app exposes common actions:
+   - start demo
+   - stop demo
+   - view status
+   - enroll face
+   - open Studio
+   - collect logs
+4. The user can connect to their own Go2 / Jetson by filling in the same values
+   that currently live in `.env.local`.
+
+### Configuration fields to guide
+
+- `JETSON_HOST`
+- `JETSON_TAILSCALE_IP`
+- `JETSON_HOSTNAME_HINT`
+- `ROBOT_IP`
+- OpenRouter / cloud keys when needed
+- Studio gateway URL
+- optional team/user identity for demo locks
+
+### Product shape
+
+Potential implementation directions:
+
+- Keep the existing `pawai` CLI as the backend engine.
+- Build a thin GUI wrapper that calls the same CLI commands and displays
+  results clearly.
+- Package per platform:
+  - macOS app bundle for demo operator use
+  - Windows installer for classmates / teachers
+  - WSL helper path for developers
+- Use `pawai doctor` as the main validation engine instead of duplicating
+  network and environment checks.
+- Store generated config in `.env.local` and never write secrets to git.
+
+### Non-goals before 6/18
+
+- Do not replace the current CLI before the live demo.
+- Do not make the GUI the only way to operate PawAI.
+- Do not hide fail-closed safety checks behind a pretty UI.
+- Do not auto-force demo locks owned by another user.
+
+### Acceptance criteria for the future GUI
+
+- A new user can install dependencies and generate `.env.local` without reading
+  the full setup docs.
+- The GUI can run `pawai doctor` and explain each red/yellow check in plain
+  language.
+- The GUI can start and stop the demo using the same code paths as the CLI.
+- The GUI works on the actual demo MacBook before being recommended to others.
+- Manual CLI commands remain available as the reliable fallback path.
