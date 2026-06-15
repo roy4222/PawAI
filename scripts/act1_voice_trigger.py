@@ -5,20 +5,22 @@
 命中固定中文關鍵字 → safety gate → 觸發 scripts/act1_forward.sh
 （reactive demo_forward **standalone /cmd_vel 直連**：短距直行 + 正前障礙安全停車）。
 
-⚠️ NEEDS_ROY_ESTOP_TEST（6/15）：底層 motion 已從撞過車的整合 mux 路徑改回 standalone
-   /cmd_vel 直連（見 start_reactive_forward_demo.sh header）。第一次 live 必須 Roy 手持
-   實體 e-stop + Go2 確認無損。本節點只是窄觸發 + 軟 safety gate，不是停車唯一來源。
+⚠️ NEEDS_ROY_ESTOP_TEST（6/15）：底層 motion 走 standalone /cmd_vel 直連
+   （見 start_reactive_forward_demo.sh header）。第一次 live 必須 Roy 手持實體 e-stop + Go2 確認無損。
+
+停車保證（6/15 對抗複查 A-2 修）：act1_forward.sh 被 subprocess.run timeout 觸發時是
+**直接 SIGKILL bash（不可捕捉，bash 的 trap 不會跑）** → 故停車保證下放到本節點的
+`_run_act1` finally：不論 act1_forward.sh 正常結束 / 例外 / 被 SIGKILL，Python 端都會
+`_guarantee_stop()`（enable=false + 直發 0 到 /cmd_vel → driver StopMove）。bash 的 trap 仍
+保留作 operator 手動執行路徑的保證。
 
 設計約束（6/15 Roy 拍板）：
   - 不接 LLM 決策、不走自由對話、不解析任意距離、不走到人面前。
-  - 固定短距：until obstacle / timeout（act1_forward.sh 內含 ~2.4s 上限）。
+  - 固定短距：act1_forward.sh enable=true → FORWARD_S(預設 2.0s) → 自停；reactive 於 danger 自動停。
   - 不建圖、不 AMCL、不 Nav2、不 goto_relative。只做短距直行 + 正前方停障。
 
 safety gate 直接訂 /scan_rplidar 自算前方最近距離（±18°、front_offset=π 補 LiDAR 反裝），
-**不依賴 reactive 的 zone**（reactive locked 時 zone 卡在 "init"、抓不到 danger）。
-
-三層觸發之「語音主線」；Studio hidden button / CLI 走同一個 act1_forward.sh。
-安全：移動中最終急停永遠是實體 e-stop 遙控器。本節點只是窄觸發 + 軟 safety gate。
+**不依賴 reactive 的 zone**。前錐無回波時 _front_min=None → _scan_ready()=False → 拒絕（fail-safe）。
 """
 import json
 import math
@@ -31,6 +33,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Twist
 
 KEYWORDS = ("往前走", "往前移動", "往前一點", "前進", "走一點", "過來一點", "往前")
 COOLDOWN_S = 8.0
@@ -40,12 +43,19 @@ FRONT_ARC_RAD = math.radians(18.0)
 FRONT_OFFSET_RAD = math.pi   # LiDAR 反裝 yaw=π 補正
 RANGE_MIN_M, RANGE_MAX_M = 0.10, 8.0
 ACT1_SCRIPT = os.path.expanduser("~/elder_and_dog/scripts/act1_forward.sh")
+REACTIVE_NODE = "/reactive_stop_node"
+CMD_VEL_TOPIC = os.environ.get("ACT1_CMD_VEL_TOPIC", "/cmd_vel")
+# bash 卡住的上限。逾時 subprocess.run 會 SIGKILL bash（bash trap 不跑）→ 故停車由本節點
+# finally 的 _guarantee_stop 保證。設小一點以限制「bash 卡住時」clear-path 續走距離。
+ACT1_TIMEOUT_S = 8.0
 
 
 class Act1VoiceTrigger(Node):
     def __init__(self):
         super().__init__("act1_voice_trigger")
         self.tts_pub = self.create_publisher(String, "/tts", 10)
+        # Python 端保證停車用（A-2）：直接發 0 到 /cmd_vel → driver StopMove。
+        self.cmd_pub = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
         # demo 走 Studio 收音 → /brain/text_input（JSON envelope）；Jetson 麥 → /asr_result（raw）
         self.create_subscription(String, "/brain/text_input", self._on_text_input, 10)
         self.create_subscription(String, "/asr_result", self._on_asr, 10)
@@ -80,6 +90,25 @@ class Act1VoiceTrigger(Node):
     def _scan_ready(self) -> bool:
         return self._front_min is not None and (time.monotonic() - self._scan_ts) < SCAN_FRESH_S
 
+    def _guarantee_stop(self):
+        """Python 端保證停車（A-2）。在 _run_act1 finally 跑，不論 act1_forward.sh 正常結束、
+        例外、或被 subprocess.run timeout SIGKILL（bash trap 不會跑）。先 enable=false 讓 reactive
+        閉嘴（避免和我們的 0 在 /cmd_vel 打架），再直發 0 → driver StopMove(discrete, 一次即停)。"""
+        try:
+            subprocess.run(
+                ["ros2", "param", "set", REACTIVE_NODE, "enable", "false"],
+                timeout=6, check=False,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+        stop = Twist()
+        for _ in range(8):
+            try:
+                self.cmd_pub.publish(stop)
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(0.1)
+
     def _on_asr(self, msg: String):
         self._handle_text((msg.data or "").strip(), "asr")
 
@@ -87,7 +116,7 @@ class Act1VoiceTrigger(Node):
         # Studio path: JSON envelope {"text": "...", "source": "studio_text"}
         try:
             text = str(json.loads(msg.data).get("text") or "").strip()
-        except Exception:
+        except Exception:  # noqa: BLE001
             text = (msg.data or "").strip()  # tolerate raw string
         self._handle_text(text, "studio")
 
@@ -104,9 +133,10 @@ class Act1VoiceTrigger(Node):
         threading.Thread(target=self._run_act1, daemon=True).start()
 
     def _run_act1(self):
+        moved = False
         try:
             front = self._front_min
-            # gate 1: 感知就緒？
+            # gate 1: 感知就緒？（前錐無回波 → _front_min=None → _scan_ready False → 拒絕）
             if not self._scan_ready():
                 self._say("目前前方感知尚未就緒，我先不移動。")
                 return
@@ -118,12 +148,16 @@ class Act1VoiceTrigger(Node):
             # clear → 放行短距前進
             self.get_logger().info(f"front={front:.2f}m clear → forward")
             self._say("好，我往前走一點。")
+            moved = True
             time.sleep(0.3)
-            try:
-                subprocess.run(["bash", ACT1_SCRIPT], timeout=15, check=False)
-            except Exception as exc:  # noqa: BLE001
-                self.get_logger().error(f"act1_forward.sh 失敗: {exc}")
+            subprocess.run(["bash", ACT1_SCRIPT], timeout=ACT1_TIMEOUT_S, check=False)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error(f"act1_forward.sh 失敗: {exc}")
         finally:
+            # A-2 保證：只要本次有放行 motion，不論上面如何結束（含 timeout SIGKILL bash），
+            # Python 端一定 force-stop。沒放行（gate 擋下）則不碰 enable/cmd_vel。
+            if moved:
+                self._guarantee_stop()
             self._busy = False
 
 

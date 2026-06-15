@@ -80,26 +80,40 @@ tmux send-keys -t "$SESSION:voice" "$ROS_SETUP && python3 ${VOICE_NODE}" Enter
 tmux new-window -t "$SESSION" -n verify
 tmux send-keys -t "$SESSION:verify" "$ROS_SETUP && watch -n 2 'echo \"=== /cmd_vel publishers (期望剛好 1 = reactive) ===\"; ros2 topic info ${CMD_VEL_TOPIC} | grep -i \"publisher count\"; echo; echo \"=== 競爭者 (期望空) ===\"; ros2 node list | grep -E \"twist_mux|teleop|joy_node\" || echo \"(none)\"; echo; echo \"=== reactive enable (期望 False 直到觸發) ===\"; ros2 param get /reactive_stop_node enable'" Enter
 
-sleep 3
+sleep 2
 
-# --- A-1 fail-safe gate：確認 /cmd_vel 唯一 publisher，偵測到 >1 就拒絕進 motion ---
+# --- A-1 fail-safe gate（對抗複查 blocker 2/3 修：fail-closed + 輪詢等就緒）---
 # bash body source setup.bash 與 zsh panes 不同 process、不算混用。reactive 在 __init__ 建
-# /cmd_vel publisher（即使 enable=false 也算一個 publisher），故此檢查在 LOCKED 狀態仍有效。
+# /cmd_vel publisher（enable=false 也算一個），故 LOCKED 狀態仍數得到。輪詢吸收 discovery 延遲；
+# 偵測到 >1 立即拒絕；等不到「reactive 就緒且剛好 1 publisher」也 fail-closed 拒絕（不靠人/不放行）。
 (
   source /opt/ros/humble/setup.bash 2>/dev/null || true
   source ~/elder_and_dog/install/setup.bash 2>/dev/null || true
-  PUBCOUNT=$(ros2 topic info "$CMD_VEL_TOPIC" 2>/dev/null | grep -i "publisher count" | grep -oE '[0-9]+' | head -1)
-  if [ -n "$PUBCOUNT" ] && [ "$PUBCOUNT" -gt 1 ] 2>/dev/null; then
+  ready=0
+  for _ in $(seq 1 12); do
+    NODES=$(ros2 node list 2>/dev/null || true)
+    REACTIVE_UP=$(printf '%s\n' "$NODES" | grep -c 'reactive_stop' || true)
+    PUBCOUNT=$(ros2 topic info "$CMD_VEL_TOPIC" 2>/dev/null | grep -iE 'publisher count' | grep -oE '[0-9]+' | head -1)
+    if [ -n "$PUBCOUNT" ] && [ "$PUBCOUNT" -gt 1 ] 2>/dev/null; then
+      echo ""
+      echo "🔴 拒絕：${CMD_VEL_TOPIC} 有 ${PUBCOUNT} 個 publisher（期望 1）= 雙 publisher 打架、danger-stop 會失效。"
+      echo "   多半是 brain demo 的 twist_mux/joy 還在。處置：ACT1_KILL_COMPETITORS=1 重跑，或 brain demo 起時關 mux+joystick。"
+      tmux kill-session -t "$SESSION" 2>/dev/null || true
+      exit 1
+    fi
+    if [ "$REACTIVE_UP" -ge 1 ] 2>/dev/null && [ "$PUBCOUNT" = "1" ]; then
+      ready=1; break
+    fi
+    sleep 1
+  done
+  if [ "$ready" != "1" ]; then
     echo ""
-    echo "🔴 拒絕：${CMD_VEL_TOPIC} 有 ${PUBCOUNT} 個 publisher（期望 1）= 雙 publisher 打架、danger-stop 會失效。"
-    echo "   多半是 brain demo 的 twist_mux/joy 還在。處置：ACT1_KILL_COMPETITORS=1 重跑，或 brain demo 起時關 mux+joystick。"
+    echo "🔴 拒絕（fail-closed）：~12s 內無法確認 ${CMD_VEL_TOPIC} 剛好 1 個 publisher 且 reactive 已就緒。"
+    echo "   可能 reactive 沒起、或 ros2 查詢卡住。不確定就不進 motion。看 tmux 'reactive' window 排除後重跑。"
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     exit 1
-  elif [ -z "$PUBCOUNT" ]; then
-    echo "[act1] ⚠ 無法確認 ${CMD_VEL_TOPIC} publisher 數（ros2 查詢失敗）— 進 motion 前務必到 verify window 手動確認 =1。"
-  else
-    echo "[act1] ✓ ${CMD_VEL_TOPIC} publisher = ${PUBCOUNT}（唯一，OK）。"
   fi
+  echo "[act1] ✓ reactive 就緒、${CMD_VEL_TOPIC} publisher = 1（唯一）。"
 ) || exit 1
 
 echo ""

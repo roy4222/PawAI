@@ -100,9 +100,16 @@ tmux kill-session -t act1react                       # 關 reactive + voice
   （犧牲正前精度）或速度壓 ≤0.2（但撞 Go2 MIN_X 0.5、需另解）。
 - standalone 直連已消除「mux 中介層 timeout 滑行」，但若 **reactive node 在前進中被殺**，
   driver 仍會因 Go2「最後 Move 滑行」滑 2-3s。→ 過程中 reactive 不要去 kill；e-stop 是底線。
-- **force_stop 已用 `trap EXIT/TERM/INT` 保證執行**（A-2 修）：act1_forward.sh 任何退出路徑都先停。
-  但 voice 的 subprocess 若 SIGKILL bash（FORWARD_S 2.0s << timeout 15s，正常不會），則靠 reactive
-  自身 danger-stop（單一 publisher 下仍有效）+ e-stop 兜底。
+- **停車雙重保證（A-2 修 + 對抗複查）**：operator 手動跑 `act1_forward.sh` → bash `trap
+  EXIT/TERM/INT` 保證 force_stop。voice 路徑 → 即使 subprocess timeout **直接 SIGKILL bash（bash
+  trap 不會跑）**，voice node 的 **`finally._guarantee_stop()`（Python 端、一定執行）** 也會
+  `enable=false` + 直發 0 到 /cmd_vel → StopMove。**殘留**：SIGKILL 情況下 `enable=false` 傳播
+  ~1-2s 內 reactive 可能再發幾個 0.6（多走 ~1-2s）→ 由 reactive danger-stop（單一 publisher 下有效）
+  + e-stop 兜底。
+- **唯一 publisher gate 已 fail-closed**（對抗複查）：start 腳本輪詢等「reactive 就緒且 /cmd_vel
+  剛好 1 publisher」才放行；偵測 >1 或 ~12s 等不到 → 自動關 session 拒絕（不靠人讀 verify）。
+- ⚠️ **本整套 Act1 是「靜態/單元/對抗複查」驗過，不是 motion 實測**：第一次 live 的「狗真的走+真的停」
+  只有你手持 e-stop 能驗。
 - **治本**＝ driver 層加「cmd_vel 供給 watchdog」（>Ns 沒收到且上一個非零 Move → 自動 StopMove），
   把 Go2 sport 最後-Move 滑行在 actuation 層收口。改 actuation、需真機校 → **排 post-6/18**
   （見 unified-demo plan LT-6 / Cloud A 調查報告修法 D）。本次**不做**。
