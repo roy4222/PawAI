@@ -38,12 +38,14 @@ driver → StopMove）。已驗證的部分：
 bash ~/elder_and_dog/scripts/start_reactive_forward_demo.sh
 ```
 
-腳本尾端會印 **`✓ /cmd_vel publisher = 1（唯一，OK）`**；若印 **`🔴 拒絕`** 代表競爭者還在
-→ 已自動關閉 session，照提示處置後重跑（**不要硬上**）。亦可 `tmux attach -t act1react`：
-- window `verify`：`/cmd_vel publisher count` **=1**、`競爭者` **(none)**、`reactive enable` **False**。
+腳本尾端會印 **`✓ reactive 就緒、無競爭 node、/cmd_vel publisher=2`**；若印 **`🔴 拒絕`**
+代表競爭 node（twist_mux/teleop/joy）還在 → 已自動關閉 session，照提示處置後重跑（**不要硬上**）。
+亦可 `tmux attach -t act1react`：
+- window `verify`：`競爭者` 必須 **(none)**（**這才是關鍵**）、`reactive enable` **False**、
+  `/cmd_vel publisher` **=2 正常**（reactive + voice node 的 stop-pub，協調不打架；只要競爭者空就對）。
 - window `reactive` / `voice`：分別是 reactive node 與語音觸發器。
 
-> 三項任一不對 → 不要進 motion（腳本偵測到 publisher>1 已會自動拒絕，但仍親眼確認一次）。
+> **競爭者非空 或 reactive 沒起 → 不要進 motion**（gate 偵測到競爭 node / publisher>2 已會自動拒絕，仍親眼確認一次）。
 
 ---
 

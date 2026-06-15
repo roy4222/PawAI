@@ -19,13 +19,14 @@
 #
 # 前提：先 `pawai demo start --with-lidar`（提供唯一 go2_driver + raw LiDAR /scan_rplidar）。
 #
-# ⚠️ /cmd_vel 唯一 publisher 鐵則：
-#   brain demo 預設起 twist_mux + joy(teleop)，兩者也發 /cmd_vel → 與本版 standalone reactive
-#   衝突（且 hot /cmd_vel_joy 是 5/11 撞牆源）。brain 本身**不用 /cmd_vel**（動作走 /webrtc_req），
-#   所以殺 twist_mux/teleop/joy 不影響 face/object/gesture/safety/TTS。
-#   - 預設：本腳本**只提醒不自動殺**，並在 verify window 印出 /cmd_vel publisher 數讓你確認。
-#   - `ACT1_KILL_COMPETITORS=1 bash scripts/start_reactive_forward_demo.sh` → 自動 pkill 三者。
-#   ⮕ 啟動後務必看 verify window：/cmd_vel 必須剛好 1 個 publisher（reactive），否則別觸發 motion。
+# ⚠️ /cmd_vel 無競爭 driver 鐵則：
+#   brain demo 預設起 twist_mux + joy(teleop)，兩者也發 /cmd_vel → 與 standalone reactive 搶、
+#   danger-stop 失效（且 hot /cmd_vel_joy 是 5/11 撞牆源）。brain 本身**不用 /cmd_vel**（動作走
+#   /webrtc_req），所以殺 twist_mux/teleop/joy 不影響 face/object/gesture/safety/TTS。
+#   - **預設 ACT1_KILL_COMPETITORS=1**：自動 pkill twist_mux/teleop/joy。設 0 才不殺（不建議）。
+#   - 啟動後 gate 自動驗「無競爭 node + reactive 就緒」，否則 fail-closed 拒絕。
+#   注意：/cmd_vel **正常會有 2 個 publisher**（reactive + voice node 的 stop-pub，A-2 保證停車用、
+#   只在 enable=false 後發 0、彼此協調不打架），這是設計；關鍵看「競爭 node 是否為空」非 raw count。
 #
 # 觸發（三層共用同一條 act1_forward.sh，本腳本一併啟語音節點）：
 #   - 語音 / Studio 文字「往前走」→ act1_voice_trigger.py（window "voice"）→ act1_forward.sh
@@ -78,42 +79,49 @@ tmux send-keys -t "$SESSION:voice" "$ROS_SETUP && python3 ${VOICE_NODE}" Enter
 
 # window 2: verify — /cmd_vel 唯一 publisher 確認 + reactive 狀態（每 2s 刷新）
 tmux new-window -t "$SESSION" -n verify
-tmux send-keys -t "$SESSION:verify" "$ROS_SETUP && watch -n 2 'echo \"=== /cmd_vel publishers (期望剛好 1 = reactive) ===\"; ros2 topic info ${CMD_VEL_TOPIC} | grep -i \"publisher count\"; echo; echo \"=== 競爭者 (期望空) ===\"; ros2 node list | grep -E \"twist_mux|teleop|joy_node\" || echo \"(none)\"; echo; echo \"=== reactive enable (期望 False 直到觸發) ===\"; ros2 param get /reactive_stop_node enable'" Enter
+tmux send-keys -t "$SESSION:verify" "$ROS_SETUP && watch -n 2 'echo \"=== /cmd_vel publishers (期望 ≤2 = reactive+voice；下方競爭者才是關鍵) ===\"; ros2 topic info ${CMD_VEL_TOPIC} | grep -i \"publisher count\"; echo; echo \"=== 競爭者 (期望空) ===\"; ros2 node list | grep -E \"twist_mux|teleop|joy_node\" || echo \"(none)\"; echo; echo \"=== reactive enable (期望 False 直到觸發) ===\"; ros2 param get /reactive_stop_node enable'" Enter
 
 sleep 2
 
-# --- A-1 fail-safe gate（對抗複查 blocker 2/3 修：fail-closed + 輪詢等就緒）---
-# bash body source setup.bash 與 zsh panes 不同 process、不算混用。reactive 在 __init__ 建
-# /cmd_vel publisher（enable=false 也算一個），故 LOCKED 狀態仍數得到。輪詢吸收 discovery 延遲；
-# 偵測到 >1 立即拒絕；等不到「reactive 就緒且剛好 1 publisher」也 fail-closed 拒絕（不靠人/不放行）。
+# --- fail-safe gate（fail-closed + 輪詢等就緒）---
+# 安全不變式＝「**無不協調競爭 driver**」(twist_mux/teleop/joy/nav 直發 /cmd_vel)，**不是** raw
+# count==1：voice node 自己也在 /cmd_vel 開了 cmd_pub（A-2 保證停車用、只在 enable=false 後發 0），
+# 所以正常情況 /cmd_vel 有 2 個 publisher（reactive + voice）且彼此協調、不打架。故 gate 改檢查
+# 競爭 node 是否存在 + reactive 是否就緒；偵測競爭 node 或 publisher>2(未知 driver) → fail-closed 拒絕。
 (
   source /opt/ros/humble/setup.bash 2>/dev/null || true
   source ~/elder_and_dog/install/setup.bash 2>/dev/null || true
   ready=0
   for _ in $(seq 1 12); do
     NODES=$(ros2 node list 2>/dev/null || true)
+    COMP=$(printf '%s\n' "$NODES" | grep -cE 'twist_mux|teleop|joy_node' || true)
     REACTIVE_UP=$(printf '%s\n' "$NODES" | grep -c 'reactive_stop' || true)
     PUBCOUNT=$(ros2 topic info "$CMD_VEL_TOPIC" 2>/dev/null | grep -iE 'publisher count' | grep -oE '[0-9]+' | head -1)
-    if [ -n "$PUBCOUNT" ] && [ "$PUBCOUNT" -gt 1 ] 2>/dev/null; then
+    if [ "${COMP:-0}" -ge 1 ] 2>/dev/null; then
       echo ""
-      echo "🔴 拒絕：${CMD_VEL_TOPIC} 有 ${PUBCOUNT} 個 publisher（期望 1）= 雙 publisher 打架、danger-stop 會失效。"
-      echo "   多半是 brain demo 的 twist_mux/joy 還在。處置：ACT1_KILL_COMPETITORS=1 重跑，或 brain demo 起時關 mux+joystick。"
+      echo "🔴 拒絕：偵測到競爭 node（twist_mux/teleop/joy）還在 → 會與 reactive 搶 /cmd_vel、danger-stop 失效。"
+      echo "   處置：ACT1_KILL_COMPETITORS=1 重跑，或確認 brain demo 起時關 mux+joystick。"
       tmux kill-session -t "$SESSION" 2>/dev/null || true
       exit 1
     fi
-    if [ "$REACTIVE_UP" -ge 1 ] 2>/dev/null && [ "$PUBCOUNT" = "1" ]; then
+    if [ -n "$PUBCOUNT" ] && [ "$PUBCOUNT" -gt 2 ] 2>/dev/null; then
+      echo ""
+      echo "🔴 拒絕：${CMD_VEL_TOPIC} 有 ${PUBCOUNT} 個 publisher（預期 ≤2＝reactive+voice）→ 有未知 driver 在發 /cmd_vel。"
+      tmux kill-session -t "$SESSION" 2>/dev/null || true
+      exit 1
+    fi
+    if [ "${REACTIVE_UP:-0}" -ge 1 ] 2>/dev/null && [ -n "$PUBCOUNT" ]; then
       ready=1; break
     fi
     sleep 1
   done
   if [ "$ready" != "1" ]; then
     echo ""
-    echo "🔴 拒絕（fail-closed）：~12s 內無法確認 ${CMD_VEL_TOPIC} 剛好 1 個 publisher 且 reactive 已就緒。"
-    echo "   可能 reactive 沒起、或 ros2 查詢卡住。不確定就不進 motion。看 tmux 'reactive' window 排除後重跑。"
+    echo "🔴 拒絕（fail-closed）：~12s 內無法確認 reactive 就緒 + 無競爭 node。看 tmux 'reactive' window 排除後重跑。"
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     exit 1
   fi
-  echo "[act1] ✓ reactive 就緒、${CMD_VEL_TOPIC} publisher = 1（唯一）。"
+  echo "[act1] ✓ reactive 就緒、無競爭 node、${CMD_VEL_TOPIC} publisher=${PUBCOUNT}（reactive + voice stop-pub，正常）。"
 ) || exit 1
 
 echo ""
