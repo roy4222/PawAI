@@ -1,12 +1,12 @@
 # PawAI CLI — MacBook 現場操作 Runbook（6/18 demo 操作機）
 
-> 日期：2026-06-15　狀態：**code 面已驗證可用，實機綠燈待 Roy 在 Mac 跑一輪**
+> 日期：2026-06-15　狀態：**靜態分析（code 層唯讀）強烈支持可用 — 但未在任何 Mac 實機跑過；實機綠燈待 Roy 在 Mac 跑一輪**（靜態分析 ≠ 已驗證）
 > 目的：6/18 用 MacBook 當現場操作機（起停 demo、看 log、註冊人臉）。
 > 一句話：**macOS 是已明確支援的一級平台，CLI 把 Mac 當 SSH 跳板、所有 ROS2 在 Jetson 跑。WSL 測過 ≠ Mac 跑過，下面標 ⚠️ 的項目必須你在實體 Mac 上跑過才算數。**
 
 ---
 
-## 0. 已驗證的事實（code 層，唯讀調查 6/15）
+## 0. 靜態分析結論（code 層唯讀調查 6/15，**未實機 = 非「已驗證」**）
 
 | 項目 | 結論 | 證據 |
 |---|---|---|
@@ -88,6 +88,8 @@ pawai demo stop                     # 清 Mac frontend + Jetson tmux/process
 ```
 
 ---
+
+> **⚠️ Act1 motion 不從 Mac 觸發**：`--with-lidar` 只起 raw LiDAR 證據窗（**無 motion**）。Act1 短距前進 = motion，**一律在 Jetson 端、由 Roy 手持實體 e-stop 跑**（見 `docs/navigation/2026-06-15-act1-demo-forward-estop-runbook.md`）。Mac 只負責起 brain demo / 看 log / face enroll。**別從 Mac 觸發 Act1**（雙 publisher 撞狗風險的 A-1 blocker 就活在這個 demo stack 上）。
 
 ## 3. ⚠️ 必須在實體 Mac 上跑過才算數（我無法在 WSL 替代）
 

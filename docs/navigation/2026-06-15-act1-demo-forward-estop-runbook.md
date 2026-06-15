@@ -30,20 +30,20 @@ driver → StopMove）。已驗證的部分：
 
 ---
 
-## 2. 啟動 Act1（standalone + 唯一 publisher）
+## 2. 啟動 Act1（standalone + 唯一 publisher，fail-safe）
 
 ```bash
-# brain demo 預設有 twist_mux + joy 也發 /cmd_vel → 必須讓 reactive 成唯一 publisher。
+# 預設(ACT1_KILL_COMPETITORS=1)就會殺 /cmd_vel 競爭者(twist_mux/teleop/joy)+啟動後驗 publisher==1。
 # brain 動作走 /webrtc_req、不用 /cmd_vel，殺這三個不影響 face/object/gesture/safety/TTS。
-ACT1_KILL_COMPETITORS=1 bash ~/elder_and_dog/scripts/start_reactive_forward_demo.sh
+bash ~/elder_and_dog/scripts/start_reactive_forward_demo.sh
 ```
 
-**啟動後務必看 `verify` window**（`tmux attach -t act1react` → window `verify`）：
-- `/cmd_vel publisher count` **必須 = 1**（就是 reactive）。≠1 → **停**，先查競爭 publisher。
-- `競爭者 (twist_mux/teleop/joy)` 必須 **(none)**。
-- `reactive enable` 必須 **False**（鎖住、無 motion）。
+腳本尾端會印 **`✓ /cmd_vel publisher = 1（唯一，OK）`**；若印 **`🔴 拒絕`** 代表競爭者還在
+→ 已自動關閉 session，照提示處置後重跑（**不要硬上**）。亦可 `tmux attach -t act1react`：
+- window `verify`：`/cmd_vel publisher count` **=1**、`競爭者` **(none)**、`reactive enable` **False**。
+- window `reactive` / `voice`：分別是 reactive node 與語音觸發器。
 
-> 三項任一不對 → 不要進 motion。
+> 三項任一不對 → 不要進 motion（腳本偵測到 publisher>1 已會自動拒絕，但仍親眼確認一次）。
 
 ---
 
@@ -92,8 +92,17 @@ tmux kill-session -t act1react                       # 關 reactive + voice
 
 ## 6. 殘留風險（誠實揭露，治本歸 post-6/18）
 
+- 🔴 **±18° 窄錐 = 側前盲區（最該記住）**：demo_forward 用 `front_arc_deg=18` + `normal_speed=0.6`
+  （Roy 拍板，為短距正前 + 避開 Go2 MIN_X 0.5）。±18° 在 1.1m 只覆蓋正前約 **±0.34m 寬** →
+  **稍微偏離正前的障礙（桌腳/牆角/人的腳）落在錐外、不算 danger、不會停**（0.6m/s + 機鼻前 0.5m 會撞）。
+  這與專案「窄錐必須綁低速 ≤0.2」鐵律（`docs/navigation/CLAUDE.md`）相違，能成立**完全賭在場地**：
+  故 §1 要求正前淨空、**左右無貼牆/近身家具**、障礙擺**正前正中**。要側向覆蓋＝錐放寬 ±30°
+  （犧牲正前精度）或速度壓 ≤0.2（但撞 Go2 MIN_X 0.5、需另解）。
 - standalone 直連已消除「mux 中介層 timeout 滑行」，但若 **reactive node 在前進中被殺**，
   driver 仍會因 Go2「最後 Move 滑行」滑 2-3s。→ 過程中 reactive 不要去 kill；e-stop 是底線。
+- **force_stop 已用 `trap EXIT/TERM/INT` 保證執行**（A-2 修）：act1_forward.sh 任何退出路徑都先停。
+  但 voice 的 subprocess 若 SIGKILL bash（FORWARD_S 2.0s << timeout 15s，正常不會），則靠 reactive
+  自身 danger-stop（單一 publisher 下仍有效）+ e-stop 兜底。
 - **治本**＝ driver 層加「cmd_vel 供給 watchdog」（>Ns 沒收到且上一個非零 Move → 自動 StopMove），
   把 Go2 sport 最後-Move 滑行在 actuation 層收口。改 actuation、需真機校 → **排 post-6/18**
   （見 unified-demo plan LT-6 / Cloud A 調查報告修法 D）。本次**不做**。
