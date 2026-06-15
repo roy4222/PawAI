@@ -92,17 +92,37 @@ class Act1VoiceTrigger(Node):
 
     def _guarantee_stop(self):
         """Python 端保證停車（A-2）。在 _run_act1 finally 跑，不論 act1_forward.sh 正常結束、
-        例外、或被 subprocess.run timeout SIGKILL（bash trap 不會跑）。先 enable=false 讓 reactive
-        閉嘴（避免和我們的 0 在 /cmd_vel 打架），再直發 0 → driver StopMove(discrete, 一次即停)。"""
-        try:
-            subprocess.run(
-                ["ros2", "param", "set", REACTIVE_NODE, "enable", "false"],
-                timeout=6, check=False,
+        例外、或被 subprocess.run timeout SIGKILL（bash trap 不會跑）。
+
+        ⚠️ 真正讓狗停的是 enable=false（reactive 停止發 normal_speed 0.6）—— 那串 0 與
+        reactive 殘留的 0.6 在 driver 是**交錯流**（每個 0.6 會 reset StopMove dedupe），
+        不是覆蓋。所以 enable=false **必須成功**：重試 + log，不再靜默吞掉失敗（對抗複查 #3）。
+        若多次失敗 → 大聲 log，靠 reactive 自身 scan danger-stop + 實體 e-stop 兜底。"""
+        disabled = False
+        for attempt in range(3):
+            try:
+                r = subprocess.run(
+                    ["ros2", "param", "set", REACTIVE_NODE, "enable", "false"],
+                    timeout=6, check=False, capture_output=True, text=True,
+                )
+                if r.returncode == 0:
+                    disabled = True
+                    break
+                self.get_logger().warn(
+                    f"enable=false 第 {attempt + 1} 次未成功 rc={r.returncode} "
+                    f"out={(r.stdout or '').strip()!r} err={(r.stderr or '').strip()!r}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn(f"enable=false 第 {attempt + 1} 次例外: {exc}")
+            time.sleep(0.2)
+        if not disabled:
+            self.get_logger().error(
+                "⚠ enable=false 多次失敗 — reactive 可能仍 enable、續發 0.6；"
+                "靠 reactive danger-stop + 實體 e-stop 兜底！"
             )
-        except Exception:  # noqa: BLE001
-            pass
+        # enable=false 後 reactive 已閉嘴 → 這串 0 才能乾淨觸發 StopMove（discrete, 一次即停）。
         stop = Twist()
-        for _ in range(8):
+        for _ in range(10):
             try:
                 self.cmd_pub.publish(stop)
             except Exception:  # noqa: BLE001

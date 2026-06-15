@@ -108,7 +108,13 @@ tmux kill-session -t act1react                       # 關 reactive + voice
   + e-stop 兜底。
 - **唯一 publisher gate 已 fail-closed**（對抗複查）：start 腳本輪詢等「reactive 就緒且 /cmd_vel
   剛好 1 publisher」才放行；偵測 >1 或 ~12s 等不到 → 自動關 session 拒絕（不靠人讀 verify）。
-- ⚠️ **本整套 Act1 是「靜態/單元/對抗複查」驗過，不是 motion 實測**：第一次 live 的「狗真的走+真的停」
+- **`_guarantee_stop` 真正讓狗停的是 `enable=false`**（對抗複查 #3）：那串 0 與 reactive 殘留的
+  0.6 在 driver 是交錯流（非覆蓋），所以 `enable=false` 已改 **retry 3 次 + 失敗大聲 log**（不再
+  靜默吞）；多次失敗時靠 reactive scan danger-stop + e-stop 兜底。
+- **殘留 #1（低機率）**：voice node 的停車在 daemon thread，若**正好在 ~2s motion 窗按 Ctrl-C
+  關 voice node**，`_guarantee_stop` 可能被 shutdown 競態殺到一半。→ 要停狗**用實體 e-stop，不要靠
+  Ctrl-C voice node**（保留 daemon=true 是為了 Ctrl-C 能即時退出、不卡 14s）。
+- ⚠️ **本整套 Act1 是「靜態/單元/三輪對抗複查」驗過，不是 motion 實測**：第一次 live 的「狗真的走+真的停」
   只有你手持 e-stop 能驗。
 - **治本**＝ driver 層加「cmd_vel 供給 watchdog」（>Ns 沒收到且上一個非零 Move → 自動 StopMove），
   把 Go2 sport 最後-Move 滑行在 actuation 層收口。改 actuation、需真機校 → **排 post-6/18**
