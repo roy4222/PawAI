@@ -44,24 +44,25 @@ CMD_VEL_TOPIC="${ACT1_CMD_VEL_TOPIC:-/cmd_vel}"
 FRONT_ARC="${ACT1_FRONT_ARC_DEG:-18.0}"
 DANGER="${ACT1_DANGER_M:-1.1}"
 SLOW="${ACT1_SLOW_M:-1.3}"
-KILL_COMPETITORS="${ACT1_KILL_COMPETITORS:-0}"
+KILL_COMPETITORS="${ACT1_KILL_COMPETITORS:-1}"
 VOICE_NODE="$HOME/elder_and_dog/scripts/act1_voice_trigger.py"
 
 echo "=== Act1 demo_forward reactive_stop (STANDALONE /cmd_vel 直連) ==="
 echo "    publish=${CMD_VEL_TOPIC}  arc=±${FRONT_ARC}°  danger=${DANGER}m  speed=0.6  enable=FALSE(locked)"
 
-# --- /cmd_vel 競爭 publisher 處置（pkill 不需 ROS env，shell-agnostic）---
+# --- /cmd_vel 唯一 publisher：fail-safe 預設殺競爭者（A-1 對抗複查修正：預設改 1）---
+# brain demo 預設起 twist_mux + joy 也發 /cmd_vel → 與 standalone reactive 雙 publisher 打架、
+# danger-stop 可能被打斷（撞狗）。brain 動作走 /webrtc_req，殺 mux/teleop/joy 不影響
+# face/object/gesture/safety/TTS（C++ 子 node 不 respawn、launch parent 不因子 node 退出而死）。
 if [ "$KILL_COMPETITORS" = "1" ]; then
-  echo "[act1] ACT1_KILL_COMPETITORS=1 → 清掉 /cmd_vel 競爭 publisher（twist_mux/teleop/joy）"
-  echo "       brain 動作走 /webrtc_req，不受影響；go2_driver / 感知 / brain 不動。"
+  echo "[act1] 清掉 /cmd_vel 競爭 publisher（twist_mux/teleop/joy）— brain 走 /webrtc_req 不受影響"
   pkill -f twist_mux 2>/dev/null || true
   pkill -f teleop_twist 2>/dev/null || true
   pkill -f joy_node 2>/dev/null || true
   sleep 1
 else
-  echo "[act1] ⚠ 未自動殺競爭 publisher（預設）。若 brain demo 有 twist_mux/joy，/cmd_vel 會有"
-  echo "       多個 publisher → motion 會打架。要嘛重跑帶 ACT1_KILL_COMPETITORS=1，要嘛確認"
-  echo "       brain demo 起時已關 mux+joystick。啟動後看 verify window 的 publisher 數。"
+  echo "[act1] ⚠⚠ ACT1_KILL_COMPETITORS=0：你選擇不殺競爭者。若 brain demo 有 twist_mux/joy，"
+  echo "       /cmd_vel 會雙 publisher 打架、danger-stop 可能失效（撞狗）。下方 verify 偵測到 >1 會拒絕。"
 fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -80,6 +81,27 @@ tmux new-window -t "$SESSION" -n verify
 tmux send-keys -t "$SESSION:verify" "$ROS_SETUP && watch -n 2 'echo \"=== /cmd_vel publishers (期望剛好 1 = reactive) ===\"; ros2 topic info ${CMD_VEL_TOPIC} | grep -i \"publisher count\"; echo; echo \"=== 競爭者 (期望空) ===\"; ros2 node list | grep -E \"twist_mux|teleop|joy_node\" || echo \"(none)\"; echo; echo \"=== reactive enable (期望 False 直到觸發) ===\"; ros2 param get /reactive_stop_node enable'" Enter
 
 sleep 3
+
+# --- A-1 fail-safe gate：確認 /cmd_vel 唯一 publisher，偵測到 >1 就拒絕進 motion ---
+# bash body source setup.bash 與 zsh panes 不同 process、不算混用。reactive 在 __init__ 建
+# /cmd_vel publisher（即使 enable=false 也算一個 publisher），故此檢查在 LOCKED 狀態仍有效。
+(
+  source /opt/ros/humble/setup.bash 2>/dev/null || true
+  source ~/elder_and_dog/install/setup.bash 2>/dev/null || true
+  PUBCOUNT=$(ros2 topic info "$CMD_VEL_TOPIC" 2>/dev/null | grep -i "publisher count" | grep -oE '[0-9]+' | head -1)
+  if [ -n "$PUBCOUNT" ] && [ "$PUBCOUNT" -gt 1 ] 2>/dev/null; then
+    echo ""
+    echo "🔴 拒絕：${CMD_VEL_TOPIC} 有 ${PUBCOUNT} 個 publisher（期望 1）= 雙 publisher 打架、danger-stop 會失效。"
+    echo "   多半是 brain demo 的 twist_mux/joy 還在。處置：ACT1_KILL_COMPETITORS=1 重跑，或 brain demo 起時關 mux+joystick。"
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    exit 1
+  elif [ -z "$PUBCOUNT" ]; then
+    echo "[act1] ⚠ 無法確認 ${CMD_VEL_TOPIC} publisher 數（ros2 查詢失敗）— 進 motion 前務必到 verify window 手動確認 =1。"
+  else
+    echo "[act1] ✓ ${CMD_VEL_TOPIC} publisher = ${PUBCOUNT}（唯一，OK）。"
+  fi
+) || exit 1
+
 echo ""
 echo "=== Started (LOCKED — 無 motion 直到觸發) ==="
 echo "  ⮕ 先看 verify window：/cmd_vel publisher 必須=1、競爭者=none，才可進行 motion。"
