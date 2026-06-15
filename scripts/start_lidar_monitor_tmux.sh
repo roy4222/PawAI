@@ -40,7 +40,12 @@ sleep 3
 
 echo "[2/2] RPLIDAR (/scan -> /scan_rplidar @ ${SERIAL_PORT}:${SERIAL_BAUD})"
 tmux new-window -t "$SESSION" -n sllidar
-tmux send-keys -t "$SESSION:sllidar" "$ROS_SETUP && ros2 run sllidar_ros2 sllidar_node -p serial_port:=${SERIAL_PORT} -p serial_baudrate:=${SERIAL_BAUD} -r /scan:=/scan_rplidar" Enter
+# 6/15: 必須帶 --ros-args，否則 -p key:=val 會被當成 remap rule（deprecation WARN
+# "Found remap rule 'serial_port:=...'"）→ serial_baudrate 256000 等參數根本不套用
+# → 用預設 baud 跟 A2M12 通訊 → SL_RESULT_OPERATION_TIMEOUT。沿用
+# start_scan_only_tmux.sh 已驗證的完整參數（含 frame_id/angle_compensate/scan_mode），
+# 實機 scan-only 隔離測得 /scan_rplidar 11.3Hz、health OK。
+tmux send-keys -t "$SESSION:sllidar" "$ROS_SETUP && ros2 run sllidar_ros2 sllidar_node --ros-args -p serial_port:=${SERIAL_PORT} -p serial_baudrate:=${SERIAL_BAUD} -p frame_id:=laser -p angle_compensate:=true -p scan_mode:=Standard -r /scan:=/scan_rplidar" Enter
 sleep 4
 
 echo ""
