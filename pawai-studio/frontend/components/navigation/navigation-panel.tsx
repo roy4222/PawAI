@@ -5,6 +5,7 @@ import { GateChip } from "@/components/shared/gate-chip";
 import { useTogglePlanMode } from "@/hooks/use-toggle-plan-mode";
 import { NavMapCanvas } from "@/components/navigation/nav-map-canvas";
 import { NavControl } from "@/components/navigation/nav-control";
+import { Act1Forward } from "@/components/navigation/act1-forward";
 
 /**
  * NavigationPanel — Sheet content for the "navigation" feature button.
@@ -49,6 +50,9 @@ export function NavigationPanel() {
           降級為 SAY。
         </p>
       </section>
+
+      {/* Section 1.5 — Act1 短距直行 / 無地圖避障（demo 主線；不走 GotoRelative/Nav2/map）*/}
+      <Act1Forward />
 
       {/* Section 2 — Plan A / B */}
       <section className="flex flex-col gap-2">

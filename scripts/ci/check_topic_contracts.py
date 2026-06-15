@@ -85,6 +85,9 @@ INTERNAL_TOPICS = {
     "/cmd_vel_joy",
     "/cmd_vel_unsmoothed",
     "/lock/emergency",
+    # Act1 短距直行 / 無地圖避障：Studio 按鈕/語音 → act1 controller 的內部指令 topic
+    "/act1/forward_cmd",
+    "/act1/stop",
     # Phase 6/7 state + event topics
     "/state/nav/heartbeat",
     "/state/nav/status",

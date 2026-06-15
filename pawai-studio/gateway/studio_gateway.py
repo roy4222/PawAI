@@ -277,6 +277,10 @@ class GatewayNode(Node):
         self._initialpose_pub = self.create_publisher(
             PoseWithCovarianceStamped, "/initialpose", 10
         )
+        # Act1 短距直行 / 無地圖避障（demo 主線、**獨立於 GotoRelative/Nav2**）：
+        # Studio 按鈕 → /act1/forward_cmd {distance_m} / /act1/stop → act1 controller node。
+        self._act1_forward_pub = self.create_publisher(String, "/act1/forward_cmd", QOS_EVENT)
+        self._act1_stop_pub = self.create_publisher(String, "/act1/stop", QOS_EVENT)
         self._nav_client = (
             ActionClient(self, GotoRelative, "/nav/goto_relative")
             if (ActionClient and GotoRelative)
@@ -637,6 +641,26 @@ class GatewayNode(Node):
                 "danger_cancel": bool(self._nav_ctrl["danger_cancel"]),
             }
 
+    # ── Act1 短距直行 / 無地圖避障（reactive，**獨立於 GotoRelative/Nav2/map**）──
+    def act1_forward(self, distance_m: float = 1.0) -> dict:
+        """發 /act1/forward_cmd {distance_m} 給 act1 controller node。距離夾在 [0.3,1.5]m。
+        gate(scan/front/競爭/單 driver) + 時間估算(distance/0.6) + force-stop 由 controller +
+        reactive 負責。完全不碰 GotoRelative / nav_action_server / Nav2 / AMCL / map。"""
+        d = max(0.3, min(1.5, float(distance_m)))
+        msg = String()
+        msg.data = json.dumps({"distance_m": d})
+        self._act1_forward_pub.publish(msg)
+        self.get_logger().info(f"Act1 FORWARD (Studio button) distance={d:.2f}m")
+        return {"ok": True, "distance_m": round(d, 2)}
+
+    def act1_stop(self) -> dict:
+        """發 /act1/stop → controller force-stop（enable=false + /cmd_vel 0）。"""
+        msg = String()
+        msg.data = json.dumps({"stop": True})
+        self._act1_stop_pub.publish(msg)
+        self.get_logger().info("Act1 STOP/HOLD (Studio button)")
+        return {"ok": True, "state": "stopping"}
+
     # ── Nav action callbacks (run in ROS executor thread) ──────────
     def _on_nav_goal_response(self, token, future) -> None:
         # token identity guard — ignore if a newer goal / stop / danger-cancel
@@ -953,6 +977,10 @@ class NavInitialPosePayload(BaseModel):
 class NavStartPayload(BaseModel):
     distance: float = NAV_DEFAULT_DISTANCE_M
     yaw_offset: float = 0.0
+
+
+class Act1ForwardPayload(BaseModel):
+    distance_m: float = 1.0
 
 
 def _spin_ros2(ros_node: Node) -> None:
@@ -1471,6 +1499,38 @@ async def get_nav_control():
     if node is None:
         return {"ok": False, "error": "ros_node_not_ready"}
     return {"ok": True, **node.nav_control_snapshot()}
+
+
+@app.post("/api/act1/forward")
+async def post_act1_forward(payload: Act1ForwardPayload):
+    """Act1 短距直行 / 無地圖避障（demo 主線）。獨立於 GotoRelative/Nav2/map。"""
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    result = node.act1_forward(payload.distance_m)
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "act1_forward",
+        "data": result,
+    })
+    return result
+
+
+@app.post("/api/act1/stop")
+async def post_act1_stop():
+    """Act1 STOP/HOLD — 立刻停車並鎖回。"""
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    result = node.act1_stop()
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "act1_stop",
+        "data": result,
+    })
+    return result
 
 
 # ── WebSocket: Event Broadcast (ROS2 → Browser) ────────────────

@@ -1423,6 +1423,7 @@ def _cleanup_for_lock(lock) -> int:
     # Brain lane: tear down the opt-in LiDAR monitor (no-op if it was never
     # started — kill-session + pkill are best-effort). Done before driver
     # cleanup so we only ever touch lidarmon's own sllidar/static TF.
+    _stop_act1_controller()
     _stop_lidar_monitor()
     return _invoke_cleanup_sh()
 
@@ -1465,6 +1466,48 @@ def _stop_lidar_monitor() -> None:
         f"tmux kill-session -t {_LIDAR_MONITOR_SESSION} 2>/dev/null; "
         "pkill -9 -f sllidar_node 2>/dev/null; "
         "pkill -9 -f 'static_transform_publisher.*--child-frame-id laser' 2>/dev/null; "
+        "true",
+        timeout=12,
+    )
+
+
+# ── Act1 reactive forward controller (opt-in --with-lidar add-on) ────────────
+# Standalone /cmd_vel reactive_stop (demo_forward profile, enable=false LOCKED) +
+# the act1 controller node (Studio「短距前進」button /act1/forward_cmd + voice).
+# Strictly additive: NO nav2/amcl/goto_relative/2nd driver. Reactive starts LOCKED —
+# NO motion until a Studio button / voice trigger AND front is clear (operator e-stop).
+_ACT1_SESSION = "act1react"
+_ACT1_SCRIPT_REL = "scripts/start_reactive_forward_demo.sh"
+
+
+def _act1_manual_command() -> str:
+    repo = shell.jetson_repo()
+    return f"ssh {shell.jetson_host()} 'cd {repo} && bash {_ACT1_SCRIPT_REL}'"
+
+
+def _start_act1_controller() -> int:
+    """Start Act1 reactive forward controller (LOCKED) on the Jetson over SSH.
+
+    The startup script kills competing /cmd_vel publishers (twist_mux/teleop/joy —
+    brain uses /webrtc_req so this is safe), starts reactive_stop standalone on
+    /cmd_vel with enable=false, starts the act1 controller, and fail-closed gates on
+    「無競爭 node + reactive 就緒」. A non-zero exit = Act1 unavailable; the brain demo
+    (S2-S5) keeps running and NO motion is possible.
+    """
+    repo = shell.jetson_repo()
+    res = shell.run_remote(
+        f"cd {shlex.quote(repo)} && bash {_ACT1_SCRIPT_REL}",
+        timeout=70,
+    )
+    return 0 if res.ok else (res.code or 1)
+
+
+def _stop_act1_controller() -> None:
+    """Tear down the act1react session + reactive_stop/controller processes."""
+    shell.run_remote(
+        f"tmux kill-session -t {_ACT1_SESSION} 2>/dev/null; "
+        "pkill -9 -f reactive_stop_node 2>/dev/null; "
+        "pkill -9 -f act1_voice_trigger 2>/dev/null; "
         "true",
         timeout=12,
     )
@@ -1709,6 +1752,19 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
                 click.echo(f"  手動補救：{_lidar_monitor_manual_command()}")
             else:
                 click.echo("✓ LiDAR monitor running (session: lidarmon, topic: /scan_rplidar)")
+                # Act1 reactive forward controller (LOCKED) — needs /scan_rplidar (just
+                # started), so only after lidar is up. Fail-closed: if it can't come up
+                # cleanly the brain demo (S2-S5) keeps running and NO motion is possible.
+                ar = _start_act1_controller()
+                if ar != 0:
+                    click.echo("⚠ Act1 forward controller start failed — Act1 unavailable "
+                               "(brain demo S2-S5 still running; NO motion).")
+                    click.echo(f"  手動補救：{_act1_manual_command()}")
+                else:
+                    click.echo(
+                        "✓ Act1 forward controller running (LOCKED; Studio 導航面板"
+                        "「短距前進 0.5/1.0/1.5m」+ 語音 ready)"
+                    )
 
 
 @demo.command("stop")
