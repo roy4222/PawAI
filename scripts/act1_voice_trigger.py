@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Act1 語音 fast-path 觸發器 — rule-based、窄 intent、safety-gated。NO LLM / NO LangGraph。
 
-雙訂 /brain/text_input（Studio 收音，JSON envelope）＋ /asr_result（Jetson 麥 raw）→
-命中固定中文關鍵字 → safety gate → 觸發 scripts/act1_forward.sh
-（reactive demo_forward **standalone /cmd_vel 直連**：短距直行 + 正前障礙安全停車）。
+訂 3 條語音/文字入口 → 命中固定中文關鍵字 → safety gate → 觸發 scripts/act1_forward.sh
+（reactive demo_forward **standalone /cmd_vel 直連**：短距直行 + 正前障礙安全停車）：
+  - **/event/speech_intent_recognized**：Studio 麥克風(/ws/speech) + /ws/text → gateway 發此
+    （契約 v2.4 §4.2，欄位 `text`）＝ **demo 語音主線**。6/15 發現原本漏訂這條 → 語音「往前走」
+    走的是這個 topic、不是 /brain/text_input，**漏訂＝語音不會觸發 motion（只有打字會）**，已補。
+  - **/brain/text_input**：Studio 打字送出(/api/text_input) → gateway 發此（JSON envelope `text`）。
+  - **/asr_result**：Jetson 機上麥 stt_intent_node（raw 字串）。
 
 ⚠️ NEEDS_ROY_ESTOP_TEST（6/15）：底層 motion 走 standalone /cmd_vel 直連
    （見 start_reactive_forward_demo.sh header）。第一次 live 必須 Roy 手持實體 e-stop + Go2 確認無損。
@@ -56,7 +60,11 @@ class Act1VoiceTrigger(Node):
         self.tts_pub = self.create_publisher(String, "/tts", 10)
         # Python 端保證停車用（A-2）：直接發 0 到 /cmd_vel → driver StopMove。
         self.cmd_pub = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
-        # demo 走 Studio 收音 → /brain/text_input（JSON envelope）；Jetson 麥 → /asr_result（raw）
+        # demo 語音主線：Studio 麥克風(/ws/speech) + /ws/text → /event/speech_intent_recognized。
+        self.create_subscription(
+            String, "/event/speech_intent_recognized", self._on_speech_intent, 10
+        )
+        # Studio 打字送出 → /brain/text_input（JSON envelope）；Jetson 機上麥 → /asr_result（raw）
         self.create_subscription(String, "/brain/text_input", self._on_text_input, 10)
         self.create_subscription(String, "/asr_result", self._on_asr, 10)
         self.create_subscription(LaserScan, "/scan_rplidar", self._on_scan, 10)
@@ -128,6 +136,16 @@ class Act1VoiceTrigger(Node):
             except Exception:  # noqa: BLE001
                 pass
             time.sleep(0.1)
+
+    def _on_speech_intent(self, msg: String):
+        # /event/speech_intent_recognized：Studio 麥克風 + /ws/text（契約 v2.4 §4.2）。
+        # 欄位 text（brain 也讀 transcript|text）。demo 語音主線就是這條。
+        try:
+            p = json.loads(msg.data)
+            text = str(p.get("transcript") or p.get("text") or "").strip()
+        except Exception:  # noqa: BLE001
+            text = (msg.data or "").strip()  # tolerate raw string
+        self._handle_text(text, "speech")
 
     def _on_asr(self, msg: String):
         self._handle_text((msg.data or "").strip(), "asr")
