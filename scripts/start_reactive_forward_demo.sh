@@ -33,9 +33,13 @@
 #   - operator 手動：bash scripts/act1_forward.sh        # 短距前進 + 遇障停 + 鎖回
 #                    bash scripts/act1_forward.sh hold   # 立即急停 + 鎖回
 #
-# demo_forward 參數＝6/15 實機驗證版（standalone 走 ~0.75m、正前障礙前 ~30cm 停）：
-#   front_arc_deg=18 / danger=1.1 / slow=1.3 / slow_speed=0.6(=normal,跳過 slow 避 Go2 MIN_X)
+# demo_forward 參數（6/15 撞車後加大停障餘裕，Roy「danger 提高到 1.5m 左右」）：
+#   front_arc_deg=18 / danger=1.5 / slow=1.8 / slow_speed=0.6(=normal,跳過 slow 避 Go2 MIN_X)
 #   normal_speed=0.6 / front_offset_rad=π(LiDAR 反裝補正)
+#   ⚠ 為何 danger 1.1→1.5：Go2 sport 速度地板 0.5（無法更慢），0.6m/s + WebRTC/sport 煞停延遲
+#   + LiDAR 裝在機鼻後 ~0.32m → danger=1.1 時「LiDAR 看到 1.1m」到「機鼻真的停」常只剩 ~30cm，
+#   一遇延遲尖峰或側前盲區就撞（6/15 實機）。1.5m 多 ~0.4m 緩衝、把停點推離邊緣。
+#   想要更早停: ACT1_DANGER_M=1.8；想回舊調校: ACT1_DANGER_M=1.1（不建議，撞過）。
 # ⚠️ NO `set -u`：ROS setup.bash 不是 nounset-clean，gate subshell source 它在 -u 下會致命
 # exit → `|| exit 1` 誤觸發（gate 假死，6/15 抓到）。變數都 ${VAR:-default} 防呆，不需 -u。
 set -eo pipefail
@@ -45,8 +49,8 @@ ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup
 # standalone 直連（已驗證會停）。改成 /cmd_vel_obstacle 會回到 6/15 撞過車的 mux 路徑 — 別改。
 CMD_VEL_TOPIC="${ACT1_CMD_VEL_TOPIC:-/cmd_vel}"
 FRONT_ARC="${ACT1_FRONT_ARC_DEG:-18.0}"
-DANGER="${ACT1_DANGER_M:-1.1}"
-SLOW="${ACT1_SLOW_M:-1.3}"
+DANGER="${ACT1_DANGER_M:-1.5}"   # 6/15 撞車後 1.1→1.5（多 ~0.4m 停障餘裕；env 可覆蓋）
+SLOW="${ACT1_SLOW_M:-1.8}"       # 須 > danger（slow_speed=normal 故 slow 區功能性無作用，僅保序）
 KILL_COMPETITORS="${ACT1_KILL_COMPETITORS:-1}"
 VOICE_NODE="$HOME/elder_and_dog/scripts/act1_voice_trigger.py"
 

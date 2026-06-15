@@ -31,7 +31,7 @@ from sensor_msgs.msg import LaserScan
 KEYWORDS = ("往前走", "往前移動", "往前一點", "前進", "走一點", "過來一點", "往前")
 COOLDOWN_S = 8.0            # 語音路徑防 ASR echo 連發
 SCAN_FRESH_S = 1.5          # /scan_rplidar 新鮮度（超過視為感知未就緒）
-DANGER_M = 1.1             # 與 reactive demo_forward danger 一致
+DANGER_M = 1.5             # 與 reactive demo_forward danger 一致（6/15 撞車後 1.1→1.5 加大餘裕）
 FRONT_ARC_RAD = math.radians(18.0)
 FRONT_OFFSET_RAD = math.pi  # LiDAR 反裝 yaw=π 補正
 RANGE_MIN_M, RANGE_MAX_M = 0.10, 8.0

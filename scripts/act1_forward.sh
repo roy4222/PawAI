@@ -32,8 +32,10 @@ source ~/elder_and_dog/install/setup.bash 2>/dev/null || true
 NODE="/reactive_stop_node"
 CMD_VEL_TOPIC="${ACT1_CMD_VEL_TOPIC:-/cmd_vel}"   # 必須與 start_reactive_forward_demo.sh 一致
 MODE="${1:-go}"
-# clear-path 前進時間上限（reactive 會在 danger 自動停）。2.0s @0.6m/s ≈ 1.2m。短＝第一次驗安全。
-FORWARD_S="${ACT1_FORWARD_S:-2.0}"
+# clear-path 前進時間上限（reactive 會在 danger 自動停）。1.0s @0.6m/s ≈ 0.6m。
+# 6/15 撞車後 2.0→1.0：manual/operator 路徑預設踏短一步＝第一次 e-stop 驗收更安全。
+# Studio 按鈕路徑由 act1_voice_trigger 依距離傳 ACT1_FORWARD_S（0.5/1.0/1.5m），不受此預設影響。
+FORWARD_S="${ACT1_FORWARD_S:-1.0}"
 
 force_stop() {
   # 1) 先讓 reactive 停止 publish（enable=false），避免和我們的 0 在 /cmd_vel 上打架。

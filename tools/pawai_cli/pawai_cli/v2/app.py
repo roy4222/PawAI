@@ -224,6 +224,11 @@ def demo_start(
                                           help="Escape hatch: skip the post-start healthcheck."),
     with_shadow: bool = typer.Option(False, "--with-shadow",
                                      help="After a healthy brain demo, enable ism_shadow_enabled."),
+    with_lidar: bool = typer.Option(False, "--with-lidar",
+                                    help="After a healthy brain demo, also start a raw LiDAR "
+                                         "monitor + Act1 reactive forward controller (LOCKED). "
+                                         "NO nav2/amcl/2nd driver/motion. Same as "
+                                         "PAWAI_DEMO_WITH_LIDAR=1."),
 ) -> None:
     """Start brain demo or nav capability lane (delegates to legacy demo start).
 
@@ -233,7 +238,7 @@ def demo_start(
     _delegate(_legacy_group_callback("demo", "start"),
               no_studio=no_studio, brain_only=brain_only, nav_mode=nav,
               yes=yes, force=force, skip_healthcheck=skip_healthcheck,
-              with_shadow=with_shadow)
+              with_shadow=with_shadow, with_lidar=with_lidar)
 
 
 @demo_app.command("stop")
