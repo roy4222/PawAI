@@ -36,7 +36,9 @@
 # demo_forward 參數＝6/15 實機驗證版（standalone 走 ~0.75m、正前障礙前 ~30cm 停）：
 #   front_arc_deg=18 / danger=1.1 / slow=1.3 / slow_speed=0.6(=normal,跳過 slow 避 Go2 MIN_X)
 #   normal_speed=0.6 / front_offset_rad=π(LiDAR 反裝補正)
-set -euo pipefail
+# ⚠️ NO `set -u`：ROS setup.bash 不是 nounset-clean，gate subshell source 它在 -u 下會致命
+# exit → `|| exit 1` 誤觸發（gate 假死，6/15 抓到）。變數都 ${VAR:-default} 防呆，不需 -u。
+set -eo pipefail
 
 SESSION="act1react"
 ROS_SETUP="source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup.zsh && source ~/elder_and_dog/install/setup.zsh"

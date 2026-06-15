@@ -27,7 +27,6 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import Twist
 
 KEYWORDS = ("往前走", "往前移動", "往前一點", "前進", "走一點", "過來一點", "往前")
 COOLDOWN_S = 8.0            # 語音路徑防 ASR echo 連發
@@ -50,8 +49,10 @@ class Act1VoiceTrigger(Node):
     def __init__(self):
         super().__init__("act1_voice_trigger")
         self.tts_pub = self.create_publisher(String, "/tts", 10)
-        # Python 端保證停車用（A-2）：直接發 0 到 /cmd_vel → driver StopMove。
-        self.cmd_pub = self.create_publisher(Twist, CMD_VEL_TOPIC, 10)
+        # ⚠️ 本節點**不**開 /cmd_vel publisher（6/15 真機抓到：voice cmd_pub 發 0 會與 reactive
+        # 的 0.6 在 /cmd_vel 交錯 → driver 在 Move/StopMove 間反覆 → 狗原地抖不前進）。
+        # /cmd_vel 的唯一 driver 是 reactive_stop_node；停車靠 enable=false + act1_forward.sh
+        # 的 topic-pub（在 reactive 停發後、單一 publisher）+ reactive 自身 danger-stop。
         # === demo 主線：Studio 按鈕 → gateway → /act1/forward_cmd {distance_m} / /act1/stop ===
         self.create_subscription(String, "/act1/forward_cmd", self._on_forward_cmd, 10)
         self.create_subscription(String, "/act1/stop", self._on_stop_cmd, 10)
@@ -103,9 +104,11 @@ class Act1VoiceTrigger(Node):
         return round(d / SPEED_MPS, 2)
 
     def _guarantee_stop(self):
-        """Python 端保證停車（A-2）。在 _run_act1 finally + STOP 按鈕跑，不論 act1_forward.sh
-        正常結束/例外/被 SIGKILL（bash trap 不會跑）。enable=false 是真正讓 reactive 停發 0.6 的
-        關鍵（那串 0 與殘留 0.6 在 driver 交錯非覆蓋）→ retry + log、不靜默吞；再發 0 觸發 StopMove。"""
+        """保證 reactive 停下來（A-2）。在 _run_act1 finally + STOP 按鈕跑，不論 act1_forward.sh
+        正常結束/例外/被 SIGKILL（bash trap 不會跑）。**只設 enable=false**（retry + log、不靜默吞）
+        —— 不在此發 /cmd_vel 0（那會讓本節點變第二個 /cmd_vel publisher、與 reactive 的 0.6 交錯
+        → driver 在 Move/StopMove 間反覆 → 狗原地抖不前進，6/15 真機抓到）。StopMove 由
+        act1_forward.sh 的 topic-pub 在 reactive 停發後送（單一 publisher）；danger 則 reactive 自己發 0。"""
         disabled = False
         for attempt in range(3):
             try:
@@ -126,15 +129,8 @@ class Act1VoiceTrigger(Node):
         if not disabled:
             self.get_logger().error(
                 "⚠ enable=false 多次失敗 — reactive 可能仍 enable、續發 0.6；"
-                "靠 reactive danger-stop + 實體 e-stop 兜底！"
+                "靠 reactive danger-stop + act1_forward topic-pub + 實體 e-stop 兜底！"
             )
-        stop = Twist()
-        for _ in range(10):
-            try:
-                self.cmd_pub.publish(stop)
-            except Exception:  # noqa: BLE001
-                pass
-            time.sleep(0.1)
 
     # ── Studio 按鈕路徑（demo 主線）──────────────────────────────────
     def _on_forward_cmd(self, msg: String):

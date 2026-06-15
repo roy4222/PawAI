@@ -20,7 +20,10 @@
 #
 # 前提：start_reactive_forward_demo.sh 已跑（/reactive_stop_node 發 /cmd_vel、且 /cmd_vel
 #       唯一 publisher — 該腳本預設殺競爭者 + 啟動後驗 publisher 數）。
-set -euo pipefail
+# ⚠️ NO `set -u`：ROS setup.bash 不是 nounset-clean，`set -u` 下 source 會致命 exit
+# （連 `|| true` 都攔不住、整個腳本靜默死在 source、enable 永遠設不成 true → 狗不動，
+#  6/15 實機抓到）。本腳本所有變數都用 ${VAR:-default} 防呆，不需 -u。
+set -eo pipefail
 
 # bash 腳本 → source setup.bash（與 setup.zsh 不可混用）。已 sourced 則無害。
 source /opt/ros/humble/setup.bash 2>/dev/null || true
