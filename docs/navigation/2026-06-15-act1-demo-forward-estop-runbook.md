@@ -55,14 +55,16 @@ bash ~/elder_and_dog/scripts/start_reactive_forward_demo.sh
 ```bash
 bash ~/elder_and_dog/scripts/act1_forward.sh
 ```
-**期望**：Go2 往前走一小段（≤~1.4m 上限或更短）→ 超時自動 force-stop + 鎖回。
+**期望**：Go2 往前走一小段（FORWARD_S 預設 **1.0s @0.6m/s ≈ 0.6m**，6/15 撞車後從 2.0s 縮短）→ 超時自動 force-stop + 鎖回。
 **通過**：0 撞、0 亂轉、走完自己停、`enable=False`。
 
-### Step 2 — Blocked path（正前方 ~0.8–1.0m 放障礙）
+### Step 2 — Blocked path（測停障）
 ```bash
 bash ~/elder_and_dog/scripts/act1_forward.sh
 ```
-**期望**：Go2 一啟動就偵測到 danger（或走極短距離）→ reactive 發 0 → 停。
+- **正前 ~1.0m 放障礙**（< danger 1.5）：Go2 **一啟動就 danger、原地不動**（reactive 立刻發 0）。
+- **正前 ~1.8–2.2m 放障礙**（> danger 1.5）：Go2 走近到 ~1.5m 處 reactive 發 0 → 停（看「走近後停」）。
+**期望**：兩種擺法都不撞。
 **通過**：障礙前停住、不撞。
 （也可先 `act1_forward.sh hold` 驗立即急停。）
 
@@ -94,9 +96,13 @@ tmux kill-session -t act1react                       # 關 reactive + voice
 
 ## 6. 殘留風險（誠實揭露，治本歸 post-6/18）
 
-- 🔴 **±18° 窄錐 = 側前盲區（最該記住）**：demo_forward 用 `front_arc_deg=18` + `normal_speed=0.6`
-  （Roy 拍板，為短距正前 + 避開 Go2 MIN_X 0.5）。±18° 在 1.1m 只覆蓋正前約 **±0.34m 寬** →
+- 🟢 **6/15 撞車後 danger 1.1→1.5m**：Go2 sport 速度地板 0.5（無法更慢），0.6m/s + WebRTC/sport 煞停延遲
+  + LiDAR 裝機鼻後 ~0.32m → danger=1.1 時「看到 1.1m」到「機鼻停」常只剩 ~30cm，遇延遲尖峰/側前盲區就撞。
+  1.5m 多 ~0.4m 緩衝。env 可調：`ACT1_DANGER_M=1.8`（更早停）/ `=1.1`（回舊調校，不建議）。
+- 🔴 **±18° 窄錐 = 側前盲區（danger 加大也修不掉，最該記住）**：demo_forward 用 `front_arc_deg=18` + `normal_speed=0.6`
+  （Roy 拍板，為短距正前 + 避開 Go2 MIN_X 0.5）。±18° 在 1.5m 只覆蓋正前約 **±0.49m 寬** →
   **稍微偏離正前的障礙（桌腳/牆角/人的腳）落在錐外、不算 danger、不會停**（0.6m/s + 機鼻前 0.5m 會撞）。
+  ⟹ 加大 danger 只解「正前停太晚」，**不解側前盲區**：§1 仍要求正前淨空、左右無貼牆/近身家具、障礙擺正前正中。
   這與專案「窄錐必須綁低速 ≤0.2」鐵律（`docs/navigation/CLAUDE.md`）相違，能成立**完全賭在場地**：
   故 §1 要求正前淨空、**左右無貼牆/近身家具**、障礙擺**正前正中**。要側向覆蓋＝錐放寬 ±30°
   （犧牲正前精度）或速度壓 ≤0.2（但撞 Go2 MIN_X 0.5、需另解）。
