@@ -217,6 +217,36 @@ def test_offline_mode_does_not_short_circuit_safety(brain):
 
 
 # ---------------------------------------------------------------------------
+# G2 (6/15) — offline + demo_phase=all (DEFAULT) must NOT play the broken
+# legacy 我聽不太懂; uses warm OFFLINE_GENERIC_FALLBACK. Online path unchanged.
+# ---------------------------------------------------------------------------
+
+
+def test_offline_mode_all_phase_uses_warm_filler_not_legacy(brain):
+    """offline_mode + demo_phase=all (the DEFAULT, no canned table entry) must
+    NOT play the broken-sounding legacy 我聽不太懂 — it uses the warm
+    OFFLINE_GENERIC_FALLBACK so a forgotten phase-set never embarrasses the demo
+    (the 6/15 manual-phase footgun). The ONLINE timeout path is unaffected (T8).
+    """
+    from interaction_executive.brain_node import OFFLINE_GENERIC_FALLBACK
+    brain.offline_mode = True
+    brain.demo_phase = "all"
+    brain._on_speech_intent(_speech_msg(session_id="off-all"))
+    assert len(brain._captured) == 1
+    assert _say_text(brain._captured[0]) == OFFLINE_GENERIC_FALLBACK
+    assert _say_text(brain._captured[0]) != "我聽不太懂"
+    assert brain._captured[0]["reason"] == "offline_mode"
+
+
+def test_offline_generic_fallback_is_nonempty_and_not_legacy():
+    """The warm filler is a real non-empty line, distinct from the legacy
+    online-timeout string (the two paths stay intentionally different)."""
+    from interaction_executive.brain_node import OFFLINE_GENERIC_FALLBACK
+    assert isinstance(OFFLINE_GENERIC_FALLBACK, str) and OFFLINE_GENERIC_FALLBACK.strip()
+    assert OFFLINE_GENERIC_FALLBACK != "我聽不太懂"
+
+
+# ---------------------------------------------------------------------------
 # T4b — /brain/offline_mode Bool subscriber (Studio toggle) sharing
 #       _set_offline_mode with the param-set path. plan3 T4 wiring.
 # ---------------------------------------------------------------------------

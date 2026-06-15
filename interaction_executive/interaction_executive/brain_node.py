@@ -140,6 +140,15 @@ DEMO_CANNED_TABLE: dict[str, dict[str, str]] = {
 }
 
 
+# 6/15 G2 fix: when offline_mode is on but demo_phase has no DEMO_CANNED_TABLE
+# entry (all / quiet — the DEFAULT), the legacy "我聽不太懂" sounds broken for a
+# deliberately-offline demo. A warm neutral filler keeps the demo flowing even
+# when the operator forgets to set demo_phase (the 6/15 "manual phase footgun").
+# The ONLINE chat-timeout path keeps "我聽不太懂" verbatim (byte-identical, T8).
+# PENDING Roy sign-off (6/15) — provisional wording.
+OFFLINE_GENERIC_FALLBACK = "嗯，我在聽，我們繼續吧。"
+
+
 class FallbackReason(str, Enum):
     """plan3 T5: why a chat/LLM turn fell back to canned. Trace/diagnostic value
     only — broadening the trigger set from 'no reply' to slow/broken/unstable.
@@ -1521,10 +1530,11 @@ class BrainNode(Node):
         # plan3 T4: offline_mode short-circuits the cloud chat/LLM path straight
         # to canned (0s, no chat_wait_ms window, no LLM request). Reached only
         # AFTER safety hard_rule + unsafe-keyword + explicit paths above, so
-        # safety stays rule-first. demo_phase=all/quiet (no table entry) keeps
-        # the legacy 「我聽不太懂」fallback string.
+        # safety stays rule-first. demo_phase=all/quiet (no table entry, the
+        # DEFAULT) uses OFFLINE_GENERIC_FALLBACK (6/15 G2) so a forgotten
+        # phase-set never plays the broken-sounding 「我聽不太懂」in offline.
         if self.offline_mode:
-            text = self._phase_canned(self.demo_phase, "generic") or "我聽不太懂"
+            text = self._phase_canned(self.demo_phase, "generic") or OFFLINE_GENERIC_FALLBACK
             self._emit(
                 build_plan(
                     "say_canned",
