@@ -1,7 +1,37 @@
 # 專案狀態
 
-**最後更新**：2026-06-15（**6/15 live HITL 續** — S3 複合句修好：pose 是 **edge-triggered**（非 6/14 誤判的 raw=None；模型有吐 sitting conf 0.55）、寫死 10s 窗太短抓不到稀疏 sitting event → 新 param `drink_sitting_window_s`(default 10 byte-identical／demo 45s)，實機驗 `sitting=True` 端到端有據；**S5 自主驗** Go2 0 動作命令(`/webrtc_req`=0)；**Act1 誠實結論**=depth 未接 control／語音無法觸發 motion／`--with-lidar` 只是 raw monitor／sllidar 硬體 timeout；fix 在 worktree `codex/s3-sitting-window` e45364a 待 merge — 詳 §6/15）。前次：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
+**最後更新**：2026-06-15（**6/15 續2（傍晚）— LiDAR 平反 + Act1 motion 撞車 + 語音 fast-path** ① **LiDAR 不是硬體死**：scan-only 隔離測 `/scan_rplidar` **11.93Hz + health OK**，根因＝`start_lidar_monitor_tmux.sh` sllidar 命令**漏 `--ros-args`**→`serial_baudrate:=256000` 被當 remap 沒套用→`SL_RESULT_OPERATION_TIMEOUT`（fix `af18a64`；S3 fix cherry-pick 進 main `1dec417`）。② **Act1 motion**：standalone 直發 `/cmd_vel` 用 **demo_forward profile**（arc18/danger1.1/slow1.3/slow_speed0.6=跳過 slow）狗直走 ~0.75m、障礙前 ~30cm **自動停 ✅**；但**整合進 brain stack 經 twist_mux `/cmd_vel_obstacle` 路徑、reactive danger-stop 沒攔截 → 撞車**（Cloud 診斷 enable 開太久＋mux 路徑 danger-stop 不可靠；**整合 motion = NOT_DEMO_SAFE → 鎖 fallback**）。③ **語音 fast-path** `act1_voice_trigger.py` 建好（訂 `/asr_result`+`/brain/text_input`→窄關鍵字→scan gate→`act1_forward.sh`、不走 LLM；demo 走 Studio 收音＝`/brain/text_input`）。**⚠ Go2 撞擊後實體狀態待 Roy 確認**。詳 §6/15 續2）。前段同日：**6/15 live HITL 續** — S3 複合句修好：pose 是 **edge-triggered**（非 6/14 誤判的 raw=None；模型有吐 sitting conf 0.55）、寫死 10s 窗太短抓不到稀疏 sitting event → 新 param `drink_sitting_window_s`(default 10 byte-identical／demo 45s)，實機驗 `sitting=True` 端到端有據；**S5 自主驗** Go2 0 動作命令(`/webrtc_req`=0)；**Act1 誠實結論**=depth 未接 control／語音無法觸發 motion／`--with-lidar` 只是 raw monitor／sllidar 硬體 timeout；fix 在 worktree `codex/s3-sitting-window` e45364a 待 merge — 詳 §6/15）。前次：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
+
+---
+
+## 6/15 續2（傍晚）：LiDAR 平反 + Act1 motion 撞車 + 語音 fast-path（Cloud HITL）
+
+**主軸**：接續上午，從 main 重 deploy（含 S3 fix）→ 攻 Act1 短距前進避障。過程把「LiDAR 硬體死」翻案、驗到 Act1 motion 能力、但**整合進 brain stack 的 motion 撞車**。
+
+### 1. S3 fix 進 main + LiDAR 平反（**推翻上午「sllidar 硬體 timeout」**）
+- **S3 fix**：`codex/s3-sitting-window` e45364a cherry-pick 進 main = **`1dec417`**（drink_sitting_window_s default 10 byte-identical / executive.yaml 45.0；75 tests 綠）。deploy 後 `ros2 param get` 確認 live=45.0。
+- **LiDAR 不是硬體死**：Roy 提隔離測試 → 關 brain、只開 scan-only（`start_scan_only_tmux.sh`）→ **`/scan_rplidar` 11.93Hz、SLLidar health OK、S/N/firmware 都讀得到**。**根因＝`start_lidar_monitor_tmux.sh` 的 sllidar 命令漏 `--ros-args`** → `-p serial_baudrate:=256000` 被當 remap rule（deprecation WARN「Found remap rule」）→ 用預設 baud 跟 A2M12 通訊 → `SL_RESULT_OPERATION_TIMEOUT`。**fix `af18a64`**：沿用 scan-only 已驗證的 `--ros-args -p ... -p scan_mode:=Standard`。重測 `pawai demo start --with-lidar`：brain+LiDAR 同開 `/scan_rplidar` **11.93Hz、go2_driver=1、無 nav2/amcl/motion** ✅。
+- USB 拓樸：CP210x（RPLIDAR）掛 Realtek USB2.0 hub、與 USB 喇叭共用（先前誤判供電的線索，但實為命令 bug）。
+
+### 2. Act1 no-motion 停障鏈（靜態，成立）
+- `lidar_front_sector.py`（front_offset=π 補反裝）：障礙 0.81m 死正中。`reactive_stop_node` demo_forward 判 `zone=danger`、`obstacle_distance=0.81`、`cmd_vel.x=0`、**go2_driver 真的在迴路（/cmd_vel sub=1）→ StopMove → 狗不動**（Roy 目視確認）。→ 「前方障礙就不前進」靜態驗證 PASS。
+
+### 3. Act1 motion：standalone ✅ / **整合 mux ❌ 撞車**
+- **demo_forward profile**（Roy 拍板，室內短距直行 + 正前停障；**非完整避障導航**）：`front_arc_deg=18`（只看正前、忽略側牆）/ `danger=1.1` / `slow_distance=1.3` / **`slow_speed=0.6`=跳過 slow 區**（避開 Go2 MIN_X 0.5 卡住）/ `normal_speed=0.6`。
+- **standalone（直發 `/cmd_vel`）✅**：operator-gated（enable=false 鎖→true 放行），狗直走 ~0.75m、障礙前 **~30cm 自動停**（reactive danger-stop 生效）。
+- **整合進 brain stack（reactive 發 `/cmd_vel_obstacle` → twist_mux priority200 → /cmd_vel → 單一 driver）→ ❌ 撞車**：reactive danger-stop **沒攔截**，狗 0.6 m/s 直撞障礙。誘因＝Cloud 的 mux 診斷把 `enable=true` 開太久（~5s、結尾才 force-stop）＋錯誤假設「不會動」。**結論：整合 mux 路徑的 motion 不可靠＝NOT_DEMO_SAFE。**
+
+### 4. 語音 fast-path（建好，但 motion 鎖 fallback）
+- `scripts/act1_voice_trigger.py`（rule-based、**不走 LLM**）：訂 `/asr_result`+**`/brain/text_input`**（demo 走 Studio 收音＝後者，JSON `{"text":..}`）→ 窄中文關鍵字（往前走/前進/走一點…）→ scan gate（自算前方 ±18° 最近距離）→ 感知未就緒/前方 danger 各有拒絕台詞、clear 才觸發 `act1_forward.sh`。**voice 觸發鏈驗證 OK**（matched [studio]、front clear、TTS「好，我往前走一點」），但底層整合 motion 撞車 → 暫鎖。
+- 三層觸發：語音主線 / Studio hidden button（未接）/ CLI `act1_forward.sh`（含 `hold`）。
+- 新腳本：`start_reactive_forward_demo.sh`、`act1_forward.sh`、`act1_voice_trigger.py`（**header 已標 NOT_DEMO_SAFE for motion**）。
+
+### 5. 撞車後處置 + 待辦
+- 已 **emergency stop** + 殺掉 reactive(act1react)/voice(act1voice) node → 0 motion 源、系統安全；brain demo（S2-S5）保留。
+- **⚠ Go2 撞擊後實體狀態待 Roy 確認**（損壞/翻倒/driver）。
+- **Act1 motion 鎖 fallback**（影片／遙控／operator），今天不再試 motion。**可講**：短距直行 + 正前停障（standalone 證明 + no-motion 證據）；**不可講**：整合自主避障（剛撞、不可靠）。
+- 待查（唯讀，零 motion）：為何 mux 路徑下 reactive danger-stop 沒攔截（standalone 會、整合不會）。⑥ social-pending #191 / grama 清理 / 五幕彩排仍在 backlog。
 
 ---
 
