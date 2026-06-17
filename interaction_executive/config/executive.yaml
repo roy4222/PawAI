@@ -1,9 +1,14 @@
 brain_node:
   ros__parameters:
-    # 2026-06-14 HITL: 20000 強制等 LLM 20s → 慢/斷網時長 dead-air。改 2000:
-    # 主線 LLM gpt-5.4-mini P50 ~1.85s,2000ms 接得到中位自然回覆、慢的退 canned。
-    # （1500 會切掉 P50 1.85s → 幾乎全 canned,失去自然感,故取 2000。）
-    chat_wait_ms: 2000
+    # 2026-06-14 HITL: 20000 強制等 LLM 20s → 慢/斷網時長 dead-air。曾改 2000。
+    # 2026-06-17 HITL（一般聊天「我聽不太懂」根因）：2000 太緊。實測 conversation_graph
+    # + OpenRouter 候選延遲 P50 ~1.5s、尾巴 3.2s，且 LLM 自己的 overall_budget_s=5.0，
+    # 2000ms 結構性切掉 ~33% 合法回覆（brain timeout 先 pop buffer → 真回覆 buffered=None
+    # 被丟、播假 canned「我聽不太懂」）。改 5500：≥ LLM 5s 預算 → 永不切掉合法回覆。
+    # 真回覆 1-3s 到就立即講、不會多等；只有 LLM 真卡死才等到 5.5s 退 canned（極罕見，
+    # 因 LLM 5s 內必回 RuleBrain 備援候選）。注意：chat_wait_ms 非 runtime 可改參數
+    # （不在 _dispatch_set_params），改此值要重啟 brain_node 才生效。
+    chat_wait_ms: 5500
     dedup_window_s: 1.0
     # 5/8: 3.0 → 5.0. Adds 2s of confirmation before stranger_alert fires,
     # cutting transient mis-recognitions (hand / glass / object). For full
