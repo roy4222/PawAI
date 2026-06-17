@@ -536,6 +536,40 @@ def test_object_remark_attention_min_runtime_set_accepted(brain):
 
 
 # ---------------------------------------------------------------------------
+# drink-merge: cup AND bottle (and bowl/wine_glass) both fire the 飲水用品 remark
+#   and the sitting compound, using generic wording (no cup↔bottle mis-naming).
+# ---------------------------------------------------------------------------
+
+
+def _setup_drink_compound(brain, monkeypatch, sitting):
+    """Open object gates + enable drink-merge; set sitting recency per `sitting`."""
+    _open_non_attention_object_gates(brain, monkeypatch)
+    _set_attention(brain, monkeypatch, AttentionState.ENGAGED)
+    brain.demo_video_cup_compound = True
+    brain._state.last_sitting_seen_ts = time.time() if sitting else 0.0
+
+
+@pytest.mark.parametrize("drink_class", ["cup", "bottle", "bowl", "wine_glass"])
+def test_drink_class_no_sitting_emits_generic_line(brain, monkeypatch, drink_class):
+    """Any drink class (incl. bottle) → generic 飲水用品 line, never a 物名."""
+    _setup_drink_compound(brain, monkeypatch, sitting=False)
+    brain._on_object(_object_msg([{"class_name": drink_class}]))
+    assert len(brain._captured) == 1
+    assert _say_text(brain._captured[0]) == "我看到你手邊有飲水用品，記得補充水分。"
+
+
+@pytest.mark.parametrize("drink_class", ["cup", "bottle"])
+def test_drink_class_recent_sitting_emits_compound(brain, monkeypatch, drink_class):
+    """bottle/cup + recent sitting → compound clause, generic wording (no 杯子)."""
+    _setup_drink_compound(brain, monkeypatch, sitting=True)
+    brain._on_object(_object_msg([{"class_name": drink_class}]))
+    assert len(brain._captured) == 1
+    assert _say_text(brain._captured[0]) == (
+        "我看到你坐下了，也看到你手邊有飲水用品，記得補充水分。"
+    )
+
+
+# ---------------------------------------------------------------------------
 # B4 — offline_mode / demo_phase setters write the value back to the ROS param
 #      store so `ros2 param get` reflects topic-driven changes (no lying).
 #      Default (value unchanged) = byte-identical (no set_parameters, no recurse).

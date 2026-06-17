@@ -2484,8 +2484,10 @@ class BrainNode(Node):
         # (default) → legacy build_object_tts below (byte-identical).
         if self.demo_video_cup_compound and class_name in OBJECT_REMARK_RELAX_CLASSES:
             recent_sitting = (now - self._state.last_sitting_seen_ts) < self.drink_sitting_window_s
+            # 物名一律用通用「飲水用品」（不糾結 cup/bottle/bowl/wine_glass，YOLO 常 cup↔bottle
+            # 互換）。坐姿是 BONUS clause，補在前面；缺席則只講飲水提醒。
             drink_text = (
-                "我看到你坐下了，也看到你手邊有杯子，記得補充水分。"
+                "我看到你坐下了，也看到你手邊有飲水用品，記得補充水分。"
                 if recent_sitting
                 else "我看到你手邊有飲水用品，記得補充水分。"
             )
