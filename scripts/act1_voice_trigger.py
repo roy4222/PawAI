@@ -28,6 +28,11 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from sensor_msgs.msg import LaserScan
 
+try:
+    from go2_interfaces.msg import WebRtcReq
+except ImportError:  # pragma: no cover — degrade loudly, never silently
+    WebRtcReq = None
+
 KEYWORDS = ("往前走", "往前移動", "往前一點", "前進", "走一點", "過來一點", "往前")
 COOLDOWN_S = 8.0            # 語音路徑防 ASR echo 連發
 SCAN_FRESH_S = 1.5          # /scan_rplidar 新鮮度（超過視為感知未就緒）
@@ -43,12 +48,30 @@ ACT1_TIMEOUT_S = 8.0       # bash 卡住上限；逾時 SIGKILL bash → finally
 SPEED_MPS = 0.6
 DIST_MIN_M, DIST_MAX_M = 0.3, 1.5
 DEFAULT_DIST_M = 1.0       # 語音/未指定距離時的預設
+# 硬 STOP：直送 StopMove 給 driver（不經 reactive/cmd_vel，sport 立即 halt 仍站立）。
+# 形狀對齊 vision_perception/event_action_bridge.py（不發明 API）。
+SPORT_TOPIC = "rt/api/sport/request"
+STOP_MOVE_API_ID = 1003     # StopMove（halt 但維持平衡；**不可**用 Damp 1001 會癱倒）
+STOP_REFRESH_COUNT = 3      # 立即 1 次 + 之後 refresh；防 DataChannel 丟包
+STOP_REFRESH_INTERVAL_S = 1.0  # ≤1Hz；勿 10Hz spam（會把 DataChannel bufferedAmount 撐爆）
+FORWARD_DANGER_POLL_S = 0.05   # 前進中主動 LiDAR 防撞閘輪詢間隔（20Hz）
 
 
 class Act1VoiceTrigger(Node):
     def __init__(self):
         super().__init__("act1_voice_trigger")
         self.tts_pub = self.create_publisher(String, "/tts", 10)
+        # 硬 STOP 直送 driver 的 sport 指令通道（StopMove 1003）。reactive enable=false 只是
+        # 軟解除、不會煞車；真正讓 Go2 立即 halt 的是這條 /webrtc_req。
+        self._pub_webrtc = (
+            self.create_publisher(WebRtcReq, "/webrtc_req", 10)
+            if WebRtcReq is not None else None
+        )
+        if self._pub_webrtc is None:
+            self.get_logger().error(
+                "go2_interfaces.WebRtcReq import 失敗 → STOP 無法直送 StopMove，"
+                "只剩 enable=false 軟解除（不安全）。檢查 go2_interfaces 是否 build/source。"
+            )
         # ⚠️ 本節點**不**開 /cmd_vel publisher（6/15 真機抓到：voice cmd_pub 發 0 會與 reactive
         # 的 0.6 在 /cmd_vel 交錯 → driver 在 Move/StopMove 間反覆 → 狗原地抖不前進）。
         # /cmd_vel 的唯一 driver 是 reactive_stop_node；停車靠 enable=false + act1_forward.sh
@@ -67,9 +90,11 @@ class Act1VoiceTrigger(Node):
         self._scan_ts = 0.0
         self._last_trigger = 0.0
         self._busy = False
+        self._forward_proc = None       # 正在跑的 act1_forward.sh handle（STOP 要能 kill 它）
         self.get_logger().info(
             f"act1 controller ready — button(/act1/forward_cmd)+voice; "
-            f"danger={DANGER_M}m arc=±18° speed={SPEED_MPS}m/s dist[{DIST_MIN_M},{DIST_MAX_M}]"
+            f"danger={DANGER_M}m arc=±18° speed={SPEED_MPS}m/s dist[{DIST_MIN_M},{DIST_MAX_M}]; "
+            f"hard-stop=StopMove({STOP_MOVE_API_ID}) via /webrtc_req"
         )
 
     def _on_scan(self, msg: LaserScan):
@@ -148,9 +173,46 @@ class Act1VoiceTrigger(Node):
         threading.Thread(target=self._run_act1, kwargs={"distance_m": d}, daemon=True).start()
 
     def _on_stop_cmd(self, msg: String):
-        """Studio STOP/HOLD → 立刻 force-stop（不過 busy 鎖）。"""
-        self.get_logger().info("Act1 STOP/HOLD (Studio button)")
-        threading.Thread(target=self._guarantee_stop, daemon=True).start()
+        """Studio STOP/HOLD → 立刻硬停（不過 busy 鎖）。
+
+        三件事（順序重要）：① 立刻直送 StopMove 1003 給 driver（Go2 立即 halt 仍站立）；
+        ② kill 正在跑的 act1_forward.sh，避免它續放 enable=true 讓 reactive 再灌 Move 蓋掉
+        StopMove；③ daemon thread 低頻 refresh StopMove + enable=false 軟解除收尾。"""
+        self.get_logger().info("Act1 STOP/HOLD (Studio button) → StopMove 1003")
+        self._send_stopmove()           # ① 立即硬停（同步、第一優先）
+        self._cancel_forward()          # ② 砍 forward subprocess（其 TERM trap 也會 force_stop）
+        threading.Thread(target=self._hard_stop_sequence, daemon=True).start()  # ③ refresh + 鎖回
+
+    def _send_stopmove(self):
+        """直送一筆 StopMove(1003) 到 /webrtc_req。形狀對齊 event_action_bridge.py。"""
+        if self._pub_webrtc is None or WebRtcReq is None:
+            self.get_logger().error("無 WebRtcReq publisher → 無法送 StopMove！靠實體 e-stop。")
+            return
+        req = WebRtcReq()
+        req.id = 0
+        req.topic = SPORT_TOPIC
+        req.api_id = STOP_MOVE_API_ID
+        req.parameter = ""
+        req.priority = 0
+        self._pub_webrtc.publish(req)
+
+    def _hard_stop_sequence(self):
+        """低頻 refresh StopMove（防 DataChannel 丟包）+ enable=false 軟解除收尾。"""
+        # 第一筆已在 _on_stop_cmd 同步送出；這裡補 refresh（共 STOP_REFRESH_COUNT 筆）。
+        for _ in range(max(0, STOP_REFRESH_COUNT - 1)):
+            time.sleep(STOP_REFRESH_INTERVAL_S)
+            self._send_stopmove()
+        self._guarantee_stop()          # reactive enable=false（停其續發 Move）
+
+    def _cancel_forward(self):
+        """kill 正在跑的 act1_forward.sh（SIGTERM → bash TERM/EXIT trap → 自身 force_stop）。"""
+        p = self._forward_proc
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+                self.get_logger().info("已 terminate act1_forward.sh（觸發其 force_stop trap）")
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn(f"terminate forward subprocess 失敗: {exc}")
 
     # ── 語音/文字路徑（加分、非主線）────────────────────────────────
     def _on_speech_intent(self, msg: String):
@@ -207,11 +269,36 @@ class Act1VoiceTrigger(Node):
             time.sleep(0.3)
             env = dict(os.environ)
             env["ACT1_FORWARD_S"] = str(forward_s)
-            subprocess.run(["bash", ACT1_SCRIPT], env=env, timeout=ACT1_TIMEOUT_S, check=False)
+            self._forward_proc = subprocess.Popen(["bash", ACT1_SCRIPT], env=env)
+            deadline = time.monotonic() + ACT1_TIMEOUT_S
+            # 前進中主動 LiDAR 防撞閘：自己持續看 /scan，一進 danger zone 直接送 StopMove 1003
+            # + kill forward（獨立於 reactive 的 cmd_vel danger-stop，雙保險，不靠單一路徑）。
+            while self._forward_proc.poll() is None:
+                if time.monotonic() > deadline:
+                    self.get_logger().warn("act1_forward.sh 逾時 → kill + StopMove")
+                    self._send_stopmove()
+                    self._cancel_forward()
+                    break
+                # 感知失效 fail-safe：前進中 /scan 變 stale（無新鮮回波）= 失去防撞能力，
+                # 立即硬停，不繼續盲走到時間到。
+                if not self._scan_ready():
+                    self.get_logger().warn("前進中 /scan_rplidar stale → fail-safe 硬停")
+                    self._send_stopmove()
+                    self._cancel_forward()
+                    break
+                if (self._front_min is not None and self._front_min < DANGER_M):
+                    self.get_logger().warn(
+                        f"前進中 front={self._front_min:.2f}m < danger({DANGER_M}m) → 硬停"
+                    )
+                    self._send_stopmove()
+                    self._cancel_forward()
+                    break
+                time.sleep(FORWARD_DANGER_POLL_S)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f"act1_forward.sh 失敗: {exc}")
         finally:
-            # A-2 保證：只要有放行 motion，不論如何結束（含 timeout SIGKILL bash）都 force-stop。
+            self._forward_proc = None
+            # A-2 保證：只要有放行 motion，不論如何結束（含 timeout / danger / 例外）都 force-stop。
             if moved:
                 self._guarantee_stop()
             self._busy = False

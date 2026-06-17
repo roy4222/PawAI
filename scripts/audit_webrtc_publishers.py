@@ -28,6 +28,13 @@ WHITELIST = {
     "vision_perception/vision_perception/event_action_bridge.py",
     # Ad-hoc Megaphone audio A/B test script; not part of runtime stack.
     "scripts/ab_test_audio.py",
+    # Safety exception (2026-06-16): Act1 hard-STOP outlets. These publish ONLY
+    # StopMove(1003) as an emergency halt and MUST bypass the brain/executive
+    # single-outlet on purpose — routing an e-stop through executive would add a
+    # hop + a liveness dependency exactly when you most need the stop. Not for
+    # normal sport commands (Act1 forward drive goes via reactive_stop /cmd_vel).
+    "scripts/act1_voice_trigger.py",
+    "pawai-studio/gateway/studio_gateway.py",
 }
 ROOT = Path(__file__).resolve().parents[1]
 EXCLUDED_DIRS = {"build", "install", "log", ".git", "node_modules"}

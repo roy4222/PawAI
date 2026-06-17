@@ -45,6 +45,18 @@ except ImportError:
     GotoRelative = None
     ActionClient = None
 
+# Hard STOP: direct StopMove(1003) to the driver, bypassing reactive/cmd_vel.
+# Guarded so WSL dev / py_compile still pass; nav_stop fail-closes when absent.
+try:
+    from go2_interfaces.msg import WebRtcReq
+except ImportError:
+    WebRtcReq = None
+
+_SPORT_TOPIC = "rt/api/sport/request"
+_STOP_MOVE_API_ID = 1003
+_STOP_REFRESH_COUNT = 3        # 立即 1 次 + refresh，防 DataChannel 掉這一包
+_STOP_REFRESH_INTERVAL_S = 1.0  # ≤1Hz；勿 10Hz spam（DataChannel bufferedAmount 會爆）
+
 from asr_client import resample_to_wav16k, transcribe
 
 # Lazy video imports — only needed on Jetson with cv2/cv_bridge
@@ -281,6 +293,18 @@ class GatewayNode(Node):
         # Studio 按鈕 → /act1/forward_cmd {distance_m} / /act1/stop → act1 controller node。
         self._act1_forward_pub = self.create_publisher(String, "/act1/forward_cmd", QOS_EVENT)
         self._act1_stop_pub = self.create_publisher(String, "/act1/stop", QOS_EVENT)
+        # Hard STOP channel: StopMove(1003) straight to the driver. Both STOP buttons
+        # (Act1 + NavControl) publish here so a press halts the dog immediately rather
+        # than only cancelling a goal / setting a param (which the dog ignores mid-Move).
+        self._webrtc_pub = (
+            self.create_publisher(WebRtcReq, "/webrtc_req", QOS_EVENT)
+            if WebRtcReq is not None else None
+        )
+        if self._webrtc_pub is None:
+            self.get_logger().warn(
+                "WebRtcReq unavailable → STOP buttons cannot send StopMove(1003) directly; "
+                "rely on Act1 controller + physical e-stop."
+            )
         self._nav_client = (
             ActionClient(self, GotoRelative, "/nav/goto_relative")
             if (ActionClient and GotoRelative)
@@ -614,8 +638,36 @@ class GatewayNode(Node):
         self._nav_broadcast_ctrl(snapshot, reason="operator_resume")
         return {"ok": True, "state": "running", "remaining_m": round(remaining, 3)}
 
+    def _send_hard_stop(self) -> None:
+        """Direct StopMove(1003) → driver (immediate halt, stays standing). NOT Damp 1001
+        (that goes limp/falls). Shape matches vision_perception/event_action_bridge.py."""
+        if self._webrtc_pub is None or WebRtcReq is None:
+            self.get_logger().error("STOP pressed but no WebRtcReq publisher — physical e-stop only!")
+            return
+        req = WebRtcReq()
+        req.id = 0
+        req.topic = _SPORT_TOPIC
+        req.api_id = _STOP_MOVE_API_ID
+        req.parameter = ""
+        req.priority = 0
+        self._webrtc_pub.publish(req)
+        self.get_logger().info("STOP → StopMove(1003) sent to /webrtc_req")
+
+    def _send_hard_stop_sequence(self) -> None:
+        """立即 1 筆 + 1Hz refresh（daemon thread，不 block request handler）。
+        不依賴 Act1 controller 收到 /act1/stop —— DataChannel 掉單包也有兜底。"""
+        self._send_hard_stop()          # 立即第一筆（同步，最快）
+
+        def _refresh() -> None:
+            for _ in range(max(0, _STOP_REFRESH_COUNT - 1)):
+                time.sleep(_STOP_REFRESH_INTERVAL_S)
+                self._send_hard_stop()
+
+        threading.Thread(target=_refresh, daemon=True).start()
+
     def nav_stop(self) -> dict:
-        """停止 — cancel everything, back to idle."""
+        """停止 — hard StopMove(1003)×refresh + cancel goal, back to idle."""
+        self._send_hard_stop_sequence()  # ① 立即硬停 + refresh（cancel goal 不會煞 Go2）
         with self._nav_lock:
             handle = self._nav_ctrl.get("goal_handle")
             self._nav_ctrl["goal_token"] = None
@@ -654,11 +706,12 @@ class GatewayNode(Node):
         return {"ok": True, "distance_m": round(d, 2)}
 
     def act1_stop(self) -> dict:
-        """發 /act1/stop → controller force-stop（enable=false + /cmd_vel 0）。"""
+        """硬停：gateway 直送 StopMove(1003)×refresh + 通知 controller（雙路徑，哪邊先到都能停）。"""
+        self._send_hard_stop_sequence()  # gateway 端立即硬停 + refresh，不等 controller 收到 topic
         msg = String()
         msg.data = json.dumps({"stop": True})
-        self._act1_stop_pub.publish(msg)
-        self.get_logger().info("Act1 STOP/HOLD (Studio button)")
+        self._act1_stop_pub.publish(msg)  # controller 也會送 StopMove + kill forward subprocess
+        self.get_logger().info("Act1 STOP/HOLD (Studio button) → StopMove(1003) + /act1/stop")
         return {"ok": True, "state": "stopping"}
 
     # ── Nav action callbacks (run in ROS executor thread) ──────────
