@@ -6,6 +6,7 @@ import { useStateStore } from "@/stores/state-store";
 import { useAudioRecorder } from "@/hooks/use-audio-recorder";
 import { BrainStatusPill } from "@/components/chat/brain-status-pill";
 import { Composer } from "@/components/chat/composer";
+import { FarewellButton } from "@/components/chat/farewell-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { authHeaders } from "@/lib/gateway-auth";
@@ -384,9 +385,13 @@ export function ChatPanel() {
   if (!hasMessages) {
     return (
       <div className="flex h-full flex-col">
-        {/* D4：手勢開關移至 hidden dev-panel（?dev=1），主/觀眾視圖不再出現。 */}
+        {/* D4：手勢開關移至 hidden dev-panel（?dev=1），主/觀眾視圖不再出現。
+            學校 demo (6/22)：結尾「道別」鈕亦掛 empty-state header。 */}
         <div className="flex items-center justify-between">
           <BrainStatusPill />
+          <div className="mr-2">
+            <FarewellButton />
+          </div>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center px-4 md:px-8">
           <div className="flex w-full max-w-[var(--chat-max-w)] flex-col items-center gap-6">
@@ -423,8 +428,10 @@ export function ChatPanel() {
         className="flex items-center justify-between bg-background"
       >
         <BrainStatusPill />
-        {/* D4：手勢開關移至 hidden dev-panel（?dev=1）；header 只留新對話。 */}
+        {/* D4：手勢開關移至 hidden dev-panel（?dev=1）；header 留新對話。
+            學校 demo (6/22)：結尾「道別」鈕掛明顯處供操作員一鍵收尾。 */}
         <div className="mr-2 flex items-center gap-1.5">
+          <FarewellButton />
           <Button
             variant="ghost"
             size="icon"

@@ -471,3 +471,50 @@ def test_identity_mode_no_school_demo_facts():
     }
     msg = _build_user_message(state)
     assert "[school_demo_facts]" not in msg
+
+
+# 學校招生 demo (2026-06-22) — school_demo_college facts injection
+def test_school_demo_college_injects_facts():
+    state = {
+        "user_text": "介紹輔大管理學院",
+        "mode": "school_demo_college",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[school_demo_facts]" in msg
+    # 管理學院關鍵字
+    assert "管理學院" in msg
+    assert "AACSB" in msg
+    assert "imMBA" in msg
+    assert "五個學系" in msg
+
+
+def test_school_demo_college_does_not_inject_scaffold_or_scene_hint():
+    """管院 facts 注入時不該疊上 intro_scaffold / scene_hint / capability。"""
+    state = {
+        "user_text": "管院",
+        "mode": "school_demo_college",
+        "world_state": _world_state(),
+    }
+    msg = _build_user_message(state)
+    assert "[intro_scaffold]" not in msg
+    assert "[scene_hint]" not in msg
+    assert "[能力描述]" not in msg
+    assert "[mode_hint]" not in msg
+
+
+def test_college_and_request_facts_are_distinct():
+    """管院版與資管版 facts 內容互不污染。"""
+    college = _build_user_message({
+        "user_text": "管理學院",
+        "mode": "school_demo_college",
+        "world_state": _world_state(),
+    })
+    request = _build_user_message({
+        "user_text": "資管系",
+        "mode": "school_demo_request",
+        "world_state": _world_state(),
+    })
+    # 管院版不該帶資管版專屬的「1981」；資管版不該帶「imMBA」。
+    assert "1981" not in college
+    assert "imMBA" not in request

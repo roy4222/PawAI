@@ -320,6 +320,22 @@ def test_v2_demo_start_nav_capability_forwarded():
     assert captured["force"] is True
 
 
+def test_v2_demo_start_school_forwarded():
+    """`pawai demo start --school` must forward school=True to the legacy callback."""
+    captured = {}
+
+    def fake_start(**kwargs):
+        captured.update(kwargs)
+
+    legacy_start = SimpleNamespace(callback=fake_start)
+    legacy_demo = SimpleNamespace(commands={"start": legacy_start})
+    legacy_cli = SimpleNamespace(commands={"demo": legacy_demo})
+    with patch("pawai_cli.main.cli", legacy_cli):
+        result = _invoke(["demo", "start", "--school", "-y"])
+    assert result.exit_code == 0, result.output
+    assert captured["school"] is True
+
+
 def test_v2_demo_start_lock_collision_exit_code_propagates():
     """When legacy demo start SystemExit(2)s on a `-y` lock collision, v2 must
     surface exit 2 — it does not swallow or remap the lock semantics."""

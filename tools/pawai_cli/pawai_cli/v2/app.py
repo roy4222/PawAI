@@ -229,6 +229,10 @@ def demo_start(
                                          "monitor + Act1 reactive forward controller (LOCKED). "
                                          "NO nav2/amcl/2nd driver/motion. Same as "
                                          "PAWAI_DEMO_WITH_LIDAR=1."),
+    school: bool = typer.Option(False, "--school",
+                                help="學校招生 demo（管理學院版）：一鍵全開原版 demo（非 "
+                                     "LiDAR）+ 啟動後印流程 cheat-sheet。關鍵字已永遠在線，"
+                                     "此 flag 只多印操作備忘、不改 runtime。"),
 ) -> None:
     """Start brain demo or nav capability lane (delegates to legacy demo start).
 
@@ -238,7 +242,7 @@ def demo_start(
     _delegate(_legacy_group_callback("demo", "start"),
               no_studio=no_studio, brain_only=brain_only, nav_mode=nav,
               yes=yes, force=force, skip_healthcheck=skip_healthcheck,
-              with_shadow=with_shadow, with_lidar=with_lidar)
+              with_shadow=with_shadow, with_lidar=with_lidar, school=school)
 
 
 @demo_app.command("stop")

@@ -57,6 +57,12 @@ _STOP_MOVE_API_ID = 1003
 _STOP_REFRESH_COUNT = 3        # 立即 1 次 + refresh，防 DataChannel 掉這一包
 _STOP_REFRESH_INTERVAL_S = 1.0  # ≤1Hz；勿 10Hz spam（DataChannel bufferedAmount 會爆）
 
+# 學校招生 demo (6/22) 結尾「道別」鈕 — 管理學院版口號 + 比愛心。直接 publish
+# /tts（繞過 brain，不入對話歷史，口號原文保證播出，mirrors scripts/
+# school_demo_ending.py）+ 比愛心 WebRtcReq。
+_FINGER_HEART_API_ID = 1036
+_FAREWELL_TEXT = "最後~祝各位考生面試順利！請記得，輔大管院填寫第一志願喔！"
+
 from asr_client import resample_to_wav16k, transcribe
 
 # Lazy video imports — only needed on Jetson with cv2/cv_bridge
@@ -279,6 +285,11 @@ class GatewayNode(Node):
             Bool, "/brain/offline_mode", 10
         )
         self._offline_mode_last: bool | None = None
+
+        # 學校 demo「道別」鈕 → 直接 publish /tts 結尾口號（繞過 brain，不入
+        # 對話歷史）。tts_node 收到即播；gateway 自己的 /tts 訂閱也會收到 →
+        # 口號同步顯示在 Studio chat。
+        self._tts_pub = self.create_publisher(String, "/tts", QOS_EVENT)
 
         # ── Operator-controlled nav driving (S1) ────────────────────
         # /initialpose set from a frontend map click; /nav/goto_relative
@@ -951,6 +962,37 @@ class GatewayNode(Node):
         """Last value published via Studio this session (None = untouched)."""
         return self._offline_mode_last
 
+    def publish_farewell(self) -> dict:
+        """學校 demo 結尾「道別」鈕：發管院口號到 /tts + 比愛心到 /webrtc_req。
+
+        口號直接 publish /tts（繞過 brain，不入對話歷史，原文保證播出）。
+        比愛心走 _webrtc_pub（同 STOP 鈕路徑，sport api_id=1036）。WebRtcReq
+        不可用時仍照常播口號（heart best-effort）。
+        """
+        # ① 比愛心（best-effort，無 publisher 時略過但仍播口號）
+        heart_sent = False
+        if self._webrtc_pub is not None and WebRtcReq is not None:
+            req = WebRtcReq()
+            req.id = 0
+            req.topic = _SPORT_TOPIC
+            req.api_id = _FINGER_HEART_API_ID
+            req.parameter = ""
+            req.priority = 0
+            self._webrtc_pub.publish(req)
+            heart_sent = True
+        else:
+            self.get_logger().warn(
+                "Farewell pressed but no WebRtcReq publisher — 比愛心 skipped, 口號 only."
+            )
+        # ② 結尾口號 → /tts
+        msg = String()
+        msg.data = _FAREWELL_TEXT
+        self._tts_pub.publish(msg)
+        self.get_logger().info(
+            f"Farewell → /tts 口號 + 比愛心(heart_sent={heart_sent})"
+        )
+        return {"ok": True, "heart_sent": heart_sent, "text": _FAREWELL_TEXT}
+
     def _on_video_frame(self, source: str, msg) -> None:
         """ROS2 Image callback → JPEG encode → broadcast to video clients."""
         if video_clients is None:
@@ -1512,6 +1554,26 @@ async def get_offline_mode():
     if node is None:
         return {"ok": False, "error": "ros_node_not_ready", "enabled": None}
     return {"ok": True, "enabled": node.offline_mode_snapshot()}
+
+
+@app.post("/api/farewell_action")
+async def post_farewell_action():
+    """學校 demo 結尾「道別」鈕：發管院結尾口號 /tts + 比愛心 /webrtc_req。
+
+    一次性 action（無 payload）。繞過 brain 直接 publish，口號原文保證播出、
+    不入對話歷史。是 scripts/school_demo_ending.py --college 的 Studio 版主線。
+    """
+    if node is None:
+        return {"ok": False, "error": "ros_node_not_ready"}
+    result = node.publish_farewell()
+    await ws_manager.broadcast({
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "source": "brain",
+        "event_type": "farewell_action",
+        "data": {"text": result.get("text"), "heart_sent": result.get("heart_sent")},
+    })
+    return result
 
 
 # ── Operator-controlled nav driving (S1 "move to scene") ────────

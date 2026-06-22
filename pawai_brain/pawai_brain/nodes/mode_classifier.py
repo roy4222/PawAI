@@ -3,8 +3,9 @@
 Used by _build_user_message and graph.py to decide whether to inject
 CAPABILITIES.md and capability_context JSON.
 
-Order matters: safety > school_demo_request > self_intro_request > scene_query
-             > identity > capability_question > action_request > chat (default).
+Order matters: safety > school_demo_request > school_demo_college
+             > self_intro_request > scene_query > identity
+             > capability_question > action_request > chat (default).
 5/15: school_demo_request broadened to bare "資管 / 資訊管理" keyword, then
 given ASR-typo tolerance via homophone character classes — live ASR mis-hears
 both the school name and the keyword itself (資管→直管, 資訊→資詢).
@@ -47,6 +48,19 @@ MODE_PATTERNS: Final[list[tuple[str, str]]] = [
         r"[資直自諮姿滋紫字][管館官觀]"
         r"|[資直自諮姿滋紫字][訊詢訓迅尋][管館官觀][理里裡]"
         r"|[管館][理里]?系(?!統)",
+    ),
+    (
+        "school_demo_college",
+        # 學校招生 demo (2026-06-22): 提到「管理學院 / 管院」即觸發管院 facts 注入。
+        # 與 school_demo_request(資管系)並存 — 資管 pattern 排在前面先比，講
+        # 「資管 / 資訊管理」走資管版；講「管理學院 / 管院」落這條走管院版。
+        # ASR 同音錯字容錯（實機 ASR 常聽錯校名與系所名）：
+        #   管 guǎn → 管館官觀罐   理 lǐ → 理里裡
+        #   學 xué → 學血雪        院 yuàn → 院園源原願
+        # 「[學血雪]?」「[理里裡]?」皆 optional，故「管院」「管理院」「管理學院」
+        # 甚至 ASR 砍成「館院」都接得住。結尾必含「院」族字 → 不會誤吃
+        # 「管理嗎」「管理系統」(後者無院族字、且 系統 走資管 (?!統) 守門)。
+        r"[管館官觀罐][理里裡]?[學血雪]?[院園源原願]",
     ),
     (
         "self_intro_request",

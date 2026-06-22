@@ -247,6 +247,155 @@ def test_offline_generic_fallback_is_nonempty_and_not_legacy():
 
 
 # ---------------------------------------------------------------------------
+# greet fast-path (6/18) —「你好」直接講 canned 問候、不進 chat_buffer、不等
+# chat_wait_ms / LLM。SAY-only（never 被 SafetyLayer 擋）。判定走 transcript 關鍵字
+# （非 intent 欄位）→ Studio 文字（intent 寫死 chat）也能短路，且不誤觸舉手/揮手。
+# ---------------------------------------------------------------------------
+
+
+def _greet_msg(session_id="greet-1", intent="greet", transcript="你好"):
+    from std_msgs.msg import String
+    m = String()
+    m.data = json.dumps(
+        {"transcript": transcript, "session_id": session_id, "intent": intent}
+    )
+    return m
+
+
+def test_greet_fast_path_default_on(brain):
+    assert brain.greet_fast_path is True
+
+
+def test_greet_fast_path_runtime_toggle(brain):
+    brain._on_set_params([_FakeParam("greet_fast_path", False)])
+    assert brain.greet_fast_path is False
+    brain._on_set_params([_FakeParam("greet_fast_path", True)])
+    assert brain.greet_fast_path is True
+
+
+def test_greet_fast_path_generic_no_known_face(brain):
+    """intent=greet, no fresh known face → instant generic say_canned, no buffer,
+    no chat-wait timer (0s, no LLM)."""
+    brain._last_stable_identity_name = None
+    n_timers_before = len(brain._chat_timeouts)
+    brain._on_speech_intent(_greet_msg(session_id="greet-gen"))
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["selected_skill"] == "say_canned"
+    assert brain._captured[0]["source"] == "rule:greet_fast_path"
+    assert brain._captured[0]["reason"] == "greet_fast_path:generic"
+    assert len(brain._chat_timeouts) == n_timers_before
+    assert "greet-gen" not in brain._state.chat_buffer
+
+
+def test_greet_fast_path_named_when_known_face_fresh(brain):
+    """intent=greet with a fresh stable known face → greet_known_person by name."""
+    brain._last_stable_identity_name = "Roy"
+    brain._last_stable_identity_ts = time.time()
+    brain._on_speech_intent(_greet_msg(session_id="greet-named"))
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["selected_skill"] == "greet_known_person"
+    assert "Roy" in _say_text(brain._captured[0])
+    assert brain._captured[0]["source"] == "rule:greet_fast_path"
+
+
+def test_greet_fast_path_stale_name_falls_back_to_generic(brain):
+    """A known name older than the 8s freshness window → generic, not by name."""
+    brain._last_stable_identity_name = "Roy"
+    brain._last_stable_identity_ts = time.time() - 60.0
+    brain._on_speech_intent(_greet_msg(session_id="greet-stale"))
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["selected_skill"] == "say_canned"
+    assert brain._captured[0]["reason"] == "greet_fast_path:generic"
+
+
+def test_greet_fast_path_studio_text_intent_chat(brain):
+    """6/18 真機根因：Studio 文字輸入把 intent 寫死 'chat'。fast-path 走 transcript
+    關鍵字，所以文字「你好」(intent=chat) 仍立即短路（不被 intent 欄位擋掉）。"""
+    brain._last_stable_identity_name = None
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(_greet_msg(session_id="studio-1", intent="chat"))
+    assert len(brain._captured) == 1
+    assert brain._captured[0]["source"] == "rule:greet_fast_path"
+    assert "studio-1" not in brain._state.chat_buffer
+
+
+def test_greet_fast_path_disabled_uses_chat_window(brain):
+    """greet_fast_path=False →「你好」falls through to legacy chat buffer
+    (waits for LLM candidate / chat_wait_ms), no instant emit."""
+    brain.greet_fast_path = False
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(_greet_msg(session_id="greet-off"))
+    assert brain._captured == []
+    assert "greet-off" in brain._state.chat_buffer
+    assert "greet-off" in brain._chat_timeouts
+
+
+def test_greet_fast_path_non_greeting_text_unaffected(brain):
+    """Non-greeting text ('今天天氣如何') is NOT short-circuited — legacy chat
+    window, even though intent=chat (transcript has no greeting keyword)."""
+    brain.greet_fast_path = True
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(
+        _greet_msg(session_id="chat-1", intent="chat", transcript="今天天氣如何")
+    )
+    assert brain._captured == []
+    assert "chat-1" in brain._state.chat_buffer
+
+
+def test_greet_fast_path_raise_hand_not_short_circuited(brain):
+    """『舉手』被 classifier 歸成 intent=greet，但要的是狗舉手（wave_hello MOTION），
+    不是講問候。fast-path 排除舉手/揮手 → 不短路，照常進 chat window 讓 LLM 觸發
+    wave_hello。保護呂奇傑『講舉手他才舉手』的 demo。"""
+    brain.greet_fast_path = True
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(
+        _greet_msg(session_id="hand-1", intent="greet", transcript="舉手")
+    )
+    assert brain._captured == []
+    assert "hand-1" in brain._state.chat_buffer
+
+
+def test_greet_fast_path_greeting_prefixed_request_goes_to_llm(brain):
+    """含問候前綴的真實請求（『你好可以幫我關燈嗎』）超過長度閘 → 不短路，進 LLM
+    路徑拿真正的對話回覆，而不是被誤判成純問候。"""
+    brain.greet_fast_path = True
+    brain.offline_mode = False
+    brain.demo_phase = "all"
+    brain._on_speech_intent(
+        _greet_msg(session_id="req-1", intent="chat", transcript="你好可以幫我關燈嗎")
+    )
+    assert brain._captured == []
+    assert "req-1" in brain._state.chat_buffer
+
+
+def test_is_verbal_greet_predicate(brain):
+    """Direct predicate checks: bare greetings fire; raise-hand and prefixed
+    requests do not."""
+    assert brain._is_verbal_greet("你好") is True
+    assert brain._is_verbal_greet("哈囉") is True
+    assert brain._is_verbal_greet(" 嗨 ") is True
+    assert brain._is_verbal_greet("Hello") is True
+    assert brain._is_verbal_greet("您好") is True
+    assert brain._is_verbal_greet("舉手") is False
+    assert brain._is_verbal_greet("揮手") is False
+    assert brain._is_verbal_greet("你好可以幫我關燈嗎") is False
+    assert brain._is_verbal_greet("今天天氣如何") is False
+    assert brain._is_verbal_greet("") is False
+
+
+def test_greet_fast_path_safety_still_wins(brain):
+    """Safety hard_rule '停' wins even if fast-path on (safety checked first)."""
+    brain.greet_fast_path = True
+    brain._on_speech_intent(_greet_msg(transcript="停", session_id="greet-stop", intent="greet"))
+    assert len(brain._captured) >= 1
+    assert brain._captured[0]["source"] != "rule:greet_fast_path"
+
+
+# ---------------------------------------------------------------------------
 # T4b — /brain/offline_mode Bool subscriber (Studio toggle) sharing
 #       _set_offline_mode with the param-set path. plan3 T4 wiring.
 # ---------------------------------------------------------------------------

@@ -1409,6 +1409,26 @@ def _print_shadow_soak_reminder() -> None:
     )
 
 
+def _print_school_demo_cheatsheet() -> None:
+    """6/22 學校招生 demo（管理學院版）操作 cheat-sheet。
+
+    管院關鍵字（school_demo_college）已 baked 進 brain、永遠在線 —— 本提示只是
+    現場流程備忘，不改任何 runtime 狀態。完整 runbook 見
+    docs/runbook/2026-06-22-school-college-demo-runbook.md。
+    """
+    click.echo("")
+    click.echo("🎓 學校招生 demo（輔大管理學院版）流程 cheat-sheet：")
+    click.echo("   1. 打招呼     — 人臉觸發 greet / 主持人問好")
+    click.echo("   2. 自我介紹   — 對狗說「自我介紹一下」")
+    click.echo("   3. 介紹館院   — 說「介紹一下輔大管理學院」（說『資管』走舊版）")
+    click.echo("   4. 三鏡頭     — 人臉 / 手勢 / 姿勢 live 展示（無觸發語）")
+    click.echo("   5. 結尾道別   — 按 Studio 主面板「道別」鈕（粉紅愛心）")
+    click.echo("                   → 口號「輔大管院填第一志願」+ 比愛心")
+    click.echo("   結尾備援（鈕不靈）：")
+    click.echo("     python3 scripts/school_demo_ending.py --college  # 在 Jetson 上")
+    click.echo("   完整 runbook：docs/runbook/2026-06-22-school-college-demo-runbook.md")
+
+
 def _invoke_nav_start_sh() -> int:
     return shell.stream(
         ["bash", ".claude/skills/nav-avoidance-lane/scripts/start.sh", "capability"],
@@ -1571,9 +1591,13 @@ def _current_sha_short() -> str:
               help="After a healthy brain demo is running, also start a raw LiDAR "
                    "monitor (/scan_rplidar evidence window). NO nav2/amcl/2nd driver/motion. "
                    "Same as PAWAI_DEMO_WITH_LIDAR=1.")
+@click.option("--school", "school", is_flag=True,
+              help="學校招生 demo（管理學院版）：一鍵全開原版 demo（非 LiDAR）+ "
+                   "啟動後印流程 cheat-sheet。管院關鍵字已 baked 進 brain、永遠在線，"
+                   "此 flag 不改 runtime，只多印操作備忘。")
 def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
                yes: bool, force: bool, skip_healthcheck: bool, with_shadow: bool,
-               with_lidar: bool) -> None:
+               with_lidar: bool, school: bool) -> None:
     """Start brain demo or nav capability lane."""
     from .lock import LOCK_FLOCK_PATH, Lock, is_stale, is_own_lock
 
@@ -1583,6 +1607,15 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
         with_lidar = True
 
     nav_mode = _validate_nav_mode(nav_mode, brain_only)
+    # --school = 學校招生 demo（管理學院版）= 全功能原版（full + studio + 非 LiDAR）。
+    # 與 nav / brain-only / with-lidar 互斥：那些都不是「主軸語音 + 三鏡頭」的原版。
+    if school:
+        if nav_mode == "capability":
+            raise click.UsageError("--school cannot be combined with --nav capability")
+        if brain_only:
+            raise click.UsageError("--school needs full perception + Studio; remove --brain-only")
+        if with_lidar:
+            raise click.UsageError("--school is the non-LiDAR 原版; remove --with-lidar")
     if with_shadow and nav_mode == "capability":
         raise click.UsageError("--with-shadow cannot be combined with --nav capability")
     if with_lidar and nav_mode == "capability":
@@ -1739,6 +1772,8 @@ def demo_start(no_studio: bool, brain_only: bool, nav_mode: str | None,
         sys.exit(2)
     click.echo(f"✓ Demo running (lane: {lane}, lock owner: {user}@{host})")
     if lane == "brain":
+        if school:
+            _print_school_demo_cheatsheet()
         if with_shadow:
             ok, detail = _enable_shadow_soak()
             if not ok:

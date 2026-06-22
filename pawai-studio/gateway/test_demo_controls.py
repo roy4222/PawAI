@@ -135,6 +135,11 @@ class _RecordingNode:
     def offline_mode_snapshot(self) -> bool | None:
         return self._offline_mode_last
 
+    # farewell (學校 demo 道別鈕)
+    def publish_farewell(self) -> dict:
+        self.calls.append(("farewell",))
+        return {"ok": True, "heart_sent": True, "text": "口號"}
+
 
 class _FakeWsManager:
     def __init__(self):
@@ -259,6 +264,34 @@ class TestOfflineModeRoute:
         assert out == {"ok": False, "error": "ros_node_not_ready"}
 
 
+# ── 學校 demo: farewell (道別鈕) ────────────────────────────────────
+
+
+class TestFarewellRoute:
+    def test_farewell_post_publishes_and_returns(self, wired):
+        import asyncio
+        node, _ = wired
+        out = asyncio.run(sg.post_farewell_action())
+        assert out["ok"] is True
+        assert ("farewell",) in node.calls
+
+    def test_farewell_ws_broadcast(self, wired):
+        import asyncio
+        _, ws = wired
+        asyncio.run(sg.post_farewell_action())
+        assert len(ws.broadcasts) == 1
+        env = ws.broadcasts[0]
+        assert env["source"] == "brain"
+        assert env["event_type"] == "farewell_action"
+        assert "text" in env["data"] and "heart_sent" in env["data"]
+
+    def test_farewell_node_none(self, monkeypatch):
+        import asyncio
+        monkeypatch.setattr(sg, "node", None)
+        out = asyncio.run(sg.post_farewell_action())
+        assert out == {"ok": False, "error": "ros_node_not_ready"}
+
+
 class _RecPub:
     """Records every published message onto a shared ordered log."""
 
@@ -311,6 +344,40 @@ class TestRealPublishCallOrder:
         node.publish_offline_mode(True)
         assert node._floor_log == [("offline_mode", True)]
         assert node.offline_mode_snapshot() is True
+
+    def test_real_publish_farewell_heart_then_tts(self, monkeypatch):
+        """比愛心(WebRtcReq) + 口號(/tts String) 都發出；口號文字 = 管院版。"""
+        class _WebRtcReq:
+            def __init__(self):
+                self.id = 0
+                self.topic = ""
+                self.api_id = 0
+                self.parameter = ""
+                self.priority = 0
+
+        monkeypatch.setattr(sg, "WebRtcReq", _WebRtcReq)
+        node = _make_floor_node()
+        log: list[tuple] = []
+        node._webrtc_pub = _RecPub(log, "webrtc")
+        node._tts_pub = _RecPub(log, "tts")
+        out = node.publish_farewell()
+        assert out["ok"] is True and out["heart_sent"] is True
+        labels = [c[0] for c in log]
+        assert "webrtc" in labels and "tts" in labels
+        # 口號原文（管院版）出現在 /tts payload
+        tts_payload = next(p for lbl, p in log if lbl == "tts")
+        assert "輔大管院" in tts_payload and "第一志願" in tts_payload
+
+    def test_real_publish_farewell_no_webrtc_still_speaks(self, monkeypatch):
+        """WebRtcReq 不可用時略過比愛心但口號照播（heart_sent=False）。"""
+        monkeypatch.setattr(sg, "WebRtcReq", None)
+        node = _make_floor_node()
+        log: list[tuple] = []
+        node._webrtc_pub = None
+        node._tts_pub = _RecPub(log, "tts")
+        out = node.publish_farewell()
+        assert out["ok"] is True and out["heart_sent"] is False
+        assert [lbl for lbl, _ in log] == ["tts"]
 
 
 class TestDemoPhaseWhitelist:

@@ -52,6 +52,7 @@ pawai doctor                              # 環境健檢（含 Network topology 
 pawai status                              # 看 demo lock owner / branch / 網路拓撲
 pawai jetson deploy --module <module>     # rsync + colcon build（含 lock collision prompt）
 pawai demo start                          # 啟 brain demo（registry lock，lane=brain）
+pawai demo start --school                 # 學校招生 demo（管理學院版）：一鍵全開原版（非 LiDAR）+ 印流程 cheat-sheet（6/22）
 pawai demo start --nav capability         # 啟 nav stack（lane=nav_capability，scope 限手動 action 場測）
 pawai demo start --with-lidar             # brain demo + raw LiDAR(/scan_rplidar) + Act1 短距前進 controller（LOCKED，Studio 鈕/語音觸發才動、需 e-stop；無 nav2/2nd driver，6/15）
 pawai demo stop                           # 依 lock lane 路由 cleanup（只清自己的，--force 才能清別人）

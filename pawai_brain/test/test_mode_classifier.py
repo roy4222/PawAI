@@ -92,6 +92,24 @@ from pawai_brain.nodes.mode_classifier import classify_mode
     ("古大司館系", "school_demo_request"),           # 輔大資管系 ASR 砍爛 → 館系收尾網
     ("自管系亮點", "school_demo_request"),           # 資→自
     ("諮訊管理系", "school_demo_request"),           # 資→諮
+    # 學校招生 demo (6/22) — school_demo_college 觸發輔大管理學院 facts 注入。
+    # 「管理學院 / 管院」皆中；資管 pattern 排前面故「資管」仍走資管版。
+    ("介紹輔大管理學院", "school_demo_college"),
+    ("輔大管理學院有什麼特色", "school_demo_college"),
+    ("管理學院", "school_demo_college"),
+    ("管院", "school_demo_college"),
+    ("介紹一下管院特色", "school_demo_college"),
+    ("管理院", "school_demo_college"),                # 漏字「學」
+    ("請跟大家介紹輔大管理學院", "school_demo_college"),
+    # ASR 同音錯字容錯
+    ("館院", "school_demo_college"),                  # 管→館（含使用者原始 typo）
+    ("官理學院", "school_demo_college"),              # 管→官
+    ("觀理學院", "school_demo_college"),              # 管→觀
+    ("管理學園", "school_demo_college"),              # 院→園
+    ("管理學源", "school_demo_college"),              # 院→源
+    ("管裡學院", "school_demo_college"),              # 理→裡
+    # 負面：講「資管」仍走資管版（資管 pattern 排在前）
+    ("輔大資管系特色", "school_demo_request"),
     # Chat (default)
     ("天氣好嗎", "chat"),
     ("我今天累了", "chat"),

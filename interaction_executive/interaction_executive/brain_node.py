@@ -148,6 +148,17 @@ DEMO_CANNED_TABLE: dict[str, dict[str, str]] = {
 # PENDING Roy sign-off (6/15) — provisional wording.
 OFFLINE_GENERIC_FALLBACK = "嗯，我在聽，我們繼續吧。"
 
+# 2026-06-18 greet fast-path 口語問候關鍵字。**故意排除「舉手/揮手」** — 那兩個在
+# intent_classifier 被歸成 greet intent，但要的是狗舉手（wave_hello 的 MOTION），不是
+# 講一句問候。對 transcript 比對（語音與 Studio 文字皆可），不靠被寫死的 intent 欄位。
+_VERBAL_GREET_KEYWORDS: tuple[str, ...] = (
+    "你好", "妳好", "您好", "哈囉", "哈嘍", "哈摟", "哈啰", "哈喽",
+    "嗨", "早安", "午安", "晚安", "hello", "hi",
+)
+# 長度閘：只短路「essentially 一句問候」。"你好" / "哈囉嗨" 觸發；"你好，幫我關燈嗎"
+# （含問候前綴的真實請求）超過上限 → 照常進 LLM。中文字 len 各算 1。
+_GREET_FAST_PATH_MAX_LEN = 6
+
 
 class FallbackReason(str, Enum):
     """plan3 T5: why a chat/LLM turn fell back to canned. Trace/diagnostic value
@@ -418,6 +429,9 @@ class BrainNode(Node):
             elif p.name == "greet_cooldown_s":
                 self.greet_cooldown_s = float(p.value)
                 self.get_logger().info(f"greet_cooldown_s set to {self.greet_cooldown_s}")
+            elif p.name == "greet_fast_path":
+                self.greet_fast_path = bool(p.value)
+                self.get_logger().info(f"greet_fast_path set to {self.greet_fast_path}")
             elif p.name == "demo_phase":
                 # plan2 T2-3: param + /brain/demo_phase topic share _set_demo_phase
                 # so cleanup logic never diverges between the two entry points.
@@ -852,6 +866,13 @@ class BrainNode(Node):
         self.declare_parameter("greet_require_sitting", True)
         self.declare_parameter("greet_sitting_window_s", 3.0)
         self.declare_parameter("greet_cooldown_s", 20.0)
+        # 2026-06-18 HITL：語音「你好」(intent=greet) 走 RuleBrain-style fast-path —
+        # 直接講 canned 問候、不進 chat_wait_ms buffer、不等 LLM 候選。語音 greet 是
+        # 「明確使用者請求」非自發社交，故不受 greet_cooldown_s / demo_phase gate。
+        # 用 SAY-only skill（greet_known_person 具名 / say_canned 通用），避免 wave_hello
+        # 的 MOTION hello 近距離被 SafetyLayer 擋掉整個 skill silent-fail。
+        # 預設 True；現場想退回 LLM-動態問候：ros2 param set /brain_node greet_fast_path false。
+        self.declare_parameter("greet_fast_path", True)
         # 2026-06-10 demo phase gate（最小版）：all=不 gate（預設、零行為改變）；
         # s2_face / s3_object / s4_gesture = 只放行該段的自發 proposal；quiet=全擋。
         # 只影響 greet/object_remark/gesture 三條社交路徑，safety 與明確指令不受影響。
@@ -937,6 +958,7 @@ class BrainNode(Node):
         self.greet_require_sitting = bool(self.get_parameter("greet_require_sitting").value)
         self.greet_sitting_window_s = float(self.get_parameter("greet_sitting_window_s").value)
         self.greet_cooldown_s = float(self.get_parameter("greet_cooldown_s").value)
+        self.greet_fast_path = bool(self.get_parameter("greet_fast_path").value)
         self.demo_phase = str(self.get_parameter("demo_phase").value or "all").strip().lower()
         self.offline_mode = bool(self.get_parameter("offline_mode").value)
         self.auto_advance_phases = list(
@@ -1459,6 +1481,15 @@ class BrainNode(Node):
             pc = active.get("priority_class", -1)
             return pc in (int(PriorityClass.SEQUENCE), int(PriorityClass.SKILL))
 
+    def _is_verbal_greet(self, transcript: str) -> bool:
+        """True 當 utterance 本質上就是一句口語問候 — 短 *且* 含問候關鍵字。
+        長度閘讓「你好，幫我關燈」這種含問候前綴的真實請求留在 LLM 路徑。
+        排除舉手/揮手（見 _VERBAL_GREET_KEYWORDS）。"""
+        t = (transcript or "").strip().lower()
+        if not t or len(t) > _GREET_FAST_PATH_MAX_LEN:
+            return False
+        return any(kw in t for kw in _VERBAL_GREET_KEYWORDS)
+
     def _on_speech_intent(self, msg: String) -> None:
         payload = self._load_json(msg)
         if payload is None:
@@ -1526,6 +1557,40 @@ class BrainNode(Node):
         if self._pending_confirm.state == ConfirmState.PENDING:
             self._pending_confirm.cancel(reason="new_speech_intent")
             self.get_logger().info("PendingConfirm cancelled by new speech intent")
+
+        # 2026-06-18 HITL: greet fast-path —「你好」直接講 canned 問候、不進 chat_buffer、
+        # 不等 chat_wait_ms / LLM（RuleBrain 風格、0s）。問候是明確使用者請求 → 一律回應，
+        # 不受 greet_cooldown_s / demo_phase gate。
+        # 判定走 *transcript 關鍵字* 而非 intent 欄位，理由有二：
+        #   ① Studio 文字輸入（_on_text_input）把 intent 寫死 "chat"，靠 intent 欄位永遠
+        #      抓不到文字「你好」（6/18 實機：文字「你好」走 LLM 出兩句的根因）。
+        #   ② intent=greet 被 classifier 跟「舉手/揮手」共用（呂奇傑 demo 要狗舉手＝
+        #      wave_hello 的 MOTION），用 intent 會把舉手誤短路成只講話不舉手。
+        #      _is_verbal_greet 只認純口語問候（排除舉手/揮手）+ 長度閘擋「你好，幫我…」。
+        # 用 SAY-only skill 保證一定講出來（wave_hello 的 MOTION 近距離會被 SafetyLayer
+        # 擋掉整個 skill silent-fail）：最近 8s 內有 stable 已知人臉 → greet_known_person
+        # 具名「{name}，歡迎回來，我看到你了。」；否則 say_canned 通用問候。
+        if self.greet_fast_path and self._is_verbal_greet(transcript):
+            name = self._last_stable_identity_name
+            fresh = name and (time.time() - self._last_stable_identity_ts) <= 8.0
+            if fresh:
+                plan = build_plan(
+                    "greet_known_person",
+                    args={"name": name},
+                    source="rule:greet_fast_path",
+                    reason=f"greet_fast_path:{name}",
+                    session_id=session_id,
+                )
+            else:
+                plan = build_plan(
+                    "say_canned",
+                    args={"text": "[excited] 嗨～你好，我是 PawAI！"},
+                    source="rule:greet_fast_path",
+                    reason="greet_fast_path:generic",
+                    session_id=session_id,
+                )
+            self._emit(plan)
+            return
 
         # plan3 T4: offline_mode short-circuits the cloud chat/LLM path straight
         # to canned (0s, no chat_wait_ms window, no LLM request). Reached only

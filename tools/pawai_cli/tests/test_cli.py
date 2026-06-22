@@ -2167,3 +2167,38 @@ def test_module_presence_maps_nodes():
 def test_health_nav_command_registered():
     result = CliRunner().invoke(cli, ["health", "nav", "--help"])
     assert result.exit_code == 0
+
+
+# ── 學校招生 demo: pawai demo start --school（管理學院版） ──────────────────
+
+def test_demo_start_school_rejects_brain_only():
+    """--school 要全感知 + Studio，與 --brain-only 互斥（pre-SSH UsageError）。"""
+    result = CliRunner().invoke(cli, ["demo", "start", "--school", "--brain-only"])
+    assert result.exit_code == 2
+    assert "brain-only" in result.output
+
+
+def test_demo_start_school_rejects_nav_capability():
+    """--school 是原版互動 demo，與 nav capability lane 互斥。"""
+    result = CliRunner().invoke(cli, ["demo", "start", "--school", "--nav", "capability"])
+    assert result.exit_code == 2
+    assert "--school" in result.output
+
+
+def test_demo_start_school_rejects_with_lidar():
+    """--school 是非 LiDAR 原版，與 --with-lidar 互斥。"""
+    result = CliRunner().invoke(cli, ["demo", "start", "--school", "--with-lidar"])
+    assert result.exit_code == 2
+    assert "LiDAR" in result.output
+
+
+def test_school_cheatsheet_prints_flow(capsys):
+    """cheat-sheet 印出五段流程 + 道別鈕 + SSH 備援 + runbook 指標。"""
+    from pawai_cli.main import _print_school_demo_cheatsheet
+    _print_school_demo_cheatsheet()
+    out = capsys.readouterr().out
+    assert "管理學院" in out
+    assert "自我介紹" in out
+    assert "道別" in out
+    assert "school_demo_ending.py --college" in out
+    assert "2026-06-22-school-college-demo-runbook.md" in out

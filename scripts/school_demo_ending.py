@@ -8,9 +8,14 @@ publisher，DDS 未必已把訊息 flush 上線，/tts 約 1/3 機率被靜默�
 發現 → publish → spin 1.5s 讓 RELIABLE QoS 寫入真正落地後才退出。
 任何需要可靠 one-shot publish 的場合都可重用。
 
+2026-06-22：加 --college 旗標切「輔大管理學院」結尾（學校 demo 管院版）。
+此腳本是 Studio「道別」鈕的 SSH 備援——按鈕不靈時手動跑。預設不帶旗標
+時維持資管版口號 byte-identical。
+
 Run ON the Jetson (needs rclpy + go2_interfaces):
     source /opt/ros/humble/setup.zsh && source install/setup.zsh
-    python3 scripts/school_demo_ending.py
+    python3 scripts/school_demo_ending.py            # 資管版（預設）
+    python3 scripts/school_demo_ending.py --college  # 管理學院版（6/22）
 """
 import sys
 import time
@@ -19,11 +24,19 @@ import rclpy
 from go2_interfaces.msg import WebRtcReq
 from std_msgs.msg import String
 
+# 資管版（5/16）— 預設，維持 byte-identical。
 SCHOOL_DEMO_ENDING_TEXT = "最後~祝各位考生面試順利！請記得，輔大資管系填寫第一志願喔！"
+# 管理學院版（6/22）— --college 切換。
+SCHOOL_DEMO_ENDING_TEXT_COLLEGE = "最後~祝各位考生面試順利！請記得，輔大管院填寫第一志願喔！"
 FINGER_HEART_API_ID = 1036  # Go2 sport action「比愛心」
 
 
 def main() -> int:
+    ending_text = (
+        SCHOOL_DEMO_ENDING_TEXT_COLLEGE
+        if "--college" in sys.argv[1:]
+        else SCHOOL_DEMO_ENDING_TEXT
+    )
     rclpy.init()
     n = rclpy.create_node("pawai_school_ending")
     heart = n.create_publisher(WebRtcReq, "/webrtc_req", 10)
@@ -52,7 +65,7 @@ def main() -> int:
     heart.publish(WebRtcReq(id=0, topic="rt/api/sport/request",
                             api_id=FINGER_HEART_API_ID, parameter="", priority=0))
     msg = String()
-    msg.data = SCHOOL_DEMO_ENDING_TEXT
+    msg.data = ending_text
     tts.publish(msg)
 
     # Spin past publish so the RELIABLE-QoS write actually lands on the wire

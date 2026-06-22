@@ -235,6 +235,17 @@ _SCHOOL_DEMO_FACTS = """[school_demo_facts] 使用者問到輔大資管系。請
 不要在回覆中提「填第一志願」，那句口號由 demo 主持人手動觸發。"""
 
 
+# 學校招生 demo (2026-06-22) — 輔大管理學院 grounded facts。
+# 與 _SCHOOL_DEMO_FACTS(資管系)並存，只在 mode=school_demo_college 注入。
+# 不存進 persona、不影響日常對話。對應 mode pattern 在 mode_classifier.py。
+_SCHOOL_DEMO_COLLEGE_FACTS = """[school_demo_facts] 使用者問到輔大管理學院。請用 PawAI 自然口吻整合介紹，60 秒內、不要逐條念。底下是純事實：
+
+輔大管理學院擁有完整的商管教育體系，涵蓋五個學系：企業管理學系、會計學系、統計資訊學系、金融與國際企業學系、資訊管理學系，以及商研所博士班、科技管理所、社會企業研究所、國際經營管理碩士班 imMBA；學院以 AACSB 國際認證為品質基礎，結合管理專業、AI科技應用、數據分析、企業實務、國際視野與天主教大學的人文關懷，培養能面對數位轉型、全球競爭與永續挑戰的新世代管理人才。
+
+語氣建議：[curious] 開場 → [excited] 帶亮點 → [playful] 結尾。
+不要在回覆中提「填第一志願」，那句口號由 demo 主持人手動觸發。"""
+
+
 def _format_demo_session(session: dict | None) -> str | None:
     """N3-B: format [demo] prompt line when demo_session.active is True."""
     if not isinstance(session, dict) or not session.get("active"):
@@ -368,6 +379,10 @@ def _build_user_message(state) -> str:
     # 學校招生 demo: 注入輔大資管 5 大亮點 facts，僅此 mode。
     if mode == "school_demo_request":
         parts.append(_SCHOOL_DEMO_FACTS)
+
+    # 學校招生 demo: 注入輔大管理學院 facts，僅此 mode。
+    if mode == "school_demo_college":
+        parts.append(_SCHOOL_DEMO_COLLEGE_FACTS)
 
     return "\n".join(parts)
 
@@ -737,6 +752,10 @@ class ConversationGraphNode(Node):
         # 學校招生 demo: 注入輔大資管 5 大亮點 facts，僅此 mode。
         if mode == "school_demo_request":
             parts.append(_SCHOOL_DEMO_FACTS)
+
+        # 學校招生 demo: 注入輔大管理學院 facts，僅此 mode。
+        if mode == "school_demo_college":
+            parts.append(_SCHOOL_DEMO_COLLEGE_FACTS)
 
         return "\n".join(parts)
 
