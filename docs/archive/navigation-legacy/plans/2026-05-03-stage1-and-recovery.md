@@ -1,6 +1,6 @@
 # 2026-05-03 — Stage 1 + Recovery 主線打穿
 
-> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
 
 > **今日唯一目標**：Go2 遇靜態障礙能可控停下；障礙移除後，能 reset + re-send goal 繼續到達。
 > **不做**：漂亮繞行、人類動態避障、D435 進 costmap、`nav_demo_point` 封裝。
@@ -44,7 +44,7 @@
 - [ ] 同 yaml（5/2 三行改動保留）、同場景、watchdog danger > 1s
 - [ ] 跑 1-2 輪
 - [ ] 每輪記：起點 / 終點 / cmd_vel 序列特徵 / 是否撞摔大甩 / Nav2 結果
-- [ ] R3 結論 append 到 `docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md`
+- [ ] R3 結論 append 到 `docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md`
 
 **判分**：
 - 類 R1（試繞 + 可控停）→ Stage 1 ✅
@@ -100,7 +100,7 @@ python3 scripts/send_relative_goal.py --distance 1.5
 通過 = 第二階段「安全 gate 存在」可宣稱。
 
 ### Block F — 收工（30 min）
-- [ ] update `docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md`：append R3 + Recovery 三輪
+- [ ] update `docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md`：append R3 + Recovery 三輪
 - [ ] 在本檔末追加「demo 話術草稿」段落
 - [ ] 更新 `references/project-status.md`：5/3 進度
 - [ ] `/update-docs`
@@ -126,7 +126,7 @@ python3 scripts/send_relative_goal.py --distance 1.5
 |---|---|
 | Round reset 腳本 | `scripts/nav_round_reset.sh` |
 | Emergency lock | `nav_capability/scripts/emergency_stop.py` |
-| 5/2 試跑紀錄（R3 append 在這） | `docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md` |
+| 5/2 試跑紀錄（R3 append 在這） | `docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md` |
 | Nav2 yaml（不要再改） | `go2_robot_sdk/config/nav2_params.yaml` |
 | 場景校準工具 | `scripts/start_scan_only_tmux.sh` + `scan_health_check.py` |
 | 啟動 stack | `scripts/start_nav_capability_demo_tmux.sh` |
@@ -196,8 +196,8 @@ python3 scripts/send_relative_goal.py --distance 1.5
 更新檔案：
 - `references/project-status.md`（5/3 進度段）
 - `.claude/skills/project-onboard/references/project-status.md`（header + 模組狀態表）
-- `docs/navigation/plans/2026-05-02-dynamic-obstacle-demo.md`（5/3 R3 R1 結果）
-- `docs/navigation/plans/2026-05-03-stage1-and-recovery.md`（本檔，append 實際執行）
+- `docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md`（5/3 R3 R1 結果）
+- `docs/archive/navigation-legacy/plans/2026-05-03-stage1-and-recovery.md`（本檔，append 實際執行）
 
 ### 最終 demo 收工狀態
 

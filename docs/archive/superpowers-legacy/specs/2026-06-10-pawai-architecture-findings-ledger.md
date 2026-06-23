@@ -147,7 +147,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - pawai-studio/gateway/studio_gateway.py:524-545 (nav_start sets state='running' unconditionally, no check of current state)
   - pawai-studio/gateway/studio_gateway.py:502-522 (_nav_send_goto overwrites goal_token and sets goal_handle=None — old handle reference lost without cancel_goal_async)
-  - docs/navigation/research/2026-06-08-trackB-hitl-results.md (nav_action_server is single-goal; orphaned active goal rejects subsequent gotos)
+  - docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md (nav_action_server is single-goal; orphaned active goal rejects subsequent gotos)
   - pawai-studio/frontend/components/navigation/nav-control.tsx:109 (only the UI canStart gate prevents this; REST is open to a second window/curl)
 - **建議**：Add a gateway-side guard: nav_start returns {ok:false, error:'busy'} unless state in {idle,done}; on legitimate restart, cancel the old handle first. Until 6/18, enforce single-Studio-window operator discipline for S1. Verify orphan consequence on Jetson (NEEDS_HITL for robot-side effect).
 
@@ -379,7 +379,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - face_perception/face_perception/face_identity_node.py:393-408 (predict_name uses MAX cosine over all stored sample embeddings, not centroid — a backup dir duplicating Roy's photos creates an equal-sim competing name → identity flapping; the 6/8 research doc's 'dilute centroid' wording understates this)
   - face_perception/face_perception/face_identity_node.py:163-181 (retrain trigger compares per-dir PNG counts only — replacing images with same count silently keeps stale pkl)
   - face_perception/face_perception/face_identity_node.py:38 (glob('*.png') only — README manual-enroll flow docs/pawai-brain/perception/face/README.md:87-90 says 'put 1-3 photos in folder' with no format note; .jpg silently ignored)
-  - docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md:192-195 (documented defect + HITL: stale enrollment dropped Roy sim to ~0.2, re-enroll restored 0.73-0.81)
+  - docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md:192-195 (documented defect + HITL: stale enrollment dropped Roy sim to ~0.2, re-enroll restored 0.73-0.81)
   - tools/pawai_cli/pawai_cli/main.py:1315-1355 (pawai face list/enroll/rebuild exist as the manual-SOP guard)
 - **建議**：Smallest fix: dirname blacklist (skip names starting with . or _, plus 'old*') in list_face_images/compute_db_counts + accept jpg/jpeg + hash-based (not count-based) staleness. Demo period: rely on documented SOP (ls face_db, pawai face rebuild). Greet's single point of failure per research doc §1.18.
 
@@ -391,7 +391,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - face_perception/face_perception/face_identity_node.py:383-389 (cb_color stores latest frame, no receipt timestamp kept)
   - face_perception/face_perception/face_identity_node.py:494-505 (tick re-detects on cached frame indefinitely; no frame-age check, no None-reset)
   - face_perception/face_perception/face_identity_node.py:633-641 (stamp=time.time() at publish — downstream cannot distinguish frozen camera from live feed)
-  - docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md:100-110 (D435 is shared upstream for face+pose+object — single sensor SPOF)
+  - docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md:100-110 (D435 is shared upstream for face+pose+object — single sensor SPOF)
 - **建議**：Record last-frame receipt time in cb_color; in tick, if age > ~1s skip detection and publish face_count with a stale/degraded flag (or stop publishing). Carry the image header stamp into JSON for true latency/liveness observability.
 
 ### FACE-4 — 604-line legacy duplicate scripts/face_identity_infer_cv.py publishes the SAME topics; contract doc still names it as the current publisher
@@ -569,7 +569,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **查證**：✅ supported — Verified: thesis 5-1-5 documents mid-session tts_node restart → all uploads silent fail with recovery only via driver/Go2 restart; speech README documents driver-absent silent fail; troubleshooting table row exists; tts_node.py finally-block always sends EXIT(4002) + 0.5s cooldown and _send_audio_command publishes raw 4001/4003/4002 WebRtcReq; start_full_demo_tmux.sh:86 defaults LOCAL_PLAYBACK=true.
 - **證據**：
   - docs/deliverables/thesis/5-系統限制與可行性分析.md:61 (mid-session restart → all uploads silent fail; only recovery = restart driver or Go2)
-  - docs/pawai-brain/architecture/0511/speech/speech-tts-lanes-megaphone.md:203 (troubleshooting table entry)
+  - docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-tts-lanes-megaphone.md:203 (troubleshooting table entry)
   - docs/pawai-brain/speech/README.md:70 (Megaphone silent fail when Go2 driver not running)
   - mitigations in code: EXIT always sent + 0.5s cooldown (speech_processor/speech_processor/tts_node.py:1513-1529); demo sidesteps entirely via LOCAL_PLAYBACK=true (start_full_demo_tmux.sh:86)
 - **建議**：Keep LOCAL_PLAYBACK=true as the 6/18 invariant; never restart tts_node mid-session if Megaphone is ever used. Post-demo: move Megaphone protocol ownership into go2_robot_sdk driver (it owns the DataChannel/state machine) so tts_node restarts become safe — tts_node currently speaks raw 4001/4003/4002 via /webrtc_req (tts_node.py:1531-1538).
@@ -747,7 +747,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - object_perception/launch/object_perception.launch.py:25-34 (OBJECT_MODEL/OBJECT_INPUT_SIZE env)
   - scripts/start_full_demo_tmux.sh:277-280 (object window does NOT forward OBJECT_MODEL/OBJECT_INPUT_SIZE explicitly, unlike speech vars; relies on tmux server env inheritance — known tmux env footgun per CLAUDE.md LD_LIBRARY_PATH rule)
   - docs/pawai-brain/perception/object/CLAUDE.md pitfall 6 (wrong input_size = inference fail + silent restart)
-  - docs/pawai-brain/research/2026-06-10-model-upgrade-decision-research.md:24-34 (candidates exported on WSL only; Jetson A/B not yet run)
+  - docs/archive/pawai-brain-legacy/research/2026-06-10-model-upgrade-decision-research.md:24-34 (candidates exported on WSL only; Jetson A/B not yet run)
   - docs/pawai-demo/2026-06-10-demo-snapshot.md:108 (YOLO26s A/B 'remains a measurement task')
 - **建議**：Before any A/B session: scp candidates to /home/jetson/models/, run object_model_contract.py on-device, and verify env propagation by launching object_perception standalone (not via full-demo tmux) or add explicit OBJECT_MODEL forwarding into the tmux window command.
 
@@ -758,7 +758,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - .gitignore:31 (.tmp/ ignored — confirmed via git check-ignore on .tmp/yolo_export/export_models.py)
   - .tmp/yolo_export/ (export_models.py, 4 validated ONNX: yolo26s_640 38.3MB / yolo26n_960 10.2MB / yolo26s_960 / yolo26n-pose_640, 3 .pt weights — none tracked, none on Jetson)
-  - docs/pawai-brain/research/2026-06-10-model-upgrade-decision-research.md:24-34 cites these paths as the prepared candidates
+  - docs/archive/pawai-brain-legacy/research/2026-06-10-model-upgrade-decision-research.md:24-34 cites these paths as the prepared candidates
 - **建議**：Commit export_models.py (e.g. scripts/ or benchmarks/), record sha256 of each ONNX via object_model_contract.py --json into docs/research or artifacts/, so A/B provenance survives a .tmp wipe. Zero demo impact.
 
 ### OBJECT-7 — Core inference path and HSV color have no tests; dedup tests re-implement logic instead of exercising it
@@ -833,7 +833,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py:108-118 (read once in __init__), 173-197 (_on_param_change handles only enable_nav_pause/safety_only/mode)
   - scripts/start_nav_capability_demo_tmux.sh:29-49 (REACTIVE_PROFILE open_space|indoor_tight workaround, 6/9)
-  - docs/navigation/research/2026-06-08-trackB-hitl-results.md §4 (HITL: ±30° cone false-danger from side furniture; ±15-18° + low speed fix verified on hardware)
+  - docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md §4 (HITL: ±30° cone false-danger from side furniture; ±15-18° + low speed fix verified on hardware)
 - **建議**：Post-demo: either accept geometry params in _on_param_change with a zone-reset, or reject the set with successful=False + loud warn so operators aren't silently fooled. Demo flow depends on the current restart-with-REACTIVE_PROFILE discipline — freeze until 6/18.
 
 ### NAV-4 — Nav motion safety rests on out-of-band discipline, not code: progressive mode is silent in slow/clear → mux 0.5s timeout hands /cmd_vel to any hot teleop publisher (100 > nav 10) — the documented 5/11 crash; only guards are launch flags and comments, plus test_mux_priority.py is a real-publisher footgun
@@ -853,7 +853,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🔴 high · `fragile_runtime` · **MUST_PRESERVE_FOR_DEMO**
 - **查證**：✅ supported — HITL plan lines 53-59 document the resume lunge (stopped 0.21m from wall, MIN_X=0.5 floor root cause, 6/18 ban); nav_action_server_node.py:246-321 outer loop unconditionally re-sends the goal when /state/nav/paused flips false with no auto_resume switch (grep confirms); gateway 428-458/547-576 implements the operator-confirm workaround; indoor_tight low speed not applying to Nav2 path is explicitly stated in the HITL doc.
 - **證據**：
-  - docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md:53-59 (Task 1.6: resume lunge to front 0.21m, 6/18 ban, MIN_X floor root cause)
+  - docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md:53-59 (Task 1.6: resume lunge to front 0.21m, 6/18 ban, MIN_X floor root cause)
   - nav_capability/nav_action_server_node.py:246-321 (outer pause/resume loop auto re-sends on resume — no auto_resume switch)
   - go2_robot_sdk/go2_robot_sdk/application/services/robot_control_service.py:41-79 (MIN_X deadband → StopMove routing)
   - pawai-studio/gateway/studio_gateway.py:428-458,547-576 (gateway works around it with cancel-on-danger + operator-confirm re-send)
@@ -908,8 +908,8 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `overclaim_risk` · **NEEDS_HITL**
 - **查證**：✅ supported — trackB results §1/§7 confirm only short goto + safe-stop proven and '不能講 route 巡場'; the 6/9 HITL plan line 13 states only 4 capabilities are HARDWARE_PROVEN with stop-resume demoted at lines 53-59; project-status lines 1885/2121/2122 show K4 run_route always blocked/deferred (no later pass found in any doc) and goto_named noted as ready-but-untested-on-hardware; the demo script still advertises run_route (:163) and 1.0m goto (:157); demo snapshot lines 88-97 list the matching forbidden claims.
 - **證據**：
-  - docs/navigation/research/2026-06-08-trackB-hitl-results.md §1,§7 (goto 0.3m reached / safe-stop proven; 不能講 route 巡場)
-  - docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md:13 (only 4 capabilities HARDWARE_PROVEN), :51-59 (safe-stop proven, stop-resume demoted)
+  - docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md §1,§7 (goto 0.3m reached / safe-stop proven; 不能講 route 巡場)
+  - docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md:13 (only 4 capabilities HARDWARE_PROVEN), :51-59 (safe-stop proven, stop-resume demoted)
   - references/project-status.md:1885,2122 (K4 run_route 全部阻塞/推遲 — no later pass recorded), :2121 (K10 log_pose 3/5 SUCCEEDED)
   - scripts/start_nav_capability_demo_tmux.sh:163 (advertises K4 run_route command), :157 (advertises 1.0m goto)
   - docs/pawai-demo/2026-06-10-demo-snapshot.md:88-97 (forbidden claims list incl. dynamic avoidance, D435 fusion, move_forward)
@@ -997,7 +997,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py:108-118 (danger/slow/arc/speeds read once in __init__)
   - reactive_stop_node.py:173-197 (_on_param_change handles only enable_nav_pause/safety_only/mode)
-  - docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md (6/9 HITL: must kill+restart with args; REACTIVE_PROFILE added)
+  - docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md (6/9 HITL: must kill+restart with args; REACTIVE_PROFILE added)
   - scripts/start_nav_capability_demo_tmux.sh:33-46 (open_space|indoor_tight profile mitigation)
 - **建議**：Freeze current behavior + REACTIVE_PROFILE for S1/6-18. Post-demo: extend _on_param_change to cover threshold/speed params (recompute _front_half_rad), or document init-only params in node docstring as a contract. Re-verify with a Jetson HITL before relying on runtime tuning.
 
@@ -1100,7 +1100,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `observability` · **POST_DEMO_ONLY**
 - **查證**：✅ supported — All four HITL doc trees exist as prose with no shared format; test_results/ contains only .gitkeep (matching the CLAUDE.md 6/4 documented observer report-ack-timeout, with run_speech_test.sh:294-298 expecting summaries there); under_load_probe.sh:21 writes to $REPO/test_results/under_load/ on the Jetson side. benchmarks/results/raw and summary are empty while only results/archive/ has data, despite build_scoreboard.py and capture_baseline_round.py existing.
 - **證據**：
-  - docs/navigation/research/2026-06-08-trackB-hitl-results.md, docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md, references/project-status.md dated sections, docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md (same class of HITL result in 4 different doc trees, prose-only)
+  - docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md, docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md, references/project-status.md dated sections, docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md (same class of HITL result in 4 different doc trees, prose-only)
   - test_results/ contains only .gitkeep (run_speech_test.sh observer report-ack-timeout → no CSV, documented in CLAUDE.md 6/4 section; scripts/run_speech_test.sh:294-298 expects summaries there)
   - scripts/under_load_probe.sh:14-22 (writes to Jetson-side test_results/under_load/, never synced to repo)
   - benchmarks/results/raw and benchmarks/results/summary are empty; only results/archive/ has data despite scoreboard tooling (benchmarks/core/build_scoreboard.py, capture_baseline_round.py)

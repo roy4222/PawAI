@@ -143,7 +143,7 @@ amigo_ros2 README 連結 `pant_tilt_v2-1` 已 link rot（GrabCAD 404）。MakerW
 | `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py` | scan 純邏輯 helpers |
 | `go2_robot_sdk/config/nav2_params.yaml` L11-19 | AMCL beamskip / laser_min_range |
 | `scripts/start_nav_capability_demo_tmux.sh` L47 | static TF base_link → laser |
-| [`docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md`](2026-04-25-rplidar-a2m12-integration-log.md) §3 / §第 75 行 | mount 量測 todo（4/25 起未做）|
+| [`docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md`](2026-04-25-rplidar-a2m12-integration-log.md) §3 / §第 75 行 | mount 量測 todo（4/25 起未做）|
 | `~/.claude/plans/snug-seeking-cascade.md` | 完整 plan（plan-mode 文件）|
 
 ## 來源

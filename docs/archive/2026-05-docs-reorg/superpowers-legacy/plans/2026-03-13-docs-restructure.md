@@ -6,7 +6,7 @@
 
 **Architecture:** 四步主幹文件改動（根 README → docs/README → architecture/README → CLAUDE.md），加上標記步驟處理歷史文件。每步獨立可暫停，Step 4 依賴前三步。
 
-**Spec:** `docs/superpowers/specs/2026-03-13-docs-restructure-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md`
 
 ---
 
@@ -477,4 +477,4 @@ git diff --quiet docs/architecture/ || {
 ---
 
 *計畫建立：2026-03-13*
-*對齊規格：`docs/superpowers/specs/2026-03-13-docs-restructure-design.md`*
+*對齊規格：`docs/archive/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md`*

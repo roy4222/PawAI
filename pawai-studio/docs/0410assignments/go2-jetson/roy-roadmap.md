@@ -214,6 +214,6 @@
 | **`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`** | **系統設計規格（current）** |
 | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md` | 守護犬 spec（superseded，歷史保留） |
 | `docs/mission/README.md` | 專案入口頁 v2.4（居家互動機器狗版） |
-| `docs/navigation/research/2026-04-08-external-lidar-feasibility.md` | LiDAR 可行性研究 |
+| `docs/archive/navigation-legacy/research/2026-04-08-external-lidar-feasibility.md` | LiDAR 可行性研究 |
 | `pawai-studio/docs/0410assignments/README.md` | 四人分工概覽（互動主軸版） |
 | `references/project-status.md` | 每日狀態 |

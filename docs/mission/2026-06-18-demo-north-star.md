@@ -2,7 +2,7 @@
 
 > **Status**: v2 — 戰略邊界文件（取代 2026-05-29 v1 draft）
 > **Created**: 2026-05-29 ｜ **v2**: 2026-05-31 ｜ **Deadline**: 2026-06-18
-> **性質**：這是 6/18 專題驗收的**戰略邊界文件**，不是開發計劃。它回答「要展示什麼、為什麼需要機器狗、哪些話不能講、哪些能力只是候選、哪些一定要守住」。實作計劃見 `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`。
+> **性質**：這是 6/18 專題驗收的**戰略邊界文件**，不是開發計劃。它回答「要展示什麼、為什麼需要機器狗、哪些話不能講、哪些能力只是候選、哪些一定要守住」。實作計劃見 `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`。
 > **與 ADR 的關係**：本文件的定位用詞 **amend ADR-0001 / ADR-0002**（平台/demo 雙層敘事保留；demo 層由「非接觸式機構巡檢助理」reframe 為「機構公共空間非接觸式守望互動 POC」）。ADR 正文待本文件 review 後再正式 amend，此處先記錄不 silent conflict。
 > **可靠度紀律**：本文件所有 P0 / P1 / P2 分層皆標 **`provisional until baseline`**——必須等上機 capability baseline 跑出數據，才從 provisional 轉 locked。先決定後量化是被禁止的。
 > **能力 claim 真相源**：每能力「能講什麼 / 不能講什麼 / 屬哪個分級」以 [`docs/mission/2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md) 為 canonical（綁 6/04 HITL trusted snapshot）；本文件是戰略邊界，能力是否 pass 一律回 claim matrix + baseline-evidence。

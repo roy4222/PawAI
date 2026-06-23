@@ -20,8 +20,8 @@
 
 | 子資料夾 | 來源於 | 為什麼 archive |
 |---------|--------|--------------|
-| `superpowers-legacy/specs/` | `docs/superpowers/specs/`（27 檔抽 3 個 active 後剩 24 個） | 過期設計 spec，主線新檔已分流到 `pawai-brain/specs/` |
-| `superpowers-legacy/plans/` | `docs/superpowers/plans/`（20 檔抽 8 個 active 後剩 12 個） | 過期實作 plan |
+| `superpowers-legacy/specs/` | `docs/archive/superpowers-legacy/specs/`（27 檔抽 3 個 active 後剩 24 個） | 過期設計 spec，主線新檔已分流到 `pawai-brain/specs/` |
+| `superpowers-legacy/plans/` | `docs/archive/superpowers-legacy/plans/`（20 檔抽 8 個 active 後剩 12 個） | 過期實作 plan |
 | `architecture-misc/` | `docs/architecture/` 殘餘（CLAUDE.md / AGENT.md / proposals / archive / README） | 設計總則已抽進 `contracts/README.md` |
 | `research-misc/` | `docs/research/` 殘餘（go2-sdk-capability / llm_local） | 非 perception/speech 模型選型紀錄 |
 | `setup-misc/` | `docs/setup/` 殘餘（hardware / network / software / README，runbook 4 檔已抽出） | runbook 沒收的 setup 文件 |
@@ -37,11 +37,11 @@
 | `docs/pawai-brain/speech/` | `docs/語音功能/` |
 | `docs/pawai-brain/studio/` | `docs/Pawai-studio/` |
 | `docs/pawai-brain/architecture/{overview.md,designs/}` | `docs/architecture/{pawai-brain-studio-overview.md,designs/}` |
-| `docs/pawai-brain/specs/` | `docs/superpowers/specs/` 中 3 個 active |
-| `docs/pawai-brain/plans/` | `docs/superpowers/plans/` 中 brain-related active |
-| `docs/pawai-brain/studio/plans/` | `docs/superpowers/plans/` 中 studio active |
+| `docs/pawai-brain/specs/` | `docs/archive/superpowers-legacy/specs/` 中 3 個 active |
+| `docs/archive/pawai-brain-legacy/plans/` | `docs/archive/superpowers-legacy/plans/` 中 brain-related active |
+| `docs/pawai-brain/studio/plans/` | `docs/archive/superpowers-legacy/plans/` 中 studio active |
 | `docs/navigation/{research,research/lidar-dev,setup}/` | `docs/導航避障/` + `docs/setup/slam_nav/` |
-| `docs/navigation/plans/` | `docs/superpowers/plans/` 中 nav active |
+| `docs/archive/navigation-legacy/plans/` | `docs/archive/superpowers-legacy/plans/` 中 nav active |
 | `docs/navigation/CLAUDE.md` `docs/navigation/AGENT.md` | `docs/導航避障/` 對應檔 |
 | `docs/navigation/legacy-readme-from-導航避障.md` | `docs/導航避障/README.md`（保留待人工 merge） |
 | `docs/contracts/interaction_contract.md` | `docs/architecture/contracts/interaction_contract.md` |

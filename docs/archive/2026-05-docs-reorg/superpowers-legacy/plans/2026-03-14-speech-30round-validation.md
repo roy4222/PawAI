@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3 / ROS2 Humble / std_msgs / go2_interfaces / PyYAML / Bash/Zsh
 
-**Spec:** `docs/superpowers/specs/2026-03-14-speech-30round-validation-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-14-speech-30round-validation-design.md`
 
 ---
 
@@ -1059,7 +1059,7 @@ git commit -m "feat(observer): add ROS2 node wrapper with topic subscriptions an
 
 Write the YAML file exactly as specified in the design spec (15 fixed rounds with 3x each of `greet`, `come_here`, `stop`, `take_photo`, `status` + 15 free rounds).
 
-Full content: see spec `docs/superpowers/specs/2026-03-14-speech-30round-validation-design.md` §3.2.
+Full content: see spec `docs/archive/superpowers-legacy/specs/2026-03-14-speech-30round-validation-design.md` §3.2.
 
 - [ ] **Step 2: Validate YAML parses correctly**
 

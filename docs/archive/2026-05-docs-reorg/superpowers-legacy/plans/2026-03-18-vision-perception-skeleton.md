@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, ROS2 Humble, numpy, pytest, std_msgs, sensor_msgs, cv_bridge
 
-**Spec:** `docs/superpowers/specs/2026-03-18-vision-perception-skeleton-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-18-vision-perception-skeleton-design.md`
 
 **Reference implementation:** `face_perception/` package (same structure pattern)
 

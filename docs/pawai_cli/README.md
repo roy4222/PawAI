@@ -625,7 +625,7 @@ ssh jetson 'tmux attach -t demo'
 ### docs
 
 ```bash
-pawai docs brain          # → docs/pawai-brain/architecture/0511/brain/brain.md
+pawai docs brain          # → docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md
 pawai docs face           # → architecture/0511/face.md
 pawai docs gesture        # → architecture/0511/gesture/gesture.md
 pawai docs onboarding     # → docs/pawai_cli/team-onboarding.md

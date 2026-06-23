@@ -10,11 +10,11 @@ Brain 是「建議者」，Executive 是「決策者」（單一控制權原則�
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/brain/brain.md` | 主總覽 + 12-node graph 拓撲 + State schema + 5/12 brain-freeze-v2 |
-| `docs/pawai-brain/architecture/0511/brain/brain-runtime-flow.md` | ROS2 → wrapper → ThreadPoolExecutor → graph.invoke() 完整 flow |
-| `docs/pawai-brain/architecture/0511/brain/brain-graph-node-map.md` | 12 個 node 的職責、輸入/輸出、trace entry、常見故障 |
-| `docs/pawai-brain/architecture/0511/brain/brain-persona-capability-memory.md` | persona 6 檔、CAPABILITIES lazy inject、skill registry、memory |
-| `docs/pawai-brain/architecture/0511/brain/brain-debug-runbook.md` | 現場 debug 指令、trace 判讀、症狀 → 檔案位置 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md` | 主總覽 + 12-node graph 拓撲 + State schema + 5/12 brain-freeze-v2 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain-runtime-flow.md` | ROS2 → wrapper → ThreadPoolExecutor → graph.invoke() 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain-graph-node-map.md` | 12 個 node 的職責、輸入/輸出、trace entry、常見故障 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain-persona-capability-memory.md` | persona 6 檔、CAPABILITIES lazy inject、skill registry、memory |
+| `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain-debug-runbook.md` | 現場 debug 指令、trace 判讀、症狀 → 檔案位置 |
 
 ## 核心程式檔案
 

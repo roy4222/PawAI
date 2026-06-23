@@ -298,8 +298,8 @@ Each item lands in its own commit. Phase 1 estimate: **~9-10 hours total wall cl
 - Today's session full transcript (Jetson Wi-Fi recovery + 10 seam bugs surfaced)
 - Industry CLI patterns research report: `docs/research/2026-05-13-cli-ux-best-practices.md` (608 lines, covers Terraform locking / Flutter doctor / WSL detection / Click vs Typer / debug bundle redaction)
 - Local CLI audit report (from parallel Explore agent) — captured in §Context tables; not separately filed
-- Prior MVP spec: `docs/superpowers/specs/2026-05-12-pawai-cli-mvp-design.md`
-- Prior team-prep spec: `docs/superpowers/specs/2026-05-12-pawai-cli-team-prep-design.md`
+- Prior MVP spec: `docs/archive/superpowers-legacy/specs/2026-05-12-pawai-cli-mvp-design.md`
+- Prior team-prep spec: `docs/archive/superpowers-legacy/specs/2026-05-12-pawai-cli-team-prep-design.md`
 - Current CLI source: `tools/pawai_cli/pawai_cli/`
 
 ---
@@ -309,7 +309,7 @@ Each item lands in its own commit. Phase 1 estimate: **~9-10 hours total wall cl
 This umbrella spec must be approved before Phase 1 implementation plan is generated (via `writing-plans`).
 
 After approval:
-1. `writing-plans` produces `docs/superpowers/plans/2026-05-13-pawai-cli-phase1-plan.md` covering 10 items with task breakdown.
+1. `writing-plans` produces `docs/archive/superpowers-legacy/plans/2026-05-13-pawai-cli-phase1-plan.md` covering 10 items with task breakdown.
 2. Phase 1 implementation begins; goal 2026-05-16 EOD.
 3. Phase 2 spec is written separately (refines lock schema v1, audit log, deploy plan) when Phase 1 is ~80% done.
 4. Phases 3 and 4 spec'd when their predecessors are stable.

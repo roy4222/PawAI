@@ -266,6 +266,6 @@ K2-lite forward+left+back 設計、最後 WP3=start。Go2 在 WP3 容差內 → 
 ## 相關檔案
 
 - 修正後 TF：7 scripts（`start_lidar_slam_tmux.sh`、`start_nav2_amcl_demo_tmux.sh`、`start_nav_capability_demo_tmux.sh`、`start_nav2_demo_tmux.sh`、`start_reactive_stop_tmux.sh`、`start_scan_only_tmux.sh`、`build_map.sh`）
-- v8 map：`docs/navigation/research/maps/home_living_room_v8.{pgm,yaml,png}`
-- mount 量測 v8：`docs/navigation/research/2026-04-29-mount-measurement.md`（v8 段）
+- v8 map：`docs/archive/navigation-legacy/research/maps/home_living_room_v8.{pgm,yaml,png}`
+- mount 量測 v8：`docs/archive/navigation-legacy/research/2026-04-29-mount-measurement.md`（v8 段）
 - v7 yaml/pgm/png 留在 repo 但 unusable

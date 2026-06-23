@@ -4,7 +4,7 @@
 > **Date**: 2026-05-11 night
 > **Scope**: 完整盤點 PawAI 導航避障 stack（RPLIDAR + D435 + reactive_stop + twist_mux + Nav2 + Go2 driver）的設計缺陷，給出 demo 前能落地的修法。
 > **Trigger**: 5/11 B5 burndown 在家裡 motion 測試時 Go2 撞到 1.5m 處障礙物。經三線並行調查（local docs / local code / 網路 best practice）發現問題不只一個。
-> **Authority**: 本檔取代任何 reactive_stop 參數、Nav2 obstacle_layer 配置、感測器分工的舊敘述。`docs/navigation/CLAUDE.md` 與 `docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4` 引用本檔。
+> **Authority**: 本檔取代任何 reactive_stop 參數、Nav2 obstacle_layer 配置、感測器分工的舊敘述。`docs/navigation/CLAUDE.md` 與 `docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md §4` 引用本檔。
 
 ---
 
@@ -342,8 +342,8 @@ local_costmap:
 # Step 0: 處理 working tree 殘留（5/11 沒解的）
 cd /home/roy422/newLife/elder_and_dog
 git status
-# M docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md（drift，待 Roy 決定）
-# D docs/pawai-brain/plans/2026-05-12-reactive-stop-safety-fix-plan.md（68fe29b 創、被刪）
+# M docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md（drift，待 Roy 決定）
+# D docs/archive/pawai-brain-legacy/plans/2026-05-12-reactive-stop-safety-fix-plan.md（68fe29b 創、被刪）
 # 三選一：(a) restore 後合併、(b) 內容 merge 進本 audit / 4-mode 段落、(c) commit 當前狀態
 
 # Step 1: Sync to Jetson + colcon build
@@ -377,9 +377,9 @@ git status
 ## 7. 與其他文件的關係
 
 - **取代**：`docs/navigation/CLAUDE.md` 中關於 reactive_stop 參數的舊敘述（5/1 「safety_only ... clear zone 會 shadow nav」需 B3.1 升等成 architecture-critical）
-- **與 `docs/navigation/research/2026-03-25-reactive-obstacle-avoidance.md` 關係**：3/25 文件用的是 `stop_threshold=0.8 / slow_threshold=1.5`（原始 D435 ROI 方案）；4/24 RPLIDAR 整合時改成 `0.6 / 1.0` 無 decision log。本檔 B0.3 把它再 enlarge 回 `1.1 / 1.7`（保守 demo 安全）
+- **與 `docs/archive/navigation-legacy/research/2026-03-25-reactive-obstacle-avoidance.md` 關係**：3/25 文件用的是 `stop_threshold=0.8 / slow_threshold=1.5`（原始 D435 ROI 方案）；4/24 RPLIDAR 整合時改成 `0.6 / 1.0` 無 decision log。本檔 B0.3 把它再 enlarge 回 `1.1 / 1.7`（保守 demo 安全）
 - **與 `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md` 關係**：detour profile（`/scan_d435 + d435_scan`）已設計，但 demo 期不啟用、demo 後 B2.1 才落地
-- **被引用於**：`docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4 B5`、`references/project-status.md`
+- **被引用於**：`docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md §4 B5`、`references/project-status.md`
 - **未影響**：`docs/contracts/interaction_contract.md`（topic 沒變）、`docs/mission/`（專案方向沒變）
 
 ---

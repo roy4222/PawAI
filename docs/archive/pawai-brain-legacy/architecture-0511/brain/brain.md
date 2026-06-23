@@ -525,5 +525,5 @@ def _route_after_safety(state: ConversationState) -> str:
 | Persona | `pawai_brain/personas/v1/*.md` |
 | Capability 框架 | `pawai_brain/capability/registry.py` + `effective_status.py` |
 | World snapshot（N3-A）| `pawai_brain/capability/world_snapshot.py` |
-| 5/11 N5 scene perception spec | `docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md` |
-| 5/12 brain-freeze 紀錄 | `docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |
+| 5/11 N5 scene perception spec | `docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md` |
+| 5/12 brain-freeze 紀錄 | `docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |

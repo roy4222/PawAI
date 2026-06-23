@@ -18,7 +18,7 @@ import { getGatewayHttpUrl } from "@/lib/gateway-url";
  * /api/map_meta endpoint (which is an optional fast-follow).
  */
 
-// v8 map metadata — MUST match docs/navigation/research/maps/home_living_room_v8.yaml
+// v8 map metadata — MUST match docs/archive/navigation-legacy/research/maps/home_living_room_v8.yaml
 // (origin [-2.41, -2.81, 0], resolution 0.05) and the cp'd PNG (205×98).
 // ⚠️ NOT v7 (origin -7.79 / -2.46). If the demo map changes, update all three:
 // this constant, public/maps PNG, and (if added) the gateway map.yaml.

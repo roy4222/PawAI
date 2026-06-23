@@ -1,7 +1,7 @@
 # S1（nav 段）三層 Fallback 決策 + Claim Wording 鎖定
 
 > **日期**：2026-06-13　**狀態**：DOC（決策草案；**S1 台詞最終版待 Roy 簽 D-1**，本檔用 LOCKED 佔位符）
-> **task**：plan6 NS-6（[`docs/superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §6 NS-6）
+> **task**：plan6 NS-6（[`docs/archive/superpowers-legacy/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §6 NS-6）
 > **權威措辭來源**：[`2026-06-13-nav-618-claim-wording.md`](2026-06-13-nav-618-claim-wording.md)（S1-S8 可講 / F1-F10 禁講）——本檔每一句宣稱都綁回該檔的編號。
 > **相關 SOP**：[診斷集 NS-D2](2026-06-13-no-motion-diagnostics-sop.md)、[initialpose 校正 NS-5](2026-06-13-initialpose-yaw-calibration-sop.md)。
 > **這份是什麼**：6/18 發表「s1_nav 這一幕」要**演什麼、講什麼、在什麼條件下退到哪一層**的決策。三層 fallback + 每層可講句綁 S1-S8、禁句綁 F1-F10。

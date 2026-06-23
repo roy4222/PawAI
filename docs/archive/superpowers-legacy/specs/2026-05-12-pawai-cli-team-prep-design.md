@@ -191,7 +191,7 @@ Added flags:
 
 | Command | Behavior |
 |---|---|
-| `pawai docs <module>` | Print or `$EDITOR`-open `docs/pawai-brain/architecture/0511/<module>/<module>.md`. Aliases: `onboarding` → `docs/pawai_cli/team-onboarding.md`, `contract` → `docs/contracts/interaction_contract.md`. |
+| `pawai docs <module>` | Print or `$EDITOR`-open `docs/archive/pawai-brain-legacy/architecture-0511/<module>/<module>.md`. Aliases: `onboarding` → `docs/pawai_cli/team-onboarding.md`, `contract` → `docs/contracts/interaction_contract.md`. |
 | `pawai contract check` | **Default: run local** (`python3 scripts/ci/check_topic_contracts.py` against current branch). `--jetson` flag runs it against the deployed copy on Jetson via SSH. Local-first is safer for branch development — Jetson copy may be a stale sync from another teammate. If script absent locally, print explicit fallback instructions (do **not** silently degrade to opening docs). |
 
 **Dropped from earlier brainstorm**: `pawai reset` (too destructive), demo-start panel hints (low-value), `pawai doctor --fast` (out of scope tonight, `--cache` covers re-run speed).

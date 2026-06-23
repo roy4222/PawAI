@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10, ROS2 Humble, rclpy, numpy, std_msgs, go2_interfaces
 
-**Spec:** `docs/superpowers/specs/2026-03-27-operation-b-prime-sprint-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-27-operation-b-prime-sprint-design.md`
 
 ---
 

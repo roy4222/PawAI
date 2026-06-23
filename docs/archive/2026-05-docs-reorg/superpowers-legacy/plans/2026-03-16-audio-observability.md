@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10, ROS2 Humble, asyncio, WebRTC DataChannel, std_msgs/String JSON
 
-**Spec:** `docs/superpowers/specs/2026-03-16-audio-observability-design.md` v1.2
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-16-audio-observability-design.md` v1.2
 
 ---
 

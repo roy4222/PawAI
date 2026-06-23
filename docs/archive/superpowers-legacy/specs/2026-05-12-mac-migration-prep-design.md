@@ -319,7 +319,7 @@ pkill -f "ssh.*8000:localhost"
 
 ## 9. 引用 / 索引
 
-- `docs/pawai-brain/architecture/0511/` — 六大模組架構快照（reference for what we're preserving）
+- `docs/archive/pawai-brain-legacy/architecture-0511/` — 六大模組架構快照（reference for what we're preserving）
 - `.gitignore` — skills whitelist 現況
 - `.claude/settings.json` — hook 配置
 - Claude Code `$CLAUDE_PROJECT_DIR` 環境變數：Claude Code 啟動 session 時自動帶入當前 project root（用 `claude` CLI 啟動的目錄）。實作前先用 `echo $CLAUDE_PROJECT_DIR` 驗證在 WSL session 內可讀；若不通則退到 B 方案（settings.local.json overlay 各機器自己寫）

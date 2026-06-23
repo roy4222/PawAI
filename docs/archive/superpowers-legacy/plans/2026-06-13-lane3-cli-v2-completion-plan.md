@@ -117,7 +117,7 @@ T3-1/T3-2/T3-5/T3-6（並行，互不重疊）→ T3-4（依賴 1/2）→ T3-7 �
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 3 Task <T3-x>（見 docs/superpowers/plans/2026-06-13-lane3-cli-v2-completion-plan.md §6）。
+任務：執行 Lane 3 Task <T3-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane3-cli-v2-completion-plan.md §6）。
 紀律：
 - CLI 只包既有腳本/SSH/rsync，零 runtime 行為；新 Jetson 端腳本放 scripts/。
 - 仿既有 pattern：_SMOKE_SCRIPTS / stream_remote（先 source setup.zsh）/ errors.py structured hints。

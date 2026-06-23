@@ -1,7 +1,7 @@
 # initialpose 朝向校正 + scan-overlay SOP（no-motion）
 
 > **日期**：2026-06-13　**狀態**：SOP（操作員流程，**零 Go2 motion**）
-> **task**：plan6 NS-5（[`docs/superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §6 NS-5）
+> **task**：plan6 NS-5（[`docs/archive/superpowers-legacy/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §6 NS-5）
 > **上游**：根因計畫 [`2026-06-13-nav-motion-incident-root-cause-plan.md`](2026-06-13-nav-motion-incident-root-cause-plan.md)、措辭 [`2026-06-13-nav-618-claim-wording.md`](2026-06-13-nav-618-claim-wording.md)、診斷集 [`2026-06-13-no-motion-diagnostics-sop.md`](2026-06-13-no-motion-diagnostics-sop.md)
 > **這份是什麼**：設 `/initialpose` 後，**人工**確認 Go2 在地圖上的朝向（yaw）對不對的 no-motion 操作流程。這是 [`nav-618-claim-wording.md`](2026-06-13-nav-618-claim-wording.md) §5 **fallback②（遙控 + Foxglove LiDAR 證據）** 的操作依據，也是任何未來 motion HITL（plan6 §8）的硬前置（θ_error<5°）。
 

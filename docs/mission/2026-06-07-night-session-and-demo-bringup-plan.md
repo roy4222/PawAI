@@ -51,7 +51,7 @@
 ### 🔑 為什麼「不換模型」（PINTO / coco_detector）— 講清楚
 
 **A. 為什麼不採用 PINTO 挖到的模型**
-- PINTO_model_zoo = 一個 482 個現成模型的大集合，我們 6/04 研究過（`docs/pawai-brain/research/2026-06-04-pinto-model-zoo-full-analysis.md`，891 行）。
+- PINTO_model_zoo = 一個 482 個現成模型的大集合，我們 6/04 研究過（`docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-model-zoo-full-analysis.md`，891 行）。
 - **杯子遠距抓不到的根因是「像素物理」不是「模型笨」**：9cm 的杯子 @2m，在 640 解析度下只剩約 **21 像素**。資訊量就那麼多，**換哪個模型都是吃同樣 21px**，換不出資訊。今晚白馬克杯 @1.5m、人眼清楚、YOLO26n `Det:0` 就是鐵證。
 - 真正能救遠距小物的只有：①拉高輸入解析度(960→約32px，但 YOLO26n ONNX 固定 640、要重匯 + 風險) ②**放近 / 用大物體**。
 - **所以「為了遠距小杯子換模型」= 白費**。你的 PINTO 研究沒白做——它的價值就是**證明了瓶頸是物理、省下我們亂換模型的時間**。

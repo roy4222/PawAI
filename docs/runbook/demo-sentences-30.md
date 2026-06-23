@@ -1,7 +1,7 @@
 # PawAI 30 展示句腳本
 
 > **用途**：5/14 校園 demo 現場按順序講 / 做的展示流程
-> **參考**：`docs/pawai-brain/architecture/0511/{brain,face,gesture,pose,object,speech}.md`
+> **參考**：`docs/archive/pawai-brain-legacy/architecture-0511/{brain,face,gesture,pose,object,speech}.md`
 > **撰寫日期**：2026-05-12
 > **總時長**：依語速約 8-12 分鐘
 > **與 demo-30-case-checklist.md 的差別**：那份是「驗收測試」（pass/fail），這份是「演出腳本」（按順序講）
@@ -134,7 +134,7 @@ A → B → C → D → E → F，遞進「認知 → 感知 → 互動 → 情�
 
 ## 引用
 
-- 模組能力範圍：`docs/pawai-brain/architecture/0511/`
+- 模組能力範圍：`docs/archive/pawai-brain-legacy/architecture-0511/`
 - 驗收（vs 演出）：`docs/runbook/demo-30-case-checklist.md`
 - Fallback 三 case 切換：`docs/runbook/mac-migration-setup.md` §6
 - 30 輪 ASR 驗收（自動化）：`test_scripts/speech_30round.yaml`

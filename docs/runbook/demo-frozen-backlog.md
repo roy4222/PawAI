@@ -150,7 +150,7 @@ review post-N3 抓到：`_on_demo_segment` 對 truthy 非 list (`shown_skills=1`
 - `_format_pose_line` age 三段保守措辭：< 15s「目前姿勢」/ 15-120s「最近姿勢」/ > 120s「歷史姿勢…需要再確認」
 - mode_classifier 加 `scene_query`（看到什麼 / 我在幹嘛 / 猜猜我），priority > identity
 - `[scene_hint]` prompt 注入「整合 [眼前的人]、姿勢、手勢、最近看到的物體做 1-3 句場景描述」（正向 framing，物件名中文）
-- spec 落地：`docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md`
+- spec 落地：`docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md`
 
 **N5.1 review fix**：scene_query regex 對「你覺得我」「你猜我」太貪，吃 capability_question。收窄 + 補「猜猜我在做什麼」（不需「你」前綴）+ 反例 test（你覺得我該展示什麼功能 → capability_question）。
 
@@ -209,7 +209,7 @@ review post-N3 抓到：`_on_demo_segment` 對 truthy 非 list (`shown_skills=1`
 
 ### 2026-05-11 / docs 跟著落地
 
-- `docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md`（`2b7a981`）— N5 事後設計文件
+- `docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md`（`2b7a981`）— N5 事後設計文件
 - `docs/runbook/demo_script.md`（`e6d667a`）— 5 分鐘 happy path 劇本
 - `docs/runbook/demo-30-case-checklist.md`（`0c030a1`）— 30 case acceptance + N8 後 8 case regression（`85ac682`）
 

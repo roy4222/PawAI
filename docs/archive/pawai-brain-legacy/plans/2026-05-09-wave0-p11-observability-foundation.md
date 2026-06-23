@@ -1030,12 +1030,12 @@ ssh jetson-nano "bash ~/elder_and_dog/scripts/start_full_demo_tmux.sh"
 
 - [ ] **Step 8.5: 收集驗收紀錄**
 
-把 5 個案例結果寫入 `docs/pawai-brain/dev-logs/2026-05-XX-wave0-p11-smoke.md`（XX = 實際日期）。
+把 5 個案例結果寫入 `docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-wave0-p11-smoke.md`（XX = 實際日期）。
 
 - [ ] **Step 8.6: Commit smoke log**
 
 ```bash
-git add docs/pawai-brain/dev-logs/
+git add docs/archive/pawai-brain-legacy/dev-logs/
 git commit -m "docs(dev-log): Wave 0 + P1-1 Jetson smoke test results
 
 5 smoke cases: chunk fallback / chat_reply bubble / skill_say green /

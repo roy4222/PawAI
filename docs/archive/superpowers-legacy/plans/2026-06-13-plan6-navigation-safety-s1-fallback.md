@@ -8,7 +8,7 @@
 > - **plan2/conductor（demo_phase）**：`s1_nav=quiet` phase 的詞表/transition cleanup 屬 conductor plan，本 plan 只負責「s1_nav 這一幕的 nav 行為與 fallback 證據」。
 > - **plan3/online-offline（台詞/timeout）**：S1 canned 台詞 `我正在移動到巡檢位置。`、`llm_timeout 6s` 屬 fallback plan，本 plan 不重複。
 > - **plan5/security（route_id sanitize S8）**：S8 **已在 `route_validator.py` 實作**（見 §2.9），本 plan 僅以 **回歸驗證 task（NS-V1）** 確認 nav 路徑覆蓋，**ownership 歸 plan5**。
-> - **Lane 6 nav v2 plan**（`docs/superpowers/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md`）：indoor_tight 鎖定、initialpose SOP、reactive corridor 等實作細節由 Lane 6 owns；本 plan 的 task 與其對齊、不重抄。
+> - **Lane 6 nav v2 plan**（`docs/archive/superpowers-legacy/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md`）：indoor_tight 鎖定、initialpose SOP、reactive corridor 等實作細節由 Lane 6 owns；本 plan 的 task 與其對齊、不重抄。
 
 ---
 
@@ -38,7 +38,7 @@
 ### 2.3 R2 — goto 不 enforce max_speed → 超衝
 - `nav_action_server_node.py:406-414`（已讀檔）：`max_speed>0` 只 `logger.warn`「ignored in v1」，速度由 controller 決定。
 - DWB 最低速：`nav2_params.yaml:158-164` `min_vel_x=0.45 / min_speed_xy=0.45 / max_vel_x=0.70`。
-- 實測超衝：`docs/navigation/research/2026-06-13-spec-d435-lidar-fusion.md:14-18`（0.5m goal → 1.04m）。
+- 實測超衝：`docs/archive/navigation-legacy/research/2026-06-13-spec-d435-lidar-fusion.md:14-18`（0.5m goal → 1.04m）。
 
 ### 2.4 R3 — reactive_stop 側向幾何沉默
 - `scripts/start_nav_capability_demo_tmux.sh:37-49`（已讀檔）：profile `open_space` = `front_arc_deg=30 / danger=1.1 / slow=1.7 / front_offset_rad=π`；`indoor_tight` = `front_arc_deg=18 / danger=1.0 / slow=1.4 / slow_speed=0.2 / normal_speed=0.3`。

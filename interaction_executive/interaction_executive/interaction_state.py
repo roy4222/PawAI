@@ -8,7 +8,7 @@ brain_node.py). This module is the *explicit* replacement core.
 Phase 0 scope (this file): pure types + policy + machine ONLY. It is NOT imported
 by brain_node yet — no runtime wiring, no behaviour change. Later phases run it in
 shadow mode, then cut brain_node's gates over to it one family at a time behind an
-`ism_enabled` flag. See docs/superpowers/plans/2026-06-11-plan-ism-interaction-state-machine.md.
+`ism_enabled` flag. See docs/archive/superpowers-legacy/plans/2026-06-11-plan-ism-interaction-state-machine.md.
 
 Design rules honoured here (master plan §7):
 - §7.1 perception events only ever produce a `Candidate`; they never drive a

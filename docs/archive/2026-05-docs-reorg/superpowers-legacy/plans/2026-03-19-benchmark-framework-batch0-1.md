@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, pytest, jtop (jetson-stats), OpenCV (YuNet), PyYAML, numpy
 
-**Spec:** `docs/superpowers/specs/2026-03-19-unified-benchmark-framework-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`
 
 ---
 

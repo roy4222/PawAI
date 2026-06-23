@@ -5,7 +5,7 @@ PawAI 專案的領域語言與真相來源索引。完整內容散在以下文�
 ## 真相來源
 - 工作慣例與環境：`CLAUDE.md`
 - 專案定位、Demo 目標、北極星：`docs/mission/README.md`
-- 系統架構 freeze（7 模組 + Studio）：`docs/pawai-brain/architecture/0511/`
+- 系統架構 freeze（7 模組 + Studio）：`docs/archive/pawai-brain-legacy/architecture-0511/`
 - ROS2 介面契約：`docs/contracts/interaction_contract.md`
 
 ## 核心領域語言

@@ -8,7 +8,7 @@
 
 **Tech Stack:** ROS2 Humble / nav_capability (AMCL + Nav2 + reactive_stop) / RPLIDAR A2M12 / D435 / Go2 Pro WebRTC / object_perception (YOLO26n TRT) / brain stack / pytest。
 
-**真相來源：** `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md`（truth table、資料模板、claim 表都在那）。本 plan 是它的執行序。
+**真相來源：** `docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md`（truth table、資料模板、claim 表都在那）。本 plan 是它的執行序。
 
 **誠實底線（報告 §1）：** 目前只有 4 個能力 HARDWARE_PROVEN（short goto / safe-stop / face / cup，皆窄版單點）。本計畫的目的是**把更多能力從 WIRED_RUNTIME 升到 HARDWARE_PROVEN，或誠實標記為未達**——不是預設它們會過。
 
@@ -61,7 +61,7 @@
 ### 現況校正（別 overclaim）
 - **D435 沒融入導航主迴路**：`depth_safety_node` 只發 `/capability/depth_clear`（不發 cmd_vel、不 pause Nav2），launcher `pointcloud.enable:=false`。現在 = 2D LiDAR stop-based safety，**不是** depth+LiDAR fusion。fusion = §9 / 獨立 **P2**（depth→/scan_d435→costmap）。
 - **目前測的是 nav primitive（goto_relative），不是 patrol behavior** → 它不自己轉彎/掉頭是合理的。patrol = Phase 1.5 prototype。
-- **DimOS = 獨立 P2 研究（今天不切框架，避免雙 driver/runtime）**：docs（`docs/navigation/research/2026-05-02-dimos-analysis.md`）**未**證明「Go2 內建 3D LiDAR 直接可靠導航」；thesis 寫它用 **D435 + VoxelGrid costmap + spatial memory + 行為層** 做巡邏（繞過內建 LiDAR ~18% 覆蓋）。值得借的是 **D435 VoxelGrid + 行為層 + FollowHuman/ReplanLimiter**，非整包導入。精準待查：①用 utlidar 還 D435？②真接 Nav2/costmap 還自做 VoxelGrid？③patrol 是實機/影片/script？④能否只借 VoxelGrid/FollowHuman/spatial-memory？⑤怎麼處理 WebRTC LiDAR 低覆蓋。
+- **DimOS = 獨立 P2 研究（今天不切框架，避免雙 driver/runtime）**：docs（`docs/archive/navigation-legacy/research/2026-05-02-dimos-analysis.md`）**未**證明「Go2 內建 3D LiDAR 直接可靠導航」；thesis 寫它用 **D435 + VoxelGrid costmap + spatial memory + 行為層** 做巡邏（繞過內建 LiDAR ~18% 覆蓋）。值得借的是 **D435 VoxelGrid + 行為層 + FollowHuman/ReplanLimiter**，非整包導入。精準待查：①用 utlidar 還 D435？②真接 Nav2/costmap 還自做 VoxelGrid？③patrol 是實機/影片/script？④能否只借 VoxelGrid/FollowHuman/spatial-memory？⑤怎麼處理 WebRTC LiDAR 低覆蓋。
 - **D435 fusion P2 進度序（Roy 6/9，現場不硬接，是新導航分支非小調參）**：① D435 shadow test（**不動狗**，錄 `/scan_d435_shadow` vs `/scan_rplidar` 比 D435 補到哪些 RPLIDAR 漏障）→ ② 接 Nav2 local costmap（D435 當 observation source 或 STVL voxel layer）→ ③ 靜態障礙 3/5 能否繞/更準停 → ④ reactive patrol。**今天不做、不准宣稱已融合。**
 
 ---
@@ -78,8 +78,8 @@
 - Create: `benchmarks/core/object_matrix.py`
 - Create: `scripts/obj_matrix_cap.py`
 - Create: `benchmarks/test/test_object_matrix.py`
-- Create: `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md`
-- Create: `docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md`（本檔）
+- Create: `docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md`
+- Create: `docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`（本檔）
 
 - [ ] **Step 1: 跑一次 gate 確認綠**
 
@@ -100,8 +100,8 @@ Run:
 git add scripts/send_relative_goal.py nav_capability/nav_capability/nav_action_server_node.py \
   scripts/start_nav_capability_demo_tmux.sh scripts/lidar_front_sector.py \
   benchmarks/core/object_matrix.py scripts/obj_matrix_cap.py benchmarks/test/test_object_matrix.py \
-  docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md \
-  docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md
+  docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md \
+  docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md
 git commit -m "feat(nav,bench): 6/9 HITL pre-flight tools — nav orphan-goal fix, indoor-tight profile, lidar sector debug, object matrix harness
 
 - send_relative_goal.py: cancel in-flight goal on interrupt + guarded shutdown
@@ -473,7 +473,7 @@ Record: 3/3 是否全 blocked、Go2 是否零移動、trace 截圖。
 
 ### Task 4.1: HITL 結果寫回 project-status + claim 表
 
-**Files:** Modify `references/project-status.md`（頂部加 6/9 段）；Modify `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md` §1 truth table（把驗過的能力升級/標記）
+**Files:** Modify `references/project-status.md`（頂部加 6/9 段）；Modify `docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md` §1 truth table（把驗過的能力升級/標記）
 
 - [ ] **Step 1:** 把每個 Phase 1/2 task 的 Record 結果填回。能力升級規則：實機觀測到結束行為 → `HARDWARE_PROVEN`；只看到中間狀態 → 維持 `WIRED_RUNTIME`；未達 gate → 誠實標 FAIL/INSUFFICIENT。
 - [ ] **Step 2:** Commit：`docs: 6/9 HITL results — <能力升級摘要>`。

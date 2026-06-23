@@ -3,7 +3,7 @@
 > **性質**：系統 Phase 2（Core Brain / Ops Refactor）**pre-6/18 additive-only 範圍**的執行收據。
 > **授權**：Roy 2026-06-12 凌晨 AFK 指令（「明天我不在，請執行 Phase 2 additive-only…開始執行吧」），
 > 其中含 T2B-0 兩決策拍板（PII 保守預設 + export 即使 GET 也要 auth）。
-> **上游 plan**：[`docs/superpowers/plans/2026-06-11-phase2-core-brain-ops-refactor.md`](../superpowers/plans/2026-06-11-phase2-core-brain-ops-refactor.md)
+> **上游 plan**：[`docs/archive/superpowers-legacy/plans/2026-06-11-phase2-core-brain-ops-refactor.md`](../superpowers/plans/2026-06-11-phase2-core-brain-ops-refactor.md)
 > **執行模式**：Fable 直接實作（Roy AFK 指令直接下給 Fable）＋ 每 lane 獨立 reviewer subagent
 > Linus 審查 ＋ 小 PR ＋ CI 綠 ＋ admin rebase merge。**系統 Phase 3/4/5 未啟動**。
 

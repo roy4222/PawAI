@@ -110,7 +110,7 @@ bash scripts/start_nav2_amcl_demo_tmux.sh
 ```
 
 **已知陷阱**：
-- **Go2 sport mode cmd_vel 門檻 MIN_X = 0.50 m/s**（4/25 實機 calibration 確認）— DWB `min_vel_x` 必須 ≥ 0.45，否則 Go2 拒抬腳。詳 `docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md` §Step 0
+- **Go2 sport mode cmd_vel 門檻 MIN_X = 0.50 m/s**（4/25 實機 calibration 確認）— DWB `min_vel_x` 必須 ≥ 0.45，否則 Go2 拒抬腳。詳 `docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md` §Step 0
 - **Go2 driver `_publish_transform` env 開關**：`GO2_PUBLISH_ODOM_TF=0` 跳 odom→base_link TF 給 cartographer own（建圖階段用）；預設 1（Nav2 demo 階段用，AMCL 需要 driver odom）
 - **slam_toolbox 在 ARM64 + Humble + RPLIDAR 永久棄用**（Mapper FATAL ERROR known bug）
 - **不要 `ros2 topic pub --once /goal_pose`**：bt_navigator subscriber 是 BEST_EFFORT，會 race 沒收到。改 `-r 2 --times 5` 多次發
@@ -497,13 +497,13 @@ Go2 sport mode 對 `Move (api_id=1008)` 有 `MIN_X = 0.50 m/s` 門檻 — `Move 
 
 ### reactive_stop danger threshold 對 Go2 機身太近（5/11 B5 burndown）
 
-`reactive_stop_node` 預設 `danger<0.6m`、`slow<1.0m` 是 LiDAR 視距，**未考慮 Go2 機身佔用** — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞。另外 `safety_only=true` 在 clear zone 完全不發訊號 → mux 在 obstacle 移開瞬間直接切「停 → 全速」，沒漸進減速。修法在 `docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4` B5 列。任何 nav motion 測試前確認此項已修。
+`reactive_stop_node` 預設 `danger<0.6m`、`slow<1.0m` 是 LiDAR 視距，**未考慮 Go2 機身佔用** — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞。另外 `safety_only=true` 在 clear zone 完全不發訊號 → mux 在 obstacle 移開瞬間直接切「停 → 全速」，沒漸進減速。修法在 `docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md §4` B5 列。任何 nav motion 測試前確認此項已修。
 
 ### reactive_stop 居家窄場「前面明明空卻被擋」+ orphaned-goal（6/8 Track B HITL）
 
-實機診斷（真實 `/scan_rplidar`）：正前方 ±15° 淨空 1.56m，卻被報 danger，根因是 `front_arc_deg=30`（±30° 寬錐）把**右前角 -30° off-path 家具**算進前方危險。**非 TF bug**（`front_offset_rad=π` 補 LiDAR 反裝 yaw=π 是對的）。**修法已實機驗證**：重啟 reactive_stop 收窄 `front_arc_deg:=15~20` + `danger_distance_m:=1.0` + 低速（`slow_speed:=0.2 normal_speed:=0.3`）→ zone clear/slow、`nav_paused=false`。⚠️ 窄錐**必須綁低速 ≤0.2 m/s**（側向覆蓋變少靠低速補反應時間）。注意 `front_arc_deg`/`danger_distance_m` 只在 `__init__` 讀一次，`ros2 param set` 改了無效 → **必須 kill 重啟帶參數**（runtime callback 只接 `enable_nav_pause`/`safety_only`/`mode`）。另一坑：goto client crash / SSH 斷線後 `nav_action_server`（single-goal）會留 **orphaned active goal** → 後續 goto 全被 `rejecting goto_* — another goto still active` 拒，需重啟 navcap launch 清除。完整實測 + backlog 見 `docs/navigation/research/2026-06-08-trackB-hitl-results.md`。
+實機診斷（真實 `/scan_rplidar`）：正前方 ±15° 淨空 1.56m，卻被報 danger，根因是 `front_arc_deg=30`（±30° 寬錐）把**右前角 -30° off-path 家具**算進前方危險。**非 TF bug**（`front_offset_rad=π` 補 LiDAR 反裝 yaw=π 是對的）。**修法已實機驗證**：重啟 reactive_stop 收窄 `front_arc_deg:=15~20` + `danger_distance_m:=1.0` + 低速（`slow_speed:=0.2 normal_speed:=0.3`）→ zone clear/slow、`nav_paused=false`。⚠️ 窄錐**必須綁低速 ≤0.2 m/s**（側向覆蓋變少靠低速補反應時間）。注意 `front_arc_deg`/`danger_distance_m` 只在 `__init__` 讀一次，`ros2 param set` 改了無效 → **必須 kill 重啟帶參數**（runtime callback 只接 `enable_nav_pause`/`safety_only`/`mode`）。另一坑：goto client crash / SSH 斷線後 `nav_action_server`（single-goal）會留 **orphaned active goal** → 後續 goto 全被 `rejecting goto_* — another goto still active` 拒，需重啟 navcap launch 清除。完整實測 + backlog 見 `docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md`。
 
-**6/9 HITL 更新**：① `start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`（一鍵窄場，免手動 param）。② indoor-tight ±18° 誤擋修正實證（front 0.97→1.22m、zone danger→slow）。③ orphan：Ctrl-C(SIGINT) 下 client cancel 沒送出（rclpy 預設 SIGINT 先關 context → RCLError，非 KeyboardInterrupt）→ orphan，但靠 `no_progress_timeout`(~10s) 自癒、**不需重啟**；`nav_action_server` 已加 `goto_max_duration_s=120` backstop。client 正解 = `rclpy.init(signal_handler_options=NO)`（post-demo）。④ **stop-resume auto-resume 會 lunge**：resume 以 Go2 MIN_X floor ~0.5 m/s 衝、短 goal 貼牆 0.21m → **tight space 禁 demo auto-resume**，台詞退「操作員確認/遙控輔助」。⑤ 新工具 `scripts/lidar_front_sector.py`（±15/20/30° 扇區最近距離 + 角度 debug，現場分辨真障礙 vs 側前家具）。完整 6/9 HITL Log + nav 台詞鎖定見 `docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md`。
+**6/9 HITL 更新**：① `start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`（一鍵窄場，免手動 param）。② indoor-tight ±18° 誤擋修正實證（front 0.97→1.22m、zone danger→slow）。③ orphan：Ctrl-C(SIGINT) 下 client cancel 沒送出（rclpy 預設 SIGINT 先關 context → RCLError，非 KeyboardInterrupt）→ orphan，但靠 `no_progress_timeout`(~10s) 自癒、**不需重啟**；`nav_action_server` 已加 `goto_max_duration_s=120` backstop。client 正解 = `rclpy.init(signal_handler_options=NO)`（post-demo）。④ **stop-resume auto-resume 會 lunge**：resume 以 Go2 MIN_X floor ~0.5 m/s 衝、短 goal 貼牆 0.21m → **tight space 禁 demo auto-resume**，台詞退「操作員確認/遙控輔助」。⑤ 新工具 `scripts/lidar_front_sector.py`（±15/20/30° 扇區最近距離 + 角度 debug，現場分辨真障礙 vs 側前家具）。完整 6/9 HITL Log + nav 台詞鎖定見 `docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`。
 
 ### 多 driver instance 殘留
 
@@ -529,7 +529,7 @@ Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet �
 
 - **greet 觸發條件已改**（commit `f2a0df4`，`interaction_executive/brain_node.py` `_on_face`）：原本 gate 在 attention `ENGAGED`（D435 depth ≤1.6m + dwell，深度在 1.5-2m 抖到逼使用者貼鏡頭不動、幾乎不觸發）→ 改成 **known face stable（`/event/face_identity` 的 `identity_stable` 事件）+ 最近 `greet_sitting_window_s`(預設 3s) 內偵測到 pose=sitting + `greet_cooldown_s`(預設 20s)/人 cooldown**。新 param `greet_require_sitting`/`greet_sitting_window_s`/`greet_cooldown_s` 全 declare 預設、不需 yaml。⟹ **pose=sitting 成為 greet 硬依賴**：sitting 不穩就 `ros2 param set /brain_node greet_require_sitting false` + 台詞去掉「坐下來了」。
 - **只在「進場（unknown→known 轉變）」觸發**，非 steady-state；要重現 greet 需遮臉/離框 ~5s 再回來。
-- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 [`docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md`](docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md)。
+- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 [`docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`](docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md)。
 
 ---
 
@@ -633,4 +633,4 @@ Default 5-role vocabulary (needs-triage / needs-info / ready-for-agent / ready-f
 
 ### Domain docs
 
-Single-context. `CONTEXT.md` at repo root acts as glossary index pointing to existing `CLAUDE.md` + `docs/pawai-brain/architecture/0511/`. ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+Single-context. `CONTEXT.md` at repo root acts as glossary index pointing to existing `CLAUDE.md` + `docs/archive/pawai-brain-legacy/architecture-0511/`. ADRs in `docs/adr/`. See `docs/agents/domain.md`.

@@ -3,7 +3,7 @@
 All tests inject `now` explicitly so no real-time sleep is needed.
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-1
-Plan: docs/pawai-brain/plans/2026-05-12-attention-policy.md Task D-1
+Plan: docs/archive/pawai-brain-legacy/plans/2026-05-12-attention-policy.md Task D-1
 """
 from __future__ import annotations
 

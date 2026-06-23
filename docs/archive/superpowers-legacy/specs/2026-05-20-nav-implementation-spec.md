@@ -13,7 +13,7 @@
 
 ## 1. Problem Statement
 
-Hiwonder ROSOrin Pro 這類 ROS2 教學整合套件讓「導航避障」**看起來**完整，因為它把 LiDAR / 深度相機 / SLAM / 動態避障 / 語音 / Agent / App 包成可操作 demo package。PawAI 不缺底層架構 — Go2 版本的 nav stack 已在 `docs/pawai-brain/architecture/0511/nav/` 完整描述。**缺的是「產品化接線」與「安全成熟度」**：
+Hiwonder ROSOrin Pro 這類 ROS2 教學整合套件讓「導航避障」**看起來**完整，因為它把 LiDAR / 深度相機 / SLAM / 動態避障 / 語音 / Agent / App 包成可操作 demo package。PawAI 不缺底層架構 — Go2 版本的 nav stack 已在 `docs/archive/pawai-brain-legacy/architecture-0511/nav/` 完整描述。**缺的是「產品化接線」與「安全成熟度」**：
 
 - 語音 / Brain 還不能真正叫 Go2 走（Executive NAV executor 未實作，仍是 `nav_unimplemented_phase_a`）
 - F7 仍是 P0 blocker：goal accepted 但 `/cmd_vel_nav` 不出，10s 後 ABORT
@@ -72,11 +72,11 @@ Brain/UI       : Brain → Executive (skill_contract) → 【NAV executor — MI
 `【MISSING】` 是 6/18 P0 唯一一條把 **Brain → Executive → Nav** 接通的 code 線（其他 P0 線多半也需要 code 或工具改動，但屬於「打磨既有」而非「接通缺口」）。
 
 權威細節：
-- `docs/pawai-brain/architecture/0511/nav/nav-runtime-flow.md`
-- `docs/pawai-brain/architecture/0511/nav/nav-reactive-stop-and-mux.md`
-- `docs/pawai-brain/architecture/0511/nav/nav-capability-brain-integration.md`
-- `docs/pawai-brain/architecture/0511/nav/nav-known-issues-roadmap.md`
-- `docs/pawai-brain/architecture/0511/nav/nav-field-runbook.md`
+- `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-runtime-flow.md`
+- `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-reactive-stop-and-mux.md`
+- `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-capability-brain-integration.md`
+- `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-known-issues-roadmap.md`
+- `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md`
 
 ---
 

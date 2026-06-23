@@ -8,7 +8,7 @@
 > **Owner**: Roy
 > **依據**：
 > - `docs/contracts/interaction_contract.md`（nav_capability 4 actions + 3 services）
-> - `docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md`
+> - `docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md`
 > - `scripts/start_nav_capability_demo_tmux.sh`
 
 ---

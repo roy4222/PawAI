@@ -1,6 +1,6 @@
 # 專案狀態
 
-**最後更新**：2026-06-15（**6/15 續4（夜）— CLI 驗證綠(254)+Act1 停障餘裕加大**：修 pawai2 `--with-lidar` parity 紅燈、Act1 demo_forward `danger 1.1→1.5`+前進 `2s→1s`（撞車後加大餘裕、`ACT1_DANGER_M` 可還原）、runbook 同步；**改動在 working tree 未 deploy**，明天先 `pawai jetson deploy` 再短距 e-stop 驗；Jetson 離線故 live face/Act1 未測。見 §6/15 續4。前段 **6/15 續3（夜，Roy AFK）— Cloud 三件事收斂**：① **Act1 motion 根因查清+修回 standalone**（撞車真因＝twist_mux 無 output timer+0.5s input timeout、reactive 供給一中斷 mux 停輸出→Go2 維持上一個 Move 滑行 2-3s 撞；改回 standalone `/cmd_vel` 直連+唯一 publisher 防線`ACT1_KILL_COMPETITORS`+force-stop 直發 0+一併啟 voice node、42 單元 tests 綠、**真機待 Roy e-stop**、runbook 已寫）② **offline**（端到端已接通 param/topic/Studio、S5 rule-first offline 免疫、demo 亮點句 greet/cup/gesture 走 perception 自發本就免疫；修 G2 footgun：offline+phase=all 不再吐「我聽不太懂」→`OFFLINE_GENERIC_FALLBACK`、446 tests 綠）③ **Mac CLI**（macOS 已一級支援/platform.py 放行/零 code 改、lock.py 全 remote→Mac 不需 flock、Mac=SSH 跳板/face enroll 在 Jetson；Mac runbook 已寫、**實機綠燈待 Roy 在 Mac 跑**）。詳 §6/15 續3。前段同日續2：**6/15 續2（傍晚）— LiDAR 平反 + Act1 motion 撞車 + 語音 fast-path** ① **LiDAR 不是硬體死**：scan-only 隔離測 `/scan_rplidar` **11.93Hz + health OK**，根因＝`start_lidar_monitor_tmux.sh` sllidar 命令**漏 `--ros-args`**→`serial_baudrate:=256000` 被當 remap 沒套用→`SL_RESULT_OPERATION_TIMEOUT`（fix `af18a64`；S3 fix cherry-pick 進 main `1dec417`）。② **Act1 motion**：standalone 直發 `/cmd_vel` 用 **demo_forward profile**（arc18/danger1.1/slow1.3/slow_speed0.6=跳過 slow）狗直走 ~0.75m、障礙前 ~30cm **自動停 ✅**；但**整合進 brain stack 經 twist_mux `/cmd_vel_obstacle` 路徑、reactive danger-stop 沒攔截 → 撞車**（Cloud 診斷 enable 開太久＋mux 路徑 danger-stop 不可靠；**整合 motion = NOT_DEMO_SAFE → 鎖 fallback**）。③ **語音 fast-path** `act1_voice_trigger.py` 建好（訂 `/asr_result`+`/brain/text_input`→窄關鍵字→scan gate→`act1_forward.sh`、不走 LLM；demo 走 Studio 收音＝`/brain/text_input`）。**⚠ Go2 撞擊後實體狀態待 Roy 確認**。詳 §6/15 續2）。前段同日：**6/15 live HITL 續** — S3 複合句修好：pose 是 **edge-triggered**（非 6/14 誤判的 raw=None；模型有吐 sitting conf 0.55）、寫死 10s 窗太短抓不到稀疏 sitting event → 新 param `drink_sitting_window_s`(default 10 byte-identical／demo 45s)，實機驗 `sitting=True` 端到端有據；**S5 自主驗** Go2 0 動作命令(`/webrtc_req`=0)；**Act1 誠實結論**=depth 未接 control／語音無法觸發 motion／`--with-lidar` 只是 raw monitor／sllidar 硬體 timeout；fix 在 worktree `codex/s3-sitting-window` e45364a 待 merge — 詳 §6/15）。前次：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
+**最後更新**：2026-06-15（**6/15 續4（夜）— CLI 驗證綠(254)+Act1 停障餘裕加大**：修 pawai2 `--with-lidar` parity 紅燈、Act1 demo_forward `danger 1.1→1.5`+前進 `2s→1s`（撞車後加大餘裕、`ACT1_DANGER_M` 可還原）、runbook 同步；**改動在 working tree 未 deploy**，明天先 `pawai jetson deploy` 再短距 e-stop 驗；Jetson 離線故 live face/Act1 未測。見 §6/15 續4。前段 **6/15 續3（夜，Roy AFK）— Cloud 三件事收斂**：① **Act1 motion 根因查清+修回 standalone**（撞車真因＝twist_mux 無 output timer+0.5s input timeout、reactive 供給一中斷 mux 停輸出→Go2 維持上一個 Move 滑行 2-3s 撞；改回 standalone `/cmd_vel` 直連+唯一 publisher 防線`ACT1_KILL_COMPETITORS`+force-stop 直發 0+一併啟 voice node、42 單元 tests 綠、**真機待 Roy e-stop**、runbook 已寫）② **offline**（端到端已接通 param/topic/Studio、S5 rule-first offline 免疫、demo 亮點句 greet/cup/gesture 走 perception 自發本就免疫；修 G2 footgun：offline+phase=all 不再吐「我聽不太懂」→`OFFLINE_GENERIC_FALLBACK`、446 tests 綠）③ **Mac CLI**（macOS 已一級支援/platform.py 放行/零 code 改、lock.py 全 remote→Mac 不需 flock、Mac=SSH 跳板/face enroll 在 Jetson；Mac runbook 已寫、**實機綠燈待 Roy 在 Mac 跑**）。詳 §6/15 續3。前段同日續2：**6/15 續2（傍晚）— LiDAR 平反 + Act1 motion 撞車 + 語音 fast-path** ① **LiDAR 不是硬體死**：scan-only 隔離測 `/scan_rplidar` **11.93Hz + health OK**，根因＝`start_lidar_monitor_tmux.sh` sllidar 命令**漏 `--ros-args`**→`serial_baudrate:=256000` 被當 remap 沒套用→`SL_RESULT_OPERATION_TIMEOUT`（fix `af18a64`；S3 fix cherry-pick 進 main `1dec417`）。② **Act1 motion**：standalone 直發 `/cmd_vel` 用 **demo_forward profile**（arc18/danger1.1/slow1.3/slow_speed0.6=跳過 slow）狗直走 ~0.75m、障礙前 ~30cm **自動停 ✅**；但**整合進 brain stack 經 twist_mux `/cmd_vel_obstacle` 路徑、reactive danger-stop 沒攔截 → 撞車**（Cloud 診斷 enable 開太久＋mux 路徑 danger-stop 不可靠；**整合 motion = NOT_DEMO_SAFE → 鎖 fallback**）。③ **語音 fast-path** `act1_voice_trigger.py` 建好（訂 `/asr_result`+`/brain/text_input`→窄關鍵字→scan gate→`act1_forward.sh`、不走 LLM；demo 走 Studio 收音＝`/brain/text_input`）。**⚠ Go2 撞擊後實體狀態待 Roy 確認**。詳 §6/15 續2）。前段同日：**6/15 live HITL 續** — S3 複合句修好：pose 是 **edge-triggered**（非 6/14 誤判的 raw=None；模型有吐 sitting conf 0.55）、寫死 10s 窗太短抓不到稀疏 sitting event → 新 param `drink_sitting_window_s`(default 10 byte-identical／demo 45s)，實機驗 `sitting=True` 端到端有據；**S5 自主驗** Go2 0 動作命令(`/webrtc_req`=0)；**Act1 誠實結論**=depth 未接 control／語音無法觸發 motion／`--with-lidar` 只是 raw monitor／sllidar 硬體 timeout；fix 在 worktree `codex/s3-sitting-window` e45364a 待 merge — 詳 §6/15）。前次：2026-06-14 深夜（**6/14 live HITL deploy** — pre-6/18 純軟體 P0 全 merge（#176-#190）+ Roy 上機實測收斂：ASR cloud server 重啟、S3 drink-merge 補水句、chat_wait 20000→2000、demo param 全持久化進 executive.yaml、防「打架」靠 phase + social-pending#191(default-off,待上機)、LiDAR sllidar 硬體 timeout、pose 模型 raw=None 待修；詳 §6/14 段）。前次：2026-06-13 深夜（**三大研究收斂 → Q1-Q6 grill → 17-agent workflow 產 1 總綱+6 子計畫**：`docs/archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md` + plan1-6；憲法=live 五幕 + auto-advance 視覺但 manual FLOOR 保證 + never dead air + 分層 flag-gated；board 40 P0/21 P1/8 P2；零 code、untracked、待 Roy 審 — 詳下節）。前段同日：**Aggressive Pre-6/18 重構 batch1+2 全 merge（8 PR #167-#175、~955 tests）+ Post-Refactor 驗收 + HITL #2**：軟體面 95% / Pre-6/18 整體 ~63%；face re-enroll ✅(sim 0.87)、confirm flow ✅、**nav motion 第一發 goto 0.3m 走歪撞牆＝NOT_DEMO_READY**；3 bug 修 B1/B2/CLI-01、新 B4 npz 待修）
 **硬底線**：6/18 期末發表。Go2 在 Roy 手上做 HITL。供電已換降壓板、近 1-2 月未復現斷電 → 不再是 P0。（歷史：5/18 期末 demo 已過；5/12 晚 Go2 曾移交學校）
 
 ---
@@ -164,8 +164,8 @@
 
 **主軸**：把三條規劃線（Cloud A 保守 demo flow、Cloud B 進階能力、Nav 撞牆根因）先收斂成單一 final plan，再經 Q1-Q6 grill 拍板，最後用 17-agent / 6-phase dynamic workflow（reader×4→writer×6→integrator→reviewer×5→fixer）產出 **1 總綱 + 6 子計畫**。**零 code、全部 untracked（待 Roy 審；commit/freeze 是 plan 內 P0-2、Roy 決定）。**
 
-### 產出 7 份（`docs/superpowers/plans/`）
-- **總綱**：[`2026-06-13-pawai-pre618-final-execution-plan.md`](../docs/superpowers/plans/2026-06-13-pawai-pre618-final-execution-plan.md)（Q1-Q6 憲法 §3、merged board §4、shared-file merge order §8、6/17 gate、6/18 live path；§2 supersede 所有 source）。
+### 產出 7 份（`docs/archive/superpowers-legacy/plans/`）
+- **總綱**：[`2026-06-13-pawai-pre618-final-execution-plan.md`](../docs/archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md)（Q1-Q6 憲法 §3、merged board §4、shared-file merge order §8、6/17 gate、6/18 live path；§2 supersede 所有 source）。
 - **plan1** runtime-layout-corun-profiling / **plan2** demo-conductor-auto-advance / **plan3** online-offline-llm-hybrid-speech / **plan4** operator-controls-studio-runbook / **plan5** post-refactor-hitl-rehearsal / **plan6** navigation-safety-s1-fallback。每份含 Codex Implementation Packet + Cloud Review Checklist + Stop Conditions + Required Evidence + Rollback。
 
 ### Q1-Q6 拍板（憲法，不再辯）
@@ -214,7 +214,7 @@ deploy→demo（healthcheck 8/8）→shadow on→`state_transition` 軌跡（`id
 
 ## 6/11 深夜：全系統重構 v2 計畫套件（5 份，待審）
 
-**主軸**：地基封閉後，Roy 指示「不實作、只寫計畫」——產出 v2 總計畫 + 四份系統 phase plan（皆 `docs/superpowers/plans/`、Status: PLANNED，**待 Roy /grill-me 審核後才開工**）。零 code 變更。
+**主軸**：地基封閉後，Roy 指示「不實作、只寫計畫」——產出 v2 總計畫 + 四份系統 phase plan（皆 `docs/archive/superpowers-legacy/plans/`、Status: PLANNED，**待 Roy /grill-me 審核後才開工**）。零 code 變更。
 
 - **`2026-06-11-pawai-system-refactor-v2-master.md`**：北極星全文（demo 拼裝系統 → 安全/可觀測/可擴展/可部署/可驗證的具身 AI 平台）+ 系統 Phase 1 完成清單（PR #143-#159）+ Phase 2-5 摘要與依賴閘門 G1-G8 + **Roy 決策登記簿 A-1~A-14** + 全域 6/18 凍結表。
 - **系統 Phase 2（Core Brain/Ops）**：2A ISM 接入（shadow → staged enable 2a-2g → 權威化）+ 2B Studio Evidence Center（gateway JSONL 落盤/export/suppressed viewer）+ 2C CLI（smoke brain / evidence pull）。**硬規則：6/18 前只做 ISM Phase 1 shadow + evidence + 零行為 CLI 工具，不做 staged enable、不改 Brain runtime 行為**。
@@ -248,7 +248,7 @@ deploy→demo（healthcheck 8/8）→shadow on→`state_transition` 軌跡（`id
 - **凍結期內刻意延後**（6/18 後）：gateway secure-default flip + 前端/probe token wiring；foxglove clientPublish（Roy 決策，會碰 nav initialpose 工作流 + 凍結腳本）。S0 安全研究三件套 docs 已 commit。
 
 ### 4. ISM（Interaction State Machine = Brain v2 互動流程）
-- **詳細 plan**（`5e5795a`）：`docs/superpowers/plans/2026-06-11-plan-ism-interaction-state-machine.md`，遵守 master plan §7 八條凍結約束（感知只產 candidate／優先序鐵律／watchdog／confirm 非黑洞／TTS-ack／demo_phase=operator mask／8 態／ism_enabled flag）。Phase 0 純模組→1 shadow→2 逐 gate family→3 權威化。
+- **詳細 plan**（`5e5795a`）：`docs/archive/superpowers-legacy/plans/2026-06-11-plan-ism-interaction-state-machine.md`，遵守 master plan §7 八條凍結約束（感知只產 candidate／優先序鐵律／watchdog／confirm 非黑洞／TTS-ack／demo_phase=operator mask／8 態／ism_enabled flag）。Phase 0 純模組→1 shadow→2 逐 gate family→3 權威化。
 - **Phase 0 實作**（#159）：`interaction_executive/interaction_executive/interaction_state.py` 純 ROS-free 核心（state enum / candidate-decision model / preemption 表 / watchdog）+ 33 測試。**未接 runtime、brain_node 未 import、零行為變更**。Linus 終審抓 3 真 bug + 1 死狀態（watchdog/TTS/plan_id/ERROR_RECOVERY）全修；拒絕「explicit 越過 confirm」的不安全建議。
 
 ### 5. 地基封閉 smoke（真機 9/9，main `b2b4a4e`→報告 `69ce1b8`）
@@ -265,7 +265,7 @@ deploy→demo（healthcheck 8/8）→shadow on→`state_transition` 軌跡（`id
 
 ### 1. Phase 0/1：凍結 + 全 repo 架構盤點（`24280ef` snapshot tag / `3b964cb` audit）
 - demo 凍結：`docs/pawai-demo/2026-06-10-demo-snapshot.md` + tag `demo-2026-06-snapshot`（回滾點）。
-- **Audit**（29 agents：10 子系統 mapper + 6 方向評估 + 13 批對抗性查證）：99 條 findings 逐條開證據檔核實（98 成立、OBJECT-1 部分駁回已修正、BRAIN skill 數勘誤 27→30）。產出 `docs/superpowers/specs/2026-06-10-pawai-architecture-audit.md`（15 節主報告 + Top 10 + 前 5 specs + 前 3 Codex plans）+ findings ledger。
+- **Audit**（29 agents：10 子系統 mapper + 6 方向評估 + 13 批對抗性查證）：99 條 findings 逐條開證據檔核實（98 成立、OBJECT-1 部分駁回已修正、BRAIN skill 數勘誤 27→30）。產出 `docs/archive/superpowers-legacy/specs/2026-06-10-pawai-architecture-audit.md`（15 節主報告 + Top 10 + 前 5 specs + 前 3 Codex plans）+ findings ledger。
 - 標籤分布：SAFE_TO_REFACTOR_NOW 32 / POST_DEMO_ONLY 47 / MUST_PRESERVE 13 / NEEDS_HITL 6 / NEEDS_RESEARCH 1。
 
 ### 2. 六項拍板（grill-me 逐題，全文見 master plan §4）
@@ -273,7 +273,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### 3. Plan 0 執行（`b1f0bc4`）+ 施工圖（`c57786f`）
 - Plan 0 塌縮成執行清單（working tree 本來就乾淨、commits 本來就分主題）：修 object 過期測試（COLOR_ZH 4 色 assert vs 實際 12 色，5/6 擴色時沒同步——**object 測試不在 CI 的活證據**，順手加分類器覆蓋不變量測試）→ 四套全綠（IE 258 / vision 138 / object 41 / studio tsc 0）→ push → tag **`post-demo-refactor-baseline-2026-06-10`**。
-- **Master plan + 五份 implementation plans**（`docs/superpowers/plans/2026-06-10-post-demo-refactor-master-plan.md` + plan-a~e）：A CI/CD Guardrails、B CLI v2 第一刀、C pawai_contracts 抽取、D Brain Router Phase 0（golden fixture 雙路徑等價）、E Brain Trace v1（每個 gate 早退發 suppressed + decision_id 串鏈）。每份含 scope/files/steps(含完整 code)/tests/rollback/forbidden scope。
+- **Master plan + 五份 implementation plans**（`docs/archive/superpowers-legacy/plans/2026-06-10-post-demo-refactor-master-plan.md` + plan-a~e）：A CI/CD Guardrails、B CLI v2 第一刀、C pawai_contracts 抽取、D Brain Router Phase 0（golden fixture 雙路徑等價）、E Brain Trace v1（每個 gate 早退發 suppressed + decision_id 串鏈）。每份含 scope/files/steps(含完整 code)/tests/rollback/forbidden scope。
 - 寫 plan 時核實的兩個坑已內建：gateway pytest 需 rclpy（只能跑 Tier-2 ROS container）；pawai_brain 2 個測試檔間接 import rclpy（CI 排除）。
 
 ### 待辦（接手即做）
@@ -315,7 +315,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### 6. 產出 / backlog
 - **PawAI Brain v2 + CLI v2 PRD**（Roy 早上要的，draft 待審）：`docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md`。5 層架構（Perception Router / Interaction State Machine / Policy Guardrail / Skill Executor / Trace）+ 增量遷移 + CLI Typer/pipx + 外部框架（OpenClaw/NeMo/ROSClaw）定位（啟發 agent 層，不當 Go2 的腦）。
-- 模型升級研究：`docs/pawai-brain/research/2026-06-10-model-upgrade-decision-research.md`（object/pose/D435 曝光 SOP）。
+- 模型升級研究：`docs/archive/pawai-brain-legacy/research/2026-06-10-model-upgrade-decision-research.md`（object/pose/D435 曝光 SOP）。
 - review 未修小事（不擋 demo）：gesture toggle `ros2 param get` stale、gateway cache VOLATILE 脫鉤、reset 沒清 active_step。
 
 ### 待辦（→ 6/10 晚全數收掉）
@@ -327,7 +327,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ## 6/9：nav HITL 實機 + WSL 工具上線（commit `a38ca96`）+ 下午轉 vision
 
-**當日主軸**：把 6/9 早上寫的 nav 工具（orphan fix / indoor-tight profile / lidar sector / object matrix harness）上 Jetson 跑 HITL，誠實鎖定 nav demo 台詞。完整 HITL Log + 台詞見 [`docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md`](../docs/superpowers/plans/2026-06-09-nav-vision-hitl-execution.md)；執行研究報告 [`docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md`](../docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md)。
+**當日主軸**：把 6/9 早上寫的 nav 工具（orphan fix / indoor-tight profile / lidar sector / object matrix harness）上 Jetson 跑 HITL，誠實鎖定 nav demo 台詞。完整 HITL Log + 台詞見 [`docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md)；執行研究報告 [`docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md`](../docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md)。
 
 ### 1. WSL 工具上線（commit `a38ca96`，9 檔，pre-commit 綠）
 - `send_relative_goal.py` cancel-on-interrupt + guarded shutdown；`nav_action_server` 加 `goto_max_duration_s=120` orphan safety net；`start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`；新 `scripts/lidar_front_sector.py`（±15/20/30° 扇區 debug）；新 `scripts/obj_matrix_cap.py` + `benchmarks/core/object_matrix.py`（object 矩陣 per-cell PASS/DEGRADED/FAIL CSV，11 tests）。
@@ -353,7 +353,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **object `b1f5058`**：launch `confidence_threshold` 預設 0.5→**0.35**（原 0.5 靜默蓋 yaml 害 cup 不出）；推論 blob **BGR→RGB**（YOLO 吃 RGB；HSV 顏色仍用 BGR）。cup @0.7m 5/5 conf 0.42-0.64。
 - **brain `932b74e`**：cup 台詞加天氣句、greet/cup **分開觸發**（`demo_video_cup_compound=false`）、thumbs_up **兩步 WeGo**（`thumbs_up_demo_ack=false`）、新 `gesture_enabled` runtime gate（param callback，可 `ros2 param set` 即時關手勢）。
 - **studio `b2d6500`**（Task A）：nav map 面板 — gateway 訂 `/amcl_pose`(**latched TRANSIENT_LOCAL**)+`/state/reactive_stop/status`+`/state/nav/paused` 轉 `source=nav` envelope；前端 `nav-map-canvas.tsx`（v8 map PNG+pose 三角形+固定 goal+直線+chip，Canvas2D 不引 ros3djs）。**未上機驗真實 pose**（需 nav stack）。
-- 施工圖：[`2026-06-09-demo-recording-impl.md`](../docs/superpowers/plans/2026-06-09-demo-recording-impl.md)（3 task）、[`2026-06-09-studio-nav-panel-buildspec.md`](../docs/superpowers/plans/2026-06-09-studio-nav-panel-buildspec.md)、brain 設計深挖 [`2026-06-09-pawai-brain-design-deepdive.md`](../docs/superpowers/plans/2026-06-09-pawai-brain-design-deepdive.md)。
+- 施工圖：[`2026-06-09-demo-recording-impl.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-demo-recording-impl.md)（3 task）、[`2026-06-09-studio-nav-panel-buildspec.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-studio-nav-panel-buildspec.md)、brain 設計深挖 [`2026-06-09-pawai-brain-design-deepdive.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-pawai-brain-design-deepdive.md)。
 
 **HITL 定位（晚，0 build，3 test）**：
 - ✅ **cup/object 沒壞**（偵測 0.45-0.64、runtime log 有 `object:orangecup` 台詞）；✅ **face 沒壞**（framing 對時 roy sim 0.70-0.78 鐵穩；face_count=0 是 Go2 D435 太低 + 背景第二張臉）。
@@ -379,9 +379,9 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **真問題＝YOLO 用得爛**：demo 鎖 cup-only（`class_whitelist:[41]`）＝ 80 類只用 1 類。**快速 win＝打開白名單**（免費多物體）＋用大物體（椅/沙發/桌，像素多更穩）。
 
 ### 3. 產出
-- `docs/pawai-brain/research/2026-06-07-report-positioning-and-hitl-derisk.md`（報告對外定位＋HITL de-risk，18-agent workflow）。
-- `docs/pawai-brain/research/2026-06-07-nav-and-object-deepdive.md`（nav/object 行動報告，13-agent workflow）。
-- `docs/pawai-brain/research/2026-06-07-evening-session-and-0608-demo-plan-review.md`（另一 agent 的 Cloud review，英文，結論一致）。
+- `docs/archive/pawai-brain-legacy/research/2026-06-07-report-positioning-and-hitl-derisk.md`（報告對外定位＋HITL de-risk，18-agent workflow）。
+- `docs/archive/pawai-brain-legacy/research/2026-06-07-nav-and-object-deepdive.md`（nav/object 行動報告，13-agent workflow）。
+- `docs/archive/pawai-brain-legacy/research/2026-06-07-evening-session-and-0608-demo-plan-review.md`（另一 agent 的 Cloud review，英文，結論一致）。
 - `docs/mission/2026-06-07-night-session-and-demo-bringup-plan.md`（白話紀錄＋6/08 流程跑通計畫）。
 - GitHub issues：建 #132（nav 前置 gate）/#133（安全拒絕 e2e）/#134（S2-S7 smoke）＋整理 #127/#131 標籤。
 - 簡報：open-slide deck 加 Roy 5 分鐘技術導讀 3 頁（`.tmp/`，git 未追蹤）。
@@ -413,7 +413,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **#127** 安全拒絕真機 HITL（P0）/ **#128** `pawai face` CLI（list/enroll/delete，6/15 enroll 用）/ **#129** Studio 前進N公尺（NAV executor no-op blocker）/ **#130** Studio depth panel / **#131** gesture camera wave wontfix（recall=0.0）。
 
 ### 4. PINTO_model_zoo 研究 → 不換模型
-- 6/04 已有 `docs/pawai-brain/research/2026-06-04-pinto-model-zoo-full-analysis.md`（482 模型）。cup>1m 根因 = **像素預算不足**（9cm 杯 @2m≈21px 踩 YOLO26n 下限），**非模型問題** → 6/18 鎖 cup ≤1.5m、不換任何感知模型（face/pose 已 freeze、object KEEP_CURRENT）。
+- 6/04 已有 `docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-model-zoo-full-analysis.md`（482 模型）。cup>1m 根因 = **像素預算不足**（9cm 杯 @2m≈21px 踩 YOLO26n 下限），**非模型問題** → 6/18 鎖 cup ≤1.5m、不換任何感知模型（face/pose 已 freeze、object KEEP_CURRENT）。
 
 ### 5. 製作計畫 + 雙軌（doc committed）
 - `docs/mission/2026-06-18-demo-production-plan.md`：逐段「開發前置 / 資料收集（每段三層同框：第三人稱+Studio debug+terminal echo）/ 拍攝口白」。雙軌=家裡備片 Roy 主角為主體 / 學校 live 她主角求穩；6/15 enroll+smoke、6/16-17 錄、6/18 簡報+備片保底。
@@ -440,7 +440,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### 2. 6/18 demo 收斂審計（report committed）
 - **Readiness = `READY_WITH_BACKUP_SLIDE`**；模型錦標賽結論 = **6/18 不換任何模型**（cup@1m/face/voice 已 pass，gesture「舉手」走語音、pose=Studio-only）。
-- 報告：`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`。
+- 報告：`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`。
 
 ### 3. demo 計畫收斂（Roy 拍板）
 - 交付 = **錄製影片為主 + 現場直播**；成功標準 = 「**先能完成、能錄到、能交代清楚；不追求每段最高 claim**」。分**必成版 / 加分版 / fallback**。
@@ -455,7 +455,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **6 個 demo-day footgun**（會靜默殺 shot）：`depth_clear=False` 擋所有 Go2 motion / greet+TTS 需 ENGAGED ≤1.6m+dwell 1.5s / `.env` CRLF 假 running（要數節點）/ TRT 冷 cache 3-10min / XL4015 供電 / config 預設關閉且 rsync 不 rebuild（要 colcon build）。
 
 ### 5. 待辦（明天，2026-06-07）
-- docs branch 收尾：merge `b4d6870` 進 main（或開 PR）+ 建 10 個 follow-up issues（草稿 `docs/pawai-brain/plans/2026-06-05-docs-refresh-followup-issues.md`，未建）。
+- docs branch 收尾：merge `b4d6870` 進 main（或開 PR）+ 建 10 個 follow-up issues（草稿 `docs/archive/pawai-brain-legacy/plans/2026-06-05-docs-refresh-followup-issues.md`，未建）。
 - 排 HITL 錄製 session（排 6 footgun → 照優先序錄）。
 - 拍板：②voice→Go2 走哪條路徑、加分 config 要不要做、nav 用哪個 stack。
 - 定位決策（獨立）：`mission/README §2` 守護 30%/陌生人警報 → North Star v2 非接觸守望。
@@ -482,7 +482,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### 關鍵發現 / 產出
 - **★ brain LLM persona 幻覺**（Roy 頭號關注）：TTS 杜撰未感測世界狀態（下雨/看到杯子/姿勢）→ persona 反幻覺為 6/18 最高優先 follow-up
-- **跨系統改進 roadmap**：`docs/pawai-brain/plans/2026-06-04-system-improvement-roadmap.md`（9-agent 研究，26 blocker/high、24 個 6/18 相關）
+- **跨系統改進 roadmap**：`docs/archive/pawai-brain-legacy/plans/2026-06-04-system-improvement-roadmap.md`（9-agent 研究，26 blocker/high、24 個 6/18 相關）
 - **evidence 凍結**：`docs/runbook/baseline-evidence/2026-06-04-hitl/`（snapshot + 55 JSONL + preflight + readiness + README 含誠實 caveat）
 
 ### ⚠️ 操作陷阱（5/14 CRLF 防線未覆蓋 `.env` source 路徑 → 今天再中招）
@@ -521,7 +521,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### Plan 修訂
 
-`docs/pawai-brain/plans/2026-05-14-spec-a-demo-mainline-stop-bleed.md` 對齊現況：base `a1ebdd2`→`d9d4879`（已含 5/14-15 school demo commits）；D0 recovery 改「已盤點乾淨」（無 spec-a branch / stash / 漂移）；worktree 命名 `elder_and_dog-spec-a-pr<N>`；PR2A/2B/3 開工前強制 `rebase origin/main`；merge 後改回主 workspace 更新 main（避免 PR worktree `checkout main` 衝突）；補 school demo 保護註記。
+`docs/archive/pawai-brain-legacy/plans/2026-05-14-spec-a-demo-mainline-stop-bleed.md` 對齊現況：base `a1ebdd2`→`d9d4879`（已含 5/14-15 school demo commits）；D0 recovery 改「已盤點乾淨」（無 spec-a branch / stash / 漂移）；worktree 命名 `elder_and_dog-spec-a-pr<N>`；PR2A/2B/3 開工前強制 `rebase origin/main`；merge 後改回主 workspace 更新 main（避免 PR worktree `checkout main` 衝突）；補 school demo 保護註記。
 
 ### Worktree 隔離
 
@@ -770,7 +770,7 @@ pawai demo start              # 重啟拿新 lock
 - troubleshooting I/J（Go2 Ethernet 直連、Gateway 8080 split diagnosis）
 
 **L3 — 便利**（2 commits）：
-- `pawai docs <module>` 直接路由到 `docs/pawai-brain/architecture/0511/<module>/<module>.md` + aliases (`onboarding` / `contract`)
+- `pawai docs <module>` 直接路由到 `docs/archive/pawai-brain-legacy/architecture-0511/<module>/<module>.md` + aliases (`onboarding` / `contract`)
 - `pawai contract check`（local-first，`--jetson` flag 才走 SSH）
 
 **Tests**：70 passed（從 12 起底擴到 70，新增 `test_network.py` / `test_cache.py` / `test_lock.py` + `test_cli.py` 大量擴張）。
@@ -798,7 +798,7 @@ pawai demo start              # 重啟拿新 lock
 - references 從 8 個（face/speech/vision-perception/llm-brain/studio/environment/project-status/validation）改成 **11 個**：face / gesture / pose / object / speech / nav / brain / studio / environment / validation / project-status
 - 砍 `vision-perception.md`（gesture/pose 分開）、`llm-brain.md` → 改名 `brain.md`
 - 每個 module reference 是 **80-120 行薄指標**，指向 0511 子文件，不複製內容
-- 新建 `docs/pawai-brain/architecture/0511/studio/` 5 子文件：runtime-flow / frontend-components / gateway-mock-bridge / debug-runbook + root `studio.md`
+- 新建 `docs/archive/pawai-brain-legacy/architecture-0511/studio/` 5 子文件：runtime-flow / frontend-components / gateway-mock-bridge / debug-runbook + root `studio.md`
 - `pawai-cli` skill 已存在（保守版自我發現，靠 `pawai --help` 探活 flags，免每次重 patch）
 
 ### Offline Fallback Chain E2E 驗證（`c4a66b2`）
@@ -849,7 +849,7 @@ pawai demo start              # 重啟拿新 lock
 
 ### Nav Burndown：B1-B4 全綠、B5 訊號通但 motion 階段撞牆
 
-詳見 [`nav-root-cause-burndown.md §4`](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md)。
+詳見 [`nav-root-cause-burndown.md §4`](../docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md)。
 
 - B1 LiDAR ✅ 11.98 Hz / 1800 pts / 94% valid / 單 publisher（`/scan_rplidar`，避免 `/scan` 雙 publisher 衝突）
 - B2 D435 ✅ color 30 Hz / aligned_depth 30 Hz / 98% valid / 中心 ROI 1.11m vs LiDAR 180° 1.18m（兩感測器交叉驗證一致）
@@ -915,12 +915,12 @@ pawai demo start              # 重啟拿新 lock
 
 | 代號 | Plan | 主題 | 視窗 |
 |:---:|---|---|---|
-| **M** | [demo-readiness-master-plan](../docs/pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md) | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
-| **A** | [brain-minimum-checklist](../docs/pawai-brain/plans/2026-05-10-brain-minimum-checklist.md) | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
-| **B** | [nav-root-cause-burndown](../docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md) | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
-| **C** | [runtime-fallback-readiness](../docs/pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md) | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
-| **D** | [free-conversation-audio-readiness](../docs/pawai-brain/plans/2026-05-12-free-conversation-audio-readiness.md) | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
-| **E** | [mac-school-network-readiness](../docs/pawai-brain/plans/2026-05-12-mac-school-network-readiness.md) | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
+| **M** | [demo-readiness-master-plan](../docs/archive/pawai-brain-legacy/plans/2026-05-10-demo-readiness-master-plan.md) | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
+| **A** | [brain-minimum-checklist](../docs/archive/pawai-brain-legacy/plans/2026-05-10-brain-minimum-checklist.md) | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
+| **B** | [nav-root-cause-burndown](../docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md) | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
+| **C** | [runtime-fallback-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-runtime-fallback-readiness.md) | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
+| **D** | [free-conversation-audio-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-free-conversation-audio-readiness.md) | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
+| **E** | [mac-school-network-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-mac-school-network-readiness.md) | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
 
 ### 戰略收斂
 
@@ -1147,8 +1147,8 @@ fdd5c93 fix(studio): composer absolute-bottom layout (ChatGPT-like)
 ### 與 5/9 brainstorm spec 對接
 
 完整 spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
-Master roadmap：`docs/pawai-brain/plans/2026-05-09-master-execution-roadmap.md`
-Branch plans：B/C/D/E 各一份在 `docs/pawai-brain/plans/`
+Master roadmap：`docs/archive/pawai-brain-legacy/plans/2026-05-09-master-execution-roadmap.md`
+Branch plans：B/C/D/E 各一份在 `docs/archive/pawai-brain-legacy/plans/`
 
 ---
 
@@ -1293,13 +1293,13 @@ LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 
 
 ## 5/7 evening 進度（Phase A.6 Capability-Aware Self-Demonstration）
 
-把 Brain 的能力宣告從「27 個 SkillContract」擴成「27 SkillContract + 6 DemoGuide」三層結構（SkillContract / DemoGuide / CapabilityContext），讓 LLM 在 5/18 driver-less demo 能流暢自介所有功能，但實體 motion 仍受 SkillContract allowlist 嚴格控制。完整 plan `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md`，5 個 batch（B1-B5）共 19 task 一次到位。
+把 Brain 的能力宣告從「27 個 SkillContract」擴成「27 SkillContract + 6 DemoGuide」三層結構（SkillContract / DemoGuide / CapabilityContext），讓 LLM 在 5/18 driver-less demo 能流暢自介所有功能，但實體 motion 仍受 SkillContract allowlist 嚴格控制。完整 plan `docs/archive/pawai-brain-legacy/plans/2026-05-07-capability-aware-self-demonstration.md`，5 個 batch（B1-B5）共 19 task 一次到位。
 
 ### 落地內容
 
 | 項目 | 結果 |
 |---|---|
-| Plan | `docs/pawai-brain/plans/2026-05-07-capability-aware-self-demonstration.md` — 19 task / 5 batch（B1 capability core / B2 SkillContract demo metadata / B3 graph wiring / B4 ROS hooks / B5 persona+studio+docs） |
+| Plan | `docs/archive/pawai-brain-legacy/plans/2026-05-07-capability-aware-self-demonstration.md` — 19 task / 5 batch（B1 capability core / B2 SkillContract demo metadata / B3 graph wiring / B4 ROS hooks / B5 persona+studio+docs） |
 | Capability layer | `pawai_brain/pawai_brain/capability/` — registry / demo_guides_loader / world_state / effective_status / skill_result_memory / world_state_builder / capability_builder（B1-B3） |
 | DemoGuide registry | `pawai_brain/config/demo_guides.yaml` — 6 entries（face / speech / gesture / pose / object / navigation） |
 | Demo policy | `pawai_brain/config/demo_policy.yaml` — limits + max_motion_per_turn |
@@ -1407,7 +1407,7 @@ Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦
 | 項目 | 結果 |
 |---|---|
 | Spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（5 次 review 修到綠） |
-| Plan | `docs/pawai-brain/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task） |
+| Plan | `docs/archive/pawai-brain-legacy/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task） |
 | Cut 1 Task 1 — `extract_proposal()` | commit `618492f` + `74f210a`，5 unit test |
 | Cut 1 Task 2 — chat_candidate proposal fields | commit `fc32c18` + `4c1a718`，schema 新增 `proposed_skill` / `proposed_args` / `proposal_reason` / `engine` |
 | Cut 1 Task 3 — primary OpenRouter model 切 `google/gemini-3-flash-preview` | commit `77a277e`，同步 default + tmux 覆寫 |
@@ -1727,7 +1727,7 @@ a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I
 - `go2_robot_sdk/config/nav2_params_detour.yaml`：新檔（detour profile，加 d435_scan source / inflation 0.30→0.20 / DWB critic 全降）
 - `scripts/start_nav_capability_demo_tmux_detour.sh`：新檔（含 d435-tf + d435-scan window，reactive 帶 -p danger:=0.40）
 - `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`：spec
-- `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md`：plan + result
+- `docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md`：plan + result
 
 **Demo B 話術降階**（誠實版）：
 > 「Go2 結合 RPLIDAR 主動避障 + D435 深度感測融合進入 Nav2 local costmap，可即時感知障礙物並自動安全停車」
@@ -1744,7 +1744,7 @@ a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I
 | B4 | nav_action_server YELLOW gate threshold 寫死 | 1 hr |
 | B5 | `actual_distance` 計算用 send-time pose 不準 | 30 min |
 
-完整清單在 `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md` 末段。
+完整清單在 `docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md` 末段。
 
 **明天 5/4 進 Phase B**（不再做 nav）：
 
@@ -2046,9 +2046,9 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 
 - `scripts/scan_health_check.py` — 30 樣本 angular probe + PHANTOM 4-條件 fail gate
 - `scripts/start_scan_only_tmux.sh` — 3-window scan-only（TF + sllidar + monitor）
-- `docs/navigation/research/2026-04-29-mount-measurement.md` — 量測 + yaw 修正歷史
-- `docs/navigation/research/baseline-scans/` — baseline / Pose-A / Pose-B-cw30 三 CSV
-- `docs/navigation/research/maps/` — v2/v3/v4/v5 PNG/yaml/pgm + README
+- `docs/archive/navigation-legacy/research/2026-04-29-mount-measurement.md` — 量測 + yaw 修正歷史
+- `docs/archive/navigation-legacy/research/baseline-scans/` — baseline / Pose-A / Pose-B-cw30 三 CSV
+- `docs/archive/navigation-legacy/research/maps/` — v2/v3/v4/v5 PNG/yaml/pgm + README
 
 ### 明日（4/30）下一步
 
@@ -2102,7 +2102,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 
 ### 唯一文件入口
 
-從今天起：[`docs/pawai-brain/plans/2026-04-28-pawclaw-master-integration.md`](../docs/pawai-brain/plans/2026-04-28-pawclaw-master-integration.md)（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
+從今天起：[`docs/archive/pawai-brain-legacy/plans/2026-04-28-pawclaw-master-integration.md`](../docs/archive/pawai-brain-legacy/plans/2026-04-28-pawclaw-master-integration.md)（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
 
 ### 下一步（4/29 雙軌開發）
 
@@ -2134,7 +2134,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 
 Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensity 全部 = 15（max），jitter < 3mm。左側完全空（2-3m）。**完全不對稱、極穩、強反射** → 不是 ghost / 雜訊，是真實物體被 RPLIDAR 看到，最可能是 **Go2 自身揹包 / 拓展模組 / 電池蓋** 或 **mount yaw 偏 ~70°**（文件明寫 mount xyz yaw 從 4/25 起就沒量過）。
 
-完整證據與三假設見 [`docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md)。
+完整證據與三假設見 [`docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md)。
 
 ### 同步發現的平台 latent bug
 
@@ -2142,7 +2142,7 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 
 ### 三天 KPI 卡關真因（Linus 風格回顧）
 
-1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。[4/25 log §3](../docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md) 寫「待精確量測」但延宕至今
+1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。[4/25 log §3](../docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md) 寫「待精確量測」但延宕至今
 2. **4/25 桌上 10.4Hz 通過 → 直接上機，沒做 scan angular audit** — 30 樣本角度分布該是 day-1 sanity，到今天才跑
 3. **4/26 上午判定「lethal 是暫態 / map 髒污」 → 整下午重建地圖** — 但根因是 scan 本身有 phantom，新 map 一樣會被污染
 4. **4/26 下午+晚上做 nav_capability S2 平台抽象（4 actions / 70 unit tests / 22+ commits）** — 抽象層 K9/K10 過了，但 K1 從沒成功一次。底層沒打穩，平台層蓋再多都是空中樓閣
@@ -2192,14 +2192,14 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 
 ### 新增/修改檔案
 
-- 新增 [`docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
+- 新增 [`docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
 - 新增 [`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
-- 新增 [`docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md) — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
+- 新增 [`docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md) — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
 - 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
 
 ### LiDAR 開發藍圖（5/9 起執行）
 
-完整 plan：[`docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/navigation/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md)
+完整 plan：[`docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md)
 
 7 階段路徑（user 已選好 mount STL，等支架印好開工）：
 
@@ -2311,7 +2311,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 ### 新增/修改檔案
 
 - 新增 [`docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
-- 新增 [`docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
+- 新增 [`docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
 - 新增 [`docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
 - 新增 [`docs/pawai-brain/architecture/overview.md`](../docs/pawai-brain/architecture/overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
 
@@ -2354,7 +2354,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 - 新增 `go2_robot_sdk/test/test_reactive_stop_node.py`（17 cases）
 - 新增 `scripts/send_relative_goal.py`（讀 amcl_pose 算前方相對 goal）
 - 新增 `scripts/start_reactive_stop_tmux.sh`（4-window）
-- 新增 `docs/navigation/research/2026-04-26-nav2-dynamic-obstacle-log.md`（完整實機 log）
+- 新增 `docs/archive/navigation-legacy/research/2026-04-26-nav2-dynamic-obstacle-log.md`（完整實機 log）
 - 修改 `go2_robot_sdk/setup.py`（加 reactive_stop_node entry point）
 
 ### 下次 session 接手
@@ -2382,7 +2382,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 新 nodes：`nav_action_server_node` / `route_runner_node` / `log_pose_node` / `state_broadcaster_node`。共 70 unit/integration tests pass（WSL）。
 
-**Spec / Plan**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / [`docs/navigation/plans/2026-04-26-nav-capability-s2.md`](../docs/navigation/plans/2026-04-26-nav-capability-s2.md)
+**Spec / Plan**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / [`docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md`](../docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md)
 
 ### 兩個重大修法（commit 8ec9a59 + e2b3932）
 
@@ -2429,7 +2429,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 - 實測：`/scan` **10.57 Hz** / **1800 points/scan**（0.2° 解析度，比 datasheet 0.225° 更密）/ 60% valid / 0.20-7.94m range / 中位數 1.08m
 - Foxglove bridge 可視化通過（port 8765）
 
-**舊 LiDAR 問題全部解決**（對照 docs/navigation/research/）：
+**舊 LiDAR 問題全部解決**（對照 docs/archive/navigation-legacy/research/）：
 
 | 歷史痛點（Go2 內建 LiDAR） | 現況（RPLIDAR A2M12 外接） |
 |---------------------------|--------------------------|
@@ -2447,7 +2447,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 **P0 導航避障 spec + plan 定稿**：
 
 - Spec: `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`（803 行）
-- Plan: `docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
+- Plan: `docs/archive/navigation-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
 - P0 承諾：劇本式 A→B + 停障 + 續行（不承諾一般繞障）
 - P1 Stretch：單一靜態障礙繞行（5/6 P0-I KPI 4/5 通過才啟動）
 - 嵌入 PawAI Brain 三層架構：Safety Layer 新增 Emergency latched FSM + Obstacle auto-recovery FSM，Policy Layer 新增 `patrol_route` skill（deterministic，不經 LLM），Expression Layer 新增 `safety_tts` 固定 6 句模板
@@ -2679,7 +2679,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 - **CPU**：風險點（slam_toolbox ~70%，導航時建議關手勢）
 - **推薦**：RPLIDAR A2M12（$7,530，16000/s，ROS 生態最豐富）
 - **最大風險**：供電（LiDAR 馬達 +2-5W，XL4015 已 8+ 次斷電）
-- 詳見 `docs/navigation/research/2026-04-08-external-lidar-feasibility.md`
+- 詳見 `docs/archive/navigation-legacy/research/2026-04-08-external-lidar-feasibility.md`
 
 ### 文件更新
 - `docs/mission/README.md` v2.3 完成

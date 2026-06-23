@@ -82,7 +82,7 @@ reactive_stop callback 抽 `zone`(`clear/slow/danger/emergency`) / `obstacle_dis
 **前置（必做，否則底圖空白）**：`public/maps/` 目前**不存在**。
 ```bash
 mkdir -p /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/public/maps
-cp /home/roy422/newLife/elder_and_dog/docs/navigation/research/maps/home_living_room_v8.png \
+cp /home/roy422/newLife/elder_and_dog/docs/archive/navigation-legacy/research/maps/home_living_room_v8.png \
    /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/public/maps/home_living_room.png
 ```
 
@@ -153,7 +153,7 @@ world_y = oy + ((H - 1) - canvas_py) * res
 1. 取 world ground-truth 點（map 原點 `(0,0)` 或已存 named pose），算 `(canvas_px,canvas_py)` 畫紅點。
 2. **截圖**對照底圖牆線：左右相反→多做 x 翻轉(拿掉)；上下相反→y-flip 漏或做兩次(`(H-1)-row_bottom` 只能一次)；整體平移→origin sign 錯或用了 width(205) 當 height(98)。
 3. 加第二方向點（如 `(1.0,0.0)` 應在原點右 +20px 同列）— 單點分不出對稱錯。
-4. 鎖定後校準截圖存 `docs/navigation/research/maps/` 當回歸基準。
+4. 鎖定後校準截圖存 `docs/archive/navigation-legacy/research/maps/` 當回歸基準。
 
 ### PGM→PNG（換圖時）
 ```bash
@@ -234,7 +234,7 @@ useStateStore.getState().updateNav({ reactiveStop: { zone: "danger", front_dista
 
 **B — 接真 gateway + nav stack**：AMCL active → `ros2 topic echo /amcl_pose --once` 有資料 → 面板三角形出現 → 人肉對照 Go2 真實相對位置 + 朝向 → 推 0.3m 同向移動 → 遮 LiDAR 變紅 + paused chip 亮。
 
-**回歸基準**：驗收 A 原點+方向點截圖存 `docs/navigation/research/maps/`，換圖後重跑對照。
+**回歸基準**：驗收 A 原點+方向點截圖存 `docs/archive/navigation-legacy/research/maps/`，換圖後重跑對照。
 
 ---
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown, TypeScript (Next.js 16 + React 19 + Zustand)
 
-**Spec:** `docs/superpowers/specs/2026-03-14-pawai-studio-dev-handoff-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-14-pawai-studio-dev-handoff-design.md`
 
 ---
 

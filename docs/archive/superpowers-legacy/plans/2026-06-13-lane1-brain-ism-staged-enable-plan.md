@@ -85,7 +85,7 @@
 | **T1-2（2b）** | confirm 接管：flag-on 時 gesture/object/greet/pose 的 pending_confirm 早退改為「組 `Candidate` → `propose()` → 依 Decision 行動」，§3.5 表為準（P4 suppress-with-trace、P2 supersede 取消 confirm、P0/P1 preempt）；confirm 30s timeout 由 ISM watchdog 驅動（與既有 PendingConfirm 30s 對齊，**PendingConfirm 機制保留**、ISM 只當裁決源）。**前置子 task T1-2pre**：寫 legacy 行為快照測試（pose fallen × pending_confirm 的現行為），分歧處以 legacy 為準先行等價、preempt 增強標 flag 內新行為並單測 | 中 | 6/9 重演：confirm 卡住時 cup/greet 有去向（trace 斷言）；timeout 30s 回 IDLE；explicit speech 取消 confirm（與 legacy `:985-987` 等價）；fallen preempt 新行為單測 |
 | **T1-3（2c）** | executing watchdog 接管：flag-on 時 `STARTED` 餵 ISM 帶 `timeout_s`（從 `SKILL_REGISTRY` 重查，不信 wire）；watchdog 逾時 → trace `watchdog_timeout:executing:{plan_id}` → 走 `_on_reset_context` 同等清理（清 active_plan/active_step）→ IDLE。**前置子 task T1-3pre（純審視）**：列 30 個 skill 的 timeout_s 值表，標不合理值（如 0/缺省）→ Roy 過目；timeout_s ≤0 的 skill watchdog 不武裝（保守） | 中（真實新行為） | 單測：mock skill 不回終態 → timeout 後 active_plan 清空 + trace；正常 skill 不被誤殺（timeout 前回終態）；6/9 stranger 場景重演自癒 |
 | **T1-4（2d）** | speaking 接管：flag-on 時 object/greet/gesture 的 `tts_playing` gate 改由 ISM SPEAKING 狀態裁決（TTS edge 已在 shadow 接好）；QUEUE 降 SUPPRESS-with-trace（見 Forbidden 6） | 中（Bool race 時序） | parity：tts_playing=true 期間社交候選全 suppress 且 reason=`gate:speaking`；TTS 結束後放行；race 單測（edge 與 candidate 同 tick） |
-| **T1-5** | soak 分歧分析報告：用 `pawai evidence pull` + Lane 2 T2-5 report，產出「legacy vs ISM 裁決分歧統計」文件（按 gate 分組、各附樣本 decision_id）→ 作為 2e/2f post-6/18 展開的數據基礎 | 零（純分析） | 文件落 `docs/pawai-brain/research/`，引用真實 JSONL |
+| **T1-5** | soak 分歧分析報告：用 `pawai evidence pull` + Lane 2 T2-5 report，產出「legacy vs ISM 裁決分歧統計」文件（按 gate 分組、各附樣本 decision_id）→ 作為 2e/2f post-6/18 展開的數據基礎 | 零（純分析） | 文件落 `docs/archive/pawai-brain-legacy/research/`，引用真實 JSONL |
 
 ## 7. Pure software tasks（WSL，可 AFK）
 
@@ -151,7 +151,7 @@ T1-0 → T1-1（2a）→ HITL → T1-2pre → T1-2（2b）→ HITL → T1-3pre �
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 1 Task <T1-x>（見 docs/superpowers/plans/2026-06-13-lane1-brain-ism-staged-enable-plan.md §6）。
+任務：執行 Lane 1 Task <T1-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane1-brain-ism-staged-enable-plan.md §6）。
 紀律：
 - TDD：先寫紅測試（含 all-off byte-identical parity），再實作到綠。
 - 只動 §4 Scope 列的檔案；§5 Forbidden scope 一條不碰（特別：不刪 19 個 _suppressed 早退、

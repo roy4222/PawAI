@@ -344,7 +344,7 @@ python tools/llm_eval/spec1_a_plus_eval.py > tools/llm_eval/spec1_a_plus_2026-05
 ❌ 姿勢 7 種綁定（→ Spec 3）
 ❌ 換更聰明的模型（A+ 後再決定）
 
-如果執行中發現「順便改一下會更好」 → **不要**，記到 `docs/pawai-brain/dev-logs/` 留待 demo 後。
+如果執行中發現「順便改一下會更好」 → **不要**，記到 `docs/archive/pawai-brain-legacy/dev-logs/` 留待 demo 後。
 
 ---
 

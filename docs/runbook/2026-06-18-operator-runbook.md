@@ -1,7 +1,7 @@
 # 2026-06-18 Operator Runbook（操作員手冊）
 
 > 日期：2026-06-13 起草｜狀態：DRAFT — 待 P4-11 dry-run + Roy 終驗（P4-12 HITL）
-> 來源計畫：`docs/superpowers/plans/2026-06-13-plan4-operator-controls-studio-runbook.md`（P4-5~P4-13）
+> 來源計畫：`docs/archive/superpowers-legacy/plans/2026-06-13-plan4-operator-controls-studio-runbook.md`（P4-5~P4-13）
 > 對外 claim 一律走 `docs/navigation/2026-06-13-nav-618-claim-wording.md`（S1–S8 可講 / F1–F10 禁講）
 
 ---

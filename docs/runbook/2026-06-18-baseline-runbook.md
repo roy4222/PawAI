@@ -2,7 +2,7 @@
 
 > **性質**：在 Jetson 上跑 capability baseline 的操作手冊。這份是「**怎麼上機量、JSONL 存哪、snapshot 怎麼 freeze、demo 當天怎麼用**」的唯一真相源。
 > **不放**：架構決策（Master Plan）、門檻數字（Capability Baseline Spec）、code 結構（Implementation Plan）。
-> **關係**：Master Plan `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`｜Spec `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`｜Implementation `docs/pawai-brain/plans/2026-06-01-scoreboard-implementation-plan.md`
+> **關係**：Master Plan `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`｜Spec `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`｜Implementation `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md`
 > **既有相關 runbook**：`docs/runbook/demo_script.md`、`demo-30-case-checklist.md`、`demo-frozen-backlog.md`（demo 展示用，與本 baseline 量測 runbook 互補）。
 
 > **鐵律：as-is baseline 必走 demo entrypoint**（`start_full_demo_tmux.sh` / 各 lane 腳本），**不裸 `ros2 run`**——裸跑會拿到錯的 mic_gain(1.0≠8.0) / gesture backend(rtmpose≠recognizer) / whisper device(cpu-int8≠cuda-fp16)。

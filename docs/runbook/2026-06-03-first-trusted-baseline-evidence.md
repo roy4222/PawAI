@@ -1,6 +1,6 @@
 # 第一份可信 Baseline Evidence（2026-06-03）
 
-> 🕰️ **HISTORICAL（已被取代，保留作里程碑）**：這份記錄 6/3 **第一次**可信量測（只測 face、`face=fail` recall 0.5 / false-accept 1.0 / n=3）。**當前唯一 trusted snapshot 是 6/4 HITL**（`docs/runbook/baseline-evidence/2026-06-04-hitl/`，SHA `78fbf36`，face 已 pass recall 1.0 / false-accept 0.0 / n=9）。**任何能力是否 pass 一律以 6/4 HITL 為準**；6/3 的 `face=fail` 是歷史快照，**不要再引用為當前 face 狀態**（6/18 簡報/demo-flow 若仍引用 6/3 fail 屬 doc-drift，見 `docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §5）。
+> 🕰️ **HISTORICAL（已被取代，保留作里程碑）**：這份記錄 6/3 **第一次**可信量測（只測 face、`face=fail` recall 0.5 / false-accept 1.0 / n=3）。**當前唯一 trusted snapshot 是 6/4 HITL**（`docs/runbook/baseline-evidence/2026-06-04-hitl/`，SHA `78fbf36`，face 已 pass recall 1.0 / false-accept 0.0 / n=9）。**任何能力是否 pass 一律以 6/4 HITL 為準**；6/3 的 `face=fail` 是歷史快照，**不要再引用為當前 face 狀態**（6/18 簡報/demo-flow 若仍引用 6/3 fail 屬 doc-drift，見 `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §5）。
 >
 > **性質**：記錄 capability baseline 第一次上機實測產出**可信工程證據**的里程碑。
 > **證據檔（git-tracked 副本）**：`docs/runbook/baseline-evidence/2026-06-03-first-trusted-face/`

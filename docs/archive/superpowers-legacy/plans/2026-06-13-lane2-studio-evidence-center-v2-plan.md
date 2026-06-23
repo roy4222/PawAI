@@ -119,7 +119,7 @@ T2-1 → T2-2 →（並行）T2-3 + T2-4 + T2-5 → T2-6 → T2-7 →（有餘�
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 2 Task <T2-x>（見 docs/superpowers/plans/2026-06-13-lane2-studio-evidence-center-v2-plan.md §6）。
+任務：執行 Lane 2 Task <T2-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane2-studio-evidence-center-v2-plan.md §6）。
 紀律：
 - TDD 紅綠；gateway 新讀取邏輯放 trace_store.py（ROS-free 純模組，比照既有）。
 - 一切輸出走 redact_trace_event() 後資料；session 參數嚴格消毒；不放寬 403 規則。

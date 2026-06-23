@@ -35,7 +35,7 @@
 
 | 主題 | 檔案 |
 |------|------|
-| 5/11 深度研究 | `docs/navigation/research/2026-05-11-nav-avoidance-deep-research.md` |
+| 5/11 深度研究 | `docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md` |
 | 5/11 修法 roadmap | `docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md` |
 | Navigation 工作規則 | `docs/navigation/CLAUDE.md` |
 | Navigation 入口 | `docs/navigation/README.md` |

@@ -10,11 +10,11 @@ Layer 2 感知模組，負責場景物體偵測（YOLO26n ONNX，COCO 80 class +
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/object/object.md` | 主總覽 + YOLO26n 選型 + 0511 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/object/object-runtime-flow.md` | D435 → YOLO ONNX + TRT → NMS → HSV → event publish 完整 flow |
-| `docs/pawai-brain/architecture/0511/object/object-color-and-detection.md` | HSV 顏色標記算法 + class_whitelist 設定 + COCO id 對照 |
-| `docs/pawai-brain/architecture/0511/object/object-brain-executive-integration.md` | world_snapshot object cache + Brain N3-A + scene_query 整合 |
-| `docs/pawai-brain/architecture/0511/object/object-debug-runbook.md` | YOLO 載入失敗 / TRT cache 首次耗時 / color 標記不準 debug |
+| `docs/archive/pawai-brain-legacy/architecture-0511/object/object.md` | 主總覽 + YOLO26n 選型 + 0511 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/object/object-runtime-flow.md` | D435 → YOLO ONNX + TRT → NMS → HSV → event publish 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/object/object-color-and-detection.md` | HSV 顏色標記算法 + class_whitelist 設定 + COCO id 對照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/object/object-brain-executive-integration.md` | world_snapshot object cache + Brain N3-A + scene_query 整合 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/object/object-debug-runbook.md` | YOLO 載入失敗 / TRT cache 首次耗時 / color 標記不準 debug |
 
 ## 核心程式檔案
 

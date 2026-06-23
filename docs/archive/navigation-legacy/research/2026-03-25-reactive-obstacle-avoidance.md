@@ -9,8 +9,8 @@
 **適用範圍**：Unitree Go2 Pro + Intel RealSense D435 + NVIDIA Jetson Orin Nano 8GB
 **前置文件**：
 - [`docs/navigation/README.md`](../README.md) — 導航避障總體規劃
-- [`docs/navigation/research/深度攝影機避障.md`](./深度攝影機避障.md) — Phase 0-2 設計文件
-- [`docs/navigation/research/Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md`](./Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md) — LiDAR Go/No-Go 分析
+- [`docs/archive/navigation-legacy/research/深度攝影機避障.md`](./深度攝影機避障.md) — Phase 0-2 設計文件
+- [`docs/archive/navigation-legacy/research/Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md`](./Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md) — LiDAR Go/No-Go 分析
 
 ---
 
@@ -59,7 +59,7 @@ Go2 Pro 搭載 3D LiDAR，理論上可提供 360° 障礙感知。然而自專�
 
 ### 2.3 已有的設計文件
 
-[`docs/navigation/research/深度攝影機避障.md`](./深度攝影機避障.md) 於 2026-03-11 建立，規劃了 Phase 0（反應式避障）→ Phase 1（Nav2 局部導航）→ Phase 2（nvblox + 語意）三階段路線。該文件設計完整但因以下原因未落地：
+[`docs/archive/navigation-legacy/research/深度攝影機避障.md`](./深度攝影機避障.md) 於 2026-03-11 建立，規劃了 Phase 0（反應式避障）→ Phase 1（Nav2 局部導航）→ Phase 2（nvblox + 語意）三階段路線。該文件設計完整但因以下原因未落地：
 
 - LiDAR 資料新鮮度始終未通過 Gate G3（`gap99 <= 0.5s`、`gap_max <= 1.0s`）
 - 3/16 攻守交換後，核心人力轉向語音/手勢/姿勢模組
@@ -801,7 +801,7 @@ obstacle_guard_node 啟動不依賴其他感知模組，僅需 D435 driver 已�
 
 **共同結論**：所有專案都不適合直接移植。本專案應保持現有 ROS2 主線，從各專案提取可用的工程方法與局部技術。方案 A 的 ROI Depth Threshold 正是吸取了這些專案「保守安全優先」的核心理念，以最小複雜度實現基礎防護。
 
-完整採納決策文件見 [`docs/navigation/research/open-source-adoption/`](./open-source-adoption/) 目錄。
+完整採納決策文件見 [`docs/archive/navigation-legacy/research/open-source-adoption/`](./open-source-adoption/) 目錄。
 
 ---
 

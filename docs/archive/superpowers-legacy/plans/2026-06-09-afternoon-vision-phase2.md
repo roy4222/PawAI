@@ -1,6 +1,6 @@
 # 6/9 下午 視覺 MVP（cup-focused）HITL 執行計畫 Implementation Plan
 
-> **For agentic workers:** 硬體 HITL（Roy 在 Jetson + 相機 + Go2 前手動跑）。照表 top-to-bottom，勾 checkbox。完整可貼指令 + 深度陷阱見姊妹 playbook：`docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`。
+> **For agentic workers:** 硬體 HITL（Roy 在 Jetson + 相機 + Go2 前手動跑）。照表 top-to-bottom，勾 checkbox。完整可貼指令 + 深度陷阱見姊妹 playbook：`docs/archive/pawai-brain-legacy/research/2026-06-09-afternoon-vision-playbook.md`。
 > **⚠️ 2026-06-09 砍版**：本版**只主測 cup**。中午寫的完整 chair/laptop/cup 矩陣**已廢棄**（太大、浪費注意力）。chair/laptop 只在 cup 失敗時做保底 sanity。
 
 **Goal:** 用最少時間量出「**cup 能多遠辨識得到 + 什麼光線/背景穩**」，定出 demo cup 距離與 fallback；其餘 face/sitting/gesture/safety 只 smoke 確認，不重測。
@@ -9,7 +9,7 @@
 
 **Tech Stack:** ROS2 Humble / object_perception (YOLO26n TRT, input_size=640) / `scripts/obj_matrix_cap.py` / interaction_executive brain_node / vision_perception / face_perception / pawai-studio。
 
-**真相來源：** playbook `docs/pawai-brain/research/2026-06-09-afternoon-vision-playbook.md`；YOLO/像素物理 `docs/pawai-brain/research/2026-06-09-nav-vision-execution-research.md` §5/§9 + `2026-06-04-pinto-model-zoo-full-analysis.md`。
+**真相來源：** playbook `docs/archive/pawai-brain-legacy/research/2026-06-09-afternoon-vision-playbook.md`；YOLO/像素物理 `docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md` §5/§9 + `2026-06-04-pinto-model-zoo-full-analysis.md`。
 
 ---
 

@@ -4,8 +4,8 @@
 > **性質**：15 個 capability 的逐功能 baseline 規格（9+1 問）。這份是「**每個能力怎麼量、怎樣算 pass**」的**唯一真相源**。
 > **不放**：架構決策（見 Master Plan）、code skeleton（見 Implementation Plan）、上機步驟（見 Runbook）。
 > **關係**：
-> - 總控 / 架構決策 / 三軸定義 / 15 能力 index → `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（Master Plan）
-> - TDD 實作 → `docs/pawai-brain/plans/2026-06-01-scoreboard-implementation-plan.md`
+> - 總控 / 架構決策 / 三軸定義 / 15 能力 index → `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（Master Plan）
+> - TDD 實作 → `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md`
 > - 上機跑 baseline → `docs/runbook/2026-06-18-baseline-runbook.md`
 > **狀態**：逐功能 grill **全收**（2026-06-01）。15 能力全拍定：face ✅、voice(command+stop) ✅、pose(basic+fall) ✅、gesture.wave ✅、object.cup ✅、nav×4 ✅、brain(skill_gate+trace) ✅、studio.evidence ✅、cli.readiness ✅。下一步：四份 baseline docs 整體 review → 另開 fast/slow plan。
 
@@ -265,7 +265,7 @@ aggregate 按 (capability_id, scenario_kind) 分組產出這些 key：`registere
 **quick sanity spike（上機十幾分鐘可測、不主張）**：
 - `range_obstacle[4]`：Go2 內建 4 向粗略障礙距離，零 consumer、韌體語意未記錄。10 分鐘 sanity test 看值域/方向/更新率。
 - onboard avoidance（api 1004）：Go2 機身內建避障，從未測（ADR-0006 禁用）。5 分鐘低風險環境測。
-- **D435 Fusion Shadow Test**：不讓 Go2 動，只錄資料——啟 D435 pointcloud→`/scan_d435_shadow`（`pointcloud_to_laserscan`，**必須 `target_frame:=base_link` 且先驗 TF**——不設 target_frame 會讓 height filter 在 optical frame 語意錯掉，high/low 切片全亂；參考 `docs/navigation/research/2026-05-25-realsense-d435-full-stack-deepdive.md:90`）、height filter **0.05-0.50**（非舊 0.20-0.80）+ 同錄 `/scan_rplidar`，放矮箱/桌面邊緣/椅腳三種障礙，量「RPLIDAR 漏掉而 D435 補到的比例」。**不可沿用舊 detour script**（hack TF / `depthimage_to_laserscan` 無 height filter / danger=0.40 / safety_only 舊坑）。延遲/TF/false-positive 可接受才考慮接 safe_stop 或 Nav2 obstacle layer。**過了才升級，不可先宣稱 fusion 已可靠**。
+- **D435 Fusion Shadow Test**：不讓 Go2 動，只錄資料——啟 D435 pointcloud→`/scan_d435_shadow`（`pointcloud_to_laserscan`，**必須 `target_frame:=base_link` 且先驗 TF**——不設 target_frame 會讓 height filter 在 optical frame 語意錯掉，high/low 切片全亂；參考 `docs/archive/navigation-legacy/research/2026-05-25-realsense-d435-full-stack-deepdive.md:90`）、height filter **0.05-0.50**（非舊 0.20-0.80）+ 同錄 `/scan_rplidar`，放矮箱/桌面邊緣/椅腳三種障礙，量「RPLIDAR 漏掉而 D435 補到的比例」。**不可沿用舊 detour script**（hack TF / `depthimage_to_laserscan` 無 height filter / danger=0.40 / safety_only 舊坑）。延遲/TF/false-positive 可接受才考慮接 safe_stop 或 Nav2 obstacle layer。**過了才升級，不可先宣稱 fusion 已可靠**。
 
 **future sidecar（6/18 不碰）**：
 - Go2 內建 3D LiDAR：**拿得到**（decode path 活、~7Hz；推翻舊「拿不到/頻率低」說法）**但 Pro 韌體每幀~22 點≈18% 覆蓋太稀疏**，不能當主導航；密集版只在 EDU 版+CycloneDDS。
@@ -328,7 +328,7 @@ aggregate 按 (capability_id, scenario_kind) 分組產出這些 key：`registere
 
 > **fast/slow 系統是另線（獨立 plan，不塞進本 spec 主體）**：6/18 正確版本＝三層階序 **Safety Kernel（`reactive_stop` / e-stop / `no_auto_resume` / nav safety，永遠最高、brain-independent）> System1（低風險、可驗證、低延遲互動捷徑：fixed intent / canned / cached TTS / non-motion skill）> System2（LLM/VLM 慢思考）**。對齊 SayCan / Nav2 BT，**非** diffusion action model / VLA low-level policy。
 > **硬邊界（防 fast_router 為了快跳過 gate）**：fast path **不得繞過** `skill_policy_gate` / `capability_health gate` / nav safety；只允許 **non-motion / canned / explain-only** 類互動先行。motion/nav 一律仍走完整 gate + Safety Kernel。
-> go/no-go = voice baseline fail。詳見 §2 設計結論 + 新 plan `docs/pawai-brain/plans/2026-06-02-fast-slow-interaction-lane-plan.md`（brain 架構審查產出）。
+> go/no-go = voice baseline fail。詳見 §2 設計結論 + 新 plan `docs/archive/pawai-brain-legacy/plans/2026-06-02-fast-slow-interaction-lane-plan.md`（brain 架構審查產出）。
 
 ## 8. `studio.evidence` ✅（2026-06-01 拍定，gateway + frontend recon file:line 接地）
 

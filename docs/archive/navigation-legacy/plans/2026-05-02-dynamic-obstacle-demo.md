@@ -1,6 +1,6 @@
 # Dynamic Obstacle Avoidance v0 — 5/2 試跑紀錄與下一步
 
-> 🕰️ **HISTORICAL — 5/2 sprint 試跑紀錄（保留作引用，不重複維護）。** 標題的「Dynamic Obstacle Avoidance」屬 5/12 sprint 目標，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走/動態避障**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準。
+> 🕰️ **HISTORICAL — 5/2 sprint 試跑紀錄（保留作引用，不重複維護）。** 標題的「Dynamic Obstacle Avoidance」屬 5/12 sprint 目標，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走/動態避障**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準。
 
 **日期**：2026-05-02 evening + late-night
 **結果**：K-STATIC-AVOID-CONTROLLED **PARTIAL**（1 輪 PASS、1 輪 no-op、未做 R3）
@@ -249,4 +249,4 @@ goal 1.8m 接受 → DWB 試走 → 約 0.85m 接近 box (0.54m)
 2. 寫 `nav2_params_detour.yaml`（PathAlign 12→10、forward_point_distance 0.2→0.5、GoalAlign 10→6、BaseObstacle 0.80→0.40、inflation 0.30→0.35）
 3. 寬場景：box 1.8-2.0m / goal 2.5-3.0m / 左右 ≥ 1.5m
 
-詳見 [`docs/navigation/plans/2026-05-03-stage1-and-recovery.md`](2026-05-03-stage1-and-recovery.md)。
+詳見 [`docs/archive/navigation-legacy/plans/2026-05-03-stage1-and-recovery.md`](2026-05-03-stage1-and-recovery.md)。

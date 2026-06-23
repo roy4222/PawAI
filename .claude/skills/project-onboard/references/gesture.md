@@ -10,11 +10,11 @@ Layer 2 感知模組，負責手勢偵測與分類。主線走 MediaPipe Gesture
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/gesture/gesture.md` | 主總覽 + 兩種 backend + 0511 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/gesture/gesture-runtime-flow.md` | D435 → MediaPipe → gesture event publish 完整 flow |
-| `docs/pawai-brain/architecture/0511/gesture/gesture-pipeline-backends.md` | Recognizer vs MediaPipe Hands 兩種 backend 比較 |
-| `docs/pawai-brain/architecture/0511/gesture/gesture-executive-brain-integration.md` | event → interaction_router → Brain current_gesture 注入 |
-| `docs/pawai-brain/architecture/0511/gesture/gesture-debug-runbook.md` | 手勢識別不穩 / MediaPipe crash / 距離調整 debug checklist |
+| `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture.md` | 主總覽 + 兩種 backend + 0511 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture-runtime-flow.md` | D435 → MediaPipe → gesture event publish 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture-pipeline-backends.md` | Recognizer vs MediaPipe Hands 兩種 backend 比較 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture-executive-brain-integration.md` | event → interaction_router → Brain current_gesture 注入 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture-debug-runbook.md` | 手勢識別不穩 / MediaPipe crash / 距離調整 debug checklist |
 
 ## 核心程式檔案
 

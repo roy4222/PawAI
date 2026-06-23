@@ -36,7 +36,7 @@ CLI 內建 8 個 module，跟 ROS2 package、log target、test 命令對應。
 ### face — 人臉辨識
 
 - **Package**：`face_perception`
-- **Doc**：[`docs/pawai-brain/architecture/0511/face.md`](../pawai-brain/architecture/0511/face.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/face.md`](../pawai-brain/architecture/0511/face.md)
 - **Tests**：`python3 -m pytest face_perception/test -v`
 - **Log**：`demo:face`
 - **備註**：YuNet 偵測 + SFace 識別 + face_db 同步
@@ -52,7 +52,7 @@ pawai logs face
 ### speech — 語音
 
 - **Packages**：`go2_interfaces`、`speech_processor`（介面依賴，fresh deploy 需一起 build）
-- **Doc**：[`docs/pawai-brain/architecture/0511/speech.md`](../pawai-brain/architecture/0511/speech.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/speech.md`](../pawai-brain/architecture/0511/speech.md)
 - **Tests**：`python3 -m pytest speech_processor/test -v`
 - **Logs**：`demo:asr`、`demo:tts`
 - **Go2**：TTS 透過 Megaphone DataChannel (api_id 4001/4003/4002)
@@ -68,7 +68,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 ### gesture — 手勢辨識
 
 - **Packages**：`go2_interfaces`、`vision_perception`（與 pose 共用）
-- **Doc**：[`docs/pawai-brain/architecture/0511/gesture.md`](../pawai-brain/architecture/0511/gesture.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/gesture.md`](../pawai-brain/architecture/0511/gesture.md)
 - **Tests**：`python3 -m pytest vision_perception/test -v -k gesture`
 - **Log**：`demo:vision`
 - **Go2**：透過 interaction skill 間接（thumbs_up → wiggle 等）
@@ -79,7 +79,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 ### pose — 姿勢辨識
 
 - **Packages**：`go2_interfaces`、`vision_perception`（與 gesture 共用）
-- **Doc**：[`docs/pawai-brain/architecture/0511/pose.md`](../pawai-brain/architecture/0511/pose.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/pose.md`](../pawai-brain/architecture/0511/pose.md)
 - **Tests**：`python3 -m pytest vision_perception/test -v -k pose`
 - **Log**：`demo:vision`
 - **Go2**：`fallen_alert` 觸發 stop（demo 預設關閉 fallen，需 `enable_fallen:=true`）
@@ -90,7 +90,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 ### object — 物體辨識
 
 - **Package**：`object_perception`
-- **Doc**：[`docs/pawai-brain/architecture/0511/object.md`](../pawai-brain/architecture/0511/object.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/object.md`](../pawai-brain/architecture/0511/object.md)
 - **Tests**：`python3 -m pytest object_perception/test -v`
 - **Log**：`demo:object`
 - **Go2**：無
@@ -118,7 +118,7 @@ pawai logs speech --lines 300  # 抓 asr + tts pane
 ### brain — PawAI Brain
 
 - **Packages**：`go2_interfaces`、`pawai_contracts`、`pawai_brain`、`interaction_executive`
-- **Doc**：[`docs/pawai-brain/architecture/0511/brain.md`](../pawai-brain/architecture/0511/brain.md)
+- **Doc**：[`docs/archive/pawai-brain-legacy/architecture-0511/brain.md`](../pawai-brain/architecture/0511/brain.md)
 - **Tests**：
   - `python3 -m pytest pawai_brain/test -v`
   - `python3 -m pytest interaction_executive/test -v`

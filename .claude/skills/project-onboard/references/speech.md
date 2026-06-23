@@ -10,12 +10,12 @@ Jetson 本地路徑（Whisper local + Piper）作為完全離線 fallback。
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/speech/speech.md` | 主總覽 + 三層管線 + 5/11 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/speech/speech-runtime-flow.md` | 完整資料流（KWS → ASR → Brain → TTS → Go2）|
-| `docs/pawai-brain/architecture/0511/speech/speech-asr-vad.md` | ASR provider 選型 + VAD 策略 + SenseVoice Cloud vs Local |
-| `docs/pawai-brain/architecture/0511/speech/speech-tts-lanes-megaphone.md` | TTS 雙通道（quality/fast）+ Go2 Megaphone DataChannel 協定 |
-| `docs/pawai-brain/architecture/0511/speech/speech-brain-executive-integration.md` | `/event/speech_intent_recognized` 與 Brain、Executive 的整合 |
-| `docs/pawai-brain/architecture/0511/speech/speech-debug-runbook.md` | 現場症狀 → 節點 + 常見故障排查 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech.md` | 主總覽 + 三層管線 + 5/11 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-runtime-flow.md` | 完整資料流（KWS → ASR → Brain → TTS → Go2）|
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-asr-vad.md` | ASR provider 選型 + VAD 策略 + SenseVoice Cloud vs Local |
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-tts-lanes-megaphone.md` | TTS 雙通道（quality/fast）+ Go2 Megaphone DataChannel 協定 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-brain-executive-integration.md` | `/event/speech_intent_recognized` 與 Brain、Executive 的整合 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-debug-runbook.md` | 現場症狀 → 節點 + 常見故障排查 |
 
 ## 核心程式檔案
 

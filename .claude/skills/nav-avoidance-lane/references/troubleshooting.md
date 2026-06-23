@@ -26,7 +26,7 @@
 - `slow_distance_m` 0.45 → 1.7m
 - 移開障礙後不自動 resume（mux 重發機制 待後續）
 
-📍 `docs/pawai-brain/plans/2026-05-11-nav-root-cause-burndown.md §4 B5`
+📍 `docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md §4 B5`
 
 ## Go2 sport mode MIN_X = 0.5 m/s
 

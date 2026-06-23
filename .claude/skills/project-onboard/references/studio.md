@@ -10,11 +10,11 @@ chat-first 設計（5/4 落地）：主畫面 ChatGPT 風純對話，6 個感知
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/studio/studio.md` | Studio 主總覽 + 雙路徑架構 + 5/11 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/studio/studio-runtime-flow.md` | WebSocket 端點 + ROS2 ↔ Gateway 完整訊息流 + 跨線程橋接模型 |
-| `docs/pawai-brain/architecture/0511/studio/studio-frontend-components.md` | Next.js panel 拆分 + Zustand stores + 事件分派規則 |
-| `docs/pawai-brain/architecture/0511/studio/studio-gateway-mock-bridge.md` | Gateway vs Mock 雙路徑對比 + PawAIEvent schema + 各模組 data schema |
-| `docs/pawai-brain/architecture/0511/studio/studio-debug-runbook.md` | 症狀 → 檔案定位（DISCONNECTED / ChatPanel 沒泡泡 / Trace 空白等）|
+| `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio.md` | Studio 主總覽 + 雙路徑架構 + 5/11 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio-runtime-flow.md` | WebSocket 端點 + ROS2 ↔ Gateway 完整訊息流 + 跨線程橋接模型 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio-frontend-components.md` | Next.js panel 拆分 + Zustand stores + 事件分派規則 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio-gateway-mock-bridge.md` | Gateway vs Mock 雙路徑對比 + PawAIEvent schema + 各模組 data schema |
+| `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio-debug-runbook.md` | 症狀 → 檔案定位（DISCONNECTED / ChatPanel 沒泡泡 / Trace 空白等）|
 
 ## 核心程式檔案
 

@@ -506,7 +506,7 @@ demo ready
 
 `pawai demo preflight --semantic --reason "<text>"`（reason 必填、允許短字串）。假設 demo stack 已啟動。預設順序執行 6 題；`--scripts 1,3,5` 指定子集。
 
-輸出 stdout + 寫入 `runtime/preflight/semantic-<timestamp>.md`（正式留檔操作者手動摘錄至 `docs/pawai-brain/dev-logs/`）。
+輸出 stdout + 寫入 `runtime/preflight/semantic-<timestamp>.md`（正式留檔操作者手動摘錄至 `docs/archive/pawai-brain-legacy/dev-logs/`）。
 
 ### 8.2 實作
 

@@ -111,7 +111,7 @@ ros2 run tf2_ros static_transform_publisher \
 **建議重構**（5/13 後 follow-up）：抽到 `scripts/lib/static_tf.sh` 或讀 env var，避免漂移。**5/13 前直接 5 處改完即可**。
 
 ### 1.4 — 驗收
-- [ ] 量值寫進 `docs/navigation/research/2026-05-XX-mount-measurement.md`
+- [ ] 量值寫進 `docs/archive/navigation-legacy/research/2026-05-XX-mount-measurement.md`
 - [ ] 水平儀照片附在文件
 - [ ] `ros2 run tf2_ros tf2_echo base_link laser` 顯示新值（含 yaw）
 - [ ] 5 個 scripts 都加 `--yaw` flag，git diff 一致
@@ -178,7 +178,7 @@ python3 scripts/scan_health_check.py --duration 5 --csv /tmp/scan.csv
 ### 2.5 — 驗收
 - [ ] scripts/scan_health_check.py 通過 PHANTOM 檢查
 - [ ] /scan_rplidar 10.4 Hz 穩定
-- [ ] 基線 CSV 存進 `docs/navigation/research/baseline-scans/`
+- [ ] 基線 CSV 存進 `docs/archive/navigation-legacy/research/baseline-scans/`
 
 ---
 
@@ -589,10 +589,10 @@ done
 |------|:----:|------|
 | 5 個 scripts（見 Phase 1.3）| 1 | static TF xyz yaw 同步更新（加 `--yaw` flag）|
 | `scripts/build_map.sh` L23 | 1 | echo 文字「z=0.10」更新成新 z 值（純註釋）|
-| `docs/navigation/research/2026-05-XX-mount-measurement.md`（新建）| 1 | 量值 + 水平儀照片 |
+| `docs/archive/navigation-legacy/research/2026-05-XX-mount-measurement.md`（新建）| 1 | 量值 + 水平儀照片 |
 | `scripts/start_scan_only_tmux.sh`（新建）| 2 | 3-window scan-only stack |
 | `scripts/scan_health_check.py`（新建）| 2 | 30 樣本 angular probe + PHANTOM fail gate（不要求 intensity）|
-| `docs/navigation/research/baseline-scans/`（新建目錄）| 2 | 健康基線 CSV |
+| `docs/archive/navigation-legacy/research/baseline-scans/`（新建目錄）| 2 | 健康基線 CSV |
 | `/home/jetson/maps/home_living_room_v2.{yaml,pgm,pbstream}`（新建）| 3 | 重建 map |
 | `go2_robot_sdk/config/nav2_params.yaml` | 4 | laser_min/max_range（必）；laser_model_type + do_beamskip（條件式）|
 | `~/elder_and_dog/runtime/nav_capability/named_poses/main.json` | 7 | 巡邏點（log_pose 寫入）|
@@ -643,8 +643,8 @@ ros2 topic echo /tts &
 - [Kodo-Robotics/go2-autonomous-patrol](https://github.com/Kodo-Robotics/go2-autonomous-patrol)
 - [Slamtec RPLIDAR A2M12 datasheet](https://bucket-download.slamtec.com/f65f8e37026796c56ddd512d33c7d4308d9edf94/LD310_SLAMTEC_rplidar_datasheet_A2M12_v1.0_en.pdf)
 - 既有 schema：`nav_capability/nav_capability/lib/route_validator.py` + `nav_capability/test/test_route_validator.py`
-- 既有 mount log：`docs/navigation/research/2026-04-25-rplidar-a2m12-integration-log.md` §75 / §212
-- 既有 phantom 調查：`docs/navigation/research/2026-04-27-rplidar-rightside-cluster-investigation.md`
-- 既有 nav2 動態避障 log：`docs/navigation/research/2026-04-26-nav2-dynamic-obstacle-log.md`
-- nav_capability S2 spec / plan：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` / `docs/navigation/plans/2026-04-26-nav-capability-s2.md`
-- P0 nav 避障 spec / plan：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md` / `docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`
+- 既有 mount log：`docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md` §75 / §212
+- 既有 phantom 調查：`docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`
+- 既有 nav2 動態避障 log：`docs/archive/navigation-legacy/research/2026-04-26-nav2-dynamic-obstacle-log.md`
+- nav_capability S2 spec / plan：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` / `docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md`
+- P0 nav 避障 spec / plan：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md` / `docs/archive/navigation-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md`

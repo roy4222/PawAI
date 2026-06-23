@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+ (stdlib + PyYAML), pytest. PyYAML 在 ROS2 Jetson 環境已有；WSL 上需確認 `python3 -c "import yaml"` 通過，否則 `uv pip install pyyaml`。
 
-**Spec:** `docs/superpowers/specs/2026-03-20-jetson-verify-skill-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-20-jetson-verify-skill-design.md`
 
 ---
 

@@ -985,7 +985,7 @@ demo flow 預期連跑 30 分鐘以上，可能撞 stale state（見第 5 章 F7
 | §11 demo 主腳本 | **整章重寫**：「一條閉環三段」→「多事件串連場景劇」（呂奇傑情境 3 風格 3 分鐘連拍 8 個 mini-event）；段 0 硬體 Before/After 30s 新增；fallback table 重寫為 mini-event 對應；ADR-0004 將於本節落地後寫入；原內容保留為 deprecated section |
 | §12 非目標 | 加「**PawAI 直接物理接觸長者**」（攙扶/碰觸/推拉/承重/安撫性肢體互動全擋，指向 ADR-0001）+ 居家陪伴狗 soften 同 §1 |
 | §13 spike 表 | 新增 **#1d F7 偵錯 spike**（W1 1d）+ **#4 5/27 影片必拍能力 spike**（W1 1-1.5d）+ **#5 6/18 live 連跑可行性 spike**（W3 中）；W3 改 Engagement 為 studio_ptt + pose state machine TTS silent；W4 改為**6/18 live demo 排練**（不錄影片，5/27 是唯一影片產出）|
-| 新增關聯文件 | `docs/adr/0001-pawai-2026-06-poc-non-contact-positioning.md` / `0002-pawai-platform-and-demo-scenario-two-layer-narrative.md` / `0003-2026-05-demo-studio-ptt-over-wake-word-vad.md` / `docs/pawai-demo/2026-05-review-synthesis.md` / （即將）`docs/pawai-demo/2026-05-23-doc-and-report-guidelines.md` / `docs/pawai-brain/plans/2026-05-23-three-week-execution-plan.md` |
+| 新增關聯文件 | `docs/adr/0001-pawai-2026-06-poc-non-contact-positioning.md` / `0002-pawai-platform-and-demo-scenario-two-layer-narrative.md` / `0003-2026-05-demo-studio-ptt-over-wake-word-vad.md` / `docs/pawai-demo/2026-05-review-synthesis.md` / （即將）`docs/pawai-demo/2026-05-23-doc-and-report-guidelines.md` / `docs/archive/pawai-brain-legacy/plans/2026-05-23-three-week-execution-plan.md` |
 | CONTEXT.md | 新增 5 條 glossary：非接觸式巡檢助理 / 雙層敘事 / Engagement Gate / 產品化接線 / 安全成熟度 |
 
 ## 附錄 B：累積決策依據（subagent 報告索引）
@@ -1019,7 +1019,7 @@ demo flow 預期連跑 30 分鐘以上，可能撞 stale state（見第 5 章 F7
 - v1 加 superseded header 但不刪
 - 後續每日進度更新到 `references/project-status.md`
 - L1 包裝層執行進度寫到 `docs/mission/sprint-b-prime.md`（沿用既有 sprint 文件）
-- W1 spike 結果寫到 `docs/superpowers/specs/2026-05-28-w1-spike-results.md`（新檔，spike 結束後寫）
+- W1 spike 結果寫到 `docs/archive/superpowers-legacy/specs/2026-05-28-w1-spike-results.md`（新檔，spike 結束後寫）
 - 後續 implementation plan 用 writing-plans skill 產出
 - **對外材料（簡報 / 影片 / 文件）格式 audit**：所有 6/13 繳交文件 + 5/27 影片旁白必須過 [`docs/pawai-demo/2026-05-23-doc-and-report-guidelines.md`](../../pawai-demo/2026-05-23-doc-and-report-guidelines.md) 禁用詞 / 必說句 / Before-After 句式 / 安全聲明 checklist
 - **架構決策**入 `docs/adr/`（已有 ADR-0001/0002/0003，ADR-0004 demo 場景劇待本 spec §11 落地後寫）

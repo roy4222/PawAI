@@ -9,11 +9,11 @@ Layer 3 能力模組，負責 Go2 在室內地圖上的自主導航（Nav2 + AMC
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/nav/nav-runtime-flow.md` | RPLIDAR → cartographer → Nav2 AMCL → DWB → mux → Go2 driver 完整 flow |
-| `docs/pawai-brain/architecture/0511/nav/nav-reactive-stop-and-mux.md` | reactive_stop_node + cmd_vel_mux 架構、safety_only 模式、danger/slow 閾值 |
-| `docs/pawai-brain/architecture/0511/nav/nav-capability-brain-integration.md` | nav_capability platform layer + Brain skill_policy_gate 整合 |
-| `docs/pawai-brain/architecture/0511/nav/nav-field-runbook.md` | 建圖/定位/demo 現場操作步驟 + 常見故障排查 |
-| `docs/pawai-brain/architecture/0511/nav/nav-known-issues-roadmap.md` | 已知問題清單 + 5/11 B5 burndown 修法 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-runtime-flow.md` | RPLIDAR → cartographer → Nav2 AMCL → DWB → mux → Go2 driver 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-reactive-stop-and-mux.md` | reactive_stop_node + cmd_vel_mux 架構、safety_only 模式、danger/slow 閾值 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-capability-brain-integration.md` | nav_capability platform layer + Brain skill_policy_gate 整合 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md` | 建圖/定位/demo 現場操作步驟 + 常見故障排查 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-known-issues-roadmap.md` | 已知問題清單 + 5/11 B5 burndown 修法 |
 
 ## 核心程式檔案
 

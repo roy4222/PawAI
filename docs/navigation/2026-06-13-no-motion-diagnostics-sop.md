@@ -1,7 +1,7 @@
 # No-Motion 導航診斷 SOP（D2–D5）
 
 > **日期**：2026-06-13　**狀態**：SOP（READ-ONLY 診斷集，**零 Go2 motion**）
-> **task**：plan6 NS-D2（[`docs/superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §7）
+> **task**：plan6 NS-D2（[`docs/archive/superpowers-legacy/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md`](../superpowers/plans/2026-06-13-plan6-navigation-safety-s1-fallback.md) §7）
 > **上游**：根因計畫 [`2026-06-13-nav-motion-incident-root-cause-plan.md`](2026-06-13-nav-motion-incident-root-cause-plan.md)、runbook [`2026-06-13-nav-incident-runbook.md`](2026-06-13-nav-incident-runbook.md)、措辭 [`2026-06-13-nav-618-claim-wording.md`](2026-06-13-nav-618-claim-wording.md)
 > **這份是什麼**：把 goto 撞牆事件的 no-motion 根因診斷（D2 AMCL yaw / D3 LiDAR 前向軸 / D4 reactive 側向幾何 / D5 靜態 smoke + covariance）寫成**可直接貼上終端**的唯讀指令集。**每一條都是讀取 / echo / param get，不發任何 cmd_vel / Move / goto / 任何 Go2 motion。**
 

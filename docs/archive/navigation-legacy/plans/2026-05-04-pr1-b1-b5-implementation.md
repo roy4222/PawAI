@@ -1,6 +1,6 @@
 # PR 1 (B1+B5) — nav_action_server 距離/速度正確性 Implementation Plan
 
-> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
 
 > ⚠️ **SUPERSEDED 2026-05-04** by [`2026-05-04-pr1a-measurement-first.md`](2026-05-04-pr1a-measurement-first.md)
 >
@@ -23,7 +23,7 @@
 
 **Tech Stack:** Python 3.10、rclpy(humble)、`rclpy.parameter` API、pytest、unittest.mock
 
-**Spec source:** [`docs/navigation/plans/2026-05-04-phase2-dev-order-spec.md`](2026-05-04-phase2-dev-order-spec.md) commit `f386adf`
+**Spec source:** [`docs/archive/navigation-legacy/plans/2026-05-04-phase2-dev-order-spec.md`](2026-05-04-phase2-dev-order-spec.md) commit `f386adf`
 
 ---
 
@@ -884,7 +884,7 @@ max_vel_x watched: enter ___ → goal-end ___ → restored ___
 
 ## Execution Handoff
 
-**Plan complete and saved to** `docs/navigation/plans/2026-05-04-pr1-b1-b5-implementation.md`。
+**Plan complete and saved to** `docs/archive/navigation-legacy/plans/2026-05-04-pr1-b1-b5-implementation.md`。
 
 兩個 execution 選項:
 

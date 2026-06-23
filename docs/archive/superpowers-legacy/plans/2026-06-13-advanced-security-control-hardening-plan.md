@@ -7,11 +7,11 @@
 > - 修法權威：[`docs/security/2026-06-11-pawai-hardening-plan.md`](../../security/2026-06-11-pawai-hardening-plan.md)（P0-1 / P0-2 / P1-1~4 / P2-1~4 / P3-x）
 > - Findings 真相源：[`docs/security/2026-06-11-pawai-security-findings-ledger.md`](../../security/2026-06-11-pawai-security-findings-ledger.md)（94 筆，7 critical）
 > - DDS 範本：[`docs/security/2026-06-13-cyclonedds-hardening-template.md`](../../security/2026-06-13-cyclonedds-hardening-template.md)
-> - 機制層 lane（**不重抄**，本份做其上的 enforcement flip 決策層）：[`docs/superpowers/plans/2026-06-13-lane5-robot-control-security-hardening-plan.md`](2026-06-13-lane5-robot-control-security-hardening-plan.md)
-> - 系統 Phase 4（post-6/18 全段）：[`docs/superpowers/plans/2026-06-11-phase4-robot-control-nav-hardening.md`](2026-06-11-phase4-robot-control-nav-hardening.md)
+> - 機制層 lane（**不重抄**，本份做其上的 enforcement flip 決策層）：[`docs/archive/superpowers-legacy/plans/2026-06-13-lane5-robot-control-security-hardening-plan.md`](2026-06-13-lane5-robot-control-security-hardening-plan.md)
+> - 系統 Phase 4（post-6/18 全段）：[`docs/archive/superpowers-legacy/plans/2026-06-11-phase4-robot-control-nav-hardening.md`](2026-06-11-phase4-robot-control-nav-hardening.md)
 > - 驗收基線：[`docs/runbook/2026-06-13-post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md) §6（default-off byte-identical、auth-on 401/403 機制已驗）
 > - Nav capability ladder（C1-C12，本份 nav 相關全對齊）：[`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
-> - master 決策登記簿 B-4 / B-5 / B-6：[`docs/superpowers/plans/2026-06-13-aggressive-pre618-master-plan.md`](2026-06-13-aggressive-pre618-master-plan.md)
+> - master 決策登記簿 B-4 / B-5 / B-6：[`docs/archive/superpowers-legacy/plans/2026-06-13-aggressive-pre618-master-plan.md`](2026-06-13-aggressive-pre618-master-plan.md)
 
 ---
 

@@ -701,6 +701,6 @@ Provider locks (WhisperLocalProvider._lock, SenseVoiceLocalProvider._lock)
 | 啟動腳本 | `scripts/start_full_demo_tmux.sh` / `start_llm_e2e_tmux.sh` |
 | 30 輪測試框架 | `test_scripts/speech_30round.yaml` + `speech_test_observer.py` |
 | 模組文件 | `docs/pawai-brain/speech/README.md` + `CLAUDE.md` + `AGENT.md` |
-| 5/12 freeze 紀錄 | `docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |
+| 5/12 freeze 紀錄 | `docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |
 | Benchmark 決策 | `docs/pawai-brain/speech/research/2026-03-21-stt-benchmark.md` + `2026-03-21-tts-benchmark.md` |
 | Contract schema | `docs/contracts/interaction_contract.md` §4.1 |

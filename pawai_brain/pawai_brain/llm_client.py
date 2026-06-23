@@ -50,7 +50,7 @@ class OpenRouterConfig:
     base_url: str = "https://openrouter.ai/api/v1/chat/completions"
     # Slot names are legacy from when primary/fallback was literally
     # Gemini→DeepSeek. Per 5/12 A/B eval
-    # (docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md):
+    # (docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md):
     #   primary  (gemini_model slot)   → openai/gpt-5.4-mini    P50 1.16s, $0.018/12-call
     #   fallback (deepseek_model slot) → google/gemini-3-flash-preview  baseline backup
     # ROS params keep legacy names; override via launch arg or env one-liner.

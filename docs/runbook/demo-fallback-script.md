@@ -4,9 +4,9 @@
 > **撰寫日期**：2026-05-12
 > **適用 demo**：5/16 dry-run / 5/18 final
 > **配套文件**：
-> - [`docs/pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md`](../pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md) §5 砍/留紅線
-> - [`docs/pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md`](../pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md) 三模式啟動
-> - [`docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md`](../pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md) LLM 主線決策
+> - [`docs/archive/pawai-brain-legacy/plans/2026-05-10-demo-readiness-master-plan.md`](../pawai-brain/plans/2026-05-10-demo-readiness-master-plan.md) §5 砍/留紅線
+> - [`docs/archive/pawai-brain-legacy/plans/2026-05-12-runtime-fallback-readiness.md`](../pawai-brain/plans/2026-05-12-runtime-fallback-readiness.md) 三模式啟動
+> - [`docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md`](../pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md) LLM 主線決策
 > - [`2026-05-12-offline-fallback-verification.md`](2026-05-12-offline-fallback-verification.md) 5/12 night LLM + TTS fallback 實機驗證紀錄
 
 ---

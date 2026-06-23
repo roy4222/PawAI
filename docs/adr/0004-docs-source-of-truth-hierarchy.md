@@ -24,7 +24,7 @@
 |---|---|---|
 | 0 | 程式碼 / runtime topic schema | 永遠是最終真相 |
 | 1 | 實測證據（empirical） | `docs/runbook/baseline-evidence/` 的當前 trusted snapshot — 能力 pass/fail 的最終事實 |
-| 2 | 收斂審計（read-only audit） | `docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` — 經指定升格為 #2，但不覆寫 baseline 數據 |
+| 2 | 收斂審計（read-only audit） | `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` — 經指定升格為 #2，但不覆寫 baseline 數據 |
 | 3 | 能力規格（how to measure） | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` — 怎麼量、怎樣算 pass |
 | 4 | 戰略邊界（what to claim） | `docs/mission/2026-06-18-demo-north-star.md` v2 — 能不能講、屬哪層 |
 | 5 | 介面契約 | `docs/contracts/interaction_contract.md`（ROS2 topic/action/service/message schema） |

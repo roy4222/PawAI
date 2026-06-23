@@ -123,9 +123,9 @@ nav-baseline    : sllidar_node + go2_driver_node + twist_mux + reactive_stop_nod
 
 | 文件 | 路徑 | 放什麼 |
 |---|---|---|
-| **Master Plan（本檔）** | `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md` | goal / scope / 6 deliverable / Layer-0 Preflight / 15 能力 canonical 表 / 三軸定義 / dependency map / fail-closed 設計 / Known Findings / issue 入口 |
+| **Master Plan（本檔）** | `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md` | goal / scope / 6 deliverable / Layer-0 Preflight / 15 能力 canonical 表 / 三軸定義 / dependency map / fail-closed 設計 / Known Findings / issue 入口 |
 | **Capability Baseline Spec** | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` | 15 能力逐功能 9+1 問（門檻數字的**唯一真相源**）|
-| **Scoreboard Implementation Plan** | `docs/pawai-brain/plans/2026-06-01-scoreboard-implementation-plan.md` | 6 deliverable 的 TDD skeleton（test→impl→commit）|
+| **Scoreboard Implementation Plan** | `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md` | 6 deliverable 的 TDD skeleton（test→impl→commit）|
 | **Baseline Runbook** | `docs/runbook/2026-06-18-baseline-runbook.md` | 上機跑 baseline / JSONL / snapshot freeze / demo 當天用 |
 
 > **drift 防線**：門檻數字只在 Spec、code 結構只在 Implementation、上機步驟只在 Runbook。本檔不重複這三者，只放架構決策與 index。
@@ -242,6 +242,6 @@ demo-day health 來源 = **baseline snapshot（凍結）**，不在 demo 中即�
 
 ## Execution Handoff
 
-Plan 完成，存於 `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`。執行方式**工具中立**：用 TDD；可選擇 **(a)** 每個 task 派 fresh subagent/worker、task 間 review，或 **(b)** 本 session 批次執行 + checkpoint review。
+Plan 完成，存於 `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`。執行方式**工具中立**：用 TDD；可選擇 **(a)** 每個 task 派 fresh subagent/worker、task 間 review，或 **(b)** 本 session 批次執行 + checkpoint review。
 
 （6 個 deliverable：核心 4（schema/grader/scoreboard 聚合器 + gesture-object observer）+ Task 3b `build_scoreboard` CLI + Task 4b `face_baseline_observer`。聚合件純 Python、dev 機可跑、無 ROS 依賴；observer 純邏輯 TDD、ROS node wrapper Jetson 跑。`demo.yaml` preflight profile 是 YAML。設計段 A–E + Known Findings 是文件/runbook。**建議實作序**：Task 1 → 2 → 3（含 F1/F2/F5）→ 3b → 4（gesture/object）→ 4b（face）→ demo.yaml。）

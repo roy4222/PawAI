@@ -132,7 +132,7 @@ PawAI live status @ jetson-nano (queried 2 sec ago)
 Module: gesture — 手勢辨識
 ──────────────────────────
 Architecture:
-  docs/pawai-brain/architecture/0511/gesture.md
+  docs/archive/pawai-brain-legacy/architecture-0511/gesture.md
 
 Packages:
   vision_perception  (與 pose / object 共用 vision_perception_node)
@@ -444,8 +444,8 @@ pawai demo stop            # 結束（看 status 沒人接力的話）
 
 | 主題 | 檔案 |
 |------|------|
-| Mac 遷移 housekeeping spec（前置） | `docs/superpowers/specs/2026-05-12-mac-migration-prep-design.md` |
-| 六大模組架構（dev info 引用對象） | `docs/pawai-brain/architecture/0511/{brain,face,gesture,pose,object,speech}.md` |
+| Mac 遷移 housekeeping spec（前置） | `docs/archive/superpowers-legacy/specs/2026-05-12-mac-migration-prep-design.md` |
+| 六大模組架構（dev info 引用對象） | `docs/archive/pawai-brain-legacy/architecture-0511/{brain,face,gesture,pose,object,speech}.md` |
 | 既有 demo launcher（demo start 包它）| `.claude/skills/brain-studio-lane/scripts/start.sh` |
 | 既有 cleanup（demo stop 包它）| `.claude/skills/brain-studio-lane/scripts/cleanup.sh` |
 | 既有 transport（status SSH 邏輯參考）| `.claude/skills/jetson-verify/scripts/transport.py` |

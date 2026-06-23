@@ -271,7 +271,7 @@ L1+L2 = 進展（明天還可以調）；L1+L2+L3 = 真 demo 可宣稱自動繞�
 今晚收工要拿到至少：
 - L1 + L2 通過（D435 進 local_costmap 融合可運作）
 - 4 個檔案 + spec doc 全 commit
-- 結果 append 到 `docs/navigation/plans/2026-05-03-stage1-and-recovery.md`
+- 結果 append 到 `docs/archive/navigation-legacy/plans/2026-05-03-stage1-and-recovery.md`
 - 更新 `references/project-status.md`
 
 L3 拿到是 bonus，沒拿到也算今晚完成（B2 兜底 + 明天再試）。

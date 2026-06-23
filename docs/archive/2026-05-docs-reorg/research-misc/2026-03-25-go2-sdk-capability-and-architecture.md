@@ -899,7 +899,7 @@ speech_processor/
 | 人臉模組 | `docs/人臉辨識/README.md` |
 | 手勢模組 | `docs/手勢辨識/README.md` |
 | 姿勢模組 | `docs/姿勢辨識/README.md` |
-| Benchmark 框架 | `docs/superpowers/specs/2026-03-19-unified-benchmark-framework-design.md` |
+| Benchmark 框架 | `docs/archive/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md` |
 
 ### 7.3 外部參考
 

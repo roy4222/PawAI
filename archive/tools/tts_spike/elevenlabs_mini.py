@@ -8,7 +8,7 @@ Usage:
 Output:
     tools/tts_spike/output/<voice_id>_<idx>.mp3 — 5 sentences × N voices
     tools/tts_spike/output/_results.json        — latency + metadata
-    docs/pawai-brain/dev-logs/2026-05-XX-elevenlabs-spike-mini.md  (Roy fills in scores)
+    docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-elevenlabs-spike-mini.md  (Roy fills in scores)
 
 GO/NO-GO criteria (Roy listens + scores 1-5):
     1. ≥ 1 voice 音色 ≥ 4/5
@@ -21,7 +21,7 @@ If GO → spike-real (Megaphone integration) on `spike/elevenlabs-tts-real`.
 If NO-GO → fall back to Gemini native spike (`spike/gemini-native-tts`).
 
 Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-2a
-Plan: docs/pawai-brain/plans/2026-05-11-elevenlabs-spike-and-dual-route.md Phase E-1
+Plan: docs/archive/pawai-brain-legacy/plans/2026-05-11-elevenlabs-spike-and-dual-route.md Phase E-1
 """
 from __future__ import annotations
 import json
@@ -178,7 +178,7 @@ def main() -> int:
     print(f"  1. Listen to all .mp3 in {OUTPUT_DIR}")
     print(f"  2. Score each voice (1-5) on: 雪寶感 / 中文自然度")
     print(f"  3. Check ElevenLabs dashboard for actual quota usage")
-    print(f"  4. Fill scores in docs/pawai-brain/dev-logs/2026-05-XX-elevenlabs-spike-mini.md")
+    print(f"  4. Fill scores in docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-elevenlabs-spike-mini.md")
     print(f"  5. If ≥ 1 voice scored ≥ 4/5 + latency targets met → GO; else NO-GO (try Gemini native)")
     return 0
 

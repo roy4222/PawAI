@@ -1136,14 +1136,14 @@ python3 run_eval.py --cases cases_5_9_review.yaml --configs all --rounds 30
 
 - [ ] **Step 9.4: 寫結果到 dev-log**
 
-`docs/pawai-brain/dev-logs/2026-05-12-persona-ab-eval.md`
+`docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-persona-ab-eval.md`
 
 - [ ] **Step 9.5: Commit eval results**
 
 ```bash
 git add tools/llm_eval/cases_5_9_review.yaml \
         tools/llm_eval/run_eval.py \
-        docs/pawai-brain/dev-logs/2026-05-12-persona-ab-eval.md
+        docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-persona-ab-eval.md
 git commit -m "test(brain): 1I 4-config A/B eval results (validation only)
 
 Gemini-3 temp 0.2 (baseline) vs 0.6 (demo main) vs 0.9 (explore) vs DeepSeek-V4 0.6.

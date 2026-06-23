@@ -10,7 +10,7 @@
 
 **Tech Stack:** Python 3.10+, Click, `python-dotenv`, `pytest`, SSH (no new deps). Lock atomicity via remote `flock` over SSH. Tests use env-override + fake JSON fixtures (no real network mutation, no real `.env.local` mutation).
 
-**Spec:** `docs/superpowers/specs/2026-05-12-pawai-cli-team-prep-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-05-12-pawai-cli-team-prep-design.md`
 
 **Out of scope (do NOT add):** `pawai reset`, `--fast` flag (use `--cache` instead), distributed consensus, ROS2 DDS tunneling, mobile Studio UI.
 
@@ -2165,8 +2165,8 @@ def arch_doc_path(name: str, root: Path) -> Path | None:
 
     # Module: try architecture/0511/<name>/<name>.md, then architecture/0511/<name>.md
     candidates = [
-        root / f"docs/pawai-brain/architecture/0511/{name}/{name}.md",
-        root / f"docs/pawai-brain/architecture/0511/{name}.md",
+        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}/{name}.md",
+        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}.md",
     ]
     for c in candidates:
         if c.exists():
@@ -2320,7 +2320,7 @@ Add detail sections:
 ### docs
 
 ```bash
-pawai docs brain          # → docs/pawai-brain/architecture/0511/brain/brain.md
+pawai docs brain          # → docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md
 pawai docs face           # → architecture/0511/face.md
 pawai docs gesture        # → architecture/0511/gesture/gesture.md
 pawai docs onboarding     # → docs/pawai_cli/team-onboarding.md

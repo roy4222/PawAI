@@ -3615,7 +3615,7 @@ done
 
 - [ ] **Step 4: 紀錄 + 影片**
 
-寫進 `docs/navigation/research/2026-MM-DD-nav-capability-validation.md`。
+寫進 `docs/archive/navigation-legacy/research/2026-MM-DD-nav-capability-validation.md`。
 
 ---
 

@@ -6,7 +6,7 @@
 > **性質**：6 個 deliverable 的 TDD skeleton（test→impl→commit）。這份是「**怎麼寫 code**」的唯一真相源。
 > **不放**：架構決策（見 Master Plan）、逐功能門檻（見 Capability Baseline Spec）、上機步驟（見 Runbook）。
 > **關係**：
-> - 架構決策 / 三軸定義 / 15 能力 index → `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（Master Plan）
+> - 架構決策 / 三軸定義 / 15 能力 index → `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（Master Plan）
 > - 逐功能門檻（門檻數字的真相源）→ `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
 > - 上機跑 → `docs/runbook/2026-06-18-baseline-runbook.md`
 

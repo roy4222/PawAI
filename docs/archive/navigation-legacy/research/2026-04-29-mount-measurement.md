@@ -46,7 +46,7 @@ v7 map 是用錯誤 TF (yaw=0) 建的，雖然內部一致但 map +X 軸對應 G
 | 模式 | Cartographer pure scan-matching（同 v2/v7 設定） |
 | 走法 | ≤ 0.05 m/s，跟 v7 同起點同朝向、客廳核心 4×4m 慢繞 30-60s |
 | 供電 | XL4015（KREE 未到貨）— **連續第二次未跳電**（v7 + v8 兩次建圖 + K1 動態都穩定）|
-| 倉內備份 | `docs/navigation/research/maps/home_living_room_v8.{pgm,yaml,png}` |
+| 倉內備份 | `docs/archive/navigation-legacy/research/maps/home_living_room_v8.{pgm,yaml,png}` |
 
 ### v8 vs v7 視覺差異
 
@@ -217,7 +217,7 @@ CSV：
 | 起點 origin | `[-2.02, -8.42, 0]` |
 | 模式 | Cartographer pure scan-matching（`use_odometry=false`，無外部 odom）|
 | 走法 | ≤ 0.05 m/s，小範圍核心活動區域（避跳電）|
-| 倉內備份 | `docs/navigation/research/maps/home_living_room_v2.{pgm,yaml,png}` |
+| 倉內備份 | `docs/archive/navigation-legacy/research/maps/home_living_room_v2.{pgm,yaml,png}` |
 
 ### Map QA 限制（**重要 — 載入此 map 的人必讀**）
 
@@ -245,7 +245,7 @@ LiDAR mount 從背部移到脖子前方（v7）後，所有舊 map 都因為 yaw
 | 模式 | Cartographer pure scan-matching（與 v2 相同設定） |
 | 走法 | ≤ 0.05 m/s，客廳核心 4×4m 慢繞一圈、loop closure 回起點，30-60s |
 | 供電 | XL4015（KREE 未到貨）— **未跳電**（建圖過程 Jetson 47°C 全程穩定）|
-| 倉內備份 | `docs/navigation/research/maps/home_living_room_v7.{pgm,yaml,png}` |
+| 倉內備份 | `docs/archive/navigation-legacy/research/maps/home_living_room_v7.{pgm,yaml,png}` |
 
 ### Map QA（v7）
 

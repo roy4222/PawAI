@@ -113,7 +113,7 @@ jobs:
           # mini_e2e / nav_executor) + 3 files needing ROS modules anyway
           # (idle_mvp: rclpy via brain_node; safety_layer: rclpy via
           # world_state; world_state: std_msgs direct + rclpy via
-          # world_state module). See docs/superpowers/plans/
+          # world_state module). See docs/archive/superpowers-legacy/plans/
           # 2026-06-10-plan-a-ci-guardrails.md. Isolated PYTHONPATH avoids the
           # top-level 'test' package collision. pawai_contracts prefix: the
           # skill_contract compat shim imports from it (Plan C2).

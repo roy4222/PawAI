@@ -185,7 +185,7 @@ capability ladder 分級：`wired_only` / `hardware_proven` / `demo_ready` / `re
 | [`docs/pawai-demo/2026-06-10-demo-snapshot.md`](../../pawai-demo/2026-06-10-demo-snapshot.md) | demo 回滾點 + forbidden claims 真相源 |
 | [`references/project-status.md`](../../../references/project-status.md) | 每日系統狀態（6/10-6/11 段 = 系統 Phase 1 經過） |
 | [`2026-06-11-plan-ism-interaction-state-machine.md`](2026-06-11-plan-ism-interaction-state-machine.md) | ISM Phase 0-3 施工圖（系統 Phase 2 的核心子計畫） |
-| [`docs/superpowers/specs/2026-06-10-pawai-architecture-audit.md`](../specs/2026-06-10-pawai-architecture-audit.md) | 99 findings audit 主報告 |
+| [`docs/archive/superpowers-legacy/specs/2026-06-10-pawai-architecture-audit.md`](../specs/2026-06-10-pawai-architecture-audit.md) | 99 findings audit 主報告 |
 | [`docs/security/2026-06-11-pawai-hardening-plan.md`](../../security/2026-06-11-pawai-hardening-plan.md) | hardening P0-P3 標籤定義 + 系統 Phase 4 控制面項來源 |
 | 四份 phase plan（本文件 §Scope 連結） | 系統 Phase 2-5 可執行細節 |
 

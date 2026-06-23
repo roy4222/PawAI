@@ -8,7 +8,7 @@
 
 **Tech Stack:** ROS2 Humble / Python 3.10 / faster-whisper (CUDA) / Piper TTS / vLLM (Qwen3.5-9B) / Unitree Go2 WebRTC DataChannel
 
-**Spec:** `docs/superpowers/specs/2026-03-17-e2e-stabilization-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-17-e2e-stabilization-design.md`
 
 ---
 

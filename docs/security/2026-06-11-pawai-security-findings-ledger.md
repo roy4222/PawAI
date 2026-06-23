@@ -1556,7 +1556,7 @@ Severity 維持 low（原評正確）：這本質是 defense-in-depth / 隱私 h
 維持 low（不升不降）的理由：
 1) 該 IP 屬 Tailscale CGNAT 100.64.0.0/10（RFC 6598，已用 ipaddress 驗證為 True），internet 不可路由——無 tailnet 授權者拿到 IP 毫無用處。Tailscale IP 本身不是 secret、不是憑證、不給任何存取權，屬純 info-hygiene / defense-in-depth。
 2) exploit 不現實：需同時滿足「已取得 tailnet 連線」+「SEC-02 gateway 無認證」兩前提；即便如此，IP 只省去一次瑣碎掃描，並非攻擊的 enabler。故 exploit_realistic=false。
-3) 這不是唯一也非首次曝光——同一 IP 散落在 27 個 tracked 檔（.claude/skills、docs/pawai_cli、docs/superpowers/plans、specs 等，含 SSH HostName、curl health check）。專案自己的 spec（docs/superpowers/specs/2026-05-12-pawai-cli-team-prep-design.md:31）早已把「.env.local.example hardcodes home Tailscale IP」列為已知 issue，plan 也有未勾的修復 checkbox。只改 example 檔不改變 repo 風險輪廓。
+3) 這不是唯一也非首次曝光——同一 IP 散落在 27 個 tracked 檔（.claude/skills、docs/pawai_cli、docs/archive/superpowers-legacy/plans、specs 等，含 SSH HostName、curl health check）。專案自己的 spec（docs/archive/superpowers-legacy/specs/2026-05-12-pawai-cli-team-prep-design.md:31）早已把「.env.local.example hardcodes home Tailscale IP」列為已知 issue，plan 也有未勾的修復 checkbox。只改 example 檔不改變 repo 風險輪廓。
 
 無人臉/音訊/PII 落盤外洩，無真實 secret，不構成 medium 條件。fix 建議（改 placeholder 如 <jetson-tailscale-ip>）正確，但若要真正修，應一併處理其餘 26 個檔的同 IP 曝光。
 
@@ -2201,7 +2201,7 @@ exploit_realistic=false：exploit 的「Go2 反覆站起」終點需要 gate 被
 - **防禦性修法**：(1) 把腳本 line 38-49 既有 case 視為正確配置，不要照 CLAUDE.md 字面加 safety_only。(2) 修文件債：更新 CLAUDE.md『reactive_stop danger threshold』段與 reactive_stop_node.py module docstring，把『safety_only=true 必須用於 mux 模式』改寫為『mux 模式請用 mode:=progressive（clear/slow 靜默讓 nav 接管，danger 發 0）；safety_only=true 是 backwards-compat alias、會 promote 成 hold_brake 永久煞車，僅供 B5 純停車驗證(start_reactive_stop_safety_hold_tmux.sh)』。(3) 在腳本 REACTIVE_PARAMS 旁加一行 inline 註解明確『勿加 safety_only:=true，會變 hold_brake 鎖死 nav』，把 source-of-truth 落在腳本旁減少 drift。
 - **🔬 驗證**：逐行查證全部成立，evidence_valid=true。腳本 start_nav_capability_demo_tmux.sh:38-49 確認兩個 REACTIVE_PROFILE（open_space line 40 / indoor_tight line 43）都用 `-p mode:=progressive`，均不帶 `safety_only:=true`；finding 引用的 decide_velocity 註解也與 lidar_geometry.py:109-112 完全一致（`progressive` mode：danger/emergency 回 0.0、slow/clear 回 None「nav 接管」）。reactive_stop_node.py:93 預設 cmd_vel_topic=/cmd_vel_obstacle（mux priority 200）、:127-138 確認 explicit mode wins、safety_only=True promote 成 hold_brake、:182-184 + lidar_geometry:107-108 確認 hold_brake 永遠回 0.0 鎖死 mux 200。
 
-核心判定：finding 正確地把原始 gap 反轉——腳本帶 mode:=progressive 是「正確配置」而非 bug，progressive 在 clear/slow zone 回 None 不 publish，不會永久 shadow nav。真正問題是文件債：CLAUDE.md:124 字面寫「safety_only=true 必須用於 mux 模式」且宣稱「start_nav_capability_demo_tmux.sh 已內建 -p safety_only:=true」——但實際腳本根本沒有這行（已 grep 確認腳本內無 `safety_only`），CLAUDE.md 與程式碼確實矛盾、過時。docs/navigation/research/2026-05-11-nav-avoidance-deep-research.md:132 也有同樣過時描述。
+核心判定：finding 正確地把原始 gap 反轉——腳本帶 mode:=progressive 是「正確配置」而非 bug，progressive 在 clear/slow zone 回 None 不 publish，不會永久 shadow nav。真正問題是文件債：CLAUDE.md:124 字面寫「safety_only=true 必須用於 mux 模式」且宣稱「start_nav_capability_demo_tmux.sh 已內建 -p safety_only:=true」——但實際腳本根本沒有這行（已 grep 確認腳本內無 `safety_only`），CLAUDE.md 與程式碼確實矛盾、過時。docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md:132 也有同樣過時描述。
 
 反證查核：(1) 程式有防護——valid_modes 白名單 + 無效 mode fallback 'hold_brake'，但 safety_only=True 仍會合法 promote 成 hold_brake，無法阻止維護者照 CLAUDE.md 誤加。(2) 該節點 demo 時確實會跑（line 98-113 window 5）。(3) 非 example/test 檔，是真實部署腳本。
 

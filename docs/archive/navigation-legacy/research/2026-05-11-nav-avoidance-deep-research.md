@@ -5,7 +5,7 @@
 > **Owner**: Roy
 > **Authority**: 本檔是研究與 todo 真相來源，**修法執行細節**見
 > [`../2026-05-11-architecture-deep-audit-and-fix-roadmap.md`](../2026-05-11-architecture-deep-audit-and-fix-roadmap.md)。
-> **取代**：`docs/pawai-brain/plans/2026-05-12-reactive-stop-safety-fix-plan.md`（68fe29b 創、被刪；Top 4 fix 多數被 4-mode 設計超越）。
+> **取代**：`docs/archive/pawai-brain-legacy/plans/2026-05-12-reactive-stop-safety-fix-plan.md`（68fe29b 創、被刪；Top 4 fix 多數被 4-mode 設計超越）。
 
 ---
 

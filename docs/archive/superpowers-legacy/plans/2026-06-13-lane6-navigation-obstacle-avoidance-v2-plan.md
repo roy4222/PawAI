@@ -79,7 +79,7 @@
 | **T6-5 goal rejection reason + covariance SOP** | ① server 側 reject 帶結構化 reason（`nav_not_ready:covariance=0.45` / `another_goto_active:<id>` / `paused` / `yellow_band_limit:0.5m`），單測各路徑；② 新 `nav_covariance_probe.py`：initialpose 後 covariance 收斂曲線（靜置 vs 0.3m warmup 兩模式）；③ 產出黃帶決策表（該等 / 該推 0.3m / 該重設 pose） | Codex 純軟體 + HITL 驗 | P0（軟體） |
 | **T6-6 orphan client 根治** | goto client `rclpy.init(signal_handler_options=NO)` + 自管 SIGINT → cancel → 單次 shutdown；修 `send_relative_goal.py` double-shutdown；驗證：goto 進行中 Ctrl-C → server log 有 cancel、立即可接下一筆 | Codex 純軟體 + HITL 驗 | P1 |
 | **T6-7 stop-resume operator-confirm 固化** | ① param 防呆：`resume_policy`（`operator_confirm` 預設 / `auto` 僅大場地）——tight profile 下 `auto` 被拒絕（單測）；② HITL 驗 gateway paused_confirm 流程一輪（danger 停 → 操作員按繼續 → 續走）；③ A-9 終局決策材料整理（lunge 數據 + 兩案利弊一頁） | Codex 小改 + **Roy HITL** | P1 |
-| **T6-8 三條研究 spec（不寫 code）** | ① **D435+LiDAR fusion**：必須先解 5/3 兩根因（max_speed enforce + AMCL plateau），路線比較（costmap obstacle layer vs depth→`/scan_d435` light 版），safety gate 定義、HITL 升級條件；② **patrol v1**：T6-3 單圈之上的多圈/排程/暫停恢復，需大場地的部分明標；③ **approach person**：4 層開發（~4-5 天）拆解、與 face/depth 的接口、禁 claim 條款 | Fable 文件（各一份，落 `docs/navigation/research/`） | P1（純軟體） |
+| **T6-8 三條研究 spec（不寫 code）** | ① **D435+LiDAR fusion**：必須先解 5/3 兩根因（max_speed enforce + AMCL plateau），路線比較（costmap obstacle layer vs depth→`/scan_d435` light 版），safety gate 定義、HITL 升級條件；② **patrol v1**：T6-3 單圈之上的多圈/排程/暫停恢復，需大場地的部分明標；③ **approach person**：4 層開發（~4-5 天）拆解、與 face/depth 的接口、禁 claim 條款 | Fable 文件（各一份，落 `docs/archive/navigation-legacy/research/`） | P1（純軟體） |
 | **T6-9 REACTIVE_PROFILE 驗收矩陣文件** | 兩 profile（open_space / indoor_tight）每格：`front_arc_deg` / `danger_distance_m` / 速度上限 / 適用場地 / HITL 證據；硬規則成文（窄錐必綁低速 ≤0.2、param 只在 `__init__` 讀改 profile 必 kill 重啟、`lidar_front_sector.py` 為現場標準工具）；（B-9 時段順帶各重跑一輪 danger 停/clear 放行） | Fable 文件 + HITL 順帶 | P1 |
 | **T6-10 6/18 claim wording** | nav 段台詞鎖定（§13 草稿）+ fallback 三層（live 短距 → 遙控輔助+Studio 證據 → 純影片）+ 與簡報對齊的一頁 | Fable 文件 + Roy 過目 | P0（純軟體） |
 
@@ -172,7 +172,7 @@ T6-1 + T6-10（文件先行，6/13-14）→ T6-5①② + T6-6 + T6-7① + T6-2�
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 6 Task <T6-x>（見 docs/superpowers/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md §6）。
+任務：執行 Lane 6 Task <T6-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md §6）。
 紀律：
 - TDD 紅綠；nav_capability 既有測試零修改。
 - T6-5 是 message-only：不改 goal accept/reject 判定、不動 covariance 門檻值。

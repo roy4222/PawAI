@@ -1,6 +1,6 @@
 # PawAI Phase A: Navigation Attack Implementation Plan
 
-> 🕰️ **HISTORICAL — 5/1–5/12 sprint plan（保留作引用，不重複維護）。** 內含「動態避障 / detour / 自走」目標屬 5/12 sprint，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不要把本 plan 當「現在能跑什麼」。
+> 🕰️ **HISTORICAL — 5/1–5/12 sprint plan（保留作引用，不重複維護）。** 內含「動態避障 / detour / 自走」目標屬 5/12 sprint，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走**。當前 nav 能力以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不要把本 plan 當「現在能跑什麼」。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -558,7 +558,7 @@ git commit -m "fix(nav): BUG #4 — skip too-close-and-same-yaw waypoints to pre
 
 ```bash
 ls scripts/start_nav_capability_demo_tmux.sh scripts/start_reactive_stop_tmux.sh 2>&1
-cat docs/navigation/research/2026-04-30* 2>/dev/null | head -30 || ls docs/navigation/research/ | tail -10
+cat docs/archive/navigation-legacy/research/2026-04-30* 2>/dev/null | head -30 || ls docs/archive/navigation-legacy/research/ | tail -10
 ```
 參考最近的 K1 PASS 紀錄(commit `42cc478` `docs(nav): K1 baseline 5/5 PASS`)
 
@@ -1755,7 +1755,7 @@ for i in 1 2 3 4 5; do
     sleep 8
 done
 ```
-記錄結果到 `docs/navigation/research/2026-05-02-nav-demo-point-validation.md`
+記錄結果到 `docs/archive/navigation-legacy/research/2026-05-02-nav-demo-point-validation.md`
 
 Expected:**5/5 PASS** — Go2 走完 1m 並 SAY 「我成功走到了!」
 
@@ -1770,7 +1770,7 @@ Expected:**5/5 PASS** — Go2 走完 1m 並 SAY 「我成功走到了!」
 - [ ] **Step 4: Commit 驗證紀錄**
 
 ```bash
-git add docs/navigation/research/2026-05-02-nav-demo-point-validation.md
+git add docs/archive/navigation-legacy/research/2026-05-02-nav-demo-point-validation.md
 git commit -m "docs(nav): nav_demo_point 5/5 PASS validation log"
 ```
 
@@ -1808,7 +1808,7 @@ Expected:Go2 走過來停在 ~1m 處,SAY「我來啦!」
 - [ ] **Step 4: 紀錄到 daily log + Commit**
 
 ```bash
-git add docs/navigation/research/2026-05-03-approach-person-validation.md
+git add docs/archive/navigation-legacy/research/2026-05-03-approach-person-validation.md
 git commit -m "docs(nav): approach_person 1 PASS validation log"
 ```
 
@@ -1817,7 +1817,7 @@ git commit -m "docs(nav): approach_person 1 PASS validation log"
 ## Task 15: 30 分鐘供電連續測試
 
 **Files:**
-- Create: `docs/navigation/research/2026-05-03-power-30min-test.md`
+- Create: `docs/archive/navigation-legacy/research/2026-05-03-power-30min-test.md`
 
 - [ ] **Step 1: 全 stack 同時跑**
 
@@ -1848,7 +1848,7 @@ done
 
 - [ ] **Step 3: 紀錄結果**
 
-寫 `docs/navigation/research/2026-05-03-power-30min-test.md`,包含:
+寫 `docs/archive/navigation-legacy/research/2026-05-03-power-30min-test.md`,包含:
 - 是否斷電?(若有,在第幾分鐘?)
 - Jetson 電壓最低值
 - Jetson 溫度最高值
@@ -1859,7 +1859,7 @@ Expected:0 次斷電(若有 → Phase A 不能結束,要等 KREE DL241910 到貨
 - [ ] **Step 4: Commit**
 
 ```bash
-git add docs/navigation/research/2026-05-03-power-30min-test.md
+git add docs/archive/navigation-legacy/research/2026-05-03-power-30min-test.md
 git commit -m "docs(power): 30-min continuous power test result"
 ```
 

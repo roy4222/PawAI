@@ -59,7 +59,7 @@ PawAI 對外敘事採**雙層**結構，明確區分「平台能力」與「短�
 
 ## Related
 
-- v2 spec：`docs/superpowers/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`（§1 主 statement + footnote）
+- v2 spec：`docs/archive/superpowers-legacy/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`（§1 主 statement + footnote）
 - 安全紅線：ADR-0001（非接觸式定位限定 demo 場景層，平台層保留未來探索空間）
 - Review synthesis：`docs/pawai-demo/2026-05-review-synthesis.md` §2.1（衝突點分析）
 - 未來若 demo 場景換到其他領域（校園 / 居家 / 導盲），開 ADR-000X supersede 本 ADR 的「2026-06 demo 場景」層即可，平台身份層維持

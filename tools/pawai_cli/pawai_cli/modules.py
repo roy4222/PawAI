@@ -21,7 +21,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="face",
         title="人臉辨識",
         packages=("face_perception",),
-        docs=("docs/pawai-brain/architecture/0511/face.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/face.md",),
         tests=("python3 -m pytest face_perception/test -v",),
         logs=("demo:face",),
         go2_access="none",
@@ -31,7 +31,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="speech",
         title="語音功能",
         packages=("go2_interfaces", "speech_processor"),
-        docs=("docs/pawai-brain/architecture/0511/speech.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/speech.md",),
         tests=("python3 -m pytest speech_processor/test -v",),
         logs=("demo:asr", "demo:tts"),
         go2_access="TTS via Megaphone",
@@ -41,7 +41,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="gesture",
         title="手勢辨識",
         packages=("go2_interfaces", "vision_perception"),
-        docs=("docs/pawai-brain/architecture/0511/gesture.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/gesture.md",),
         tests=("python3 -m pytest vision_perception/test -v -k gesture",),
         logs=("demo:vision",),
         go2_access="indirect via interaction skills",
@@ -51,7 +51,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="pose",
         title="姿勢辨識",
         packages=("go2_interfaces", "vision_perception"),
-        docs=("docs/pawai-brain/architecture/0511/pose.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/pose.md",),
         tests=("python3 -m pytest vision_perception/test -v -k pose",),
         logs=("demo:vision",),
         go2_access="fallen_alert can stop Go2",
@@ -61,7 +61,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="object",
         title="辨識物體",
         packages=("object_perception",),
-        docs=("docs/pawai-brain/architecture/0511/object.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/object.md",),
         tests=("python3 -m pytest object_perception/test -v",),
         logs=("demo:object",),
         go2_access="none",
@@ -81,7 +81,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="brain",
         title="PawAI Brain",
         packages=("go2_interfaces", "pawai_contracts", "pawai_brain", "interaction_executive"),
-        docs=("docs/pawai-brain/architecture/0511/brain.md",),
+        docs=("docs/archive/pawai-brain-legacy/architecture-0511/brain.md",),
         tests=(
             "python3 -m pytest pawai_brain/test -v",
             "python3 -m pytest interaction_executive/test -v",
@@ -141,8 +141,8 @@ def arch_doc_path(name: str, root: Path) -> Path | None:
 
     # Module: try architecture/0511/<name>/<name>.md, then architecture/0511/<name>.md
     candidates = [
-        root / f"docs/pawai-brain/architecture/0511/{name}/{name}.md",
-        root / f"docs/pawai-brain/architecture/0511/{name}.md",
+        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}/{name}.md",
+        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}.md",
     ]
     for c in candidates:
         if c.exists():

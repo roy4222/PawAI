@@ -306,7 +306,7 @@ Level 1: Standalone → Level 2: Node-level → Level 3: System-level → Level 
 | 執行 | code-reviewer agent |
 | 不通過 | 原 Builder 就地修，再觸發 review |
 | 通過 | commit 到功能分支 |
-| 紀錄 | 對話為主，必要時摘要寫入 `docs/superpowers/reviews/` |
+| 紀錄 | 對話為主，必要時摘要寫入 `docs/archive/superpowers-legacy/reviews/` |
 
 ### 升級條件 → PR-based
 

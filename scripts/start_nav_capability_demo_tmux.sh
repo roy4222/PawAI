@@ -32,7 +32,7 @@ ROS_SETUP='source /opt/ros/humble/setup.zsh && source ~/rplidar_ws/install/setup
 #   open_space  (預設) — 寬 ±30° 錐、danger 1.1m / slow 1.7m（5/11 B0.3 calibration，開闊空間）。
 #   indoor_tight       — 窄 ±18° 錐、danger 1.0m / slow 1.4m + 低速 slow 0.2 / normal 0.3。
 #                        窄錐必須綁低速：側向覆蓋變少，靠低速補反應時間
-#                        （6/8 HITL，docs/navigation/research/2026-06-08-trackB-hitl-results.md）。
+#                        （6/8 HITL，docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md）。
 # 用法：REACTIVE_PROFILE=indoor_tight bash scripts/start_nav_capability_demo_tmux.sh
 REACTIVE_PROFILE="${REACTIVE_PROFILE:-open_space}"
 case "$REACTIVE_PROFILE" in

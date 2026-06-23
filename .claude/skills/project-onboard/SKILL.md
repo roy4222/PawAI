@@ -81,15 +81,15 @@ reference 是導覽與摘要，不是第二份真相。詳細內容在它指向�
 |------|---------|
 | 專案方向、Demo 目標 | `docs/mission/README.md` |
 | ROS2 介面契約 | `docs/contracts/interaction_contract.md` |
-| **0511 架構 freeze-snapshot（七大模組 + Studio）** | `docs/pawai-brain/architecture/0511/` |
-| 人臉辨識（0511） | `docs/pawai-brain/architecture/0511/face/face.md` |
-| 手勢辨識（0511） | `docs/pawai-brain/architecture/0511/gesture/gesture.md` |
-| 姿勢辨識（0511） | `docs/pawai-brain/architecture/0511/pose/pose.md` |
-| 物體辨識（0511） | `docs/pawai-brain/architecture/0511/object/object.md` |
-| 語音模組（0511） | `docs/pawai-brain/architecture/0511/speech/speech.md` |
-| 導航避障（0511） | `docs/pawai-brain/architecture/0511/nav/` |
-| AI 大腦（0511） | `docs/pawai-brain/architecture/0511/brain/brain.md` |
-| PawAI Studio（0511） | `docs/pawai-brain/architecture/0511/studio/studio.md` |
+| **0511 架構 freeze-snapshot（七大模組 + Studio）** | `docs/archive/pawai-brain-legacy/architecture-0511/` |
+| 人臉辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/face/face.md` |
+| 手勢辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture.md` |
+| 姿勢辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose.md` |
+| 物體辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/object/object.md` |
+| 語音模組（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech.md` |
+| 導航避障（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/nav/` |
+| AI 大腦（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md` |
+| PawAI Studio（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio.md` |
 | Studio 設計文件 | `docs/pawai-brain/studio/README.md` |
 | 環境建置 | `docs/runbook/README.md` |
 

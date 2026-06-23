@@ -15,7 +15,7 @@ Design notes
 - No side-effects: transitions only change internal state.
 
 Spec reference: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-1
-Plan reference: docs/pawai-brain/plans/2026-05-12-attention-policy.md
+Plan reference: docs/archive/pawai-brain-legacy/plans/2026-05-12-attention-policy.md
 """
 from __future__ import annotations
 

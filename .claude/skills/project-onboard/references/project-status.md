@@ -6,7 +6,7 @@
 
 - **Track A merged（PR #135）**：object 家用 7 類 whitelist `[39,41,45,56,63,67,73]` + runtime `add_on_set_parameters_callback`（免重啟切類別）、BRAIN-1 object dedup 30→60s、VIS-5 thumbs_up demo 不引出 wiggle、VIS-10-min `pawai face list/enroll/rebuild/test`。issue #136（2 個 stale 測試 object 12 色 / pawai_cli health env）待清。
 - **Track B 導航 HITL（居家小空間，Foxglove 按鈕非語音）**：F7 解了（goto 0.3m→實走 0.27m `reached`，無 no_progress abort）；reactive_stop 安全停有效（0 撞 0 暴衝）；blocked-goal 撐 278s 不 timeout（stop-resume 有潛力）。**導航主力只用 2D RPLIDAR**（Go2 內建光達空轉、D435/相機未進 nav 迴路）。⭐ **誤擋根因**：`front_arc_deg=30`（±30° 寬錐）把右前角 off-path 家具誤判 danger（非 TF bug）→ **indoor-tight（±15-20° + danger 1.0 + 低速 0.2）修法已實機驗證**（zone clear、nav_paused false）。**orphaned-goal 為新 blocker**（goto client crash/SSH 斷 → single-goal server 留 active goal → 後續 goto 全拒）。`goto_named chair_front` 未成功（空間 + orphan）。
-- **導航判定**：降級為「**短距自走 + 遇障安全停 + indoor-tight 安全 profile**」可講；**不能講**走到椅子前 / 自由導航 / 動態繞障 / 視覺目標導航。完整實測 + nav backlog（6 票）見 `docs/navigation/research/2026-06-08-trackB-hitl-results.md`。
+- **導航判定**：降級為「**短距自走 + 遇障安全停 + indoor-tight 安全 profile**」可講；**不能講**走到椅子前 / 自由導航 / 動態繞障 / 視覺目標導航。完整實測 + nav backlog（6 票）見 `docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md`。
 
 ### 2026-06-08 晚 — VIS-4 具名問候 + 視覺 HITL/研究（brain stack）
 
@@ -14,7 +14,7 @@
 - **VIS-2 object runtime 切換 ✅ 實機驗證**：`ros2 param set class_whitelist` 不重啟生效——`[56]`→只 chair、家用7類→cup、`[-1]`→cup+**person**（person 只在全類出現＝白名單動態套用坐實）。
 - **VIS-7 後端確認**：gateway `/health` subs=10（face/object/gesture/pose/speech + brain conversation_trace 全訂）、Studio frontend `:3001` 連上（ws_clients=1）；正式截圖證據明天補。
 - **VIS-8 idle baseline**（13-window 全 stack、無人/物入框）：RAM 3.65/7.6GB、CPU ~80%(6核)、GPU 0-74% bursty、溫度 58.7°C、功耗 10.2W、MAXN_SUPER。under-load + per-stage latency 待測。
-- **夜間研究（2 份，明日養分）**：[`docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md`](../../../docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md)（object切換/VIS-3矩陣/VIS-8瓶頸/pose-gesture demo-safe/greet 後續 + open questions）、[`docs/pawai-brain/research/2026-06-08-supervision-vis3a-research.md`](../../../docs/pawai-brain/research/2026-06-08-supervision-vis3a-research.md)（Supervision 只當離線分析庫、VIS-3A harness Layer A+B 設計、PINTO 列 bonus）。
+- **夜間研究（2 份，明日養分）**：[`docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`](../../../docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md)（object切換/VIS-3矩陣/VIS-8瓶頸/pose-gesture demo-safe/greet 後續 + open questions）、[`docs/archive/pawai-brain-legacy/research/2026-06-08-supervision-vis3a-research.md`](../../../docs/archive/pawai-brain-legacy/research/2026-06-08-supervision-vis3a-research.md)（Supervision 只當離線分析庫、VIS-3A harness Layer A+B 設計、PINTO 列 bonus）。
 - **最大缺口（明天）**：物體辨識矩陣（chair/laptop/cup × 距離 × 光線 × 角度，4/5 判定）尚未系統化收數據；sitting 可靠度未量。臨時 harness `obj_matrix_cap.py` 已就緒，正式 VIS-3A 進 `benchmarks/object_eval/`。
 
 ## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾
@@ -74,7 +74,7 @@ Tags: `brain-hotfix-N3` → `N4` → `N5` (committed via 631b98b earlier session
 - mode_classifier 加 `scene_query`（看到什麼 / 我在幹嘛 / 猜猜我）
 - prompt 注入 `[目前姿勢]` / `[最近姿勢]` / `[歷史姿勢]` 三段 age 措辭 + `[剛剛手勢]` + `[scene_hint]`
 - N5.1 收窄 `你覺得我` / `你猜我` regex 不吃 capability_question
-- spec：`docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md`
+- spec：`docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md`
 
 **N6 demo polish**（`d4c4236` + `eb422e9` N6.1）
 - conversation-active gate：wave/fist/index 在最近 30s 有 speech/text input 時不 fire（palm safety 例外）
@@ -141,7 +141,7 @@ Tags: `brain-freeze-v2` (49ecac7) → `brain-hotfix-N1` (c285b60 TTS strip) → 
 | 2 | 手勢 6 靜態 + 3 動態 | 6 靜態全到 mapping（palm→pause / fist→mute / index→listen / ok→confirm / thumbs_up→wiggle / peace→stretch / wave→hello）；circle / come_here 標 demo 後 |
 | 3 | 姿勢 7 種 + 跌倒人名 | 7 enum 齊；fallen_alert SAY 模板 → "偵測到 {name} 跌倒，請注意安全"；name 從 brain 30s face cache 注入；bridge audible disabled (避免雙播) |
 | 4 | 物體 yolo26n vs 8n + 顏色 | 主線 yolo26n + HSV 12 色 (5/6 凍結 schema v2.5)；A/B 標 demo 後 |
-| 5 | 導航避障空間問題 | 5/12 nav burndown demo 最低目標 3/3 通過（goto 0.3m、reactive_stop danger 1.1m 1 次煞停、SLAM/Nav2 stack 36 node 全跑）。詳見 `docs/navigation/research/2026-05-11-nav-avoidance-deep-research.md §10` |
+| 5 | 導航避障空間問題 | 5/12 nav burndown demo 最低目標 3/3 通過（goto 0.3m、reactive_stop danger 1.1m 1 次煞停、SLAM/Nav2 stack 36 node 全跑）。詳見 `docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md §10` |
 
 ### LLM A/B benchmark（8-model）
 
@@ -237,8 +237,8 @@ ASR 三段 fallback inherently 需現場麥克風 — 排明天到場 5 分鐘�
 
 ### Spec / plan 文件
 - spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
-- roadmap：`docs/pawai-brain/plans/2026-05-09-master-execution-roadmap.md`
-- 5 個 branch plans 在 `docs/pawai-brain/plans/2026-05-09-*` 和 `2026-05-11-*` 和 `2026-05-12-*`
+- roadmap：`docs/archive/pawai-brain-legacy/plans/2026-05-09-master-execution-roadmap.md`
+- 5 個 branch plans 在 `docs/archive/pawai-brain-legacy/plans/2026-05-09-*` 和 `2026-05-11-*` 和 `2026-05-12-*`
 
 ---
 

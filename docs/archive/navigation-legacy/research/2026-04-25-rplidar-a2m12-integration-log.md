@@ -64,7 +64,7 @@
 
 P0 spec + plan 同日定稿：
 - Spec：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`（803 行）
-- Plan：`docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
+- Plan：`docs/archive/navigation-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md`（17 tasks, gate-by-gate TDD）
 
 P0 承諾：劇本式 A→B + 停障 + 續行（不承諾一般動態繞障）。
 
@@ -377,7 +377,7 @@ ros2 run nav2_map_server map_saver_cli -f /home/jetson/maps/home_living_room --r
 - `~/rplidar_ws/src/sllidar_ros2`（Jetson）
 - `~/rplidar_ws/src/rf2o_laser_odometry`（Jetson archive，**不再啟用**）
 - Spec：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`
-- Plan：`docs/navigation/plans/2026-04-24-p0-nav-obstacle-avoidance.md`
+- Plan：`docs/archive/navigation-legacy/plans/2026-04-24-p0-nav-obstacle-avoidance.md`
 
 ---
 

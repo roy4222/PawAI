@@ -33,7 +33,7 @@
   - model: `eleven_flash_v2_5`
   - output: WAV/MP3 落地 + latency 量測（HTTP fetch time）
 - [ ] 跑完 5 × 3 = 15 次 fetch
-- [ ] 結果寫 `docs/pawai-brain/dev-logs/2026-05-11-elevenlabs-spike-mini.md`：
+- [ ] 結果寫 `docs/archive/pawai-brain-legacy/dev-logs/2026-05-11-elevenlabs-spike-mini.md`：
   - 主觀打分（音色雪寶感 1-5、中文自然度 1-5、破音/吞字/簡體腔 ✓/✗）
   - latency 表（短句 < 2s? 長句 < 4s?）
   - PAYG 用量

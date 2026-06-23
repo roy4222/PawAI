@@ -356,7 +356,7 @@
 - 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`/home/roy422/newLife/elder_and_dog/docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
 - demo north-star（§5 禁守護、§7 nav 鐵律、能力宣稱前提）：`/home/roy422/newLife/elder_and_dog/docs/mission/2026-06-18-demo-north-star.md`
 - demo-flow-plan（S3/S4/S5 旁白、R3 gate、wave 語音觸發、launch override 真相源）：`/home/roy422/newLife/elder_and_dog/docs/mission/2026-06-18-demo-flow-plan.md`
-- PINTO 可部署模型清單（黃金標準錨點、CONFIRMED/SPIKE tier）：`/home/roy422/newLife/elder_and_dog/docs/pawai-brain/research/2026-06-04-pinto-jetson-deployable-models.md`
+- PINTO 可部署模型清單（黃金標準錨點、CONFIRMED/SPIKE tier）：`/home/roy422/newLife/elder_and_dog/docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-jetson-deployable-models.md`
 - safety_gate「停」keyword 鏈：`/home/roy422/newLife/elder_and_dog/speech_processor/speech_processor/intent_classifier.py:88-103`
 
 ---
@@ -382,7 +382,7 @@
 - 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
 - demo north-star（§5 禁守護、§7 nav 鐵律、§9 誠實 scoreboard）：`docs/mission/2026-06-18-demo-north-star.md`
 - demo-flow-plan / final-presentation-outline：`docs/mission/2026-06-18-*.md`（本審計指出的 face stale drift **已於 2026-06-05 docs 架構重構修復**；claim 真相源見 `docs/mission/2026-06-18-capability-claim-matrix.md`）
-- pinto model zoo：`docs/pawai-brain/research/2026-06-04-pinto-model-zoo-full-analysis.md`、`2026-06-04-pinto-jetson-deployable-models.md`、`2026-06-02-model-candidate-registry.md`
+- pinto model zoo：`docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-model-zoo-full-analysis.md`、`2026-06-04-pinto-jetson-deployable-models.md`、`2026-06-02-model-candidate-registry.md`
 - safety_gate「停」keyword 鏈：`speech_processor/speech_processor/intent_classifier.py:88-103`
 - persona 幻覺源：`pawai_brain/personas/v1/STYLE.md:64`、`EXAMPLES.md:21/30/65`、`pawai_brain/pawai_brain/world_state_builder.py`（`_get_weather()` 抓 wttr.in 台北網路天氣）
 

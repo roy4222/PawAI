@@ -39,7 +39,7 @@ Scripts for evaluating new TTS providers before integrating into main chain.
    - 中文自然度 (no robotic / no English-accent / no Mainland accent)
    - 破音/吞字/簡體腔 (any)
 
-6. **Fill in dev-log**: `docs/pawai-brain/dev-logs/2026-05-XX-elevenlabs-spike-mini.md`
+6. **Fill in dev-log**: `docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-elevenlabs-spike-mini.md`
 
 7. **Decision**:
    - **GO**: ≥ 1 voice ≥ 4/5 音色 AND ≥ 4/5 中文 AND short < 2s AND long < 4s AND no defects → proceed to Spike-Real

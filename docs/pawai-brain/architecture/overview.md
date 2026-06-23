@@ -13,7 +13,7 @@
 > - `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`（Brain MVS Spec — Phase A）
 > - `docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`（**PawClaw 演進** — Phase B）
 > - `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`（PawAI 系統設計）
-> - `docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md`（實作計畫 — Phase A）
+> - `docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md`（實作計畫 — Phase A）
 >
 > **Conversation Engine spec**（已存在）：
 > - `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（Phase A.5 Conversation Engine LangGraph spec — 含 graph node I/O、tools 分層、5-phase 遷移、dependency spike 步驟）
@@ -587,7 +587,7 @@ Jetson 斷電：
 |---|---|
 | **本文件**（系統整合總覽） | `docs/pawai-brain/architecture/overview.md` |
 | **Phase A**：Brain MVS 設計 spec | `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md` |
-| **Phase A**：Brain MVS 實作 plan（34 tasks） | `docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md` |
+| **Phase A**：Brain MVS 實作 plan（34 tasks） | `docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md` |
 | **Phase A.5**：Conversation Engine LangGraph 演進 spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` |
 | **canonical Capability Claim Matrix**（能力分級真相源） | `docs/mission/2026-06-18-capability-claim-matrix.md`（判決來源：6/05 audit §B） |
 | **能力門檻 / 怎麼量** | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` |

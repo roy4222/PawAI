@@ -628,7 +628,7 @@ Studio Skill Trace Drawer 可加一個 debug 視窗顯示「LLM 此刻會看到�
 |---|---|
 | **本文件** | PawClaw 演進路線、Phase A → B 設計 |
 | `docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md` | Brain MVS 技術 spec（Phase A） |
-| `docs/pawai-brain/plans/2026-04-27-pawai-brain-skill-first.md` | Brain MVS 實作 plan（Phase A） |
+| `docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md` | Brain MVS 實作 plan（Phase A） |
 | `docs/pawai-brain/architecture/overview.md` | Brain × Studio 整合總覽（已對外可讀） |
 | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md` | PawAI 系統定位（產品 / 願景 / 4/11 三層） |
 | `docs/mission/README.md` | 專案方向、時程、分工 |

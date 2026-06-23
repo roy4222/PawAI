@@ -1,6 +1,6 @@
 # PR 1a — Measurement-first: 證明 overshoot 因果 + 改善 distance log 可信度
 
-> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +12,7 @@
 - 在 `_execute_relative_inner` 加詳細 log(start_pose / end_pose / displacement / max_vel_x snapshot at start)
 - 用 PR 6-lite 的 bag helper 收原始資料(`/cmd_vel` / `/amcl_pose` / `/odom`)
 - 在 Jetson 跑三組對照(current / 0.30 / 0.45 max_vel_x via CLI `ros2 param set`)
-- 數據寫進 `docs/navigation/research/2026-05-04-overshoot-causation.md`
+- 數據寫進 `docs/archive/navigation-legacy/research/2026-05-04-overshoot-causation.md`
 
 PR1a 結束後 → 決策:
 - **若 max_vel_x 真的影響 actual_distance** → 寫 PR1b(SpeedOverride helper,clamp 值用實機 sweet spot,**不**硬編)
@@ -20,7 +20,7 @@ PR1a 結束後 → 決策:
 
 **Tech Stack:** Python(rclpy logging only)、pytest、`~/sync`、`ros2 bag record`、`ros2 param set`、`ros2 topic echo`
 
-**Spec source:** [`docs/navigation/plans/2026-05-04-phase2-dev-order-spec.md`](2026-05-04-phase2-dev-order-spec.md) commit `f386adf`(對 PR1 收斂解讀:不直接寫 helper,先驗因果)
+**Spec source:** [`docs/archive/navigation-legacy/plans/2026-05-04-phase2-dev-order-spec.md`](2026-05-04-phase2-dev-order-spec.md) commit `f386adf`(對 PR1 收斂解讀:不直接寫 helper,先驗因果)
 
 **Supersedes:** [`2026-05-04-pr1-b1-b5-implementation.md`](2026-05-04-pr1-b1-b5-implementation.md)(因 5 個 review blocker 退回)
 
@@ -33,7 +33,7 @@ PR1a 結束後 → 決策:
 
 新建:
 - `scripts/measure_overshoot.sh` — 測量輔助腳本(包 `ros2 param get/set` + bag record + send_goal × 3)
-- `docs/navigation/research/2026-05-04-overshoot-causation.md` — 數據紀錄 + 結論
+- `docs/archive/navigation-legacy/research/2026-05-04-overshoot-causation.md` — 數據紀錄 + 結論
 
 不動:
 - `nav_capability/lib/`(不新增 helper)
@@ -423,7 +423,7 @@ ssh jetson-nano 'cd /home/jetson/elder_and_dog && \
 ## Task 4: 整理數據 + 寫結論
 
 **Files:**
-- Create: `docs/navigation/research/2026-05-04-overshoot-causation.md`
+- Create: `docs/archive/navigation-legacy/research/2026-05-04-overshoot-causation.md`
 
 - [ ] **Step 1:從 Jetson 把三個 `logs/overshoot/<UTC>-*/` 複製回 WSL 看(或直接 sshfs 看)**
 
@@ -442,7 +442,7 @@ ls -la ~/jetson/elder_and_dog/logs/overshoot/
 - `duration_s=`
 - 從 bag 看 `/cmd_vel` linear.x 峰值(用 `ros2 bag play` + `ros2 topic echo /cmd_vel | grep linear -A 1` 或更高效用 `rosbag2_py` 寫個一次性讀 script)
 
-- [ ] **Step 3:寫 `docs/navigation/research/2026-05-04-overshoot-causation.md`**
+- [ ] **Step 3:寫 `docs/archive/navigation-legacy/research/2026-05-04-overshoot-causation.md`**
 
 模板:
 ```markdown
@@ -492,7 +492,7 @@ ls -la ~/jetson/elder_and_dog/logs/overshoot/
 - [ ] **Step 4:Commit research log + 結論 commit**
 
 ```bash
-git add docs/navigation/research/2026-05-04-overshoot-causation.md
+git add docs/archive/navigation-legacy/research/2026-05-04-overshoot-causation.md
 git commit -m "$(cat <<'EOF'
 research(nav): PR1a overshoot causation — measurement results
 
@@ -533,7 +533,7 @@ EOF
 - [ ] **Step 3:Commit**
 
 ```bash
-git add docs/navigation/plans/2026-05-04-phase2-dev-order-spec.md  # 如有改
+git add docs/archive/navigation-legacy/plans/2026-05-04-phase2-dev-order-spec.md  # 如有改
 git commit -m "$(cat <<'EOF'
 docs(nav): update spec per PR1a measurement outcome
 
@@ -570,7 +570,7 @@ EOF
 
 ## Execution Handoff
 
-**Plan complete and saved to** `docs/navigation/plans/2026-05-04-pr1a-measurement-first.md`。
+**Plan complete and saved to** `docs/archive/navigation-legacy/plans/2026-05-04-pr1a-measurement-first.md`。
 
 **兩個 execution 選項**:
 

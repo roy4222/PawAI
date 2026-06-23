@@ -163,7 +163,7 @@
 - **Evidence**:
   - Live HITL：Act1 ❌ 沒成功；Roy 列候選含「Go2 沒動 / 走歪 / reactive 沒啟 / cmd_vel 沒到 driver」。
   - `scripts/start_nav_capability_demo_tmux.sh:98-113` / `scripts/start_reactive_stop_tmux.sh:56-63`
-  - `docs/superpowers/plans/2026-06-13-s1-low-risk-navigation-plan.md:13`
+  - `docs/archive/superpowers-legacy/plans/2026-06-13-s1-low-risk-navigation-plan.md:13`
 - **Acceptance criteria**:
   - 明確記錄當天 topology（standalone vs progressive）+ ros2 node list driver 數 + 有無 goto log。
   - `pawai evidence pull` 撈回當天 `runtime/traces/*.jsonl`（D0，只讀零 motion）。
@@ -189,7 +189,7 @@
   - 不發 motion。
 - **Evidence**:
   - Stage1：LiDAR 11.9Hz、front±15°=2.09m、+20°=1.70m。
-  - `docs/navigation/research/2026-04-29-mount-measurement.md:76` / `2026-04-25-rplidar-a2m12-integration-log.md:306`
+  - `docs/archive/navigation-legacy/research/2026-04-29-mount-measurement.md:76` / `2026-04-25-rplidar-a2m12-integration-log.md:306`
   - `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py:38-51` / `scripts/lidar_front_sector.py:85-96`
 - **Acceptance criteria**:
   - 障礙物放正前 1.0m 時 `lidar_front_sector.py --once` 讀 ~1.0m（非 2.09m）。
@@ -220,7 +220,7 @@
 - **Evidence**:
   - Live HITL：Act1 ❌ 沒成功。
   - `docs/navigation/2026-06-13-s1-fallback-decision.md:20`
-  - `docs/navigation/research/2026-06-08-trackB-hitl-results.md:14`
+  - `docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md:14`
   - `scripts/start_reactive_stop_tmux.sh:74-79`
 - **Acceptance criteria**:
   - 6/17 Roy 拍板當天採哪層 + A 層前置門檻全列（lidar_front_sector 看得到 + param 驗 indoor_tight + e-stop 就位 + 場地淨空）。
@@ -369,7 +369,7 @@
 - **Evidence**:
   - `face_perception/config/face_perception.yaml:11-24`
   - `face_perception/face_perception/face_identity_node.py:561-598`（decide_stable）/ `:709-718`（identity_stable）
-  - `docs/pawai-brain/research/2026-06-08-night-vision-brain-research.md`
+  - `docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`
 - **Acceptance criteria**:
   - demo 前一天在現場光線量 Roy raw_sim n≥10 確認 ≥0.7。
   - `ls -la /home/jetson/face_db/` 只有真人子目錄、無 ghost dir。
@@ -795,7 +795,7 @@
   - `go2_robot_sdk/.../webrtc/go2_connection.py:72/107`（單一 peer/channel）
   - `go2_robot_sdk/urdf/go2.urdf:49-50/71-72`（T0 fixed joint）
   - `go2_robot_sdk/go2_robot_sdk/presentation/go2_driver_node.py:132`（enable_lidar default True）
-  - `docs/navigation/plans/2026-06-14-unified-demo-stack-single-go2-driver-plan.md`
+  - `docs/archive/navigation-legacy/plans/2026-06-14-unified-demo-stack-single-go2-driver-plan.md`
 - **Acceptance criteria**:
   - 架構計畫文件完整（LT-0~LT-6 標 PLANNED + 順序依賴 + gate 條件）。
   - 6/18 前只落 ST-1/ST-2/ST-3/ST-5（文件 + no-motion 驗證 + 證據窗）。

@@ -52,7 +52,7 @@ LOCAL_LLM_MODEL="${LOCAL_LLM_MODEL:-qwen2.5:1.5b}"
 # ── OpenRouter primary / fallback model slugs (5/12 round-2 A/B winner) ──
 # Override one-liner:
 #   PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
-# Demo decision rationale: docs/pawai-brain/dev-logs/2026-05-12-llm-naturalness-ab-eval.md
+# Demo decision rationale: docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md
 PAWAI_LLM_MODEL="${PAWAI_LLM_MODEL:-openai/gpt-5.4-mini}"
 PAWAI_LLM_FALLBACK_MODEL="${PAWAI_LLM_FALLBACK_MODEL:-google/gemini-3-flash-preview}"
 

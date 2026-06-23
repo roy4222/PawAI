@@ -214,7 +214,7 @@ go2_ros2_sdk 的 coco_detector(torchvision `fasterrcnn_mobilenet_v3_large_320_fp
 17. `docs/.../thesis/背景知識/4-8-Navigation.md:7`(4/3 避障失敗根因)、`4-10-D435.md:69/80`(深色吸 IR/感知不受安裝角度影響)
 18. `docs/.../2026-04-26-nav2-dynamic-obstacle-log.md:38–52/96–106/172/243–244/250`(5/2 摔狗/DWB 不可重現/淨空)
 19. `project-status.md:46/275/277/303–304/322`(nav 零自走/0.81m 停實證/早停/F7 reframe/F7 P0)
-20. maps:`docs/navigation/research/maps/home_living_room_v3.pgm` = 234×178 = 41,652 cells
+20. maps:`docs/archive/navigation-legacy/research/maps/home_living_room_v3.pgm` = 234×178 = 41,652 cells
 
 **外部(external_refs)**:
 21. torchvision FasterRCNN-MobileNet-V3-Large-320-FPN model card(box mAP 22.8 / 19.4M params / 0.72 GFLOPS) — https://pytorch.org/vision/stable/models/faster_rcnn.html

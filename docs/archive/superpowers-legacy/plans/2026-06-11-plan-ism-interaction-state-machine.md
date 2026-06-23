@@ -600,7 +600,7 @@ git commit -m "ci(ism): fast-gate runs interaction_state pure tests (Plan ISM Ph
 - [ ] **3.1** 全 sub-phase 綠後，`ism_enabled` 預設翻 True；保留 env/param 可一鍵 fallback v1。
 - [ ] **3.2** 跑完整驗收網：`test_brain_rules` 73 條 + Phase 1/2 全測 + 6/9 場景重演 + 真機 Jetson demo 一輪（§7.8）。
 - [ ] **3.3** 刪 legacy gate 死碼（19 個分散 `_suppressed` 早退收斂進 ISM policy 後，移除重複判斷），`refactor-cleaner` 掃 dead code。
-- [ ] **3.4** 更新 `docs/contracts/interaction_contract.md`（STATE_TRANSITION trace）+ `docs/pawai-brain/architecture/0511/brain/brain.md`（ISM 取代隱式機）。
+- [ ] **3.4** 更新 `docs/contracts/interaction_contract.md`（STATE_TRANSITION trace）+ `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md`（ISM 取代隱式機）。
 
 ---
 
@@ -637,7 +637,7 @@ git commit -m "ci(ism): fast-gate runs interaction_state pure tests (Plan ISM Ph
 
 ## Execution Handoff
 
-Plan 已存到 `docs/superpowers/plans/2026-06-11-plan-ism-interaction-state-machine.md`。
+Plan 已存到 `docs/archive/superpowers-legacy/plans/2026-06-11-plan-ism-interaction-state-machine.md`。
 
 **這份是「施工圖」**：Phase 0–1（純模組 + shadow）是可立即逐 task 執行的完整 TDD；Phase 2–3 是設計鎖定的遷移序列，待 Phase 1 shadow 數據落地後再展開逐行任務（master plan §7.8）。
 

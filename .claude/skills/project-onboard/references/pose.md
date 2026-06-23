@@ -10,11 +10,11 @@ fallen（跌倒）是守護輔助（30%）的關鍵觸發，Brain world_state_bu
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/pose/pose.md` | 主總覽 + 分類規則 + 0511 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/pose/pose-runtime-flow.md` | D435 → MediaPipe → pose classifier → event publish 完整 flow |
-| `docs/pawai-brain/architecture/0511/pose/pose-classifier-rules.md` | trunk_angle / vertical_ratio / ankle 分類規則（5/11 調過）|
-| `docs/pawai-brain/architecture/0511/pose/pose-executive-brain-integration.md` | pose event → interaction_router → fall_alert + Brain 注入 |
-| `docs/pawai-brain/architecture/0511/pose/pose-debug-runbook.md` | 姿勢誤判 / fallen 誤觸發 / MediaPipe 跑不動 debug checklist |
+| `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose.md` | 主總覽 + 分類規則 + 0511 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose-runtime-flow.md` | D435 → MediaPipe → pose classifier → event publish 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose-classifier-rules.md` | trunk_angle / vertical_ratio / ankle 分類規則（5/11 調過）|
+| `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose-executive-brain-integration.md` | pose event → interaction_router → fall_alert + Brain 注入 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose-debug-runbook.md` | 姿勢誤判 / fallen 誤觸發 / MediaPipe 跑不動 debug checklist |
 
 ## 核心程式檔案
 

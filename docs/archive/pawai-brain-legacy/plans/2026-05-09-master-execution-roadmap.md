@@ -53,7 +53,7 @@ spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.
   574f556  issues 3-8 收尾
   551ca24  brainstorm 收尾 review 2 點
 
-plan: docs/pawai-brain/plans/2026-05-09-wave0-p11-observability-foundation.md
+plan: docs/archive/pawai-brain-legacy/plans/2026-05-09-wave0-p11-observability-foundation.md
   2f5d07f  Wave 0 + P1-1 plan
 ```
 

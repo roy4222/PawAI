@@ -119,8 +119,8 @@ V0（Roy，6/13-14）→ W1（即刻）→ W2/W3/W4/W5 並行（6/14-15）→ W7
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 4 Task <W-x / V-x>（見 docs/superpowers/plans/2026-06-13-lane4-vision-benchmark-model-ab-plan.md §6；
-細部步驟與門檻以 docs/superpowers/plans/2026-06-11-phase3-vision-evidence-model-benchmark.md 對應段為權威）。
+任務：執行 Lane 4 Task <W-x / V-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane4-vision-benchmark-model-ab-plan.md §6；
+細部步驟與門檻以 docs/archive/superpowers-legacy/plans/2026-06-11-phase3-vision-evidence-model-benchmark.md 對應段為權威）。
 紀律：
 - 全程 offline：獨立 venv（uv venv && uv pip install ...），不碰 runtime code、不裝任何東西進 Jetson runtime。
 - demo 錄影只餵程式（ORT/cv2/supervision），絕不餵 LLM。

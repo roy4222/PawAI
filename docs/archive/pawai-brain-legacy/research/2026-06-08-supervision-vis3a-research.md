@@ -220,5 +220,5 @@ benchmarks/object_eval/
 - Jetson 硬規則（禁 ultralytics、TRT 參數、`--no-deps`）：`/home/roy422/newLife/elder_and_dog/CLAUDE.md`（物體 pipeline 段）+ `docs/pawai-brain/perception/object/CLAUDE.md`
 - Supervision Detections 構造 / CSVSink：https://supervision.roboflow.com/latest/detection/core/ ｜ https://supervision.roboflow.com/latest/how_to/save_detections/
 - Supervision Smoother（需 tracker_id）：https://supervision.roboflow.com/latest/detection/tools/smoother/
-- 6/18 committed plan（VIS-1/2/3 + bonus VIS-6/9/11 不碰）：`/home/roy422/newLife/elder_and_dog/docs/superpowers/plans/2026-06-08-pawai-6-18-committed-plan.md`
-- PINTO 不進 6/18 理由 + 三組 FPS gate：`/home/roy422/newLife/elder_and_dog/docs/superpowers/specs/2026-05-20-object-perception-research-brief.md` §8
+- 6/18 committed plan（VIS-1/2/3 + bonus VIS-6/9/11 不碰）：`/home/roy422/newLife/elder_and_dog/docs/archive/superpowers-legacy/plans/2026-06-08-pawai-6-18-committed-plan.md`
+- PINTO 不進 6/18 理由 + 三組 FPS gate：`/home/roy422/newLife/elder_and_dog/docs/archive/superpowers-legacy/specs/2026-05-20-object-perception-research-brief.md` §8

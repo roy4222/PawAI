@@ -267,7 +267,7 @@
 - gesture 必須短期 → 舊手勢當作目前狀態會誤導
 - object 用 window 是因為連續偵測，需要吸收雜訊
 
-完整 spec：`docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md`
+完整 spec：`docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md`
 
 ---
 
@@ -496,4 +496,4 @@ tmux send-keys -t "$SESSION:object" \
 | Contract schema | `docs/contracts/interaction_contract.md` §4.8 |
 | 模組文件 | `docs/pawai-brain/perception/object/README.md` + `CLAUDE.md` |
 | 選型研究 | `docs/pawai-brain/perception/object/research/2026-03-25-object-detection-feasibility.md` |
-| N5 scene spec | `docs/superpowers/specs/2026-05-11-n5-scene-perception-design.md` |
+| N5 scene spec | `docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md` |

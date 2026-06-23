@@ -3,7 +3,7 @@
 > **Scope**：PawAI 移動能力（定位 / 建圖 / 避障 / 短距移動）的**架構真相層** — 「stack 怎麼組、哪條 action path 是真的、哪些是 historical/research」。
 > **Status**：active（架構真相層）。本檔**不再**充當「當前能力 claim」真相 — 任何 nav 能力是否 pass / 可否走真實 motion，一律以 §「nav 能力 claim」的 canonical claim matrix nav 行為準。
 > **Owner lane**：nav（搭配 `docs/navigation/CLAUDE.md` 模組工作規則）。
-> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/`（實測，nav 全 `insufficient_data`）＞ `docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §4（收斂審計：nav 降級為純 Studio 顯示、零實機自走）＞ `docs/mission/2026-06-18-demo-north-star.md` §7（戰略邊界）＞ 本檔（架構）＞ `docs/contracts/interaction_contract.md`（nav topic/action schema）。
+> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/`（實測，nav 全 `insufficient_data`）＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §4（收斂審計：nav 降級為純 Studio 顯示、零實機自走）＞ `docs/mission/2026-06-18-demo-north-star.md` §7（戰略邊界）＞ 本檔（架構）＞ `docs/contracts/interaction_contract.md`（nav topic/action schema）。
 > **Maintained child files**：`CLAUDE.md`（工作規則）、`legacy-readme-from-導航避障.md`（既有權威 README）、`2026-05-11-architecture-deep-audit-and-fix-roadmap.md`（4-mode reactive stop / B-burndown 架構真相）。
 > **Archived / historical 邊界**：`plans/*.md`（5/1–5/4 sprint plan）、`research/*.md`、`legacy-archive/` 一律 **historical / research-only**，不重複維護、不得當「現在能跑什麼」的依據。
 > **本 README 不是**：能力 claim 真相（→ canonical claim matrix）、操作手冊（→ runbook，最安全 = `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`）、門檻定義（→ `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`）。
@@ -12,7 +12,7 @@
 
 ## nav 能力 claim（引用 canonical，勿在此重複整份）
 
-> **權威**：`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B Capability Claim Matrix nav 行 + §4，基準為 `docs/runbook/baseline-evidence/2026-06-04-hitl/`。下面只是入口摘要。
+> **權威**：`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B Capability Claim Matrix nav 行 + §4，基準為 `docs/runbook/baseline-evidence/2026-06-04-hitl/`。下面只是入口摘要。
 
 - **Current Claim**：nav 四能力（`nav.short_move` / `nav.safe_stop` / `nav.no_auto_resume` / `nav.dynamic_avoidance`）6/4 trusted snapshot 全 **`insufficient_data`**。
 - **Pass / Degraded / Fail / Insufficient**：**Insufficient_data**（無 trusted motion record）。
@@ -82,13 +82,13 @@ Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**�
 | 檔案 / 路徑 | 內容 |
 |---|---|
 | **入口頁(本檔)** | `docs/navigation/README.md` |
-| **Phase A Implementation Plan**(5/2-5/3 attack) | `docs/navigation/plans/2026-05-01-phase-a-nav-attack.md` |
+| **Phase A Implementation Plan**(5/2-5/3 attack) | `docs/archive/navigation-legacy/plans/2026-05-01-phase-a-nav-attack.md` |
 | **Sprint design 主線**(包含 §5 D435+RPLIDAR 整合 / §6 兩層 Capability Gate / §7 Phase A) | `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` |
 | **既有設計 specs** | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`<br/>`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` |
 | **介面契約**(nav 相關 topic + action) | `docs/contracts/interaction_contract.md` |
 | **最安全 operator runbook**（nav = 純 DRY-RUN 段、fail-closed） | `docs/runbook/2026-06-18-hitl-oneshot-runbook.md` |
 | **baseline 量測 runbook**（含 `/event/nav/mission` doc-bug 註記） | `docs/runbook/2026-06-18-baseline-runbook.md` |
-| **能力 claim canonical matrix**（nav 行） | `docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B/§4 |
+| **能力 claim canonical matrix**（nav 行） | `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B/§4 |
 | **Nav 既有權威 README**（historical） | `docs/navigation/legacy-readme-from-導航避障.md` |
 | **Nav CLAUDE.md**(模組工作規則) | `docs/navigation/CLAUDE.md` |
 
@@ -96,7 +96,7 @@ Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**�
 
 ## 5/2 外部 Stack 研究(8 份) — research-only
 
-> **`docs/navigation/research/*` 一律 research-not-truth**：是吸收性分析 / daily 探測紀錄，**不覆寫 baseline-evidence 或 contracts**，也不得當作「已實作 / 已驗證」的依據。模型/stack 研究分層 = BASELINE_NOW / STUDIO_ONLY_NOW / SPIKE_AFTER_FAIL / FUTURE_RESEARCH，不要預設變成實作 backlog。
+> **`docs/archive/navigation-legacy/research/*` 一律 research-not-truth**：是吸收性分析 / daily 探測紀錄，**不覆寫 baseline-evidence 或 contracts**，也不得當作「已實作 / 已驗證」的依據。模型/stack 研究分層 = BASELINE_NOW / STUDIO_ONLY_NOW / SPIKE_AFTER_FAIL / FUTURE_RESEARCH，不要預設變成實作 backlog。
 
 對 8 個開源專案(Odin / OM1 / NavDP / visualnav-transformer / amigo_ros2 / DimOS + 1 篇論文)做了可吸收性分析。
 **總彙整與優先序**:`research/2026-05-02-research-synthesis.md` — 列出 Phase A 立即可吸收 4 項(A1-A4)、5/12 後 P2 七項、6 月後 P3 六項、明確不做的事。
@@ -104,8 +104,8 @@ Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**�
 ## Legacy / Archive（historical）
 
 歷史紀錄 / 研究 / 5/1 之前的 daily log 仍在原位:
-- `docs/navigation/research/` — 4/27-5/1 LiDAR mount yaw / AMCL 180° / K1 baseline / Phase 4-7 critical bugs
-- `docs/navigation/research/lidar-dev/` — 4/27 lidar dev roadmap
+- `docs/archive/navigation-legacy/research/` — 4/27-5/1 LiDAR mount yaw / AMCL 180° / K1 baseline / Phase 4-7 critical bugs
+- `docs/archive/navigation-legacy/research/lidar-dev/` — 4/27 lidar dev roadmap
 - `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-{24,26}-*.md` — Phase 1-4 設計
 
 本資料夾**只**維護 5/12 Demo 衝刺期 + 之後的主線版本;舊文件保留作歷史與引用,不重複維護。

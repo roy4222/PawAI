@@ -73,7 +73,7 @@ Expected: 全 PASS（~150+ tests，<3s）。
 
 ```yaml
           # Invocation 3 (2026-06-10 Plan A, Tier 1): interaction_executive —
-          # rclpy-free subset only (4 rclpy files run locally, see docs/superpowers/
+          # rclpy-free subset only (4 rclpy files run locally, see docs/archive/superpowers-legacy/
           # plans/2026-06-10-plan-a-ci-guardrails.md). Isolated PYTHONPATH to avoid
           # top-level 'test' package collision.
           PYTHONPATH=interaction_executive pytest \

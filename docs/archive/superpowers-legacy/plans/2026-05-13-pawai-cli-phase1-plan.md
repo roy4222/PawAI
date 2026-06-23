@@ -6,12 +6,12 @@
 
 **Goal:** Land 11 surgical fixes that promote `pawai` CLI from tool collection to Jetson on-site collaboration console, before 2026-05-16 (5/18 demo prep buffer).
 
-**Architecture:** Each task is one Item from the umbrella spec (`docs/superpowers/specs/2026-05-13-pawai-cli-collab-console-design.md`). Items are grouped into 5 batches by file-touch locality to minimize merge conflicts during landing. Each task = 1 commit. Tests run via `python3 -m pytest tools/pawai_cli`. Smoke verification runs against actual Jetson over SSH alias `jetson` (Tailscale 100.64.0.1).
+**Architecture:** Each task is one Item from the umbrella spec (`docs/archive/superpowers-legacy/specs/2026-05-13-pawai-cli-collab-console-design.md`). Items are grouped into 5 batches by file-touch locality to minimize merge conflicts during landing. Each task = 1 commit. Tests run via `python3 -m pytest tools/pawai_cli`. Smoke verification runs against actual Jetson over SSH alias `jetson` (Tailscale 100.64.0.1).
 
 **Tech Stack:** Python 3.10+ click CLI, pytest, bash 4+ scripts, Jetson Orin Nano (Ubuntu 22.04 + ROS2 Humble) over SSH.
 
 **Source-of-truth files:**
-- Spec: `docs/superpowers/specs/2026-05-13-pawai-cli-collab-console-design.md` (commit `6388a08`)
+- Spec: `docs/archive/superpowers-legacy/specs/2026-05-13-pawai-cli-collab-console-design.md` (commit `6388a08`)
 - Cross-batch invariants: I1 platform policy, I2 lock schema, I3 output contract, I4 config precedence, I5 redaction
 - Existing CLI: `tools/pawai_cli/pawai_cli/` (1586 LOC, 7 modules)
 - Existing tests: `tools/pawai_cli/tests/test_{cache,cli,lock,network}.py`
@@ -396,7 +396,7 @@ platforms. doctor() prints platform line as first diagnostic block.
 
 10 unit tests cover all detection branches + repo path guard.
 
-Spec: docs/superpowers/specs/2026-05-13-pawai-cli-collab-console-design.md §I1
+Spec: docs/archive/superpowers-legacy/specs/2026-05-13-pawai-cli-collab-console-design.md §I1
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF

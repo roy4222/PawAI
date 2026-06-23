@@ -129,7 +129,7 @@
 3. nav short goto 0.3m → 0.5m
 4. safe-stop / stop-resume（另列；stop-resume tight space 禁 auto，operator-confirm only）
 
-硬性 abort criteria 見 `docs/superpowers/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md` §8。
+硬性 abort criteria 見 `docs/archive/superpowers-legacy/plans/2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md` §8。
 
 ---
 

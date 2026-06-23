@@ -140,7 +140,7 @@ T5S-4 + T5S-2（bugfix 先行，6/13）→ T5S-1 + T5S-3（機制，6/14）→ T
 
 ```
 你在 /home/roy422/newLife/elder_and_dog（branch: 新開 feature branch）。
-任務：執行 Lane 5 Task <T5S-x>（見 docs/superpowers/plans/2026-06-13-lane5-robot-control-security-hardening-plan.md §6；
+任務：執行 Lane 5 Task <T5S-x>（見 docs/archive/superpowers-legacy/plans/2026-06-13-lane5-robot-control-security-hardening-plan.md §6；
 修法細節以 docs/security/2026-06-11-pawai-hardening-plan.md 對應 P 項為權威）。
 紀律：
 - 機制先行：新行為一律 param/env-gated、預設關；先寫「off = byte-identical」紅綠測試再實作。

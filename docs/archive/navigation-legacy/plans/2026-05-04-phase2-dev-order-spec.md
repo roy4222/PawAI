@@ -1,6 +1,6 @@
 # 2026-05-04 — Phase 2 開發順序 Spec
 
-> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+> 🕰️ **HISTORICAL — 5/4 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
 
 > **目的**:把 Phase 2 七個 PR 的執行順序、量測護欄、baseline 通過標準、scope cut 寫死,避免 5/4–5/12 期間每天反覆討論。
 > **前置**:[`2026-05-04-demo-scope-freeze.md`](2026-05-04-demo-scope-freeze.md) 已 commit `16dc384`。
@@ -365,7 +365,7 @@ ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative "{di
 # 5. Ctrl-C bag record,看 ros2 bag info logs/nav_baseline/<最新>
 ```
 
-baseline 結果寫進:`docs/navigation/research/2026-05-XX-baseline-runs.md`(每天 append)
+baseline 結果寫進:`docs/archive/navigation-legacy/research/2026-05-XX-baseline-runs.md`(每天 append)
 
 > **Capability 命名約定**(本 spec 全篇沿用):`nav_ready` 與 `depth_clear` 是**平行 capability**,Executive WorldState 兩者都 fail-closed 訂。`nav_ready` 答覆「導航 stack 自身能不能用」、`depth_clear` 答覆「前方安全」,**不互相依賴**。任何把 `depth_clear` 結果塞進 `nav_ready` 邏輯的設計都拒絕(混淆責任邊界)。
 
@@ -408,11 +408,11 @@ baseline 結果寫進:`docs/navigation/research/2026-05-XX-baseline-runs.md`(每
 
 ```
 新建:
-  docs/navigation/plans/2026-05-04-phase2-dev-order-spec.md   ← 本檔
+  docs/archive/navigation-legacy/plans/2026-05-04-phase2-dev-order-spec.md   ← 本檔
   scripts/preflight_nav_lite.py                                ← PR 6-lite-A
   scripts/record_nav_baseline.sh                               ← PR 6-lite-B
   go2_robot_sdk/config/behavior_trees/navigate_w_replanning_go2_safe.xml  ← PR 5
-  docs/navigation/research/2026-05-XX-baseline-runs.md         ← baseline log
+  docs/archive/navigation-legacy/research/2026-05-XX-baseline-runs.md         ← baseline log
 
 修改:
   nav_capability/nav_capability/nav_action_server_node.py      ← PR 1 (B1+B5)

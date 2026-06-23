@@ -30,9 +30,9 @@
 **目標（一句）**：量化 15 個 capability（pass / degraded / fail / insufficient_data），產生 frozen snapshot，供 **CLI readiness 與 Studio evidence** 決定 demo 主線；**runtime gate 接入另在 #14 v0.2，不在 6/18 範圍**。讓「沒 baseline 證據的能力不准進 6/18 demo」。
 
 **真相源**：
-- Master Plan `docs/pawai-brain/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（架構 / 三軸 / canonical 15 能力表 / 設計段 C-D）
+- Master Plan `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（架構 / 三軸 / canonical 15 能力表 / 設計段 C-D）
 - Spec `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`（門檻數字）
-- Implementation `docs/pawai-brain/plans/2026-06-01-scoreboard-implementation-plan.md`（6 deliverable TDD）
+- Implementation `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md`（6 deliverable TDD）
 - Runbook `docs/runbook/2026-06-18-baseline-runbook.md`（上機流程）
 
 **v0.1 成功定義**：不是「Brain 已自動 gate 所有能力」，而是「已有可信 baseline 數據，可決定哪些能力允許進 demo 主線」（Master Plan:22）。

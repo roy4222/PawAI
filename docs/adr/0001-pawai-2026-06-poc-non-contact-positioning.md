@@ -50,6 +50,6 @@
 
 ## Related
 
-- v2 spec：`docs/superpowers/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`
+- v2 spec：`docs/archive/superpowers-legacy/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`
 - Review synthesis：`docs/pawai-demo/2026-05-review-synthesis.md`
 - 未來若重啟物理接觸功能，請開 ADR-000X supersede 本 ADR 的相關條款（不必整篇 supersede）

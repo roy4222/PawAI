@@ -50,10 +50,10 @@
 
 ```bash
 mkdir -p /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/public/maps
-cp /home/roy422/newLife/elder_and_dog/docs/navigation/research/maps/home_living_room_v8.png \
+cp /home/roy422/newLife/elder_and_dog/docs/archive/navigation-legacy/research/maps/home_living_room_v8.png \
    /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/public/maps/home_living_room.png
 ```
-Expected: `ls pawai-studio/frontend/public/maps/home_living_room.png` 存在（205×98）。若來源 `.png` 不存在，先 `python3 -c "from PIL import Image; Image.open('docs/navigation/research/maps/home_living_room_v8.pgm').save('docs/navigation/research/maps/home_living_room_v8.png')"`。
+Expected: `ls pawai-studio/frontend/public/maps/home_living_room.png` 存在（205×98）。若來源 `.png` 不存在，先 `python3 -c "from PIL import Image; Image.open('docs/archive/navigation-legacy/research/maps/home_living_room_v8.pgm').save('docs/archive/navigation-legacy/research/maps/home_living_room_v8.png')"`。
 
 - [ ] **A-Step 2: gateway pose envelope 失敗測試**
 
@@ -115,7 +115,7 @@ useStateStore.getState().updateNav({ pose: { x: 0, y: 0, yaw: 0 } });
 useStateStore.getState().updateNav({ pose: { x: 0, y: 0, yaw: Math.PI/2 } });
 useStateStore.getState().updateNav({ reactiveStop: { zone: "danger", front_distance_m: 0.8, nav_paused: true } });
 ```
-Expected：① 原點三角形落底圖 **canvas ~(48,41)** ② `yaw=0` 尖端**朝右**、`yaw=π/2` **朝上**（不是朝下 → 證明 `-yaw` 對）③ `x=1.0,y=0` 三角形往**右** ~20px 同列 ④ `zone=danger` 變紅。任一不符 → 回 buildspec §2 校準步驟排錯（y-flip 別做兩次、別多做 x 翻轉）。截圖存 `docs/navigation/research/maps/` 當回歸基準。
+Expected：① 原點三角形落底圖 **canvas ~(48,41)** ② `yaw=0` 尖端**朝右**、`yaw=π/2` **朝上**（不是朝下 → 證明 `-yaw` 對）③ `x=1.0,y=0` 三角形往**右** ~20px 同列 ④ `zone=danger` 變紅。任一不符 → 回 buildspec §2 校準步驟排錯（y-flip 別做兩次、別多做 x 翻轉）。截圖存 `docs/archive/navigation-legacy/research/maps/` 當回歸基準。
 
 - [ ] **A-Step 9: Commit**
 

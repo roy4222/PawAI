@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 14, Tailwind CSS, shadcn/ui, Zustand, FastAPI, uvicorn, WebSocket
 
-**Spec:** `docs/superpowers/specs/2026-03-14-pawai-studio-scaffold-design.md`
+**Spec:** `docs/archive/superpowers-legacy/specs/2026-03-14-pawai-studio-scaffold-design.md`
 **Schema 真相來源:** `docs/Pawai-studio/specs/event-schema.md`
 
 ---

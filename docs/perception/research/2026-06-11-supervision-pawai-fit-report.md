@@ -199,4 +199,4 @@ demo 錄影/rosbag + /brain/trace JSONL + /event/* JSONL
 - [github.com/roboflow/supervision/pull/180](https://github.com/roboflow/supervision/pull/180)（headless 提案）→ 📍pyproject.toml:54 證實**現行已是完整版 opencv-python**（headless 方案不在現行依賴中）
 
 **PawAI 對照檔案**：
-`object_perception/object_perception/object_perception_node.py`、`docs/superpowers/plans/2026-06-10-plan-{c,d,e}-*.md`
+`object_perception/object_perception/object_perception_node.py`、`docs/archive/superpowers-legacy/plans/2026-06-10-plan-{c,d,e}-*.md`

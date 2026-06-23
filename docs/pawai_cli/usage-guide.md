@@ -537,7 +537,7 @@ pawai logs all                      # 一次抓 8 個 demo windows
 跳到 0511 架構文件：
 
 ```bash
-pawai docs brain         # → docs/pawai-brain/architecture/0511/brain/brain.md
+pawai docs brain         # → docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md
 pawai docs --open speech # 用 $EDITOR 開
 ```
 

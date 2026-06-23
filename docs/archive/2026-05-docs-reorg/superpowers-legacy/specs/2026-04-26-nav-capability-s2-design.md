@@ -6,7 +6,7 @@
 **Supersedes**: None
 **Related**:
 - [`docs/導航避障/README.md`](../../導航避障/README.md) — current state (P0-D 完成)
-- [`docs/superpowers/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](2026-04-24-p0-nav-obstacle-avoidance-design.md) — 4/24 P0 spec
+- [`docs/archive/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`](2026-04-24-p0-nav-obstacle-avoidance-design.md) — 4/24 P0 spec
 - [`docs/導航避障/research/2026-04-26-nav2-dynamic-obstacle-log.md`](../../導航避障/research/2026-04-26-nav2-dynamic-obstacle-log.md) — 4/26 實機 log
 - AMIGO ROS2 研究筆記（commit 96e830cc）
 

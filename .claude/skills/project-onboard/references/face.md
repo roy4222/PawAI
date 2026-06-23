@@ -10,11 +10,11 @@ Layer 2 感知模組，負責人臉偵測（YuNet）、識別（SFace cosine）�
 
 | 文件 | 用途 |
 |------|------|
-| `docs/pawai-brain/architecture/0511/face/face.md` | 主總覽 + 架構圖 + 0511 freeze 快照 |
-| `docs/pawai-brain/architecture/0511/face/face-recognition-tracking.md` | YuNet + SFace pipeline + IOU tracker 細節 |
-| `docs/pawai-brain/architecture/0511/face/face-runtime-flow.md` | D435 → YuNet → SFace → 追蹤 → ROS2 publish 完整 flow |
-| `docs/pawai-brain/architecture/0511/face/face-brain-executive-integration.md` | 與 Brain world_state_builder 的整合（current_speaker 注入）|
-| `docs/pawai-brain/architecture/0511/face/face-registration-debug-runbook.md` | 人臉註冊流程 + 現場 debug checklist |
+| `docs/archive/pawai-brain-legacy/architecture-0511/face/face.md` | 主總覽 + 架構圖 + 0511 freeze 快照 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/face/face-recognition-tracking.md` | YuNet + SFace pipeline + IOU tracker 細節 |
+| `docs/archive/pawai-brain-legacy/architecture-0511/face/face-runtime-flow.md` | D435 → YuNet → SFace → 追蹤 → ROS2 publish 完整 flow |
+| `docs/archive/pawai-brain-legacy/architecture-0511/face/face-brain-executive-integration.md` | 與 Brain world_state_builder 的整合（current_speaker 注入）|
+| `docs/archive/pawai-brain-legacy/architecture-0511/face/face-registration-debug-runbook.md` | 人臉註冊流程 + 現場 debug checklist |
 
 ## 核心程式檔案
 

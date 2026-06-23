@@ -1,6 +1,6 @@
 # Phase 1 Implementation Plan — D435 → /scan_d435 可視化
 
-> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
+> 🕰️ **HISTORICAL — 5/3 sprint plan（保留作引用，不重複維護）。** 屬 5/12 sprint 階段；當前 nav 能力一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（全 `insufficient_data`）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B）為準，不得宣稱動態避障/自走。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -335,8 +335,8 @@ D435 fov ±30°，所以 box 在側面 90° 不會被 D435 看到。
 ## Task 7: 結果記錄
 
 **Files:**
-- Modify: `docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md`（本檔末尾 append）
-- Add: `docs/navigation/plans/assets/2026-05-03-phase1-foxglove.png`（Task 5 Step 4 的截圖，optional）
+- Modify: `docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md`（本檔末尾 append）
+- Add: `docs/archive/navigation-legacy/plans/assets/2026-05-03-phase1-foxglove.png`（Task 5 Step 4 的截圖，optional）
 
 - [ ] **Step 1: 在本檔末尾 append Phase 1 result 段**
 
@@ -379,16 +379,16 @@ Edit 本檔，在最後加：
 - [ ] **Step 2: 如果 Task 5 截圖了，commit 截圖**
 
 ```bash
-mkdir -p docs/navigation/plans/assets
-cp /tmp/phase1_foxglove_aligned.png docs/navigation/plans/assets/2026-05-03-phase1-foxglove.png
-git add docs/navigation/plans/assets/2026-05-03-phase1-foxglove.png \
-        docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md
+mkdir -p docs/archive/navigation-legacy/plans/assets
+cp /tmp/phase1_foxglove_aligned.png docs/archive/navigation-legacy/plans/assets/2026-05-03-phase1-foxglove.png
+git add docs/archive/navigation-legacy/plans/assets/2026-05-03-phase1-foxglove.png \
+        docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md
 git commit -m "docs(nav): Phase 1 D435 → /scan_d435 result（PASS/PARTIAL/FAIL）"
 ```
 
 如果沒截圖（純文字描述）：
 ```bash
-git add docs/navigation/plans/2026-05-03-d435-fusion-phase1-plan.md
+git add docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md
 git commit -m "docs(nav): Phase 1 D435 → /scan_d435 result"
 ```
 
