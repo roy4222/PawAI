@@ -24,7 +24,7 @@ setup(
     maintainer="Roy",
     maintainer_email="roy@pawai.dev",
     description="ROS2 vision perception: gesture + pose classification",
-    license="BSD-3-Clause",
+    license="BSD-2-Clause",
     entry_points={
         "console_scripts": [
             "vision_perception_node = vision_perception.vision_perception_node:main",

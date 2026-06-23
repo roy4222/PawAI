@@ -19,7 +19,7 @@ setup(
     maintainer="Roy",
     maintainer_email="roy@pawai.dev",
     description="ROS2 object detection: YOLO26n ONNX on D435 RGB",
-    license="BSD-3-Clause",
+    license="BSD-2-Clause",
     entry_points={
         "console_scripts": [
             "object_perception_node = object_perception.object_perception_node:main",

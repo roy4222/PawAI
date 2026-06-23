@@ -2683,7 +2683,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 ### 文件更新
 - `docs/mission/README.md` v2.3 完成
-- 四人分工文件完成（`pawai-studio/docs/0410assignments/`）
+- 四人分工文件完成
 - 外接 LiDAR 可行性研究完成
 - 各模組 README 同步更新
 

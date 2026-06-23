@@ -29,7 +29,7 @@ setup(
     maintainer="Nuralem Abizov",
     maintainer_email="abizov94@gmail.com",
     description="ROS2 package for speech processing including TTS and audio management for Go2 robot",
-    license="BSD-3-Clause",
+    license="BSD-2-Clause",
     entry_points={
         "console_scripts": [
             "tts_node = speech_processor.tts_node:main",

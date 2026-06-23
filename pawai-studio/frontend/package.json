@@ -1,6 +1,8 @@
 {
   "name": "frontend",
   "version": "0.1.0",
+  "license": "BSD-2-Clause",
+  "author": "PawAI Team",
   "private": true,
   "packageManager": "npm@11.4.2",
   "scripts": {

@@ -23,7 +23,7 @@ setup(
     maintainer="Roy",
     maintainer_email="roy@pawai.dev",
     description="ROS2 face perception package: YuNet detection + SFace recognition + IOU tracking",
-    license="BSD-3-Clause",
+    license="BSD-2-Clause",
     entry_points={
         "console_scripts": [
             "face_identity_node = face_perception.face_identity_node:main",

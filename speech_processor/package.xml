@@ -6,7 +6,7 @@
   <description>ROS2 package for speech processing including TTS and audio management for Go2 robot</description>
   
   <maintainer email="abizov94@gmail.com">brimo</maintainer>
-  <license>BSD-3-Clause</license>
+  <license>BSD-2-Clause</license>
   
   <author email="abizov94@gmail.com">brimo</author>
   

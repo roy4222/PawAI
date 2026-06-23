@@ -15,5 +15,5 @@ setup(
     maintainer="Roy",
     maintainer_email="roy@pawai.dev",
     description="ROS-free shared truths for PawAI (skill registry / zh tables / LLM policy)",
-    license="MIT",
+    license="BSD-2-Clause",
 )

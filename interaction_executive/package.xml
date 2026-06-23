@@ -6,7 +6,7 @@
   <description>Thin interaction orchestrator — state machine for demo control</description>
 
   <maintainer email="roy@pawai.dev">Roy</maintainer>
-  <license>MIT</license>
+  <license>BSD-2-Clause</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 

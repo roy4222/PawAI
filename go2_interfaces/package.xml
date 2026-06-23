@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>ROS2 message interfaces for Go2 robot communication (merged unitree_go and go2_interfaces)</description>
   <maintainer email="abizov94@gmail.com">brimo</maintainer>
-  <license>TODO: License declaration</license>
+  <license>BSD-2-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>builtin_interfaces</depend>

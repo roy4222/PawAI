@@ -20,7 +20,7 @@ setup(
     maintainer="roy422",
     maintainer_email="roy422roy@gmail.com",
     description="Nav capability platform layer.",
-    license="MIT",
+    license="BSD-2-Clause",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [

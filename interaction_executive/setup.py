@@ -19,7 +19,7 @@ setup(
     maintainer="Roy",
     maintainer_email="roy@pawai.dev",
     description="Thin interaction orchestrator — state machine for demo control",
-    license="MIT",
+    license="BSD-2-Clause",
     entry_points={
         "console_scripts": [
             "interaction_executive_node = interaction_executive.interaction_executive_node:main",

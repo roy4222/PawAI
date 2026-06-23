@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>ROS2 object detection: YOLO26n ONNX on D435 RGB</description>
   <maintainer email="roy@pawai.dev">Roy</maintainer>
-  <license>BSD-3-Clause</license>
+  <license>BSD-2-Clause</license>
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>

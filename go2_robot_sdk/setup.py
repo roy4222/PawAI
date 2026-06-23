@@ -1,5 +1,5 @@
 # Copyright (c) 2024, RoboVerse community
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: Apache-2.0
 
 
 import os
@@ -45,7 +45,7 @@ setup(
     maintainer='brimo',
     maintainer_email='abizov94@gmail.com',
     description='Go2 ROS2 SDK for Unitree Go2 Edu/Pro/Air models',
-    license='BSD-3-Clause',
+    license='Apache-2.0',
     entry_points={
         'console_scripts': [
             'go2_driver_node = go2_robot_sdk.main:main',

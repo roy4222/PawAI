@@ -27,7 +27,7 @@ setup(
     maintainer="roy",
     maintainer_email="roy422roy@gmail.com",
     description="PawAI Conversation Engine — LangGraph primary runtime.",
-    license="MIT",
+    license="BSD-2-Clause",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
