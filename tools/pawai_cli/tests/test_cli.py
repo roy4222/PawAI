@@ -658,7 +658,7 @@ def test_demo_stop_own_stale_lock_releases_without_force(monkeypatch):
     from pawai_cli.lock import Lock
 
     own_stale = Lock(
-        user="lubaiyu", host="Roy422deMacBook-Pro.local",
+        user="alice", host="dev-laptop.local",
         branch="main", sha="abc1234",
         state="running",
         start_time=(datetime.now(timezone.utc) - timedelta(hours=5)).isoformat(),
@@ -668,14 +668,14 @@ def test_demo_stop_own_stale_lock_releases_without_force(monkeypatch):
     with patch("pawai_cli.lock.Lock.read", return_value=own_stale), \
          patch("pawai_cli.lock.Lock.release_if_owned", return_value=True) as mock_rel, \
          patch("pawai_cli.main._cleanup_for_lock", return_value=0), \
-         patch("pawai_cli.main.platform.node", return_value="Roy422deMacBook-Pro.local"):
-        monkeypatch.setenv("USER", "lubaiyu")
+         patch("pawai_cli.main.platform.node", return_value="dev-laptop.local"):
+        monkeypatch.setenv("USER", "alice")
         runner = CliRunner()
         result = runner.invoke(cli, ["demo", "stop"])
 
     assert result.exit_code == 0
     assert "Reclaiming your own stale" in result.output
-    mock_rel.assert_called_once_with(user="lubaiyu", host="Roy422deMacBook-Pro.local")
+    mock_rel.assert_called_once_with(user="alice", host="dev-laptop.local")
 
 
 @pytest.mark.real_repo  # reads real repo docs/scripts (T2C-0)

@@ -37,7 +37,7 @@ export CYCLONEDDS_URI=/home/jetson/elder_and_dog/config/cyclonedds-template.xml
 For a WSL/dev machine that joins the bus, point to that machine's local checkout:
 
 ```bash
-export CYCLONEDDS_URI=/home/roy422/newLife/elder_and_dog/config/cyclonedds-template.xml
+export CYCLONEDDS_URI=$WORKSPACE/config/cyclonedds-template.xml
 ```
 
 Do not enable this until the placeholder interface and peer addresses have been

@@ -11,7 +11,7 @@
 |------|------|
 | **IP** | `YOUR_GPU_HOST` |
 | **Port** | `8022` |
-| **帳號** | `roy422` |
+| **帳號** | `YOUR_USER` |
 
 > ⚠️ **此為敏感資訊，請勿外洩**
 
@@ -48,7 +48,7 @@ ssh -L 8050:localhost:8050 GPUServer
 ```
 Host GPUServer
     HostName YOUR_GPU_HOST
-    User roy422
+    User YOUR_USER
     Port 8022
 ```
 
@@ -158,7 +158,7 @@ CUDA_VISIBLE_DEVICES=2,3 python train.py
 ```
 Host School_GPU
     HostName YOUR_GPU_HOST
-    User roy422
+    User YOUR_USER
     Port 8022
 ```
 

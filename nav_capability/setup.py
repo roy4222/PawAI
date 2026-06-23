@@ -17,7 +17,7 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="roy422",
+    maintainer="YOUR_USER",
     maintainer_email="roy422roy@gmail.com",
     description="Nav capability platform layer.",
     license="BSD-2-Clause",

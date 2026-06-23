@@ -60,7 +60,7 @@ class OpenRouterConfig:
     overall_budget_s: float = 5.0
     temperature: float = 0.2
     max_tokens: int = 500
-    referer: str = "https://github.com/roy422/elder_and_dog"
+    referer: str = "https://github.com/roy4222/PawAI"
     title: str = "PawAI Brain"
 
 

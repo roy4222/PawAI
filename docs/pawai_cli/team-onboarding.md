@@ -30,7 +30,7 @@ sudo apt install tmux nodejs npm
    ```bash
    tailscale status
    ```
-   應該看到 `roy422` 的 jetson node（hostname 含 "jetson"）
+   應該看到 `YOUR_USER` 的 jetson node（hostname 含 "jetson"）
 5. 測延遲：
    ```bash
    tailscale ping jetson

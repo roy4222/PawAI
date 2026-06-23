@@ -267,7 +267,7 @@ acquire lock (starting)  ───────►  跑 start.sh  ─────
 ═══ 啟動 Studio overlay ═══
     ✅ Frontend: http://localhost:3000/studio
 ═══ 啟動完成 ═══
-✓ Demo running (lane: brain, lock owner: lubaiyu@Roy422deMacBook-Pro.local)
+✓ Demo running (lane: brain, lock owner: alice@dev-laptop.local)
 ```
 
 如果 preflight 卡在某條 → 該條前面有具體提示，照著修就行。

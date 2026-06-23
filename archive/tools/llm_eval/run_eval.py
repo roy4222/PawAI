@@ -118,7 +118,7 @@ def call_openrouter(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/roy422/elder_and_dog",
+            "HTTP-Referer": "https://github.com/roy4222/PawAI",
             "X-Title": "PawAI Brain Eval",
         },
     )

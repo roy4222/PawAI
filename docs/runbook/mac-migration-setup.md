@@ -47,7 +47,7 @@ ssh jetson-nano 'echo ok && hostname'
 ```bash
 mkdir -p ~/newLife
 cd ~/newLife
-git clone git@github.com:roy4222/elder_and_dog.git
+git clone git@github.com:USER2/elder_and_dog.git
 cd elder_and_dog
 ```
 
@@ -95,15 +95,15 @@ personal notes such as `user_career_goals.md` and `user_career_interest.md`.
 Create a private GitHub repo:
 
 ```text
-roy4222/pawai-claude-memory
+USER2/pawai-claude-memory
 ```
 
 WSL one-time push:
 
 ```bash
-cd ~/.claude/projects/-home-roy422-newLife-elder-and-dog/memory/
+cd ~/.claude/projects/-home-USER-project/memory/
 git init
-git remote add origin git@github.com:roy4222/pawai-claude-memory.git
+git remote add origin git@github.com:USER2/pawai-claude-memory.git
 git add .
 git commit -m "init: WSL freeze before Mac migration (2026-05-12)"
 git branch -M main
@@ -123,7 +123,7 @@ ls ~/.claude/projects/ | grep -i elder
 
 # 3. Clone memory into that actual project directory.
 cd ~/.claude/projects/<actual-project-dir>
-git clone git@github.com:roy4222/pawai-claude-memory.git memory
+git clone git@github.com:USER2/pawai-claude-memory.git memory
 ```
 
 Maintenance rule: push memory at the end of each work session and after major

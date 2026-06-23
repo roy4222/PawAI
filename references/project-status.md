@@ -600,7 +600,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ### Mac 搬家 + PawAI CLI 落地
 
-- 從 WSL Roy422 → MacBook M1 完整搬家：Tailscale / SSH key / venv / Studio gateway URL 全部對齊
+- 從 WSL machine → MacBook M1 完整搬家：Tailscale / SSH key / venv / Studio gateway URL 全部對齊
 - `tools/pawai_cli` MVP 落地：`doctor / status / dev info / jetson deploy / demo start|stop / logs`
 - `start.sh` self-heal：偵測舊 lane → cleanup → preflight；frontend 自動 `npm install` + 寫 `.env.local`
 - doctor 加 platform-aware hints（Mac brew vs Linux apt nodejs npm）+ SSH config 偵測 + frontend 檢查

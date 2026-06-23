@@ -83,7 +83,7 @@
       "skip": 0,
       "error": 0
     },
-    "version_snapshot": "{\"deployed_by\": \"roy422\", \"deployed_from_host\": \"DESKTOP-575ABRI\", \"branch\": \"main\", \"git_sha\": \"78fbf36\", \"git_sha_full\": \"78fbf36063000202e69361a28dd0e170162554b0\", \"dirty\": true, \"module\": \"all\", \"packages\": [\"face_perception\", \"go2_robot_sdk\", \"interaction_executive\", \"object_perception\", \"pawai_brain\", \"speech_processor\", \"vision_perception\"], \"when\": \"2026-06-04T13:16:02.221961+00:00\", \"sync_method\": \"sync-once\", \"user\": \"roy422@DESKTOP-575ABRI\", \"ts\": \"2026-06-04T13:16:02.221961+00:00\"}\n",
+    "version_snapshot": "{\"deployed_by\": \"YOUR_USER\", \"deployed_from_host\": \"YOUR_HOST\", \"branch\": \"main\", \"git_sha\": \"78fbf36\", \"git_sha_full\": \"78fbf36063000202e69361a28dd0e170162554b0\", \"dirty\": true, \"module\": \"all\", \"packages\": [\"face_perception\", \"go2_robot_sdk\", \"interaction_executive\", \"object_perception\", \"pawai_brain\", \"speech_processor\", \"vision_perception\"], \"when\": \"2026-06-04T13:16:02.221961+00:00\", \"sync_method\": \"sync-once\", \"user\": \"YOUR_USER@YOUR_HOST\", \"ts\": \"2026-06-04T13:16:02.221961+00:00\"}\n",
     "verify_report_path": "artifacts/baseline/logs/latest.json"
   }
 }

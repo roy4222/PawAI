@@ -579,7 +579,7 @@ class LlmBridgeNode(Node):
         headers = {
             "Authorization": f"Bearer {self._openrouter_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/roy422/elder_and_dog",
+            "HTTP-Referer": "https://github.com/roy4222/PawAI",
             "X-Title": "PawAI Brain",
         }
 

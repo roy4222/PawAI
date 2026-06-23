@@ -222,7 +222,7 @@ def chat(
     headers = {
         "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/roy422/elder_and_dog",
+        "HTTP-Referer": "https://github.com/roy4222/PawAI",
         "X-Title": "PawAI Studio Mock Chat",
     }
 
