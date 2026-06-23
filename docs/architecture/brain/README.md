@@ -1,32 +1,34 @@
-# PawAI Brain × Studio — 架構文件索引
+# PawAI Brain × Studio — Architecture Documentation Index
 
-> **Scope**：PawAI 互動主線的**架構真相**入口 — 把 Brain / Executive / Studio / 感知資料流的架構文件分層索引（哪份是當前總覽、哪份是 5/11 freeze-snapshot、哪份是 historical/outdated）。
-> **Status**：active（架構索引）。本檔**不是**能力 claim 真相，也不重複任何能力分級。
-> **Owner lane**：brain-studio（搭配 `docs/architecture/README.md` 與各模組 `CLAUDE.md`）。
-> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/`（最新唯一 trusted snapshot，SHA `78fbf36`，readiness=`not_ready`）＞ `docs/mission/2026-06-18-capability-claim-matrix.md`（canonical Capability Claim Matrix）＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B（claim 判決依據）＞ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`（門檻 / 怎麼量）＞ `docs/mission/2026-06-18-demo-north-star.md`（戰略邊界）＞ 本目錄（架構）＞ `docs/contracts/interaction_contract.md`（topic/action schema, v2.5 凍結）。
-> **Maintained child files**：`overview.md`（當前架構總覽）、`designs/clean-architecture.md`、`designs/data-flow.md`（兩份均部分過時，見下表）。
-> **Archived / historical 邊界**：`0511/**` 為 **5/11 freeze-snapshot**（保留作引用，**不重複維護**）；任何「現在能跑什麼」一律以 canonical claim matrix 為準，不以 0511 快照或 designs 舊圖為準。
-> **本 README 不是**：能力 claim 真相（→ canonical claim matrix）、門檻定義（→ `specs/2026-06-18-capability-baseline-spec.md`）、介面契約（→ `docs/contracts/interaction_contract.md`）。
+**English** | [中文](./README.zh.md)
+
+> **Scope**: The entry point for the **architectural source of truth** of PawAI's interaction mainline — a layered index of the architecture documents for Brain / Executive / Studio / perception data flow (which one is the current overview, which one is the 5/11 freeze-snapshot, which one is historical/outdated).
+> **Status**: active (architecture index). This file is **not** the source of truth for capability claims, nor does it duplicate any capability tiering.
+> **Owner lane**: brain-studio (paired with `docs/architecture/README.md` and each module's `CLAUDE.md`).
+> **Source-of-truth priority** (high → low): code / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/` (the latest and only trusted snapshot, SHA `78fbf36`, readiness=`not_ready`) ＞ `docs/mission/2026-06-18-capability-claim-matrix.md` (canonical Capability Claim Matrix) ＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B (basis for claim adjudication) ＞ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md` (thresholds / how to measure) ＞ `docs/mission/2026-06-18-demo-north-star.md` (strategic boundaries) ＞ this directory (architecture) ＞ `docs/contracts/interaction_contract.md` (topic/action schema, v2.5 frozen).
+> **Maintained child files**: `overview.md` (current architecture overview), `designs/clean-architecture.md`, `designs/data-flow.md` (both partially outdated, see table below).
+> **Archived / historical boundary**: `0511/**` is the **5/11 freeze-snapshot** (retained for reference, **not maintained in parallel**); anything about "what can run right now" must defer to the canonical claim matrix, not to the 0511 snapshot or the older diagrams in designs.
+> **This README is not**: the source of truth for capability claims (→ canonical claim matrix), the threshold definitions (→ `specs/2026-06-18-capability-baseline-spec.md`), or the interface contract (→ `docs/contracts/interaction_contract.md`).
 
 ---
 
-## 架構文件導覽
+## Architecture Documentation Guide
 
-| 文件 | 狀態 | 內容 |
+| Document | Status | Contents |
 |---|---|---|
-| [`overview.md`](overview.md) | active（架構真相）；能力宣稱/時程 superseded | Brain（決策引擎）× Studio（操作觀測介面）整合總覽：目標、系統架構、資料流、模組職責、降級鏈、部署拓樸。**頂部 6/05 註記**說明哪些能力宣稱已被 6/04 baseline + 6/05 audit 取代。 |
-| [`designs/clean-architecture.md`](designs/clean-architecture.md) | ⚠️ 部分過時 | Clean Architecture 四層分層原則（3/08）。原則可參考，但落地狀況與文件描述有差距（只有 `go2_robot_sdk` 完整落地，頂部 banner 已標）。 |
-| [`designs/data-flow.md`](designs/data-flow.md) | ⚠️ outdated（結構性差異） | 早期（3/13）資料流與互動流程圖。頂部 banner 已標已知偏差，**以 `docs/contracts/interaction_contract.md` 為準**。 |
+| [`overview.md`](overview.md) | active (architecture source of truth); capability claims/timeline superseded | An integrated overview of Brain (decision engine) × Studio (operation & observation interface): goals, system architecture, data flow, module responsibilities, degradation chains, deployment topology. The **6/05 note at the top** explains which capability claims have been superseded by the 6/04 baseline + 6/05 audit. |
+| [`designs/clean-architecture.md`](designs/clean-architecture.md) | ⚠️ partially outdated | The four-layer Clean Architecture principles (3/08). The principles are still worth referencing, but the implementation status differs from the document's description (only `go2_robot_sdk` is fully implemented, as noted in the banner at the top). |
+| [`designs/data-flow.md`](designs/data-flow.md) | ⚠️ outdated (structural divergence) | Early (3/13) data-flow and interaction-flow diagrams. The banner at the top flags the known divergences; **defer to `docs/contracts/interaction_contract.md`**. |
 
 ---
 
-## 5/11 freeze-snapshot（`0511/`，historical 參考，不重複維護）
+## 5/11 freeze-snapshot (`0511/`, historical reference, not maintained in parallel)
 
-> `0511/` 是 **5/11 各 lane 的凍結架構快照**（runtime flow / graph node map / persona-capability-memory / debug runbook 等，按 lane 拆檔）。它是當時 demo 衝刺期的架構照片，**保留作引用**：理解某條鏈路「5/11 時長怎樣」很有用，但**不得當作「現在能跑什麼 / 能力是否 pass」的依據**。能力分級一律回 canonical claim matrix。
+> `0511/` is the **frozen architecture snapshot of each lane as of 5/11** (runtime flow / graph node map / persona-capability-memory / debug runbook, etc., split per lane). It is a photograph of the architecture during that demo sprint, **retained for reference**: it is useful for understanding "what a given chain looked like as of 5/11", but it **must not be used as the basis for "what can run right now / whether a capability passes"**. Capability tiering always defers to the canonical claim matrix.
 
-| lane | snapshot 入口 |
+| lane | snapshot entry |
 |---|---|
-| Brain | `0511/brain.md` → `0511/brain/`（runtime-flow / graph-node-map / persona-capability-memory / debug-runbook） |
+| Brain | `0511/brain.md` → `0511/brain/` (runtime-flow / graph-node-map / persona-capability-memory / debug-runbook) |
 | Face | `0511/face.md` → `0511/face/` |
 | Gesture | `0511/gesture.md` → `0511/gesture/` |
 | Pose | `0511/pose.md` → `0511/pose/` |
@@ -37,9 +39,9 @@
 
 ---
 
-## 能力是否 pass / 哪段能講（不在本目錄重複，連結 canonical）
+## Whether a capability passes / what can be claimed (not duplicated here, linked to canonical)
 
-- **canonical Capability Claim Matrix**：`docs/mission/2026-06-18-capability-claim-matrix.md`（判決來源 6/05 audit §B，基準 `docs/runbook/baseline-evidence/2026-06-04-hitl/`）。
-- **能力門檻 / 怎麼量**（provisional until baseline）：`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`。
-- **戰略邊界 / 禁說清單**：`docs/mission/2026-06-18-demo-north-star.md`。
-- **介面契約**（topic / action / service schema, v2.5 凍結）：`docs/contracts/interaction_contract.md`。
+- **canonical Capability Claim Matrix**: `docs/mission/2026-06-18-capability-claim-matrix.md` (adjudication source: 6/05 audit §B, baseline `docs/runbook/baseline-evidence/2026-06-04-hitl/`).
+- **Capability thresholds / how to measure** (provisional until baseline): `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`.
+- **Strategic boundaries / do-not-say list**: `docs/mission/2026-06-18-demo-north-star.md`.
+- **Interface contract** (topic / action / service schema, v2.5 frozen): `docs/contracts/interaction_contract.md`.

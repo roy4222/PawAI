@@ -1,34 +1,36 @@
 # Architecture Decision Records (ADR)
 
-> **Scope**：PawAI 的持久架構決策（durable decisions）。一次一決策、可被未來提案 supersede。
+**English** | [中文](./README.zh.md)
+
+> **Scope**: PawAI's durable architecture decisions. One decision at a time; can be superseded by future proposals.
 > **Status**: active / canonical durable-decision layer
-> **Owner lane**: cross-cutting（不綁單一模組）
-> **Source-of-truth priority**：ADR 是 [真相層級](0004-docs-source-of-truth-hierarchy.md) 的 **#8**（持久決策）。能力是否 pass 一律高於 ADR、回 **#1** [`baseline-evidence`](../runbook/baseline-evidence/2026-06-04-hitl/)；能不能講連 [canonical claim matrix](../mission/2026-06-18-capability-claim-matrix.md)。ADR 記**決策**，不記能力 grade、不記 transient todo。
-> **Maintained child files**：`0001`–`0007` + 本 README index。
-> **Archived / legacy boundary**：被 supersede 的 ADR 在 Status 標 `superseded by ADR-XXXX`，不刪；被新文件 amend 的在頂部加 Amendment blockquote（見 0001 / 0002）。
-> **What this README is NOT**：不是長版設計規格（那是 `docs/architecture/specs/` 等模組 spec），不是能力真相源（那是 baseline-evidence + claim matrix）。
+> **Owner lane**: cross-cutting (not bound to a single module)
+> **Source-of-truth priority**: ADR is **#8** of the [source-of-truth hierarchy](0004-docs-source-of-truth-hierarchy.md) (durable decisions). Whether a capability passes always ranks above ADR, falling back to **#1** [`baseline-evidence`](../runbook/baseline-evidence/2026-06-04-hitl/); whether something can be claimed defers to the [canonical claim matrix](../mission/2026-06-18-capability-claim-matrix.md). ADRs record **decisions**, not capability grades, and not transient todos.
+> **Maintained child files**: `0001`–`0007` + this README index.
+> **Archived / legacy boundary**: superseded ADRs are marked in their Status as `superseded by ADR-XXXX` and are not deleted; those amended by a newer document get an Amendment blockquote added at the top (see 0001 / 0002).
+> **What this README is NOT**: not a long-form design spec (those live in module specs such as `docs/architecture/specs/`), and not a capability source-of-truth (that is baseline-evidence + claim matrix).
 
-每個架構決策一份 markdown。檔名格式 `NNNN-kebab-case-title.md`（e.g. `0004-docs-source-of-truth-hierarchy.md`）。
+One markdown file per architecture decision. Filename format `NNNN-kebab-case-title.md` (e.g. `0004-docs-source-of-truth-hierarchy.md`).
 
-## ADR 索引
+## ADR Index
 
-| ADR | 決策 | Status |
+| ADR | Decision | Status |
 |---|---|---|
-| [0001](0001-pawai-2026-06-poc-non-contact-positioning.md) | 2026-06 POC 採非接觸式定位（紅線） | accepted · 2026-06-05 amended |
-| [0002](0002-pawai-platform-and-demo-scenario-two-layer-narrative.md) | 平台身份 + demo 場景雙層敘事 | accepted · 2026-06-05 amended |
-| [0003](0003-2026-05-demo-studio-ptt-over-wake-word-vad.md) | demo 階段以 Studio PTT 取代 wake word / VAD | accepted |
-| [0004](0004-docs-source-of-truth-hierarchy.md) | 文件真相來源 10 層 hierarchy + 衝突仲裁 | accepted |
-| [0005](0005-evidence-first-claim-policy.md) | Evidence-first claim policy（分級 + 證據綁定 + 禁止句式） | accepted |
-| [0006](0006-618-demo-claim-policy.md) | 6/18 demo claim policy（窄版 pass + 禁說清單 + fail-closed） | accepted |
-| [0007](0007-wsl-source-of-truth-vs-jetson-runtime.md) | WSL=source-of-truth / Jetson=runtime（SHA-match 取證鐵律） | accepted |
+| [0001](0001-pawai-2026-06-poc-non-contact-positioning.md) | 2026-06 POC adopts non-contact positioning (red line) | accepted · 2026-06-05 amended |
+| [0002](0002-pawai-platform-and-demo-scenario-two-layer-narrative.md) | Platform identity + demo scenario two-layer narrative | accepted · 2026-06-05 amended |
+| [0003](0003-2026-05-demo-studio-ptt-over-wake-word-vad.md) | During the demo phase, replace wake word / VAD with Studio PTT | accepted |
+| [0004](0004-docs-source-of-truth-hierarchy.md) | Docs source-of-truth 10-layer hierarchy + conflict arbitration | accepted |
+| [0005](0005-evidence-first-claim-policy.md) | Evidence-first claim policy (grading + evidence binding + forbidden phrasing) | accepted |
+| [0006](0006-618-demo-claim-policy.md) | 6/18 demo claim policy (narrow pass + do-not-say list + fail-closed) | accepted |
+| [0007](0007-wsl-source-of-truth-vs-jetson-runtime.md) | WSL=source-of-truth / Jetson=runtime (SHA-match evidence iron rule) | accepted |
 
-## 與長版 spec 的分工
-- **`docs/architecture/specs/`、`docs/architecture/navigation/specs/`、`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/`（歷史）**：歷史設計規格、Spike 計畫、北極星文件 — 通常含「為什麼這樣設計、後續細節怎麼跑」的長篇規格
-- **`docs/adr/`**（本資料夾）：精煉的「我們決定 X、因為 Y、後果 Z」記錄 — 一次一個決策、可被未來提案 supersede
+## Division of labor with long-form specs
+- **`docs/architecture/specs/`, `docs/architecture/navigation/specs/`, `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/` (historical)**: historical design specs, Spike plans, North Star documents — usually contain long-form specs covering "why it is designed this way, and how the follow-up details play out"
+- **`docs/adr/`** (this folder): distilled "we decided X, because Y, with consequence Z" records — one decision at a time, can be superseded by future proposals
 
-新決策從這裡開始；spec 是 ADR 的長版背景。
+New decisions start here; specs are the long-form background for ADRs.
 
-## 模板
+## Template
 ```markdown
 # ADR-NNNN: <decision title>
 

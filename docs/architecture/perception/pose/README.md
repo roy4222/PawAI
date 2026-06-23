@@ -1,42 +1,44 @@
-# 姿勢辨識
+# Pose Recognition
 
-> **Scope**：vision_perception 姿勢子系統設計真相（MediaPipe Pose + 角度/幾何分類）｜**Status**: active / source-of-truth (module)
-> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `pose.basic` / `pose.fall`
-> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（pose.basic / pose.fall = ⚪ **insufficient_data**，無 pose observer；caveats 凌駕本頁敘事）
-> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
-> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）。⚠️ **pose.basic = Studio-only / insufficient_data**（6/04 無 observer，未量）；**跌倒（pose.fall）是 future、非緊急行為**，demo 維持 `enable_fallen:=false`。**不得宣稱跌倒偵測可靠 / 防跌倒守護 / 緊急警報已 pass**。
+**English** | [中文](./README.zh.md)
 
-> MediaPipe Pose 辨識人體姿勢。**pose.basic 本輪未量測（Studio-only）；跌倒是 future、非緊急行為**。
+> **Scope**: vision_perception pose subsystem design source-of-truth (MediaPipe Pose + angle/geometry classification) | **Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception | **Capability claim source-of-truth**: [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `pose.basic` / `pose.fall`
+> **Capability grade evidence (final fact)**: [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) (pose.basic / pose.fall = ⚪ **insufficient_data**, no pose observer; caveats override the narrative on this page)
+> **Maintained sub-files**: `CLAUDE.md` (work rules) | `AGENT.md` (topic interface contract) | `research/` (research-only, not source-of-truth)
+> **What this page is NOT**: it is not the adjudication of capability pass/fail (see baseline-evidence). ⚠️ **pose.basic = Studio-only / insufficient_data** (no observer on 6/04, not measured); **fall detection (pose.fall) is future, not an emergency behavior**, demo keeps `enable_fallen:=false`. **Do NOT claim that fall detection is reliable / fall-prevention guardianship / emergency alert has passed.**
 
-## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+> MediaPipe Pose recognizes human body poses. **pose.basic was not measured this round (Studio-only); fall detection is future, not an emergency behavior.**
 
-> 完整 8 欄位散文見 [claim matrix `pose.basic / pose.fall`](../../../mission/2026-06-18-capability-claim-matrix.md#posebasic--posefall)。本表為速查。
+## Capability card (canonical 8 fields → links to claim matrix, do not repeat the full prose on this page)
 
-| 欄位 | 值 |
+> For the full 8-field prose, see [claim matrix `pose.basic / pose.fall`](../../../mission/2026-06-18-capability-claim-matrix.md#posebasic--posefall). This table is a quick reference.
+
+| Field | Value |
 |---|---|
-| **Current Claim** | 姿勢 / 跌倒有能力鏈路但本輪未量測；demo 不做、用應用場景影片帶過 |
+| **Current Claim** | Pose / fall has a capability chain but was not measured this round; demo does not perform it, covered with an application-scenario video instead |
 | **Claim Level** | DO_NOT_CLAIM |
-| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（n=0, 無 pose observer, fall claim_level=future, `brain_allowed=false`） |
-| **Pass/Degraded/Fail/Insufficient** | ⚪ insufficient_data（pose.basic = Studio-only）；跌倒是 **future**、非緊急行為 |
-| **Fallback** | 鏡頭帶到 Studio fallen 紅標時旁白**絕不提跌倒**；demo 啟動維持 `enable_fallen:=false` |
-| **Non-Claims** | 跌倒偵測可靠 / 防跌倒守護 / 坐下偵測已 pass / 緊急警報 / 把 pose 觀察當醫療判斷 |
-| **Model Candidates** | FUTURE_RESEARCH（跌倒）；pose.basic 待建 observer |
-| **Next Retest** | 建 pose observer 工具 + HITL 收 ground-truth 樣本才可談 pass；fall 本就 future 不進 demo |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) (n=0, no pose observer, fall claim_level=future, `brain_allowed=false`) |
+| **Pass/Degraded/Fail/Insufficient** | ⚪ insufficient_data (pose.basic = Studio-only); fall is **future**, not an emergency behavior |
+| **Fallback** | When the camera shows the Studio fallen red marker, the narration **never mentions falling**; demo startup keeps `enable_fallen:=false` |
+| **Non-Claims** | Reliable fall detection / fall-prevention guardianship / sit-down detection has passed / emergency alert / treating pose observation as a medical judgment |
+| **Model Candidates** | FUTURE_RESEARCH (fall); pose.basic awaiting observer construction |
+| **Next Retest** | A pose observer tool must be built + HITL ground-truth samples collected before pass can be discussed; fall is future by nature and does not enter the demo |
 
-## 狀態卡
+## Status card
 
-> **狀態卡 caveat（6/04 收斂）**：下表「5/7 上機通過」是**開發期主觀上機觀察（無 observer 量化）**，**非 6/04 trusted baseline**。6/04 pose.basic / pose.fall = ⚪ insufficient_data（無 pose observer，n=0）。完成度為模組開發進度，非能力 pass。「fallen 穩定」**不構成跌倒偵測 pass**——跌倒是 future、非緊急。
+> **Status card caveat (converged 6/04)**: the "5/7 on-device pass" in the table below is a **subjective on-device observation during development (no observer quantification)**, **not the 6/04 trusted baseline**. On 6/04 pose.basic / pose.fall = ⚪ insufficient_data (no pose observer, n=0). Completion is module development progress, not a capability pass. "fallen stable" **does not constitute a fall-detection pass**—fall is future, not an emergency.
 
-| 項目 | 值 |
+| Item | Value |
 |------|---|
-| 狀態 | **pose.basic = ⚪ Studio-only / insufficient（6/04 trusted）**；fallen = future 非緊急 |
-| 版本/決策 | MediaPipe Pose (CPU 18.5 FPS) |
-| 完成度 | 90%（模組開發進度，非能力 pass — 見上方 caveat） |
-| 最後驗證 | 6/04 trusted 無 pose observer（insufficient_data）；5/7「上機通過」僅開發期主觀觀察 |
-| 入口檔案 | `vision_perception/vision_perception/pose_classifier.py` |
-| 測試 | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
+| Status | **pose.basic = ⚪ Studio-only / insufficient (6/04 trusted)**; fallen = future, not an emergency |
+| Version/Decision | MediaPipe Pose (CPU 18.5 FPS) |
+| Completion | 90% (module development progress, not a capability pass — see caveat above) |
+| Last verified | 6/04 trusted, no pose observer (insufficient_data); 5/7 "on-device pass" is only a subjective development-period observation |
+| Entry file | `vision_perception/vision_perception/pose_classifier.py` |
+| Tests | `python3 -m pytest vision_perception/test/test_pose_classifier.py -v` |
 
-## 啟動方式
+## How to launch
 
 ```bash
 ros2 launch vision_perception vision_perception.launch.py \
@@ -44,7 +46,7 @@ ros2 launch vision_perception vision_perception.launch.py \
   pose_backend:=mediapipe
 ```
 
-## 核心流程
+## Core flow
 
 ```
 D435 RGB → vision_perception_node
@@ -58,45 +60,45 @@ pose_classifier.py（hip/knee/trunk 角度判定）
 interaction_executive_node → fallen = EMERGENCY（內部 routing 標籤）
 ```
 
-> ⚠️ **「EMERGENCY」是內部事件 routing 標籤，非已驗證的緊急守護能力**。跌倒（pose.fall）= future、非緊急行為（claim matrix `pose.fall` Non-Claims）。demo 維持 `enable_fallen:=false`、fallen TTS 兩條路徑皆 mute（5/8）；**不得對外宣稱跌倒守護 / 緊急警報已 pass**。
+> ⚠️ **"EMERGENCY" is an internal event-routing label, not a verified emergency-guardianship capability.** Fall detection (pose.fall) = future, not an emergency behavior (claim matrix `pose.fall` Non-Claims). The demo keeps `enable_fallen:=false`, and both fallen TTS paths are muted (5/8); **do not publicly claim that fall guardianship / emergency alert has passed.**
 
-## 支援姿勢（MOC 7 種全部 Active，5/5 落地）
+## Supported poses (all 7 in the MOC are Active, landed 5/5)
 
-| 姿勢 | 判定邏輯 | 觸發 Skill | 台詞範本（demo bridge）| 狀態 |
+| Pose | Decision logic | Triggered Skill | Line template (demo bridge) | Status |
 |------|---------|---|---|:---:|
-| standing | hip_angle > 155° + knee_angle > 155° | （預設，不觸發）| — | Active |
-| akimbo | standing 變體；shoulder/elbow/hip vis ≥ 0.5；雙肘往外 > hip_width × 0.4；elbow y 在 shoulder 與 hip+0.5×hip_width 之間；wrist 可見時 elbow 角 60-140° | `akimbo_react` | 「你看起來很有架式喔！」（暫定）| **不穩**（5/6） |
-| sitting | y-geometry：trunk < 35° + hip_y ≈ knee_y（< 0.12×torso）OR knee_y < hip_y + ankle_y - hip_y > 0.5×torso + knee_angle < 145° | `sit_along` | 「會不會太累？」 | Active |
-| crouching | hip_angle < 145°, knee_angle < 145°, trunk > 10° | （互動 say）| 「我在這裡喔」 | Active |
-| bending | trunk > 30°, knee_angle > 130°, hip_angle < 160°, bbox ≤ 1.0 | `careful_remind` | 「請小心喔」 | Active |
-| knee_kneel | 兩膝 y 差 > 0.07×torso；hip/knee/stand_ankle vis ≥ 0.5；kneel ankle 隱藏 OR ankle_y ≈ knee_y（< 0.20×torso）OR kneel 角 < 130°；stand 角 > 130° OR sitting-like 支撐 | `knee_kneel_react` | 「需要我幫忙嗎？」（暫定）| **不穩**（5/6） |
-| fallen | trunk > 60° AND 0 ≤ vertical_ratio < 0.4 AND torso vis ≥ 0.5；deep-bending guard：hip→ankle 與向下垂直夾角 < 30° 且 bbox ≤ 1.0 時跳過；bbox > 1.0 加 +0.05 confidence bonus（不再為硬條件）| `fallen_alert`（EMERGENCY）| 「{name}，偵測到跌倒，請注意安全！」 | Active（可關）|
+| standing | hip_angle > 155° + knee_angle > 155° | (default, does not trigger) | — | Active |
+| akimbo | standing variant; shoulder/elbow/hip vis ≥ 0.5; both elbows out > hip_width × 0.4; elbow y between shoulder and hip+0.5×hip_width; elbow angle 60-140° when wrist is visible | `akimbo_react` | "You look quite poised!" (tentative) | **Unstable** (5/6) |
+| sitting | y-geometry: trunk < 35° + hip_y ≈ knee_y (< 0.12×torso) OR knee_y < hip_y + ankle_y - hip_y > 0.5×torso + knee_angle < 145° | `sit_along` | "Are you tired?" | Active |
+| crouching | hip_angle < 145°, knee_angle < 145°, trunk > 10° | (interaction say) | "I'm right here" | Active |
+| bending | trunk > 30°, knee_angle > 130°, hip_angle < 160°, bbox ≤ 1.0 | `careful_remind` | "Please be careful" | Active |
+| knee_kneel | y difference between the two knees > 0.07×torso; hip/knee/stand_ankle vis ≥ 0.5; kneel ankle hidden OR ankle_y ≈ knee_y (< 0.20×torso) OR kneel angle < 130°; stand angle > 130° OR sitting-like support | `knee_kneel_react` | "Do you need my help?" (tentative) | **Unstable** (5/6) |
+| fallen | trunk > 60° AND 0 ≤ vertical_ratio < 0.4 AND torso vis ≥ 0.5; deep-bending guard: skip when the angle between hip→ankle and the downward vertical is < 30° and bbox ≤ 1.0; bbox > 1.0 adds a +0.05 confidence bonus (no longer a hard condition) | `fallen_alert` (EMERGENCY) | "{name}, a fall has been detected, please stay safe!" | Active (can be disabled) |
 
-> **5/6 演算法升級**（commits TBD，base on community-validated rules）：
-> - `fallen` 解除「bbox_ratio > 1.0 必要條件」，改 vertical_ratio 為主守門 + torso visibility ≥ 0.5 拒掉 MediaPipe garbage frames（有時把 shoulder 標到 hip 下方）；新增 deep-bending guard 防止彎腰摸地誤判 fallen。
-> - `sitting` 改用 y-geometry（hip≈knee y + ankle 明顯低於 hip）取代角度法，避免與 bending / crouching 重疊。
-> - `akimbo` 主訊號改為 elbow-bowed-out（社群 BleedAI / MediaPipe issue #4462 的 wrist drift 坑），visibility 門檻從 0.2 提到 0.5。
-> - `knee_kneel` 新增 kneel-side ankle.y ≈ knee.y 區分 kneel-vs-lunge（社群 yoga-pose 規則）；ankle 隱藏視為 kneel 訊號。
-> - 順序：fallen → standing/akimbo → knee_kneel → sitting → crouching → bending → None。
-> 26/26 unit tests 全綠（synthetic）；上機 5/7 動作 PASS，akimbo + knee_kneel 真實 MediaPipe 數據仍待調校。
-> 完整 plan：`$HOME/.claude/plans/pose-validated-harp.md`。
+> **5/6 algorithm upgrade** (commits TBD, based on community-validated rules):
+> - `fallen` removes the "bbox_ratio > 1.0 required condition", switching to vertical_ratio as the primary gatekeeper + torso visibility ≥ 0.5 to reject MediaPipe garbage frames (which sometimes label the shoulder below the hip); adds a deep-bending guard to prevent bending-to-touch-the-ground being misjudged as fallen.
+> - `sitting` switches to y-geometry (hip≈knee y + ankle clearly lower than hip) instead of the angle method, avoiding overlap with bending / crouching.
+> - `akimbo` changes its primary signal to elbow-bowed-out (the wrist-drift pitfall from the community BleedAI / MediaPipe issue #4462), raising the visibility threshold from 0.2 to 0.5.
+> - `knee_kneel` adds kneel-side ankle.y ≈ knee.y to distinguish kneel-vs-lunge (community yoga-pose rule); a hidden ankle is treated as a kneel signal.
+> - Order: fallen → standing/akimbo → knee_kneel → sitting → crouching → bending → None.
+> 26/26 unit tests all green (synthetic); 5/7 actions PASS on-device, akimbo + knee_kneel still need tuning against real MediaPipe data.
+> Full plan: `$HOME/.claude/plans/pose-validated-harp.md`.
 
-## 操作限制與已知問題
+## Operational limits and known issues
 
-- **有效範圍**：D435 前方約 **4-5m** 以內
-- **僅支援單人追蹤**：多人時 MediaPipe 只追蹤一人
-- RTMPose balanced mode GPU 91-99%（備援方案，主線用 MediaPipe CPU 0%）
-- ~~正面站姿被誤判為 fallen~~ — **已修復（4/3）**：新增 `vertical_ratio` guard，用 shoulder-hip 垂直差 / torso 長度作為相對尺度（閾值 0.4），不受距離影響
-- ~~彎腰摸地被吃成 fallen~~ — **已修復（5/6）**：fallen 主分支內加 deep-bending guard（hip→ankle 向量與向下垂直夾角 < 30° + bbox ≤ 1.0 → 跳過）。
-- ~~MediaPipe garbage frame 觸發 fallen~~ — **已修復（5/6）**：trunk_angle 計算出 shoulder.y > hip.y（vertical_ratio 為負）的 frame 被拒；torso 4 點 visibility 平均 < 0.5 也拒。
-- 跌倒偵測可能誤報（椅子上趴下）
-- **akimbo / knee_kneel 上機不穩**（5/6 實測）：MediaPipe Pose 對手腕近髖、單膝跪地的 frame 經常 hallucinate landmark（trunk=160°+ 是常見訊號）。已套用社群實證的修法（elbow-bowed-out 主訊號、ankle.y ≈ knee.y 區分 kneel-vs-lunge），但實機仍偶有 miss。可能需要：(1) 拉視野到 1.5-3m（避免半身出框），(2) 改用 RTMPose-wholebody（GPU 路徑），(3) 加入 hand keypoint 訊號。
-- 幽靈跌倒偵測：投票 buffer（20 幀多數決）已大幅降低誤報，但未完全消除。**4/8 會議確認幻覺仍頻繁**（無人時鎖定衣架等物體判為 fallen）
-- **`enable_fallen` 已參數化**（4/6）：Demo 可關閉跌倒偵測避免誤報
-- 因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
-- 側面坐姿 hip_angle 和 trunk_angle 計算偏差，Demo 時建議正面面向攝影機
+- **Effective range**: within about **4-5m** in front of the D435
+- **Single-person tracking only**: with multiple people, MediaPipe tracks only one
+- RTMPose balanced mode GPU 91-99% (fallback option, the mainline uses MediaPipe CPU 0%)
+- ~~Frontal standing pose misjudged as fallen~~ — **fixed (4/3)**: added a `vertical_ratio` guard, using shoulder-hip vertical difference / torso length as a relative scale (threshold 0.4), unaffected by distance
+- ~~Bending to touch the ground swallowed as fallen~~ — **fixed (5/6)**: added a deep-bending guard inside the fallen main branch (hip→ankle vector and downward vertical angle < 30° + bbox ≤ 1.0 → skip).
+- ~~MediaPipe garbage frame triggering fallen~~ — **fixed (5/6)**: frames where trunk_angle computes shoulder.y > hip.y (vertical_ratio negative) are rejected; an average visibility of the 4 torso points < 0.5 is also rejected.
+- Fall detection may produce false positives (lying down on a chair)
+- **akimbo / knee_kneel unstable on-device** (measured 5/6): MediaPipe Pose frequently hallucinates landmarks for frames with the wrist near the hip or a single knee kneeling (trunk=160°+ is a common signal). The community-validated fixes have been applied (elbow-bowed-out as the primary signal, ankle.y ≈ knee.y to distinguish kneel-vs-lunge), but there are still occasional misses on real hardware. May require: (1) extending the field of view to 1.5-3m (avoiding half the body leaving the frame), (2) switching to RTMPose-wholebody (GPU path), (3) adding hand keypoint signals.
+- Ghost fall detection: the voting buffer (majority vote over 20 frames) has greatly reduced false positives, but has not fully eliminated them. **The 4/8 meeting confirmed hallucinations are still frequent** (with no one present, locking onto a coat rack or similar object and judging it fallen)
+- **`enable_fallen` is now parameterized** (4/6): the demo can disable fall detection to avoid false positives
+- Since the project no longer centers on elderly care, **the fall-detection feature may be de-emphasized**
+- Side-view sitting causes deviation in hip_angle and trunk_angle calculations; facing the camera frontally during the demo is recommended
 
-## Event Schema（v2.0 凍結）
+## Event Schema (frozen v2.0)
 
 ```json
 {
@@ -108,52 +110,52 @@ interaction_executive_node → fallen = EMERGENCY（內部 routing 標籤）
 }
 ```
 
-## Pose → Skill Mapping（5/12 Sprint）
+## Pose → Skill Mapping (5/12 Sprint)
 
-| 姿勢 | Brain 觸發 | Cooldown | Demo Scene |
+| Pose | Brain trigger | Cooldown | Demo Scene |
 |---|---|:---:|---|
-| sitting | demo bridge → 「會不會太累？」TTS（say only）| 5s | 互動段 |
-| crouching | demo bridge → 「我在這裡喔」TTS | 5s | 互動段 |
-| bending | demo bridge → 「請小心喔」TTS | 5s | 互動段 |
-| fallen | **demo silence**（5/8）— TTS 兩條路徑都已 mute，Studio Trace 仍顯示紅 alert | **10s** | Scene 8（future，非緊急；用詞用「守望/回報」不用「守護」）|
-| akimbo | demo bridge → 「你看起來很有架式喔！」（暫定）| 5s | 互動段（5/5 升 Active）|
-| knee_kneel | demo bridge → 「需要我幫忙嗎？」（暫定）| 5s | 互動段（5/5 升 Active）|
+| sitting | demo bridge → "Are you tired?" TTS (say only) | 5s | Interaction segment |
+| crouching | demo bridge → "I'm right here" TTS | 5s | Interaction segment |
+| bending | demo bridge → "Please be careful" TTS | 5s | Interaction segment |
+| fallen | **demo silence** (5/8) — both TTS paths are muted, the Studio Trace still shows a red alert | **10s** | Scene 8 (future, not an emergency; use the wording "watch over / report", not "guard") |
+| akimbo | demo bridge → "You look quite poised!" (tentative) | 5s | Interaction segment (promoted to Active 5/5) |
+| knee_kneel | demo bridge → "Do you need my help?" (tentative) | 5s | Interaction segment (promoted to Active 5/5) |
 
-> 站立 standing 不觸發任何 skill（純 baseline 狀態）。
-> 全部走 `vision_perception/vision_perception/event_action_bridge.py` POSE_TTS_MAP 的 demo bridge — 只 publish `/tts`，不發 Go2 motion。長期路徑改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` / `akimbo_react` / `knee_kneel_react`）走 `/brain/proposal` → `/skill_result`，列為 post-demo Stretch。
+> standing does not trigger any skill (pure baseline state).
+> All go through the demo bridge in `vision_perception/vision_perception/event_action_bridge.py` POSE_TTS_MAP — only publishing `/tts`, not issuing Go2 motion. The long-term path switches to a formal Brain skill (`sit_along` / `careful_remind` / `fallen_alert` / `akimbo_react` / `knee_kneel_react`) via `/brain/proposal` → `/skill_result`, listed as a post-demo Stretch.
 
-**5/8 fallen demo silence**（兩條 TTS 路徑都 mute，避免推車/椅子等 mid-frame 假跌倒打斷對話）：
-1. `_on_fall_alert`（topic `/event/interaction/fall_alert`）→ `FALL_ALERT_TTS = ""` + `if FALL_ALERT_TTS:` guard（commit `9d8acb7`）
-2. `_on_pose_event`（topic `/event/pose_detected`）→ `POSE_TTS_MAP` 移除 `"fallen"` key（commit `b224217`）
+**5/8 fallen demo silence** (both TTS paths are muted, to avoid mid-frame false falls from carts/chairs interrupting the conversation):
+1. `_on_fall_alert` (topic `/event/interaction/fall_alert`) → `FALL_ALERT_TTS = ""` + `if FALL_ALERT_TTS:` guard (commit `9d8acb7`)
+2. `_on_pose_event` (topic `/event/pose_detected`) → `POSE_TTS_MAP` removes the `"fallen"` key (commit `b224217`)
 
-加 sync test `test_pose_tts_map_no_fallen_template_demo_silence` 鎖兩條路。Studio 仍顯示紅 alert chip — 視覺紀錄保留，只是不發語音。
+Added the sync test `test_pose_tts_map_no_fallen_template_demo_silence` to lock both paths. Studio still shows the red alert chip — the visual record is retained, only the voice is not emitted.
 
-**5/8 ankle-on-floor gate**（`pose_classifier.classify_pose` 加 `image_height` 參數）：當 `image_height` 提供時，要求 `ankle_y / image_height > 0.7`（人在畫面下半部 30% → 真的躺在地上）才認 fallen。`image_height=None` 維持原行為（既有 unit test 不破），mid-frame ankles（推車 / 椅子 / 彎腰物）擋下。`vision_perception_node.py:289` 在呼叫處傳 `image.shape[0]`。
+**5/8 ankle-on-floor gate** (`pose_classifier.classify_pose` adds an `image_height` parameter): when `image_height` is provided, fallen is only accepted if `ankle_y / image_height > 0.7` (the person is in the lower 30% of the frame → actually lying on the ground). `image_height=None` keeps the original behavior (the existing unit tests are not broken), blocking mid-frame ankles (cart / chair / bending object). `vision_perception_node.py:289` passes `image.shape[0]` at the call site.
 
-### `fallen_alert` 接 face name（5/5 對齊）
+### `fallen_alert` wiring the face name (aligned 5/5)
 
-`fallen_alert` 的 say_template 引用 `{name}` 變數：「**{name}**，偵測到跌倒，請注意安全」。`{name}` 來源：
+The say_template of `fallen_alert` references the `{name}` variable: "**{name}**, a fall has been detected, please stay safe". Source of `{name}`:
 
-1. Brain 收 `pose_detected: fallen` 事件時，查 `/state/perception/face` 最近一次 `identity_stable` 的 `stable_name`
-2. 若無人臉識別（unknown / 無人臉視野）→ fallback「偵測到跌倒，請注意安全」（無稱呼）
-3. 同樣的 `{name}` 變數也用在 face/README.md 的 `greet_known_person`，模板 source 統一在 `interaction_executive` skill registry
+1. When Brain receives a `pose_detected: fallen` event, it looks up the most recent `stable_name` of `identity_stable` from `/state/perception/face`
+2. If there is no face recognition (unknown / no face in view) → fallback "a fall has been detected, please stay safe" (no name)
+3. The same `{name}` variable is also used in face/README.md's `greet_known_person`; the template source is unified in the `interaction_executive` skill registry
 
-> Detail: `docs/contracts/interaction_contract.md` v2.5 say_template 章節。
+> Detail: `docs/contracts/interaction_contract.md` v2.5 say_template section.
 
-## 下一步
+## Next steps
 
-- [x] fallen → EMERGENCY 整合進 executive（已 4/4 PASS）
-- [x] **akimbo / knee_kneel 判定演算法**（5/5 commit `ca32655`，`pose_classifier._is_akimbo` / `_is_knee_kneel` + demo bridge TTS template）
-- [x] **B4-5 fallen_alert + {name} 全鏈路**（5/5 commit `4f638ae`，event_action_bridge demo bridge 訂閱 `/state/perception/face` cache 最近 stable name + format("{name}")）
-- [x] **7 姿勢演算法升級**（5/6，社群實證規則：elbow-bowed-out / ankle ≈ knee y / vertical_ratio 守門 / deep-bending guard，26 unit tests 全綠）
-- [x] **5/12 Sprint 5/7 上機驗證**：standing / sitting / crouching / bending / fallen 通過（5/6）
-- [ ] **akimbo / knee_kneel 上機 miss 修復**（5/6 user 回報「基本完全測不出來」）— 候選：拉視野距離、切 RTMPose-wholebody、加 hand keypoint
-- [ ] **5/12 Sprint Active 7 上機驗證**：sitting / crouching / bending / fallen-with-name / akimbo / knee_kneel / standing 各 3 次穩定觸發
-- [ ] **demo bridge 退場路徑**：把 pose→/tts 改為正規 Brain skill（`sit_along` / `careful_remind` / `fallen_alert` 等）走 `/brain/proposal` → `/skill_result`（post-demo, Stretch P1）
-- [ ] 跌倒偵測幻覺（無人時鎖定衣架）— 投票 buffer 改 30 幀 OR 改 movement-based filter
+- [x] fallen → EMERGENCY integrated into the executive (already 4/4 PASS)
+- [x] **akimbo / knee_kneel decision algorithm** (5/5 commit `ca32655`, `pose_classifier._is_akimbo` / `_is_knee_kneel` + demo bridge TTS template)
+- [x] **B4-5 fallen_alert + {name} full chain** (5/5 commit `4f638ae`, event_action_bridge demo bridge subscribes to `/state/perception/face` caching the most recent stable name + format("{name}"))
+- [x] **7-pose algorithm upgrade** (5/6, community-validated rules: elbow-bowed-out / ankle ≈ knee y / vertical_ratio gatekeeping / deep-bending guard, 26 unit tests all green)
+- [x] **5/12 Sprint 5/7 on-device verification**: standing / sitting / crouching / bending / fallen passed (5/6)
+- [ ] **akimbo / knee_kneel on-device miss fix** (5/6 user reported "basically can't detect at all") — candidates: extend the field-of-view distance, switch to RTMPose-wholebody, add hand keypoints
+- [ ] **5/12 Sprint Active 7 on-device verification**: sitting / crouching / bending / fallen-with-name / akimbo / knee_kneel / standing, 3 stable triggers each
+- [ ] **demo bridge exit path**: change pose→/tts to a formal Brain skill (`sit_along` / `careful_remind` / `fallen_alert`, etc.) via `/brain/proposal` → `/skill_result` (post-demo, Stretch P1)
+- [ ] Fall-detection hallucination (locking onto a coat rack when no one is present) — change the voting buffer to 30 frames OR switch to a movement-based filter
 
-## 子資料夾
+## Subfolders
 
-| 資料夾 | 內容 |
+| Folder | Contents |
 |--------|------|
-| research/ | 選型過程（MediaPipe vs RTMPose vs DWPose）、benchmark 比較、跌倒偵測研究 |
+| research/ | Model-selection process (MediaPipe vs RTMPose vs DWPose), benchmark comparisons, fall-detection research |

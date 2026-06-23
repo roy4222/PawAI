@@ -1,0 +1,780 @@
+# PawAI CLI 使用手冊
+
+[English](./README.md) | **中文**
+
+> **文件治理（governance header）**
+> - **Scope**：五人共用 Jetson 的單一入口 CLI（`pawai`）操作手冊 — 安裝 / doctor / deploy / demo lock / logs。
+> - **Status**：active / ops 工具手冊（**非**能力或產品真相層）。
+> - **Owner lane**：ops（搭配 [`../runbook/`](../runbook/) 救火 SOP 使用）。
+> - **Source-of-truth priority**：本檔是 CLI **指令行為**的真相；但任何「某能力是否 pass / 能不能講 / demo 該怎麼解讀」一律回 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY 順序（baseline-evidence ＞ convergence audit ＞ capability-baseline-spec ＞ north-star）。
+> - **Maintained child files**：[`usage-guide.md`](usage-guide.md)（日常）、[`team-onboarding.md`](team-onboarding.md)（上手）、[`troubleshooting.md`](troubleshooting.md)（踩坑）、[`modules.md`](modules.md)（8 module 對照）。
+> - **Routing**：本資料夾在 [`docs/README.md`](../README.md) 列為「支援性資料夾 → PawAI CLI」。CLI 設計背景的長版 spec / plan 在 `../superpowers/`（historical/research-only）。
+> - **What this README is NOT**：不是 capability scoreboard、不是 demo 劇本（劇本見 [`../mission/README.md`](../mission/README.md)）、不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）。CLI 印出的 nav action 能跑 ≠ 真實移動/動態避障（nav 能力一律以 baseline-evidence 的 insufficient_data 為準）。
+
+`pawai` 是 5 人團隊的單一入口工具，把分散的 `scripts/`、`tmux`、`ssh jetson`、
+`colcon build`、`bash .claude/skills/.../start.sh` 包成一致的指令。
+
+> 它不取代既有 bash 腳本，只是讓「每個人記一套指令」變成「全隊記一套」。
+
+> **日常使用：** 隊友 onboarding 完之後，請看 [`usage-guide.md`](usage-guide.md) — 三個高頻指令（`jetson deploy` / `demo start` / `demo stop`）的場景 walkthrough、決策樹、Phase 1 新行為、錯誤訊息對照表。本 README 保留為**指令參考手冊**（完整 flag、環境變數、Lock 機制設計）。
+
+---
+
+## 1. 安裝（首次）
+
+```bash
+cd ~/elder_and_dog          # 或 ~/newLife/elder_and_dog
+
+# 先建立並啟用 venv（避免污染系統 Python，也避開 uv 找不到 venv 的錯）
+python3 -m venv ~/.venv
+source ~/.venv/bin/activate
+
+uv pip install -e tools/pawai_cli
+pawai --version             # 應該印出 0.1.0
+```
+
+每次新 shell 都要 `source ~/.venv/bin/activate`，或把它寫進 `~/.zshrc` / `~/.bashrc`。
+
+沒裝 `uv`：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 或最後手段（不用 uv）：
+python3 -m pip install -e tools/pawai_cli
+```
+
+> Jetson **不需要**裝 CLI（CLI 從你的 Mac/WSL 端跑，靠 SSH 操作 Jetson）。
+
+### 系統前置（Mac）
+
+```bash
+brew install tmux node            # tmux 給 demo 腳本、node 給 Studio frontend
+brew install --cask tailscale     # 用來 SSH 上 Jetson
+```
+
+### 系統前置（Linux/WSL）
+
+```bash
+sudo apt install tmux nodejs npm
+```
+
+### 支援平台
+
+支援：
+
+- macOS native
+- Linux native
+- WSL2 Ubuntu（repo 放在 Linux filesystem，例如 `~/elder_and_dog`）
+
+不支援：
+
+- Windows PowerShell / CMD / Git Bash native
+- WSL1
+- WSL2 但 repo 放在 `/mnt/c/...`、`/mnt/d/...` 這類 Windows filesystem
+
+原因很務實：CLI 會用到 `ssh`、`rsync`、`flock`、`tmux`、`bash`、`/tmp` 與 Unix
+permission semantics。純 Windows native 會在 deploy/demo lock 上出現不可預期行為。
+
+### 第一次設定 .env.local
+
+```bash
+cp .env.local.example .env.local
+$EDITOR .env.local       # 填 JETSON_HOST / JETSON_TAILSCALE_IP / OPENROUTER_KEY
+```
+
+`.env.local` 是個人化覆寫；`.env` 是 repo 共用預設值。**Secrets 只放 `.env.local`**。
+參考 [.env.local.example](../../.env.local.example) 找完整變數列表。
+
+### SSH key 推上 Jetson（一次性）
+
+`.env.local` 只有 `pawai` CLI 會讀，**shell 不會自動 export**。所以直接打：
+
+```bash
+ssh-copy-id jetson             # 填你 `~/.ssh/config` 裡的 alias
+```
+
+或先把 `.env.local` source 進 shell 再用變數：
+
+```bash
+set -a; source .env.local; set +a
+ssh-copy-id "$JETSON_HOST"
+```
+
+`JETSON_HOST` 預設為 `jetson-nano`，可在 `.env.local` 改成你 SSH config 裡用的 alias。
+記得 `~/.ssh/config` 對應的 `Host` 區塊要先建好（內容指向 Jetson 的 Tailscale IP）。
+
+---
+
+## 2. 5 分鐘上手
+
+```bash
+pawai doctor                       # 1) 確認環境健康（會列出該補的東西）
+pawai jetson deploy --module brain # 2) 推 brain 改動到 Jetson + colcon build
+pawai demo start                   # 3) 啟動 13-window demo + 本機 Studio
+pawai status                       # 4) 看 tmux/ROS node/last deploy
+pawai logs brain --lines 200       # 5) 抓 brain pane 最後 200 行
+pawai demo stop                    # 6) 收工
+```
+
+整套流程在 [troubleshooting.md](troubleshooting.md) 有踩過的坑全清單。
+
+---
+
+## 3. 指令參考
+
+| 指令 | 一句話 |
+|------|-------|
+| [`pawai doctor`](#doctor) | 本機與 Jetson 環境健檢，給 actionable hint |
+| [`pawai status`](#status) | 看 Jetson 當前 tmux / ROS node / git / 上次 deploy |
+| [`pawai dev info <module>`](#dev-info) | 看某模組的 packages / 文件 / tests / log target |
+| [`pawai jetson deploy`](#jetson-deploy) | rsync 整個 repo + colcon build 指定模組 |
+| [`pawai demo start`](#demo-start) | 啟動 brain-studio-lane（Jetson tmux + 本機 Studio） |
+| [`pawai demo stop`](#demo-stop) | 清掉 demo session |
+| [`pawai demo school`](#demo-school) | **DEPRECATED**（5/16 活動已過；publisher 留在 `scripts/school_demo_ending.py`） |
+| [`pawai health brain`](#health-brain) | 跑 brain demo healthcheck |
+| [`pawai health nav`](#health-brain) | 跑 nav-avoidance-lane healthcheck |
+| [`pawai smoke vision`](#smoke-vision) | 跑 vision lane static/HITL smoke |
+| [`pawai smoke object`](#smoke-object) | 跑 object lane static/HITL cup smoke |
+| [`pawai object matrix`](#object-matrix) | 現場 object detection 矩陣採集，CSV 寫到 Jetson |
+| [`pawai smoke nav`](#smoke-nav) | 跑 nav capability static-only smoke（零 motion + 8GB 互斥） |
+| [`pawai smoke full`](#smoke-full) | 跑 6/17 回穩主工具：brain + vision/object static + gateway/trace |
+| [`pawai logs <module>`](#logs) | 抓對應 tmux pane 最後 N 行 |
+| [`pawai docs <target>`](#docs) | 開架構/onboarding/契約文件 |
+| [`pawai contract check`](#contract) | 跑 topic schema 驗證（預設 local，--jetson 跑遠端） |
+| [`pawai face list`](#face-db) | 列出 Jetson face_db 人物與樣本數，標出疑似備份目錄 |
+| [`pawai face delete <name>`](#face-db) | 刪除指定人物資料夾並清掉 face model，重啟後重訓 |
+| [`pawai net wifi {list,status,connect,forget}`](usage-guide.md#85-pawai-net-wifi--jetson-wi-fi-控制無需-ssh-手動) | Jetson Wi-Fi 控制（無需 SSH 手動 nmcli） |
+
+---
+
+### doctor
+
+驗證本機 + Jetson 環境，**0 blocking 才能放心做事**。
+
+```bash
+pawai doctor          # 預設輸出
+pawai doctor --verbose # SSH 失敗時印出 stderr 細節
+```
+
+檢查項目：
+
+- 平台是否為 macOS / Linux / WSL2；Windows native、WSL1、`/mnt/c` repo 會被擋
+- Python ≥ 3.10
+- git + repo 狀態（dirty/clean）
+- `.env.local` 是否存在；缺就提示 `cp .env.local.example .env.local`
+- SSH 到 `$JETSON_HOST` 是否通；不通會檢查 `~/.ssh/config` 給出 ssh-copy-id 或 tailscale up 提示
+- Jetson ROS env 唯讀抽查：source Humble + repo `install/setup.zsh`，確認核心 package 與 install tree 時間戳
+- `tailscale status` 是否能跑
+- `ROBOT_IP` 變數（不主動 ping）
+- `tmux` / `node` / `npm` 是否在 PATH；缺的給 `brew install` 或 `apt install` 指令
+- Studio frontend 的 `node_modules` 和 `.env.local`
+- `OPENROUTER_KEY` 是否設定
+
+**Exit code**：`0`（綠）/ `2`（有 blocking）。CI 友善。
+
+### doctor flags
+
+| Flag | Effect |
+|---|---|
+| (none) | full check, no API calls, no file writes |
+| `--fix` | prompt to write detected Tailscale IP into `.env.local` |
+| `--deep` | one OpenRouter API call to verify key |
+| `--cache 30` | cache result for 30s (avoids 5-person waiting on same SSH probes) |
+| `--expect-demo` | treat Gateway 8080 down as FAIL instead of SKIP |
+| `--verbose` | print SSH stderr on failure |
+
+### Network topology block
+
+`pawai doctor` prints a topology summary near the top:
+
+```
+== Network topology ==
+  ✓ local → Jetson Tailscale: OK YOUR_JETSON_IP
+  ✓ Jetson internet route: wlan0
+  ✓ Jetson Go2 link: eth0 192.168.123.X/24
+  ✓ Jetson → Go2 ping: OK 192.168.123.161
+  ℹ Gateway 8080: SKIP (no demo running)
+```
+
+Reading guide:
+- `Jetson internet route: eth0` → **warning** — Ethernet likely hijacked for school uplink, Go2 link lost
+- `Jetson Go2 link: ✗` → Go2 Ethernet not connected to Jetson
+- `Gateway 8080: SKIP` → expected when no demo running; only red if `--expect-demo` or active demo lock
+
+### Jetson ROS env block
+
+`pawai doctor` also prints a non-blocking ROS environment sanity check before the final summary:
+
+```
+== Jetson ROS env ==
+  ✓ Jetson ROS core packages present: pawai_contracts, interaction_executive, go2_interfaces
+  ✓ Jetson install tree is up to date with latest commit
+```
+
+This check SSHes to Jetson with a short timeout and runs read-only commands only. It sources both `/opt/ros/humble/setup.zsh` and `$JETSON_REPO/install/setup.zsh`, then checks:
+
+- core packages: `pawai_contracts`, `interaction_executive`, `go2_interfaces`
+- whether the newest file under `install/` is older than the latest repo commit
+
+All findings in this block are **warnings only**. Missing packages or stale `install/` output means run `pawai jetson deploy` or `colcon build` on Jetson; it does not change the `0 blocking` green path. If SSH is unavailable, the block prints one `⚠ ... skipped` line and does not block.
+
+---
+
+### status
+
+```bash
+pawai status         # 完整輸出（tmux + ROS nodes + git + last deploy）
+pawai status --short # 跳過 ROS node list，適合快速看 lock/branch/tmux
+```
+
+讀 Jetson 上的：
+- `tmux ls` — 找 `demo:` / `pawai_brain:` / `studio_gw:` / `llm-e2e:` 等 session
+- `ros2 node list` — 看 perception/brain 是否亮
+- `ps -eo … | grep go2_driver_node|go2_robot_sdk` — 列出 Go2 driver 程序的 PID / user / tty / start time / cmd（P0）
+- Brain runtime 區塊 — 若 `brain_node` 在 ROS node list 中，顯示 shadow/ISM flags、`demo_phase`、gesture/stranger alert flags，並列出存在的 `ism_stage_2*` 參數；node 不在時顯示 `(brain not running)`
+- `$JETSON_REPO/.pawai-last-deploy` — JSON 紀錄誰、何時、deploy 了哪個 module、git SHA、用 `rsync` 還是 `~/sync once`
+
+**Go2 driver processes 區塊**（P0，五人共用 Jetson 時尤其重要）：
+- 列出 Jetson 上所有 `go2_driver_node` / `ros2 launch go2_robot_sdk` 程序
+- 若 driver 存在但**沒有任何 demo lock**，會印 `⚠ drivers running with NO demo lock — orphan or direct ros2 launch`，提示有人繞過 `pawai demo start`
+- ❗ **不會**把 Jetson process user (`jetson`) 跟 lock owner（本機 user 例如 `alice`）做比對 — 兩個欄位語意不同，比對會誤觸
+
+**Heads-up 區**會警告：
+- demo 正在跑，deploy 要先 stop
+- 上次 deploy 的人不是你（多人協作場景）
+
+**SSH 失敗 / timeout（🟡 fail-fast）**：第一個 SSH probe (`tmux ls`) timeout / 失敗時 status 立即 short-circuit 印 `✗ Jetson unreachable over SSH` + 原因，**不會**再花 30s 把後續 4 個 probe 逐一 timeout。
+
+`--short` 不會 SSH 到 Jetson 跑 `ros2 node list`，所以適合 demo 剛停、ROS daemon cache
+還沒刷新時看真實 tmux/lock/deploy 狀態。
+
+> ⚠️ **race**：`pawai demo start` 剛回來時，Jetson tmux 可能還沒 spawn，馬上跑 status
+> 會看到 `tmux: none`，等 10–20 秒再跑即可。
+
+---
+
+### dev info
+
+看某模組的所有相關資源。
+
+```bash
+pawai dev info brain          # 文字輸出
+pawai dev info gesture --open # 用 $EDITOR / code 開主文件
+```
+
+支援的 module：`face` `speech` `gesture` `pose` `object` `nav` `brain` `studio`。
+別名：`vision` → `gesture`、`object-perception` → `object`、`pawai-brain` → `brain` 等。
+
+完整模組表在 [modules.md](modules.md)。
+
+---
+
+### face db
+
+`pawai face` 管 Jetson 上的 `/home/jetson/face_db`，所有資料庫操作都透過 SSH 執行。
+
+```bash
+pawai face list
+pawai face delete alice
+pawai face delete alice -y
+```
+
+`face list` 會列出人物子目錄與 `.png` 樣本數；若子目錄名稱看起來像備份
+（`_backup*`、`old*`、`_old*`，或名稱包含 `backup`），輸出尾端會加
+`⚠ 疑似備份目錄，建議移出 face_db`。這類目錄不應留在 `face_db`，否則訓練時會被當成身份。
+
+`face delete <name>` 只接受單層人物名稱；空字串、`.`、`..`、含 `/`、或以 `.` 開頭的名稱會在本機端直接拒絕，不會送 SSH。未加 `-y/--yes` 時會先列該目錄樣本數並要求二次確認；確認後刪除 `/home/jetson/face_db/<name>`，並清掉 `model_sface.pkl`，下次重啟 `face_identity_node` 會重訓。
+
+---
+
+### jetson deploy
+
+```bash
+pawai jetson deploy --module brain          # sync + build brain 套件
+pawai jetson deploy --module gesture        # sync + build vision_perception
+pawai jetson deploy --all                   # sync + build 所有 packages
+pawai jetson deploy --module brain --no-build  # 只 sync 不 build
+pawai jetson deploy --module brain --no-sync   # 只 build 不 sync
+pawai jetson deploy --module brain -y          # 跳過 confirm
+```
+
+**Sync 邏輯**（Plan B2 優先序反轉，2026-06-10 `.env` 刪除事故後）：
+1. **預設一律用內建 audited rsync**，exclude 清單來自唯一契約檔
+   `tools/sync/rsync-excludes.txt`（`.git/`、`.env`、`.env.*`、`.env.local`、
+   `.ssh/`、`build/`、`install/`、`log/`、cache 目錄等 16 條，測試把守）
+2. `~/sync once` 改為 **opt-in**：需 `PAWAI_SYNC_CMD=1` 且 `~/sync` 存在可執行，
+   會印 `⚠ UNAUDITED` 警告（它沒有 exclude 契約，6/10 事故元兇）
+3. **Post-sync guard**：任一 sync 路徑後（成功或失敗皆然）檢查 Jetson
+   `.env`/`.env.local` 仍存在，消失即 fail-loud + 印還原 SOP
+
+Secrets 只留本機 `.env.local`，不會被 deploy 推到 Jetson。
+手動 sync 用 `scripts/sync_to_jetson.sh`（共用同一份 exclude 契約，不 build）。
+
+**Build 邏輯**：在 Jetson 上跑 `colcon build --packages-select <模組對應的 packages>`，
+build log 直接 stream 到本機。
+
+**Deploy 記錄**：成功後寫 `$JETSON_REPO/.pawai-last-deploy`（JSON），
+`pawai status` 會讀。
+
+> ⚠️ Demo 正在跑時 deploy 會跳 confirm — 多數情況要先 `demo stop` 再 deploy 再 `demo start`。
+
+---
+
+### demo start
+
+啟動 brain-studio-lane，分三種 mode：
+
+```bash
+pawai demo start             # 預設 = full + Studio overlay（推薦）
+pawai demo start --no-studio # full mode 但不開本機 Studio
+pawai demo start --brain-only # 只起 brain（minimal mode，無 perception）
+pawai demo start --nav capability # 起導航避障 capability stack（手動 action 場測）
+pawai demo start --with-shadow # brain lane healthy/running 後啟用 shadow soak
+pawai demo start -y          # 跳過一般確認；不能搶別人的 lock
+pawai demo start --skip-healthcheck # 逃生口：跳過 post-start healthcheck gate（見下）
+```
+
+預設模式做的事：
+1. **Orphan driver preflight（P1）**：讀完 lock 後，若**無 lock 但 Jetson 上仍有 `go2_driver_node` 程序**（直接 `ros2 launch` / 手動 tmux / 上次 crash 殘留）：
+   - `--force` → 自動跑 cleanup 後繼續
+   - `-y` → exit 2（**不**自動清，避免 CI / 新人誤殺別人手動 session）
+   - 互動 → prompt `Cleanup orphan drivers and continue?`
+   - **lock 存在時 skip 此檢查**（沒有可靠 session id，不做不可靠判斷）
+2. 偵測舊 lane（Jetson tmux session / 本機 `next dev`），有就 auto-cleanup
+3. 跑 preflight（SSH/.env/port 8080/OpenRouter key/LLM tunnel/ASR tunnel/USB 喇叭/nav session 衝突）
+4. SSH 進 Jetson 起 `start_full_demo_tmux.sh`（13-window：go2/D435/face/vision/object/asr/tts/llm/executive/gateway/...）
+5. 本機 frontend：
+   - 缺 `.env.local` → 從 `.env.local.example` 自動生成（替換 `JETSON_TAILSCALE_IP`）
+   - 缺 `node_modules` → 自動跑 `npm install`
+   - 用 `node_modules/.bin/next dev` 啟動，並寫 `/tmp/pawai-frontend.pid`
+6. Healthcheck：
+   - 從本機 curl `http://$JETSON_TAILSCALE_IP:8080/health`
+   - 從本機 probe `http://localhost:3000/studio` 是否 200
+7. 印出真正的 Studio URL
+
+成功時最後印：
+
+```
+✅ Gateway reachable from local: http://YOUR_JETSON_IP:8080
+✅ Frontend: http://localhost:3000/studio
+```
+
+**Post-start healthcheck hard gate（Plan B4）**：`start.sh` rc==0 **不算成功**——
+6/4 `.env` CRLF 事故證明 tmux 可能根本沒 spawn 卻回報 `✓ Demo running`。
+`demo start` 在 start.sh 成功後會跑 lane 對應的 healthcheck
+（brain → `brain-studio-lane/scripts/healthcheck.sh`、nav capability →
+`nav-avoidance-lane/scripts/healthcheck.sh`），**pass 才把 lock 轉 `running`**。
+fail → exit 1、lock 留在 `starting` 當證據、印 inspect/cleanup 指引。
+逃生口（healthcheck 本身壞掉時才用）：`--skip-healthcheck`，會印大字警告。
+
+Brain lane 成功啟動後會額外提醒 shadow soak 尚需手動開啟：
+
+```text
+↳ shadow soak 需手動開啟：ssh <jetson> ros2 param set /brain_node ism_shadow_enabled True（或用 --with-shadow）
+```
+
+`--with-shadow` 只適用 brain lane；不能和 `--nav capability` 併用。它會在
+healthcheck 通過、且 demo lock 已轉成 `running` 之後，SSH 到 Jetson 對
+`/brain_node` 執行 `ros2 param set /brain_node ism_shadow_enabled True`，再
+`ros2 param get` 回讀確認值為 `True`。若 param set 或回讀失敗，CLI 會 exit
+非零並印手動補救命令；demo 本體已在跑，這個失敗不會清 lock，也不會 stop demo。
+
+**`JETSON_TAILSCALE_IP` 解析優先序**（`demo start` / `health brain` 共用）：
+1. `PAWAI_TRUST_ENV_IP=1` → 信任 env 值不覆蓋（hand-crafted testing 的逃生口）
+2. **Tailscale peer online + 有 IP → 偵測值 override env**（即使 env 已設）；env 與偵測不一致時會印兩行 warning 告知正在用哪個 IP / 如何 silence
+3. peer offline / 偵測失敗 → keep env 原值
+
+預設「偵測 wins」的原因：`.env.local` 留下 stale IP 是多人共用最常見的失敗模式；`pawai doctor` 已 flag mismatch，但 `health brain` / `demo start` 需要實際**用對的 IP**，不只警告。
+
+如果直接手動跑 `start.sh`、CLI 沒注入、且偵測失敗，腳本會明確 fail，不再 fallback 到寫死 IP。
+
+#### Nav capability mode
+
+`pawai demo start --nav capability` 走
+`.claude/skills/nav-avoidance-lane/scripts/start.sh capability`。它會啟：
+
+- RPLIDAR `/scan_rplidar`
+- D435 aligned depth + `/capability/depth_clear`
+- Go2 driver + Nav2 / AMCL / twist_mux
+- `reactive_stop_node mode=progressive`
+- `nav_capability` 6 nodes
+
+這個模式的 scope 是 **nav stack bringup + 手動 ROS2 action 場測**，不是 Brain 語音導航：
+
+- ✅ 手動 `ros2 action send_goal /nav/goto_relative ...`
+- ❌ 語音說「往前走」讓 Go2 移動（Executive NAV executor 尚未實作）
+- ❌ 沒有場地 map 時自動導航
+- ❌ detour / fallback / amcl / mapping 透過 `pawai demo start`
+
+到新場地不要直接用家裡 map `/home/jetson/maps/home_living_room_v8.yaml`。先照
+`nav-field-runbook.md`
+建圖或確認場地 map，再跑 capability。
+
+第一個移動測試只做短距離：
+
+```bash
+ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative \
+  "{distance: 0.3, yaw_offset: 0.0, max_speed: 0.0}"
+```
+
+如果 goal accepted 但 Go2 不動，照 `nav-field-runbook.md` 的 F7 Debug 查
+`/cmd_vel_nav`、mux priority、Nav2 lifecycle。`pawai status` 只顯示 raw nav
+topic，不把 WorldState 衍生欄位當 safety truth。
+
+---
+
+### demo stop
+
+```bash
+pawai demo stop
+```
+
+依 lock 裡的 `lane` 呼叫對應 cleanup：
+
+- `lane=brain`（或舊 lock 無 lane）→ `.claude/skills/brain-studio-lane/scripts/cleanup.sh`
+- `lane=nav_capability` → `.claude/skills/nav-avoidance-lane/scripts/cleanup.sh`
+
+Brain cleanup 只會關閉 `/tmp/pawai-frontend.pid` 指向的本機 frontend，不會用
+`pkill -f "next.*dev"` 掃掉隊友其他 Next.js 專案。
+
+---
+
+### demo school
+
+**[DEPRECATED 2026-06-10，Plan B6]** 5/16 學校招生活動已過，命令已退役——
+`pawai demo school` 現在只回報 retired 訊息並 exit 非零。
+
+ending publisher 的 **wait-for-subscriber-then-publish pattern**（等 DDS
+discovery → publish → spin 1.5s 確保 RELIABLE QoS 投遞，解一次性
+`ros2 topic pub` 約 1/3 機率掉訊息的 race）保留在
+`scripts/school_demo_ending.py`，可在 Jetson 上直接執行、也可作為任何
+「可靠 one-shot publish」需求的參考實作。
+
+> brain 端 `school_demo_request` mode（資管同音字容錯等）不受影響，仍在
+> pawai_brain 內。
+
+---
+
+### health brain
+
+```bash
+pawai health brain
+```
+
+跑 `.claude/skills/brain-studio-lane/scripts/healthcheck.sh`，但由 CLI 注入
+`JETSON_HOST` 與 `JETSON_TAILSCALE_IP`，避免 healthcheck 寫死 hostname 或缺 env。
+Demo 跑起來後用它確認 Gateway 8080、Studio frontend、Jetson tmux 與 brain stack。
+
+`pawai health nav` 同款，跑 `nav-avoidance-lane/scripts/healthcheck.sh`
+（nav capability stack 的對應檢查）。兩者也是 `demo start` post-start hard
+gate（Plan B4）背後呼叫的同一批腳本。
+
+> brain 的 healthcheck.sh 已改 fail-hard：`JETSON_TAILSCALE_IP` 未設時立即
+> 報錯退出（不再 fallback 寫死 IP；nav 的 script 不用此變數）。走 `pawai`
+> 入口會自動注入；裸跑需自行 export。
+
+---
+
+### smoke brain（6/12 系統 Phase 2 / 2C 新增）
+
+```bash
+pawai smoke brain                # 預設 5 輪
+pawai smoke brain --rounds 3     # 1-30 輪
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_e2e.sh`（語音 E2E 固定話術驗收）。**前提：demo
+lane 或 llm-e2e session 已在跑**（腳本 6/12 起雙 stack 相容：brain demo 的
+`conversation_graph_node` 與 legacy 的 `llm_bridge_node` 都認；播放證據接受
+Megaphone WAV 或 USB 喇叭 local playback）。執行前先 probe 遠端腳本存在
+（fail-closed）；失敗時 exit code 原樣傳回並附「↳」修法提示（`pawai health brain`
+/ `pawai demo start`）。**真機 6/12 驗證 5/5**。
+
+---
+
+### smoke vision
+
+```bash
+pawai smoke vision                  # static-only：node / status_image hz / event publishers
+pawai smoke vision --with-events 3  # HITL：static 綠後等待 3 個 gesture/pose event
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_vision.sh`。預設是 static-only：檢查
+`vision_perception` node、`/vision_perception/status_image` hz > 0，以及
+`/event/gesture_detected`、`/event/pose_detected` 兩個 topic 都有 publisher。
+`--with-events N` 會在 static 全綠後進入 HITL 模式，60 秒內累計收到 N 個
+gesture/pose event 才算 PASS。
+
+前提：vision lane 已由 `pawai demo start` 啟動；CLI 會先 source
+`/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`，避免 non-interactive SSH 看不到
+ROS 環境。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
+
+---
+
+### smoke object
+
+```bash
+pawai smoke object              # static-only：node / debug_image hz>=3 / event publisher
+pawai smoke object --with-cup   # HITL：static 綠後等待 60 秒 cup event
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_object.sh`。預設是 static-only：檢查
+`object_perception` node、`/perception/object/debug_image` 平均 hz >= 3，以及
+`/event/object_detected` topic 至少有 1 個 publisher。
+
+`--with-cup` 會在 static 全綠後呼叫 `capture_baseline_round.py percep` 收 60 秒
+`object.cup` positive round，輸出到 `artifacts/baseline/smoke_object.jsonl`；只有寫入
+`pass_fail=pass` 且 `predicted_label=cup` 才算 PASS。HITL 模式固定帶
+`--gesture-topic /__no_gesture__`，避免 gesture event 污染 object 量測（反向污染也是已知坑）。
+
+前提：object lane 已由 `pawai demo start` 啟動；CLI 會先 source
+`/opt/ros/humble/setup.zsh` 與 `install/setup.zsh`。失敗時 exit code 原樣傳回，並提示先確認 demo 是否已啟動。
+
+---
+
+### object matrix
+
+```bash
+pawai object matrix --object cup --distance 0.7 --light normal
+pawai object matrix --object cup --distance 1.0 --light low --angle left --trials 3 --auto --gap 1.5
+pawai object matrix --object cup --distance 0.7 --light normal --out artifacts/object_matrix/cup.csv
+```
+
+SSH 到 Jetson 跑 `python3 scripts/obj_matrix_cap.py`，用於現場 object detection
+矩陣採集。CLI 只負責透傳參數、source ROS 環境並 stream 即時輸出；採集工具本身會訂閱
+`/event/object_detected`，逐 trial 收集後把 CSV 寫到 Jetson repo。
+
+常用透傳參數：`--object`、`--distance`、`--light`、`--angle`、`--trials`、
+`--window`、`--conf-min`、`--object-topic`、`--auto`、`--gap`、`--out`、
+`--notes`、`--allow-short-window`。`--out` 預設是
+`artifacts/object_matrix/object_matrix.csv`；成功後 CLI 會印出 Jetson 上的完整 CSV 路徑。
+需要拉回本機時用 `pawai evidence pull` 或 `scp`。
+
+上機矩陣日用：先 `pawai demo start` 起 object lane，依 object / distance / light /
+angle 組合逐條跑 `pawai object matrix ...`，每天收工前把
+`artifacts/object_matrix/*.csv` 拉回並放進 evidence。失敗時 exit code 原樣傳回；若 object
+lane 沒起，先重啟 demo 再採。
+
+### smoke nav
+
+```bash
+pawai smoke nav --static   # static-only：nodes / scan hz / AMCL / action list / reactive status
+```
+
+SSH 到 Jetson 跑 `scripts/smoke_test_nav_static.sh`。`--static` 必須顯式帶上；不帶會直接拒絕，因為動態 nav 回歸屬於 HITL，不在 CLI 自動 smoke 範圍。
+
+此 smoke 是零 motion、唯讀檢查：只讀 `ros2 node list`、`ros2 topic hz /scan_rplidar`、`ros2 topic info /amcl_pose`、`ros2 action list`、`ros2 topic info /state/reactive_stop/status`。腳本不發 action，不 publish `/cmd_vel*`，也不碰 `/goal_pose`。
+
+執行前 CLI 會先讀 demo lock。若 brain demo lane 正在跑，或任何非 `nav_capability` lane 佔著 lock，會在遠端腳本前直接 fail，提示先 `pawai demo stop`；這是 8GB Jetson 上 brain 與 nav stack 的互斥防線。互斥通過後才 probe 遠端腳本存在並 source `/opt/ros/humble/setup.zsh` 與 `install/setup.zsh` 執行。
+
+---
+
+### smoke full
+
+```bash
+pawai smoke full               # brain 3 輪 + vision/object static + gateway/trace
+pawai smoke full --rounds 5    # 調整 brain E2E 輪數（1-30）
+```
+
+6/17 回穩主工具。CLI 端逐段 SSH 到 Jetson 執行並彙總 rc：
+`brain` 跑既有 `scripts/smoke_test_e2e.sh`（預設 3 輪）、`vision` 跑
+`scripts/smoke_test_vision.sh` static-only、`object` 跑
+`scripts/smoke_test_object.sh` static-only，接著檢查 Studio gateway
+`http://localhost:8080/health` 必須含 `"status":"ok"`，最後比對
+`runtime/traces/*.jsonl` 總行數在短暫等待後是否增加。
+
+`smoke full` 明確不含 nav，也不發 goal：8GB Jetson 上 brain 與 nav 資源互斥，full
+只驗 demo 回穩所需的 brain / perception static / gateway evidence chain。任一段 FAIL
+會讓整體 exit 非 0；summary table 會列出每段 PASS/FAIL 與 rc，失敗段附「↳」修法提示。
+
+---
+
+### evidence pull（6/12 系統 Phase 2 / 2C 新增）
+
+```bash
+pawai evidence pull                      # → artifacts/evidence/traces/
+pawai evidence pull --dest /tmp/traces   # 自訂目的地
+```
+
+把 Jetson gateway trace store 的 `runtime/traces/*.jsonl`（Evidence Center 落盤，
+見 `docs/architecture/studio/README.md`）rsync 回本機並印摘要
+（files / events / suppressed）。**只讀**：無 `--delete`、不動 Jetson 端、不改寫
+JSONL（Roy D5：CLI 只負責讀取與匯出）。失敗訊息附修法（`pawai doctor` 看
+Tailscale；Jetson 端沒檔案 = gateway 沒跑或 `PAWAI_TRACE_STORE_ENABLED=0`）。
+
+---
+
+### logs
+
+```bash
+pawai logs brain                 # 預設 500 行
+pawai logs brain --lines 200     # 改成 200 行
+pawai logs all --lines 1000      # 抓全部 demo pane
+```
+
+抓的 pane 由 `modules.py` 設定。`brain` 對應 `demo:llm` + `demo:executive` + `pawai_brain:conv_graph`。
+
+`logs all` 抓：`demo:face` `demo:vision` `demo:object` `demo:asr` `demo:tts` `demo:llm` `demo:executive` `demo:gateway`。
+
+互動式 follow：
+
+```bash
+ssh jetson 'tmux attach -t demo'
+```
+
+---
+
+### docs
+
+```bash
+pawai docs brain          # → docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md
+pawai docs face           # → architecture/0511/face.md
+pawai docs gesture        # → architecture/0511/gesture/gesture.md
+pawai docs onboarding     # → docs/pawai_cli/team-onboarding.md
+pawai docs contract       # → docs/contracts/interaction_contract.md
+pawai docs brain --open   # 用 $EDITOR 開
+```
+
+Unknown target → 印列表 + exit 2。
+
+---
+
+### contract
+
+```bash
+pawai contract check          # 本機 branch 跑 scripts/ci/check_topic_contracts.py
+pawai contract check --jetson # 透過 SSH 在 Jetson deployed copy 跑
+```
+
+預設 local-first 是為了驗證**你目前 branch** 的契約一致性 — Jetson 上的 install 可能是別人的 stale sync。
+
+---
+
+## 4. 工作流範例
+
+### 改完 brain 程式碼 → 推上 Jetson → 看 log
+
+```bash
+# 1. 確認環境
+pawai doctor
+
+# 2. 推 + build
+pawai jetson deploy --module brain
+
+# 3. 重啟 demo（如果有在跑）
+pawai demo stop && pawai demo start
+
+# 4. 看 log
+pawai logs brain --lines 300
+
+# 5. 改完了
+pawai demo stop
+```
+
+### 跨平台搬家後第一次設定
+
+依照 [troubleshooting.md](troubleshooting.md) 的「**Mac 搬家踩坑**」章節，
+或直接跑 `pawai doctor` 一條條解掉警告。
+
+---
+
+## 5. 環境變數參考
+
+CLI 讀順序：`.env` → `.env.local`（後者覆寫前者）。
+
+| 變數 | 預設 | 用途 |
+|------|------|-----|
+| `JETSON_HOST` | `jetson-nano` | SSH alias / hostname |
+| `JETSON_REPO` | `/home/jetson/elder_and_dog` | Jetson 上的 repo 路徑 |
+| `JETSON_TAILSCALE_IP` | `YOUR_JETSON_IP` | 本機 browser 連 Studio Gateway 用 |
+| `ROBOT_IP` | `192.168.123.161` | Go2 IP |
+| `OPENROUTER_KEY` / `OPENROUTER_API_KEY` | （無） | LLM cloud key |
+| `PAWAI_LLM_MODEL` | `openai/gpt-5.4-mini` | 主線 LLM |
+| `PAWAI_LLM_FALLBACK_MODEL` | `google/gemini-3-flash-preview` | LLM fallback |
+| `TTS_PROVIDER` | `openrouter_gemini` | TTS 提供者 |
+| `OPENROUTER_GEMINI_VOICE` | `Despina` | TTS 聲音 |
+| `ASR_PROVIDER_ORDER` | `["sensevoice_cloud","sensevoice_local","whisper_local"]` | ASR 優先順序 |
+| `PAWAI_REPO_ROOT` | （自動偵測 git root） | 從非 repo 目錄跑 CLI 時手動指定 |
+
+---
+
+## 6. 進階
+
+### 在子目錄跑 CLI
+
+CLI 用 `git rev-parse --show-toplevel` 找 repo root，多數情況自動正確。如果你不在 git repo 內：
+
+```bash
+PAWAI_REPO_ROOT=~/elder_and_dog pawai status
+```
+
+### 跑單元測試
+
+```bash
+python3 -m pytest tools/pawai_cli/tests -v
+```
+
+### 升級 / 重裝
+
+```bash
+uv pip install -e tools/pawai_cli --force-reinstall
+```
+
+---
+
+## 7. Lock 機制（多人共用 Jetson）
+
+`$JETSON_REPO/.pawai-demo-lock` 是共用 Jetson 的 single source of truth：
+
+- `state: starting` — `pawai demo start` 已 acquire lock，正在啟動
+- `state: running` — start.sh 跑完，demo 正常運行
+- `lane: brain | nav_capability` — stop / force takeover 用來選正確 cleanup
+- `tmux_session: demo | nav-cap-demo` — status 顯示與現場 debug 用
+- `pawai demo stop` / start 失敗 — lock 移除
+
+**stale 規則**：
+- `starting` > 10 min → 視為啟動失敗，會 prompt 清掉
+- `running` > 4 hr → 標 `STALE` 在 `pawai status`，**不**自動刪
+- 自己留下的 stale lock 可由 `pawai demo stop` owner-aware 清掉，不需要 `--force`
+- 別人的 lock 即使 stale，也要先溝通；確認對方不在用後才 `--force`
+
+### `-y` vs `--force`
+
+| Flag | 跳一般 prompt？ | 可以搶別人 lock？ |
+|---|---|---|
+| `-y` | ✅ | ❌ |
+| `--force` | ✅ | ✅ |
+
+`pawai demo start --force` / `pawai demo stop --force` / `pawai jetson deploy --force` 都會搶。
+明天現場接手別人 demo 前**請先溝通**。
+
+### Branch mismatch
+
+`rsync` 不同步 `.git/`，Jetson 上 git 狀態不代表實際跑的 code。`.pawai-last-deploy` 才是 runtime provenance。
+
+`pawai status` 比對：
+- **local branch**（你 checkout 的）
+- **install branch**（`.pawai-last-deploy` 記錄的 deploy 來源）
+- **dirty**（deploy 當下 working tree 是否有未 commit 改動）
+
+不一致時印 `⚠ MISMATCH`。要讓兩邊一致 → 切到對的 branch 再 `pawai jetson deploy --module X`。
+
+---
+
+## 8. 設計理念
+
+- **包裝不取代**：所有重活還是 `scripts/*.sh` 在做，CLI 只負責「正確順序 + 環境 + 提示」
+- **失敗時給 actionable hint**：doctor 不只說「missing」，會給對應的 `brew install` / `cp example`
+- **idempotent**：每個指令多跑一次不會壞掉；deploy/demo start 都會偵測舊 state 自動清
+- **不藏錯**：rsync/colcon 的 output 全部 stream 到本機 stdout，不吞錯誤
+- **多人友善**：`.pawai-last-deploy` 記錄誰最後動了什麼；deploy 會警告別人正在 demo
+
+---
+
+## 8. 進一步
+
+- 踩過的坑 + 解法：[troubleshooting.md](troubleshooting.md)
+- 8 個 module 的詳細資訊：[modules.md](modules.md)
+- CLI 原始碼：`tools/pawai_cli/pawai_cli/`
+- brain-studio-lane start.sh：`.claude/skills/brain-studio-lane/scripts/start.sh`
+- 變數模板：[.env.local.example](../../.env.local.example) / [frontend/.env.local.example](../../pawai-studio/frontend/.env.local.example)

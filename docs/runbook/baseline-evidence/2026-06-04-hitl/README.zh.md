@@ -1,6 +1,6 @@
 # 2026-06-04 HITL Capability Baseline — Evidence
 
-**English** | [中文](./README.zh.md)
+[English](./README.md) | **中文**
 
 **Run**: `hitl-0604` · **demo SHA**: `78fbf36` · **snapshot**: `run_trusted=True`, `version_mismatch=False`
 **Method**: demo (`pawai demo start`, 13-window full stack) → `capture_baseline_round.py` (fixed-window, SSH-driven) + voice `run_speech_test.sh` → WSL `build_scoreboard --preflight` (built at checkout `78fbf36` to match Jetson deploy manifest) → `pawai readiness`.

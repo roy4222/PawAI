@@ -1,45 +1,47 @@
-# 物體辨識
+# Object Recognition
 
-> **Scope**：object_perception 模組設計真相（YOLO26n ONNX + ORT TensorRT EP FP16 + HSV 顏色）｜**Status**: active / source-of-truth (module)
-> **Owner lane**: pawai-brain / perception ｜ **能力 claim 真相源**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `object.cup`
-> **能力 grade 證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（object.cup = 🟢 pass **僅 ~1m 近距 cup-only**；caveats 凌駕本頁敘事）
-> **維護子檔**：`CLAUDE.md`（工作規則）｜`AGENT.md`（topic 介面契約）｜`research/`（research-only，非真相）
-> **這頁不是什麼**：不是能力 pass/fail 的裁定（看 baseline-evidence）。⚠️ **6/04 trusted 只量 `object.cup`（~1m 近距）**——code 雖支援 COCO 80 class + 12 色，但**80 類 / 通用偵測 / 尋物 / VLM / 可靠顏色 / 2m 穩 均未經 trusted baseline 量測，不得宣稱**。
+**English** | [中文](./README.zh.md)
 
-> YOLO26n ONNX + ORT TensorRT EP。code 支援 COCO 80 class，但 **6/18 能力 claim 窄鎖 `object.cup` ~1m 近距**（config 可硬鎖 `class_whitelist=[41,999]`）。
+> **Scope**: object_perception module design source-of-truth (YOLO26n ONNX + ORT TensorRT EP FP16 + HSV color) | **Status**: active / source-of-truth (module)
+> **Owner lane**: pawai-brain / perception | **Capability claim source-of-truth**: [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../../mission/2026-06-18-capability-claim-matrix.md) `object.cup`
+> **Capability grade evidence (final fact)**: [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) (object.cup = 🟢 pass **only at ~1m close-range, cup-only**; caveats override this page's narrative)
+> **Maintained sub-files**: `CLAUDE.md` (working rules) | `AGENT.md` (topic interface contract) | `research/` (research-only, not source-of-truth)
+> **What this page is NOT**: it is not the adjudication of capability pass/fail (see baseline-evidence). ⚠️ **On 6/04 the trusted measurement covered only `object.cup` (~1m close-range)** — although the code supports COCO 80 class + 12 colors, **80 classes / generic detection / object-finding / VLM / reliable color / stable at 2m have all NOT been measured by a trusted baseline and must not be claimed**.
 
-## 能力卡（canonical 8 欄位 → 連結 claim matrix，勿在本頁重複整份散文）
+> YOLO26n ONNX + ORT TensorRT EP. The code supports COCO 80 class, but the **6/18 capability claim is narrowly locked to `object.cup` ~1m close-range** (config can hard-lock `class_whitelist=[41,999]`).
 
-> 完整 8 欄位散文見 [claim matrix `object.cup`](../../../mission/2026-06-18-capability-claim-matrix.md#objectcup)。本表為速查。
+## Capability Card (canonical 8 fields → link to claim matrix, do not repeat the full prose on this page)
 
-| 欄位 | 值 |
+> See the full 8-field prose at [claim matrix `object.cup`](../../../mission/2026-06-18-capability-claim-matrix.md#objectcup). This table is for quick reference.
+
+| Field | Value |
 |---|---|
-| **Current Claim** | ~1m 近距、桌上單色杯子受控擺位可靠辨識「杯子」這一類；config 硬鎖 cup-only |
+| **Current Claim** | At ~1m close-range, with a single-color cup on a table in a controlled placement, reliably recognizes the "cup" class; config hard-locks cup-only |
 | **Claim Level** | CLAIM_WITH_CAVEAT |
-| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/)（5/5 positive @1m, conf 0.83–0.88, idle 0 誤觸, n=7） |
-| **Pass/Degraded/Fail/Insufficient** | 🟢 pass（窄版近距）— 2m 無樣本、distance=manual_declared、latency p90≈4.9s |
-| **Fallback** | 距離拉遠 / 延遲尷尬 → 鎖 ~1m、不說「即時」、改「我看到桌上有物品」 |
-| **Non-Claims** | 通用物體辨識 / 80 類 / 「2m 也穩」 / 「即時 / 很快」 / 地上水杯提醒（絆倒守護語言）/ 把 LLM 口播「我看到杯子」當感知證據 / 用物體觸發機器狗移動 / 可靠顏色 / 尋物 / VLM |
-| **Model Candidates** | BASELINE_NOW（YOLO26n TRT FP16，現役窄版 pass 不換） |
-| **Next Retest** | 多距離 1 / 1.5 / 2m 各 5 筆 + D435 depth 量距；跨光線 / 冷啟 TRT 重跑 |
+| **Evidence-Provenance** | [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/) (5/5 positive @1m, conf 0.83–0.88, idle 0 false triggers, n=7) |
+| **Pass/Degraded/Fail/Insufficient** | 🟢 pass (narrow close-range version) — no samples at 2m, distance=manual_declared, latency p90≈4.9s |
+| **Fallback** | If distance increases / latency is awkward → lock to ~1m, do not say "real-time", switch to "I see there's an item on the table" |
+| **Non-Claims** | Generic object recognition / 80 classes / "stable at 2m too" / "real-time / very fast" / floor water-cup reminders (trip-hazard guardian language) / treating the LLM's spoken "I see a cup" as perception evidence / using objects to trigger robot-dog movement / reliable color / object-finding / VLM |
+| **Model Candidates** | BASELINE_NOW (YOLO26n TRT FP16, currently the active narrow version passes, do not switch) |
+| **Next Retest** | Multi-distance 1 / 1.5 / 2m, 5 samples each + D435 depth distance measurement; re-run across lighting / cold-start TRT |
 
-> **顏色 / 80 類 / 中文 label**：以下章節描述的是 **code 能力**，**非 trusted-baseline 驗證過的能力 claim**。6/04 未量顏色準確率與多類召回——demo/簡報不得宣稱「可靠顏色辨識」或「通用 80 類偵測」。
+> **Color / 80 classes / Chinese labels**: the following sections describe **code capability**, **not a trusted-baseline-verified capability claim**. On 6/04, color accuracy and multi-class recall were not measured — the demo/slides must not claim "reliable color recognition" or "generic 80-class detection".
 
-## 狀態卡
+## Status Card
 
-> **狀態卡 caveat（6/04 收斂）**：下表 5/6「Brain 全鏈路通」是**開發期上機觀察**，**非 6/04 trusted baseline**。trusted 能力只有 `object.cup` ~1m 近距（🟢 pass 窄版）。顏色 / 80 類 / 32-class TTS 為 code 能力，**未量化驗證**。
+> **Status card caveat (converged 6/04)**: the table below's 5/6 "Brain full-chain works" is a **development-period on-device observation**, **not the 6/04 trusted baseline**. The only trusted capability is `object.cup` ~1m close-range (🟢 pass narrow version). Color / 80 classes / 32-class TTS are code capabilities, **not quantitatively verified**.
 
-| 項目 | 值 |
+| Item | Value |
 |------|---|
-| 狀態 | **object.cup ~1m 近距 = 🟢 pass 窄版（6/04 trusted）**；顏色/80 類為 code 能力非 claim |
-| 版本/決策 | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16（不裝 ultralytics） |
-| 完成度 | 85%（模組開發進度，非能力 pass — 見上方 caveat）|
-| 最後驗證 | 2026-05-06（chair brown/black、cup gray、person cyan 全鏈路觀察到 brain `object_remark` 觸發 zh TTS）|
-| 模型檔案 | Jetson: `/home/jetson/models/yolo26n.onnx`（大小待實測） |
-| TRT Cache | `/home/jetson/trt_cache/`（首次啟動 3-10 分鐘，之後秒起） |
-| Package | `object_perception/`（ROS2 Python，entry: `object_perception_node`） |
+| Status | **object.cup ~1m close-range = 🟢 pass narrow version (6/04 trusted)**; color/80 classes are code capabilities, not a claim |
+| Version/Decision | YOLO26n ONNX + onnxruntime-gpu TensorRT EP FP16 (do not install ultralytics) |
+| Completeness | 85% (module development progress, not a capability pass — see caveat above)|
+| Last Verified | 2026-05-06 (chair brown/black, cup gray, person cyan — full chain observed triggering brain `object_remark` → zh TTS)|
+| Model File | Jetson: `/home/jetson/models/yolo26n.onnx` (size to be measured) |
+| TRT Cache | `/home/jetson/trt_cache/` (first startup 3-10 minutes, then seconds to start) |
+| Package | `object_perception/` (ROS2 Python, entry: `object_perception_node`) |
 
-## 核心流程
+## Core Flow
 
 ```
 D435 RGB (/camera/camera/color/image_raw)
@@ -63,52 +65,52 @@ interaction_executive_node（物體辨識結果 → TTS 回報）[待整合]
 }
 ```
 
-- 每 tick 可能偵測多物件，統一用 `objects` 陣列
-- `bbox`: Python int `[x1, y1, x2, y2]` 像素座標（逆 letterbox 後）
-- `class_name`: 見下方 P0 類別表
-- Per-class cooldown 5s：同 class 連續偵測不重複發 event
+- Multiple objects may be detected each tick, all unified in the `objects` array
+- `bbox`: Python int `[x1, y1, x2, y2]` pixel coordinates (after inverse letterbox)
+- `class_name`: see the P0 class table below
+- Per-class cooldown 5s: continuous detection of the same class does not re-emit events
 
-## 實測資源
+## Measured Resources
 
-### 4/4 Phase B（四核心全開壓測）
-| 指標 | 值 |
+### 4/4 Phase B (all four cores running, stress test)
+| Metric | Value |
 |------|---|
-| FPS | 15.0 穩定（70 秒零掉幀） |
-| RAM 增量 | +1GB（3667/7620 MB） |
-| GPU | 0%（TensorRT EP） |
-| 溫度 | 56°C |
-| 功耗 | 8.9W |
+| FPS | 15.0 stable (zero dropped frames over 70 seconds) |
+| RAM increment | +1GB (3667/7620 MB) |
+| GPU | 0% (TensorRT EP) |
+| Temperature | 56°C |
+| Power | 8.9W |
 
-### 4/5 Phase C（ROS2 node 單獨跑 5 分鐘穩定性）
-| 指標 | 值 |
+### 4/5 Phase C (ROS2 node running standalone for 5 minutes, stability)
+| Metric | Value |
 |------|---|
-| Debug image Hz | 6.3-6.8 Hz（publish_fps=8.0） |
-| Event 發布 | 正確（per-class cooldown 5s 生效） |
-| RAM | 2312 → 2319 MB（+7MB，無 leak） |
-| 溫度 | 48°C（持平略降） |
+| Debug image Hz | 6.3-6.8 Hz (publish_fps=8.0) |
+| Event publishing | Correct (per-class cooldown 5s in effect) |
+| RAM | 2312 → 2319 MB (+7MB, no leak) |
+| Temperature | 48°C (held steady, slightly down) |
 | Node process CPU | 38.5% |
 | ONNX providers | TensorRT + CUDA + CPU |
 
-## 模型比較（yolo26n vs yolov8n vs yolo26s）
+## Model Comparison (yolo26n vs yolov8n vs yolo26s)
 
-> **狀態**: 待實測。下表只列**比較維度與當前角色**；mAP / FPS / 模型大小等具體數字 **5/12 demo 後**才補（需自家 Jetson + class_whitelist 條件下的 benchmark 才有意義，引用上游 README 的全 80-class 數字會誤導）。
+> **Status**: to be measured. The table below only lists the **comparison dimensions and current roles**; concrete numbers such as mAP / FPS / model size will be filled in **only after the 5/12 demo** (benchmarks are only meaningful under our own Jetson + class_whitelist conditions; quoting the full 80-class numbers from the upstream README would be misleading).
 
-| 模型 | 角色 | 比較維度 |
+| Model | Role | Comparison Dimensions |
 |---|---|---|
-| **yolo26n** | **主線**（5/12 demo 已上機驗證） | 待實測：mAP / 大小 / Jetson FP16 FPS / 小物件偵測率 |
-| yolov8n | MOC §5 對比候選；目前未上機 | 同上；要進主線需先做 A/B |
-| yolo26s | 升級候選（post-demo） | 同上；MOC 提到改善小物件，需驗證 |
+| **yolo26n** | **Mainline** (verified on-device for the 5/12 demo) | To be measured: mAP / size / Jetson FP16 FPS / small-object detection rate |
+| yolov8n | MOC §5 comparison candidate; currently not on-device | Same as above; entering the mainline requires an A/B first |
+| yolo26s | Upgrade candidate (post-demo) | Same as above; MOC mentions improved small-object handling, needs verification |
 
-> MOC §5 寫「yolo26n 和 yolov8n 辨識物體效果比較」— 5/12 demo 不做完整 A/B（時程不足），保留為 post-demo 評估項。**yolo26n 已經是上機驗證主線**，不切換。
-> 真實數字補在 [`research/`](./research/) 子資料夾的 benchmark 報告，更新到此表前先 cite 來源。
+> MOC §5 says "comparison of yolo26n and yolov8n object recognition effectiveness" — the 5/12 demo will not do a full A/B (insufficient time), keep it as a post-demo evaluation item. **yolo26n is already the on-device-verified mainline**, do not switch.
+> Real numbers will be filled into the benchmark reports in the [`research/`](./research/) sub-folder; cite the source before updating this table.
 
-## HSV 顏色偵測（5/6 12 色升級）
+## HSV Color Detection (5/6 upgrade to 12 colors)
 
-> MOC §5：「要可以偵測顏色」。
-> 程式：`object_perception/object_perception/object_perception_node.py::analyze_bbox_color`（module-level，可單元測試；class staticmethod 委派之）
-> 歷史：5/5 落地 4 色（commit `4f638ae`）→ 5/6 升 12 色（commit `d9fef2d`）
+> MOC §5: "must be able to detect color".
+> Code: `object_perception/object_perception/object_perception_node.py::analyze_bbox_color` (module-level, unit-testable; the class staticmethod delegates to it)
+> History: 5/5 landed 4 colors (commit `4f638ae`) → 5/6 upgraded to 12 colors (commit `d9fef2d`)
 
-### 演算法（per-pixel 分類取 mode）
+### Algorithm (per-pixel classification, take the mode)
 
 ```
 YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV)
@@ -117,16 +119,16 @@ YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV)
   → ratio < 0.25 視為「太碎」回 "Unknown"
 ```
 
-### 12 色分類
+### 12-Color Classification
 
-| 優先 | 標籤 | 規則（OpenCV: H 0-180, S/V 0-255）|
+| Priority | Label | Rule (OpenCV: H 0-180, S/V 0-255)|
 |:---:|:---:|---|
 | 1 | black | V < 50 |
 | 2 | white | S < 40 AND V ≥ 200 |
 | 3 | gray | S < 40 AND 50 ≤ V < 200 |
-| 4 | brown | warm hue 5-25 AND V < 130（chromatic & dark）|
+| 4 | brown | warm hue 5-25 AND V < 130 (chromatic & dark)|
 | 5 | pink | (red side H ≥ 160 OR ≤ 5 + S < 150 + V ≥ 180) OR magenta band 150-165 |
-| 6 | red | H ≤ 8 OR ≥ 165（不是 brown / pink）|
+| 6 | red | H ≤ 8 OR ≥ 165 (not brown / pink)|
 | 7 | orange | 8 < H ≤ 22 |
 | 8 | yellow | 22 < H ≤ 35 |
 | 9 | green | 35 < H ≤ 85 |
@@ -134,13 +136,13 @@ YOLO bbox → crop ROI → cv2.cvtColor(BGR→HSV)
 | 11 | blue | 100 < H ≤ 130 |
 | 12 | purple | 130 < H ≤ 150 |
 
-**為什麼 brown / pink 要先過 V/S，不只看 hue**：brown 的 hue 在 orange/yellow band 但 V 偏低；pink 在紅或洋紅側但通常 S 較低 V 較高。單純擴 hue band 會把咖啡色椅子歸成 yellow / red。
+**Why brown / pink go through V/S first, not just hue**: brown's hue is in the orange/yellow band but V is low; pink is on the red or magenta side but usually has lower S and higher V. Simply widening the hue band would classify a coffee-brown chair as yellow / red.
 
-### Event 寫入規則
+### Event-Writing Rules
 
-Saturation 過低或 ratio < 0.25 → 不寫 `color` / `color_confidence`（前端視為無色）。
+Saturation too low or ratio < 0.25 → do not write `color` / `color_confidence` (the frontend treats it as colorless).
 
-例子（咖啡色椅子）：
+Example (coffee-brown chair):
 ```json
 {
   "objects": [
@@ -150,20 +152,20 @@ Saturation 過低或 ratio < 0.25 → 不寫 `color` / `color_confidence`（前�
 }
 ```
 
-### 中文顯示 + TTS 渲染
+### Chinese Display + TTS Rendering
 
-- 三份 zh dict（perception node `coco_classes.py:COLOR_ZH` / brain `OBJECT_COLOR_ZH` / frontend `object-config.ts:COLOR_ZH`）— 互不依賴，避免 ROS2 跨 package import；keep in sync 於檔頂註明
+- Three zh dicts (perception node `coco_classes.py:COLOR_ZH` / brain `OBJECT_COLOR_ZH` / frontend `object-config.ts:COLOR_ZH`) — mutually independent to avoid ROS2 cross-package imports; the keep-in-sync note is marked at the top of each file
 - `紅 / 橘 / 黃 / 綠 / 青 / 藍 / 紫 / 粉紅 / 咖啡 / 黑 / 白 / 灰`
-- Studio 物體 panel `live-detection.tsx` 渲染：「咖啡色 椅子」（COLOR_ZH + getLabel(class_name)）
-- Brain `build_object_tts(class_name, color)` 產出：`看到{COLOR_ZH}的{class_zh}了` + 可選 personality suffix
+- Studio object panel `live-detection.tsx` renders: "咖啡色 椅子" (COLOR_ZH + getLabel(class_name))
+- Brain `build_object_tts(class_name, color)` produces: `看到{COLOR_ZH}的{class_zh}了` + optional personality suffix
 
-### 80 類中文 + zh 渲染（debug overlay）
+### 80-Class Chinese + zh Rendering (debug overlay)
 
-`object_perception_node._publish_debug_image` 5/6 起切 PIL CJK rendering（cv2.putText 不支援中文），讀 `coco_classes.COCO_CLASSES_ZH` 顯示 80 類中文 label，font 從 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc` 載入，無 CJK 字型則 fallback ASCII。
+`object_perception_node._publish_debug_image` switched to PIL CJK rendering starting 5/6 (cv2.putText does not support Chinese), reading `coco_classes.COCO_CLASSES_ZH` to display 80-class Chinese labels; the font is loaded from `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`, falling back to ASCII if there is no CJK font.
 
-## Scene 6 `object_remark` 整合（5/12 Sprint）
+## Scene 6 `object_remark` Integration (5/12 Sprint)
 
-### 觸發條件
+### Trigger Conditions
 
 ```
 /event/object_detected: { class_name: "cup", color: "red", confidence: ≥0.35 }  # 6/9 b1f5058: launch 預設 0.5→0.35（原 0.5 靜默蓋 yaml 害近距 cup 不出）
@@ -177,18 +179,18 @@ SkillPlan(object_remark) → say_template 渲染 `{class}` + `{color}`
 TTS：「咦，你拿著紅色的杯子！」
 ```
 
-### 5/7 night demo silence（commits `685c97d` + `e1363c8`）
+### 5/7 Night Demo Silence (commits `685c97d` + `e1363c8`)
 
-兩條收緊規則跟 SkillContract.cooldown_s=5 互補：
+Two tightening rules complement SkillContract.cooldown_s=5:
 
-| 規則 | 為什麼 | 實作位置 |
+| Rule | Why | Implementation Location |
 |---|---|---|
-| `class_name == "person"` 不講話 | YOLO 偵測 person 與 face stranger_alert / greet_known_person 路徑撞車，會「看到黑色的人了」「偵測到不認識的人」連環喊 | `brain_node.py:build_object_tts()` 直接 return None |
-| Per-(class, color) 60s 自我去重 | `SkillContract.cooldown_s=5` 只擋 SAY skill，不擋 brain_node 對同一張椅子每 5s re-emit；YOLO 連續偵測會狂喊 | `brain_node.py._on_object()` 加 `_object_remark_seen[(class, color)]` dict + 60s 窗口 |
+| `class_name == "person"` stays silent | YOLO detecting person collides with the face stranger_alert / greet_known_person paths, causing a chain of "I see a black person" / "detected an unknown person" shouts | `brain_node.py:build_object_tts()` returns None directly |
+| Per-(class, color) 60s self-deduplication | `SkillContract.cooldown_s=5` only blocks the SAY skill, not brain_node re-emitting on the same chair every 5s; continuous YOLO detection would shout constantly | `brain_node.py._on_object()` adds an `_object_remark_seen[(class, color)]` dict + 60s window |
 
-驗證：5/7 night smoke「看到咖啡色的椅子了」60s 才再講一次；person 偵測完全靜音；Studio object panel 仍顯示 bbox。
+Verification: the 5/7 night smoke "I see a coffee-brown chair" only repeats after 60s; person detection is completely silent; the Studio object panel still shows the bbox.
 
-### Event Schema 擴充（5/5 起）
+### Event Schema Extension (from 5/5)
 
 ```json
 {
@@ -205,67 +207,67 @@ TTS：「咦，你拿著紅色的杯子！」
 }
 ```
 
-> Schema 變動需同步 `docs/contracts/interaction_contract.md` v2.6（contract 升版）。本 README 為先描述，contract 升版時 cross-link。
+> Schema changes must be synced to `docs/contracts/interaction_contract.md` v2.6 (contract version bump). This README describes it first; cross-link when the contract version is bumped.
 
-### 個性化回覆範例（傳給 brain，由 LLM 改寫）
+### Personalized Reply Examples (passed to brain, rewritten by the LLM)
 
-| class | color | TTS（demo baseline 範例）|
+| class | color | TTS (demo baseline examples)|
 |---|:---:|---|
 | cup | red | 「咦，你拿著紅色的杯子！」 |
 | cup | blue | 「藍杯子，看起來很涼」 |
 | bottle | red | 「紅瓶子，喝點水吧」 |
 | bottle | green | 「綠色瓶子是茶嗎？」 |
-| 其他 | * | LLM 動態生成 |
+| other | * | LLM dynamically generated |
 
-## 偵測類別 — COCO 80 class（預設全開）
+## Detection Classes — COCO 80 class (all enabled by default)
 
-自 v0.2（2026-04-05）起，node 預設辨識**完整 COCO 80 類**。完整類別 ID → name 映射見 `object_perception/object_perception/coco_classes.py`。
+Since v0.2 (2026-04-05), the node detects the **complete COCO 80 classes** by default. The full class ID → name mapping is in `object_perception/object_perception/coco_classes.py`.
 
-### Class whitelist（可選縮減）
+### Class whitelist (optional reduction)
 
-ROS2 參數 `class_whitelist` 控制：
-- `[]`（預設）— 全開 80 類
-- `[0, 16, 39, 41, 56, 60]` — 縮減為原 P0 6 類
+The ROS2 parameter `class_whitelist` controls this:
+- `[]` (default) — all 80 classes enabled
+- `[0, 16, 39, 41, 56, 60]` — reduced to the original P0 6 classes
 
-Launch 時覆寫：
+Override at launch:
 ```bash
 ros2 launch object_perception object_perception.launch.py \
   class_whitelist:='[0, 16, 39, 41, 56, 60]'
 ```
 
-或改 `config/object_perception.yaml`。
+Or edit `config/object_perception.yaml`.
 
-### 常用 P0 subset（Demo 展示目標）
+### Common P0 subset (Demo target)
 
-| Class | COCO ID | 命名 | 用途 |
+| Class | COCO ID | Name | Purpose |
 |-------|:-------:|------|------|
-| person | 0 | `person` | 人物偵測 |
-| dog | 16 | `dog` | 專題主題 |
-| bottle | 39 | `bottle` | 小物展示 |
-| cup | 41 | `cup` | 小物展示 |
-| chair | 56 | `chair` | 環境理解 |
-| dining table | 60 | `dining_table` | 環境理解 |
+| person | 0 | `person` | Person detection |
+| dog | 16 | `dog` | Project theme |
+| bottle | 39 | `bottle` | Small-object showcase |
+| cup | 41 | `cup` | Small-object showcase |
+| chair | 56 | `chair` | Environment understanding |
+| dining table | 60 | `dining_table` | Environment understanding |
 
-### 命名規則
+### Naming Convention
 
-COCO 原名含空格者統一改底線（JSON consistency）：
+COCO original names containing spaces are uniformly changed to underscores (JSON consistency):
 - `dining table` → `dining_table`
 - `cell phone` → `cell_phone`
 - `traffic light` → `traffic_light`
 - `teddy bear` → `teddy_bear`
-- 等等（共 15 個原含空格名稱）
+- and so on (15 names originally contained spaces)
 
-## 部署路徑
+## Deployment Path
 
-**不在 Jetson 上裝 ultralytics**（會覆蓋 Jetson torch wheel，4/4 已踩坑）。
+**Do not install ultralytics on the Jetson** (it would overwrite the Jetson torch wheel — already hit this pitfall on 4/4).
 
-1. WSL 上用 ultralytics 匯出：`yolo26n.pt` → `yolo26n.onnx`（`format='onnx', imgsz=640, simplify=True, opset=17`）
-2. scp 到 Jetson `/home/jetson/models/`
-3. Jetson 上用 `onnxruntime-gpu`（已有）直接載入，TensorRT EP + FP16
+1. Export with ultralytics on WSL: `yolo26n.pt` → `yolo26n.onnx` (`format='onnx', imgsz=640, simplify=True, opset=17`)
+2. scp to the Jetson `/home/jetson/models/`
+3. On the Jetson, load directly with `onnxruntime-gpu` (already present), TensorRT EP + FP16
 
-YOLO26n 是 NMS-free，output shape `(1, 300, 6)` = `[x1, y1, x2, y2, conf, class_id]`，後處理只需 threshold filter。
+YOLO26n is NMS-free, output shape `(1, 300, 6)` = `[x1, y1, x2, y2, conf, class_id]`, post-processing only needs a threshold filter.
 
-## 啟動方式
+## How to Launch
 
 ```bash
 # Jetson 上（需 D435 先跑）
@@ -275,15 +277,15 @@ source install/setup.zsh
 ros2 launch object_perception object_perception.launch.py
 ```
 
-**TRT 參數陷阱**：`trt_engine_cache_enable` 和 `trt_fp16_enable` 的值必須是 `"True"`/`"False"` 字串，不是 `"1"`/`"0"`，否則會 fallback 到 CPU。
+**TRT parameter pitfall**: the values of `trt_engine_cache_enable` and `trt_fp16_enable` must be the strings `"True"`/`"False"`, not `"1"`/`"0"`, otherwise it will fall back to CPU.
 
-## Brain 整合（5/6 改寫，取代 5/5 state_machine 路徑）
+## Brain Integration (5/6 rewrite, replacing the 5/5 state_machine path)
 
-實際生產路徑走 `interaction_executive/brain_node.py:_on_object` → `build_object_tts` → `object_remark` skill，**不**經 `state_machine.py:OBJECT_TTS_MAP`（後者已不在實際 wire 上）。
+The actual production path goes through `interaction_executive/brain_node.py:_on_object` → `build_object_tts` → `object_remark` skill, and does **not** go through `state_machine.py:OBJECT_TTS_MAP` (the latter is no longer on the actual wire).
 
-### TTS whitelist（~32 class）
+### TTS whitelist (~32 class)
 
-只對常見家居物件開口；其他 48 類（飛盤、紅綠燈、滑雪板等）UI 仍顯示，但 brain 靜默：
+Only speaks for common household objects; the other 48 classes (frisbee, traffic light, snowboard, etc.) still display in the UI, but brain stays silent:
 
 ```
 cup, bottle, book, person, dog, cat, chair, couch, bed, dining_table,
@@ -292,7 +294,7 @@ umbrella, clock, vase, potted_plant, teddy_bear, scissors, wine_glass,
 fork, knife, spoon, bowl, banana, apple, orange
 ```
 
-### 模板：colour preamble + optional personality suffix
+### Template: colour preamble + optional personality suffix
 
 ```python
 # 標準格式：「看到 {COLOR_ZH 顏色} 的 {class_zh}」
@@ -303,48 +305,48 @@ build_object_tts("cup", "Unknown") == "看到杯子了，你要喝水嗎？"    
 build_object_tts("frisbee", "red") is None                            # 不在 whitelist
 ```
 
-`OBJECT_TTS_SPECIAL_SUFFIX` 只 cup / bottle / book 三個有 personality phrase（5/6 user 回饋：suffix 接在 colour preamble 後，不替換）。
+`OBJECT_TTS_SPECIAL_SUFFIX` has personality phrases for only cup / bottle / book (5/6 user feedback: the suffix is appended after the colour preamble, not a replacement).
 
-### 行為約束
+### Behavioral Constraints
 
-- Cooldown 5s（在 brain `_emit_with_cooldown`）
-- payload 兩種格式都吃：production `{"objects": [...]}` 與 legacy flat `{"label", "color"}`
-- 不在 active sequence 中才觸發（brain `_has_active_sequence` 守門）
+- Cooldown 5s (in brain `_emit_with_cooldown`)
+- Accepts both payload formats: production `{"objects": [...]}` and legacy flat `{"label", "color"}`
+- Only triggers when not in an active sequence (gated by brain `_has_active_sequence`)
 
-### 棄用路徑
+### Deprecated Path
 
-`interaction_executive/state_machine.py:OBJECT_TTS_MAP`（5/5 設計，cup / bottle / book 三類英文模板）— 還在檔案裡但未被 wire；新增類別不要改它。
+`interaction_executive/state_machine.py:OBJECT_TTS_MAP` (5/5 design, English templates for the three classes cup / bottle / book) — still in the file but not wired; do not modify it when adding new classes.
 
-## 實測結果（4/6 上機驗證）
+## Measured Results (4/6 on-device verification)
 
-| 物品 | 結果 | 備註 |
+| Item | Result | Notes |
 |------|:----:|------|
-| cup 杯子 | ✅ | threshold 0.5，觸發 TTS「你要喝水嗎？」 |
-| cell phone 手機 | ✅ | 適當光線下可辨識 |
-| book 書本 | ⚠️ | 平放時困難，翻開展示可辨識（threshold 0.3 下偶爾偵測） |
-| bottle 水瓶 | ❌ | 未偵測到，Demo 不展示 |
+| cup | ✅ | threshold 0.5, triggers TTS "do you want some water?" |
+| cell phone | ✅ | recognizable under adequate lighting |
+| book | ⚠️ | difficult when lying flat, recognizable when opened for display (occasionally detected at threshold 0.3) |
+| bottle | ❌ | not detected, not shown in the demo |
 
-## 已知問題
+## Known Issues
 
-- **光線不足時小物體幾乎無法辨識** — Demo 必須開燈
-- 物體需在一定高度且正對攝影機角度才能偵測到
-- YOLO26n 是 Nano 版（小物件偵測率低，模型大小待實測）
-- 平放的扁平物體辨識困難（書本、手機平放）
-- **Jetson 供電不穩**：累積斷電 8+ 次
-- 追蹤、3D depth、target selection 未做
+- **Small objects are nearly impossible to recognize under insufficient lighting** — the demo must have the lights on
+- Objects must be at a certain height and facing the camera angle to be detected
+- YOLO26n is the Nano version (low small-object detection rate, model size to be measured)
+- Flat objects lying down are hard to recognize (book, phone lying flat)
+- **Jetson power instability**: 8+ cumulative power losses
+- Tracking, 3D depth, and target selection are not done
 
-## 下一步
+## Next Steps
 
-- [x] **B4-4 HSV 顏色偵測**（5/5 commit `4f638ae` 落地 4 色；5/6 commit `d9fef2d` 升 12 色 + brown / pink / 黑灰白）
-- [x] **Scene 6 `object_remark` 整合**（5/6 commit `545cd33` brain pipeline，real-machine 觀察 chair brown / chair black 觸發 zh TTS）
-- [x] **Event schema 升版 v2.5**（5/6 commit `545cd33` 補 color / color_confidence；commit `d9fef2d` 升 12 色 enum）
-- [ ] **小物件偵測距離問題**：`input_size` 640 → 960 A/B（YOLO26n 訓練 640，調 960 不保證好；需 mAP + Jetson FPS 雙軸驗證）
-- [ ] 室內 dataset 進階（post-demo）：MOC §5 提「資料集目前用 coco 看是否要用多一點室內」— 5/12 demo COCO 80 + 12 colour 即可，post-demo 再評估 OpenImages / Objects365 finetune
-- [ ] yolo26s 升級評估（mAP / 大小 / Jetson FPS / 小物件偵測率 全部待實測）
-- [ ] 平放扁平物體（書本、手機）辨識率改善（光線 + 角度 + threshold tuning）
+- [x] **B4-4 HSV color detection** (5/5 commit `4f638ae` landed 4 colors; 5/6 commit `d9fef2d` upgraded to 12 colors + brown / pink / black-gray-white)
+- [x] **Scene 6 `object_remark` integration** (5/6 commit `545cd33` brain pipeline, real-machine observation of chair brown / chair black triggering zh TTS)
+- [x] **Event schema bumped to v2.5** (5/6 commit `545cd33` added color / color_confidence; commit `d9fef2d` upgraded to the 12-color enum)
+- [ ] **Small-object detection distance issue**: `input_size` 640 → 960 A/B (YOLO26n was trained at 640, tuning to 960 does not guarantee improvement; needs dual-axis verification of mAP + Jetson FPS)
+- [ ] Indoor dataset advancement (post-demo): MOC §5 mentions "the dataset currently uses coco, consider using more indoor data" — for the 5/12 demo, COCO 80 + 12 colour is enough; evaluate OpenImages / Objects365 finetune post-demo
+- [ ] yolo26s upgrade evaluation (mAP / size / Jetson FPS / small-object detection rate all to be measured)
+- [ ] Improve recognition rate of flat objects lying down (book, phone) (lighting + angle + threshold tuning)
 
-## 子資料夾
+## Sub-folders
 
-| 資料夾 | 內容 |
+| Folder | Content |
 |--------|------|
-| research/ | 物體辨識可行性研究（YOLO26n 評估） |
+| research/ | Object recognition feasibility research (YOLO26n evaluation) |

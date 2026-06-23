@@ -1,79 +1,81 @@
-# PawAI 文件入口
+# PawAI Documentation Entry Point
 
-**專案**：老人與狗 (Elder and Dog) / PawAI
-**定位**：居家四足具身互動機器人（互動 70% / 守護 30%）。主線文件在以下路線下。
+**English** | [中文](./README.zh.md)
 
-> **30 秒原則**：找不到資訊 30 秒之內 → 走 `architecture/`（含 `architecture/navigation/`），再不行看 repo 根目錄的 `archive/` 是否保留退役程式。
+**Project**: Elder and Dog / PawAI
+**Positioning**: A home quadruped embodied interaction robot (70% interaction / 30% guardianship). The mainline documentation lives under the lanes below.
+
+> **30-second rule**: If you cannot find the information within 30 seconds → go to `architecture/` (including `architecture/navigation/`); if that still fails, check whether the `archive/` at the repo root retains the retired code.
 >
-> **Demo claim 真相**：任何「某能力是否 pass / 能不能講」一律以 §衝突仲裁 的 EVIDENCE_AUTHORITY 順序裁定，不以任何敘事文件為準。
+> **Demo claim truth**: Any question of "whether a capability passes / whether it can be claimed" is always adjudicated by the EVIDENCE_AUTHORITY order in §Conflict Arbitration, not by any narrative document.
 
 ---
 
-## 主線文件 (active)
+## Mainline Documents (active)
 
-| # | 路線 | 入口 | 內容 |
+| # | Lane | Entry | Contents |
 |:-:|------|------|------|
-| 1 | **Brain** | [architecture/README.md](architecture/README.md) | 互動主線：感知 / 語音 / Studio / Brain 決策層 |
-| 2 | **Navigation** | [architecture/navigation/README.md](architecture/navigation/README.md) | 移動主線：LiDAR / Nav2 / AMCL / D435 depth / 避障 |
-| 3 | **Contracts** | [contracts/README.md](contracts/README.md) | 跨主線 ROS2 介面契約 + 設計總則 |
-| 4 | **Runbook** | [runbook/README.md](runbook/README.md) | Demo 救火 SOP（Jetson / Network / GPU server / Go2 操作） |
-| 5 | **Mission** | [mission/README.md](mission/README.md) | 專案定位 / Demo 劇本 / 八大功能 SoT；6/18 戰略邊界 north-star v2（禁說清單） |
-| 6 | **Deliverables** | [deliverables/](deliverables/) | 學期繳交素材（thesis） |
+| 1 | **Brain** | [architecture/README.md](architecture/README.md) | Interaction mainline: perception / speech / Studio / Brain decision layer |
+| 2 | **Navigation** | [architecture/navigation/README.md](architecture/navigation/README.md) | Mobility mainline: LiDAR / Nav2 / AMCL / D435 depth / obstacle avoidance |
+| 3 | **Contracts** | [contracts/README.md](contracts/README.md) | Cross-lane ROS2 interface contract + design principles |
+| 4 | **Runbook** | [runbook/README.md](runbook/README.md) | Demo firefighting SOP (Jetson / Network / GPU server / Go2 operations) |
+| 5 | **Mission** | [mission/README.md](mission/README.md) | Project positioning / Demo script / eight-feature SoT; 6/18 strategic boundary north-star v2 (do-not-say list) |
+| 6 | **Deliverables** | [deliverables/](deliverables/) | Semester submission materials (thesis) |
 
-## 支援性資料夾（active，非主線真相層）
+## Supporting Folders (active, not the mainline truth layer)
 
-> 工具手冊 / 流程設定 / 製作指南 / 持久決策 / 研究。**不是能力或產品真相**——能力 pass/fail 一律回 baseline-evidence（見 §衝突仲裁）。
+> Tool manuals / process configuration / production guides / persistent decisions / research. **Not capability or product truth** — capability pass/fail always defers to baseline-evidence (see §Conflict Arbitration).
 
-| 資料夾 | 入口 | 角色 |
+| Folder | Entry | Role |
 |--------|------|------|
-| **ADR** | [adr/](adr/) | 持久架構決策（一次一決策、可被 supersede）。ADR-0001/0002 待 north-star v2 正式 amend |
-| **Agents** | [agents/](agents/) | AI agent / skill 運作設定（domain / issue-tracker / triage / HITL 取證流程）。流程設定，非產品真相 |
-| **PawAI CLI** | [pawai_cli/README.md](pawai_cli/README.md) | 五人共用 Jetson 單一入口 CLI 手冊（搭配 runbook 使用） |
-| **PawAI Demo** | [pawai-demo/](pawai-demo/) | Demo 製作 / 簡報 / 影片 / 報告撰寫指南（製作流程，非能力真相） |
-| **Research** | [research/](research/) | 通用研究（非 lane 綁定）。research-not-truth，不覆寫 baseline-evidence / contracts |
+| **ADR** | [adr/](adr/) | Persistent architecture decisions (one decision at a time, can be superseded). ADR-0001/0002 pending formal amendment by north-star v2 |
+| **Agents** | [agents/](agents/) | AI agent / skill operation configuration (domain / issue-tracker / triage / HITL evidence-gathering process). Process configuration, not product truth |
+| **PawAI CLI** | [pawai_cli/README.md](pawai_cli/README.md) | Single-entry CLI manual for the five-person shared Jetson (used together with the runbook) |
+| **PawAI Demo** | [pawai-demo/](pawai-demo/) | Demo production / slides / video / report writing guide (production process, not capability truth) |
+| **Research** | [research/](research/) | General research (not lane-bound). research-not-truth, does not override baseline-evidence / contracts |
 
-## 歷史
+## History
 
-| # | 路線 | 入口 | 內容 |
+| # | Lane | Entry | Contents |
 |:-:|------|------|------|
-| 7 | **Archive** | [archive/](archive/) | 退役套件與腳本（不含內部歷史文件） |
+| 7 | **Archive** | [archive/](archive/) | Retired packages and scripts (excluding internal historical documents) |
 
 ---
 
-## 衝突仲裁（誰是真相來源）
+## Conflict Arbitration (who is the source of truth)
 
-衝突時由高到低仲裁；**最新實測證據優先**。能力是否 pass、能不能進 Brain 主線、6/18 能不能講，一律回此順序。
+In a conflict, arbitrate from high to low; **the latest empirical evidence takes priority**. Whether a capability passes, whether it can enter the Brain mainline, and whether it can be claimed on 6/18 all defer to this order.
 
-| # | 層級 | 真相來源 |
+| # | Tier | Source of Truth |
 |:-:|------|---------|
-| 0 | **程式碼 / runtime topic schema** | 永遠是最終真相 |
-| 1 | **實測證據（empirical, TOP）** | [runbook/baseline-evidence/2026-06-04-hitl/](runbook/baseline-evidence/2026-06-04-hitl/) — 當前唯一 trusted snapshot（SHA 78fbf36, readiness=not_ready）。其 README 的 capability grades + honesty caveats 是能力 pass/degraded/fail/insufficient 的最終事實。READ-ONLY 證據資料。`2026-06-03-first-trusted-face/` 已被取代，僅作歷史 |
-| 2 | **收斂審計（read-only）** | （6/05 convergence audit — 已移出公開版，見內部歷史） — 6/18 claim-scope / 換不換模型 / docs-drift 裁定的權威。本身是 research，不覆寫 baseline 數據 |
-| 3 | **能力規格（how to measure）** | [architecture/specs/2026-06-18-capability-baseline-spec.md](architecture/specs/2026-06-18-capability-baseline-spec.md) — 15 capability 怎麼量、怎樣算 pass 的唯一真相源（門檻 provisional）。grade 結果以 #1 為準 |
-| 4 | **戰略邊界（what to claim）** | [mission/2026-06-18-demo-north-star.md](mission/2026-06-18-demo-north-star.md) v2 — 6/18 定位、禁說清單、scoreboard-first、scope 分層。amend ADR-0001/0002。能力是否 pass 仍回 #1 |
-| 5 | **介面契約** | [contracts/interaction_contract.md](contracts/interaction_contract.md)（ROS2 topic / action / service / message schema，v2.5 凍結） |
-| 6 | **模組設計真相** | `architecture/{brain,perception/*,speech,studio,specs}/`、`architecture/navigation/{setup,specs}/`（各帶模組 `CLAUDE.md`；內部歷史文件不包含在公開版） |
-| 7 | **產品方向 / Demo 劇本 / 八大功能** | [mission/README.md](mission/README.md) |
-| 8 | **持久決策** | [adr/](adr/)（ADR，可被新提案 supersede） |
-| 9 | **環境建置與救火 SOP** | [runbook/](runbook/) |
+| 0 | **Code / runtime topic schema** | Always the final truth |
+| 1 | **Empirical evidence (empirical, TOP)** | [runbook/baseline-evidence/2026-06-04-hitl/](runbook/baseline-evidence/2026-06-04-hitl/) — the only currently trusted snapshot (SHA 78fbf36, readiness=not_ready). The capability grades + honesty caveats in its README are the final fact for capability pass/degraded/fail/insufficient. READ-ONLY evidence data. `2026-06-03-first-trusted-face/` has been superseded and is kept only as history |
+| 2 | **Convergence audit (read-only)** | (6/05 convergence audit — removed from the public version, see internal history) — the authority for adjudicating 6/18 claim-scope / whether to swap models / docs-drift. It is itself research and does not override baseline data |
+| 3 | **Capability spec (how to measure)** | [architecture/specs/2026-06-18-capability-baseline-spec.md](architecture/specs/2026-06-18-capability-baseline-spec.md) — the sole source of truth for how the 15 capabilities are measured and what counts as a pass (thresholds provisional). Grade results defer to #1 |
+| 4 | **Strategic boundary (what to claim)** | [mission/2026-06-18-demo-north-star.md](mission/2026-06-18-demo-north-star.md) v2 — 6/18 positioning, do-not-say list, scoreboard-first, scope tiering. Amends ADR-0001/0002. Whether a capability passes still defers to #1 |
+| 5 | **Interface contract** | [contracts/interaction_contract.md](contracts/interaction_contract.md) (ROS2 topic / action / service / message schema, v2.5 frozen) |
+| 6 | **Module design truth** | `architecture/{brain,perception/*,speech,studio,specs}/`, `architecture/navigation/{setup,specs}/` (each carrying a module `CLAUDE.md`; internal historical documents are not included in the public version) |
+| 7 | **Product direction / Demo script / eight features** | [mission/README.md](mission/README.md) |
+| 8 | **Persistent decisions** | [adr/](adr/) (ADR, can be superseded by a new proposal) |
+| 9 | **Environment setup and firefighting SOP** | [runbook/](runbook/) |
 
-**EVIDENCE_AUTHORITY（最新優先）**：`runbook/baseline-evidence/2026-06-04-hitl/` ＞ 6/05 convergence audit ＞ 2026-06-18-capability-baseline-spec ＞ 2026-06-18-demo-north-star。6/03 first-trusted 為歷史。
+**EVIDENCE_AUTHORITY (latest first)**: `runbook/baseline-evidence/2026-06-04-hitl/` ＞ 6/05 convergence audit ＞ 2026-06-18-capability-baseline-spec ＞ 2026-06-18-demo-north-star. 6/03 first-trusted is history.
 
-**canonical claim matrix**：每能力的 Current Claim / Claim Level / Evidence-Provenance / Pass-Degraded-Fail-Insufficient / Fallback / Non-Claims / Model Candidates / Next Retest 以上述 #1–#4 為準，**不在各檔重複整份散文**——一律連結回 baseline-evidence README + convergence audit。
+**canonical claim matrix**: Each capability's Current Claim / Claim Level / Evidence-Provenance / Pass-Degraded-Fail-Insufficient / Fallback / Non-Claims / Model Candidates / Next Retest defers to #1–#4 above, and **is not duplicated as full prose in each file** — always link back to the baseline-evidence README + convergence audit.
 
-**關鍵原則**：實測 ＞ 審計 ＞ 規格 ＞ 敘事。`research/` 一律 research-not-truth（除 6/05 convergence audit 經指定升格為 #2）；退役程式在 repo 根目錄 `archive/`，不屬於現行真相。
-
----
-
-## 文件治理
-
-- **不主動重寫沒碰到的文件** — 改了程式碼才同步對應 `README.md`
-- **新增 / 移除 ROS2 topic** → 同步 `contracts/interaction_contract.md`
-- **每日收工** → 更新 `references/project-status.md`（在 repo 根目錄 `references/`，不在 `docs/`）
-- **命名約定**：`YYYY-MM-DD-description.md`（plan / spec / research）
-
-詳見本檔 commit 紀錄。
+**Key principle**: Empirical ＞ audit ＞ spec ＞ narrative. `research/` is always research-not-truth (except the 6/05 convergence audit, which is designated and promoted to #2); retired code lives in the repo-root `archive/` and is not part of the current truth.
 
 ---
 
-*Last reorg: 2026-05-02（推翻 5/13 pre-demo policy 提前執行；18 top-level → 7 active + archive）*
+## Documentation Governance
+
+- **Do not proactively rewrite documents you have not touched** — only sync the corresponding `README.md` after changing the code
+- **Adding / removing a ROS2 topic** → sync `contracts/interaction_contract.md`
+- **End of each workday** → update `references/project-status.md` (under the repo-root `references/`, not under `docs/`)
+- **Naming convention**: `YYYY-MM-DD-description.md` (plan / spec / research)
+
+See this file's commit history for details.
+
+---
+
+*Last reorg: 2026-05-02 (overturned the 5/13 pre-demo policy and executed it early; 18 top-level → 7 active + archive)*

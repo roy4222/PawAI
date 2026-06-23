@@ -1,61 +1,63 @@
-# Contracts — 跨主線 ROS2 介面契約
+# Contracts — Cross-Lane ROS2 Interface Contract
+
+**English** | [中文](./README.zh.md)
 
 > **Governance**
-> - **Scope**：Brain 主線（pawai-brain/）與 Navigation 主線（navigation/）共同遵守的 ROS2 topic / action / service / message schema + 設計總則。
-> - **Status**：active / source-of-truth（衝突仲裁 #5）。`interaction_contract.md` v2.5 凍結。
-> - **Owner lane**：跨 lane 共用；新增/移除 topic 先在此 PR review，再各模組跟進。
-> - **Source-of-truth priority**：程式碼 / runtime topic schema ＞ 本契約。能力是否 pass **不在此判定**——回 [`../README.md` §衝突仲裁](../README.md) 的 EVIDENCE_AUTHORITY（baseline-evidence 為準）。
-> - **Maintained child files**：`interaction_contract.md`。
-> - **Archived-legacy boundary**：設計總則原稿在 `archive/2026-05-docs-reorg/architecture-misc/`（frozen，僅引用）。
-> - **What this README is NOT**：不是能力 grade、不是 demo claim 真相、不是模組實作狀態；只定義介面 schema 與命名/QoS 總則。
+> - **Scope**: ROS2 topic / action / service / message schema + design principles jointly observed by the Brain lane (pawai-brain/) and the Navigation lane (navigation/).
+> - **Status**: active / source-of-truth (conflict arbitration #5). `interaction_contract.md` v2.5 frozen.
+> - **Owner lane**: shared across lanes; adding/removing a topic is PR-reviewed here first, then each module follows up.
+> - **Source-of-truth priority**: code / runtime topic schema ＞ this contract. Whether a capability passes is **not decided here** — refer to EVIDENCE_AUTHORITY in [`../README.md` §Conflict Arbitration](../README.md) (baseline-evidence is authoritative).
+> - **Maintained child files**: `interaction_contract.md`.
+> - **Archived-legacy boundary**: the original design-principles manuscript lives in `archive/2026-05-docs-reorg/architecture-misc/` (frozen, reference only).
+> - **What this README is NOT**: not a capability grade, not the truth of demo claims, not module implementation status; it only defines the interface schema and the naming / QoS principles.
 >
-> 任何感知模組或控制邏輯改動，**先改契約，後改 code**。
+> For any change to a perception module or control logic, **change the contract first, then change the code**.
 
 ---
 
-## 文件
+## Documents
 
-| 檔案 | 內容 |
+| File | Content |
 |------|------|
-| [interaction_contract.md](interaction_contract.md) | 完整 ROS2 topic / action / message schema（v2.5 凍結，5/12 demo 主線） |
+| [interaction_contract.md](interaction_contract.md) | Full ROS2 topic / action / message schema (v2.5 frozen, 5/12 demo mainline) |
 
 ---
 
-## 設計總則（抽自 archive/2026-05-docs-reorg/architecture-misc/CLAUDE.md+AGENT.md）
+## Design Principles (extracted from archive/2026-05-docs-reorg/architecture-misc/CLAUDE.md+AGENT.md)
 
-### Topic 形式：Event vs State
+### Topic Forms: Event vs State
 
-| 種類 | 用途 | QoS | 命名前綴 |
+| Type | Purpose | QoS | Naming Prefix |
 |------|------|-----|---------|
-| **Event** | 一次性觸發信號（Intent recognized / Gesture detected / Goal reached） | RELIABLE，KEEP_LAST(10) | `/event/...` |
-| **State** | 持續狀態快照（Face perception state 10Hz / Pose state） | BEST_EFFORT，KEEP_LAST(1) | `/state/...` |
-| **Capability** | 能力閘門 Bool（Brain Executive 用於 pre-action validate） | RELIABLE，TRANSIENT_LOCAL（latched） | `/capability/...` |
-| **Cmd** | 動作命令（Go2 driver / Nav 出口） | RELIABLE，KEEP_LAST(10) | `/cmd_vel`, `/webrtc_req` |
+| **Event** | One-shot trigger signal (Intent recognized / Gesture detected / Goal reached) | RELIABLE, KEEP_LAST(10) | `/event/...` |
+| **State** | Continuous state snapshot (Face perception state 10Hz / Pose state) | BEST_EFFORT, KEEP_LAST(1) | `/state/...` |
+| **Capability** | Capability gate Bool (used by Brain Executive for pre-action validate) | RELIABLE, TRANSIENT_LOCAL (latched) | `/capability/...` |
+| **Cmd** | Action command (Go2 driver / Nav outlet) | RELIABLE, KEEP_LAST(10) | `/cmd_vel`, `/webrtc_req` |
 
-### Latched Topic（TRANSIENT_LOCAL）
+### Latched Topic (TRANSIENT_LOCAL)
 
-- 慢頻、最後值即真相 → latched（如 `/capability/nav_ready`、`/state/perception/face`）
-- 高頻、僅當下有效 → 非 latched（如 `/scan`、camera image）
+- Slow rate, last value is the truth → latched (e.g. `/capability/nav_ready`, `/state/perception/face`)
+- High rate, only valid at the moment → not latched (e.g. `/scan`, camera image)
 
 ### Correlation ID
 
-- 跨節點關聯事件（語音 → Brain → 動作）→ 同一個 `correlation_id`
-- 格式：UUID4 字串
-- Speech intent → Brain skill plan → Go2 cmd 全鏈帶同一個 id
+- Correlate events across nodes (speech → Brain → action) → the same `correlation_id`
+- Format: UUID4 string
+- Speech intent → Brain skill plan → Go2 cmd carries the same id throughout the chain
 
-### 動作出口唯一原則
+### Single-Outlet Principle for Actions
 
-- 所有實體動作（Go2 移動、語音播放、頭部）**唯一出口在 Layer 3 Brain Executive**
-- 感知模組只發 event/state，**不直接發 cmd**
-- Safety Gate 在 Executive 內部（Pre-action Validate + Reactive Stop）
+- All physical actions (Go2 movement, speech playback, head) have their **sole outlet in the Layer 3 Brain Executive**
+- Perception modules only publish event/state and **do not publish cmd directly**
+- The Safety Gate is inside the Executive (Pre-action Validate + Reactive Stop)
 
 ---
 
-## 修改流程
+## Modification Flow
 
-1. 改 `interaction_contract.md` — schema、QoS、欄位定義
-2. PR 通過 contract review
-3. 各模組 implementation 跟進
-4. CI `pre-commit topic contract check` 防止實作偏離
+1. Edit `interaction_contract.md` — schema, QoS, field definitions
+2. PR passes the contract review
+3. Each module's implementation follows up
+4. CI `pre-commit topic contract check` prevents implementation drift
 
-> **Pre-commit hook**：`scripts/hooks/git-pre-commit.sh` 會跑 contract check，commit 時自動驗證。
+> **Pre-commit hook**: `scripts/hooks/git-pre-commit.sh` runs the contract check, validating automatically on commit.

@@ -1,26 +1,28 @@
 # PawAI Studio — Specs Index
 
+**English** | [中文](./README.zh.md)
+
 > **Governance header**
-> - **Scope**：PawAI Studio `specs/` 目錄索引 — 標明每份 spec 是 **current（仍是設計真相）/ legacy（部分 superseded）/ superseded（已被取代）**，避免讀者誤把舊架構當現況。
-> - **Status**：active / index。
-> - **Owner lane**：brain-studio-lane。
-> - **Source-of-truth priority**：Studio 模組設計真相在各 spec；但**架構是否反映實作**以 [`../README.md`](../README.md)（current Studio 真相）+ gateway 程式碼（`pawai-studio/gateway/studio_gateway.py`）為準。**能力是否 pass** 一律回 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) ＞ `convergence audit` ＞ [`capability-baseline-spec`](../../specs/2026-06-18-capability-baseline-spec.md)。能力 claim 邊界綁 [`capability-claim-matrix`](../../../mission/2026-06-18-capability-claim-matrix.md)。ROS2 schema 真相在 [`docs/contracts/interaction_contract.md`](../../../contracts/interaction_contract.md)。
-> - **What this index is NOT**：不是能力 pass 證明、不是 ROS2 contract、不是實作計畫（plans 在 `../plans/`）。
+> - **Scope**: Index of the PawAI Studio `specs/` directory — marks each spec as **current (still the design source of truth) / legacy (partially superseded) / superseded (already replaced)**, so readers don't mistake the old architecture for the current state.
+> - **Status**: active / index.
+> - **Owner lane**: brain-studio-lane.
+> - **Source-of-truth priority**: The Studio module design source of truth lives in each spec; but **whether the architecture reflects the implementation** is determined by [`../README.md`](../README.md) (the current Studio source of truth) + the gateway code (`pawai-studio/gateway/studio_gateway.py`). **Whether a capability passes** always falls back to [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) ＞ `convergence audit` ＞ [`capability-baseline-spec`](../../specs/2026-06-18-capability-baseline-spec.md). Capability claim boundaries are bound to [`capability-claim-matrix`](../../../mission/2026-06-18-capability-claim-matrix.md). The ROS2 schema source of truth lives in [`docs/contracts/interaction_contract.md`](../../../contracts/interaction_contract.md).
+> - **What this index is NOT**: It is not capability-pass proof, not a ROS2 contract, and not an implementation plan (plans live in `../plans/`).
 
-## Specs 清單（current / legacy / superseded）
+## Specs List (current / legacy / superseded)
 
-| spec | 主題 | 狀態 | 備註 |
+| spec | Topic | Status | Notes |
 |------|------|------|------|
-| [`2026-05-04-studio-chat-first-redesign-design.md`](2026-05-04-studio-chat-first-redesign-design.md) | chat-first 主畫面重設計 v2.1 | **current（設計 of record）** | 5/4 已落地（見 README 狀態卡）；spec 內文標「awaiting approval」是撰寫當下狀態，實作已完成。 |
-| [`2026-05-04-design-tokens.md`](2026-05-04-design-tokens.md) | chat-first design tokens（dark only） | **current** | 對應 `frontend/lib/design-tokens.ts` + `globals.css`。 |
-| [`2026-05-04-studio-redesign-feedback.md`](2026-05-04-studio-redesign-feedback.md) | UI/UX review feedback（a11y / touch / animation） | **current（review 紀錄）** | Step 10 review output；follow-up 項見 README「下一步」phase C。 |
-| [`ui-orchestration.md`](ui-orchestration.md) | UI orchestration 設計原則（ChatGPT↔Foxglove 雙模） | **current（原則層，v1.1）** | 概念仍成立；具體 panel 結構以 README chat-first 章節為準。 |
-| [`event-schema.md`](event-schema.md) | Gateway ↔ Frontend JSON event / state / command schema（v1.0） | **legacy（部分對齊）** | 概念正確；但實際 WS event 欄位以 current gateway + [`interaction_contract.md`](../../../contracts/interaction_contract.md) v2.5 為準（含 conversation_trace / capability / tts source 等後加欄位）。 |
-| [`brain-adapter.md`](brain-adapter.md) | LLM 統一介面（Brain Adapter，v1.0） | **legacy（部分 superseded）** | 「LLM 提建議 → Executive 決策 → Runtime 執行」原則仍成立；但實際 fallback chain 以 README「Chat 閉環」+ `llm_bridge_node._try_openrouter_chain` 五級 fallback 為準。 |
-| [`system-architecture.md`](system-architecture.md) | 系統架構（快/慢雙系統 + Gateway 拓撲，v1.0） | **🔴 LEGACY / 部分 superseded** | **RTX 8000 + Redis Event Bus + ros2_bridge→Redis 拓撲未落地**。現行 Gateway 跑 **Jetson**（FastAPI+rclpy 直連，port **8080**），無 Redis。與 current gateway README 衝突，**一律以 [`../README.md`](../README.md) + gateway 程式碼為準**。檔頂已加 banner。 |
+| [`2026-05-04-studio-chat-first-redesign-design.md`](2026-05-04-studio-chat-first-redesign-design.md) | chat-first main-screen redesign v2.1 | **current (design of record)** | Landed on 5/4 (see the README status card); the "awaiting approval" note in the spec body reflects its state at writing time — the implementation is complete. |
+| [`2026-05-04-design-tokens.md`](2026-05-04-design-tokens.md) | chat-first design tokens (dark only) | **current** | Corresponds to `frontend/lib/design-tokens.ts` + `globals.css`. |
+| [`2026-05-04-studio-redesign-feedback.md`](2026-05-04-studio-redesign-feedback.md) | UI/UX review feedback (a11y / touch / animation) | **current (review record)** | Step 10 review output; for follow-up items see the README "Next steps" phase C. |
+| [`ui-orchestration.md`](ui-orchestration.md) | UI orchestration design principles (ChatGPT↔Foxglove dual mode) | **current (principle layer, v1.1)** | The concept still holds; for the concrete panel structure, defer to the README chat-first section. |
+| [`event-schema.md`](event-schema.md) | Gateway ↔ Frontend JSON event / state / command schema (v1.0) | **legacy (partially aligned)** | The concept is correct; but the actual WS event fields defer to the current gateway + [`interaction_contract.md`](../../../contracts/interaction_contract.md) v2.5 (including later-added fields such as conversation_trace / capability / tts source). |
+| [`brain-adapter.md`](brain-adapter.md) | LLM unified interface (Brain Adapter, v1.0) | **legacy (partially superseded)** | The principle "LLM proposes suggestions → Executive decides → Runtime executes" still holds; but the actual fallback chain defers to the README "Chat closed loop" + the five-tier fallback in `llm_bridge_node._try_openrouter_chain`. |
+| [`system-architecture.md`](system-architecture.md) | System architecture (fast/slow dual system + Gateway topology, v1.0) | **🔴 LEGACY / partially superseded** | **The RTX 8000 + Redis Event Bus + ros2_bridge→Redis topology was never landed.** The current Gateway runs on **Jetson** (FastAPI+rclpy direct connection, port **8080**), with no Redis. It conflicts with the current gateway README, so **always defer to [`../README.md`](../README.md) + the gateway code**. A banner has been added at the top of the file. |
 
-## current vs legacy 一句話判準
+## One-line current vs legacy criteria
 
-- **架構 / 部署 / port / 端點**：以 [`../README.md`](../README.md) + `pawai-studio/gateway/studio_gateway.py` 為準（current）。`system-architecture.md` 的 RTX8000/Redis 是早期提案，未落地。
-- **JSON schema 欄位**：以 [`interaction_contract.md`](../../../contracts/interaction_contract.md) v2.5（ROS2 層）+ current gateway（WS 層）為準；`event-schema.md` 是 v1.0 概念草案。
-- **能力是否 pass / chip 顏色**：以 [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) 為唯一 trusted 數據源，**Studio 顯示不等於能力 pass**（見 README「Studio claim 邊界」）。
+- **Architecture / deployment / port / endpoints**: defer to [`../README.md`](../README.md) + `pawai-studio/gateway/studio_gateway.py` (current). The RTX8000/Redis in `system-architecture.md` was an early proposal that was never landed.
+- **JSON schema fields**: defer to [`interaction_contract.md`](../../../contracts/interaction_contract.md) v2.5 (ROS2 layer) + the current gateway (WS layer); `event-schema.md` is a v1.0 conceptual draft.
+- **Whether a capability passes / chip color**: defer to [`baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) as the single trusted data source — **a Studio display does not equal a capability pass** (see the README "Studio claim boundaries").

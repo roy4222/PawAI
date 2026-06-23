@@ -1,121 +1,123 @@
 # Navigation
 
-> **Scope**：PawAI 移動能力（定位 / 建圖 / 避障 / 短距移動）的**架構真相層** — 「stack 怎麼組、哪條 action path 是真的、哪些是 historical/research」。
-> **Status**：active（架構真相層）。本檔**不再**充當「當前能力 claim」真相 — 任何 nav 能力是否 pass / 可否走真實 motion，一律以 §「nav 能力 claim」的 canonical claim matrix nav 行為準。
-> **Owner lane**：nav（搭配 `docs/architecture/navigation/CLAUDE.md` 模組工作規則）。
-> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/`（實測，nav 全 `insufficient_data`）＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §4（收斂審計：nav 降級為純 Studio 顯示、零實機自走）＞ `docs/mission/2026-06-18-demo-north-star.md` §7（戰略邊界）＞ 本檔（架構）＞ `docs/contracts/interaction_contract.md`（nav topic/action schema）。
-> **Maintained child files**：`CLAUDE.md`（工作規則）、`legacy-readme-from-導航避障.md`（既有權威 README）、`2026-05-11-architecture-deep-audit-and-fix-roadmap.md`（4-mode reactive stop / B-burndown 架構真相）。
-> **Archived / historical 邊界**：`plans/*.md`（5/1–5/4 sprint plan）、`research/*.md`、`legacy-archive/` 一律 **historical / research-only**，不重複維護、不得當「現在能跑什麼」的依據。
-> **本 README 不是**：能力 claim 真相（→ canonical claim matrix）、操作手冊（→ runbook，最安全 = `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`）、門檻定義（→ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`）。
+**English** | [中文](./README.zh.md)
+
+> **Scope**: The **architectural source-of-truth layer** for PawAI mobility (localization / mapping / obstacle avoidance / short-distance movement) — "how the stack is assembled, which action path is real, and which are historical/research."
+> **Status**: active (architectural source-of-truth layer). This file **no longer** serves as the source-of-truth for "current capability claims" — whether any nav capability passes / whether real motion is allowed is governed solely by the nav row of the canonical claim matrix in §"nav capability claim".
+> **Owner lane**: nav (paired with the module working rules in `docs/architecture/navigation/CLAUDE.md`).
+> **Source-of-truth priority** (high→low): code / topic schema ＞ `docs/runbook/baseline-evidence/2026-06-04-hitl/` (measured, nav all `insufficient_data`) ＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §4 (convergence audit: nav downgraded to Studio-display-only, zero real-robot self-driving) ＞ `docs/mission/2026-06-18-demo-north-star.md` §7 (strategic boundary) ＞ this file (architecture) ＞ `docs/contracts/interaction_contract.md` (nav topic/action schema).
+> **Maintained child files**: `CLAUDE.md` (working rules), `legacy-readme-from-導航避障.md` (existing authoritative README), `2026-05-11-architecture-deep-audit-and-fix-roadmap.md` (4-mode reactive stop / B-burndown architectural truth).
+> **Archived / historical boundary**: `plans/*.md` (5/1–5/4 sprint plans), `research/*.md`, and `legacy-archive/` are all **historical / research-only** — not maintained in duplicate and must not be used as the basis for "what can run right now."
+> **This README is NOT**: the source-of-truth for capability claims (→ canonical claim matrix), an operations manual (→ runbook, safest = `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`), or the threshold definition (→ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`).
 
 ---
 
-## nav 能力 claim（引用 canonical，勿在此重複整份）
+## nav capability claim (references the canonical; do not duplicate the whole thing here)
 
-> **權威**：`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B Capability Claim Matrix nav 行 + §4，基準為 `docs/runbook/baseline-evidence/2026-06-04-hitl/`。下面只是入口摘要。
+> **Authoritative**: the nav row of §B Capability Claim Matrix + §4 in `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`, with `docs/runbook/baseline-evidence/2026-06-04-hitl/` as the baseline. Below is just an entry-point summary.
 
-- **Current Claim**：nav 四能力（`nav.short_move` / `nav.safe_stop` / `nav.no_auto_resume` / `nav.dynamic_avoidance`）6/4 trusted snapshot 全 **`insufficient_data`**。
-- **Pass / Degraded / Fail / Insufficient**：**Insufficient_data**（無 trusted motion record）。
-- **真實 action path**：手動短距 goto 走 `/nav/goto_relative`（action），由 `scripts/send_relative_goal.py` 觸發；觀測值是該 script 印出的 action Result（`success` / `message` / `actual_distance`）。**`/event/nav/mission` topic 全 source 不存在** — 不要 echo（會永久 hang），詳 `docs/runbook/2026-06-18-baseline-runbook.md` 的 doc-bug 註記。
-- **Fallback / 安全規則**：nav 一律 **dry-run / fail-closed**，除非 explicit override **且** safety gate（`nav.safe_stop` + `nav.no_auto_resume`）pass。dry-run 只證 fail-closed + action 鏈路通（AMCL 未定位 → `amcl_lost` abort、Go2 全程不動），**非真實移動、非動態避障/自走**。
-- **Non-Claims（禁說）**：不得宣稱 6/18 動態避障 / 自主繞障 / 自走；nav 預設純 Studio / Foxglove 顯示零實機自走（北極星 §7 + 收斂審計 §4）。
-- **Next Retest**：HITL 上機定位 F7（goal accept 後 `/cmd_vel_nav` 無 publisher）+ safety 兩項 recorder/行為重設計後，才談真實 motion。最安全 operator runbook = `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`（nav = 純 DRY-RUN 段）。
-
----
-
-## 一句話（架構真相層，非當前能力 claim）
-
-**Navigation 是 PawAI 的移動能力 — RPLIDAR-A2M12 負責 2D `/scan` + SLAM(離線建圖)+ AMCL(runtime 定位)+ Nav2(規劃),D435 depth 負責近距離 safety gate;兩個 Capability Bool(`/capability/nav_ready` + `/capability/depth_clear`)餵給 Brain Executive 的 Pre-action Validate。**
+- **Current Claim**: the four nav capabilities (`nav.short_move` / `nav.safe_stop` / `nav.no_auto_resume` / `nav.dynamic_avoidance`) are all **`insufficient_data`** in the 6/4 trusted snapshot.
+- **Pass / Degraded / Fail / Insufficient**: **Insufficient_data** (no trusted motion record).
+- **Real action path**: manual short-distance goto goes through `/nav/goto_relative` (action), triggered by `scripts/send_relative_goal.py`; the observed value is the action Result that script prints (`success` / `message` / `actual_distance`). **The `/event/nav/mission` topic does not exist in any source** — do not echo it (it will hang forever); see the doc-bug note in `docs/runbook/2026-06-18-baseline-runbook.md`.
+- **Fallback / safety rule**: nav is always **dry-run / fail-closed**, unless there is an explicit override **and** the safety gate (`nav.safe_stop` + `nav.no_auto_resume`) passes. A dry-run only proves fail-closed + that the action chain is connected (AMCL not localized → `amcl_lost` abort, Go2 never moves) — it is **not real movement, not dynamic avoidance / self-driving**.
+- **Non-Claims (must not say)**: must not claim 6/18 dynamic avoidance / autonomous detour / self-driving; nav defaults to Studio / Foxglove display only with zero real-robot self-driving (North Star §7 + convergence audit §4).
+- **Next Retest**: real motion can only be discussed after the HITL on-robot localization F7 (no publisher on `/cmd_vel_nav` after goal accept) + the recorder/behavior redesign of the two safety items. The safest operator runbook = `docs/runbook/2026-06-18-hitl-oneshot-runbook.md` (nav = pure DRY-RUN section).
 
 ---
 
-> **以下 5/2–5/12 sprint 段落為 historical sprint 紀錄（保留作引用）。** 其中「動態避障 / detour / Wow」等語言屬 5/12 sprint 目標，**已被 6/5 收斂審計 §4 + 北極星 §7 降級為純 Studio 顯示、零實機自走**。當前 nav 能力一律以上方「nav 能力 claim」（canonical claim matrix）為準，不要把這些 sprint 段當作「現在能跑什麼」。
+## In one sentence (architectural source-of-truth layer, not a current capability claim)
 
-## 5/2 進度更新（historical）
+**Navigation is PawAI's mobility capability — RPLIDAR-A2M12 provides 2D `/scan` + SLAM (offline mapping) + AMCL (runtime localization) + Nav2 (planning), and D435 depth provides the close-range safety gate; two Capability Bools (`/capability/nav_ready` + `/capability/depth_clear`) feed the Pre-action Validate of the Brain Executive.**
 
-Phase A Step 1+2+3 完成(commit `a3bdd2e`):BUG #2 已修(`nav_action_server` 訂 `/state/nav/paused` + 10s pose-progress timeout、K1 3/3 + K-pause 實機過)、`/capability/depth_clear` fail-closed 上線、`/capability/nav_ready` v0.5 basic 上線。
-Phase A Step 4(Executive 接線)同日完成:WorldState 訂三個 capability(fail-closed)+ SafetyLayer 加 nav_paused / NAV / MOTION 三段 gate(27 cases 過 + 92/92 regression)。
-**day 2 待做**:接 launch / Brain rules / Studio LED / `nav_ready` 升級 lifecycle+TF+costmap。
+---
 
-## 5/4 Scope Freeze 與 Bug 診斷
+> **The following 5/2–5/12 sprint sections are historical sprint records (kept for reference).** Language such as "dynamic avoidance / detour / Wow" therein refers to 5/12 sprint goals, which **have been downgraded by the 6/5 convergence audit §4 + North Star §7 to Studio display only, with zero real-robot self-driving**. Current nav capability is governed solely by the "nav capability claim" (canonical claim matrix) above; do not treat these sprint sections as "what can run right now."
 
-5/3 夜間拆解確認 detour 反覆失敗的根因是 **B1**(`nav_action_server` 不 enforce max_speed,0.5m goal 走 1.04m)+ **B2**(AMCL `update_min_d=0.10` 靜止不收斂)兩 bug 串連,**不是 DWB 設計問題、不是場地、不是感測器**。
+## 5/2 progress update (historical)
 
-詳見 `plans/2026-05-04-demo-scope-freeze.md` — 含戰略 framing、完整 bug backlog(B1-B5)、環境陷阱(E1-E10)、操作教訓(O1-O4)、物理極限(P1-P4)、驗收 V1-V9、答辯 framing。
+Phase A Step 1+2+3 complete (commit `a3bdd2e`): BUG #2 fixed (`nav_action_server` subscribes to `/state/nav/paused` + 10s pose-progress timeout, K1 3/3 + K-pause passed on real robot), `/capability/depth_clear` fail-closed shipped, `/capability/nav_ready` v0.5 basic shipped.
+Phase A Step 4 (Executive wiring) completed the same day: WorldState subscribes to all three capabilities (fail-closed) + SafetyLayer adds the three gates nav_paused / NAV / MOTION (27 cases pass + 92/92 regression).
+**day 2 to-do**: wire up launch / Brain rules / Studio LED / upgrade `nav_ready` to lifecycle+TF+costmap.
 
-Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**。
+## 5/4 Scope Freeze and Bug Diagnosis
 
-## 目前主線(5/12 衝刺週)
+The 5/3 nighttime teardown confirmed that the root cause of the repeated detour failures is two chained bugs, **B1** (`nav_action_server` does not enforce max_speed, a 0.5m goal travels 1.04m) + **B2** (AMCL `update_min_d=0.10` does not converge while stationary) — **not a DWB design problem, not the venue, not the sensor**.
 
-- **建圖層**:cartographer(離線,已產出 `home_living_room_v8.pbstream + .yaml`;slam_toolbox 在本硬體永久棄用)
-- **定位層**:AMCL(載入既有 map,K1 baseline 5/5 PASS @ 5/1)
-- **規劃層**:Nav2 BT navigator + DWB controller(`min_vel_x ≥ 0.45` 對應 Go2 sport mode 0.50 m/s 門檻)
-- **動態避障**:`reactive_stop_node`(D435+LiDAR 兩源,Phase 4 v0)+ `/state/nav/paused` global pause state(Phase A 新增)
-- **Capability Gate**(Phase A 新增):
+See `plans/2026-05-04-demo-scope-freeze.md` for details — including strategic framing, the complete bug backlog (B1-B5), environment pitfalls (E1-E10), operational lessons (O1-O4), physical limits (P1-P4), acceptance V1-V9, and defense framing.
+
+Phase 2 code changes will be split into independent small PRs (PR 1-7), **outside this scope freeze**.
+
+## Current mainline (5/12 sprint week)
+
+- **Mapping layer**: cartographer (offline, already produced `home_living_room_v8.pbstream + .yaml`; slam_toolbox is permanently abandoned on this hardware)
+- **Localization layer**: AMCL (loads an existing map, K1 baseline 5/5 PASS @ 5/1)
+- **Planning layer**: Nav2 BT navigator + DWB controller (`min_vel_x ≥ 0.45` corresponding to the Go2 sport mode 0.50 m/s threshold)
+- **Dynamic obstacle avoidance**: `reactive_stop_node` (D435+LiDAR dual source, Phase 4 v0) + `/state/nav/paused` global pause state (added in Phase A)
+- **Capability Gate** (added in Phase A):
   - `/capability/nav_ready` — Nav2 active + AMCL covariance < 0.20 + local costmap healthy
-  - `/capability/depth_clear` — D435 ROI 前方 1m 內 / 障礙 < 0.4m
-- **nav_capability 平台層**:`goto_relative` action(Phase A 修 BUG #2)+ `run_route` + `log_pose`
+  - `/capability/depth_clear` — D435 ROI within 1m ahead / obstacle < 0.4m
+- **nav_capability platform layer**: `goto_relative` action (Phase A fixed BUG #2) + `run_route` + `log_pose`
 
 ---
 
-## 5/12 Demo 必做(5 項生死線)
+## 5/12 Demo must-dos (5 lifelines)
 
-> Scope Freeze 詳見 `plans/2026-05-04-demo-scope-freeze.md`
+> See `plans/2026-05-04-demo-scope-freeze.md` for the Scope Freeze
 
-1. **`nav_demo_point` 5/5 PASS** — 對應 Storyboard Scene 2 ★Wow A
-   *條件*:B1(`nav_action_server` max_speed enforce)+ B2(AMCL plateau)修完
-2. **D435 + LiDAR 雙源 reactive stop** — 障礙 < 0.6m 強制停車
-3. **Pause-Resume 或 safe abort** — 障礙清除 resume / 10s 無進度 abort
-4. **`/capability/nav_ready` 升級**(lifecycle + TF + scan freshness 三項;**只做這三項,不再加**)
-5. **30 分鐘供電連測 0 斷電**(2464 升降壓恒壓恒流模組驗收)
+1. **`nav_demo_point` 5/5 PASS** — corresponds to Storyboard Scene 2 ★Wow A
+   *Condition*: B1 (`nav_action_server` max_speed enforce) + B2 (AMCL plateau) fixed
+2. **D435 + LiDAR dual-source reactive stop** — forced stop when obstacle < 0.6m
+3. **Pause-Resume or safe abort** — resume when obstacle cleared / abort after 10s of no progress
+4. **`/capability/nav_ready` upgrade** (lifecycle + TF + scan freshness, three items; **do only these three, add no more**)
+5. **30-minute continuous power test with 0 outages** (2464 buck-boost constant-voltage constant-current module acceptance)
 
-### Wow 加分(條件達成才做)
+### Wow bonus (do only if conditions are met)
 
-- `approach_person` 1 PASS — 對應 Scene 7 ★★Wow C(可砍)
-- **Detour profile** — ★ Wow,**條件:B1+B2 修完後**,失敗就回 stop+resume
-- Studio / Foxglove 顯示 `nav_ready` level + reasons
+- `approach_person` 1 PASS — corresponds to Scene 7 ★★Wow C (can be cut)
+- **Detour profile** — ★ Wow, **condition: after B1+B2 are fixed**; on failure fall back to stop+resume
+- Studio / Foxglove display `nav_ready` level + reasons
 
 ---
 
-## 文件導覽
+## Document map
 
-| 檔案 / 路徑 | 內容 |
+| File / path | Content |
 |---|---|
-| **入口頁(本檔)** | `docs/architecture/navigation/README.md` |
-| **Phase A Implementation Plan**(5/2-5/3 attack) | `docs/archive/navigation-legacy/plans/2026-05-01-phase-a-nav-attack.md` |
-| **Sprint design 主線**(包含 §5 D435+RPLIDAR 整合 / §6 兩層 Capability Gate / §7 Phase A) | `docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md` |
-| **既有設計 specs** | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`<br/>`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` |
-| **介面契約**(nav 相關 topic + action) | `docs/contracts/interaction_contract.md` |
-| **最安全 operator runbook**（nav = 純 DRY-RUN 段、fail-closed） | `docs/runbook/2026-06-18-hitl-oneshot-runbook.md` |
-| **baseline 量測 runbook**（含 `/event/nav/mission` doc-bug 註記） | `docs/runbook/2026-06-18-baseline-runbook.md` |
-| **能力 claim canonical matrix**（nav 行） | `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B/§4 |
-| **Nav 既有權威 README**（historical） | `docs/architecture/navigation/legacy-readme-from-導航避障.md` |
-| **Nav CLAUDE.md**(模組工作規則) | `docs/architecture/navigation/CLAUDE.md` |
+| **Entry page (this file)** | `docs/architecture/navigation/README.md` |
+| **Phase A Implementation Plan** (5/2-5/3 attack) | `docs/archive/navigation-legacy/plans/2026-05-01-phase-a-nav-attack.md` |
+| **Sprint design mainline** (includes §5 D435+RPLIDAR integration / §6 two-layer Capability Gate / §7 Phase A) | `docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md` |
+| **Existing design specs** | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-24-p0-nav-obstacle-avoidance-design.md`<br/>`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` |
+| **Interface contract** (nav-related topics + actions) | `docs/contracts/interaction_contract.md` |
+| **Safest operator runbook** (nav = pure DRY-RUN section, fail-closed) | `docs/runbook/2026-06-18-hitl-oneshot-runbook.md` |
+| **Baseline measurement runbook** (includes the `/event/nav/mission` doc-bug note) | `docs/runbook/2026-06-18-baseline-runbook.md` |
+| **Capability claim canonical matrix** (nav row) | `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §B/§4 |
+| **Existing authoritative Nav README** (historical) | `docs/architecture/navigation/legacy-readme-from-導航避障.md` |
+| **Nav CLAUDE.md** (module working rules) | `docs/architecture/navigation/CLAUDE.md` |
 
 ---
 
-## 5/2 外部 Stack 研究(8 份) — research-only
+## 5/2 external Stack research (8 docs) — research-only
 
-> **`docs/archive/navigation-legacy/research/*` 一律 research-not-truth**：是吸收性分析 / daily 探測紀錄，**不覆寫 baseline-evidence 或 contracts**，也不得當作「已實作 / 已驗證」的依據。模型/stack 研究分層 = BASELINE_NOW / STUDIO_ONLY_NOW / SPIKE_AFTER_FAIL / FUTURE_RESEARCH，不要預設變成實作 backlog。
+> **Everything under `docs/archive/navigation-legacy/research/*` is research-not-truth**: it is absorption analysis / daily probing records, **does not override baseline-evidence or contracts**, and must not be taken as the basis for "implemented / verified." The model/stack research tiers = BASELINE_NOW / STUDIO_ONLY_NOW / SPIKE_AFTER_FAIL / FUTURE_RESEARCH — do not let them become an implementation backlog by default.
 
-對 8 個開源專案(Odin / OM1 / NavDP / visualnav-transformer / amigo_ros2 / DimOS + 1 篇論文)做了可吸收性分析。
-**總彙整與優先序**:`research/2026-05-02-research-synthesis.md` — 列出 Phase A 立即可吸收 4 項(A1-A4)、5/12 後 P2 七項、6 月後 P3 六項、明確不做的事。
+Conducted an absorbability analysis of 8 open-source projects (Odin / OM1 / NavDP / visualnav-transformer / amigo_ros2 / DimOS + 1 paper).
+**Overall synthesis and priority**: `research/2026-05-02-research-synthesis.md` — lists 4 items immediately absorbable in Phase A (A1-A4), 7 P2 items after 5/12, 6 P3 items after June, and the things explicitly not done.
 
-## Legacy / Archive（historical）
+## Legacy / Archive (historical)
 
-歷史紀錄 / 研究 / 5/1 之前的 daily log 仍在原位:
+Historical records / research / daily logs prior to 5/1 remain in place:
 - `docs/archive/navigation-legacy/research/` — 4/27-5/1 LiDAR mount yaw / AMCL 180° / K1 baseline / Phase 4-7 critical bugs
 - `docs/archive/navigation-legacy/research/lidar-dev/` — 4/27 lidar dev roadmap
-- `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-{24,26}-*.md` — Phase 1-4 設計
+- `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-{24,26}-*.md` — Phase 1-4 design
 
-本資料夾**只**維護 5/12 Demo 衝刺期 + 之後的主線版本;舊文件保留作歷史與引用,不重複維護。
+This folder **only** maintains the 5/12 Demo sprint period + later mainline versions; old documents are kept for history and reference, not maintained in duplicate.
 
 ---
 
-## 已知陷阱(摘要,完整見 `docs/architecture/navigation/CLAUDE.md`)
+## Known pitfalls (summary; full list in `docs/architecture/navigation/CLAUDE.md`)
 
-- **Go2 sport mode `cmd_vel` 門檻 MIN_X = 0.50 m/s** — DWB `min_vel_x` 必須 ≥ 0.45,否則 Go2 拒抬腳
-- **slam_toolbox 在 ARM64 + Humble + RPLIDAR 永久棄用**(Mapper FATAL ERROR known bug)
-- **不要 `ros2 topic pub --once /goal_pose`** — bt_navigator subscriber 是 BEST_EFFORT,改 `-r 2 --times 5`
-- **D435 RGB-D topic 用 double namespace** `/camera/camera/aligned_depth_to_color/image_raw`
-- **XL4015 供電不穩** — 4/27 起 8+ 次 Go2 運行中 Jetson 斷電,Demo 最大風險,等 KREE DL241910
+- **Go2 sport mode `cmd_vel` threshold MIN_X = 0.50 m/s** — DWB `min_vel_x` must be ≥ 0.45, otherwise Go2 refuses to lift its legs
+- **slam_toolbox is permanently abandoned on ARM64 + Humble + RPLIDAR** (Mapper FATAL ERROR known bug)
+- **Do not `ros2 topic pub --once /goal_pose`** — the bt_navigator subscriber is BEST_EFFORT; use `-r 2 --times 5` instead
+- **D435 RGB-D topic uses a double namespace** `/camera/camera/aligned_depth_to_color/image_raw`
+- **XL4015 power instability** — since 4/27, 8+ Jetson outages while Go2 is running; the biggest Demo risk, awaiting the KREE DL241910

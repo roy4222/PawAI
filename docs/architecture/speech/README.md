@@ -1,159 +1,161 @@
-# 語音互動系統
+# Voice Interaction System
 
-> **Scope**：語音互動主線的**模組設計真相層** — ASR / VAD / Intent 分類 / LLM bridge / TTS routing 怎麼組、哪條 path 是真的、哪些是 historical/research。
-> **Status**：active（模組設計真相層）。本檔**不是**「當前能力是否 pass」的真相 — 任何 voice 能力 claim 一律以下方「能力 claim」區塊引用的 canonical claim matrix + 6/04 baseline-evidence 為準。
-> **Owner lane**：brain-speech（搭配 [`CLAUDE.md`](CLAUDE.md) 模組工作規則 + [`AGENT.md`](AGENT.md) 介面契約）。
-> **Source-of-truth 優先序**（高→低）：程式碼 / topic schema ＞ [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/)（實測 trusted snapshot，SHA `78fbf36`，`run_trusted=true`，readiness=`not_ready`）＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`（收斂審計）＞ [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)（每能力 claim canonical）＞ [`docs/mission/2026-06-18-demo-north-star.md`](../../mission/2026-06-18-demo-north-star.md)（戰略邊界）＞ 本檔（模組設計）＞ [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md)（topic/action schema）。
-> **Maintained child files**：[`CLAUDE.md`](CLAUDE.md)（工作規則）、[`AGENT.md`](AGENT.md)（介面契約）、`research/*.md`（research-only，benchmark / pipeline 報告）。
-> **Archived / historical 邊界**：`archive/jetson-MVP測試.md` 與 `research/*.md` 一律 **historical / research-only**，不重複維護、不得當「現在能跑什麼」的依據；下方 5/2–5/12 sprint 散文（brain-freeze-v2 / Phase 0.5 / TTS chunking 等）是**開發紀錄**，描述「機制如何實作」，**不等於 e2e 驗證過或能力 pass**。
-> **本 README 不是**：能力 claim 真相（→ [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md)）、操作手冊（→ [`docs/runbook/`](../../runbook/)）、門檻定義（→ [`specs/2026-06-18-capability-baseline-spec.md`](../specs/2026-06-18-capability-baseline-spec.md)）。
+**English** | [中文](./README.zh.md)
 
-> 中文語音對話：聽懂 → 理解意圖 → LLM 回應 → 說出來。
+> **Scope**: The **module-design source-of-truth layer** for the voice interaction main line — how ASR / VAD / Intent classification / LLM bridge / TTS routing fit together, which path is real, and which are historical/research.
+> **Status**: active (module-design source-of-truth layer). This file is **NOT** the truth on "whether a capability currently passes" — any voice capability claim must follow the canonical claim matrix referenced in the "Capability claims" section below + the 6/04 baseline-evidence.
+> **Owner lane**: brain-speech (together with [`CLAUDE.md`](CLAUDE.md) module working rules + [`AGENT.md`](AGENT.md) interface contract).
+> **Source-of-truth priority** (high → low): code / topic schema ＞ [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/) (measured trusted snapshot, SHA `78fbf36`, `run_trusted=true`, readiness=`not_ready`) ＞ `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` (convergence audit) ＞ [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md) (per-capability claim canonical) ＞ [`docs/mission/2026-06-18-demo-north-star.md`](../../mission/2026-06-18-demo-north-star.md) (strategic boundary) ＞ this file (module design) ＞ [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) (topic/action schema).
+> **Maintained child files**: [`CLAUDE.md`](CLAUDE.md) (working rules), [`AGENT.md`](AGENT.md) (interface contract), `research/*.md` (research-only, benchmark / pipeline reports).
+> **Archived / historical boundary**: `archive/jetson-MVP測試.md` and `research/*.md` are uniformly **historical / research-only** — not maintained in duplicate, and must not be taken as evidence of "what runs now"; the 5/2–5/12 sprint prose below (brain-freeze-v2 / Phase 0.5 / TTS chunking, etc.) is a **development record** describing "how the mechanism is implemented", which **does not mean e2e verified or capability pass**.
+> **This README is NOT**: capability claim truth (→ [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md)), an operations manual (→ [`docs/runbook/`](../../runbook/)), or a threshold definition (→ [`specs/2026-06-18-capability-baseline-spec.md`](../specs/2026-06-18-capability-baseline-spec.md)).
+
+> Chinese voice conversation: hear → understand intent → LLM responds → speak it out.
 
 ---
 
-## 能力 claim（引用 canonical，勿在此重複整份）
+## Capability claims (reference the canonical, do not duplicate the whole thing here)
 
-> **權威**：每能力的 Current Claim / Claim Level / Pass-Fail / Non-Claims 以 [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md) `voice.command` / `voice.stop` 行為 canonical，基準為 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/)。下面只是入口摘要，**勿改寫等級**。
+> **Authoritative**: each capability's Current Claim / Claim Level / Pass-Fail / Non-Claims is canonical per the `voice.command` / `voice.stop` rows of [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md), with the baseline being [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../runbook/baseline-evidence/2026-06-04-hitl/). The below is only an entry-point summary — **do not rewrite the levels**.
 
-### voice.command（固定指令 intent — 窄版 pass）
+### voice.command (fixed-command intent — narrow pass)
 
-- **Current Claim**：對**固定指令集**的「意圖分類」success_rate=0.875（純 Python 關鍵字規則分類器，可作 Brain 三層決策的合法輸入）。
-- **Claim Level**：CLAIM_WITH_CAVEAT。
-- **Evidence-Provenance**：6/04 HITL（n=24, success_rate=0.875, false-trigger=0.0；**latency 全 null、CSV 由終端重建、git_commit≠snapshot SHA、單一講者 Roy**）。
-- **Pass / Degraded / Fail / Insufficient**：🟢 **pass（窄版）** — 僅限固定指令集意圖分類。
-- **Fallback**：ASR 聽錯 → 清楚發音 retake。
-- **Non-Claims（禁說）**：語音延遲 / 反應時間 / **mic_stop 急停（未接線、未量測）** / 自由對話辨識率 / LLM 直接操控機器狗 / 把 0.875 講成「ASR 辨識率」。
-- **Model Candidates**：BASELINE_NOW（規則分類器 + SenseVoice / Whisper ASR，現役不換）。
-- **Next Retest**：真人對 demo 麥克風跑完整 ASR→intent e2e ≥20 筆 + 量 e2e latency + 換非 Roy 講者 + 噪音。
+- **Current Claim**: "intent classification" success_rate=0.875 for the **fixed command set** (a pure-Python keyword rule classifier, usable as a legitimate input to the Brain three-layer decision).
+- **Claim Level**: CLAIM_WITH_CAVEAT.
+- **Evidence-Provenance**: 6/04 HITL (n=24, success_rate=0.875, false-trigger=0.0; **latency all null, CSV reconstructed from the terminal, git_commit≠snapshot SHA, single speaker Roy**).
+- **Pass / Degraded / Fail / Insufficient**: 🟢 **pass (narrow)** — limited to fixed-command-set intent classification.
+- **Fallback**: ASR misheard → enunciate clearly and retake.
+- **Non-Claims (do not say)**: voice latency / reaction time / **mic_stop emergency stop (not wired, not measured)** / free-conversation recognition rate / LLM directly controlling the robot dog / calling 0.875 an "ASR recognition rate".
+- **Model Candidates**: BASELINE_NOW (rule classifier + SenseVoice / Whisper ASR, in service, no swap).
+- **Next Retest**: a real person runs the full ASR→intent e2e ≥20 items against the demo mic + measure e2e latency + switch to a non-Roy speaker + add noise.
 
-### voice.stop（語音「停」— fail，非安全機制）
+### voice.stop (voice "stop" — fail, not a safety mechanism)
 
-- **Current Claim**：語音「停」6/04 量到 success_rate=0.667、scoreboard 誠實標 **fail**、`brain_allowed=false`，只是便利互動指令、**不是安全機制**。
-- **Claim Level**：DO_NOT_CLAIM（僅可誠實揭露 fail 本身）。
-- **Evidence-Provenance**：6/04 HITL（n=6, 0.667, FN=2：R16 no-ack / R18「欸等一下先停住」誤判 come_here）。
-- **Pass / Degraded / Fail / Insufficient**：🔴 **fail**（baseline 後 speech code 零變更，fail live）。
-- **Fallback**：真安全靠 `reactive_stop` + 物理 e-stop；語音停只作便利指令，現場不對機器狗喊停。
-- **Non-Claims（禁說）**：「說停就停」 / 安全停車 / 緊急停止 / **mic_stop latency** / 接 nav / motion 觸發 / 把 voice.stop 講成 safety stop。
-- **Model Candidates**：SPIKE_AFTER_FAIL（不是換模型；intent_classifier 加 safety tie-break + 調 VAD）。
-- **Next Retest**：intent_classifier 加 safety tie-break + 單測 → 調 VAD → HITL n≥15 重跑，pass 前不接 motion。
+- **Current Claim**: voice "stop" measured success_rate=0.667 on 6/04, the scoreboard honestly marks it **fail**, `brain_allowed=false`; it is merely a convenience interaction command, **not a safety mechanism**.
+- **Claim Level**: DO_NOT_CLAIM (may only honestly disclose the fail itself).
+- **Evidence-Provenance**: 6/04 HITL (n=6, 0.667, FN=2: R16 no-ack / R18 "hey wait, stop first" misclassified as come_here).
+- **Pass / Degraded / Fail / Insufficient**: 🔴 **fail** (zero speech code changes since baseline, fail live).
+- **Fallback**: real safety relies on `reactive_stop` + physical e-stop; voice stop is only a convenience command, do not shout stop at the robot dog on site.
+- **Non-Claims (do not say)**: "say stop and it stops" / safe stopping / emergency stop / **mic_stop latency** / wired to nav / motion trigger / calling voice.stop a safety stop.
+- **Model Candidates**: SPIKE_AFTER_FAIL (not a model swap; add a safety tie-break to the intent_classifier + tune VAD).
+- **Next Retest**: add safety tie-break to intent_classifier + unit test → tune VAD → re-run HITL n≥15; do not wire motion before it passes.
 
-> ⚠️ **mic_stop / latency / safety-stop 一律未接線、未量測**：6/04 voice e2e 是 **VAD-era**，`mic_stop` 觀測者未接線、CSV 無 latency 欄。**不可宣稱 mic_stop 急停延遲、不可把 voice.stop 當 safety stop**。下方散文中任何 latency 數字（VAD 2–10s / P50 等）皆為**開發期 proxy 觀測**，非 baseline-evidence trusted 量測。
+> ⚠️ **mic_stop / latency / safety-stop are uniformly not wired and not measured**: the 6/04 voice e2e was **VAD-era**, the `mic_stop` observer was not wired, and the CSV had no latency column. **Do not claim a mic_stop emergency-stop latency, and do not treat voice.stop as a safety stop.** Any latency number in the prose below (VAD 2–10s / P50, etc.) is a **development-period proxy observation**, not a baseline-evidence trusted measurement.
 
-> ℹ️ **brain LLM persona 幻覺（6/04 operator-observed）**：TTS 回覆曾虛構未感知世界狀態（下雨 / 「看到杯子」 / 姿勢）。這是 Brain-persona follow-up，**不得當作真實感知呈現**；voice 模組不宣稱反幻覺已驗證。
+> ℹ️ **brain LLM persona hallucination (6/04 operator-observed)**: TTS replies have fabricated unperceived world state (raining / "I see a cup" / posture). This is a Brain-persona follow-up and **must not be presented as real perception**; the voice module does not claim anti-hallucination has been verified.
 
-## 狀態卡
+## Status card
 
-> ℹ️ 下表是 **5/12 brain-freeze-v2 開發紀錄**（model / routing 選型 + 當日 smoke），描述「機制如何配置」，**不等於 6/18 能力 pass**。能力是否 pass 一律回上方「能力 claim」區塊 + canonical claim matrix；表內 latency 數字為開發期 proxy 觀測，非 trusted 量測。
+> ℹ️ The table below is the **5/12 brain-freeze-v2 development record** (model / routing selection + same-day smoke), describing "how the mechanism is configured", which **does not mean 6/18 capability pass**. Whether a capability passes always returns to the "Capability claims" section above + the canonical claim matrix; the latency numbers in the table are development-period proxy observations, not trusted measurements.
 
-| 項目 | 值 |
+| Item | Value |
 |------|---|
-| 狀態 | **brain-freeze-v2 (5/12)**：LLM 8-model A/B 後切 `openai/gpt-5.4-mini`、TTS dual-route gemini Despina；env override `PAWAI_LLM_MODEL=...` 一行切回 |
-| 版本/決策 | **LLM primary**: `openai/gpt-5.4-mini` (OpenRouter, P50 1.16s local / 1.85s Jetson tunnel) ／ **fallback**: `google/gemini-3-flash-preview` ／ **TTS quality lane**: `google/gemini-3.1-flash-tts-preview` (Despina) — fast lane (≤12 字 / 無 audio tag) 走 edge_tts；ASR 用 SenseVoice cloud。決策 log: `docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |
-| 完成度 | 95% (brain-freeze-v2 落地) |
-| 最後驗證 | 2026-05-12 night Jetson smoke：60s 自介 ×5 (4/5 captured, P50 1.85s, replies 自然有 follow-up)；fallback env override 切 Gemini 真的生效；TTS gemini Despina 真的播 ✅ |
-| 入口檔案 | `speech_processor/speech_processor/stt_intent_node.py` |
-| 測試 | `python3 -m pytest speech_processor/test/ -v` |
+| Status | **brain-freeze-v2 (5/12)**: after an LLM 8-model A/B, switched to `openai/gpt-5.4-mini`, TTS dual-route gemini Despina; one-line revert via env override `PAWAI_LLM_MODEL=...` |
+| Version/decision | **LLM primary**: `openai/gpt-5.4-mini` (OpenRouter, P50 1.16s local / 1.85s Jetson tunnel) ／ **fallback**: `google/gemini-3-flash-preview` ／ **TTS quality lane**: `google/gemini-3.1-flash-tts-preview` (Despina) — fast lane (≤12 chars / no audio tag) goes edge_tts; ASR uses SenseVoice cloud. Decision log: `docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md` |
+| Completeness | 95% (brain-freeze-v2 landed) |
+| Last verified | 2026-05-12 night Jetson smoke: 60s self-intro ×5 (4/5 captured, P50 1.85s, replies natural with follow-up); fallback env override switching to Gemini really took effect; TTS gemini Despina really played ✅ |
+| Entry file | `speech_processor/speech_processor/stt_intent_node.py` |
+| Test | `python3 -m pytest speech_processor/test/ -v` |
 
-## 啟動方式
+## How to launch
 
 ```bash
-# 一鍵啟動（推薦）
+# One-click launch (recommended)
 bash scripts/start_llm_e2e_tmux.sh
 
-# 全離線模式
+# Fully offline mode
 TTS_PROVIDER=piper bash scripts/start_llm_e2e_tmux.sh
 ```
 
-### 5/5 補充：tts_node 獨立啟動 + USB 喇叭 fallback
+### 5/5 addendum: standalone tts_node launch + USB speaker fallback
 
-當 Go2 driver 沒在跑（例如本地 perception-only 測試），預設的 Megaphone DataChannel 路徑會 silent fail（沒聲音、沒錯誤）。改走本機 ALSA：
+When the Go2 driver is not running (e.g., a local perception-only test), the default Megaphone DataChannel path will silent-fail (no sound, no error). Switch to local ALSA:
 
 ```bash
-# Jetson 上獨立啟動 tts_node (跑 demo bridge / smoke test 用)
+# Standalone tts_node launch on Jetson (for demo bridge / smoke test)
 ros2 run speech_processor tts_node --ros-args \
   -p provider:=edge_tts \
   -p local_playback:=true \
   -p local_output_device:=plughw:0,0
-# (plughw:N,0 — N 由 `aplay -l` 找 USB 喇叭 card index，重開機後可能漂移)
+# (plughw:N,0 — find N as the USB speaker card index via `aplay -l`; it may drift after reboot)
 ```
 
-開啟 `local_playback:=true` 後 startup log 應顯示 `Playback: Local`（而不是 `Robot`），TTS 會送到 USB 喇叭。Megaphone 路徑仍保留作 demo 主線（Go2 driver 跑時自動恢復）。
+After enabling `local_playback:=true`, the startup log should show `Playback: Local` (instead of `Robot`), and TTS is sent to the USB speaker. The Megaphone path is still kept as the demo main line (auto-restored when the Go2 driver is running).
 
-## 核心流程
+## Core flow
 
 ```
-筆電麥克風 via PawAI Studio（Demo 主線）
-    |  ← USB 麥克風已廢棄（Go2 風扇噪音導致 ~20% 辨識率）
+Laptop microphone via PawAI Studio (demo main line)
+    |  ← USB microphone deprecated (Go2 fan noise causes ~20% recognition rate)
     |  Studio WebSocket → Gateway(Jetson:8080) → ROS2
-stt_intent_node（Energy VAD -> ASR 三級 fallback -> Intent 分類）
+stt_intent_node (Energy VAD -> ASR three-tier fallback -> Intent classification)
     |   ASR: SenseVoice cloud -> SenseVoice local (sherpa-onnx int8) -> Whisper small
     | /event/speech_intent_recognized
-llm_bridge_node（**locked main**: OpenRouter Gemini 3 Flash Preview → DeepSeek V4 Flash → Cloud Qwen2.5-7B → Ollama 1.5B → RuleBrain 五級 fallback）
-    |   output_mode=legacy → 發 /tts + sport /webrtc_req（既有行為）
-    |   output_mode=brain  → 只發 /brain/chat_candidate（PawAI Brain MVS 模式）
-    |   OpenRouter timeout default 4.0s / overall budget 5.0s（5/4 Jetson smoke 後 bump）
-    | /tts（legacy 模式）or /brain/chat_candidate（brain 模式）
-tts_node（**5/8 evening 統一 routing**：OPENROUTER_KEY 有設一律走 gemini → edge_tts → piper；mic + Studio 同音色）
-    |   `/tts` payload 雙模：純文字 OR JSON envelope `{"text", "input_origin"}`
-    |   有 _studio_fallback_chain（OPENROUTER_KEY 設）→ 一律用該 chain
-    |   無（key 缺）→ default chain（edge_tts → piper）
-    |   audio_tag.py + tts_provider.py：provider.supports_audio_tags 守門 strip
-    |   input_origin 欄位保留供未來 per-source policy（chunk / voice tweak），目前不再做 routing 分支
+llm_bridge_node (**locked main**: OpenRouter Gemini 3 Flash Preview → DeepSeek V4 Flash → Cloud Qwen2.5-7B → Ollama 1.5B → RuleBrain five-tier fallback)
+    |   output_mode=legacy → publishes /tts + sport /webrtc_req (existing behavior)
+    |   output_mode=brain  → publishes only /brain/chat_candidate (PawAI Brain MVS mode)
+    |   OpenRouter timeout default 4.0s / overall budget 5.0s (bumped after 5/4 Jetson smoke)
+    | /tts (legacy mode) or /brain/chat_candidate (brain mode)
+tts_node (**5/8 evening unified routing**: when OPENROUTER_KEY is set, always go gemini → edge_tts → piper; mic + Studio same voice)
+    |   `/tts` payload dual-mode: plain text OR JSON envelope `{"text", "input_origin"}`
+    |   has _studio_fallback_chain (OPENROUTER_KEY set) → always use that chain
+    |   none (key missing) → default chain (edge_tts → piper)
+    |   audio_tag.py + tts_provider.py: provider.supports_audio_tags gatekeeps strip
+    |   input_origin field reserved for future per-source policy (chunk / voice tweak); no routing branch for now
     |
-USB 喇叭 local playback（Megaphone DataChannel 備用）
+USB speaker local playback (Megaphone DataChannel as backup)
     |
-echo gate 阻止 ASR 自激（total 1.5s）
+echo gate prevents ASR self-triggering (total 1.5s)
 ```
 
-**Intent fast path**：stop/greet 等高頻 intent 跳過 LLM，直接 RuleBrain（~0ms）。
-**LLM timeout** Jetson default 4.0s（5/4 bump from 2.0s — Python urllib3+requests overhead 在 Jetson 把 1.5s curl 推到 2s 邊界，premature fallback）。
-**TTS provider chain**（5/8 evening 統一 routing — commit `a2eefc8`）：
+**Intent fast path**: high-frequency intents like stop/greet skip the LLM and go straight to RuleBrain (~0ms).
+**LLM timeout** Jetson default 4.0s (5/4 bump from 2.0s — Python urllib3+requests overhead on Jetson pushes a 1.5s curl to the 2s boundary, causing premature fallback).
+**TTS provider chain** (5/8 evening unified routing — commit `a2eefc8`):
 
-| 路徑 | input_origin | Chain | 備註 |
+| Path | input_origin | Chain | Notes |
 |---|---|---|---|
-| Studio chat panel 文字輸入 | `studio_text` | `openrouter_gemini` (Despina, audio tag native, ~6.5s 首音) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline) | Demo 對話主路徑 |
-| 麥克風語音輸入 + 自動感知（greet / object_remark / fall_alert / careful_remind ...） | `null` 或缺欄位 | **同上**（5/8 起 mic 也走 Gemini chain，Roy 要求統一 persona 音色） | 與 Studio chat 同音色 |
-| `ros2 topic pub /tts std_msgs/String "..."` | parse fail → null | 同上 | 開發 / debug |
-| OPENROUTER_KEY 缺 / 失敗 | 任意 | `default_chain`（edge_tts → piper） | demo-safe fallback |
+| Studio chat panel text input | `studio_text` | `openrouter_gemini` (Despina, audio tag native, ~6.5s first audio) → `edge_tts` (strip tag, ~1.5s) → `piper` (offline) | Demo conversation main path |
+| Microphone voice input + auto-perception (greet / object_remark / fall_alert / careful_remind ...) | `null` or missing field | **Same as above** (since 5/8 the mic also goes through the Gemini chain; Roy requested a unified persona voice) | Same voice as Studio chat |
+| `ros2 topic pub /tts std_msgs/String "..."` | parse fail → null | Same as above | Development / debug |
+| OPENROUTER_KEY missing / failed | any | `default_chain` (edge_tts → piper) | demo-safe fallback |
 
-關鍵實作：
-- `tts_node.tts_callback` 解析 `/tts` payload — 嘗試 `json.loads`，是 dict 且有 `"text"` → override raw_text + 讀 `input_origin`；否則純文字 path
-- `_studio_fallback_chain` 啟動時 lazy build（讀 `OPENROUTER_KEY` env），dedup by provider name
-- 5/8 起 routing 條件改為「有 `_studio_fallback_chain` 即用」，不再依 input_origin 分支（commit `a2eefc8`，line 1040-1043）
-- chain iteration loop（line ~1024-1080）對所有 chain 同樣處理，cache key per-provider 不衝突
+Key implementation:
+- `tts_node.tts_callback` parses the `/tts` payload — attempts `json.loads`; if it is a dict with `"text"` → override raw_text + read `input_origin`; otherwise the plain-text path
+- `_studio_fallback_chain` is lazily built at startup (reads the `OPENROUTER_KEY` env), dedup by provider name
+- Since 5/8 the routing condition changed to "use it if `_studio_fallback_chain` exists", no longer branching on input_origin (commit `a2eefc8`, line 1040-1043)
+- The chain iteration loop (line ~1024-1080) treats all chains identically; the per-provider cache key does not collide
 
-詳見：`docs/architecture/specs/2026-05-05-tts-rewrite-result.md`（Stage 4 chain 機制）+ commit `10829ca`（per-message plumbing）+ commit `a2eefc8`（5/8 統一 routing）。
+See: `docs/architecture/specs/2026-05-05-tts-rewrite-result.md` (Stage 4 chain mechanism) + commit `10829ca` (per-message plumbing) + commit `a2eefc8` (5/8 unified routing).
 
-### 為什麼鎖 Gemini 3 Flash + Gemini 3.1 Flash TTS（2026-05-05）
+### Why lock Gemini 3 Flash + Gemini 3.1 Flash TTS (2026-05-05)
 
-- **Audio tag 原生支援**：Gemini 3.1 Flash TTS 接收 `[excited]` / `[laughs]` / `[curious]` 等情緒標籤直接渲染，不需 strip — 個性表現最強，跟 Brain MVS persona 一致
-- **延遲在可接受範圍**：~4.6s P50（Despina voice），對 demo 場景足夠；fallback `edge_tts` 更快（~1.5s）但個性弱
-- **單一 provider 維護成本低**：LLM + TTS 都走 OpenRouter，credentials / rate limit / billing 統一管理
-- **其他選項不再評估**：Qwen3.6 Plus / DeepSeek V4 / Kimi K2.6 等候選曾出現在 MOC，但 5/12 sprint 已收斂只跑 Gemini 主線；fallback 保留是工程現實，不是 A/B 候選
+- **Native audio tag support**: Gemini 3.1 Flash TTS receives emotional tags like `[excited]` / `[laughs]` / `[curious]` and renders them directly, no strip needed — strongest personality expression, consistent with the Brain MVS persona
+- **Latency within acceptable range**: ~4.6s P50 (Despina voice), enough for demo scenarios; the `edge_tts` fallback is faster (~1.5s) but weaker in personality
+- **Low single-provider maintenance cost**: both LLM + TTS go through OpenRouter, with unified management of credentials / rate limit / billing
+- **Other options no longer evaluated**: candidates like Qwen3.6 Plus / DeepSeek V4 / Kimi K2.6 appeared in the MOC, but the 5/12 sprint already converged to run only the Gemini main line; keeping the fallback is an engineering reality, not an A/B candidate
 
-### 5/8 補充：TTS chunking 重構 + ROS-free 切分模組
+### 5/8 addendum: TTS chunking refactor + ROS-free splitting module
 
-長句語氣斷掉根因不只 Gemini 自身限制，而是 chunking 邏輯太貪心：原本 `len(buf) >= CHUNK_MAX_CHARS // 2 (= 20)` 就在句號切，把 20 字內的自然停頓也切成獨立 chunk → 跨 chunk Gemini 重新初始化 → 氣音 / narrate 語氣完全消失。逗號 fallback 用 `max(rfind(','), rfind('，'), rfind(' '))` + `> CHUNK_MAX_CHARS // 2` 比較，在 `-1` 邊界也有歧義（沒命中時 max 仍回 -1，會誤判進入硬切分支但語意不清）。
+The root cause of long-sentence tone breaks is not only Gemini's own limitation but also overly greedy chunking logic: originally `len(buf) >= CHUNK_MAX_CHARS // 2 (= 20)` would cut at a period, splitting even natural pauses within 20 chars into separate chunks → cross-chunk Gemini re-initialization → breathy / narrate tone completely disappears. The comma fallback used `max(rfind(','), rfind('，'), rfind(' '))` + a `> CHUNK_MAX_CHARS // 2` comparison, which is also ambiguous at the `-1` boundary (when nothing matches, max still returns -1, mistakenly entering the hard-cut branch with unclear semantics).
 
-5/8 修法（commit `6d548b8`）：
-- 抽純 module `speech_processor/speech_processor/tts_split.py`（**ROS-free**）— pre-commit hook 不需 source ROS，單元測試直接 import；`tts_node` 透過 class 屬性 + `_split_for_tts` shim 維持 backward compat
-- 新增 `MIN_SPLIT_CHARS = 30`（原 `CHUNK_MAX_CHARS // 2 = 20`）— 句號要 30 字才切，跨 chunk 語氣不再頻繁重置
-- 逗號 fallback 加 explicit `-1` guard：`cut = max([c for c in candidates if c >= 0], default=-1)`，且 `cut >= MIN_SPLIT_CHARS - 1` 才採用，否則硬切到 `CHUNK_MAX_CHARS = 40`
-- 13 個新 unit test 覆蓋邊界（短句 / 跨句 / 全 CJK 無標點 / audio-tag preservation / hard-cut 字元保留）
+5/8 fix (commit `6d548b8`):
+- Extracted a pure module `speech_processor/speech_processor/tts_split.py` (**ROS-free**) — the pre-commit hook does not need to source ROS, and unit tests import it directly; `tts_node` keeps backward compat via a class attribute + a `_split_for_tts` shim
+- Added `MIN_SPLIT_CHARS = 30` (was `CHUNK_MAX_CHARS // 2 = 20`) — a period only cuts at 30 chars, so cross-chunk tone is no longer reset frequently
+- Added an explicit `-1` guard to the comma fallback: `cut = max([c for c in candidates if c >= 0], default=-1)`, and only adopt it if `cut >= MIN_SPLIT_CHARS - 1`, otherwise hard-cut at `CHUNK_MAX_CHARS = 40`
+- 13 new unit tests covering boundaries (short sentences / cross-sentence / all-CJK with no punctuation / audio-tag preservation / hard-cut character preservation)
 
-### 5/11 night 補充：chunk 邊界 silence + 跳句根因鎖定
+### 5/11 night addendum: chunk-boundary silence + sentence-skip root cause pinned
 
-5/11 night 三輪修法 + 一輪 instrumented diagnosis：
+5/11 night: three rounds of fixes + one round of instrumented diagnosis:
 
-1. **CHUNK_MAX_CHARS 40 → 60、MIN_SPLIT_CHARS 30 → 45**：Google/community 對 Gemini 3.1 Flash TTS 的指引是「長 chunk 比短 chunk voice tone 更一致」，60 仍離 80-char tail-drop 危險區 30%+。200-char 故事 chunk 數 6 → 3-4
-2. **新模組 `pcm_trim.py`**：每 chunk 回傳前去掉 gemini 內部 80-200ms silence padding，保留 80ms（1920 samples @ 24kHz）tail 作為自然呼吸間距。`int16 -32768` overflow 透過 `astype(np.int32)` 處理。`ChunkTrimError` fail-loud：非空 input trim 成空 → 走 provider fallback，避免靜默丟句
-3. **whispers tag 恢復**：N6 morning 把 `[whispers]` normalize → `[curious]` 是過度反應；user 明示在 storytelling / 念詩場景 whisper 是必要的。只保留 `[sighs]` 在 normalize 清單（破壞 demo 節奏）。EXAMPLES.md 睡前故事改用 `[whispers]`
-4. **Phase 1 instrumented diagnosis**（5/11 night 最後一輪）：加 `PAWAI_TTS_DIAG=1` env-gated log，per chunk 印 peak / rms / duration_ms / cut_lead_ms / cut_tail_ms
+1. **CHUNK_MAX_CHARS 40 → 60, MIN_SPLIT_CHARS 30 → 45**: Google/community guidance for Gemini 3.1 Flash TTS is "long chunks have more consistent voice tone than short chunks"; 60 is still 30%+ away from the 80-char tail-drop danger zone. A 200-char story goes from 6 chunks → 3-4
+2. **New module `pcm_trim.py`**: before returning each chunk, strip Gemini's internal 80-200ms silence padding, keeping 80ms (1920 samples @ 24kHz) of tail as a natural breathing gap. `int16 -32768` overflow is handled via `astype(np.int32)`. `ChunkTrimError` fail-loud: a non-empty input trimmed to empty → go to provider fallback, avoiding silently dropping a sentence
+3. **whispers tag restored**: N6 morning normalizing `[whispers]` → `[curious]` was an overreaction; the user explicitly stated that whisper is necessary in storytelling / poem-reading scenarios. Keep only `[sighs]` in the normalize list (it breaks the demo rhythm). EXAMPLES.md bedtime stories switched back to `[whispers]`
+4. **Phase 1 instrumented diagnosis** (5/11 night's last round): added a `PAWAI_TTS_DIAG=1` env-gated log, printing per chunk peak / rms / duration_ms / cut_lead_ms / cut_tail_ms
 
-**5/11 night 跳句根因 = H1 parallel voice drift**（不是 trim / split / tail-drop）：
+**5/11 night sentence-skip root cause = H1 parallel voice drift** (not trim / split / tail-drop):
 
-DIAG log 顯示 3 個並行 chunk 對「同一個 whisper Despina 角色」回來的音量差距 2x：
+The DIAG log shows the volume of 3 parallel chunks coming back for "the same whisper Despina character" differs by 2x:
 
 | Chunk | text_len | peak | rms | duration_ms |
 |-------|---------|------|------|-------|
@@ -161,182 +163,182 @@ DIAG log 顯示 3 個並行 chunk 對「同一個 whisper Despina 角色」回�
 | [1] | 68 | 12240 | **1139** | 6240 |
 | [2] | 37 | 28874 | **1529** | 6240 |
 
-3 chunk 之間 RMS 階梯式跳動（782 → 1139 → 1529）= user 聽到的「越念越大聲、又突然變小」階梯感。
+The RMS steps up across the 3 chunks (782 → 1139 → 1529) = the "reads louder and louder, then suddenly quieter" stair-step sensation the user hears.
 
-**P1 未做（下輪）**：sequential synthesis（不再 parallel）或 post-synthesis RMS normalize across chunks，或兩者結合。記憶在
-`memory/project_tts_skip_diagnosis_0511_night.md`（隊友本機 `.claude` 私有記憶路徑，非本 repo 內檔案，不提供連結）。
+**P1 not done (next round)**: sequential synthesis (no more parallel) or post-synthesis RMS normalize across chunks, or a combination of both. The memory is in
+`memory/project_tts_skip_diagnosis_0511_night.md` (a teammate's local `.claude` private memory path, not a file inside this repo, no link provided).
 
-### 5/9 補充：TTS dual-route + audio_format/served_by 重構（issue 1 partial）
+### 5/9 addendum: TTS dual-route + audio_format/served_by refactor (issue 1 partial)
 
-5/8 evening Roy 抓出 quality lane 從未觸發 — 原本 `tts_callback` 單軌走 OpenRouter Gemini chain，短句/safety 都走 6-7s 雲端鏈，user 體感都是「google 小姐 + 慢」。5/9 PR #55 + #57 雙軌路由：
+On 5/8 evening Roy caught that the quality lane was never triggered — originally `tts_callback` went single-track through the OpenRouter Gemini chain, so even short / safety sentences went through the 6-7s cloud chain, and the user's perception was all "Google lady + slow". 5/9 PR #55 + #57 dual-track routing:
 
-- **Fast lane**：`edge-tts → Piper`（<2s 首音；safety keyword + 短句 + 無 emotional tag）
-- **Quality lane**：`OpenRouter Gemini → edge-tts → Piper`（情緒 / 長句；ElevenLabs 待 spike GO 後加在鏈頭）
-- **路由邏輯**（`_should_use_fast_lane(text, threshold)`）：
-  1. safety keyword 命中（`停|停止|不要動|別動|小心|警告|危險|stop`）→ **永遠** fast lane
-  2. 含 emotional audio tag（`[playful]/[excited]/[whispers]/[worried]/[sighs]/[curious]/[laughs]/[thinking]/[gentle]/[happy]/[sad]/[shy]`）→ **強制** quality lane
-  3. effective_length（去 audio tag + punctuation 後 CJK 字 + 英文 word 計數）≤ `tts_fast_lane_threshold` (default 12) → fast lane
-  4. 否則 → quality lane
+- **Fast lane**: `edge-tts → Piper` (<2s first audio; safety keyword + short sentence + no emotional tag)
+- **Quality lane**: `OpenRouter Gemini → edge-tts → Piper` (emotion / long sentence; ElevenLabs to be added at the head once the spike is GO)
+- **Routing logic** (`_should_use_fast_lane(text, threshold)`):
+  1. safety keyword match (`停|停止|不要動|別動|小心|警告|危險|stop`) → **always** fast lane
+  2. contains an emotional audio tag (`[playful]/[excited]/[whispers]/[worried]/[sighs]/[curious]/[laughs]/[thinking]/[gentle]/[happy]/[sad]/[shy]`) → **forced** quality lane
+  3. effective_length (count of CJK chars + English words after removing audio tags + punctuation) ≤ `tts_fast_lane_threshold` (default 12) → fast lane
+  4. otherwise → quality lane
 
-**audio_format/served_by 修法**（PR #55）：原本 `_play_on_robot` 用 `self.config.provider == TTSProvider.PIPER ? WAV : MP3` 判格式 → fallback chain 從 Gemini 跌到 Piper 時，Piper WAV 被當 MP3 decode → pydub error。改：每個 provider class 加 `output_format: AudioFormat`，chain loop 在選中成功 provider 時記 `_last_served_format`，`_play_on_robot` 用實際 served format。
+**audio_format/served_by fix** (PR #55): originally `_play_on_robot` decided the format via `self.config.provider == TTSProvider.PIPER ? WAV : MP3` → when the fallback chain dropped from Gemini to Piper, the Piper WAV was decoded as MP3 → pydub error. Fix: each provider class adds `output_format: AudioFormat`, the chain loop records `_last_served_format` on the selected successful provider, and `_play_on_robot` uses the actual served format.
 
-**ROS params**：
+**ROS params**:
 - `tts_dual_route_enabled` (default True)
 - `tts_fast_lane_threshold` (default 12)
 
-**ElevenLabs spike**（issue 1 完整解的 P1）：spike script 在 `tools/tts_spike/elevenlabs_mini.py`，dev-log 模板 `docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-elevenlabs-spike-mini.md`。Roy 自跑（API key + 挑 voice ID + 聽 15 mp3 + 評分），GO 後再 PR 把 ElevenLabs 加進 quality lane chain 頭。
+**ElevenLabs spike** (the P1 for the full fix of issue 1): the spike script is at `tools/tts_spike/elevenlabs_mini.py`, the dev-log template at `docs/archive/pawai-brain-legacy/dev-logs/2026-05-XX-elevenlabs-spike-mini.md`. Roy runs it himself (API key + pick voice ID + listen to 15 mp3 + score); after GO, a PR adds ElevenLabs to the head of the quality lane chain.
 
-### 5/9 補充：ASR 簡→繁 OpenCC s2twp（issue 6）
+### 5/9 addendum: ASR Simplified→Traditional OpenCC s2twp (issue 6)
 
-ASR provider（SenseVoice / Whisper / Qwen Cloud）無 zh-TW 選項，輸出含簡體。三個入口注入 `to_traditional_tw()`（`opencc-python-reimplemented` lazy import + `s2twp` config）：
+The ASR providers (SenseVoice / Whisper / Qwen Cloud) have no zh-TW option and output Simplified characters. Three entry points inject `to_traditional_tw()` (`opencc-python-reimplemented` lazy import + `s2twp` config):
 
-| 入口 | 檔案 | 觸發路徑 |
+| Entry | File | Trigger path |
 |---|---|---|
-| 1. 實機 mic | `speech_processor/speech_processor/stt_intent_node.py:1100` `_publish_asr_result` 前 | USB mic → ASR → 繁中 → publish `/event/speech_intent_recognized` |
-| 2. Studio mic | `pawai-studio/gateway/studio_gateway.py` `/ws/speech` handler 約 L627 | Browser mic → SenseVoice cloud → 繁中 → 同上 |
-| 3. Studio chat | `pawai-studio/gateway/studio_gateway.py` `/api/text_input` POST handler | Studio chat panel typing → 繁中 → publish `/brain/text_input` |
+| 1. Physical mic | `speech_processor/speech_processor/stt_intent_node.py:1100` before `_publish_asr_result` | USB mic → ASR → Traditional Chinese → publish `/event/speech_intent_recognized` |
+| 2. Studio mic | `pawai-studio/gateway/studio_gateway.py` `/ws/speech` handler ~L627 | Browser mic → SenseVoice cloud → Traditional Chinese → same as above |
+| 3. Studio chat | `pawai-studio/gateway/studio_gateway.py` `/api/text_input` POST handler | Studio chat panel typing → Traditional Chinese → publish `/brain/text_input` |
 
-兩份 helper（避免 cross-package import 陷阱）：
+Two helpers (to avoid the cross-package import pitfall):
 - `speech_processor/speech_processor/text_normalization.py`
 - `pawai-studio/gateway/text_normalization.py`
 
-**ROS param**：`enable_s2twp` (default True) + env `PAWAI_ENABLE_S2TWP`。
+**ROS param**: `enable_s2twp` (default True) + env `PAWAI_ENABLE_S2TWP`.
 
-依賴：`opencc-python-reimplemented` 已加進 `speech_processor/setup.py` 和 `pawai-studio/gateway/requirements.txt`。Jetson 用前先 `pip install --user opencc-python-reimplemented` 確認。
+Dependency: `opencc-python-reimplemented` is already added to `speech_processor/setup.py` and `pawai-studio/gateway/requirements.txt`. On Jetson, first confirm with `pip install --user opencc-python-reimplemented` before use.
 
-**5/9 night 已修 silent fail**（commit `756aeb0`）：原 helper `OpenCC("s2twp.json")` 會被 lib 自動 append `.json` 變 `s2twp.json.json` → FileNotFoundError → except 落到原文 silent fallback。從 PR #52 起三個入口全靜默失敗（ASR 簡→繁完全沒生效），這次才被 Studio 簡體輸入測試抓到。改成 `OpenCC("s2twp")`。
+**5/9 night fixed a silent fail** (commit `756aeb0`): the original helper `OpenCC("s2twp.json")` would have the lib auto-append `.json`, becoming `s2twp.json.json` → FileNotFoundError → except falls back to the original text silently. Since PR #52 all three entries failed silently (ASR Simplified→Traditional never took effect), and this was only caught now by a Studio Simplified-input test. Changed to `OpenCC("s2twp")`.
 
-## 輸入/輸出
+## Input/Output
 
-| Topic | 方向 | 說明 |
+| Topic | Direction | Description |
 |-------|:----:|------|
-| `/event/speech_intent_recognized` | 輸出 | Intent 事件 JSON |
-| `/state/interaction/speech` | 輸出 | 語音管線狀態 5Hz |
-| `/state/tts_playing` | 輸出 | TTS 播放中 flag |
-| `/tts` | 輸入 | 要說的文字 |
-| `/asr_result` | 輸出 | 原始 ASR 文字 |
+| `/event/speech_intent_recognized` | output | Intent event JSON |
+| `/state/interaction/speech` | output | Voice pipeline state 5Hz |
+| `/state/tts_playing` | output | TTS-playing flag |
+| `/tts` | input | Text to speak |
+| `/asr_result` | output | Raw ASR text |
 
-## Noisy Profile v1（2026-03-28）
+## Noisy Profile v1 (2026-03-28)
 
-Go2 伺服噪音環境下的 ASR 參數調校結果。
+ASR parameter tuning results for the Go2 servo-noise environment.
 
-**啟動方式：**
+**How to launch:**
 ```bash
 ENABLE_ACTIONS=false bash scripts/start_full_demo_tmux.sh
 ```
 
-**參數（寫在 start_full_demo_tmux.sh 的 launch arg）：**
-- `mic_gain=8.0`（預設，v1 甜蜜點。gain 10/12 測試過，噪音放大更嚴重）
-- `energy_vad.start_threshold=0.02`（原 0.015，避免 Go2 噪音誤觸發）
+**Parameters (written in start_full_demo_tmux.sh launch args):**
+- `mic_gain=8.0` (default, v1 sweet spot. gain 10/12 tested, noise amplification is worse)
+- `energy_vad.start_threshold=0.02` (was 0.015, avoids Go2 noise false triggering)
 - `energy_vad.stop_threshold=0.015`
 - `energy_vad.silence_duration_ms=1000`
 - `energy_vad.min_speech_ms=500`
 
-**Whisper 改善（寫在 stt_intent_node.py）：**
-- `vad_filter=True`（啟用 silero VAD，過濾非語音段）
-- `no_speech_threshold=0.6`（拒絕低信心結果）
+**Whisper improvements (written in stt_intent_node.py):**
+- `vad_filter=True` (enable silero VAD, filter non-speech segments)
+- `no_speech_threshold=0.6` (reject low-confidence results)
 - `log_prob_threshold=-1.0`
-- 幻覺黑名單 6→22 pattern + 短文字（< 2 字）過濾
+- hallucination blacklist 6→22 patterns + short text (< 2 chars) filtering
 
-**安全門：** `ENABLE_ACTIONS` 環境變數
-- `true`（預設）：llm_bridge 和 event_action_bridge 正常發布 `/webrtc_req`
-- `false`：兩條動作路徑都關閉，Go2 不會因垃圾 intent 做危險動作
+**Safety gate:** the `ENABLE_ACTIONS` environment variable
+- `true` (default): llm_bridge and event_action_bridge publish `/webrtc_req` normally
+- `false`: both action paths are off, so Go2 will not perform dangerous actions due to junk intents
 
-**A/B 測試結果（固定音檔 controlled test）：**
+**A/B test results (fixed audio-file controlled test):**
 
-| 組別 | gain | 正確+部分 | 備註 |
+| Group | gain | Correct+Partial | Notes |
 |:----:|:----:|:---------:|------|
-| v1 | 8.0 | **64%** | 甜蜜點 |
-| v2 | 10.0 | 43% | 觸發暴增但品質下降 |
-| v5 | 12.0 | 62% | 無改善，出現幻覺 |
+| v1 | 8.0 | **64%** | sweet spot |
+| v2 | 10.0 | 43% | triggers surge but quality drops |
+| v5 | 12.0 | 62% | no improvement, hallucinations appear |
 
-**結論：** Whisper Small 在中文短句+機器噪音場景已到上限（64%），已被 SenseVoice 替換（92%）。
+**Conclusion:** Whisper Small has hit its ceiling in the Chinese-short-sentence + machine-noise scenario (64%), and has been replaced by SenseVoice (92%).
 
-## ASR 三級 Fallback（2026-03-29 驗證通過）
+## ASR three-tier fallback (verified 2026-03-29)
 
 ```
 sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx int8) → whisper_local
 ```
 
-**Cloud server**：`scripts/sensevoice_server.py`（FastAPI + FunASR SenseVoiceSmall，port 8001，需 SSH tunnel）
-**Local model**：`~/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx`（228MB，CPU only，352MB RAM）
+**Cloud server**: `scripts/sensevoice_server.py` (FastAPI + FunASR SenseVoiceSmall, port 8001, requires SSH tunnel)
+**Local model**: `~/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx` (228MB, CPU only, 352MB RAM)
 
-**等量三方 A/B 測試（各 25 筆，Go2 噪音環境）：**
+**Equal-volume three-way A/B test (25 items each, Go2 noise environment):**
 
-| 指標 | SenseVoice Cloud | SenseVoice Local | Whisper Local |
+| Metric | SenseVoice Cloud | SenseVoice Local | Whisper Local |
 |------|:---:|:---:|:---:|
-| 正確+部分 | 92% | 92% | 52% |
-| Intent 正確 | 96% | 92% | 56% |
-| 幻覺/亂碼 | 0 | 0 | 8% |
-| 延遲 | ~600ms | ~400ms | ~3000ms |
-| 需要網路 | 是 | 否 | 否 |
+| Correct+Partial | 92% | 92% | 52% |
+| Intent correct | 96% | 92% | 56% |
+| Hallucination/garbage | 0 | 0 | 8% |
+| Latency | ~600ms | ~400ms | ~3000ms |
+| Needs network | Yes | No | No |
 
-**Fallback 行為**：cloud 斷 → `Connection refused` warn → 自動切 sensevoice_local（`degraded=True`）→ 如模型缺失再切 whisper_local。
+**Fallback behavior**: cloud down → `Connection refused` warn → auto-switch to sensevoice_local (`degraded=True`) → if the model is missing, switch again to whisper_local.
 
-**⚠ 兩條語音路徑 fallback 不對稱（6/14 HITL 實證）**：
-- **stt_intent_node（Jetson USB 麥）** 有上述三級 fallback。
-- **Studio 筆電收音（`gateway/studio_gateway.py` `/ws/speech` L627）只 POST 到 cloud 8001、無 local fallback** → 雲端 ASR 一死，Studio 語音就全斷（gateway log: `Speech error: ConnectionResetError(104, Connection reset by peer)`、前端顯示 `processing_failed`）。demo 走 Studio 收音時這是單點故障。6/18 前 follow-up：gateway 加 8001 不通退本地 sensevoice/whisper。臨時 fallback = operator 改用 Studio 文字輸入補打同句。
+**⚠ The two voice paths have asymmetric fallback (6/14 HITL confirmed)**:
+- **stt_intent_node (Jetson USB mic)** has the three-tier fallback above.
+- **Studio laptop capture (`gateway/studio_gateway.py` `/ws/speech` L627) only POSTs to cloud 8001, with no local fallback** → once the cloud ASR dies, Studio voice fully breaks (gateway log: `Speech error: ConnectionResetError(104, Connection reset by peer)`, the frontend shows `processing_failed`). When the demo captures via Studio this is a single point of failure. Pre-6/18 follow-up: the gateway falls back to local sensevoice/whisper when 8001 is unreachable. Temporary fallback = the operator switches to Studio text input and re-types the same sentence.
 
-**Cloud server 重啟程序（6/14 HITL：SSH tunnel 活著但遠端 server 進程死＝`Connection reset`，非 `Connection refused`）**：
+**Cloud server restart procedure (6/14 HITL: the SSH tunnel is alive but the remote server process is dead ＝ `Connection reset`, not `Connection refused`)**:
 ```bash
-# 1. 確認是 server 進程死（非 tunnel）：Jetson 上 curl 8001 = 000/reset，但 8000(LLM) 正常
-ssh jetson-nano "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health"   # 200=活
-# 2. 在 RTX 8000（YOUR_USER@YOUR_GPU_HOST）重啟（掛 tmux 持久化、用 pawai_gpu env、GPU1）
+# 1. Confirm it is the server process that died (not the tunnel): on Jetson, curl 8001 = 000/reset, but 8000 (LLM) is normal
+ssh jetson-nano "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health"   # 200=alive
+# 2. Restart on RTX 8000 (YOUR_USER@YOUR_GPU_HOST) (run in tmux for persistence, use pawai_gpu env, GPU1)
 ssh YOUR_USER@YOUR_GPU_HOST "tmux new-session -d -s sensevoice 'cd ~ && CUDA_VISIBLE_DEVICES=1 ~/miniconda3/envs/pawai_gpu/bin/python sensevoice_server.py --port 8001 > ~/sensevoice_restart.log 2>&1'"
-# 3. ~15-40s model 載入後，Jetson curl 8001/health 應回 200（FunASR log 那句 "Loading remote code failed: No module named 'model'" 是無害 warning）
+# 3. After ~15-40s model loading, Jetson curl 8001/health should return 200 (the FunASR log line "Loading remote code failed: No module named 'model'" is a harmless warning)
 ```
 
-## 已知問題
+## Known issues
 
-- **Go2 機身 USB 麥克風已廢棄**（4/8 決定）：Go2 風扇噪音極大，辨識率 ~20%。Demo 改用筆電麥克風 via Studio
-- USB device index 重開機後漂移 → 用 `source scripts/device_detect.sh`
-- MeloTTS 和 ElevenLabs 已棄用（3/26 決議）
-- SenseVoice 對「現在請停止動作」辨識不穩（stop intent 約 60% 正確）
-- **本地 ASR 不可用**：Whisper 上機後噪音干擾嚴重，長句辨識失敗
-- **本地 LLM 不可用**：Qwen2.5-0.8B 智商極低，胡言亂語（4/8 會議確認）
-- ~~**LLM 回覆品質待改善**：max_tokens=120/25 字限制，回答過短、無個性、無多輪 memory~~（5/5 evening 處理：persona v3 + max_reply_chars=0 + 5-turn deque）
-- **GPU 雲端不穩**：昨天斷線 2 次，Plan B 固定台詞為必備
-- **`speech_processor` 用 ament_python，code 改完必須 colcon build**：sync source 不會自動更新 `install/`，stale install 是 5/5 evening 整晚截斷的真兇。改 ROS param 或 persona file 是 runtime 生效，不需 build；改 .py 必須 build。
-- **架構碎片化警示（5/5）**：chat + tool calling 路徑跨 `llm_bridge_node` (1100 行) + `brain_node._on_chat_candidate` + ChatPanel + Studio gateway，多源 path 增加 hidden bug 風險（如本次 stale install + 截斷 cap）。已記為 backlog（LangGraph refactor 提案）
+- **Go2 body USB microphone deprecated** (decided 4/8): Go2 fan noise is extreme, recognition rate ~20%. The demo switched to the laptop microphone via Studio
+- USB device index drifts after reboot → use `source scripts/device_detect.sh`
+- MeloTTS and ElevenLabs deprecated (3/26 decision)
+- SenseVoice is unstable at recognizing "please stop moving now" (stop intent ~60% correct)
+- **Local ASR unusable**: after deployment, Whisper suffers severe noise interference and fails on long-sentence recognition
+- **Local LLM unusable**: Qwen2.5-0.8B has extremely low intelligence and talks nonsense (confirmed at the 4/8 meeting)
+- ~~**LLM reply quality needs improvement**: max_tokens=120/25-char limit, replies too short, no personality, no multi-turn memory~~ (addressed 5/5 evening: persona v3 + max_reply_chars=0 + 5-turn deque)
+- **GPU cloud unstable**: disconnected twice yesterday; Plan B canned lines are mandatory
+- **`speech_processor` uses ament_python; after code changes you must colcon build**: syncing source does not auto-update `install/`, and the stale install was the real culprit of the 5/5 evening all-night truncation. Changing a ROS param or persona file takes effect at runtime, no build needed; changing .py must be built.
+- **Architecture fragmentation warning (5/5)**: the chat + tool calling path spans `llm_bridge_node` (1100 lines) + `brain_node._on_chat_candidate` + ChatPanel + Studio gateway; multiple-source paths increase hidden-bug risk (as with this stale install + truncation cap). Recorded as backlog (a LangGraph refactor proposal)
 
-## Plan B 固定台詞模式（4/8 會議新增）
+## Plan B canned-lines mode (added at the 4/8 meeting)
 
-GPU 斷線時的備案。ASR 判斷意圖後直接匹配固定回答，回應速度 ~0.x 秒。
-- 需設計兩版 Demo 對話腳本：Plan A（雲端 AI）+ Plan B（固定台詞）
-- Studio 顯示連線狀態燈號，團隊即時判斷是否切換
-- 必要時出示錄影作為 AI 對話功能佐證
-- **負責人**：陳若恩（見分工文件）
+A backup for when the GPU disconnects. After ASR determines the intent, it matches a fixed answer directly, with a response time of ~0.x seconds.
+- Two versions of the demo conversation script are needed: Plan A (cloud AI) + Plan B (canned lines)
+- Studio displays a connection-status indicator so the team can decide in real time whether to switch
+- If necessary, present a recording as evidence of the AI-conversation feature
+- **Owner**: Chen Ruo-en (see the division-of-labor doc)
 
-## PawAI Brain MVS 整合（2026-04-28 Phase 0+1+2 完成）
+## PawAI Brain MVS integration (2026-04-28 Phase 0+1+2 complete)
 
-### `output_mode` 參數（Phase 0）
+### The `output_mode` parameter (Phase 0)
 
-`llm_bridge_node` 新增 ROS2 param：
+`llm_bridge_node` adds a new ROS2 param:
 
-| 模式 | 行為 | 使用時機 |
+| Mode | Behavior | When to use |
 |------|------|---------|
-| `legacy`（預設）| 發 `/tts` + sport `/webrtc_req`（直接控狗，既有行為）| 舊 demo / 不啟動 brain_node 時 |
-| `brain` | **只**發 `/brain/chat_candidate`，不發 `/tts`、不發 sport `/webrtc_req` | brain_node 啟動時，由 Executive 唯一控狗 |
+| `legacy` (default) | publishes `/tts` + sport `/webrtc_req` (controls the dog directly, existing behavior) | old demo / when brain_node is not started |
+| `brain` | publishes **only** `/brain/chat_candidate`, no `/tts`, no sport `/webrtc_req` | when brain_node is started, with the Executive as the sole dog controller |
 
-`scripts/start_pawai_brain_tmux.sh` 一鍵啟動 brain-mode：
-- `llm_bridge_node` 設 `output_mode:=brain`
-- `event_action_bridge` 設 `enable_event_action_bridge:=false`
-- 不啟動 `vision_perception/interaction_router`
+`scripts/start_pawai_brain_tmux.sh` one-click launches brain-mode:
+- sets `llm_bridge_node` to `output_mode:=brain`
+- sets `event_action_bridge` to `enable_event_action_bridge:=false`
+- does not start `vision_perception/interaction_router`
 
 ### Source-level guard test
 
-`speech_processor/test/test_tts_audio_api_only.py` — 確保 `tts_node` 只發 audio api_id（4001-4004 Megaphone enter/upload/exit/cleanup），不會誤發 sport 動作 api。
+`speech_processor/test/test_tts_audio_api_only.py` — ensures `tts_node` only publishes audio api_id (4001-4004 Megaphone enter/upload/exit/cleanup) and never accidentally publishes a sport action api.
 
-### Brain MVS 後 fallback chain（Phase A）
+### Post-Brain-MVS fallback chain (Phase A)
 
 ```
 /event/speech_intent_recognized
     ↓
-llm_bridge_node（output_mode=brain）
+llm_bridge_node (output_mode=brain)
     ↓
-   /brain/chat_candidate ──→ brain_node（1500ms 等待）
-                                 ├ 命中 → SkillPlan(chat_reply)
-                                 └ 逾時 → SkillPlan(say_canned)
+   /brain/chat_candidate ──→ brain_node (1500ms wait)
+                                 ├ hit → SkillPlan(chat_reply)
+                                 └ timeout → SkillPlan(say_canned)
                              ↓
                           /brain/proposal
                              ↓
@@ -345,144 +347,144 @@ llm_bridge_node（output_mode=brain）
                             /tts → tts_node → Megaphone
 ```
 
-詳細 schema 見 [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) v2.5。
+For the detailed schema see [`docs/contracts/interaction_contract.md`](../../contracts/interaction_contract.md) v2.5.
 
-## 5/5 evening — LLM 個性化 + 對話記憶 + Brain MVS 全鏈接通
+## 5/5 evening — LLM personalization + conversation memory + Brain MVS full chain connected
 
-當日改動 unstaged，主要把「Voice → Brain → Studio E2E」打通，並把 LLM 的個性、字數、記憶、環境感知一次升級。
+The day's changes were unstaged, mainly connecting "Voice → Brain → Studio E2E" and upgrading the LLM's personality, length, memory, and environment awareness all at once.
 
-### Brain MVS 路徑啟用（先決條件）
-- `start_full_demo_tmux.sh` 顯式加 `-p output_mode:=brain` — llm_bridge 改發 `/brain/chat_candidate`，不再直發 `/tts`
-- `brain_node._on_speech_intent` 拿掉 self_introduce / show_status keyword bypass：
-  - 動作型 self_introduce 6-step 在使用者近距離（D435 ROI）會被 SafetyLayer 擋成 `blocked_by_safety` → 沉默
-  - LLM 的 persona 已能自然處理「你是誰 / 現在狀態」相關提問，不需要硬規則
-  - MOTION 完整 self_introduce 仍可從 Studio button 觸發（不依賴語音 keyword）
-- `interaction_executive/config/executive.yaml` 的 `chat_wait_ms` 1500 → **20000**（雲端 LLM 長回覆有時 ~10s，舊值 buffer 已失效）
-- ChatPanel（`pawai-studio/frontend/components/chat/chat-panel.tsx`）加單行 skill trace bar — 顯示最近一筆 `brain:skill_result` 的 `selected_skill / status / detail`，無 drawer 無 timeline
+### Brain MVS path enabled (prerequisite)
+- `start_full_demo_tmux.sh` explicitly adds `-p output_mode:=brain` — llm_bridge switches to publishing `/brain/chat_candidate` instead of publishing `/tts` directly
+- `brain_node._on_speech_intent` removed the self_introduce / show_status keyword bypass:
+  - the action-type self_introduce 6-step gets blocked as `blocked_by_safety` by the SafetyLayer when the user is close (D435 ROI) → silence
+  - the LLM persona can already naturally handle "who are you / current status" questions, no hard rule needed
+  - the MOTION full self_introduce can still be triggered from the Studio button (not dependent on a voice keyword)
+- `chat_wait_ms` in `interaction_executive/config/executive.yaml` 1500 → **20000** (cloud LLM long replies are sometimes ~10s, the old value's buffer was no longer effective)
+- ChatPanel (`pawai-studio/frontend/components/chat/chat-panel.tsx`) adds a single-line skill trace bar — showing the latest `brain:skill_result`'s `selected_skill / status / detail`, no drawer, no timeline
 
-### LLM 字數 + token 完全解除
-- `max_reply_chars` 預設 40 → **0（uncapped）**；`_post_process_reply` 改成 `cap<=0` 跳過截斷
-- `llm_max_tokens` 預設 80 → **2000**（啟動腳本顯式 4000）
-- `llm_timeout` 預設 5 → **20s**
-- `openrouter_request_timeout_s` 4 → **30s**、`openrouter_overall_budget_s` 5 → **35s**（短 timeout 是長故事被切的元兇之一）
+### LLM length + token fully unlocked
+- `max_reply_chars` default 40 → **0 (uncapped)**; `_post_process_reply` changed to skip truncation when `cap<=0`
+- `llm_max_tokens` default 80 → **2000** (startup script explicitly 4000)
+- `llm_timeout` default 5 → **20s**
+- `openrouter_request_timeout_s` 4 → **30s**, `openrouter_overall_budget_s` 5 → **35s** (short timeouts were one of the culprits of long stories being cut)
 
-### 對話記憶（5 turns / 10 messages）
-- `llm_bridge_node` 加 `_convo_history: deque(maxlen=10)`，user/assistant pair
-- 兩條 LLM 路徑（OpenRouter + vLLM/Ollama）都會把 history 塞進 `messages` array
-- 只在「真聊天」（intent ∈ greet/chat/status）才寫入；stop/sit/stand 不污染 context
-- 隨手修了一個老 bug：`_call_llm`（vLLM/Ollama）路徑原本還寫死 inline `SYSTEM_PROMPT`（12 字版），現在統一用 `self._system_prompt`（persona file）
+### Conversation memory (5 turns / 10 messages)
+- `llm_bridge_node` adds `_convo_history: deque(maxlen=10)`, user/assistant pairs
+- both LLM paths (OpenRouter + vLLM/Ollama) stuff history into the `messages` array
+- only writes when it is a "real chat" (intent ∈ greet/chat/status); stop/sit/stand do not pollute the context
+- Fixed an old bug along the way: the `_call_llm` (vLLM/Ollama) path used to hard-code an inline `SYSTEM_PROMPT` (the 12-char version); now it uniformly uses `self._system_prompt` (the persona file)
 
-### 台北時間 + wttr.in 天氣 context
-- `_time_of_day_zh()`：早上 / 中午 / 下午 / 傍晚 / 晚上 / 深夜
-- `_get_weather_text()`：打 `https://wttr.in/Taipei?format=%C+%t+濕度%h&lang=zh-tw`，10 分鐘 cache，2s timeout，失敗安靜
-- 注入到每次 user_message 結尾：`[環境] 台北 早上 10:23，外面 多雲 22°C 濕度 65%`
-- Persona 教 LLM「自然帶入，不要當天氣播報員」
+### Taipei time + wttr.in weather context
+- `_time_of_day_zh()`: morning / noon / afternoon / dusk / evening / late night
+- `_get_weather_text()`: hits `https://wttr.in/Taipei?format=%C+%t+濕度%h&lang=zh-tw`, 10-minute cache, 2s timeout, fails quietly
+- injected at the end of each user_message: `[環境] 台北 早上 10:23，外面 多雲 22°C 濕度 65%`
+- the Persona teaches the LLM to "bring it in naturally, do not be a weather broadcaster"
 
-### Persona v3：寵物優先個性（4777 bytes，from `tools/llm_eval/persona.txt`）
-- **70% 小狗 / 20% 童心 / 10% 居家守護者**（Olaf 啟發但非模仿）
-- 核心句：「最重要的不是完成任務，而是讓人感覺：家裡有一個小傢伙在」
-- 個性原則拆「做這些 / 避免這些」兩欄；明令禁止客服腔、不要拍馬屁、不要每句都拋問題、不要主動列功能
-- 守護模式 override：跌倒 / 陌生人 / 危險 → 立刻認真，不撒嬌不脫線
-- 回答長度情境決定：閒聊 1-2 句 / 解釋 2-4 句 / 故事 / 安慰 / 共鳴 可長
-- 加 「短期對話記憶 vs 長期人臉資料庫」明確區分 — 防止 LLM 用「我看不到你的臉」拒答短期記住的事
-- `RuleBrain` `REPLY_TEMPLATES` 同步升人性版（`[excited] 嗨！我在這裡，今天過得怎麼樣？` 等）
-- `tools/llm_eval/run_eval.py` alias `gemini` → `google/gemini-2.5-flash`（從 `gemini-3-flash-preview` 切 stable）
+### Persona v3: pet-first personality (4777 bytes, from `tools/llm_eval/persona.txt`)
+- **70% puppy / 20% childlike / 10% home guardian** (Olaf-inspired but not imitation)
+- Core line: "The most important thing is not completing tasks, but making people feel: there is a little fellow at home"
+- The personality principles split into two columns "do these / avoid these"; explicitly forbids a customer-service tone, no flattery, do not throw a question in every sentence, do not proactively list features
+- Guardian-mode override: fall / stranger / danger → immediately serious, no cuteness, no derailing
+- Reply length determined by context: chit-chat 1-2 sentences / explanation 2-4 sentences / story / comfort / resonance can be long
+- Added a clear distinction "short-term conversation memory vs long-term face database" — to prevent the LLM from using "I can't see your face" to refuse to answer about things remembered short-term
+- `RuleBrain` `REPLY_TEMPLATES` upgraded to a more human version in sync (`[excited] 嗨！我在這裡，今天過得怎麼樣？` etc.)
+- `tools/llm_eval/run_eval.py` alias `gemini` → `google/gemini-2.5-flash` (switched from `gemini-3-flash-preview` to stable)
 
-### Truncation Bug 真兇 — Stale `install/`
-晚間反覆觀察到「reply 在中文逗號或無標點處截斷至 30-40 字」現象，diagnose 路徑：
-1. ❌ 一開始懷疑 `gemini-3-flash-preview` preview model bug → 切 `gemini-2.5-flash` → 還截斷
-2. ❌ 懷疑 Gemini 系列 structured output 共通問題 → 切 `deepseek/deepseek-v4-flash` → 還截斷
-3. ❌ 懷疑 `temperature=0.2` 過低 → 改 0.7 → 還截斷
-4. ❌ 懷疑 `openrouter_request_timeout_s=4.0` 短 → 改 30s → 還截斷
-5. ❌ 懷疑 conversation history 內含截斷 sample 污染 → 清空 → 還截斷
-6. ✅ 用 `curl` 直打 OpenRouter DeepSeek，**回完整 138 token 故事** → 確認 API 層正常
-7. ✅ 對比 md5：WSL source 與 Jetson source 一致，但 **Jetson `install/` 目錄是 stale**！
+### Truncation Bug real culprit — Stale `install/`
+In the evening we repeatedly observed "reply truncated to 30-40 chars at a Chinese comma or where there is no punctuation"; the diagnose path:
+1. ❌ initially suspected a `gemini-3-flash-preview` preview model bug → switched to `gemini-2.5-flash` → still truncated
+2. ❌ suspected a common Gemini-series structured-output problem → switched to `deepseek/deepseek-v4-flash` → still truncated
+3. ❌ suspected `temperature=0.2` was too low → changed to 0.7 → still truncated
+4. ❌ suspected `openrouter_request_timeout_s=4.0` was short → changed to 30s → still truncated
+5. ❌ suspected the conversation history contained truncated-sample pollution → cleared it → still truncated
+6. ✅ curled OpenRouter DeepSeek directly, **got the full 138-token story** → confirmed the API layer is fine
+7. ✅ compared md5: the WSL source matches the Jetson source, but the **Jetson `install/` directory is stale**!
    - Jetson source: `6f8edce4...`
-   - Jetson install: `0f8952ca...` ← 含舊 cap=40 截斷邏輯
-   - 整晚的 code 改動全部沒生效（只有 ROS param overrides + persona file 因為是 runtime 讀取所以有作用）
-8. **Fix**：`colcon build --packages-select speech_processor --symlink-install`，未來改 source 仍需重 build，但 install layout 走 egg-link → build/，drift 會比較顯眼
+   - Jetson install: `0f8952ca...` ← contains the old cap=40 truncation logic
+   - All night's code changes had no effect (only the ROS param overrides + persona file worked, because they are read at runtime)
+8. **Fix**: `colcon build --packages-select speech_processor --symlink-install`; future source changes still need a rebuild, but the install layout goes egg-link → build/, so drift will be more conspicuous
 
-### 待驗證
-- 重 build 後第一次完整 smoke test 還沒跑，確認 reply 不再卡 40 char
-- DeepSeek V4 Flash vs Gemini 2.5 Flash 在「真實長回覆」情境下的比較還沒做（之前的 A/B 都被 stale install 干擾，無效）
+### To be verified
+- The first full smoke test after the rebuild has not been run, to confirm the reply no longer sticks at 40 chars
+- The comparison of DeepSeek V4 Flash vs Gemini 2.5 Flash under "real long-reply" conditions has not been done (previous A/Bs were all corrupted by the stale install, invalid)
 
-## 5/6 night — Phase 0.5 Cut 1（chat_candidate SkillProposal contract）
+## 5/6 night — Phase 0.5 Cut 1 (chat_candidate SkillProposal contract)
 
-完整 spec / plan：
+Full spec / plan:
 - Spec: `docs/architecture/specs/2026-05-06-conversation-engine-langgraph-design.md`
-- Plan: `docs/archive/pawai-brain-legacy/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task）
+- Plan: `docs/archive/pawai-brain-legacy/plans/2026-05-06-conversation-engine-phase-0-5.md` (3 cuts / 20 tasks)
 - Contract: `docs/contracts/interaction_contract.md` v2.7
 
-### `/brain/chat_candidate` schema（既有 + Phase 0.5 新增 4 欄）
+### `/brain/chat_candidate` schema (existing + 4 fields added in Phase 0.5)
 
 ```json
 {
   "session_id": "speech-...",
   "reply_text": "汪我會看你會聽你...",
   "intent": "chat",
-  "selected_skill": null,            // legacy diagnostic（4 P0 skill）
+  "selected_skill": null,            // legacy diagnostic (4 P0 skills)
   "reasoning": "openrouter:eval_schema",
   "confidence": 0.82,
-  // ── Phase 0.5 新增 ──
-  "proposed_skill": "show_status",   // null | "show_status" | "self_introduce"（brain allowlist 由它決定接受）
+  // ── Phase 0.5 additions ──
+  "proposed_skill": "show_status",   // null | "show_status" | "self_introduce" (the brain allowlist decides acceptance)
   "proposed_args": {},
   "proposal_reason": "openrouter:eval_schema",
   "engine": "legacy"                 // legacy | langgraph
 }
 ```
 
-`extract_proposal()`（`speech_processor/llm_contract.py`）從 persona JSON 直接帶 `skill` / `args` 進新欄，繞過 `adapt_eval_schema` 的 4-skill SKILL_TO_CMD 過濾。`chat_reply` / `say_canned` 視為「沒有 side effect 的提案」，會被 filter 成 `None` 避免 brain trace 被誤判 rejected。
+`extract_proposal()` (`speech_processor/llm_contract.py`) carries `skill` / `args` directly from the persona JSON into the new fields, bypassing `adapt_eval_schema`'s 4-skill SKILL_TO_CMD filtering. `chat_reply` / `say_canned` are treated as "proposals with no side effect" and are filtered to `None` to avoid the brain trace being mistakenly judged as rejected.
 
-### Brain 端執行政策（`interaction_executive/brain_node.py`）
+### Brain-side execution policy (`interaction_executive/brain_node.py`)
 
 ```python
 LLM_PROPOSABLE_SKILLS = frozenset({"show_status", "self_introduce"})
 LLM_PROPOSAL_EXECUTE = {
-    "show_status":    "execute",       # chat_reply + 真執行 show_status
-    "self_introduce": "trace_only",    # chat_reply only；motion 序列保留給 Studio button
+    "show_status":    "execute",       # chat_reply + actually execute show_status
+    "self_introduce": "trace_only",    # chat_reply only; the motion sequence is reserved for the Studio button
 }
 ```
 
-每筆 chat_candidate 永遠先 enqueue `chat_reply`（reply_text 非空時）；提案另外走 allowlist + cooldown + safety gate，accepted/accepted_trace_only/blocked/rejected_not_allowed 四態都發 `/brain/conversation_trace`。
+Each chat_candidate always first enqueues `chat_reply` (when reply_text is non-empty); the proposal additionally goes through allowlist + cooldown + safety gate, and all four states accepted/accepted_trace_only/blocked/rejected_not_allowed publish `/brain/conversation_trace`.
 
-### TTS chunking（5/6 night 對應 Gemini 3.1 Flash Preview tail-truncation 行為）
+### TTS chunking (5/6 night, corresponding to Gemini 3.1 Flash Preview tail-truncation behavior)
 
-`TTSProvider_OpenRouterGemini` 加：
-- `CHUNK_MAX_CHARS = 60`（5/11 night 從 40 bumped；MIN_SPLIT_CHARS=45）：Gemini Flash TTS Preview 在 ≥ 80 字 input 會隨機砍尾段 25%，60 字以下穩定且減半 chunk 邊界數量。
-- `_AUDIO_TAG_RE`：偵測開頭 `[whispers]` / `[playful]` 等，prepend 給每段確保 voice 一致（chunk 2+ 否則回到預設音色）。
-- `ThreadPoolExecutor` parallel synthesize：N 段同時打 OpenRouter `/audio/speech`，wall ≈ 單段時間（不是 N × 單段）。
-- **5/11 night** `pcm_trim.py`：每 chunk concat 前 trim gemini 內部 silence padding（保留 80ms tail）。`ChunkTrimError` 非空 input → silent 時 fail-loud 走 fallback chain。
-- 完整 observability log：`chunks parallel sizes=[..]`、`chunk[N] ok / FAILED`、`N/N chunks ok in Xs wall, Ys audio after trim (saved Xms silence)`。
-- **PAWAI_TTS_DIAG=1**（env-gated）：開額外 per-chunk text preview + peak/rms/duration_ms + per-chunk trim lead/tail ms。預設關，零 overhead。
+`TTSProvider_OpenRouterGemini` adds:
+- `CHUNK_MAX_CHARS = 60` (bumped from 40 on 5/11 night; MIN_SPLIT_CHARS=45): Gemini Flash TTS Preview randomly cuts the last 25% on ≥ 80-char input; below 60 chars it is stable and halves the number of chunk boundaries.
+- `_AUDIO_TAG_RE`: detects a leading `[whispers]` / `[playful]` etc., prepending it to each segment to ensure voice consistency (otherwise chunk 2+ reverts to the default voice).
+- `ThreadPoolExecutor` parallel synthesize: N segments hit OpenRouter `/audio/speech` simultaneously, wall ≈ single-segment time (not N × single segment).
+- **5/11 night** `pcm_trim.py`: trims Gemini's internal silence padding before concatenating each chunk (keeping an 80ms tail). `ChunkTrimError` for a non-empty input → silent, fail-loud to the fallback chain.
+- Full observability log: `chunks parallel sizes=[..]`, `chunk[N] ok / FAILED`, `N/N chunks ok in Xs wall, Ys audio after trim (saved Xms silence)`.
+- **PAWAI_TTS_DIAG=1** (env-gated): turns on extra per-chunk text preview + peak/rms/duration_ms + per-chunk trim lead/tail ms. Off by default, zero overhead.
 
-**5/11 night 跳句根因鎖定為 H1 parallel voice drift**（chunk 之間 RMS 差 2x），不是 trim/split/tail-drop。
-詳見上面「5/11 night 補充：chunk 邊界 silence + 跳句根因鎖定」段。下輪 fix 走 sequential synthesis 或
-post-synth RMS normalize。
+**5/11 night sentence-skip root cause pinned as H1 parallel voice drift** (RMS differs by 2x between chunks), not trim/split/tail-drop.
+See the "5/11 night addendum: chunk-boundary silence + sentence-skip root cause pinned" section above. The next fix goes sequential synthesis or
+post-synth RMS normalize.
 
-### Persona（`tools/llm_eval/persona.txt`）
+### Persona (`tools/llm_eval/persona.txt`)
 
-加 8 條具體功能清單（語音聊天 / 認熟人 / 看手勢 / 看姿勢 / 看物體 / 唸故事詩 / OK 動作 / safety），明定 LLM 別瞎編做不到的事。被問「你會什麼」時要從清單具體挑 2-4 條。
+Added a list of 8 concrete features (voice chat / recognize acquaintances / read gestures / read posture / read objects / read stories and poems / OK action / safety), explicitly stating the LLM should not make up things it cannot do. When asked "what can you do" it should concretely pick 2-4 from the list.
 
 ---
 
-## 下一步
+## Next steps
 
-- [x] **OpenRouter 接入**（5/4 完成，B1 Plan D）：LLM/TTS 均走 OpenRouter，五級 fallback 全鏈通
-- [x] **LLM prompt 智慧化**（5/5 evening）：persona v3 寵物個性 / max_reply_chars=0 解鎖 / 對話記憶 / 環境 context
-- [x] **Phase 0.5 Cut 1**（5/6 night）：chat_candidate SkillProposal contract + brain allowlist + Studio trace + Gemini 3 Flash Preview primary
-- [ ] **Phase 0.5 Cut 2**：`pawai_brain` ROS2 package shadow skeleton（4 graph node + LangGraph dependency spike）
-- [ ] **Phase 0.5 Cut 3**：`llm_bridge_node` 抽 5 個 conversation/ 純 module（行為零變化）
-- [ ] **Gemini TTS skip句修復**：preamble + retry（plan: `~/.claude/plans/gemini-api-nifty-rain.md`）
-- [ ] **Stale install/ rebuild 後完整 smoke**：3 句固定題目（睡前故事 / 介紹功能 / 累陪聊），確認長 reply 不被砍
-- [ ] **長期持續 model A/B**：DeepSeek V4 Flash vs Gemini 2.5 Flash，看 persona 表現 / latency / cost
-- [ ] **LangGraph 重構評估（backlog）**：目前 chat + tool calling 邏輯散落 `llm_bridge_node`（1100 行）+ `brain_node`，使用者建議搬到 `pawai-studio/backend/chat_agent/`，5/16 demo 後再做
-- [ ] Plan B 固定台詞設計：至少 15 組問答（陳若恩）
-- [ ] B1-4 Ollama 1.5B 斷網壓測（驗證 fallback 路徑）
-- [ ] B1-5 Megaphone 16kHz 端到端（Despina 降採樣）
+- [x] **OpenRouter integration** (completed 5/4, B1 Plan D): both LLM/TTS go through OpenRouter, the five-tier fallback chain fully connected
+- [x] **LLM prompt smartening** (5/5 evening): persona v3 pet personality / max_reply_chars=0 unlocked / conversation memory / environment context
+- [x] **Phase 0.5 Cut 1** (5/6 night): chat_candidate SkillProposal contract + brain allowlist + Studio trace + Gemini 3 Flash Preview primary
+- [ ] **Phase 0.5 Cut 2**: `pawai_brain` ROS2 package shadow skeleton (4 graph nodes + LangGraph dependency spike)
+- [ ] **Phase 0.5 Cut 3**: extract 5 pure conversation/ modules from `llm_bridge_node` (zero behavior change)
+- [ ] **Gemini TTS sentence-skip fix**: preamble + retry (plan: `~/.claude/plans/gemini-api-nifty-rain.md`)
+- [ ] **Full smoke after the stale install/ rebuild**: 3 fixed prompts (bedtime story / introduce features / tired-and-chatting), confirm long replies are not cut
+- [ ] **Long-term continuous model A/B**: DeepSeek V4 Flash vs Gemini 2.5 Flash, observing persona performance / latency / cost
+- [ ] **LangGraph refactor evaluation (backlog)**: currently the chat + tool calling logic is scattered across `llm_bridge_node` (1100 lines) + `brain_node`; the user suggests moving it to `pawai-studio/backend/chat_agent/`, to be done after the 5/16 demo
+- [ ] Plan B canned-line design: at least 15 Q&A sets (Chen Ruo-en)
+- [ ] B1-4 Ollama 1.5B offline stress test (verify the fallback path)
+- [ ] B1-5 Megaphone 16kHz end-to-end (Despina downsampling)
 
-## 子資料夾
+## Subfolders
 
-| 資料夾 | 內容 |
+| Folder | Content |
 |--------|------|
-| research/ | 語音 pipeline 分析報告 |
-| archive/ | Jetson MVP 測試記錄（73K） |
+| research/ | Voice pipeline analysis reports |
+| archive/ | Jetson MVP test records (73K) |

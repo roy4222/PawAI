@@ -1,29 +1,31 @@
 # First Trusted Baseline Evidence — 2026-06-03 (face)
 
-專案第一份 **trusted** capability baseline 證據。這份資料夾把當天 HITL run 的 artifacts 永久固定進 git（`artifacts/baseline/` 本身是 gitignore，不可靠），讓今天的結果**可重現、可被 6/18 報告引用**。
+**English** | [中文](./README.zh.md)
 
-> 完整工程敘事（含上機坑、6/18 報告寫法、follow-up）見 [`../../2026-06-03-first-trusted-baseline-evidence.md`](../../2026-06-03-first-trusted-baseline-evidence.md)。
+The project's first **trusted** capability baseline evidence. This folder permanently pins that day's HITL run artifacts into git (`artifacts/baseline/` is itself gitignored and unreliable), making today's results **reproducible and citable by the 6/18 report**.
 
-## 一句話結論
+> For the full engineering narrative (including on-device pitfalls, how to write the 6/18 report, and follow-ups), see [`../../2026-06-03-first-trusted-baseline-evidence.md`](../../2026-06-03-first-trusted-baseline-evidence.md).
 
-整條鏈路 `demo → preflight → observer → baseline_result.jsonl → build_scoreboard → trusted snapshot → readiness` **端到端打通並用真人驗證**。第一份 trusted snapshot：`run_trusted=True` / `version_mismatch=False` / `face.recognition=fail`（誠實揭露）/ readiness=`not_ready`（正確 fail-closed）。
+## One-Line Conclusion
 
-## 檔案清單
+The entire chain `demo → preflight → observer → baseline_result.jsonl → build_scoreboard → trusted snapshot → readiness` is **wired up end-to-end and verified with a real person**. The first trusted snapshot: `run_trusted=True` / `version_mismatch=False` / `face.recognition=fail` (honestly disclosed) / readiness=`not_ready` (correctly fail-closed).
 
-| 檔案 | 內容 |
+## File List
+
+| File | Contents |
 |------|------|
-| `preflight_result.json` | Layer-0 preflight **pass** 案例（demo 起來、9/9 checks、warn=0） |
-| `preflight_result.fail.json` | Layer-0 preflight **fail** 案例（demo 沒開 → 3 blocking fail → snapshot 全 insufficient，驗 fail-closed） |
-| `baseline_result.jsonl` | 3 筆真 face record（roy_1m_01 positive→fail、roy_1m_02 positive→pass@1.67m、idle_01 idle→false-accept） |
-| `baseline_snapshot.json` | build_scoreboard 產出的 trusted snapshot（15 能力；face=fail，其餘 14 insufficient_data） |
-| `readiness_output.json` | `pawai readiness --json` 輸出（verdict=`not_ready`，誠實 fail-closed） |
-| `jetson_manifest.json` | 當次 Jetson `.pawai-last-deploy`（git_sha 對齊 WSL，version_mismatch=False 的依據） |
+| `preflight_result.json` | Layer-0 preflight **pass** case (demo up, 9/9 checks, warn=0) |
+| `preflight_result.fail.json` | Layer-0 preflight **fail** case (demo not started → 3 blocking fail → snapshot all insufficient, verifying fail-closed) |
+| `baseline_result.jsonl` | 3 real face records (roy_1m_01 positive→fail, roy_1m_02 positive→pass@1.67m, idle_01 idle→false-accept) |
+| `baseline_snapshot.json` | The trusted snapshot produced by build_scoreboard (15 capabilities; face=fail, the other 14 insufficient_data) |
+| `readiness_output.json` | `pawai readiness --json` output (verdict=`not_ready`, honest fail-closed) |
+| `jetson_manifest.json` | That run's Jetson `.pawai-last-deploy` (git_sha aligned with WSL, the basis for version_mismatch=False) |
 
-## 為什麼 `face.recognition=fail` 也是可信證據
+## Why `face.recognition=fail` Is Also Trustworthy Evidence
 
-`fail`（`registered_recall=0.5`、`unknown_false_accept_rate=1.0`、n=3）不是失敗，是**能力分級制度在運作的證明**：scoreboard 誠實標出「這項還不能進 Brain 主線」，Brain 依 §4 demo promise 對 fail 能力**不觸發、不宣稱**。6/18 的可信度來自 scoreboard 的誠實，不是嘴上說「我們有做」。
+`fail` (`registered_recall=0.5`, `unknown_false_accept_rate=1.0`, n=3) is not a failure — it is **proof that the capability-grading system is working**: the scoreboard honestly marks "this one cannot yet enter the Brain main line", and per the §4 demo promise the Brain **does not trigger or claim** capabilities that are fail. The 6/18 credibility comes from the scoreboard's honesty, not from verbally claiming "we have it".
 
-## 重現指令
+## Reproduction Commands
 
 ```bash
 # 1) 工具（非互動固定時間窗 capture helper，取代 SSH 一行 capture 的引號/時序惡夢）
@@ -46,8 +48,8 @@ python3 -m benchmarks.core.build_scoreboard <jsonl> \
 PAWAI_SCOREBOARD_PATH=baseline_snapshot.json $HOME/.venv/bin/pawai readiness --json
 ```
 
-## 已知關鍵坑（寫進工程筆記）
+## Known Critical Pitfalls (Recorded in the Engineering Notes)
 
-- **build_scoreboard 必須在 WSL 跑**：Jetson git 在 rsync 後 `fatal: not a git repository` → version_mismatch 永遠 True → 全 insufficient。流程：observer 在 Jetson 產 JSONL → `scp` 回 WSL → WSL build。
-- **相機角度/距離是 face 偵測關鍵**（Go2/D435 移近 ~1.6m 才穩定認 roy）。
-- **face idle round**：round 前需離開鏡頭並等 5–8s 清 track（tracker 有 2.5s grace + hold，否則 idle false-accept 被汙染）。
+- **build_scoreboard must run on WSL**: Jetson git after rsync is `fatal: not a git repository` → version_mismatch is always True → everything insufficient. Flow: observer produces JSONL on Jetson → `scp` back to WSL → build on WSL.
+- **Camera angle/distance is key to face detection** (Go2/D435 must move in to ~1.6m before it stably recognizes roy).
+- **face idle round**: before the round you must leave the camera frame and wait 5–8s to clear the track (the tracker has a 2.5s grace + hold, otherwise the idle false-accept is contaminated).

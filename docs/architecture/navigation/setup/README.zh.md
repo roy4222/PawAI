@@ -1,32 +1,32 @@
-# 📚 Go2 ROS2 SDK: Complete SLAM + Nav2 Operation Manual
+# 📚 Go2 ROS2 SDK：SLAM + Nav2 完整操作手冊
 
-**English** | [中文](./README.zh.md)
+[English](./README.md) | **中文**
 
-## "From Zero to Autonomous Navigation" Guide
+## 「從零到自主導航」指南
 
-> **Applicable versions:** ROS2 Humble + slam_toolbox + Nav2  
-> **Project:** PawAI (Elder and Dog) - Unitree Go2 robot dog  
-> **Last updated:** 2026/01/11
-
----
-
-## 📋 Table of Contents
-
-1. [System Architecture Overview](#1-系統架構總覽)
-2. [File Structure](#2-檔案結構說明)
-3. [TF Coordinate Frame Tree](#3-tf-座標系樹狀圖)
-4. [Launch Parameter Reference](#4-啟動參數參考)
-5. [Step-by-Step Operation Workflow](#5-從零開始操作流程)
-6. [SLAM Configuration Details](#6-slam-配置詳解)
-7. [Nav2 Configuration Details](#7-nav2-配置詳解)
-8. [Common Error Troubleshooting](#8-常見錯誤排除)
-9. [Advanced Tuning Guide](#9-進階調校指南)
+> **適用版本：** ROS2 Humble + slam_toolbox + Nav2  
+> **專案：** PawAI (老人與狗) - Unitree Go2 機器狗  
+> **最後更新：** 2026/01/11
 
 ---
 
-## 1. System Architecture Overview
+## 📋 目錄
 
-### 1.1 Data Flow Diagram
+1. [系統架構總覽](#1-系統架構總覽)
+2. [檔案結構說明](#2-檔案結構說明)
+3. [TF 座標系樹狀圖](#3-tf-座標系樹狀圖)
+4. [啟動參數參考](#4-啟動參數參考)
+5. [從零開始操作流程](#5-從零開始操作流程)
+6. [SLAM 配置詳解](#6-slam-配置詳解)
+7. [Nav2 配置詳解](#7-nav2-配置詳解)
+8. [常見錯誤排除](#8-常見錯誤排除)
+9. [進階調校指南](#9-進階調校指南)
+
+---
+
+## 1. 系統架構總覽
+
+### 1.1 資料流圖
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -71,7 +71,7 @@
                                           /cmd_vel → 機器狗
 ```
 
-### 1.2 Launch Hierarchy Architecture
+### 1.2 啟動層級架構
 
 ```mermaid
 graph TD
@@ -92,21 +92,21 @@ graph TD
 
 ---
 
-## 2. File Structure
+## 2. 檔案結構說明
 
-### 2.1 Core File List
+### 2.1 核心檔案清單
 
-| Category | File Path | Description |
+| 類別 | 檔案路徑 | 說明 |
 |------|----------|------|
-| Launch file | `go2_robot_sdk/launch/robot.launch.py` | Main system launch entry point |
-| SLAM params | `go2_robot_sdk/config/mapper_params_online_async.yaml` | slam_toolbox configuration |
-| Nav2 params | `go2_robot_sdk/config/nav2_params.yaml` | Navigation stack configuration |
-| Velocity control | `go2_robot_sdk/config/twist_mux.yaml` | Velocity command multiplexing |
-| URDF | `go2_robot_sdk/urdf/go2.urdf` | Robot model definition |
-| Test script | `phase1_test.sh` | Automated test script |
-| Debug guide | `nav2_debug_checklist.md` | Troubleshooting checklist |
+| 啟動檔 | `go2_robot_sdk/launch/robot.launch.py` | 主系統啟動入口 |
+| SLAM 參數 | `go2_robot_sdk/config/mapper_params_online_async.yaml` | slam_toolbox 配置 |
+| Nav2 參數 | `go2_robot_sdk/config/nav2_params.yaml` | 導航堆疊配置 |
+| 速度控制 | `go2_robot_sdk/config/twist_mux.yaml` | 速度指令多路複用 |
+| URDF | `go2_robot_sdk/urdf/go2.urdf` | 機器人模型定義 |
+| 測試腳本 | `phase1_test.sh` | 自動化測試腳本 |
+| Debug 指南 | `nav2_debug_checklist.md` | 故障排除清單 |
 
-### 2.2 Configuration File Relationship Diagram
+### 2.2 配置檔案關係圖
 
 ```
 go2_robot_sdk/
@@ -126,9 +126,9 @@ go2_robot_sdk/
 
 ---
 
-## 3. TF Coordinate Frame Tree
+## 3. TF 座標系樹狀圖
 
-### 3.1 Complete TF Tree
+### 3.1 完整 TF 樹
 
 ```
 map                          ← SLAM Toolbox 發布 (全域座標)
@@ -146,28 +146,28 @@ map                          ← SLAM Toolbox 發布 (全域座標)
            └── RR_hip → RR_thigh → RR_calf → RR_foot
 ```
 
-### 3.2 Publishing Source of Each Frame
+### 3.2 各框架發布來源
 
-| Transform | Publishing Node | Description |
+| Transform | 發布節點 | 說明 |
 |-----------|----------|------|
-| map → odom | slam_toolbox | SLAM correction |
-| odom → base_link | go2_driver_node | Odometry (WebRTC) |
-| Joint TF | robot_state_publisher | Parsed from URDF |
-| Static TF | robot_state_publisher | Camera, IMU, etc. |
+| map → odom | slam_toolbox | SLAM 校正 |
+| odom → base_link | go2_driver_node | 里程計 (WebRTC) |
+| 關節 TF | robot_state_publisher | 從 URDF 解析 |
+| 靜態 TF | robot_state_publisher | 相機、IMU 等 |
 
-### 3.3 ⚠️ Important Notes
+### 3.3 ⚠️ 重要注意事項
 
-| Frame | Note |
+| 框架 | 注意 |
 |------|------|
-| `front_camera` | AI perception (YOLO/DA3) uses this frame, not camera_link! |
-| `odom` | The frame_id of the LiDAR point cloud uses odom, because WebRTC has already transformed it |
-| Z-axis compensation | ros2_publisher.py adds +0.07m height compensation |
+| `front_camera` | AI 感知 (YOLO/DA3) 使用此框架，不是 camera_link！ |
+| `odom` | LiDAR 點雲的 frame_id 使用 odom，因為 WebRTC 已轉換 |
+| Z 軸補償 | ros2_publisher.py 加入 +0.07m 高度補償 |
 
 ---
 
-## 4. Launch Parameter Reference
+## 4. 啟動參數參考
 
-### 4.1 Environment Variables (Required)
+### 4.1 環境變數 (必須)
 
 ```bash
 export ROBOT_IP="192.168.12.1"      # 機器狗 IP (必填)
@@ -177,19 +177,19 @@ export MAP_NAME="my_map"            # 地圖名稱 (選填)
 export ELEVENLABS_API_KEY=""        # TTS API Key (選填)
 ```
 
-### 4.2 Launch Parameters
+### 4.2 啟動參數
 
-| Parameter | Default | Description |
+| 參數 | 預設值 | 說明 |
 |------|--------|------|
-| `slam` | true | Launch SLAM Toolbox |
-| `nav2` | true | Launch Nav2 navigation stack |
-| `rviz2` | true | Launch RViz2 visualization |
-| `foxglove` | true | Launch Foxglove Bridge (Port 8765) |
-| `joystick` | true | Launch joystick control |
-| `teleop` | true | Launch twist_mux |
-| `mcp_mode` | false | MCP mode: disable SLAM/Nav2, enable AI services |
+| `slam` | true | 啟動 SLAM Toolbox |
+| `nav2` | true | 啟動 Nav2 導航堆疊 |
+| `rviz2` | true | 啟動 RViz2 視覺化 |
+| `foxglove` | true | 啟動 Foxglove Bridge (Port 8765) |
+| `joystick` | true | 啟動手把控制 |
+| `teleop` | true | 啟動 twist_mux |
+| `mcp_mode` | false | MCP 模式：停用 SLAM/Nav2，啟用 AI 服務 |
 
-### 4.3 Launch Examples
+### 4.3 啟動範例
 
 ```bash
 # 完整系統 (SLAM + Nav2 + 視覺化)
@@ -207,9 +207,9 @@ ros2 launch go2_robot_sdk robot.launch.py rviz2:=false foxglove:=false
 
 ---
 
-## 5. Step-by-Step Operation Workflow
+## 5. 從零開始操作流程
 
-### 5.1 Environment Preparation
+### 5.1 環境準備
 
 ```bash
 # 1. Source ROS2 環境
@@ -222,7 +222,7 @@ export ROBOT_IP="192.168.12.1"
 export CONN_TYPE="webrtc"
 ```
 
-### 5.2 Using the Automation Script (Recommended)
+### 5.2 使用自動化腳本 (推薦)
 
 ```bash
 # 步驟零：環境檢查
@@ -245,7 +245,7 @@ zsh phase1_test.sh t4
 # 輸入 auto 自動巡房建圖
 ```
 
-### 5.3 Manual Operation Workflow
+### 5.3 手動操作流程
 
 ```bash
 # Terminal 1：啟動驅動 (簡化版)
@@ -260,7 +260,7 @@ ros2 topic hz /scan   # 確認 > 5 Hz
 ros2 topic echo /tf   # 確認 TF 發布
 ```
 
-### 5.4 Saving the Map
+### 5.4 儲存地圖
 
 ```bash
 # 建立地圖目錄
@@ -274,7 +274,7 @@ ls -lh src/go2_robot_sdk/maps/my_map.*
 # 應該看到 my_map.yaml 和 my_map.pgm
 ```
 
-### 5.5 Sending a Navigation Goal
+### 5.5 發送導航目標
 
 ```bash
 # 方法 1：使用 RViz2 / Foxglove 的 "2D Goal Pose" 工具
@@ -294,9 +294,9 @@ python3 scripts/nav2_goal_autotest.py --distance 1.0
 
 ---
 
-## 6. SLAM Configuration Details
+## 6. SLAM 配置詳解
 
-### 6.1 Key Parameters (mapper_params_online_async.yaml)
+### 6.1 關鍵參數 (mapper_params_online_async.yaml)
 
 ```yaml
 slam_toolbox:
@@ -323,19 +323,19 @@ slam_toolbox:
     loop_search_maximum_distance: 3.0  # 搜索範圍
 ```
 
-### 6.2 Mode Descriptions
+### 6.2 模式說明
 
-| Mode | Use Case | Description |
+| 模式 | 使用場景 | 說明 |
 |------|----------|------|
-| online_async | Default, real-time mapping | Asynchronous processing, does not block the main loop |
-| online_sync | Requires precise synchronization | Synchronous processing, slower but more stable |
-| localization | Map already exists, localization only | Loads an existing map for AMCL localization |
+| online_async | 預設，即時建圖 | 非同步處理，不阻塞主循環 |
+| online_sync | 需要精確同步 | 同步處理，較慢但更穩定 |
+| localization | 已有地圖，只定位 | 載入現有地圖進行 AMCL 定位 |
 
 ---
 
-## 7. Nav2 Configuration Details
+## 7. Nav2 配置詳解
 
-### 7.1 Controller Parameters (nav2_params.yaml)
+### 7.1 控制器參數 (nav2_params.yaml)
 
 ```yaml
 controller_server:
@@ -357,7 +357,7 @@ controller_server:
       RotateToGoal.scale: 10.0  # ⚠️ 降低以減少原地旋轉
 ```
 
-### 7.2 Costmap Parameters
+### 7.2 代價地圖參數
 
 ```yaml
 local_costmap:
@@ -380,7 +380,7 @@ global_costmap:
       global_frame: map          # ⚠️ 必須是 map，不是 odom！
 ```
 
-### 7.3 Planner Parameters
+### 7.3 規劃器參數
 
 ```yaml
 planner_server:
@@ -393,13 +393,13 @@ planner_server:
 
 ---
 
-## 8. Common Error Troubleshooting
+## 8. 常見錯誤排除
 
-### 8.1 Problem: The robot dog spins in place
+### 8.1 問題：機器狗原地打轉
 
-**Symptom:** After sending a navigation goal, the robot dog only rotates in place
+**症狀：** 發送導航目標後，機器狗只在原地旋轉
 
-**Check and fix:**
+**檢查與修復：**
 
 ```bash
 # 1. 檢查 cmd_vel 輸出
@@ -415,11 +415,11 @@ ros2 param set /controller_server FollowPath.min_vel_x 0.1
 ros2 param set /controller_server FollowPath.max_vel_theta 1.0
 ```
 
-### 8.2 Problem: TF error (No transform)
+### 8.2 問題：TF 錯誤 (No transform)
 
-**Symptom:** `Could not transform... No transform available` appears
+**症狀：** 出現 `Could not transform... No transform available`
 
-**Check:**
+**檢查：**
 
 ```bash
 # 1. 檢查 TF 樹完整性
@@ -433,11 +433,11 @@ ros2 run tf2_tools view_frames
 ros2 node list | grep slam
 ```
 
-### 8.3 Problem: /scan frequency too low
+### 8.3 問題：/scan 頻率過低
 
-**Symptom:** `/scan` frequency < 5 Hz
+**症狀：** `/scan` 頻率 < 5 Hz
 
-**Check:**
+**檢查：**
 
 ```bash
 # 1. 檢查驅動是否正常
@@ -450,11 +450,11 @@ ros2 topic hz /point_cloud2
 ping 192.168.12.1
 ```
 
-### 8.4 Problem: SLAM map does not update
+### 8.4 問題：SLAM 地圖不更新
 
-**Symptom:** The `/map` topic has no new data
+**症狀：** `/map` topic 沒有新數據
 
-**Check:**
+**檢查：**
 
 ```bash
 # 1. 確認 SLAM 節點運行
@@ -467,23 +467,23 @@ ros2 topic echo /scan --once
 ros2 param get /slam_toolbox scan_topic
 ```
 
-### 8.5 Problem: Nav2 Recovery Loop
+### 8.5 問題：Nav2 Recovery Loop
 
-**Symptom:** Navigation retries repeatedly, with "Goal canceled" appearing
+**症狀：** 導航反覆重試，出現 "Goal canceled"
 
-**Causes and fixes:**
+**原因與修復：**
 
-| Possible Cause | Fix |
+| 可能原因 | 修復方法 |
 |----------|----------|
-| Goal point is on an obstacle | Confirm in RViz2 that the goal is in a white (free) area |
-| Path planning failed | Check whether the `/plan` topic has a path |
-| Costmap over-inflated | Reduce `inflation_radius` |
+| 目標點在障礙物上 | 在 RViz2 確認目標在白色(自由)區域 |
+| 路徑規劃失敗 | 檢查 `/plan` topic 是否有路徑 |
+| Costmap 過度膨脹 | 縮小 `inflation_radius` |
 
 ---
 
-## 9. Advanced Tuning Guide
+## 9. 進階調校指南
 
-### 9.1 Increasing Navigation Speed
+### 9.1 提升導航速度
 
 ```yaml
 # nav2_params.yaml
@@ -492,7 +492,7 @@ FollowPath:
   acc_lim_x: 1.5          # 降低加速度，更平滑
 ```
 
-### 9.2 Optimizing Narrow-Space Passage
+### 9.2 優化窄空間通過
 
 ```yaml
 # nav2_params.yaml
@@ -501,7 +501,7 @@ inflation_layer:
   cost_scaling_factor: 2.0 # 降低代價衰減
 ```
 
-### 9.3 Improving SLAM Accuracy
+### 9.3 改善 SLAM 精度
 
 ```yaml
 # mapper_params_online_async.yaml
@@ -509,17 +509,17 @@ resolution: 0.03           # 提高解析度 (0.05 → 0.03)
 minimum_travel_distance: 0.3  # 更頻繁更新
 ```
 
-### 9.4 Monitoring Key Topics
+### 9.4 關鍵 Topics 監控
 
-| Topic | Expected Frequency | Monitoring Command |
+| Topic | 預期頻率 | 監控指令 |
 |-------|----------|----------|
 | `/scan` | > 5 Hz | `ros2 topic hz /scan` |
 | `/map` | ~ 0.2 Hz | `ros2 topic hz /map` |
 | `/cmd_vel` | ~ 10 Hz | `ros2 topic echo /cmd_vel` |
-| `/tf` | Continuous | `ros2 topic echo /tf` |
-| `/local_costmap/costmap` | ~ 1 Hz | Observe in RViz2 |
+| `/tf` | 持續 | `ros2 topic echo /tf` |
+| `/local_costmap/costmap` | ~ 1 Hz | 在 RViz2 觀察 |
 
-### 9.5 Launching in Debug Mode
+### 9.5 Debug 模式啟動
 
 ```bash
 # 啟動時加上 debug log
@@ -531,9 +531,9 @@ ros2 bag record -a -o nav2_debug_$(date +%Y%m%d_%H%M%S)
 
 ---
 
-## 📎 Quick Reference Card
+## 📎 快速參考卡
 
-### Common Commands
+### 常用指令
 
 ```bash
 # 啟動完整系統
@@ -552,16 +552,16 @@ python3 scripts/nav2_goal_autotest.py --distance 2.0
 ros2 run tf2_tools view_frames
 ```
 
-### Important Coordinate Frames
+### 重要座標框架
 
-- `map` → used by Nav2 goals
-- `odom` → used by local motion
-- `base_link` → cmd_vel reference
-- `front_camera` → used by AI perception ⚠️
+- `map` → Nav2 目標使用
+- `odom` → 本地運動使用
+- `base_link` → cmd_vel 參考
+- `front_camera` → AI 感知使用 ⚠️
 
-### Key Parameter Quick Reference
+### 關鍵參數速查
 
-| Parameter | Location | Suggested Value for Go2 |
+| 參數 | 位置 | Go2 建議值 |
 |------|------|-----------|
 | `min_vel_x` | nav2_params.yaml | 0.1 |
 | `max_vel_theta` | nav2_params.yaml | 1.0 |
@@ -571,4 +571,4 @@ ros2 run tf2_tools view_frames
 
 ---
 
-**Happy navigating! 🐕**
+**祝導航順利！🐕**
