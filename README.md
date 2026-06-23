@@ -27,6 +27,18 @@ Unitree Go2 Pro with an NVIDIA Jetson Orin Nano. The codebase follows
 **Clean Architecture**: perception, decision and driver layers are cleanly
 separated with a single, unidirectional dependency direction.
 
+<div align="center">
+
+### 🎬 Demo
+
+<a href="https://youtu.be/rTVchCmYQuw">
+  <img src="docs/assets/pawai-hardware-overview.jpg" width="640" alt="Watch the PawAI demo on YouTube">
+</a>
+
+▶️ **[Watch on YouTube — IM4308: PawAI · multimodal-fusion autonomous object-finding &amp; embodied interaction](https://youtu.be/rTVchCmYQuw)**
+
+</div>
+
 ---
 
 ## ✨ Highlights

@@ -115,3 +115,8 @@ node_modules/
 
 ## Evidence Center trace JSONL（gateway 落盤產物，含 PII — 永不入 repo）
 /runtime/traces/
+
+## 大型影片 / demo 原檔（用 docs/assets 縮圖 + YouTube 連結，不入庫）
+*.mov
+*.mp4
+/硬體介紹.JPG

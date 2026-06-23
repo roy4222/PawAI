@@ -24,6 +24,18 @@ PawAI 不是聊天機器人，也不是各功能分開展示的辨識系統，�
 NVIDIA Jetson Orin Nano 上。整個程式庫遵循 **Clean Architecture**：感知、決策、
 驅動三層清楚分離、依賴單向。
 
+<div align="center">
+
+### 🎬 Demo 影片
+
+<a href="https://youtu.be/rTVchCmYQuw">
+  <img src="docs/assets/pawai-hardware-overview.jpg" width="640" alt="在 YouTube 觀看 PawAI demo">
+</a>
+
+▶️ **[YouTube 觀看 — IM4308：PawAI · 基於多模態感知融合之自主尋物與具身互動](https://youtu.be/rTVchCmYQuw)**
+
+</div>
+
 ---
 
 ## ✨ 核心能力
