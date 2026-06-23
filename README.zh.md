@@ -99,13 +99,22 @@ flowchart TD
 
 ## 🤖 硬體
 
-| 部件 | 規格 |
-|------|------|
-| 載體 | Unitree **Go2 Pro** |
-| 邊緣運算 | NVIDIA **Jetson Orin Nano Super 8 GB** |
-| 視覺 | Intel RealSense **D435**（RGB-D） |
-| 光達 | **RPLIDAR A2M12**（12 m，16000 次/秒） |
-| 音訊 | USB 麥克風 + USB 喇叭 |
+PawAI 可以分層上手。只跑 Go2 driver 不需要所有外設；完整多模態 Demo 才需要全套硬體。
+
+| 上手目標 | 需要的硬體 |
+|----------|------------|
+| **最小 Go2 driver** | Unitree **Go2 Pro** + 一台在 Go2 網路內的 Ubuntu 22.04 / ROS2 Humble 機器 |
+| **完整 PawAI 互動 Demo** | Go2 Pro + NVIDIA **Jetson Orin Nano Super 8 GB** + Intel RealSense **D435** + USB 麥克風 + USB 喇叭 |
+| **物體 / 深度感知** | 固定在機器狗或測試架上的 Intel RealSense **D435** |
+| **實驗性導航** | **RPLIDAR A2M12** + 穩固支架 + 外接供電餘裕 + 人在旁邊看守安全 |
+| **操作端 UI** | 可連到 PawAI Studio 的筆電或桌機瀏覽器 |
+
+實際 Go2 Pro 配置建議準備：
+
+- D435 的 USB 3 線材與固定支架。
+- USB 麥克風與喇叭，或等效的 Go2 音訊播放路徑。
+- 若要做導航實驗，RPLIDAR 需要穩固固定、5 V 供電與急停流程。
+- 一台開發機負責改 code；Jetson 負責 ROS2 runtime、GPU 推理與機器狗 I/O。
 
 ---
 
@@ -114,6 +123,16 @@ flowchart TD
 | 系統 | ROS2 版本 |
 |------|-----------|
 | Ubuntu 22.04（Jetson / x86） | Humble |
+
+---
+
+## 🧭 新使用者上手路徑
+
+1. 先跑 **最小 Go2 driver**，確認 WebRTC 控制能通。
+2. 加上 **D435**，分別驗證人臉、物體、姿勢感知。
+3. 等攝影機與感知穩定後，再接語音與 TTS。
+4. 單一路徑都通過後，再啟 PawAI Studio 與完整多模態 Demo。
+5. 導航仍屬實驗性能力：只在有人看守、有明確停機流程的環境中測。
 
 ---
 
@@ -192,7 +211,7 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 | 操作 runbook（Demo SOP） | [`docs/runbook/`](docs/runbook/README.md) |
 | 架構決策（ADR） | [`docs/adr/`](docs/adr/README.md) |
 
-歷史 / 已被取代的素材在 `docs/archive/`；
+內部歷史文件不包含在公開版；
 已退役的套件與腳本在 [`archive/`](archive/README.md)。
 
 ---

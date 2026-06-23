@@ -11,7 +11,8 @@ workspace built on a fork of
 
 ### Added
 - Bilingual top-level README ([English](README.md) / [中文](README.zh.md)) with a
-  Mermaid three-layer Clean-Architecture diagram and a package table.
+  Mermaid three-layer Clean-Architecture diagram, package table, hardware
+  checklist and new-user bring-up path.
 - `SECURITY.md` (private vulnerability reporting + deployment guidance).
 - `docs/architecture/` — Clean-Architecture documentation layout
   (`brain/`, `perception/`, `speech/`, `studio/`, `navigation/`, `specs/`).

@@ -103,13 +103,23 @@ flowchart TD
 
 ## 🤖 Hardware
 
-| Part | Spec |
-|------|------|
-| Body | Unitree **Go2 Pro** |
-| Edge compute | NVIDIA **Jetson Orin Nano Super 8 GB** |
-| Vision | Intel RealSense **D435** (RGB-D) |
-| LiDAR | **RPLIDAR A2M12** (12 m, 16 000 samples/s) |
-| Audio | USB microphone + USB speaker |
+PawAI can be brought up in layers. You do **not** need every peripheral to run
+the base Go2 driver, but the full multimodal demo expects the full kit.
+
+| Bring-up goal | Required hardware |
+|---------------|-------------------|
+| **Minimal Go2 driver** | Unitree **Go2 Pro** + Ubuntu 22.04 / ROS2 Humble machine on the Go2 network |
+| **Full PawAI interaction demo** | Go2 Pro + NVIDIA **Jetson Orin Nano Super 8 GB** + Intel RealSense **D435** + USB microphone + USB speaker |
+| **Object / depth perception** | Intel RealSense **D435** mounted rigidly on the robot or test rig |
+| **Experimental navigation** | **RPLIDAR A2M12** + stable mount + external power budget + human-in-the-loop safety observer |
+| **Operator UI** | A laptop or desktop browser connected to PawAI Studio |
+
+Accessory checklist for a practical Go2 Pro setup:
+
+- USB 3 cable and mount for the D435.
+- USB microphone and speaker, or an equivalent Go2 audio path.
+- Reliable 5 V power and mounting for the RPLIDAR if navigation experiments are enabled.
+- A development machine for editing plus a Jetson for ROS2 runtime, GPU inference and robot I/O.
 
 ---
 
@@ -118,6 +128,16 @@ flowchart TD
 | System | ROS2 distro |
 |--------|-------------|
 | Ubuntu 22.04 (Jetson / x86) | Humble |
+
+---
+
+## 🧭 New User Path
+
+1. Start with the **Minimal Go2 driver** path and confirm WebRTC control works.
+2. Add the **D435** and run face / object / pose perception independently.
+3. Add speech and TTS after the camera pipeline is stable.
+4. Start PawAI Studio and the full multimodal demo only after the individual lanes pass.
+5. Treat navigation as experimental: run it only with a safety observer and clear stop procedure.
 
 ---
 
@@ -198,7 +218,7 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 | Operation runbooks (demo SOPs) | [`docs/runbook/`](docs/runbook/README.md) |
 | Architecture decisions (ADRs) | [`docs/adr/`](docs/adr/README.md) |
 
-Historical / superseded material lives under `docs/archive/`;
+Internal historical docs are intentionally omitted from the public tree;
 deprecated packages and scripts live under [`archive/`](archive/README.md).
 
 ---

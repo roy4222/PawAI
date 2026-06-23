@@ -7,7 +7,7 @@ continuity. Nothing here is built or run by the main demo.
 - `COLCON_IGNORE` marks this whole tree as invisible to `colcon build` / `colcon test`.
 - Everything was moved here with `git mv`, so full history is preserved
   (`git log --follow archive/<path>`).
-- For archived **documentation**, see `docs/archive/` instead.
+- Internal archived documentation is not included in the public tree.
 
 ## Contents
 
