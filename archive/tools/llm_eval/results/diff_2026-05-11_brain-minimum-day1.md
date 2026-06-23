@@ -44,7 +44,7 @@ improved file: `results/improved_2026-05-11_post-mission-and-4files/gemini_chat1
 - 6 檔載入 log「6 files / base 5」（test 已驗證）。
 
 > ⚠️ 禁字 scope 修正（2026-05-11 review fix）：
-> 之前寫「禁字 0 match」會誤導。「陪伴」這個字仍在 [`IDENTITY.md:14`](../../pawai_brain/personas/v1/IDENTITY.md) 與 [`CAPABILITIES.md:36`](../../pawai_brain/personas/v1/CAPABILITIES.md)，
+> 之前寫「禁字 0 match」會誤導。「陪伴」這個字仍在 [`IDENTITY.md:14`](../../../../pawai_brain/personas/v1/IDENTITY.md) 與 [`CAPABILITIES.md:36`](../../../../pawai_brain/personas/v1/CAPABILITIES.md)，
 > 是描述寵物陪伴特質（pet companionship）與 sit_along skill 觸發語境，**不屬於「長者陪伴專案」定位用語**，不應視為禁字。
 > Gate 規則：MISSION.md 不出現「老人/長者/長輩」即可；「陪伴」一字在 IDENTITY/CAPABILITIES 是合法的。
 

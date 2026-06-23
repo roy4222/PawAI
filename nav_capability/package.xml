@@ -3,7 +3,7 @@
   <name>nav_capability</name>
   <version>0.1.0</version>
   <description>Nav capability platform: high-level navigation actions, route runner, pose logger.</description>
-  <maintainer email="roy422roy@gmail.com">roy422</maintainer>
+  <maintainer email="roy@pawai.dev">Roy</maintainer>
   <license>BSD-2-Clause</license>
 
   <depend>rclpy</depend>

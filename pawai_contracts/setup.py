@@ -12,8 +12,8 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="Roy",
-    maintainer_email="roy@pawai.dev",
+    maintainer='Roy',
+    maintainer_email='roy@pawai.dev',
     description="ROS-free shared truths for PawAI (skill registry / zh tables / LLM policy)",
     license="BSD-2-Clause",
 )

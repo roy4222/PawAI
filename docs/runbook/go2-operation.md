@@ -133,7 +133,7 @@ zsh start_go2_simple.sh
 
 > ℹ️ 說明：  
 > - 若 WebRTC 尚未成功建立（例如 `/con_notify` HTTP timeout、data channel 一直停在 `connecting`），那麼 `TEST.sh` 中的 sit/stand/forward 等動作指令**可能不會生效**。  
-> - 在這種情況下，請先依照 [webrtc_troubleshooting.md](./webrtc_troubleshooting.md) 的流程，確認 `aiortc` 版本、Go2 模式與 HTTP `/con_notify` 是否正常（可用 `curl` 測試）。  
+> - 在這種情況下，請先依照本節的 WebRTC 檢查流程，確認 `aiortc` 版本、Go2 模式與 HTTP `/con_notify` 是否正常（可用 `curl` 測試）。  
 > - 在 WSL2 環境下，偶爾會遇到網路 / 虛擬網卡特有問題，若多次嘗試仍不穩定，建議在原生 Ubuntu 機器交叉驗證一次。
 
 2. **準備測試環境**（終端 2）
@@ -795,9 +795,9 @@ TEST.sh 包含以下模組：
 
 ## 相關文件
 
-- [README.md](./README.md) - 開發文件總覽
-- [environment_setup_ubuntu.md](./environment_setup_ubuntu.md) - 環境設置
-- [package_structure.md](./package_structure.md) - 套件結構
+- [文件總覽](../README.md) - 專案文件入口
+- [Go2 / navigation setup](../architecture/navigation/setup/README.md) - ROS2 與 Go2 啟動設定
+- [Repository overview](../../README.md) - active packages and layout
 
 ---
 

@@ -1,636 +1,108 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Public-facing guidance for Claude Code and other AI coding agents working in this repository.
+For humans, start with [`README.md`](README.md) and [`docs/README.md`](docs/README.md).
 
-## 語言與工具約定
+## Language And Tooling
 
-- **一律用繁體中文回答**
-- **pip install 一律改成用 uv pip install**（專案使用 uv 管理 Python 依賴）
-- Code Review 角色設定：Linus Torvalds 風格，嚴格審核程式碼品質與潛在風險
+- Reply in Traditional Chinese unless the user asks otherwise.
+- Use `uv pip install` instead of bare `pip install`.
+- Prefer `rg` / `rg --files` for search.
+- Keep edits scoped. Do not revive archived packages or scripts unless the user explicitly asks.
+- Log or re-raise exceptions; do not silently suppress failures.
 
-## 工作紀律（基於 51 sessions 的摩擦分析）
+## Repository Shape
 
-- **不要擴張 scope**：只做我要求的，不要提議額外清理、重構、或「順便改」。我會主動擴張
-- **寫完 Python 後自我檢查**：確認所有 import 存在、沒有 hardcoded 測試值、boolean casting 正確、timestamp 用真實來源
-- **指定 skill 就用那個 skill**：不要替換成其他 skill、不要手動探索檔案、不要自行 brainstorm。先執行指令，再問問題
-- **每個任務完成後停下來確認**，不要連續做多個任務
+This repository is a ROS2 Humble workspace for PawAI, a Unitree Go2 Pro embodied-interaction robot dog.
+The active system is intentionally small:
 
-## Jetson 環境硬規則
+| Layer | Packages / folders | Role |
+|---|---|---|
+| Contracts | `go2_interfaces`, `pawai_contracts` | ROS2 and ROS-free shared contracts |
+| Driver | `go2_robot_sdk` | Go2 WebRTC driver and robot-facing services |
+| Perception | `face_perception`, `vision_perception`, `object_perception` | Face, pose/gesture and object events |
+| Speech | `speech_processor` | ASR, intent bridge and TTS |
+| Decision | `pawai_brain`, `interaction_executive` | Brain policy and single robot-action arbiter |
+| Navigation | `nav_capability` | Experimental navigation capability surface |
+| Operator UI | `pawai-studio` | Studio frontend and gateway |
+| Tooling | `tools/pawai_cli`, `scripts`, `benchmarks` | Team CLI, launchers, tests and model benchmarks |
 
-- source 時用 `setup.zsh`（不是 `setup.bash`），兩者不可混用
-- tmux 不繼承 `LD_LIBRARY_PATH` — 啟動腳本中必須 export
-- Jetson CUDA int8 支援有限 — 走 CUDA 路徑時 Whisper 必須用 `cuda` + `float16`;CPU 路徑的 int8 量化可用(`speech_processor.yaml` 預設 `device: cpu` + `compute_type: int8`),Demo 啟動腳本 `scripts/start_full_demo_tmux.sh` 會覆寫為 `cuda + float16` 以提升速度
-- bash-specific 腳本用 `bash -c`，不要假設 zsh 相容
+Deprecated code stays under [`archive/`](archive/README.md), which is excluded from colcon by `COLCON_IGNORE`.
+The removed internal document archive is not part of the public tree.
 
----
+## Architecture Rules
 
-## 專案概述
+- `go2_robot_sdk/go2_robot_sdk/domain` must not import ROS2 or presentation-layer code.
+- `pawai_brain` proposes intent; `interaction_executive` owns safety gating and robot actions.
+- Keep robot-body commands flowing through one explicit arbiter. Avoid extra `/cmd_vel` or `/webrtc_req` publishers.
+- Treat navigation and motion claims as evidence-bound. If hardware/HITL evidence is missing, document the capability as experimental or insufficiently verified.
+- Public docs should point to active truth sources: `docs/README.md`, `docs/contracts/`, `docs/architecture/`, `docs/runbook/`, and `docs/adr/`.
 
-**專題名稱：老人與狗 / PawAI**
-**硬底線：2026/4/13 文件繳交（週日初版、週一繳交），五月展示／驗收**
-**當前日期：2026-04-11（互動主軸定位收斂，PawAI Brain 命名定案）**
+## Development Topology
 
-以 Unitree Go2 Pro 為載體的**居家互動機器狗（兼具守護能力）**。互動 70% / 守護 30%。
-
-**核心**：PawAI Brain（三層決策引擎：Safety → Policy → Expression）+ 多模態感知（人臉/語音/手勢/姿勢/物體）+ 實體反應。
-
-**互動主軸（70%）**：手勢 / 姿勢 / 語音 / 物體辨識 → 觸發動作 or 移動（細節下週四人回報後定）
-**守護輔助（30%）**：陌生人警告、巡邏（需雷達）、跟隨（文件級 future work）
-
-> 完整專案定位見 [`docs/mission/README.md`](docs/mission/README.md)
-> **系統設計規格（current）**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`
-> 4/10 守護犬 spec 已 superseded（保留作歷史）：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`
-
----
-
-## 建構與執行
-
-### PawAI CLI 主入口（5/12 起，五人共用 Jetson 必走）
+Source of truth is the WSL workspace:
 
 ```bash
-pawai doctor                              # 環境健檢（含 Network topology 區塊）
-pawai status                              # 看 demo lock owner / branch / 網路拓撲
-pawai jetson deploy --module <module>     # rsync + colcon build（含 lock collision prompt）
-pawai demo start                          # 啟 brain demo（registry lock，lane=brain）
-pawai demo start --school                 # 學校招生 demo（管理學院版）：一鍵全開原版（非 LiDAR）+ 印流程 cheat-sheet（6/22）
-pawai demo start --nav capability         # 啟 nav stack（lane=nav_capability，scope 限手動 action 場測）
-pawai demo start --with-lidar             # brain demo + raw LiDAR(/scan_rplidar) + Act1 短距前進 controller（LOCKED，Studio 鈕/語音觸發才動、需 e-stop；無 nav2/2nd driver，6/15）
-pawai demo stop                           # 依 lock lane 路由 cleanup（只清自己的，--force 才能清別人）
-pawai docs <module>                       # 跳到 0511 架構文件
-pawai contract check                      # 跑 topic schema 驗證
-pawai smoke brain                         # SSH 上 Jetson 跑 5 輪語音 E2E（demo/llm-e2e 都吃，6/12）
-pawai evidence pull                       # 拉回 runtime/traces/*.jsonl 證據（只讀，6/12）
+cd /home/roy422/newLife/elder_and_dog
 ```
 
-**規矩**：一次只能一人 demo（lock），`-y` ≠ `--force`（前者跳一般 prompt、不能搶 lock；後者才能搶）。完整手冊：[`docs/pawai_cli/README.md`](docs/pawai_cli/README.md)、[`team-onboarding.md`](docs/pawai_cli/team-onboarding.md)、[`troubleshooting.md`](docs/pawai_cli/troubleshooting.md)。
-
-**6/14 HITL demo 調校（已持久化進 `interaction_executive/config/executive.yaml`，重啟自動帶）**：`chat_wait_ms 2000`（原 20000=LLM 慢時 dead-air）、`greet_cooldown_s 90`、`gesture_enabled true`、`object_remark_attention_min NOTICED`、`object_remark_priority`=飲水類、`demo_video_cup_compound true`（**drink-merge**：cup/bottle/bowl/wine_glass 講通用「手邊有飲水用品，記得補充水分」**不糾結物名**、recent sitting 在 `drink_sitting_window_s` 內加坐姿複合句、**pose 缺席不卡**）。**6/15 HITL**：`drink_sitting_window_s` 新 param（default 10.0 byte-identical、demo 設 **45.0**）——`/event/pose_detected` 是 **edge-triggered**（穩坐時 sitting event 稀疏、且無連續 `/state/perception/pose`），寫死 10s 窗抓不到那唯一事件 → 複合句永遠 sitting=False；放寬 45s 後實機驗 `sitting=True` 端到端（**6/15 已 merge 進 main `1dec417`**、deploy 後 `param get` 確認 live=45.0）。
-- **防「打架」（社交事件互搶 TTS）**：每幕 `ros2 param set /brain_node demo_phase {s2_greet|s3_pose_object|s4_gesture}` 讓該幕只剩一個模組講話（`demo_phase=all` = greet/object/gesture 三者全搶＝最易卡）。更治本的 `social_pending_enabled`（one-slot pending+TTL+flush，PR #191 default-off）讓 all 模式也不丟話 — **尚待上機驗**。操作細節見 [`docs/runbook/2026-06-18-operator-runbook.md`](docs/runbook/2026-06-18-operator-runbook.md)。
-- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/architecture/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ **（6/15 更正，原判「雷達硬體」是錯的）** `--with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` 多半是 `start_lidar_monitor_tmux.sh` **漏 `--ros-args`** → `serial_baudrate:=256000` 被當 remap rule 沒套用（pane 出現「Found remap rule」WARN 即是），已修 `af18a64`。先用 `scripts/start_scan_only_tmux.sh` **隔離測**：`/scan_rplidar` ~11Hz＋health OK ＝硬體沒事、是整合命令的鍋。④ **Act1 motion 根因已查清 + 已修回 standalone（6/15，NEEDS_ROY_ESTOP_TEST）**：撞車真因＝`twist_mux` **無 output timer + 0.5s input timeout** → reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默/被殺/enable 開太久結尾才 force-stop），mux 停輸出 → driver 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞牆；standalone 直連無此中介層。已把 demo_forward 改回 **standalone `/cmd_vel` 直連**（每個 0 直達 driver→StopMove，6/15 已實機驗會停）+ 保證唯一 publisher（**預設**殺 mux/teleop/joy + 啟動後驗 `/cmd_vel` publisher==1 否則**拒絕進 motion**；brain 走 `/webrtc_req` 不受影響）+ force-stop 由 **`trap EXIT/TERM/INT` 保證執行** + 定時放行（對抗複查抓到 A-1 雙 publisher fail-open / A-2 force-stop 不保證、皆已修）。**6/15 整合測「會走但撞」後加大停障餘裕**：demo_forward `danger 1.1→1.5m`、手動前進預設 `2s→1s`（停車邊緣太緊＝撞因；env `ACT1_DANGER_M` 可調），demo 主線改 **Studio「短距前進」鈕**（不押語音）。單元邏輯 42 tests 綠，**真機 motion 待 Roy 手持 e-stop 驗**（流程見 `docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`）。⑤ **offline 預設 demo_phase=all 會吐「我聽不太懂」footgun（6/15 修 G2）**：`offline_mode=true` 時若沒先切 phase，canned fallback 變「我聽不太懂」（同源「手動切 phase footgun」）→ 已加 `OFFLINE_GENERIC_FALLBACK` 溫和 filler（online-timeout 路徑保持 byte-identical）。offline 鏈端到端已接通（param/topic/Studio toggle）、S5 安全 rule-first offline 免疫。
-
-### 基本建構
+Runtime, GPU and ROS2 hardware checks run on the Jetson:
 
 ```bash
-source /opt/ros/humble/setup.bash   # 或 setup.zsh（Jetson 用 zsh）
-colcon build                                        # 全部
-colcon build --packages-select go2_robot_sdk        # 單一套件
-colcon build --packages-select speech_processor     # 語音模組
-colcon build --packages-select face_perception      # 人臉辨識模組
-source install/setup.bash                           # build 後必須重新 source
+ssh jetson-nano "cd /home/jetson/elder_and_dog && <command>"
 ```
 
-### 啟動 Go2 驅動（最小模式）
+Use the one-way sync helper before Jetson builds:
 
 ```bash
-export ROBOT_IP="192.168.123.161"
-export CONN_TYPE="webrtc"
-ros2 launch go2_robot_sdk robot.launch.py \
-  enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false
+~/sync start
+~/sync status
+~/sync once
+~/sync stop
 ```
 
-### P0 導航避障：建圖（cartographer + RPLIDAR）
+Do not edit source directly on the Jetson. Build artifacts belong on the Jetson, not in git.
+
+## Common Commands
 
 ```bash
-# 5-window tmux: tf + sllidar + carto + carto_grid + foxglove（無 Go2 driver）
-bash scripts/build_map.sh home_living_room
-# → 走完客廳一圈後存圖（3 步驟 prompt）：
-#   ros2 service call /finish_trajectory cartographer_ros_msgs/srv/FinishTrajectory "{trajectory_id: 0}"
-#   ros2 service call /write_state cartographer_ros_msgs/srv/WriteState "{filename: '/home/jetson/maps/home_living_room.pbstream', include_unfinished_submaps: true}"
-#   ros2 run nav2_map_server map_saver_cli -f /home/jetson/maps/home_living_room --ros-args -p map_subscribe_transient_local:=true
+# Local / WSL
+rg --files
+python3 -m compileall <package-or-script>
+python3 scripts/ci/check_topic_contracts.py
+
+# Jetson / ROS2
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+colcon build --packages-select go2_robot_sdk
+colcon test --packages-select go2_robot_sdk
+
+# CLI
+pawai doctor
+pawai status
+pawai demo start
+pawai demo stop
+pawai docs brain
+pawai contract check
 ```
 
-### P0 導航避障：Demo（cartographer mapping 已存圖後）
+## Verification Expectations
 
-```bash
-# 5-window tmux: tf + sllidar + driver + nav2_bringup(amcl+map_server+nav) + foxglove
-bash scripts/start_nav2_amcl_demo_tmux.sh
-# 等 ~30s lifecycle active 後：
-# - Foxglove/RViz 設 /initialpose（Go2 真實位置 + 朝向）
-# - 發 goal: ros2 topic pub /goal_pose geometry_msgs/PoseStamped ... -r 2  (BEST_EFFORT sub 要多次發)
-```
+Use the narrowest check that proves the change:
 
-**已知陷阱**：
-- **Go2 sport mode cmd_vel 門檻 MIN_X = 0.50 m/s**（4/25 實機 calibration 確認）— DWB `min_vel_x` 必須 ≥ 0.45，否則 Go2 拒抬腳。詳 `docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md` §Step 0
-- **Go2 driver `_publish_transform` env 開關**：`GO2_PUBLISH_ODOM_TF=0` 跳 odom→base_link TF 給 cartographer own（建圖階段用）；預設 1（Nav2 demo 階段用，AMCL 需要 driver odom）
-- **slam_toolbox 在 ARM64 + Humble + RPLIDAR 永久棄用**（Mapper FATAL ERROR known bug）
-- **不要 `ros2 topic pub --once /goal_pose`**：bt_navigator subscriber 是 BEST_EFFORT，會 race 沒收到。改 `-r 2 --times 5` 多次發
+- Python source change: syntax check plus the package's focused pytest set.
+- ROS2 interface/topic change: `scripts/ci/check_topic_contracts.py` plus affected tests.
+- Driver or launch change: package tests and, when hardware behavior changes, a Jetson/HITL note.
+- Documentation-only change: tracked markdown link check or direct proof that touched links resolve.
 
-### nav_capability 平台層 Demo（4/26 evening 新增）
+Never claim hardware or robot-motion readiness from local tests alone.
 
-```bash
-# 8-window tmux: tf + sllidar + robot(含 nav2 + AMCL + mux + reactive_stop) + navcap(4 nodes) + pause-enable + foxglove + monitor
-bash scripts/start_nav_capability_demo_tmux.sh
-# 預設 ROBOT_IP=192.168.123.161 / MAP=/home/jetson/maps/home_living_room.yaml
-# Runtime data 寫到 ~/elder_and_dog/runtime/nav_capability/{named_poses,routes}/
-# 等 ~50s 後 Foxglove 設 /initialpose、發 action：
-#   ros2 action send_goal /nav/goto_relative go2_interfaces/action/GotoRelative "{distance: 0.5}"
-#   ros2 action send_goal /nav/run_route go2_interfaces/action/RunRoute "{route_id: 'sample'}"
-#   ros2 action send_goal /log_pose go2_interfaces/action/LogPose "{name: alpha, log_target: named_poses}"
-```
+## Documentation Map
 
-**已知陷阱**：
-- **`reactive_stop_node` `safety_only=true` 必須用於 mux 模式**（priority 200）— 不然 clear zone 0.60 m/s 永久 shadow nav。`start_nav_capability_demo_tmux.sh` 已內建 `-p safety_only:=true`。standalone fallback（`start_reactive_stop_tmux.sh`）保持預設 `false`，兩腳本互斥
-- **`test_mux_priority.py` 不可在 full stack 跑** — FakePublisher 是真實 publisher，會透過 mux 把 0.30 m/s 灌進 go2_driver 讓 Go2 衝出（4/26 22:30 撞過）。只能在 WSL 或 isolated mux 環境跑
-- **Runtime path 用 `~/elder_and_dog/runtime/`，不要寫 install/share** — 預設 `named_poses_file` / `routes_dir` 指 pkg_share 會被 colcon build 覆蓋，且不在 git 之外（commit `e2b3932` 已修，env override `NAV_NAMED` / `NAV_ROUTES`）
-
-### 語音 MVP 測試（Jetson 上，no-VAD 主線）
-
-```bash
-# 一鍵啟動（推薦）
-bash scripts/start_llm_e2e_tmux.sh
-
-# 或分別啟動：
-ros2 run speech_processor stt_intent_node --ros-args \
-  -p provider_order:='["whisper_local"]' \
-  -p input_device:=0 -p sample_rate:=16000 -p capture_sample_rate:=44100
-ros2 run speech_processor intent_tts_bridge_node
-ros2 run speech_processor tts_node --ros-args -p provider:=piper \
-  -p piper_model_path:=/home/jetson/models/piper/zh_CN-huayan-medium.onnx \
-  -p playback_method:=datachannel
-```
-
-### 語音 + LLM 主線（5/12 brain-freeze-v2: gpt-5.4-mini + gemini TTS Despina）
-
-```bash
-# 一鍵啟動 demo (推薦) — 5 perception + brain + Studio frontend
-bash .claude/skills/brain-studio-lane/scripts/start.sh demo
-
-# 或直接全功能 13-window tmux (Jetson)
-bash scripts/start_full_demo_tmux.sh
-
-# 主線 LLM = openai/gpt-5.4-mini (P50 ~1.85s Jetson tunnel)
-# 主線 TTS = openrouter_gemini Despina (quality lane >12 字 / audio tag) → edge_tts (fast lane)
-
-# Env override 一行切回 (demo 當天 OpenAI down 用)
-PAWAI_LLM_MODEL=google/gemini-3-flash-preview bash scripts/start_full_demo_tmux.sh
-TTS_PROVIDER=edge_tts bash scripts/start_full_demo_tmux.sh
-
-# 完全離線模式
-LLM_ENDPOINT="http://127.0.0.1:1/" TTS_PROVIDER=piper \
-  ASR_PROVIDER_ORDER='["sensevoice_local","whisper_local"]' \
-  bash scripts/start_full_demo_tmux.sh
-
-# 純語音 e2e（不啟 perception/Go2，dev 用）
-bash scripts/start_llm_e2e_tmux.sh
-
-# SSH tunnel（Cloud ASR + Cloud LLM）
-ssh -f -N -L 8001:localhost:8001 -L 8000:localhost:8000 $USER@<server>
-
-# ASR provider 順序：sensevoice_cloud → sensevoice_local → whisper_local
-# Cloud ASR server（RTX 8000）：scripts/sensevoice_server.py（port 8001）
-```
-
-### PawAI Studio（前端開發用）
-
-```bash
-# 從 repo 根目錄一鍵啟動
-bash pawai-studio/start.sh
-# → http://localhost:3000/studio
-# → Mock Server: http://localhost:8080
-# → WebSocket:   ws://localhost:8080/ws/events
-```
-
-### 快速驗證 TTS → Go2 播放
-
-```bash
-ros2 topic pub --once /tts std_msgs/msg/String '{data: "測試播放"}'
-```
-
-### 5 輪 E2E Smoke Test
-
-```bash
-# 前提：demo lane 或 llm-e2e session 已在跑（6/12 起雙 stack 相容）
-bash scripts/smoke_test_e2e.sh      # 預設 5 輪（Jetson 上跑）
-bash scripts/smoke_test_e2e.sh 3    # 指定輪數
-pawai smoke brain                   # 從開發機跑（自動 SSH + source ROS env）
-```
-
-腳本 6/12 修了兩個坑：`/tts` 發布改 `--times 2 -r 1`（`--once` 會 race RELIABLE
-訂閱者 discovery、`-w N` 會因 QoS 不相容訂閱永久卡）；播放證據接受 Megaphone WAV
-**或** local playback log（demo lane 走 USB 喇叭沒有 WAV）。
-
-### 30 輪驗收測試
-
-```bash
-# 完整流程
-bash scripts/run_speech_test.sh
-
-# 跳過 build + driver（最常用）
-bash scripts/run_speech_test.sh --skip-driver --skip-build
-```
-
-### 人臉辨識 pipeline（Jetson 上）
-
-```bash
-# 一鍵啟動（推薦）— D435 + face_identity_node + foxglove_bridge
-bash scripts/start_face_identity_tmux.sh
-
-# 或手動啟動：
-ros2 launch face_perception face_perception.launch.py
-
-# 環境清理
-bash scripts/clean_face_env.sh --all
-```
-
-### 手勢+姿勢 pipeline（vision_perception）
-
-```bash
-# Gesture Recognizer 模式（推薦，3/23 場景驗證通過）
-colcon build --packages-select vision_perception
-source install/setup.zsh
-ros2 launch vision_perception vision_perception.launch.py \
-  inference_backend:=rtmpose use_camera:=true \
-  pose_backend:=mediapipe gesture_backend:=recognizer max_hands:=2
-
-# 全 MediaPipe 模式（備用，GPU 0%，但只有 3 種手勢且 point 不穩）
-ros2 launch vision_perception vision_perception.launch.py \
-  inference_backend:=rtmpose use_camera:=true \
-  pose_backend:=mediapipe gesture_backend:=mediapipe
-
-# 效能調參（3/22 新增 launch args）
-# pose_complexity:=0 (lite,快) / 1 (full)
-# hands_complexity:=0 (lite) / 1 (full)
-# max_hands:=1 (單手,快) / 2 (雙手)
-# publish_fps:=15 (debug 用高 FPS)
-# gesture_every_n_ticks:=3 (mediapipe backend 專用，recognizer 每 tick 都跑)
-
-# RTMPose + MediaPipe 混合（pose 走 GPU，gesture 走 CPU）
-ros2 launch vision_perception vision_perception.launch.py \
-  inference_backend:=rtmpose use_camera:=true rtmpose_mode:=lightweight \
-  gesture_backend:=mediapipe
-
-# Phase 1 mock mode（不需相機，開發機或 Jetson 都可）
-ros2 launch vision_perception vision_perception.launch.py \
-  inference_backend:=mock use_camera:=false mock_scenario:=stop
-
-# Mock event publisher（給前端用，持續循環發事件）
-ros2 launch vision_perception mock_publisher.launch.py
-
-# 狀態儀表板（Foxglove Image panel 可視化）
-ros2 run vision_perception vision_status_display
-
-# Event → Go2 動作橋接
-ros2 launch vision_perception event_action_bridge.launch.py
-
-# 高層互動事件路由（3/23 新增，訂閱 face+gesture+pose → welcome/gesture_cmd/fall_alert）
-ros2 launch vision_perception interaction_router.launch.py
-
-# 三感知壓力測試（face+vision+camera 同跑 60s，含 monitor）
-bash scripts/start_stress_test_tmux.sh        # 預設 60s
-bash scripts/start_stress_test_tmux.sh 120    # 指定時間
-```
-
-**RTMPose 已知狀況**（3/18 實測）：
-- balanced mode, GPU 91-99% 滿載，debug_image ~3.8 Hz
-- 溫度 66°C 安全，RAM 餘 2.4GB
-- 若需更快可切 `rtmpose_mode:=lightweight`（未測）
-- onnxruntime-gpu 安裝：`pip install onnxruntime-gpu==1.23.0 --index-url https://pypi.jetson-ai-lab.io/jp6/cu126 --extra-index-url https://pypi.org/simple/`
-- rtmlib 安裝：`pip install --no-deps rtmlib`（避免拉回 CPU onnxruntime）
-
-### 物體辨識 pipeline（object_perception，Jetson 上）
-
-```bash
-# 前提：D435 camera 已啟動
-ros2 launch realsense2_camera rs_launch.py enable_depth:=false pointcloud.enable:=false
-
-# 啟動物體辨識 node（COCO 80 class 全開，YOLO26n ONNX + TensorRT EP FP16）
-colcon build --packages-select object_perception
-source install/setup.zsh
-ros2 launch object_perception object_perception.launch.py
-
-# 縮減為原 P0 6 類（person/dog/bottle/cup/chair/dining_table）
-ros2 launch object_perception object_perception.launch.py \
-  class_whitelist:='[0, 16, 39, 41, 56, 60]'
-
-# 驗證 topic
-ros2 topic hz /perception/object/debug_image        # ~6-8 Hz
-ros2 topic echo /event/object_detected --once       # JSON event
-```
-
-**已知陷阱**（見 `docs/architecture/perception/object/CLAUDE.md`）：
-- **不要 `pip install ultralytics`**（會破壞 Jetson torch wheel）
-- TRT provider 參數值必須 `"True"`/`"False"` 字串，非 `"1"`/`"0"`
-- `class_whitelist` 空 list 需用 `ParameterDescriptor(INTEGER_ARRAY)`，yaml 不要寫 `: []`
-- 模型路徑：`/home/jetson/models/yolo26n.onnx`（9.5MB, output `(1,300,6)` NMS-free）
-- TRT cache：`/home/jetson/trt_cache/`（首次啟動 3-10 分鐘）
-
-### 模型選型 Benchmark（2026-03-19 新建）
-
-```bash
-# 單一模型 benchmark（headless mode，不需 ROS2）
-python3 benchmarks/scripts/bench_single.py \
-  --config benchmarks/configs/face_candidates.yaml \
-  --model yunet_2023mar --level 1
-
-# Jetson 環境鎖定（benchmark 前必做）
-sudo bash benchmarks/scripts/prepare_env.sh          # nvpmodel + jetson_clocks
-sudo bash benchmarks/scripts/prepare_env.sh --drop-cache  # 含清 page cache
-```
-
-**制度流程**：Research Brief (`docs/archive/2026-05-docs-reorg/research-misc/{task}.md`) → Candidate Shortlist (`benchmarks/configs/{task}_candidates.yaml`) → Benchmark → Decision
-
-**Spec**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`
-
-**3/21 決策摘要**（完整數據見 `benchmarks/results/archive/` + `docs/archive/2026-05-docs-reorg/research-misc/`）：
-
-| Task | 主線 | FPS | Decision | 備援 | Decision |
-|------|------|:---:|:--------:|------|:--------:|
-| face | YuNet 2023mar | 71.3 (CPU) | JETSON_LOCAL | SCRFD-500M | JETSON_LOCAL |
-| pose | MediaPipe Pose | 18.5 (CPU) | JETSON_LOCAL | RTMPose lw | JETSON_LOCAL |
-| gesture | Gesture Recognizer | 7.2 (CPU) | JETSON_LOCAL | MediaPipe Hands | JETSON_LOCAL |
-| stt | SenseVoice cloud (FunASR) | ~600ms | CLOUD | SenseVoice local (sherpa-onnx int8) | JETSON_LOCAL |
-| tts | edge-tts | P50 1.13s | CLOUD | Piper huayan | JETSON_LOCAL |
-| llm (local) | Qwen2.5-0.5B | P50 0.8s, 139MB | JETSON_LOCAL | Qwen2.5-1.5B | HYBRID |
-
-**L2 共存**：face(CPU)+pose(CUDA) = -6%、SCRFD(GPU)+pose = -10%、whisper(CUDA)+pose = -20%
-
-**L3 三感知壓測**（3/23）：face(CPU)+pose(CPU)+gesture(CPU) 同跑 60s → RAM 1.2GB, temp 52°C, GPU 0% ✅
-
-### 環境清理
-
-```bash
-bash scripts/clean_full_demo.sh              # 清 demo 全環境（13 window + Go2 + camera）
-bash scripts/clean_speech_env.sh              # 只清語音，不碰 go2_driver_node
-bash scripts/clean_speech_env.sh --with-go2-driver  # 診斷用：連 driver 一起清
-```
-
-### USB 裝置偵測
-
-```bash
-source scripts/device_detect.sh   # !! 必須用 source，不能用 bash !!
-# exports: DETECTED_MIC_INDEX, DETECTED_MIC_CHANNELS, DETECTED_CAPTURE_RATE, DETECTED_SPK_DEVICE
-```
-
-### 常用除錯
-
-```bash
-ros2 topic list
-ros2 topic echo /event/speech_intent_recognized
-ros2 topic echo /asr_result
-ros2 topic echo /tts
-ros2 topic echo /webrtc_req
-ros2 topic info /webrtc_req -v   # 確認訂閱者包含 go2_driver_node
-```
-
----
-
-## 三層系統架構
-
-> 詳見 [`docs/mission/README.md`](docs/mission/README.md) §5
-
-Layer 3（中控）→ Layer 2（感知）→ Layer 1（驅動/硬體）。事件驅動、單一控制權。
-
----
-
-## ROS2 套件與節點
-
-> 完整節點清單與參數見 [`docs/contracts/interaction_contract.md`](docs/contracts/interaction_contract.md)
-
-**核心套件速查**：
-- `go2_robot_sdk` — Go2 驅動，Clean Architecture 分層，WebRTC DataChannel 通訊
-- `speech_processor` — 語音模組（stt_intent_node / tts_node / llm_bridge_node / intent_tts_bridge_node）
-- `face_perception` — 人臉辨識模組（face_identity_node：YuNet 偵測 + SFace 識別 + IOU 追蹤）
-- `vision_perception` — 手勢+姿勢模組（vision_perception_node / mock_event_publisher / event_action_bridge / interaction_router）
-- `interaction_executive` — 統一中控（interaction_executive_node：state machine + event routing，Day 6 起取代 router+bridge）
-- `go2_interfaces` — 自訂 ROS2 訊息（`WebRtcReq.msg`）
-
-**WebRTC 音訊播放速查**：
-- **現行方式**：Megaphone DataChannel — `4001`(enter) → `4003`(upload chunks) → `4002`(exit)
-- chunk_size = 4096 base64 chars，payload 須含 `current_block_size`，msg type 須為 `"req"`
-- **Megaphone cooldown**：4002 EXIT 後 sleep 0.5s，防止 Go2 狀態機未重置導致 silent fail
-- **LLM 模型**：Qwen2.5-7B-Instruct（純文字 CausalLM），max_tokens 120，reply ≤ 25 字
-- **LLM fallback**：雲端優先 → 本地 Qwen2.5-0.8B 作為備援（智商待測）
-- **ASR warmup**：stt_intent_node 啟動時 daemon thread 預熱 Whisper CUDA（~12s）
-- **RuleBrain fallback**：LLM 失敗自動 fallback，`force_fallback:=true` 可強制測試
-- 詳見 [`docs/architecture/speech/README.md`](docs/architecture/speech/README.md) 的「Go2 音訊播放」章節
-
----
-
-## 關鍵 ROS2 Topic
-
-> 完整 Topic 列表見 [`docs/contracts/interaction_contract.md`](docs/contracts/interaction_contract.md)
-
-**語音主線**：`/event/speech_intent_recognized`（Intent 事件 JSON）
-**人臉主線**：`/state/perception/face`（人臉狀態 10Hz JSON）
-**手勢主線**：`/event/gesture_detected`（手勢事件 JSON，v2.0 凍結）
-**姿勢主線**：`/event/pose_detected`（姿勢事件 JSON，v2.0 凍結）
-**視覺儀表板**：`/vision_perception/status_image`（Foxglove 狀態圖 8Hz）
-**互動事件**：`/event/interaction/welcome` | `/event/interaction/gesture_command` | `/event/interaction/fall_alert`（interaction_router 發布）
-
----
-
-## 開發環境
-
-### 品質閘門（三層）
-
-```bash
-# 1. 安裝 git pre-commit hook（clone 後一次性）
-ln -sf ../../scripts/hooks/git-pre-commit.sh .git/hooks/pre-commit
-
-# 觸發時機：每次 git commit
-# 檢查：py_compile → topic contract → affected package tests
-# 跳過：git commit --no-verify
-```
-
-- **Claude Code hooks**：Edit/Write 後即時 py_compile + commit 時 colcon build 提醒
-- **Git pre-commit**：commit 時 py_compile + contract check + smart-scope tests
-- **GitHub Actions**：push/PR 時 Fast Gate（flake8 report-only + 新 core code blocking flake8 + pure-Python tests：speech/vision/benchmarks **+ scoreboard core + pawai_brain**，兩 invocation 避 `test` package 撞名）+ test_environment + contract check（blocking）+ colcon build
-
-### 雙平台架構
-
-- **Windows/Mac（開發機）**：VS Code SSH → Jetson，程式碼編輯、文件撰寫
-- **Jetson Orin Nano（邊緣端）**：ROS2 runtime、模型推理、Go2 連線
-- **Go2 Pro**：192.168.12.1（Wi-Fi AP）或 192.168.123.161（Ethernet）
-- **所有設備已上機**（4/8 確認）：Jetson + D435 + 外接喇叭 + XL4015 降壓板
-- ⚠️ **供電不穩**：XL4015 在 Go2 運行中反覆斷電（8+ 次），20V 已是安全極限
-- **機身 USB 麥克風已廢棄**：Go2 風扇噪音導致 ~20% 辨識率，Demo 改用筆電 Studio 收音
-
-### Jetson 操作要點
-
-- Shell 用 **zsh**：source 時用 `setup.zsh` 而非 `setup.bash`
-- **主線麥克風**：USB UACDemoV1.0（device 24，mono，48kHz）— `input_device:=24 channels:=1 capture_sample_rate:=48000 mic_gain:=4.0`
-- **主線喇叭**：USB CD002-AUDIO（`plughw:2,0`）— `local_playback:=true local_output_device:=plughw:2,0`（card index 跟著 Jetson 啟動順序變，先跑 `source scripts/device_detect.sh` 拿 `$DETECTED_SPK_DEVICE` 為準）
-- **備用麥克風 HyperX SoloCast 是 stereo-only**（硬體 `CHANNELS: 2`），需 `channels:=2` + 手動 downmix
-- **Whisper 在 Jetson 走 CUDA 時必須用 `float16`**(`cuda + int8` 不支援會 silent fail);`speech_processor.yaml` 預設為 `cpu + int8` 可用但速度較慢,Demo 啟動腳本覆寫為 `cuda + float16`
-- `LD_LIBRARY_PATH` 必須含 `/home/jetson/.local/ctranslate2-cuda/lib`（啟動腳本已處理）
-- zsh 的 glob 會炸掉陣列參數：用 `'["whisper_local"]'` 加引號，或 `setopt nonomatch`。**`.env` 路徑的變體（6/12 真機）**：`.env` 裡 `VAR=["a","b"]` 被 bash source 剝掉引號 → 啟動腳本未加引號展開進 tmux zsh pane → node 靜默死亡（stt_intent_node 即此死法；`start_full_demo_tmux.sh` 已修為 send-keys 層單引號包覆）
-- `setup.bash` / `setup.zsh` 不可混用，否則環境不完整
-
-### Jetson 測試規範
-
-- 同時間只允許一套 speech session（禁止多 tmux 混跑）
-- 測試前必須 clean-start：`bash scripts/clean_speech_env.sh`
-- 修改 Python 程式碼後必須 `colcon build` 再 `source install/setup.zsh`
-- **Jetson setuptools 必須 `<70`**（colcon 的 setup.py shim 用 `--editable`/`--uninstall`，setuptools 80+ 拿掉這兩個 flag → build 會 fail with `option --editable not recognized`）。修法：`pip install --user "setuptools<70"`（已知好版本：`69.5.1`）
-- **rsync 同步只搬源碼，不會 rebuild `install/`**：感覺到 brain 模式或新參數沒生效時，跑 `colcon build --packages-select <pkg>` 而不是只 `~/sync once`
-- **deploy 的 rsync `--delete` 曾整棵轟掉 Jetson `runtime/`**（6/12 真機抓到：開發機沒有 `runtime/` → 每次 deploy 刪光 trace JSONL + nav named_poses/routes）。`tools/sync/rsync-excludes.txt` 已補 `runtime/` + `artifacts/`；**新增 Jetson 端持久資料目錄時必須同步加進 excludes**
-
----
-
-## 已知陷阱與設計決策
-
-### WebRTC 音訊發送的執行緒模型
-
-`go2_driver_node` 有兩個執行緒：
-1. **ROS2 executor 執行緒**：處理 `/webrtc_req` callback
-2. **asyncio event loop 執行緒**：管理 WebRTC DataChannel
-
-音訊命令從 ROS2 callback → `send_command()` → `run_coroutine_threadsafe()` → DataChannel.send()。
-`send_command` 已正確處理跨執行緒，其他動作命令（movement/stand）也用此路徑。
-
-### Jetson 記憶體預算（8GB 統一記憶體）
-
-同時跑 D435 + YuNet + ASR + TTS + ROS2 時，需保留 ≥0.8GB 餘量。
-展示模式應關閉 RViz/Foxglove/Nav2/SLAM 以釋放資源。
-
-### Go2 LiDAR 頻率過低（<2Hz）
-
-Go2 內建 LiDAR 導航不可行（覆蓋率 18%），D435 避障因鏡頭角度限制上機全失敗（4/3 停用）。外接 RPLIDAR A2M12 評估中（4/14 定案），可行性研究結論：RAM 安全、CPU 風險需管理。
-
-### Go2 DataChannel Megaphone API 格式（v1.1.7 已驗證）
-
-Megaphone API (4001/4003/4002) **可正常播放**，之前判定「失效」是因為 payload 格式錯誤。正確格式：chunk_size=4096、payload 含 `current_block_size` 欄位、DataChannel msg type 為 `"req"`（不是 `"msg"`）。詳見語音模組 README。
-
-### Go2 sport mode：cmd_vel = 0 不會停車（5/11 B4 burndown 發現）
-
-Go2 sport mode 對 `Move (api_id=1008)` 有 `MIN_X = 0.50 m/s` 門檻 — `Move {x:0,y:0,z:0}` 會被 silently 忽略，Go2 繼續執行最後一個有效 Move 直到 sport timeout (~2-3s)。**driver `RobotControlService.handle_cmd_vel` 已修為**：post-deadband zero 改走 `send_stop_move_command` (`api_id=1003 StopMove`)，非零才走 `send_movement_command` (1008)。同時加 1 Hz dedupe 避免 `reactive_stop_node` 10 Hz spam StopMove 撐爆 WebRTC DataChannel buffer（觀測過 86KB+ backlog）。Routing 規則的權威 unit test 在 `go2_robot_sdk/test/test_robot_control_service.py`（11 條全綠）。
-
-### reactive_stop danger threshold 對 Go2 機身太近（5/11 B5 burndown）
-
-`reactive_stop_node` 預設 `danger<0.6m`、`slow<1.0m` 是 LiDAR 視距，**未考慮 Go2 機身佔用** — LiDAR 安在 base_link 前 17.5cm，Go2 機鼻在 base_link 前 ~50-60cm，LiDAR 看到 0.6m 時機鼻只剩 ~0.2m，加上 0.5 m/s × 0.3s 反應 + 機身慣性必撞。另外 `safety_only=true` 在 clear zone 完全不發訊號 → mux 在 obstacle 移開瞬間直接切「停 → 全速」，沒漸進減速。修法在 `docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md §4` B5 列。任何 nav motion 測試前確認此項已修。
-
-### reactive_stop 居家窄場「前面明明空卻被擋」+ orphaned-goal（6/8 Track B HITL）
-
-實機診斷（真實 `/scan_rplidar`）：正前方 ±15° 淨空 1.56m，卻被報 danger，根因是 `front_arc_deg=30`（±30° 寬錐）把**右前角 -30° off-path 家具**算進前方危險。**非 TF bug**（`front_offset_rad=π` 補 LiDAR 反裝 yaw=π 是對的）。**修法已實機驗證**：重啟 reactive_stop 收窄 `front_arc_deg:=15~20` + `danger_distance_m:=1.0` + 低速（`slow_speed:=0.2 normal_speed:=0.3`）→ zone clear/slow、`nav_paused=false`。⚠️ 窄錐**必須綁低速 ≤0.2 m/s**（側向覆蓋變少靠低速補反應時間）。注意 `front_arc_deg`/`danger_distance_m` 只在 `__init__` 讀一次，`ros2 param set` 改了無效 → **必須 kill 重啟帶參數**（runtime callback 只接 `enable_nav_pause`/`safety_only`/`mode`）。另一坑：goto client crash / SSH 斷線後 `nav_action_server`（single-goal）會留 **orphaned active goal** → 後續 goto 全被 `rejecting goto_* — another goto still active` 拒，需重啟 navcap launch 清除。完整實測 + backlog 見 `docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md`。
-
-**6/9 HITL 更新**：① `start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`（一鍵窄場，免手動 param）。② indoor-tight ±18° 誤擋修正實證（front 0.97→1.22m、zone danger→slow）。③ orphan：Ctrl-C(SIGINT) 下 client cancel 沒送出（rclpy 預設 SIGINT 先關 context → RCLError，非 KeyboardInterrupt）→ orphan，但靠 `no_progress_timeout`(~10s) 自癒、**不需重啟**；`nav_action_server` 已加 `goto_max_duration_s=120` backstop。client 正解 = `rclpy.init(signal_handler_options=NO)`（post-demo）。④ **stop-resume auto-resume 會 lunge**：resume 以 Go2 MIN_X floor ~0.5 m/s 衝、短 goal 貼牆 0.21m → **tight space 禁 demo auto-resume**，台詞退「操作員確認/遙控輔助」。⑤ 新工具 `scripts/lidar_front_sector.py`（±15/20/30° 扇區最近距離 + 角度 debug，現場分辨真障礙 vs 側前家具）。完整 6/9 HITL Log + nav 台詞鎖定見 `docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`。
-
-### 多 driver instance 殘留
-
-`ros2 launch` 啟動後，`killall python3` 只殺 launch parent，C++ 子 process（robot_state_publisher、pointcloud、joy 等）會殘留。下次 launch 會再生一組，導致多 instance 搶 WebRTC 連線和 topic。**必須用 `pkill -9 go2_driver; pkill -9 robot_state; pkill -9 pointcloud; pkill -9 joy_node; pkill -9 teleop; pkill -9 twist_mux` 逐一清除。**
-
-### clean_all.sh 的 pipefail + grep 空結果
-
-`clean_all.sh` 使用 `set -euo pipefail`。驗證段 `RESIDUAL=$(ps aux | grep -E ... | grep -v grep | wc -l)` 在無殘留 process 時，`grep` 回傳 1（no match），`pipefail` 傳播非零，`set -e` 中斷腳本。修復：尾端加 `|| true`。
-
-### Go2 OTA 自動更新
-
-Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet 直連模式（192.168.123.161）開發，避免 Go2 連上外網被更新。
-
-### Demo 啟動 / `.env` 環境陷阱（6/4 HITL 發現）
-
-- **`.env` CRLF 致 demo 靜默假成功**：`.env` 若是 Windows CRLF 換行，`start_full_demo_tmux.sh` 的 `source .env` 會撞 `$'\r': command not found`，配 `set -euo pipefail` **整個腳本靜默 abort、tmux session 從沒建起來**——但 `pawai demo start` 仍回報 `✓ Demo running`（假成功）。**修法**：`ssh jetson-nano "cd ~/elder_and_dog && sed -i 's/\r$//' .env .env.local"`；**起 demo 後務必 `tmux ls` + 數 process / `ros2 node list`，不要只信 CLI 的成功訊息**。（注意：5/14 已有 CRLF 防線但**未覆蓋 `.env` source 路徑**。）
-- **`.env` vs `.env.local` 檔名漂移**：`start_full_demo_tmux.sh` 與 brain preflight 都 source/檢查 `.env`，但 Jetson 上可能只有 `.env.local`（真實 keys）。**修法**：`cp .env.local .env`。canonical 化是 roadmap follow-up。
-- **`capture_baseline_round.py percep` 同收 gesture+object 兩流、不按 capability 過濾**：量 `object.cup` 會被 gesture event 污染、反之亦然。**量單一能力要隔離另一條 topic**：object 用 `--gesture-topic /__no_gesture__`、gesture 用 `--object-topic /__no_object__`。
-- **gesture `WaveDetector` config default=rtmpose 是 footgun**：`vision_perception.yaml` 預設 `gesture_backend: rtmpose`，rtmpose backend 不餵 WaveDetector → wave 永不觸發。**demo 主線靠 `start_full_demo_tmux.sh` 的 `gesture_backend:=recognizer` override**；直接 `ros2 launch` 不帶 override 會中招。
-- **voice `run_speech_test.sh` observer report-ack-timeout → 不產 CSV**（`test_results/` 只剩 `.gitkeep`）。terminal 仍有逐輪 intent 結果 → 可重建 CSV 給 `voice_csv_to_jsonl.py`（評分只看 success_rate，不需 latency）。
-
-### VIS-4 具名問候 gate 改「人臉+sitting+cooldown」+ face_db 衛生（6/8 HITL）
-
-- **greet 觸發條件已改**（commit `f2a0df4`，`interaction_executive/brain_node.py` `_on_face`）：原本 gate 在 attention `ENGAGED`（D435 depth ≤1.6m + dwell，深度在 1.5-2m 抖到逼使用者貼鏡頭不動、幾乎不觸發）→ 改成 **known face stable（`/event/face_identity` 的 `identity_stable` 事件）+ 最近 `greet_sitting_window_s`(預設 3s) 內偵測到 pose=sitting + `greet_cooldown_s`(預設 20s)/人 cooldown**。新 param `greet_require_sitting`/`greet_sitting_window_s`/`greet_cooldown_s` 全 declare 預設、不需 yaml。⟹ **pose=sitting 成為 greet 硬依賴**：sitting 不穩就 `ros2 param set /brain_node greet_require_sitting false` + 台詞去掉「坐下來了」。
-- **只在「進場（unknown→known 轉變）」觸發**，非 steady-state；要重現 greet 需遮臉/離框 ~5s 再回來。
-- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 `docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`。
-
----
-
-## 關鍵文件索引
-
-| 領域 | 真相來源 |
-|------|---------|
-| 專案方向、分工、Demo | [`docs/mission/README.md`](docs/mission/README.md) |
-| 3/16 交付清單 | [`docs/mission/handoff_316.md`](docs/mission/handoff_316.md) |
-| ROS2 介面契約 | [`docs/contracts/interaction_contract.md`](docs/contracts/interaction_contract.md) |
-| PawAI Studio 設計 | [`docs/architecture/studio/README.md`](docs/architecture/studio/README.md) |
-| 語音模組 | [`docs/architecture/speech/README.md`](docs/architecture/speech/README.md) |
-| 人臉模組 | [`docs/architecture/perception/face/README.md`](docs/architecture/perception/face/README.md) |
-| 手勢辨識 | [`docs/architecture/perception/gesture/README.md`](docs/architecture/perception/gesture/README.md) |
-| 姿勢辨識 | [`docs/architecture/perception/pose/README.md`](docs/architecture/perception/pose/README.md) |
-| 環境建置 | [`docs/runbook/README.md`](docs/runbook/README.md) |
-| 模型選型調查 | `docs/archive/2026-05-docs-reorg/research-misc/{task}.md`（face 已建） |
-| Benchmark 框架規格 | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md` |
-
-### 配置檔
-- `go2_robot_sdk/config/` — SLAM/Nav2/CycloneDDS/Joystick 參數
-- `speech_processor/config/speech_processor.yaml` — 語音模組參數
-- `face_perception/config/face_perception.yaml` — 人臉辨識參數（Jetson 路徑、閾值）
-- `vision_perception/config/vision_perception.yaml` — 手勢+姿勢參數（mock mode 預設）
-- `benchmarks/configs/face_candidates.yaml` — 人臉 benchmark 候選模型（Batch 1）
-- `go2_robot_sdk/launch/robot.launch.py` — 主 launch（修改後不需 rebuild）
-- `face_perception/launch/face_perception.launch.py` — 人臉辨識 launch
-- `vision_perception/launch/vision_perception.launch.py` — 手勢+姿勢 launch（含 use_camera 開關）
-
-### 測試腳本
-- `scripts/start_llm_e2e_tmux.sh` — 語音+LLM 主線一鍵啟動（edge-tts + USB 外接）
-- `scripts/start_full_demo_tmux.sh` — 四功能整合 Demo 一鍵啟動
-- `scripts/start_face_identity_tmux.sh` — 人臉辨識 pipeline 一鍵啟動
-- `scripts/start_vision_debug_tmux.sh` — 手勢+姿勢 debug 環境（全 MediaPipe + Foxglove）
-- `scripts/build_map.sh` — P0 導航 cartographer 建圖（呼叫 `start_lidar_slam_tmux.sh`）
-- `scripts/start_lidar_slam_tmux.sh` — P0 導航建圖 5-window（無 Go2 driver）
-- `scripts/start_nav2_amcl_demo_tmux.sh` — P0 導航 demo 5-window（含 Go2 driver + nav2 + amcl）
-- `scripts/start_nav2_demo_tmux.sh` — v3.6 cartographer pure-loc archive，**不再啟用**
-- `scripts/start_reactive_stop_tmux.sh` — P0 反應式停障 fallback 4-window（5/13 demo 備援，與 nav2-amcl 互斥）
-- `scripts/send_relative_goal.py` — 讀 `/amcl_pose` 算前方相對 goal（QoS BEST_EFFORT 配 bt_navigator）
-- `scripts/run_vision_case.sh` — 手勢/姿勢半自動測試（宣告 case → 錄 event → 產生 log）
-- `scripts/run_speech_test.sh` — 30 輪驗收測試 orchestration
-- `scripts/clean_full_demo.sh` — Demo 全環境清理（13 window + Go2 + camera）
-- `scripts/clean_speech_env.sh` — 語音環境清理（被其他腳本呼叫）
-- `scripts/clean_face_env.sh` — 人臉辨識環境清理
-- `scripts/device_detect.sh` — USB 音訊裝置自動偵測（必須用 `source`）
-- `test_scripts/speech_30round.yaml` — 30 輪測試定義（15 固定 + 15 自由）
-
----
-
-## 專案 Skills 使用時機
-
-- **`demo-preflight`**：部署到 Jetson 後、Demo 展示前跑。`--quick` 5 項核心（2 分鐘），`--full` 15+ 項（5 分鐘）
-- **`ros2-test-suite`**：改完 Python 後、commit 前跑。`--quick` 只跑 speech+face（3 秒），全套含 vision+go2
-- **`meeting-sync`**：收到會議紀錄後，列出該更新哪些文件 + 產生 diff 建議
-- **`jetson-deploy`**：程式碼改動要上 Jetson 時觸發
-- **`jetson-verify`**：部署後跑 smoke test
-- **`update-docs`**：每日收工前同步文件
-
----
-
-## 常見開發情境
-
-### 新增 ROS2 節點
-
-1. 建立節點檔案（例如 `speech_processor/speech_processor/my_node.py`）
-2. 更新 `setup.py` 的 `entry_points`
-3. `colcon build --packages-select speech_processor`
-4. `source install/setup.bash`（或 `.zsh`）
-5. `ros2 run speech_processor my_node`
-
-### 新增 Intent 規則
-
-編輯 `speech_processor/speech_processor/stt_intent_node.py` 中的 `intent_rules` 字典，
-加入關鍵字與權重。同步更新 `intent_tts_bridge_node.py` 的 `reply_templates`。
-
-### 切換 TTS Provider
-
-```bash
-# edge-tts（雲端主線，推薦）— 速度快、音質佳
-ros2 run speech_processor tts_node --ros-args -p provider:=edge_tts
-
-# Piper（本地離線 fallback）— 不依賴網路
-ros2 run speech_processor tts_node --ros-args -p provider:=piper \
-  -p piper_model_path:=/home/jetson/models/piper/zh_CN-huayan-medium.onnx
-```
-
-> MeloTTS、ElevenLabs 已淘汰（3/26 會議確認），不再支援。
-
----
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues at `github.com/roy4222/PawAI` via `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default 5-role vocabulary (needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context. `CONTEXT.md` at repo root acts as glossary index pointing to existing `CLAUDE.md` + `docs/archive/pawai-brain-legacy/architecture-0511/`. ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+- Project overview: [`README.md`](README.md)
+- Documentation index: [`docs/README.md`](docs/README.md)
+- Architecture: [`docs/architecture/README.md`](docs/architecture/README.md)
+- Contracts: [`docs/contracts/interaction_contract.md`](docs/contracts/interaction_contract.md)
+- Runbooks: [`docs/runbook/README.md`](docs/runbook/README.md)
+- ADRs: [`docs/adr/README.md`](docs/adr/README.md)
+- Deprecated packages/scripts: [`archive/README.md`](archive/README.md)

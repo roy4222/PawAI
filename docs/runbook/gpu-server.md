@@ -220,5 +220,5 @@ uv pip install -r requirements.txt
 
 ## 相關文件
 
-- [Depth Anything V2 使用指南](./Depth%20Anything%20V2/depth-anything-v2-guide.md)
-- [開發計畫](../00-overview/開發計畫.md)
+- Depth Anything V2 使用指南：internal note, not included in the public tree
+- [Perception research](../perception/research/)

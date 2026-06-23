@@ -190,7 +190,7 @@ bad OPENROUTER_KEY 模擬雲端掛掉，五句連發走過完整 chain：
 | TTS fallback `edge_tts` | ✅ 接手合成 + 播放 |
 | TTS final `piper` | 未觸發（edge_tts 已 catch；要拔網才能驗）|
 
-紀錄：[`docs/runbook/2026-05-12-offline-fallback-verification.md`](../../../docs/runbook/2026-05-12-offline-fallback-verification.md)
+紀錄：[`docs/runbook/2026-05-12-offline-fallback-verification.md`](../../../../docs/runbook/2026-05-12-offline-fallback-verification.md)
 
 副產品（4 個 bug/坑）：
 1. `pawai demo start` 不 forward Mac shell 的 `TTS_PROVIDER` / `ASR_PROVIDER_ORDER`（brain-studio-lane skill default 蓋掉）

@@ -16,8 +16,8 @@ setup(
     ],
     install_requires=["setuptools", "numpy", "opencv-python"],
     zip_safe=True,
-    maintainer="Roy",
-    maintainer_email="roy@pawai.dev",
+    maintainer='Roy',
+    maintainer_email='roy@pawai.dev',
     description="ROS2 object detection: YOLO26n ONNX on D435 RGB",
     license="BSD-2-Clause",
     entry_points={

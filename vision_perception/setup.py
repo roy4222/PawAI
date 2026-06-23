@@ -21,8 +21,8 @@ setup(
         "mediapipe==0.10.18",
     ],
     zip_safe=True,
-    maintainer="Roy",
-    maintainer_email="roy@pawai.dev",
+    maintainer='Roy',
+    maintainer_email='roy@pawai.dev',
     description="ROS2 vision perception: gesture + pose classification",
     license="BSD-2-Clause",
     entry_points={

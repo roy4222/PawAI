@@ -16,8 +16,8 @@ setup(
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="Roy",
-    maintainer_email="roy@pawai.dev",
+    maintainer='Roy',
+    maintainer_email='roy@pawai.dev',
     description="Thin interaction orchestrator — state machine for demo control",
     license="BSD-2-Clause",
     entry_points={

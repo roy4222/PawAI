@@ -3,7 +3,7 @@
   <name>pawai_brain</name>
   <version>0.1.0</version>
   <description>PawAI Conversation Engine — LangGraph-based stateful conversation graph (primary publisher of /brain/chat_candidate; legacy llm_bridge_node retained as manual fallback).</description>
-  <maintainer email="roy422roy@gmail.com">roy</maintainer>
+  <maintainer email="roy@pawai.dev">Roy</maintainer>
   <license>BSD-2-Clause</license>
 
   <exec_depend>rclpy</exec_depend>

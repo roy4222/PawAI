@@ -26,8 +26,8 @@ setup(
         "opencc-python-reimplemented",
     ],
     zip_safe=True,
-    maintainer="Nuralem Abizov",
-    maintainer_email="abizov94@gmail.com",
+    maintainer='Roy',
+    maintainer_email='roy@pawai.dev',
     description="ROS2 package for speech processing including TTS and audio management for Go2 robot",
     license="BSD-2-Clause",
     entry_points={

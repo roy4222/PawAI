@@ -3,7 +3,7 @@
 **專案**：老人與狗 (Elder and Dog) / PawAI
 **定位**：居家四足具身互動機器人（互動 70% / 守護 30%）。主線文件在以下路線下。
 
-> **30 秒原則**：找不到資訊 30 秒之內 → 走 `architecture/`（含 `architecture/navigation/`），再不行去 `archive/`。
+> **30 秒原則**：找不到資訊 30 秒之內 → 走 `architecture/`（含 `architecture/navigation/`），再不行看 repo 根目錄的 `archive/` 是否保留退役程式。
 >
 > **Demo claim 真相**：任何「某能力是否 pass / 能不能講」一律以 §衝突仲裁 的 EVIDENCE_AUTHORITY 順序裁定，不以任何敘事文件為準。
 
@@ -36,7 +36,7 @@
 
 | # | 路線 | 入口 | 內容 |
 |:-:|------|------|------|
-| 7 | **Archive** | [archive/](archive/) | 5/02 reorg 前歷史 + 2026-02-11 restructure |
+| 7 | **Archive** | [archive/](archive/) | 退役套件與腳本（不含內部歷史文件） |
 
 ---
 
@@ -52,7 +52,7 @@
 | 3 | **能力規格（how to measure）** | [architecture/specs/2026-06-18-capability-baseline-spec.md](architecture/specs/2026-06-18-capability-baseline-spec.md) — 15 capability 怎麼量、怎樣算 pass 的唯一真相源（門檻 provisional）。grade 結果以 #1 為準 |
 | 4 | **戰略邊界（what to claim）** | [mission/2026-06-18-demo-north-star.md](mission/2026-06-18-demo-north-star.md) v2 — 6/18 定位、禁說清單、scoreboard-first、scope 分層。amend ADR-0001/0002。能力是否 pass 仍回 #1 |
 | 5 | **介面契約** | [contracts/interaction_contract.md](contracts/interaction_contract.md)（ROS2 topic / action / service / message schema，v2.5 凍結） |
-| 6 | **模組設計真相** | `architecture/{brain,perception/*,speech,studio,specs}/`、`architecture/navigation/{setup,specs}/`（各帶模組 `CLAUDE.md`；歷史 plans/research 在 `archive/`） |
+| 6 | **模組設計真相** | `architecture/{brain,perception/*,speech,studio,specs}/`、`architecture/navigation/{setup,specs}/`（各帶模組 `CLAUDE.md`；內部歷史文件不包含在公開版） |
 | 7 | **產品方向 / Demo 劇本 / 八大功能** | [mission/README.md](mission/README.md) |
 | 8 | **持久決策** | [adr/](adr/)（ADR，可被新提案 supersede） |
 | 9 | **環境建置與救火 SOP** | [runbook/](runbook/) |
@@ -61,7 +61,7 @@
 
 **canonical claim matrix**：每能力的 Current Claim / Claim Level / Evidence-Provenance / Pass-Degraded-Fail-Insufficient / Fallback / Non-Claims / Model Candidates / Next Retest 以上述 #1–#4 為準，**不在各檔重複整份散文**——一律連結回 baseline-evidence README + convergence audit。
 
-**關鍵原則**：實測 ＞ 審計 ＞ 規格 ＞ 敘事。`research/` 一律 research-not-truth（除 6/05 convergence audit 經指定升格為 #2）；`archive/` 全 frozen。
+**關鍵原則**：實測 ＞ 審計 ＞ 規格 ＞ 敘事。`research/` 一律 research-not-truth（除 6/05 convergence audit 經指定升格為 #2）；退役程式在 repo 根目錄 `archive/`，不屬於現行真相。
 
 ---
 
