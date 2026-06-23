@@ -1,7 +1,7 @@
 # PawAI Studio — Developer Launcher
 
-> **正式規格以 [`../docs/pawai-brain/studio/*.md`](../docs/pawai-brain/studio/) 為準；**
-> `docs/*.md` 是實作導引與 panel-level spec。若有衝突，以 `docs/pawai-brain/studio/` 為準。
+> **正式規格以 [`../docs/architecture/studio/*.md`](../docs/architecture/studio/) 為準；**
+> `docs/*.md` 是實作導引與 panel-level spec。若有衝突，以 `docs/architecture/studio/` 為準。
 
 ---
 
@@ -79,13 +79,13 @@ curl -X POST http://localhost:8001/mock/scenario/demo_a
 
 | 需求 | 路徑 |
 |------|------|
-| Event / State Schema | [`../docs/pawai-brain/studio/specs/event-schema.md`](../docs/pawai-brain/studio/specs/event-schema.md) |
+| Event / State Schema | [`../docs/architecture/studio/specs/event-schema.md`](../docs/architecture/studio/specs/event-schema.md) |
 | Design Tokens | [`docs/design-tokens.md`](docs/design-tokens.md) |
 | Git Workflow | [`docs/git-workflow.md`](docs/git-workflow.md) |
 | 新人上手 | [`docs/onboarding.md`](docs/onboarding.md) |
-| 系統架構 | [`../docs/pawai-brain/studio/specs/system-architecture.md`](../docs/pawai-brain/studio/specs/system-architecture.md) |
-| UI 編排規則 | [`../docs/pawai-brain/studio/specs/ui-orchestration.md`](../docs/pawai-brain/studio/specs/ui-orchestration.md) |
-| Brain Adapter | [`../docs/pawai-brain/studio/specs/brain-adapter.md`](../docs/pawai-brain/studio/specs/brain-adapter.md) |
+| 系統架構 | [`../docs/architecture/studio/specs/system-architecture.md`](../docs/architecture/studio/specs/system-architecture.md) |
+| UI 編排規則 | [`../docs/architecture/studio/specs/ui-orchestration.md`](../docs/architecture/studio/specs/ui-orchestration.md) |
+| Brain Adapter | [`../docs/architecture/studio/specs/brain-adapter.md`](../docs/architecture/studio/specs/brain-adapter.md) |
 
 ---
 

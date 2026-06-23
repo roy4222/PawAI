@@ -4,7 +4,7 @@
 
 **Goal:** 解 issue 6（ASR 簡→繁）+ issue 7（refresh 重置 context）。兩個小而清楚的修改，並行做。
 
-**Spec 來源:** `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` P1-3（ASR）+ P1-2（Context Reset）。
+**Spec 來源:** `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` P1-3（ASR）+ P1-2（Context Reset）。
 
 **前置依賴**: Branch A merged。可與 Branch B 並行（不衝突）。
 

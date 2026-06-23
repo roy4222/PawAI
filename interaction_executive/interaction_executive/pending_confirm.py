@@ -1,8 +1,8 @@
 """PendingConfirm state machine — OK 二次確認共用邏輯.
 
 Spec:
-  - docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md §4.2
-  - docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md §2
+  - docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md §4.2
+  - docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md §2
 
 Active Confirm Set (4): wiggle / stretch / approach_person /
                        nav_demo_point (非 Studio button trigger)

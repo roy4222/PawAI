@@ -17,7 +17,7 @@ Repo baseline references:
 - Current localization launch flow: `scripts/start_nav2_localization.sh`
 - Existing gate/rate checks: `scripts/check_gate_c_rates.sh`
 - Existing short-distance repeat test: `scripts/nav2_goal_autotest.py`
-- Existing stability plan style: `docs/navigation/落地計畫_v2.md`
+- Existing stability plan style: `docs/architecture/navigation/落地計畫_v2.md`
 
 ## Phase 0 (Immediate, 2-3 days): Integration Safety Shell
 

@@ -92,7 +92,7 @@
 - 現役 parse：`object_perception_node.py:384` `raw = outputs[0][0]  # (300, 6): x1, y1, x2, y2, conf, class_id`。
 - YOLOE-26 是 seg 模型，e2e NMS-free seg export 的同型參照是 YOLO11s-seg with NMS export：輸出 `((1, 300, 38), (1, 32, 160, 160))`——前 6 欄 = bbox+conf+class、後 32 欄 = mask 係數、第二個 tensor = mask proto（[supervision issue #1787](https://github.com/roboflow/supervision/issues/1787)）。**假設**（標注：未實際 export 驗證）：YOLOE-26-seg ONNX export 形態同款 → node 改動 = 取 `outputs[0][0][:, :6]` 切片 + 忽略 proto tensor，**一行級 parse 改動**；mask 不取用則 CPU 零額外成本。
 - 換 vocab 必改類別表：`object_perception_node.py:393-404` 有 `if class_id not in COCO_CLASSES: continue` guard 與 `COCO_CLASSES[class_id]` 名稱映射——custom vocab 的 class_id 0..N-1 與 COCO id 表意不同，**必須換成 vocab 對應表**（id 碰撞風險：不換表會把 vocab id 2 講成 "car"）。
-- TRT EP 角度：export 後是普通 ONNX graph（無 text branch），與現役 YOLO26n 同走 onnxruntime-gpu 1.23.0 + `trt_fp16_enable` 路徑，無已知額外 operator 風險（依據 §2.1 的 "standard YOLO detector" 宣稱；TRT engine 首次 build 3-10 分鐘照舊，`docs/pawai-brain/perception/object/CLAUDE.md` 既有紀律）。
+- TRT EP 角度：export 後是普通 ONNX graph（無 text branch），與現役 YOLO26n 同走 onnxruntime-gpu 1.23.0 + `trt_fp16_enable` 路徑，無已知額外 operator 風險（依據 §2.1 的 "standard YOLO detector" 宣稱；TRT engine 首次 build 3-10 分鐘照舊，`docs/architecture/perception/object/CLAUDE.md` 既有紀律）。
 
 ### 2.4 WSL export 步驟（replay/上機前置，照抄即可）
 

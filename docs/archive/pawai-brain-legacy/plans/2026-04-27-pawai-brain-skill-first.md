@@ -15,7 +15,7 @@
 
 **Tech Stack:** ROS2 Humble (rclpy / std_msgs / go2_interfaces.WebRtcReq) · Python 3.10 · pytest · FastAPI + Pydantic · Next.js 14 (TypeScript) · Zustand · WebSocket。
 
-**Spec:** [`docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md)
+**Spec:** [`docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md)
 
 ---
 
@@ -673,7 +673,7 @@ git tag pawai-brain-phase0-done
 ```python
 """Skill-first PawAI Brain core types.
 
-Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §3
+Spec: docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md §3
 """
 from __future__ import annotations
 
@@ -738,7 +738,7 @@ class SkillContract:
     # Phase B（PawClaw evolution）預留欄位 — MVS 階段為空 list，行為等同 always-enabled。
     # CapabilityPredicate 是 dataclass(name: str, check: Callable[[BodyState], tuple[bool, str]])
     # 在 MVS 階段 typing 用 list 即可（避免循環 import）；Phase B 實際塞 predicate instance。
-    # 詳見 docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md §4
+    # 詳見 docs/architecture/specs/2026-04-27-pawclaw-embodied-brain-evolution.md §4
     enabled_when: list = field(default_factory=list)
     requires_confirmation: bool = False
     risk_level: Literal["low", "medium", "high"] = "low"
@@ -1099,7 +1099,7 @@ Subscribes to existing publishers (no new state sources):
 - /state/reactive_stop/status (String JSON, BEST_EFFORT) — from reactive_stop_node
 - /state/nav/safety (String JSON, BEST_EFFORT) — from nav_capability state_broadcaster
 
-Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §3, §4.4
+Spec: docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md §3, §4.4
 """
 from __future__ import annotations
 
@@ -1554,7 +1554,7 @@ git commit -m "test(brain): cover SkillQueue push/pop/preempt"
 Subscribes to perception events + Studio injection topics, applies rule table,
 emits SkillPlan via /brain/proposal, publishes /state/pawai_brain at 2 Hz.
 
-Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §6
+Spec: docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md §6
 """
 from __future__ import annotations
 
@@ -2344,7 +2344,7 @@ Replace entire content of `interaction_executive_node.py`:
 Subscribes /brain/proposal (SkillPlan), validates via SafetyLayer, dispatches
 say/motion/nav steps, publishes /brain/skill_result for every plan/step event.
 
-Spec: docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §7
+Spec: docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md §7
 """
 from __future__ import annotations
 

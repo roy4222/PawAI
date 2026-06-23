@@ -220,7 +220,7 @@ go2 driver log 沒看到 reject — Go2 對不支援 api_id 慣性 silent ignore
 - `e1363c8` stranger_alert / object person 靜音
 - `67c28ce` Studio Gateway CORS
 
-詳細 fail-map：`docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`（含 [#A1.3]、[#F-confirm]、[#TTS-gemini] 完整 root cause）
+詳細 fail-map：`docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md`（含 [#A1.3]、[#F-confirm]、[#TTS-gemini] 完整 root cause）
 
 ---
 

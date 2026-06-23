@@ -232,4 +232,4 @@ Demo 過後優先評估的項目（不是承諾要做，只是排序參考）：
 
 - `docs/runbook/demo_script.md` — 5 分鐘劇本（凍結後寫，劇本反推真缺口）
 - `references/project-status.md` — 各模組當前狀態
-- `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` — 5/9 spec（含 demo-frozen-backlog 上游需求）
+- `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` — 5/9 spec（含 demo-frozen-backlog 上游需求）

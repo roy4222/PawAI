@@ -250,4 +250,4 @@ LLM_ENDPOINT="http://127.0.0.1:1/" TTS_PROVIDER=piper \
 - **Operator Runbook**：[`2026-06-13-demo-operator-runbook-plan.md`](2026-06-13-demo-operator-runbook-plan.md) — WAV pre-render 暖機 SOP、online↔offline 切換操作、env override 備援指令寫入。
 - **Lane 1 ISM**：[`2026-06-13-lane1-brain-ism-staged-enable-plan.md`](2026-06-13-lane1-brain-ism-staged-enable-plan.md) — offline_mode 與 ism_enabled 互不衝突（offline 是語音層短路，ISM stage 2a 是 phase policy 接管）；offline_mode 應與 ISM 各 stage 正交。
 - **Lane 3 CLI**：[`2026-06-13-lane3-cli-v2-completion-plan.md`](2026-06-13-lane3-cli-v2-completion-plan.md) — `pawai demo mode online|offline` 由 Lane 3 實作（param set 包裝，零 runtime 行為例外需 Roy 點頭）；`pawai status` brain runtime 區塊顯示 offline_mode。
-- 相關既有文件：[`docs/runbook/2026-06-13-roy-hitl-queue.md`](../../runbook/2026-06-13-roy-hitl-queue.md)（H-1..H-5 入列）。
+- 相關既有文件：[`docs/archive/runbook-legacy/2026-06-13-roy-hitl-queue.md`](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)（H-1..H-5 入列）。

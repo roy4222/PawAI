@@ -31,7 +31,7 @@
 
 **真相源**：
 - Master Plan `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（架構 / 三軸 / canonical 15 能力表 / 設計段 C-D）
-- Spec `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`（門檻數字）
+- Spec `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`（門檻數字）
 - Implementation `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md`（6 deliverable TDD）
 - Runbook `docs/runbook/2026-06-18-baseline-runbook.md`（上機流程）
 

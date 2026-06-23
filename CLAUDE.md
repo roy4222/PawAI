@@ -66,7 +66,7 @@ pawai evidence pull                       # 拉回 runtime/traces/*.jsonl 證據
 
 **6/14 HITL demo 調校（已持久化進 `interaction_executive/config/executive.yaml`，重啟自動帶）**：`chat_wait_ms 2000`（原 20000=LLM 慢時 dead-air）、`greet_cooldown_s 90`、`gesture_enabled true`、`object_remark_attention_min NOTICED`、`object_remark_priority`=飲水類、`demo_video_cup_compound true`（**drink-merge**：cup/bottle/bowl/wine_glass 講通用「手邊有飲水用品，記得補充水分」**不糾結物名**、recent sitting 在 `drink_sitting_window_s` 內加坐姿複合句、**pose 缺席不卡**）。**6/15 HITL**：`drink_sitting_window_s` 新 param（default 10.0 byte-identical、demo 設 **45.0**）——`/event/pose_detected` 是 **edge-triggered**（穩坐時 sitting event 稀疏、且無連續 `/state/perception/pose`），寫死 10s 窗抓不到那唯一事件 → 複合句永遠 sitting=False；放寬 45s 後實機驗 `sitting=True` 端到端（**6/15 已 merge 進 main `1dec417`**、deploy 後 `param get` 確認 live=45.0）。
 - **防「打架」（社交事件互搶 TTS）**：每幕 `ros2 param set /brain_node demo_phase {s2_greet|s3_pose_object|s4_gesture}` 讓該幕只剩一個模組講話（`demo_phase=all` = greet/object/gesture 三者全搶＝最易卡）。更治本的 `social_pending_enabled`（one-slot pending+TTL+flush，PR #191 default-off）讓 all 模式也不丟話 — **尚待上機驗**。操作細節見 [`docs/runbook/2026-06-18-operator-runbook.md`](docs/runbook/2026-06-18-operator-runbook.md)。
-- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/pawai-brain/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ **（6/15 更正，原判「雷達硬體」是錯的）** `--with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` 多半是 `start_lidar_monitor_tmux.sh` **漏 `--ros-args`** → `serial_baudrate:=256000` 被當 remap rule 沒套用（pane 出現「Found remap rule」WARN 即是），已修 `af18a64`。先用 `scripts/start_scan_only_tmux.sh` **隔離測**：`/scan_rplidar` ~11Hz＋health OK ＝硬體沒事、是整合命令的鍋。④ **Act1 motion 根因已查清 + 已修回 standalone（6/15，NEEDS_ROY_ESTOP_TEST）**：撞車真因＝`twist_mux` **無 output timer + 0.5s input timeout** → reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默/被殺/enable 開太久結尾才 force-stop），mux 停輸出 → driver 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞牆；standalone 直連無此中介層。已把 demo_forward 改回 **standalone `/cmd_vel` 直連**（每個 0 直達 driver→StopMove，6/15 已實機驗會停）+ 保證唯一 publisher（**預設**殺 mux/teleop/joy + 啟動後驗 `/cmd_vel` publisher==1 否則**拒絕進 motion**；brain 走 `/webrtc_req` 不受影響）+ force-stop 由 **`trap EXIT/TERM/INT` 保證執行** + 定時放行（對抗複查抓到 A-1 雙 publisher fail-open / A-2 force-stop 不保證、皆已修）。**6/15 整合測「會走但撞」後加大停障餘裕**：demo_forward `danger 1.1→1.5m`、手動前進預設 `2s→1s`（停車邊緣太緊＝撞因；env `ACT1_DANGER_M` 可調），demo 主線改 **Studio「短距前進」鈕**（不押語音）。單元邏輯 42 tests 綠，**真機 motion 待 Roy 手持 e-stop 驗**（流程見 [`docs/navigation/2026-06-15-act1-demo-forward-estop-runbook.md`](docs/navigation/2026-06-15-act1-demo-forward-estop-runbook.md)）。⑤ **offline 預設 demo_phase=all 會吐「我聽不太懂」footgun（6/15 修 G2）**：`offline_mode=true` 時若沒先切 phase，canned fallback 變「我聽不太懂」（同源「手動切 phase footgun」）→ 已加 `OFFLINE_GENERIC_FALLBACK` 溫和 filler（online-timeout 路徑保持 byte-identical）。offline 鏈端到端已接通（param/topic/Studio toggle）、S5 安全 rule-first offline 免疫。
+- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/architecture/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ **（6/15 更正，原判「雷達硬體」是錯的）** `--with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` 多半是 `start_lidar_monitor_tmux.sh` **漏 `--ros-args`** → `serial_baudrate:=256000` 被當 remap rule 沒套用（pane 出現「Found remap rule」WARN 即是），已修 `af18a64`。先用 `scripts/start_scan_only_tmux.sh` **隔離測**：`/scan_rplidar` ~11Hz＋health OK ＝硬體沒事、是整合命令的鍋。④ **Act1 motion 根因已查清 + 已修回 standalone（6/15，NEEDS_ROY_ESTOP_TEST）**：撞車真因＝`twist_mux` **無 output timer + 0.5s input timeout** → reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默/被殺/enable 開太久結尾才 force-stop），mux 停輸出 → driver 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞牆；standalone 直連無此中介層。已把 demo_forward 改回 **standalone `/cmd_vel` 直連**（每個 0 直達 driver→StopMove，6/15 已實機驗會停）+ 保證唯一 publisher（**預設**殺 mux/teleop/joy + 啟動後驗 `/cmd_vel` publisher==1 否則**拒絕進 motion**；brain 走 `/webrtc_req` 不受影響）+ force-stop 由 **`trap EXIT/TERM/INT` 保證執行** + 定時放行（對抗複查抓到 A-1 雙 publisher fail-open / A-2 force-stop 不保證、皆已修）。**6/15 整合測「會走但撞」後加大停障餘裕**：demo_forward `danger 1.1→1.5m`、手動前進預設 `2s→1s`（停車邊緣太緊＝撞因；env `ACT1_DANGER_M` 可調），demo 主線改 **Studio「短距前進」鈕**（不押語音）。單元邏輯 42 tests 綠，**真機 motion 待 Roy 手持 e-stop 驗**（流程見 [`docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`](docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md)）。⑤ **offline 預設 demo_phase=all 會吐「我聽不太懂」footgun（6/15 修 G2）**：`offline_mode=true` 時若沒先切 phase，canned fallback 變「我聽不太懂」（同源「手動切 phase footgun」）→ 已加 `OFFLINE_GENERIC_FALLBACK` 溫和 filler（online-timeout 路徑保持 byte-identical）。offline 鏈端到端已接通（param/topic/Studio toggle）、S5 安全 rule-first offline 免疫。
 
 ### 基本建構
 
@@ -307,7 +307,7 @@ ros2 topic hz /perception/object/debug_image        # ~6-8 Hz
 ros2 topic echo /event/object_detected --once       # JSON event
 ```
 
-**已知陷阱**（見 `docs/pawai-brain/perception/object/CLAUDE.md`）：
+**已知陷阱**（見 `docs/architecture/perception/object/CLAUDE.md`）：
 - **不要 `pip install ultralytics`**（會破壞 Jetson torch wheel）
 - TRT provider 參數值必須 `"True"`/`"False"` 字串，非 `"1"`/`"0"`
 - `class_whitelist` 空 list 需用 `ParameterDescriptor(INTEGER_ARRAY)`，yaml 不要寫 `: []`
@@ -402,7 +402,7 @@ Layer 3（中控）→ Layer 2（感知）→ Layer 1（驅動/硬體）。事�
 - **LLM fallback**：雲端優先 → 本地 Qwen2.5-0.8B 作為備援（智商待測）
 - **ASR warmup**：stt_intent_node 啟動時 daemon thread 預熱 Whisper CUDA（~12s）
 - **RuleBrain fallback**：LLM 失敗自動 fallback，`force_fallback:=true` 可強制測試
-- 詳見 [`docs/pawai-brain/speech/README.md`](docs/pawai-brain/speech/README.md) 的「Go2 音訊播放」章節
+- 詳見 [`docs/architecture/speech/README.md`](docs/architecture/speech/README.md) 的「Go2 音訊播放」章節
 
 ---
 
@@ -540,11 +540,11 @@ Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet �
 | 專案方向、分工、Demo | [`docs/mission/README.md`](docs/mission/README.md) |
 | 3/16 交付清單 | [`docs/mission/handoff_316.md`](docs/mission/handoff_316.md) |
 | ROS2 介面契約 | [`docs/contracts/interaction_contract.md`](docs/contracts/interaction_contract.md) |
-| PawAI Studio 設計 | [`docs/pawai-brain/studio/README.md`](docs/pawai-brain/studio/README.md) |
-| 語音模組 | [`docs/pawai-brain/speech/README.md`](docs/pawai-brain/speech/README.md) |
-| 人臉模組 | [`docs/pawai-brain/perception/face/README.md`](docs/pawai-brain/perception/face/README.md) |
-| 手勢辨識 | [`docs/pawai-brain/perception/gesture/README.md`](docs/pawai-brain/perception/gesture/README.md) |
-| 姿勢辨識 | [`docs/pawai-brain/perception/pose/README.md`](docs/pawai-brain/perception/pose/README.md) |
+| PawAI Studio 設計 | [`docs/architecture/studio/README.md`](docs/architecture/studio/README.md) |
+| 語音模組 | [`docs/architecture/speech/README.md`](docs/architecture/speech/README.md) |
+| 人臉模組 | [`docs/architecture/perception/face/README.md`](docs/architecture/perception/face/README.md) |
+| 手勢辨識 | [`docs/architecture/perception/gesture/README.md`](docs/architecture/perception/gesture/README.md) |
+| 姿勢辨識 | [`docs/architecture/perception/pose/README.md`](docs/architecture/perception/pose/README.md) |
 | 環境建置 | [`docs/runbook/README.md`](docs/runbook/README.md) |
 | 模型選型調查 | `docs/archive/2026-05-docs-reorg/research-misc/{task}.md`（face 已建） |
 | Benchmark 框架規格 | [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`](docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md) |

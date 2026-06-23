@@ -35,7 +35,7 @@ Phase 7.2 bridge: enable_nav_pause=true → zone transitions trigger /nav/{pause
 Phase 7-bugfix #5: also publish /state/reactive_stop/status JSON for state_broadcaster.
 
 5/11 B5 burndown 完整 audit + 修法路線圖：
-docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
+docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
 """
 import json
 import math
@@ -70,7 +70,7 @@ class ReactiveStopNode(Node):
         # base_link+0.175m); Go2 nose at base_link+~0.40m, so LiDAR at 0.6m
         # = nose at 0.2m + 0.5m/s × 0.3s reaction → guaranteed collision.
         # New 1.1m gives ~0.7m nose buffer for braking + body inertia.
-        # See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.3.
+        # See docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.3.
         self.declare_parameter("danger_distance_m", 1.1)
         self.declare_parameter("slow_distance_m", 1.7)
         self.declare_parameter("slow_speed", 0.45)

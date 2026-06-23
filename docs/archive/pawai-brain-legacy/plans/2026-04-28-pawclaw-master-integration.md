@@ -7,7 +7,7 @@
 >
 > **與既有 4 份文件的關係**：
 > - 本文件 = 唯一入口（從這裡開始讀）
-> - [`docs/pawai-brain/architecture/overview.md`](../../pawai-brain/architecture/overview.md) = 對外總覽（教授 / 答辯讀物）
+> - [`docs/architecture/brain/overview.md`](../../pawai-brain/architecture/overview.md) = 對外總覽（教授 / 答辯讀物）
 > - [`specs/2026-04-27-pawai-brain-skill-first-design.md`](../specs/2026-04-27-pawai-brain-skill-first-design.md) = Phase A 設計藍圖
 > - [`plans/2026-04-27-pawai-brain-skill-first.md`](2026-04-27-pawai-brain-skill-first.md) = Phase A 實作 plan（34 task，已執行 Phase 0）
 > - [`specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../specs/2026-04-27-pawclaw-embodied-brain-evolution.md) = Phase B 演進 spec

@@ -24,7 +24,7 @@ paths:
 - 檔案：`.md`（小寫，不用 `.MD`）
 - 日期前綴：`YYYY-MM-DD-description.md`
 - **新 Spec / Plan 寫在主線**（5/02 reorg 後）：
-  - Brain / Studio 相關 → `docs/pawai-brain/specs/` 或 `docs/archive/pawai-brain-legacy/plans/`（Studio 專用 plans 在 `docs/pawai-brain/studio/plans/`）
+  - Brain / Studio 相關 → `docs/architecture/specs/` 或 `docs/archive/pawai-brain-legacy/plans/`（Studio 專用 plans 在 `docs/architecture/studio/plans/`）
   - Navigation 相關 → `docs/archive/navigation-legacy/plans/`
 - 過期歷史在 `docs/archive/2026-05-docs-reorg/superpowers-legacy/`，不再新增
 

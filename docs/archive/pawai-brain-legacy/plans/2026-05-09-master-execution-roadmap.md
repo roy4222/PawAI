@@ -3,7 +3,7 @@
 > 🗄️ **HISTORICAL（5 月 sprint 期，已被 6/18 scoreboard-first 路線取代）**。保留作歷史，**不再執行**。現行計畫見 [`README.md`](README.md) current 區；能力 claim 以 [canonical claim matrix](../../mission/2026-06-18-capability-claim-matrix.md) 與 baseline-evidence 為準。
 
 > **建立**：2026-05-09
-> **Spec 來源**：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+> **Spec 來源**：`docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md`
 > **Demo 硬底線**：5/13 場地驗 / 5/14 三連跑 / 5/18 demo
 
 8 個 issue 的總執行排程。每條 branch 有獨立 plan 文件 + 獨立 PR。
@@ -44,7 +44,7 @@ Branch F 全 demo 後
 ## 已 commit 的 spec 與 plan
 
 ```
-spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md
+spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md
   928e083  issue 1 B-lite 收斂
   4de63ed  issue 1 review 4 點
   7f0b4e9  TTS spec + rules cleanup

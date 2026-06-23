@@ -495,6 +495,6 @@ last_stable_identity_freshness_s = 30.0
 | fallen_alert skill | `interaction_executive/interaction_executive/skill_contract.py::fallen_alert` |
 | 設定 | `vision_perception/config/vision_perception.yaml` |
 | Contract schema | `docs/contracts/interaction_contract.md` §4.4 / §4.5 |
-| 模組文件 | `docs/pawai-brain/perception/pose/README.md` + `AGENT.md` + `CLAUDE.md` |
-| Benchmark 決策 | `docs/pawai-brain/perception/pose/research/2026-03-21-benchmark-decision.md` |
+| 模組文件 | `docs/architecture/perception/pose/README.md` + `AGENT.md` + `CLAUDE.md` |
+| Benchmark 決策 | `docs/architecture/perception/pose/research/2026-03-21-benchmark-decision.md` |
 | 任務分工 | `docs/mission/README.md` §5 |

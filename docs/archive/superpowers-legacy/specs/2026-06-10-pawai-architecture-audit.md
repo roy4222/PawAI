@@ -7,7 +7,7 @@
 > 99 條逐一對抗性查證（verifier 開證據檔核實；98 supported、1 條 OBJECT-1 部分駁回已修正）
 > → 6 個 v2 方向評估。本文件不改任何程式碼、不做任何硬體宣稱。
 > 完整 findings 附錄：[`2026-06-10-pawai-architecture-findings-ledger.md`](2026-06-10-pawai-architecture-findings-ledger.md)。
-> 約束繼承：`docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md` §0 已決事項不重議；
+> 約束繼承：`docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md` §0 已決事項不重議；
 > S1 未錄 → 所有 MUST_PRESERVE_FOR_DEMO 項目凍結到 6/18 之後。
 
 ---

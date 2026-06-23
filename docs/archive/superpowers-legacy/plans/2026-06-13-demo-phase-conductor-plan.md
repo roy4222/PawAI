@@ -318,7 +318,7 @@ alias 解析：`_canonicalize_phase("s2_face") → "s2_greet"`、`"s3_object" �
 4. **T-C3**（CLI 契約）— 交棒 Lane 3 實作。
 5. **H-C1 → H-C2 → H-C4 → H-C3**（HITL，先低風險詞彙/清理/顯示，**H-C3 Go2 motion 最後且需 e-stop**）。
 
-純軟體（1-4）可在 6/18 前先合 + 單測綠（needs-HITL 標記）；HITL（5）排進 [roy-hitl-queue](../runbook/2026-06-13-roy-hitl-queue.md)，**且必須在確認 Go2 停穩 + nav/brain stack 不同跑後才開**。
+純軟體（1-4）可在 6/18 前先合 + 單測綠（needs-HITL 標記）；HITL（5）排進 [roy-hitl-queue](../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)，**且必須在確認 Go2 停穩 + nav/brain stack 不同跑後才開**。
 
 ---
 

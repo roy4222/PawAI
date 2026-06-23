@@ -33,7 +33,7 @@
 - **根因（唯讀調查，非臆測）**：`twist_mux` 4.x **無 output timer、純 event-driven**，每 input 0.5s timeout。reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默 / node 被殺 / enable 開太久結尾才 force-stop）→ mux 停輸出 → driver 收不到新 `/cmd_vel` → **Go2 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞**。standalone 直連無此中介層＝這就是「standalone 會停、整合不停」的根本差異。H1/H3/H4 排除（mux 有跑、無重複 reactive、driver zero→StopMove 正常）。
 - **「嘴巴回有、狗沒動」是結構必然**：`ACTION_FORWARD` 是 dead code、`brain 從不發 cmd_vel`（動作走 `/webrtc_req`）。brain 的 LLM 回覆「我往前挪一點」純聊天、無法驅動 motion。→ 必須有獨立的窄觸發器（`act1_voice_trigger.py`）。
 - **修法（Option A，與 unified-demo plan ST-4 一致）**：demo_forward 改回 **standalone `/cmd_vel` 直連**（6/15 已實機驗會停）；`start_reactive_forward_demo.sh` 重寫＝唯一 publisher 防線（`ACT1_KILL_COMPETITORS=1` 殺 mux/teleop/joy、brain 走 /webrtc_req 不受影響）+ verify window 確認 `/cmd_vel` publisher=1 + 一併啟 voice node；`act1_forward.sh` force-stop 改 standalone（enable=false→直發 0 到 /cmd_vel→StopMove，不再靠 mux 的 /cmd_vel_emergency）+ 縮短 enable 窗（撞車誘因）。
-- **驗證**：reactive danger→0 + driver zero→StopMove 單元邏輯 **42 tests 綠**；bash -n / py_compile / flake8 乾淨。**真機「狗真的走+真的停」待 Roy e-stop**（流程 `docs/navigation/2026-06-15-act1-demo-forward-estop-runbook.md`）。
+- **驗證**：reactive danger→0 + driver zero→StopMove 單元邏輯 **42 tests 綠**；bash -n / py_compile / flake8 乾淨。**真機「狗真的走+真的停」待 Roy e-stop**（流程 `docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`）。
 - **wiring bug 找到+修+live 驗（6/15 Roy 質疑「語音真的接到嗎」）**：Studio **麥克風**(/ws/speech)+/ws/text → gateway 發 **`/event/speech_intent_recognized`**（非 /brain/text_input）；voice node 原本只訂 /brain/text_input(打字)+/asr_result(機上麥) → **語音「往前走」漏訂、不會觸發 motion**（只有打字會）。已補訂 `/event/speech_intent_recognized`（解析 transcript|text，比照 brain_node:1473）。Jetson **零 motion live 驗**（demo 未跑無 driver）：Subscription count=1、log `matched [speech] '往前走'` → safety gate「感知尚未就緒」拒絕、cooldown 生效。三入口(語音/打字/機上麥)全覆蓋。scripts 已 rsync 上 Jetson。commit `3baf823`。
 - **gate publisher-count bug（live 測試抓到、自己引入的）**：A-2 給 voice node 加 `/cmd_vel` cmd_pub（保證停車）→ `/cmd_vel` 正常有 **2 個 publisher**（reactive + voice），但 gate 原寫死「publisher==1 否則拒絕」→ 會 fail-closed **誤殺正常 session**。修：gate 改檢查「**競爭 node（twist_mux/teleop/joy）是否存在** + reactive 就緒」而非 raw count（publisher>2 才當未知 driver 拒絕）。安全不變式＝「無不協調競爭 driver」非「單一 publisher」（voice 只在 enable=false 後發 0、與 reactive 協調）。
 - **6/15 晚 stack 已起好 + 驗綠（Roy 授權）**：`pawai demo start --with-lidar`（healthcheck 全綠、go2_driver=1、studio_gateway 在、`/scan_rplidar` 11.2Hz）+ `start_reactive_forward_demo.sh`（reactive LOCKED、voice 在線、競爭 node none、gate 放行）。**就緒待 Roy e-stop 說「往前走」做真機 motion 驗收**。⚠ Studio gateway 瀏覽器→8080 的 Tailscale IP 警告（`JETSON_TAILSCALE_IP` 待確認）可能影響 Studio 送指令。
@@ -314,7 +314,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **S1 移動沒錄成**：按「開始」狗不動，根因 = **AMCL covariance 在 0.45 門檻上下抖**（0.41-0.47），nav_action_server 安全閘規定 yellow（0.3-0.5）只准 ≤0.5m，Roy 要的 1.0/1.2m 被拒（非按鈕壞）。**未解選項**：(A) 距離改 0.5m（yellow 也准，最快）(B) 放寬 covariance 閘允許 yellow 跑 1.2m (C) 設準 initialpose 讓 cov 穩 green。Studio 目前 goal 被拒沒顯示原因（靜默回 idle）= Roy 看到的「沒反應」，可補 rejection reason 廣播。
 
 ### 6. 產出 / backlog
-- **PawAI Brain v2 + CLI v2 PRD**（Roy 早上要的，draft 待審）：`docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md`。5 層架構（Perception Router / Interaction State Machine / Policy Guardrail / Skill Executor / Trace）+ 增量遷移 + CLI Typer/pipx + 外部框架（OpenClaw/NeMo/ROSClaw）定位（啟發 agent 層，不當 Go2 的腦）。
+- **PawAI Brain v2 + CLI v2 PRD**（Roy 早上要的，draft 待審）：`docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md`。5 層架構（Perception Router / Interaction State Machine / Policy Guardrail / Skill Executor / Trace）+ 增量遷移 + CLI Typer/pipx + 外部框架（OpenClaw/NeMo/ROSClaw）定位（啟發 agent 層，不當 Go2 的腦）。
 - 模型升級研究：`docs/archive/pawai-brain-legacy/research/2026-06-10-model-upgrade-decision-research.md`（object/pose/D435 曝光 SOP）。
 - review 未修小事（不擋 demo）：gesture toggle `ros2 param get` stale、gateway cache VOLATILE 脫鉤、reset 沒清 active_step。
 
@@ -533,7 +533,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 - `pawai_brain/package.xml` — 補 `python3-requests` exec_depend
 - `requirements-jetson.txt` — 補 `langgraph` / `langchain-core`
-- `docs/pawai-brain/README.md` — LLM chain 對齊 code（`gpt-5.4-mini`）；demo Active 清單移除 `approach_person`
+- `docs/architecture/README.md` — LLM chain 對齊 code（`gpt-5.4-mini`）；demo Active 清單移除 `approach_person`
 - `docs/runbook/README.md` — 加 Jetson Brain Bring-up 指引
 - `docs/pawai_cli/team-onboarding.md` — 加 demo 唯一合法 chain + legacy 禁用清單
 - `personas/v1/CAPABILITIES.md` — 收斂誇大字（手勢/守護/移動）、跌倒改保守 trace、移除 `approach_person`、加 STATUS_NOTE 三層 demo 行為規範
@@ -866,7 +866,7 @@ pawai demo start              # 重啟拿新 lock
 
 ### Nav 撞牆 deep audit + 4-mode 重設計（commits `8ae7faf` `f471ebd` `4ec8350` `f366acd` `0f5a16f` `d804a58`）
 
-詳見 [`docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md`](../docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md)。
+詳見 [`docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md`](../docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md)。
 
 **深度調查（3 subagent 並行）**：local docs / local code / 網路 best practice 三線挖掘 → 撞牆是多層設計缺陷疊加，文件層 root cause 是「3 次架構翻案沒做舊參數適用性 audit」（3/25 D435 ROI 0.8/1.5 → 4/24 RPLIDAR 改 0.6/1.0 無 decision log → 5/1 capability gate 沒 review safety_only 語境 → 5/11 撞）。
 
@@ -898,7 +898,7 @@ pawai demo start              # 重啟拿新 lock
 - `start_nav_capability_demo_tmux.sh`（改）— progressive，nav 可驅動
 - `start_reactive_stop_tmux.sh`（改）— standalone，reactive 直接驅動 Go2
 
-**docs 升等**：`docs/navigation/CLAUDE.md` Reactive stop 段加 architecture-critical 4-mode 故事化敘述 + 釋放 3 步驟（切 mode → kill teleop → 發 nav goal）。
+**docs 升等**：`docs/architecture/navigation/CLAUDE.md` Reactive stop 段加 architecture-critical 4-mode 故事化敘述 + 釋放 3 步驟（切 mode → kill teleop → 發 nav goal）。
 
 ---
 
@@ -948,7 +948,7 @@ pawai demo start              # 重啟拿新 lock
 
 5/10 全天文件工作日（白天 7 commit 全 docs）+ 晚上 Spec 6 P0 從「驗證 5/9 fix」演化成「Studio composer 重構」（2 commit，一個 plan、一個程式碼）。共 9 commit。把 demo 前剩餘 6 天的工作拆成 6 個 spec，並把 Spec 1（LLM Naturalness A+）打磨到可進 implementation plan 的狀態。
 
-### 6-Spec roadmap（`docs/pawai-brain/specs/2026-05-10-*`）
+### 6-Spec roadmap（`docs/architecture/specs/2026-05-10-*`）
 
 | Spec | 主題 | demo 前 | 狀態 |
 |---|---|---|---|
@@ -1146,7 +1146,7 @@ fdd5c93 fix(studio): composer absolute-bottom layout (ChatGPT-like)
 
 ### 與 5/9 brainstorm spec 對接
 
-完整 spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+完整 spec：`docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md`
 Master roadmap：`docs/archive/pawai-brain-legacy/plans/2026-05-09-master-execution-roadmap.md`
 Branch plans：B/C/D/E 各一份在 `docs/archive/pawai-brain-legacy/plans/`
 
@@ -1308,7 +1308,7 @@ LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 
 | ROS hooks | conversation_graph_node 訂閱 `/state/tts_playing`（Bool TRANSIENT_LOCAL）/ `/state/reactive_stop/status` / `/state/nav/safety` / `/state/pawai_brain` / `/brain/skill_result`；`selected_skill` 從 skill_result payload 直接 populate `recent_skill_results`（B4） |
 | Persona rules | `tools/llm_eval/persona.txt` 加上 9 條 CapabilityContext 規則（kind=demo_guide trace-only、needs_confirm 要求 OK、recent_skill_results 自然銜接等）（B5 Task 16） |
 | Studio chips | `skill-trace-content.tsx` 加 needs_confirm（yellow）+ demo_guide（blue）chip color，配合既有 amber/rose/emerald palette（B5 Task 17） |
-| Architecture docs | `docs/pawai-brain/architecture/overview.md` §5.1 加上 DemoGuide registry + CapabilityContext 兩列三層結構（B5 Task 18） |
+| Architecture docs | `docs/architecture/brain/overview.md` §5.1 加上 DemoGuide registry + CapabilityContext 兩列三層結構（B5 Task 18） |
 | Tests | pawai_brain 121 / interaction_executive 152 / legacy llm_bridge 2 全綠；wrapper smoke 載入 6 demo guides + 編譯 CompiledStateGraph 通過（B5 Task 19） |
 
 ### Brain contract 不變式（B1-B5 全程守住）
@@ -1406,7 +1406,7 @@ Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦
 
 | 項目 | 結果 |
 |---|---|
-| Spec | `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`（5 次 review 修到綠） |
+| Spec | `docs/architecture/specs/2026-05-06-conversation-engine-langgraph-design.md`（5 次 review 修到綠） |
 | Plan | `docs/archive/pawai-brain-legacy/plans/2026-05-06-conversation-engine-phase-0-5.md`（3 cut / 20 task） |
 | Cut 1 Task 1 — `extract_proposal()` | commit `618492f` + `74f210a`，5 unit test |
 | Cut 1 Task 2 — chat_candidate proposal fields | commit `fc32c18` + `4c1a718`，schema 新增 `proposed_skill` / `proposed_args` / `proposal_reason` / `engine` |
@@ -1546,7 +1546,7 @@ frisbee     → None                          (whitelist 外，UI 顯示但 brai
 | **B1 Plan D Stage 2 — `TTSProviderBase` Protocol** | 純 refactor，4 既有 class 加 class attrs（name/sample_rate/supports_audio_tags），不改邏輯。tts_callback 加 `if not provider.supports_audio_tags` 守門。157+5 tests PASS、edge_tts smoke 行為不變 | ✅ commit `1df3afe` |
 | **B1 Plan D Stage 3 — `TTSProvider_OpenRouterGemini`** | 新 class，name=`openrouter_gemini`、sample_rate=24000、supports_audio_tags=True。讀 OPENROUTER_KEY env，timeout 6.0s default。包 WAV header via stdlib `wave`。6 unit tests + Jetson 3 句 smoke：`[excited]` `[laughs]` `[curious]` 全部 user 耳朵驗收 PASS、cache hit replay 全綠 | ✅ commit `4f6da89` |
 | **B1 Plan D Stage 4 — Fallback chain + log fix** | `_build_fallback_chain`：openrouter_gemini → [edge_tts, piper] / edge_tts → [piper]。tts_callback 重寫成單一 chain 迭代（per-provider 文字 strip + cache key + voice 解析）。Cosmetic：log 顯示 `🎤 [provider_name] (voice: actual_voice)` 取代寫死的 ElevenLabs voice ID | ✅ commit `54c68d0`（5 chain tests）|
-| **B1 Plan D Stage 5 — Spec doc** | `docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md` 174 行：Stage 1 數據、Stage 2-4 設計、Known Limitations、Follow-up 排序 | ✅ commit `5671b33` |
+| **B1 Plan D Stage 5 — Spec doc** | `docs/architecture/specs/2026-05-05-tts-rewrite-result.md` 174 行：Stage 1 數據、Stage 2-4 設計、Known Limitations、Follow-up 排序 | ✅ commit `5671b33` |
 
 ### 5/4 evening commit 鏈
 
@@ -1651,12 +1651,12 @@ a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I
 
 ### 關鍵 spec / feedback 文件
 
-- `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` — Phase B 11 天 sprint design
-- `docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md` — 今日決策 notes
-- `docs/pawai-brain/specs/2026-05-04-llm-eval-result.md` — LLM eval 結果（150 calls 完整數據）
-- `docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md` — redesign spec v2.1
-- `docs/pawai-brain/studio/specs/2026-05-04-design-tokens.md` — 視覺 token rationale
-- `docs/pawai-brain/studio/specs/2026-05-04-studio-redesign-feedback.md` — ui-ux-pro-max review feedback
+- `docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md` — Phase B 11 天 sprint design
+- `docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md` — 今日決策 notes
+- `docs/architecture/specs/2026-05-04-llm-eval-result.md` — LLM eval 結果（150 calls 完整數據）
+- `docs/architecture/studio/specs/2026-05-04-studio-chat-first-redesign-design.md` — redesign spec v2.1
+- `docs/architecture/studio/specs/2026-05-04-design-tokens.md` — 視覺 token rationale
+- `docs/architecture/studio/specs/2026-05-04-studio-redesign-feedback.md` — ui-ux-pro-max review feedback
 
 ---
 
@@ -1708,7 +1708,7 @@ a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I
 
 5/3 evening 第二段已執行（D435 + RPLIDAR 融合到 detour profile）— 見下面「5/3 late-night 補充」。
 
-明天 5/4 = Phase B Day 1，主菜 **B1 LLM eval + TTS 換血**（spec `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` §8）。Nav debt 排到 demo 後修。
+明天 5/4 = Phase B Day 1，主菜 **B1 LLM eval + TTS 換血**（spec `docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md` §8）。Nav debt 排到 demo 後修。
 
 ---
 
@@ -1726,7 +1726,7 @@ a55f83a  polish(studio): chat-first redesign a11y + touch target fixes (commit I
 - `go2_robot_sdk/launch/robot.launch.py`：加 `nav_params_file` LaunchArgument（不傳 arg 時 Demo A 行為 100% 不變）
 - `go2_robot_sdk/config/nav2_params_detour.yaml`：新檔（detour profile，加 d435_scan source / inflation 0.30→0.20 / DWB critic 全降）
 - `scripts/start_nav_capability_demo_tmux_detour.sh`：新檔（含 d435-tf + d435-scan window，reactive 帶 -p danger:=0.40）
-- `docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`：spec
+- `docs/architecture/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`：spec
 - `docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md`：plan + result
 
 **Demo B 話術降階**（誠實版）：
@@ -2310,10 +2310,10 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 ### 新增/修改檔案
 
-- 新增 [`docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
+- 新增 [`docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
 - 新增 [`docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
-- 新增 [`docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/pawai-brain/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
-- 新增 [`docs/pawai-brain/architecture/overview.md`](../docs/pawai-brain/architecture/overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
+- 新增 [`docs/architecture/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/architecture/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
+- 新增 [`docs/architecture/brain/overview.md`](../docs/architecture/brain/overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
 
 ---
 
@@ -2442,7 +2442,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 - 舊判定基於 Go2 內建 LiDAR 5Hz 品質差，業界 SLAM 門檻 7Hz
 - 新實測 RPLIDAR 10.5Hz 超過門檻 → **Full SLAM / Nav2 路線復活為 P0 主線**
-- `docs/navigation/legacy-readme-from-導航避障.md` 的「架構決策 2026-04-01」加 Supersedes 註記
+- `docs/architecture/navigation/legacy-readme-from-導航避障.md` 的「架構決策 2026-04-01」加 Supersedes 註記
 
 **P0 導航避障 spec + plan 定稿**：
 
@@ -2488,10 +2488,10 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 **各模組功能提取計畫**（明天實作）：
 
-- [`docs/pawai-brain/perception/pose/research/2026-04-25-pr41-extraction-plan.md`](../docs/pawai-brain/perception/pose/research/2026-04-25-pr41-extraction-plan.md) — 分類細則 + pose schema
-- [`docs/pawai-brain/perception/gesture/research/2026-04-25-pr38-extraction-plan.md`](../docs/pawai-brain/perception/gesture/research/2026-04-25-pr38-extraction-plan.md) — `_is_waving()` 算法 + UI panel
-- [`docs/pawai-brain/speech/research/2026-04-25-pr42-extraction-plan.md`](../docs/pawai-brain/speech/research/2026-04-25-pr42-extraction-plan.md) — TTS voice + zhconv 簡轉繁 + 去重邏輯
-- [`docs/pawai-brain/perception/object/research/2026-04-25-pr40-extraction-plan.md`](../docs/pawai-brain/perception/object/research/2026-04-25-pr40-extraction-plan.md) — retry 邏輯（重寫去 ultralytics）+ 雙模式 UX
+- [`docs/architecture/perception/pose/research/2026-04-25-pr41-extraction-plan.md`](../docs/architecture/perception/pose/research/2026-04-25-pr41-extraction-plan.md) — 分類細則 + pose schema
+- [`docs/architecture/perception/gesture/research/2026-04-25-pr38-extraction-plan.md`](../docs/architecture/perception/gesture/research/2026-04-25-pr38-extraction-plan.md) — `_is_waving()` 算法 + UI panel
+- [`docs/architecture/speech/research/2026-04-25-pr42-extraction-plan.md`](../docs/architecture/speech/research/2026-04-25-pr42-extraction-plan.md) — TTS voice + zhconv 簡轉繁 + 去重邏輯
+- [`docs/architecture/perception/object/research/2026-04-25-pr40-extraction-plan.md`](../docs/architecture/perception/object/research/2026-04-25-pr40-extraction-plan.md) — retry 邏輯（重寫去 ultralytics）+ 雙模式 UX
 
 ---
 
@@ -2524,8 +2524,8 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 **同步修正的 code/文件不一致**(本次 update-docs 撰寫時一併處理):
 
-- `docs/pawai-brain/speech/README.md` 狀態卡「本地 ASR/LLM 不可用」與下方三級 fallback 流程矛盾 → 澄清本地 ASR 可作 fallback、本地 LLM 僅形式備援
-- `docs/pawai-brain/perception/face/AGENT.md` 的 `/camera/aligned_depth_to_color/image_raw` 缺 double namespace、OpenCV 4.5.4+ 過時宣稱 → 訂正為 `/camera/camera/aligned_depth_to_color/image_raw` + OpenCV ≥ 4.8
+- `docs/architecture/speech/README.md` 狀態卡「本地 ASR/LLM 不可用」與下方三級 fallback 流程矛盾 → 澄清本地 ASR 可作 fallback、本地 LLM 僅形式備援
+- `docs/architecture/perception/face/AGENT.md` 的 `/camera/aligned_depth_to_color/image_raw` 缺 double namespace、OpenCV 4.5.4+ 過時宣稱 → 訂正為 `/camera/camera/aligned_depth_to_color/image_raw` + OpenCV ≥ 4.8
 - `CLAUDE.md` 行 22、365 的 Whisper 敘述容易誤導 → 澄清 CPU int8(yaml 預設)可用、CUDA int8 不支援、Demo 啟動腳本覆寫為 CUDA float16 三層關係
 
 **產出檔案**:

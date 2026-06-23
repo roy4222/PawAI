@@ -1,0 +1,86 @@
+{
+  "version": "2026-05-04",
+  "timestamp": "20260504-095028",
+  "models": [
+    {
+      "alias": "deepseek",
+      "slug": "deepseek/deepseek-v4-flash"
+    }
+  ],
+  "prompts_file": "tools/llm_eval/prompts.json",
+  "results": [
+    {
+      "item_id": "chat-01",
+      "bucket": "chat",
+      "model_alias": "deepseek",
+      "model_slug": "deepseek/deepseek-v4-flash",
+      "turns": [
+        "你好啊"
+      ],
+      "expected_intent": "greet",
+      "expected_skills": [
+        "chat_reply",
+        "wave_hello"
+      ],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.6600995063781738,
+        "response": {
+          "id": "gen-1777859428-YsfaiRprKUJ0UeEzotxT",
+          "object": "chat.completion",
+          "created": 1777859428,
+          "model": "deepseek/deepseek-v4-flash-20260423",
+          "provider": "Novita",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "stop",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[excited] 你好！我是 PawAI，好開心見到你！\", \"skill\": \"wave_hello\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": "我们：用户说“你好啊”，这是打招呼。作为PawAI，应该热情回应。可以用wave_hello技能，或者chat_reply。但wave_hello更符合打招呼场景。reply要简短活泼，带audio tag。",
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.text",
+                    "text": "我们：用户说“你好啊”，这是打招呼。作为PawAI，应该热情回应。可以用wave_hello技能，或者chat_reply。但wave_hello更符合打招呼场景。reply要简短活泼，带audio tag。",
+                    "format": "unknown",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 875,
+            "completion_tokens": 84,
+            "total_tokens": 959,
+            "cost": 0.00014602,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00014602,
+              "upstream_inference_prompt_cost": 0.0001225,
+              "upstream_inference_completions_cost": 2.352e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 68,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[excited] 你好！我是 PawAI，好開心見到你！\", \"skill\": \"wave_hello\", \"args\": {}}",
+      "scores": null
+    }
+  ]
+}

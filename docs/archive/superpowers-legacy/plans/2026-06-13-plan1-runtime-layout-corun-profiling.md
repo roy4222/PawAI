@@ -97,7 +97,7 @@
   - 新增 `scripts/corun_profile.sh`（profiling orchestrator：跑 N 個 sample interval，每 interval 抓 jetson snapshot + 一組 `ros2 topic hz` window）
   - 新增 `scripts/corun_profile_parse.py`（把 raw snapshot log 解析成一張 CSV + pass/fail 判定表）
   - 新增 `scripts/corun_topics.txt`（每配置要 watch 的 topic 清單，see §9）
-  - 新增 `docs/navigation/2026-06-13-corun-profiling-procedure.md`（程序文件 + 決策樹 + 結果模板，文件部分）
+  - 新增 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`（程序文件 + 決策樹 + 結果模板，文件部分）
 - **exact tests**：
   - 新增 `scripts/test_corun_profile_parse.py`（pytest，pure-python，無 ROS/無硬體）：
     - `test_parse_ram_from_free_block`：餵一段 `free -h` fixture → 解析出 used GB 正確。
@@ -109,7 +109,7 @@
     - `test_passfail_node_crash`：snapshot N 的 `ros2 node list` 比 baseline 少了一個 node → fail（crash 偵測）。
     - `test_config_label_required`：parser 收到無 `config=A|B|C` label → 報錯（防止 A/B/C 結果混淆）。
   - 命令：`cd /home/roy422/newLife/elder_and_dog && python3 -m pytest scripts/test_corun_profile_parse.py -v`
-- **rollback**：`git rm scripts/corun_profile.sh scripts/corun_profile_parse.py scripts/corun_topics.txt scripts/test_corun_profile_parse.py docs/navigation/2026-06-13-corun-profiling-procedure.md && git checkout -- .`（純新增檔案，刪除即回復；不動任何既有檔，byte-identical）
+- **rollback**：`git rm scripts/corun_profile.sh scripts/corun_profile_parse.py scripts/corun_topics.txt scripts/test_corun_profile_parse.py docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md && git checkout -- .`（純新增檔案，刪除即回復；不動任何既有檔，byte-identical）
 - **demo impact**：無（純工具，不進 demo runtime；不改 demo 腳本）。
 - **needs_roy**：否（寫 + 單測 AFK 可做）。
 - **needs_go2_motion**：否。
@@ -158,9 +158,9 @@
 - **id**：T5
 - **task_type**：`pure_software`（判讀 + 寫決策表；數據來自 T2–T4）
 - **優先級**：**P0**
-- **exact files to touch**：`docs/navigation/2026-06-13-corun-profiling-procedure.md`（補 §決策樹結果 + 決策表 + 8GB 互斥事實 + cold-start 成本）。
+- **exact files to touch**：`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`（補 §決策樹結果 + 決策表 + 8GB 互斥事實 + cold-start 成本）。
 - **exact tests**：文件 review（無自動測試適用）；但**交叉驗證**：決策表每一格的「可講話術」必須能對映 [claim-wording](../navigation/2026-06-13-nav-618-claim-wording.md) S1–S8 / F1–F10（Cloud review checklist §「overclaim 掃描」逐句檢）。決策表的數字（RAM/溫度/Hz）必須等於 T2–T4 CSV，不得自編。
-- **rollback**：`git checkout -- docs/navigation/2026-06-13-corun-profiling-procedure.md`（回到 T1 寫入的模板版本）。
+- **rollback**：`git checkout -- docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`（回到 T1 寫入的模板版本）。
 - **demo impact**：**這張表是 S1 runtime layout 的決定**，plan6 + plan2 直接消費；錯了會讓 S1 走錯路（押 live nav 撞牆 / 或過度保守退影片）。
 - **needs_roy**：**是**（最終 branch 選定需 Roy 在 6/17 彩排根據實機數據拍板；本計畫提供決策樹，Roy 拍板落點）。
 - **needs_go2_motion**：否。
@@ -170,7 +170,7 @@
 - **id**：T6
 - **task_type**：`jetson`（no-motion）
 - **優先級**：**P1**（決策樹不依賴它，但現場交接旁白需要）
-- **exact files to touch**：`docs/navigation/2026-06-13-corun-profiling-procedure.md`（補 cold-start 成本表 + 交接時間預算）。
+- **exact files to touch**：`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`（補 cold-start 成本表 + 交接時間預算）。
 - **程序**：量 `bash scripts/clean_full_demo.sh` → `bash scripts/start_full_demo_tmux.sh` → 到 `/tts` 可發、face 出圖、ASR warmup done 的牆鐘時間（含 ASR warmup ~12s、object TRT cache hit、gateway up）。同量 nav stack stop→start 到 `/state/nav/heartbeat` 1Hz 的時間。⟹ 推出「S1(nav) 結束 → S2(brain) 開始」的 8GB 交接最短間隔（master open question：1 分鐘 gap 是否需旁白解釋）。
 - **exact tests / acceptance**：產出兩個牆鐘數字（brain cold-start s、nav cold-start s）+ 交接間隔建議（s）；數字寫入 CSV `runtime/profiling/2026-06-13-coldstart.csv`，與文件表一致。
 - **rollback**：`bash scripts/clean_full_demo.sh`；`rm -f runtime/profiling/2026-06-13-coldstart.csv`。
@@ -188,7 +188,7 @@
 
 ## 7. Jetson tasks（no-motion）
 
-> **共通前置 J-0（不可省）**：開工第一件事 = 確認 Go2 停穩（Roy e-stop 在手）+ `pawai demo stop` 清場 + `pkill -9 -f nav_capability; pkill -9 reactive_stop; pkill -9 sllidar`（清掉 6/13 EOD 殘留的 nav-cap-demo 9 windows）+ `ros2 node list` 確認乾淨。對映 [roy-hitl-queue](../runbook/2026-06-13-roy-hitl-queue.md)。
+> **共通前置 J-0（不可省）**：開工第一件事 = 確認 Go2 停穩（Roy e-stop 在手）+ `pawai demo stop` 清場 + `pkill -9 -f nav_capability; pkill -9 reactive_stop; pkill -9 sllidar`（清掉 6/13 EOD 殘留的 nav-cap-demo 9 windows）+ `ros2 node list` 確認乾淨。對映 [roy-hitl-queue](../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)。
 
 - **J-0**：清場（見上）。`needs_roy`=是；`needs_go2_motion`=否。
 - **T2**：配置 A run（brain-full baseline）。
@@ -255,11 +255,11 @@
 
 | 任務 | rollback 指令 |
 |------|--------------|
-| T1（腳本） | `git rm scripts/corun_profile.sh scripts/corun_profile_parse.py scripts/corun_topics.txt scripts/test_corun_profile_parse.py docs/navigation/2026-06-13-corun-profiling-procedure.md`（純新增，刪即回復，byte-identical） |
+| T1（腳本） | `git rm scripts/corun_profile.sh scripts/corun_profile_parse.py scripts/corun_topics.txt scripts/test_corun_profile_parse.py docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`（純新增，刪即回復，byte-identical） |
 | T2（A run） | `bash scripts/clean_full_demo.sh` + `rm -f runtime/profiling/2026-06-13-configA.*` |
 | T3（B run） | `pkill -9 sllidar` + 關額外 foxglove window；`bash scripts/clean_full_demo.sh` + `rm -f runtime/profiling/2026-06-13-configB.*` |
 | T4（C run） | `bash scripts/clean_full_demo.sh && pkill -9 -f nav_capability; pkill -9 reactive_stop; pkill -9 sllidar` + `rm -f runtime/profiling/2026-06-13-configC.*` |
-| T5（決策表） | `git checkout -- docs/navigation/2026-06-13-corun-profiling-procedure.md` |
+| T5（決策表） | `git checkout -- docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md` |
 | T6（cold-start） | `bash scripts/clean_full_demo.sh` + `rm -f runtime/profiling/2026-06-13-coldstart.csv` |
 
 > **全域保守退路**：本計畫**不改任何 demo runtime 行為**（只新增 profiling 工具 + 文件）。最壞情況 = profiling 沒跑成 ⟹ S1 直接走決策樹 branch 3（third-person + Studio brain only + map/LiDAR 影片/截圖），這是 master plan 既有的最保守 S1 fallback，零新風險。
@@ -270,7 +270,7 @@
 
 1. **T1 綠**：`scripts/corun_profile.sh` + `corun_profile_parse.py` + `corun_topics.txt` 寫好，`pytest scripts/test_corun_profile_parse.py -v` 八條全綠。
 2. **T2–T4 三配置各跑 ≥ 3 分鐘**，產出 `runtime/profiling/2026-06-13-config{A,B,C}.csv`，parser 判定每配置 stable/unstable。
-3. **4-branch 決策樹落點**：依下表，Roy 在 6/17 彩排根據實機 CSV 拍定 S1 runtime layout，寫進 `docs/navigation/2026-06-13-corun-profiling-procedure.md` 決策表。
+3. **4-branch 決策樹落點**：依下表，Roy 在 6/17 彩排根據實機 CSV 拍定 S1 runtime layout，寫進 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md` 決策表。
 4. **8GB 互斥事實 + brain cold-start 成本 + 交接時間**（T6）寫入文件。
 5. **決策表每句話術過 claim-wording 掃描**（無 F1–F10 禁語、無 autonomous/即時 SLAM/動態繞障）。
 6. plan6 / plan2 引用本決策表時，本計畫已凍結（6/17 18:00 前）。
@@ -339,7 +339,7 @@
    - 全程**零 motion 指令**（不得出現 `goto`/`cmd_vel`/`/nav/`/Move）。
 3. `scripts/corun_profile_parse.py`：讀 log → 解析 RAM/temp/GPU/topic-Hz/node-list → 套 §9.2 thresholds → 輸出 `runtime/profiling/2026-06-13-config<X>.csv` + stdout 判定（PASS/WARNING/FAIL 逐指標 + 配置 stable/unstable）。要求 `--config` label，缺則報錯。
 4. `scripts/test_corun_profile_parse.py`：§T1 八條 pytest，用 inline fixture（不碰硬體、不碰 ROS）。
-5. `docs/navigation/2026-06-13-corun-profiling-procedure.md`：程序文件骨幹 — 含 §9 watch topics 表、§9.2 thresholds 表、§11.1 4-branch 決策樹、**空白決策表**（待 T5 填）、空白 8GB/cold-start 表（待 T6 填）。
+5. `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`：程序文件骨幹 — 含 §9 watch topics 表、§9.2 thresholds 表、§11.1 4-branch 決策樹、**空白決策表**（待 T5 填）、空白 8GB/cold-start 表（待 T6 填）。
 
 **驗收**：`python3 -m pytest scripts/test_corun_profile_parse.py -v` 八條全綠；`bash -n scripts/corun_profile.sh` 語法檢查過；grep `scripts/corun_profile.sh` 確認**無**任何 motion 關鍵字（`goto`/`cmd_vel`/`Move`/`/nav/`）。
 
@@ -354,7 +354,7 @@
 - `scripts/corun_profile.sh`
 - `scripts/corun_profile_parse.py`
 - `scripts/test_corun_profile_parse.py`
-- `docs/navigation/2026-06-13-corun-profiling-procedure.md`
+- `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md`
 
 **exact tests**：
 - `cd /home/roy422/newLife/elder_and_dog && python3 -m pytest scripts/test_corun_profile_parse.py -v`（八條全綠）
@@ -367,7 +367,7 @@ cd /home/roy422/newLife/elder_and_dog
 python3 -m pytest scripts/test_corun_profile_parse.py -v
 bash -n scripts/corun_profile.sh
 grep -nE "goto|cmd_vel|/nav/|Move\(|api_id" scripts/corun_profile.sh || echo "NO-MOTION OK"
-git add scripts/corun_*.* scripts/test_corun_profile_parse.py docs/navigation/2026-06-13-corun-profiling-procedure.md
+git add scripts/corun_*.* scripts/test_corun_profile_parse.py docs/archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md
 ```
 
 **acceptance**：

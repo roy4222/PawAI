@@ -57,7 +57,7 @@
 - `go2_interfaces/CMakeLists.txt` — 加 actions + Cancel.srv
 - `scripts/send_relative_goal.py` — 改 action client
 - `scripts/start_nav2_amcl_demo_tmux.sh` — 加 nav_capability window
-- `docs/navigation/legacy-readme-from-導航避障.md` — Status 更新
+- `docs/architecture/navigation/legacy-readme-from-導航避障.md` — Status 更新
 
 ### 規約
 - 每個 task 完成跑「**該 task 對應的最小驗證**」（不是全部 unit test）

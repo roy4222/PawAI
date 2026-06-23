@@ -18,7 +18,7 @@ This goal exists to produce a falsifiable verdict on this specific bottleneck. I
 - Hard constraints: **ultralytics 不可裝在 Jetson**（破壞 torch wheel）——export 一律 WSL；TRT provider 參數值必須 `"True"/"False"` 字串；`class_whitelist` 空 list 陷阱
 - Related docs already in repo (cross-validate against these):
   - `object_perception/object_perception/object_perception_node.py`（:384 raw `(300,6)` parse、:159 conf threshold）
-  - `docs/pawai-brain/perception/object/CLAUDE.md`
+  - `docs/architecture/perception/object/CLAUDE.md`
   - `docs/perception/research/2026-06-11-pinto-model-zoo-pawai-fit-report.md` §5a（已裁定：zoo 內 COCO 候選全 SKIP，正解第一刀 = incumbent re-export imgsz=1280）
   - `docs/perception/research/2026-06-11-supervision-pawai-fit-report.md` §7a（低 threshold + ByteTrack 時序確認 spike）
 
@@ -72,7 +72,7 @@ If no enumerated option fits the evidence, the verdict is `NEEDS_NEW_RESEARCH` w
 
 - `docs/perception/research/2026-06-11-pinto-model-zoo-pawai-fit-report.md`（§5a 已裁定 re-export 是第一刀——若本研究推翻它要明說）
 - `docs/perception/research/2026-06-11-supervision-pawai-fit-report.md`（§7a threshold+tracking spike——避免兩條線重複量同一件事）
-- `docs/pawai-brain/perception/object/CLAUDE.md`（現役整合陷阱清單）
+- `docs/architecture/perception/object/CLAUDE.md`（現役整合陷阱清單）
 
 State explicitly when this research's finding contradicts a prior doc, ADR, or commit decision — those tensions are the real signal.
 

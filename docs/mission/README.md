@@ -4,7 +4,7 @@
 > - **Scope**：產品方向 / Demo 劇本 / 八大功能的入口頁與摘要（不放技術細節，那是各模組 README 的事）。
 > - **Status**：active / source-of-truth（mission lane）。**注意**：本頁 §2 定位文字（v2.3, 2026-04-08）仍是「居家互動 + 守護」舊框架；**6/18 專題驗收的定位、禁說清單、能力分級以 [`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) v2 與 [`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md) 為準（後者勝出）**——6/18 一律用「守望」，不用「守護 / 陌生人警報」。
 > - **Owner lane**：mission（戰略邊界）。
-> - **Source-of-truth priority**：實測證據 ([`runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)) ＞ 收斂審計 ([`pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)) ＞ 能力規格 ([`pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)) ＞ 戰略邊界 (north-star v2) ＞ 本頁敘事。
+> - **Source-of-truth priority**：實測證據 ([`runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)) ＞ 收斂審計 ([`archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)) ＞ 能力規格 ([`architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)) ＞ 戰略邊界 (north-star v2) ＞ 本頁敘事。
 > - **Maintained child files**：[`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md)、[`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md)、[`2026-06-18-demo-flow-plan.md`](2026-06-18-demo-flow-plan.md)、[`2026-06-18-final-presentation-outline.md`](2026-06-18-final-presentation-outline.md)、[`sprint-b-prime.md`](sprint-b-prime.md)、[`demo-scope.md`](demo-scope.md)、[`handoff_316.md`](handoff_316.md)、[`meetings/`](meetings/)。
 > - **Archived / legacy boundary**：`meetings/*` 為歷史會議快照（各檔頂部已標 historical）；`archive/` 全 frozen。
 > - **What this README is NOT**：不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）、不是技術細節（見各模組 README）、不是能力 pass/fail 的最終事實依據（見 claim matrix + baseline-evidence）。
@@ -35,8 +35,8 @@
 | 角色 | 閱讀重點 | 延伸文件 |
 |------|----------|----------|
 | 新成員 | 第 1、2、3、7 節 | [setup/README.md](../runbook/README.md) |
-| 手勢/姿勢研究 (黃旭、陳若恩) | 第 5、6、7 節 | [手勢辨識/README.md](../pawai-brain/perception/gesture/README.md) |
-| 前端開發 (魏宇同) | 第 5、6、7 節 | [Pawai-studio/README.md](../pawai-brain/studio/README.md) |
+| 手勢/姿勢研究 (黃旭、陳若恩) | 第 5、6、7 節 | [手勢辨識/README.md](../architecture/perception/gesture/README.md) |
+| 前端開發 (魏宇同) | 第 5、6、7 節 | [Pawai-studio/README.md](../architecture/studio/README.md) |
 | System Architect | 全篇 + 附錄 | [interaction_contract.md](../contracts/interaction_contract.md) |
 
 ---
@@ -368,7 +368,7 @@ idle_listening (Energy VAD 持續監聽)
 - **待擴充（4/8 會議）**：組員各自開發新增手勢種類與對應互動行為
 - 上機驗收通過：stop/thumbs_up/非白名單/距離/dedup 全 PASS
 
-> 詳見 [`docs/pawai-brain/perception/gesture/README.md`](../pawai-brain/perception/gesture/README.md)
+> 詳見 [`docs/architecture/perception/gesture/README.md`](../architecture/perception/gesture/README.md)
 
 ### 5.5 功能 4：姿勢辨識 🔄
 
@@ -383,7 +383,7 @@ idle_listening (Energy VAD 持續監聽)
 - **已知問題（4/8 會議確認）**：跌倒幻覺仍頻繁（無人時誤判有人跌倒，鎖定衣架等物體）。因專題已不以老人照護為主題，**跌倒偵測功能可考慮弱化**
 - L3 壓測 60s 通過（RAM 1.2GB, 52°C, GPU 0%）
 
-> 詳見 [`docs/pawai-brain/perception/pose/README.md`](../pawai-brain/perception/pose/README.md)
+> 詳見 [`docs/architecture/perception/pose/README.md`](../architecture/perception/pose/README.md)
 
 ### 5.6 功能 5：AI 大腦 (PawAI Studio)
 
@@ -508,7 +508,7 @@ LiDAR 正式放棄（3/26）→ D435 反應式避障實作 + 桌測通過（4/1�
 - 雙層安全架構 + safety guard heartbeat
 - Foxglove 3D dashboard 可視化
 - SLAM/Nav2 Gate A-D 驗證框架（見 `docs/archive/refactor/slam-nav2.md`）
-- 詳見 [導航避障/README.md](../navigation/README.md)
+- 詳見 [導航避障/README.md](../architecture/navigation/README.md)
 
 ### 5.9 功能 8：文件網站
 
@@ -826,11 +826,11 @@ docs/
 
 | 目的 | 連結 |
 |------|------|
-| PawAI Studio 設計 | [Pawai-studio/README.md](../pawai-brain/studio/README.md) |
+| PawAI Studio 設計 | [Pawai-studio/README.md](../architecture/studio/README.md) |
 | 介面契約規格 | [interaction_contract.md](../contracts/interaction_contract.md) |
-| 人臉辨識 | [人臉辨識/README.md](../pawai-brain/perception/face/README.md) |
-| 語音功能 | [語音功能/README.md](../pawai-brain/speech/README.md) |
-| Jetson MVP 測試 | [語音功能/jetson-MVP測試.md](../pawai-brain/speech/archive/jetson-MVP測試.md) |
+| 人臉辨識 | [人臉辨識/README.md](../architecture/perception/face/README.md) |
+| 語音功能 | [語音功能/README.md](../architecture/speech/README.md) |
+| Jetson MVP 測試 | [語音功能/jetson-MVP測試.md](../architecture/speech/archive/jetson-MVP測試.md) |
 
 ---
 

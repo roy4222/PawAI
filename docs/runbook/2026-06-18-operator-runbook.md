@@ -2,7 +2,7 @@
 
 > 日期：2026-06-13 起草｜狀態：DRAFT — 待 P4-11 dry-run + Roy 終驗（P4-12 HITL）
 > 來源計畫：`docs/archive/superpowers-legacy/plans/2026-06-13-plan4-operator-controls-studio-runbook.md`（P4-5~P4-13）
-> 對外 claim 一律走 `docs/navigation/2026-06-13-nav-618-claim-wording.md`（S1–S8 可講 / F1–F10 禁講）
+> 對外 claim 一律走 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md`（S1–S8 可講 / F1–F10 禁講）
 
 ---
 
@@ -207,7 +207,7 @@ plan1 co-run profiling 結果：
 
 ### §2.4　nav motion FAILED（引 nav incident plan，不重做）
 
-- 6/13 **goto_relative 0.3m 走歪撞牆**。根因多因（見 `docs/navigation/2026-06-13-nav-motion-incident-root-cause-plan.md`）：
+- 6/13 **goto_relative 0.3m 走歪撞牆**。根因多因（見 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-motion-incident-root-cause-plan.md`）：
   - **T0** `go2.urdf` 把 map→odom / odom→base_link 當 fixed joint 發 `/tf_static`，與 AMCL/driver 雙 authority 衝突（**CO-PRIMARY，先 `ros2 topic echo /tf_static` 排除**）。
   - **R1** AMCL yaw 注入 forward／**R2** 0.5m→1.04m 超衝／**R5** reactive slow-band 沉默 + yaw-blind gate。
 - **本 demo 不靠 goto_relative**。live-motion 僅在 nav incident plan 的 **T0 fix + D1–D5 綠 + θ_error<5° + e-stop + n=3** 全過後才用 **DriveOnHeading（body-frame）**；否則 **S1 退遙控 + Studio 證據 → 影片**。

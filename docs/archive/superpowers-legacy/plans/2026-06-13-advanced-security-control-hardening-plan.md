@@ -10,7 +10,7 @@
 > - 機制層 lane（**不重抄**，本份做其上的 enforcement flip 決策層）：[`docs/archive/superpowers-legacy/plans/2026-06-13-lane5-robot-control-security-hardening-plan.md`](2026-06-13-lane5-robot-control-security-hardening-plan.md)
 > - 系統 Phase 4（post-6/18 全段）：[`docs/archive/superpowers-legacy/plans/2026-06-11-phase4-robot-control-nav-hardening.md`](2026-06-11-phase4-robot-control-nav-hardening.md)
 > - 驗收基線：[`docs/runbook/2026-06-13-post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md) §6（default-off byte-identical、auth-on 401/403 機制已驗）
-> - Nav capability ladder（C1-C12，本份 nav 相關全對齊）：[`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
+> - Nav capability ladder（C1-C12，本份 nav 相關全對齊）：[`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
 > - master 決策登記簿 B-4 / B-5 / B-6：[`docs/archive/superpowers-legacy/plans/2026-06-13-aggressive-pre618-master-plan.md`](2026-06-13-aggressive-pre618-master-plan.md)
 
 ---
@@ -270,10 +270,10 @@ Lane 5 = **機制入庫（預設關 = byte-identical）+ 紅綠單測**。本份
 > 分級 **needs_hitl** · 優先 **P1** · task_type **go2_motion_needed** · before_monday **no** · 進 runtime **maybe**
 
 1. **Desired demo benefit**：確保發表現場有**唯一、可靠、可信來源**的移動中急停；同時修文件債（GAP3-01：`safety_only=true` 會 promote 成 `hold_brake` 永久煞車鎖死 nav，CLAUDE.md 過時宣稱與實際腳本 `mode:=progressive` 矛盾）。
-2. **Current baseline**：`nav_capability/scripts/emergency_stop.py` **已存在**（普通 ROS2 Bool publisher，無認證——ledger MOT-10）。CLAUDE.md / nav 安全鐵則：「移動中禁 Damp、`emergency_stop.py engage` 為唯一移動中急停、teleop 嚴格 kill」（Phase4 §Jetson requirement）。twist_mux `/lock/emergency` priority 255、timeout 0.0（ledger MOT-10）。reactive_stop 4-mode 狀態機（`docs/navigation/CLAUDE.md` 載 27 cases，CLAUDE.md 仍記舊數 17，T4A-7 文件債）。
+2. **Current baseline**：`nav_capability/scripts/emergency_stop.py` **已存在**（普通 ROS2 Bool publisher，無認證——ledger MOT-10）。CLAUDE.md / nav 安全鐵則：「移動中禁 Damp、`emergency_stop.py engage` 為唯一移動中急停、teleop 嚴格 kill」（Phase4 §Jetson requirement）。twist_mux `/lock/emergency` priority 255、timeout 0.0（ledger MOT-10）。reactive_stop 4-mode 狀態機（`docs/architecture/navigation/CLAUDE.md` 載 27 cases，CLAUDE.md 仍記舊數 17，T4A-7 文件債）。
 3. **Candidate options**：(a) **文件債修正**（emergency stop SOP 寫清、reactive_stop 4-mode 與文件對齊，hardening P3-4，**doc 可凍結期先做**）；(b) `/lock/emergency` 來源治理（latched + 受信任節點，MOT-10，**post-6/18**——動安全鏈）；(c) demo-preflight 加「遮 LiDAR 驗 `/cmd_vel_obstacle` 發 0」檢項（碰 `.claude/skills/`，凍結面，排 G5 後）。
 4. **Required data**：發表日 emergency stop 操作 SOP（誰按、按什麼、Go2 連線 vs Damp 的界線）——對齊 nav lane 既有鐵則。
-5. **Pure software tasks**：**文件債修正**（CLAUDE.md / `docs/navigation/CLAUDE.md` reactive_stop 4-mode 與實作逐字對照、emergency stop SOP）——doc 不碰凍結三檔可先做。
+5. **Pure software tasks**：**文件債修正**（CLAUDE.md / `docs/architecture/navigation/CLAUDE.md` reactive_stop 4-mode 與實作逐字對照、emergency stop SOP）——doc 不碰凍結三檔可先做。
 6. **Jetson tasks**：preflight 新檢項真機跑一次（排 G5 後，碰 demo-preflight skill）。
 7. **Go2 HITL tasks**：發表彩排確認 `emergency_stop.py engage` 移動中可靠停 Go2（nav lane 既有鐵則，需 motion）；對齊 ladder **C4** safe-stop（`hardware_proven` `HARDWARE_PROVEN_WITH_LIMIT`）——**注意 emergency stop（操作員主動急停）≠ reactive safe-stop（自動停障）≠ 繞障（C11 `DO_NOT_CLAIM`）**。
 8. **Metrics**：`emergency_stop.py engage` 移動中 Go2 停（撞 0、暴衝 0，對齊 trackB §1 證據）；文件與 `reactive_stop_node.py` 4-mode 零矛盾；`/lock/emergency` 來源治理 = post-6/18。
@@ -297,7 +297,7 @@ Lane 5 = **機制入庫（預設關 = byte-identical）+ 紅綠單測**。本份
 | **AS-4** | §2.1 auth flip | mixed | T5S-8 auth-on 彩排決策驗收（Studio 全流程 + CLI probe + smoke 全綠 → B-6 可選 on）；本份只定門檻與紀錄，不翻 | T5S-3 wiring 單測（無 token header 不帶=現行為）；彩排 = security_smoke + Studio 全流程 | HITL #2（6/15 晚）：Studio 按鈕/push-to-talk/video/nav panel/Evidence 全綠 | env 翻回 default-off（S0-2 已驗 byte-identical） |
 | **AS-5** | §2.2 foxglove | mixed | B-5 決策驗收：若發表不開 Foxglove 且 initialpose 可走 Studio → 降權（單獨 PR，碰凍結腳本逐改知情）；否則 post-6/18 | 降權後：Foxglove 看 topic/image OK、publish `/cmd_vel` 拒；遷工作流：Studio 設 pose → AMCL `Setting pose` log | HITL：降權後驗證 + （若遷）initialpose 實機（對齊 ladder C7） | 拿掉 capabilities 參數一行（PR revert） |
 | **AS-6** | §2.3 whitelist | jetson_needed | whitelist-on 動作回歸決策（誤殺風險評估，發表預設 off）；本份定門檻不翻 | whitelist 單測（內放行/外拒/StopMove 永放行/rate limit 不擋 1Hz dedupe） | HITL：demo 動作全流程零誤殺 + banned 拒 log | param 切 `off` 或 `blacklist` |
-| **AS-7** | §2.10 emergency | go2_motion_needed | 文件債修正（CLAUDE.md / `docs/navigation/CLAUDE.md` reactive_stop 4-mode 對齊、emergency SOP）— **doc 可凍結期先做**；preflight 檢項排 G5 後 | 文件與 `reactive_stop_node.py` 4-mode 逐字對照；`docs/navigation/CLAUDE.md` 27 cases 對齊（修舊數 17） | 發表彩排：移動中 `emergency_stop.py engage` 可靠停（撞 0） | 文件 revert |
+| **AS-7** | §2.10 emergency | go2_motion_needed | 文件債修正（CLAUDE.md / `docs/architecture/navigation/CLAUDE.md` reactive_stop 4-mode 對齊、emergency SOP）— **doc 可凍結期先做**；preflight 檢項排 G5 後 | 文件與 `reactive_stop_node.py` 4-mode 逐字對照；`docs/architecture/navigation/CLAUDE.md` 27 cases 對齊（修舊數 17） | 發表彩排：移動中 `emergency_stop.py engage` 可靠停（撞 0） | 文件 revert |
 | **AS-8** | §2.5/2.6/2.7 | research_only | 三 spec 落地（nav action auth 模型 / DDS isolation + SROS2 評估 / cmd_vel-mux 收斂）——**全 post-6/18，本份只確認 spec 在 Phase4 有歸屬、不寫 code** | spec review（含根因前置 + HITL 升級條件） | 無（不實作） | N/A |
 
 ---
@@ -394,7 +394,7 @@ Lane 5 = **機制入庫（預設關 = byte-identical）+ 紅綠單測**。本份
 3. **§2.4 blacklist 是否進發表 runtime**：低風險縱深防禦（driver 拒 3 條 BANNED）。HITL 動作回歸零誤殺後，Roy 是否點頭翻 enforced（blacklist 模式）？對外可講「driver 層已擋危險 api_id」。**vs** 維持 off + 講「機制已入庫」。
 4. **webrtc filter 完整 api_id 清單**：whitelist 模式需 demo+nav 用到的完整 api_id（sit/stand/hello/stretch/wiggle_hip/balance_stand/Megaphone 4001-4004/StopMove 1003…）。**需 Roy 指認 / 從動作序列實測**——漏一個即誤殺。即使不翻 whitelist，blacklist 也需確認 3 條 BANNED 不在 demo 動作中（已知不在）。
 5. **DDS 真實 interface 名 + Peers 白名單**：`cyclonedds-template.xml` 占位 `eth0` / `192.168.123.161` / `192.168.123.x` 需替換為真實 Jetson-to-Go2 interface 與可信 participant 清單（post-6/18 接線前）。**需 Roy 指認**。
-6. **emergency stop 文件債修正範圍**：CLAUDE.md「`safety_only=true` 必須用於 mux 模式」過時宣稱（與腳本 `mode:=progressive` 矛盾、會 promote `hold_brake` 鎖死 nav）。doc 修正可凍結期先做——Roy 是否授權現在改 CLAUDE.md / `docs/navigation/CLAUDE.md`（含 reactive_stop 27 cases 對齊舊數 17）？
+6. **emergency stop 文件債修正範圍**：CLAUDE.md「`safety_only=true` 必須用於 mux 模式」過時宣稱（與腳本 `mode:=progressive` 矛盾、會 promote `hold_brake` 鎖死 nav）。doc 修正可凍結期先做——Roy 是否授權現在改 CLAUDE.md / `docs/architecture/navigation/CLAUDE.md`（含 reactive_stop 27 cases 對齊舊數 17）？
 7. **post-6/18 三 research spec 排期**：nav action auth（§2.5）、DDS/SROS2（§2.6）、cmd_vel-mux（§2.7）全在 Phase4 有歸屬。本份確認不偷跨進發表前——Roy 確認排期（master G5 解凍後）。
 
 > 本計畫所有「修法」均為設計建議，未實作、未測試（READ-ONLY 審計基礎，且本份只寫計畫）。實作時走既有 TDD + 實機回歸流程，enforcement flip 嚴格依 Lane5 六步硬順序（機制 → 測試 → dry-run → CLI smoke → Jetson smoke → secure-default flip），每步逐項 Roy 拍板，凍結期不翻任何 enforcement。

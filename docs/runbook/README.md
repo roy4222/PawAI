@@ -5,7 +5,7 @@
 > **Owner lane**：ops / runbook。
 > **Source-of-truth 優先序**：本資料夾是**操作 SOP**真相，**不是能力 pass/fail 真相**。能力是否 pass 一律以 `docs/runbook/baseline-evidence/2026-06-04-hitl/`（最新唯一 trusted snapshot）+ canonical claim matrix（`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`）為準。
 > **Maintained child files**：見下方索引。`baseline-evidence/` 是 **read-only 證據資料**（不在本 README 維護範圍，只被引用）。
-> **本 README 不是**：能力 claim 真相（→ baseline-evidence + canonical matrix）、架構真相（→ 各 lane README）、門檻定義（→ `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`）。
+> **本 README 不是**：能力 claim 真相（→ baseline-evidence + canonical matrix）、架構真相（→ 各 lane README）、門檻定義（→ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`）。
 
 ---
 

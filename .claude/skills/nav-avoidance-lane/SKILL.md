@@ -155,7 +155,7 @@ brain-studio-lane start e2e --studio
 
 `safety_only=true` legacy alias = 自動 promote 成 `mode=hold_brake`。
 
-完整 mode 設計與 5/11 B5 burndown：`go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py` 開頭 docstring + `docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0`。
+完整 mode 設計與 5/11 B5 burndown：`go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py` 開頭 docstring + `docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0`。
 
 ## 進一步閱讀
 

@@ -89,7 +89,7 @@
 |------|------|------|
 | mission/README.md v2.0 | ✅ 已完成 | `docs/mission/README.md` |
 | interaction_contract.md v2.0 | ✅ 已完成 | `docs/contracts/interaction_contract.md` |
-| Pawai-studio/ 五份設計文件 | ✅ 已完成 | `docs/pawai-brain/studio/` |
+| Pawai-studio/ 五份設計文件 | ✅ 已完成 | `docs/architecture/studio/` |
 | 本交付清單 | ✅ 已完成 | `docs/mission/handoff_316.md` |
 
 ---
@@ -104,7 +104,7 @@
 | 手勢清單 | 列出 4/13 Demo 要支援的手勢（建議：wave / stop / point / ok） |
 | 延遲評估 | 在本機 webcam 上量測推理延遲，記錄數值 |
 | Jetson 可行性 | 評估 Jetson 8GB 記憶體佔用，是否與 face + speech 共存 |
-| 交付格式 | Markdown 文件，放 `docs/pawai-brain/perception/gesture/research_report.md` |
+| 交付格式 | Markdown 文件，放 `docs/architecture/perception/gesture/research_report.md` |
 
 #### R2: 姿勢辨識方案報告
 
@@ -114,7 +114,7 @@
 | 姿勢清單 | 列出 4/13 Demo 要支援的姿勢（建議：standing / sitting / crouching / fallen） |
 | 延遲評估 | 在本機 webcam 上量測推理延遲，記錄數值 |
 | Jetson 可行性 | 記憶體佔用評估 |
-| 交付格式 | Markdown 文件，放 `docs/pawai-brain/perception/pose/research_report.md` |
+| 交付格式 | Markdown 文件，放 `docs/architecture/perception/pose/research_report.md` |
 
 #### R3: 小 Demo
 
@@ -187,11 +187,11 @@
 
 | 交接項目 | 內容 | 位置 |
 |----------|------|------|
-| **Gateway API 文件** | REST + WebSocket 端點規格 | `docs/pawai-brain/studio/specs/system-architecture.md` |
-| **Event Schema** | 所有事件/狀態的 TypeScript 型別 | `docs/pawai-brain/studio/specs/event-schema.md` |
-| **UI Orchestration** | 面板切換規則 + layout preset | `docs/pawai-brain/studio/specs/ui-orchestration.md` |
-| **Mock Server** | 啟動方式 + 端點說明 | `docs/pawai-brain/studio/specs/system-architecture.md` § Mock Event Server |
-| **面板元件清單** | 11 個面板的資料來源對應 | `docs/pawai-brain/studio/README.md` § 面板清單 |
+| **Gateway API 文件** | REST + WebSocket 端點規格 | `docs/architecture/studio/specs/system-architecture.md` |
+| **Event Schema** | 所有事件/狀態的 TypeScript 型別 | `docs/architecture/studio/specs/event-schema.md` |
+| **UI Orchestration** | 面板切換規則 + layout preset | `docs/architecture/studio/specs/ui-orchestration.md` |
+| **Mock Server** | 啟動方式 + 端點說明 | `docs/architecture/studio/specs/system-architecture.md` § Mock Event Server |
+| **面板元件清單** | 11 個面板的資料來源對應 | `docs/architecture/studio/README.md` § 面板清單 |
 | **啟動指令** | Mock Server + Gateway 啟動 | Roy 口頭 + README |
 
 **鄔接手後獨立開發條件**：

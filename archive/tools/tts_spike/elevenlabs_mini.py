@@ -20,7 +20,7 @@ GO/NO-GO criteria (Roy listens + scores 1-5):
 If GO → spike-real (Megaphone integration) on `spike/elevenlabs-tts-real`.
 If NO-GO → fall back to Gemini native spike (`spike/gemini-native-tts`).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-2a
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P2-2a
 Plan: docs/archive/pawai-brain-legacy/plans/2026-05-11-elevenlabs-spike-and-dual-route.md Phase E-1
 """
 from __future__ import annotations

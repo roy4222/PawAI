@@ -217,7 +217,7 @@ benchmarks/object_eval/
 - object event 正規化（聚合可復用）：`/home/roy422/newLife/elder_and_dog/benchmarks/core/perception_baseline_observer.py:47-74`
 - 既有 reporter / scoreboard gate 慣例：`/home/roy422/newLife/elder_and_dog/benchmarks/core/reporter.py`、`benchmarks/core/scoreboard.py`
 - 當前依賴（無 supervision，維持）：`/home/roy422/newLife/elder_and_dog/object_perception/setup.py`（`install_requires=["setuptools","numpy","opencv-python"]`）
-- Jetson 硬規則（禁 ultralytics、TRT 參數、`--no-deps`）：`/home/roy422/newLife/elder_and_dog/CLAUDE.md`（物體 pipeline 段）+ `docs/pawai-brain/perception/object/CLAUDE.md`
+- Jetson 硬規則（禁 ultralytics、TRT 參數、`--no-deps`）：`/home/roy422/newLife/elder_and_dog/CLAUDE.md`（物體 pipeline 段）+ `docs/architecture/perception/object/CLAUDE.md`
 - Supervision Detections 構造 / CSVSink：https://supervision.roboflow.com/latest/detection/core/ ｜ https://supervision.roboflow.com/latest/how_to/save_detections/
 - Supervision Smoother（需 tracker_id）：https://supervision.roboflow.com/latest/detection/tools/smoother/
 - 6/18 committed plan（VIS-1/2/3 + bonus VIS-6/9/11 不碰）：`/home/roy422/newLife/elder_and_dog/docs/archive/superpowers-legacy/plans/2026-06-08-pawai-6-18-committed-plan.md`

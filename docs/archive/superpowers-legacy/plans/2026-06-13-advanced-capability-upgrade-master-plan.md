@@ -6,7 +6,7 @@
 > **上游連結（引用，不重抄內文）**：
 > - 既有 aggressive 套件（本份是其「如果時間足夠」的進階補充層，不取代）：[`2026-06-13-aggressive-pre618-master-plan.md`](2026-06-13-aggressive-pre618-master-plan.md)（北極星、B-1~B-10、6/17 回穩日、fallback 三層、demo snapshot 凍結）
 > - current baseline：[`docs/runbook/2026-06-13-post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md)（軟體 95% / pre-6/18 ~63% / 北極星 ~33%；HITL #2 Task3 nav 撞牆 NOT_DEMO_READY）
-> - nav capability ladder：[`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12）、claim wording：[`2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（F1-F10）
+> - nav capability ladder：[`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12）、claim wording：[`2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（F1-F10）
 > - 五份 domain plan（全部讀過，本份統領）：
 >   - [Vision / Object Model A-B](2026-06-13-advanced-vision-model-ab-plan.md)（A1-A9）
 >   - [Gesture / Pose](2026-06-13-advanced-gesture-pose-plan.md)（G1-G3 / P1-P3）

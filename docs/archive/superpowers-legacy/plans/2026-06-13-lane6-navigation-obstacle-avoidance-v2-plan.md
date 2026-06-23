@@ -54,7 +54,7 @@
 - `scripts/send_relative_goal.py` + goto client：orphan 根治（signal handling）。
 - 新診斷腳本：`scripts/nav_covariance_probe.py`（covariance 收斂曲線量測）。
 - `tools/pawai_cli/`：`evidence pull` 把 Jetson `runtime/nav_capability/{named_poses,routes}` 納入拉回清單（備份面；CLI 實作但主題歸本 lane）。
-- 文件：capability ladder、restore SOP、HITL matrix、三條研究 spec、claim wording（落 `docs/navigation/`）。
+- 文件：capability ladder、restore SOP、HITL matrix、三條研究 spec、claim wording（落 `docs/architecture/navigation/`）。
 - runtime 資料：named poses / routes 重錄（HITL）。
 
 ## 5. Forbidden scope

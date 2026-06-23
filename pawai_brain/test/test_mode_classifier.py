@@ -1,6 +1,6 @@
 """Unit tests for mode_classifier — 5-mode rule-based classifier.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 """
 from __future__ import annotations
 import pytest

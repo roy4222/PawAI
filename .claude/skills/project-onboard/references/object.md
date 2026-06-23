@@ -23,7 +23,7 @@ Layer 2 感知模組，負責場景物體偵測（YOLO26n ONNX，COCO 80 class +
 | `object_perception/object_perception/object_perception_node.py` | 主 ROS2 節點（YOLO ONNX + TRT EP + HSV）|
 | `object_perception/config/object_perception.yaml` | class_whitelist、模型路徑、TRT cache 路徑 |
 | `object_perception/launch/object_perception.launch.py` | 一鍵 launch |
-| `docs/pawai-brain/perception/object/CLAUDE.md` | 已知陷阱詳細版（TRT 字串、pip 禁令等）|
+| `docs/architecture/perception/object/CLAUDE.md` | 已知陷阱詳細版（TRT 字串、pip 禁令等）|
 
 ## 關鍵 ROS2 topic / event
 
@@ -40,7 +40,7 @@ Layer 2 感知模組，負責場景物體偵測（YOLO26n ONNX，COCO 80 class +
 
 ## 已知陷阱
 
-- **禁止 `pip install ultralytics`**：會破壞 Jetson torch wheel（見 `docs/pawai-brain/perception/object/CLAUDE.md`）
+- **禁止 `pip install ultralytics`**：會破壞 Jetson torch wheel（見 `docs/architecture/perception/object/CLAUDE.md`）
 - **TRT provider 參數值必須是字串** `"True"` / `"False"`，不是 `"1"` / `"0"`
 - **class_whitelist 空 list**：yaml 不要寫 `: []`，需用 `ParameterDescriptor(INTEGER_ARRAY)`
 - **模型路徑**：`/home/jetson/models/yolo26n.onnx`（9.5MB，output `(1,300,6)` NMS-free）

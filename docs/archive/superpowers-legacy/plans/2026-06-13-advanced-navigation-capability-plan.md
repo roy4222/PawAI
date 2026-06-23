@@ -290,7 +290,7 @@ Lane 6（T6-1~T6-10）是**已排程**的 aggressive refactor：ladder 落檔、
 ### T-NAV-1：AMCL initialpose 朝向校正 SOP 文件（A10）
 
 - **task_type**：[pure software]
-- **內容**：產出 `docs/navigation/` 朝向校正 SOP（物理錨定步驟 + goto 前 yaw sanity checklist + 「不目視猜 yaw」硬規則）。引用 `lidar_front_sector.py` / `scan_health_check.py`，不重寫工具。
+- **內容**：產出 `docs/architecture/navigation/` 朝向校正 SOP（物理錨定步驟 + goto 前 yaw sanity checklist + 「不目視猜 yaw」硬規則）。引用 `lidar_front_sector.py` / `scan_health_check.py`，不重寫工具。
 - **tests**：文件 review（Roy 過目）；checklist 可逐條執行（dry-run 走查每條指令存在：`tf2_echo map base_link`、`lidar_front_sector.py` --help）。
 - **HITL checklist**：N/A（純文件）；真機校正在 T-NAV-7。
 - **rollback**：文件，無 code；不合用即廢棄。

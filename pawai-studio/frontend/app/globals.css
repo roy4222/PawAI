@@ -159,7 +159,7 @@
 
 /* ──────────────────────────────────────────────────────────────
  * Chat-first redesign tokens (2026-05-04, Phase B step 1)
- * Spec: docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md
+ * Spec: docs/architecture/studio/specs/2026-05-04-studio-chat-first-redesign-design.md
  *
  * NEW tokens — do NOT replace existing --primary / --background
  * etc. Existing components (button / badge / card) keep using

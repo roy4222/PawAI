@@ -7,7 +7,7 @@ E2E 流程：使用者說話 → SenseVoice（cloud → local → Whisper fallba
 
 ## 權威文件
 
-- **語音模組設計**：`docs/pawai-brain/speech/README.md`
+- **語音模組設計**：`docs/architecture/speech/README.md`
 - **LLM 整合規格**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-llm-integration-mini-spec.md`
 - **ROS2 介面契約**：`docs/contracts/interaction_contract.md` (語音相關 topics)
 

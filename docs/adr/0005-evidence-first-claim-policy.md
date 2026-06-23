@@ -55,7 +55,7 @@ PawAI 對外 / 文件 claim 一律遵守 **evidence-first** 政策：
 
 - claim 真相源 canonical：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../mission/2026-06-18-capability-claim-matrix.md)（8 欄位能力卡 + grade 速查）
 - 當前 trusted snapshot：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（grade + honesty caveats）
-- 量測協定（怎麼量）：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)
+- 量測協定（怎麼量）：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)
 - 真相層級：ADR-0004（本政策的 #1 即該層級的 empirical layer）
 - 6/18 demo 具體禁說清單：ADR-0006
 - 未來若引入新的證據 freeze 流程，開 ADR-000X 補充本政策的取證細節

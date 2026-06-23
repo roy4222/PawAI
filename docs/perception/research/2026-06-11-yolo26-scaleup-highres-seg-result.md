@@ -59,16 +59,16 @@
 - **F26** **現役 6-8Hz 的真相**：`/perception/object/debug_image` 被 `publish_fps: 8.0` 硬性限流（`object_perception/config/object_perception.yaml` publish_fps 行；`object_perception/object_perception/object_perception_node.py:422-424` rate limit），tick 上限 15Hz（`tick_period: 0.067`），相機本身只有 15fps（F30）。CLAUDE.md 的「~6-8 Hz」是 debug topic hz，不是模型吞吐。node 每 tick 的成本大頭是 Python 端：letterbox+blob（:365-372）、HSV 12 色逐 bbox 分析（:401, :83-137）、PIL CJK overlay（:488-501）。→ **換大模型的 Hz 衝擊是「+10~35ms 推理」加在一個本來就 ~60-160ms 的 Python 迴圈上，次線性**。
 - **F27**（估算，標假設）**RAM delta 預算表**（相對現役 n@640 已付的 CUDA context + ORT 基線；假設：FP16 權重 ≈ 2 bytes/param、activation/buffer ∝ 輸入像素 × 通道寬度、單顆 YOLO 級 TRT engine+execution context 全包 ~200-400MB——後者為**經驗值，無單一公開來源，上機 `tegrastats` 實測為準**。可引的最接近公開錨點是 Xavier NX 世代 NVIDIA 論壇案例：staff 載明 cuDNN/TRT 函式庫載入「at least 600 MB」、ORT+TRT EP 整 process 實測 ≥2GB、engine cache 可省 ~700MB——量級上支持「context/函式庫固定成本 >> 權重檔」，但該案例是整 process 口徑、Xavier 非 Orin、非 YOLO 模型，只能當量級錨不能當 delta；https://forums.developer.nvidia.com/t/high-ram-consumption-with-cuda-and-tensorrt-on-jetson-xavier-nx/183109）：**s@640 ≈ +100~250MB（PASS 預期）；n@960 ≈ +100~200MB（PASS 預期）；n@1280 ≈ +200~400MB（邊緣，需實測）；s@960 ≈ +300~600MB（最可能違反 0.8GB 紀律，需實測）**。引擎檔本體都很小（n FP16 engine 8.1MB，F14 表；s 估 ~20-30MB），不是問題。
 - **F28** **真正的 RAM 風險是 build 階段**：ORT TensorRT EP `trt_max_workspace_size` 預設 **1073741824（1GB）**；engine rebuild 觸發條件 = 模型拓撲變更或輸入 shape 超出 cached profile。在 full demo stack 跑著的時候現燒 engine = workspace 峰值 + 統一記憶體 = OOM 風險。另有 `trt_timing_cache_enable` 可跨 build 重用 kernel timing 省 build 時間（現役 code 未開，列為 future option，本研究不改 code）。（https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html）
-- **F29** **TRT build 時間**：現役已知 n@640 首次 build 3-10 分鐘（CLAUDE.md「物體辨識 pipeline」節；`docs/pawai-brain/perception/object/CLAUDE.md` 模型路徑節）。按模型大小/解析度放大估算（假設 build 時間隨 layer 數與 tactic 搜尋空間增長 1-2x）：**3 顆新 engine 上機日現燒 ≈ 30-60 分鐘**——必須前一晚預燒（矩陣 SOP，§5）。trt_cache 容量無虞（每顆 engine 10-40MB）。
+- **F29** **TRT build 時間**：現役已知 n@640 首次 build 3-10 分鐘（CLAUDE.md「物體辨識 pipeline」節；`docs/architecture/perception/object/CLAUDE.md` 模型路徑節）。按模型大小/解析度放大估算（假設 build 時間隨 layer 數與 tactic 搜尋空間增長 1-2x）：**3 顆新 engine 上機日現燒 ≈ 30-60 分鐘**——必須前一晚預燒（矩陣 SOP，§5）。trt_cache 容量無虞（每顆 engine 10-40MB）。
 
 ### E. 相機 / 整合面（本地 code 查證）
 
 - **F30** **現役 demo 相機只餵 640x480@15fps**：`scripts/start_full_demo_tmux.sh:144-145` = `depth_module.depth_profile:=640x480x15`、`rgb_camera.color_profile:=640x480x15`。→ **n@1280 在不動相機的前提下 = 把 640x480 插值放大 2x 餵模型，沒有任何新像素**。
 - **F31** realsense-ros 切高解析的參數已確認：`rgb_camera.color_profile:=1280x720x30`（官方 README 範例原文）。D435 RGB 感光元件支援 1280x720（goal 文件 :44 亦載明）。（https://github.com/IntelRealSense/realsense-ros README）
 - **F32**（計算，標假設）**cup 像素帳**（假設：cup 直徑 ~8cm、D435 RGB HFOV ≈69°、水平像素 = 解析度寬）：1.5m 處場景寬 = 2×1.5×tan(34.5°) ≈ 2.06m → cup 在 **640 寬 ≈ 25px、1280 寬 ≈ 50px**；2.0m 處 ≈ 19px / 37px。COCO 定義 small <32²、medium <96² → **640 capture 下 1.5m 的 cup 已落在 small 物件域（YOLO 最弱區），720p capture 直接抬進 medium 域**。這是「高解析路線」的理論依據，但前提是真像素（F30）。
-- **F33** **node 已是解析度無關**：`letterbox()`（`object_perception_node.py:322-332`）與 `rescale_bbox()`（:337-343）全參數化；`input_size` 是 declared param（:160）。換 1280/960 模型 = 換 ONNX 檔 + 改 `input_size` 參數，**零 code 改動**。唯 fixed-shape 陷阱在案：餵錯 input_size 直接 inference fail（`docs/pawai-brain/perception/object/CLAUDE.md` 坑 #6，2026-05-23 踩過）。
+- **F33** **node 已是解析度無關**：`letterbox()`（`object_perception_node.py:322-332`）與 `rescale_bbox()`（:337-343）全參數化；`input_size` 是 declared param（:160）。換 1280/960 模型 = 換 ONNX 檔 + 改 `input_size` 參數，**零 code 改動**。唯 fixed-shape 陷阱在案：餵錯 input_size 直接 inference fail（`docs/architecture/perception/object/CLAUDE.md` 坑 #6，2026-05-23 踩過）。
 - **F34** **A/B 基礎建設已就位（6/10 準備）**：launch 已有 `OBJECT_MODEL` / `OBJECT_INPUT_SIZE` env 一行切換，註解明列候選 `yolo26s_640.onnx@640 / yolo26n_960.onnx@960 / yolo26s_960.onnx@960`（`object_perception/launch/object_perception.launch.py:19-34`）；TRT cache 按 model stem 分子目錄避免互踩（`object_perception_node.py:271-274`，註解「2026-06-10 model A/B」）。**注意：repo 自己準備的高解析候選是 960，不是 goal 問的 1280**（見 §4 矛盾標注）。
-- **F35** **conf threshold 現況 = 0.35 非 0.5**：launch default 0.35（`launch.py:39`，註解明載 0.5 默默蓋掉 yaml 的歷史教訓）；yaml 0.35（`object_perception/config/object_perception.yaml` confidence_threshold 行，註解「0.5→0.35: 召回率 +5-10%」）。goal 文件 :16 寫 `confidence_threshold=0.5` 是**過時 context**（b1f5058 已改）。且 `confidence_threshold` 不是 runtime param，改門檻必須重啟 node（`docs/pawai-brain/perception/object/CLAUDE.md` 坑 #9）。
+- **F35** **conf threshold 現況 = 0.35 非 0.5**：launch default 0.35（`launch.py:39`，註解明載 0.5 默默蓋掉 yaml 的歷史教訓）；yaml 0.35（`object_perception/config/object_perception.yaml` confidence_threshold 行，註解「0.5→0.35: 召回率 +5-10%」）。goal 文件 :16 寫 `confidence_threshold=0.5` 是**過時 context**（b1f5058 已改）。且 `confidence_threshold` 不是 runtime param，改門檻必須重啟 node（`docs/architecture/perception/object/CLAUDE.md` 坑 #9）。
 - **F36** **class_whitelist 現役 = 家用 7 類含 cup(41)**（yaml `[39, 41, 45, 56, 63, 67, 73]`，2026-06-08 VIS-1）；runtime 可切（VIS-2 callback `object_perception_node.py:250-261`）。bench 矩陣量測時 whitelist 條件要固定，避免吃到 VIS-2 切換污染。
 - **F37** **相機升 720p 的漣漪面**：(a) `face_identity_node` 與 `pawai face enroll` 共用同一 color topic（CLAUDE.md VIS-4 節）→ YuNet 前處理 CPU 變 2.25x 像素；(b) `/event/object_detected` 的 bbox 是原圖像素座標（`object_perception_node.py:395-398` rescale 到 orig_w/h）→ 任何下游假設 640x480 座標域的消費者（Studio overlay 縮放、bbox 面積閾值）要先 audit；(c) USB 頻寬與 RealSense node CPU 上升。→ 矩陣裡「需要動相機」的配置（C/D）排在「不動相機」的 B 之後。
 
@@ -81,7 +81,7 @@
 - **F42** **追蹤（>1m 物體追蹤）不在本 goal 解**：supervision 報告 §6 已排好 ByteTrack offline spike（WSL、一個下午、對 S3 錄影），與本矩陣的 recall 量測互補不重疊——本矩陣只量「各配置 cup@distance 單幀 recall + Hz + RAM」，時序確認的 FP 抑制歸 supervision spike 量。（`docs/perception/research/2026-06-11-supervision-pawai-fit-report.md` §6、§8）
 - **F43** **S3 可接受 Hz 下限**：cup 是事件驅動（`class_cooldown_sec: 5.0`，yaml）、demo 流程是「拿出 cup → brain 講一句」（goal :8、6/9 錄影腳本）；首次偵測延遲 ≤1s 即可 → **偵測迴圈 ≥2Hz 已夠用，矩陣 pass 門檻取 ≥3Hz 留裕度**。相機 15fps（F30）才是事件新鮮度的真上限。
 - **F44** **INT8 不是免費午餐**：官方表 YOLO26n INT8 在 Orin Nano Super 只比 FP16 快 17%（3.80 vs 4.57ms）但 mAP 掉 3.1 點（0.449 vs 0.480）——對「recall 不夠」的問題方向相反，本輪不考慮 INT8。（https://docs.ultralytics.com/guides/nvidia-jetson/）
-- **F45** **官方 ONNX(ORT CPU/CUDA) 路徑 15.76ms vs TRT EP 4.57ms（3.4x）**——PawAI 走 ORT+TRT EP 介於兩者之間（TRT engine + ORT session 開銷）。bench 矩陣量到的「node 內推理 ms」預期落在 6-20ms 區間（n@640），若量出 >30ms 先懷疑 TRT EP fallback 到 CUDA/CPU provider（已知坑：provider 參數值必須 `"True"` 字串，`docs/pawai-brain/perception/object/CLAUDE.md` 坑 #1）。（https://docs.ultralytics.com/guides/nvidia-jetson/）
+- **F45** **官方 ONNX(ORT CPU/CUDA) 路徑 15.76ms vs TRT EP 4.57ms（3.4x）**——PawAI 走 ORT+TRT EP 介於兩者之間（TRT engine + ORT session 開銷）。bench 矩陣量到的「node 內推理 ms」預期落在 6-20ms 區間（n@640），若量出 >30ms 先懷疑 TRT EP fallback 到 CUDA/CPU provider（已知坑：provider 參數值必須 `"True"` 字串，`docs/architecture/perception/object/CLAUDE.md` 坑 #1）。（https://docs.ultralytics.com/guides/nvidia-jetson/）
 
 ---
 
@@ -167,9 +167,9 @@ TRT FP16 精度問題：seg 專屬的沒查到；但偵測版有兩個訊號—�
 
 1. **修正 PINTO 報告 §5a**（`docs/perception/research/2026-06-11-pinto-model-zoo-pawai-fit-report.md:130-135`）：該報告裁定「正確的第一刀 = YOLO26n re-export `imgsz=1280`」。本研究以三點推翻其優先序：(a) n@1280 與 s@640 GFLOPs 等值（F24）但證據強度懸殊（F2 vs F38）；(b) 現役相機 640x480 使 n@1280 退化為插值（F30）——PINTO 報告未考慮相機輸入端；(c) repo 自己 6/10 的 launch 候選清單已內定 960 而非 1280（F34），1280 從未是 repo 共識。**「不用換 zoo 模型、incumbent 路線內解決」的大方向兩報告一致**，只是第一刀從「n 升解析」改為「升 s」。
 2. **與 supervision 報告 §7a/§6 的分工——互補，但其 conf 基線已過時，必須標明**（`docs/perception/research/2026-06-11-supervision-pawai-fit-report.md:143,152-156`）：分工面互補無重疊——為避免兩線重複量同一件事（goal :74 的明確要求）：**本矩陣量「配置 × 距離 × recall/Hz/RAM」（on-device）**，supervision spike 量「threshold+ByteTrack 的 FP 抑制與 track 連續性」（offline/WSL 對錄影）。**矛盾點**：supervision §7a（:154）寫「現行 `confidence_threshold=0.5` 📍`object_perception_node.py:159`」、§6 spike 協議（:143）也以「threshold 0.5 vs 0.3」設計量測——這個 0.5 基線**已被 b1f5058 過時化**（與 §4.3 的 goal :16 是同一筆過時 context）：node `:159` 的 declared default 確實仍是 0.5，但 effective conf 是 **0.35**（launch `:39` 後置 override + yaml 同值，F35）。**連帶配對缺口**：兩線 control 基線因此不一致（supervision spike：0.5 vs 0.3；本矩陣：A0=0.35 vs A1=0.30），「A1 上機數據直接餵 supervision spike 當 ground truth 配對」**在基線對齊前不成立**。對齊二選一：(a) supervision spike 的 baseline 同步改 0.35（**建議**——0.5 已非現役配置，重量它沒有 demo 意義）；或 (b) 本矩陣 A 加量一組 conf=0.5 arm（僅在要保留與 supervision 報告既有數字可比性時才做）。
-3. **goal 文件 context 過時一處**：goal :16 寫 `confidence_threshold=0.5`，現役 launch/yaml 均為 **0.35**（F35；b1f5058 已修，`docs/pawai-brain/perception/object/CLAUDE.md` 坑 #9 在案）。本報告所有「基線」均以 0.35 為準。
+3. **goal 文件 context 過時一處**：goal :16 寫 `confidence_threshold=0.5`，現役 launch/yaml 均為 **0.35**（F35；b1f5058 已修，`docs/architecture/perception/object/CLAUDE.md` 坑 #9 在案）。本報告所有「基線」均以 0.35 為準。
 4. **goal 候選清單 vs repo 既定候選**：goal :8 問「n@1280？s@640？s@960？seg？」；repo launch 註解（F34）既定候選為 `s_640 / n_960 / s_960`——本研究裁定跟隨 repo 的 960 系（理由見 Q5），1280 不進矩陣。
-5. **`docs/pawai-brain/perception/object/CLAUDE.md` 陷阱清單**：全部仍有效且被本矩陣 SOP 引用（ultralytics 禁裝 Jetson → WSL export；TRT 參數字串；fixed-shape input_size；conf 非 runtime param）。無矛盾。
+5. **`docs/architecture/perception/object/CLAUDE.md` 陷阱清單**：全部仍有效且被本矩陣 SOP 引用（ultralytics 禁裝 Jetson → WSL export；TRT 參數字串；fixed-shape input_size；conf 非 runtime param）。無矛盾。
 6. **CLAUDE.md「debug_image ~6-8 Hz」表述的精確化**：該數字含 `publish_fps: 8` 限流上限（F26），不應被讀成「模型只能跑 6-8Hz」——本報告據此判斷模型放大的 Hz 衝擊為次線性，與 CLAUDE.md 字面印象不同但與 code 一致。
 
 ---
@@ -193,7 +193,7 @@ pass 門檻中 recall 80%/50% 的推導見 Q10（由 1−(1−p)³ 事件觸發�
 
 ### WSL 前置動作清單（上機日前完成）
 
-1. WSL 獨立 venv：`uv venv && uv pip install ultralytics onnxruntime`（**禁令只限 Jetson**，`docs/pawai-brain/perception/object/CLAUDE.md` 不能做 #1）。
+1. WSL 獨立 venv：`uv venv && uv pip install ultralytics onnxruntime`（**禁令只限 Jetson**，`docs/architecture/perception/object/CLAUDE.md` 不能做 #1）。
 2. Export 3 顆 ONNX（fixed shape、預設 e2e）：`yolo export model=yolo26s.pt format=onnx imgsz=640`、`model=yolo26n.pt imgsz=960`、`model=yolo26s.pt imgsz=960`；檔名按 launch 註解慣例 `yolo26s_640.onnx / yolo26n_960.onnx / yolo26s_960.onnx`（F34）。
 3. WSL 用 onnxruntime CPU 對 6/9 S3 錄影抽幀做 sanity：確認輸出 shape `(1,300,6)`、cup 在近距幀有偵測、座標域正確（F16/F23 的 engine 風險防線第一層）。**可選加碼**：對整段 S3 錄影離線跑 4 配置 recall 對照，預先排序（即原 NEEDS_TEST_WSL_REPLAY 的內容，降級為加分項）。
 4. `rsync` 3 顆 ONNX 到 `/home/jetson/models/`（走 audited deploy 路徑）。
@@ -246,6 +246,6 @@ pass 門檻中 recall 80%/50% 的推導見 Q10（由 1−(1−p)³ 事件觸發�
 - `object_perception/launch/object_perception.launch.py`（:19-39 OBJECT_MODEL/OBJECT_INPUT_SIZE/conf 0.35）
 - `object_perception/config/object_perception.yaml`（conf 0.35、input_size 640、publish_fps 8、whitelist 7 類、cooldown 5s）
 - `scripts/start_full_demo_tmux.sh`（:144-145 相機 640x480x15）
-- `docs/pawai-brain/perception/object/CLAUDE.md`（陷阱 #1/#6/#9 等）
+- `docs/architecture/perception/object/CLAUDE.md`（陷阱 #1/#6/#9 等）
 - `docs/perception/research/2026-06-11-pinto-model-zoo-pawai-fit-report.md`（§5a，本研究修正其第一刀排序）
 - `docs/perception/research/2026-06-11-supervision-pawai-fit-report.md`（§3.3/§6/§7a，分工對接）

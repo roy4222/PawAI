@@ -18,7 +18,7 @@
 - Lane 3 CLI：[`2026-06-13-lane3-cli-v2-completion-plan.md`](2026-06-13-lane3-cli-v2-completion-plan.md)
 - nav 階梯：[`../../navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
 - nav claim wording：[`../../navigation/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)
-- Roy HITL queue：[`../../runbook/2026-06-13-roy-hitl-queue.md`](../../runbook/2026-06-13-roy-hitl-queue.md)
+- Roy HITL queue：[`../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md`](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)
 - post-refactor 驗收：[`../../runbook/2026-06-13-post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md)
 
 ---
@@ -282,7 +282,7 @@ PowerShell / WSL / macOS / Jetson-only 四欄，標每類指令哪裡原生跑�
   4. 重啟 face node 重訓。
   5. `pawai face test` 確認 sim ≥ 0.7（needs-HITL 重驗）。
 - **rollback**：sim < 0.7 → S2 退 generic greet（不秀具名）或還原前一晚 backup。
-- 交叉引用 [`post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md)、[`roy-hitl-queue.md`](../../runbook/2026-06-13-roy-hitl-queue.md)。
+- 交叉引用 [`post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md)、[`roy-hitl-queue.md`](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)。
 
 #### 8.6.2 confirm wiggle（needs-HITL；proven 僅 peace→OK→WeGo 一次）[Go2 motion needed]
 

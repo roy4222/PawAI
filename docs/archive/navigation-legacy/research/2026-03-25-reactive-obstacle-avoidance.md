@@ -8,7 +8,7 @@
 **文件定位**：技術決策依據 — 反應式避障方案選型與架構設計
 **適用範圍**：Unitree Go2 Pro + Intel RealSense D435 + NVIDIA Jetson Orin Nano 8GB
 **前置文件**：
-- [`docs/navigation/README.md`](../README.md) — 導航避障總體規劃
+- [`docs/architecture/navigation/README.md`](../README.md) — 導航避障總體規劃
 - [`docs/archive/navigation-legacy/research/深度攝影機避障.md`](./深度攝影機避障.md) — Phase 0-2 設計文件
 - [`docs/archive/navigation-legacy/research/Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md`](./Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md) — LiDAR Go/No-Go 分析
 
@@ -644,7 +644,7 @@ clip_distance: 3.0    # 超過 3m 的深度截斷
 | DWB 路徑規劃 | 配置完整，短距導航有時可成功 |
 | twist_mux 仲裁 | `go2_robot_sdk/config/twist_mux.yaml` |
 | D435 URDF | `go2_robot_sdk/urdf/go2_with_realsense.urdf` |
-| 碰撞監控配置 | `docs/navigation/深度攝影機避障.md` 中的 collision_monitor_params |
+| 碰撞監控配置 | `docs/architecture/navigation/深度攝影機避障.md` 中的 collision_monitor_params |
 
 ### 8.2 為什麼棄用
 
@@ -811,12 +811,12 @@ obstacle_guard_node 啟動不依賴其他感知模組，僅需 D435 driver 已�
 
 | 文件 | 路徑 |
 |------|------|
-| 導航避障總體規劃 | `docs/navigation/README.MD` |
-| 深度攝影機避障設計 | `docs/navigation/深度攝影機避障.md` |
-| LiDAR 低頻感測研究 | `docs/navigation/Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md` |
-| 落地計畫 v2 | `docs/navigation/落地計畫_v2.md` |
-| 開源專案採納決策 | `docs/navigation/開源專案/*.md` |
-| Clean Architecture 原則 | `docs/pawai-brain/architecture/designs/clean-architecture.md` |
+| 導航避障總體規劃 | `docs/architecture/navigation/README.MD` |
+| 深度攝影機避障設計 | `docs/architecture/navigation/深度攝影機避障.md` |
+| LiDAR 低頻感測研究 | `docs/architecture/navigation/Go2_低頻感測與BurstGap_研究綜整_2026-03-03.md` |
+| 落地計畫 v2 | `docs/architecture/navigation/落地計畫_v2.md` |
+| 開源專案採納決策 | `docs/architecture/navigation/開源專案/*.md` |
+| Clean Architecture 原則 | `docs/architecture/brain/designs/clean-architecture.md` |
 | ROS2 介面契約 v2.1 | `docs/contracts/interaction_contract.md` |
 | 人臉辨識配置 | `face_perception/config/face_perception.yaml` |
 | twist_mux 配置 | `go2_robot_sdk/config/twist_mux.yaml` |

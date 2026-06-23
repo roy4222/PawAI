@@ -64,7 +64,7 @@ pawai-studio/frontend/
 └──────────────────────────────────────────────────────────┘
 ```
 
-**6 個 feature button → Sheet**（`docs/pawai-brain/studio/README.md` §主畫面架構）：
+**6 個 feature button → Sheet**（`docs/architecture/studio/README.md` §主畫面架構）：
 
 | Icon | Label | Panel |
 |------|-------|-------|
@@ -204,4 +204,4 @@ bash pawai-studio/start-live.sh --mock
 # → open http://localhost:3000/studio
 ```
 
-5/11 狀態：221 tests PASS, tsc 0 errors（`docs/pawai-brain/studio/README.md` §狀態卡）。
+5/11 狀態：221 tests PASS, tsc 0 errors（`docs/architecture/studio/README.md` §狀態卡）。

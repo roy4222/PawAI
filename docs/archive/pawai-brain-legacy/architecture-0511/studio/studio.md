@@ -195,6 +195,6 @@ Face / Speech / Gesture / Pose / Object / Navigation 各對應一個 Panel 元�
 | WS 狀態機 | `pawai-studio/frontend/hooks/use-websocket.ts` |
 | State stores | `pawai-studio/frontend/stores/state-store.ts` |
 | Event ring buffer | `pawai-studio/frontend/stores/event-store.ts` |
-| Studio 設計文件 | `docs/pawai-brain/studio/README.md` |
-| Studio 工作規則 | `docs/pawai-brain/studio/CLAUDE.md` |
+| Studio 設計文件 | `docs/architecture/studio/README.md` |
+| Studio 工作規則 | `docs/architecture/studio/CLAUDE.md` |
 | Mock server schemas | `pawai-studio/backend/schemas.py` |

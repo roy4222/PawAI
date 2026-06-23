@@ -91,7 +91,7 @@ SkillStep ExecutorKind.NAV
 
 subagent/code audit 發現：
 - root `CLAUDE.md` 仍有 `safety_only=true` 和舊 `0.6/1.0` 敘述。
-- `docs/navigation/CLAUDE.md` 有些 `/nav/pause` 舊描述，和目前 goto action 訂 `/state/nav/paused` 不完全一致。
+- `docs/architecture/navigation/CLAUDE.md` 有些 `/nav/pause` 舊描述，和目前 goto action 訂 `/state/nav/paused` 不完全一致。
 - `scripts/start_nav2_amcl_demo_tmux.sh` 還示範 `/goal_pose --once`，但 demo 主線應走 `/nav/goto_relative`。
 
 處置：以 `docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md`、`reactive_stop_node.py`、`start_nav_capability_demo_tmux.sh` 為準。
@@ -128,7 +128,7 @@ Nav2 local_costmap observation_sources: scan + d435
 參考：
 
 ```text
-docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md
+docs/architecture/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md
 ```
 
 ### B2.2 base_link projection

@@ -5,7 +5,7 @@
 > **性質**：記錄 capability baseline 第一次上機實測產出**可信工程證據**的里程碑。
 > **證據檔（git-tracked 副本）**：`docs/runbook/baseline-evidence/2026-06-03-first-trusted-face/`
 > **工作副本（gitignore）**：`artifacts/baseline/2026-06-03-first-trusted-face/`
-> 相關：Spec `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`｜Runbook `docs/runbook/2026-06-18-baseline-runbook.md`
+> 相關：Spec `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`｜Runbook `docs/runbook/2026-06-18-baseline-runbook.md`
 
 ## 達成了什麼
 

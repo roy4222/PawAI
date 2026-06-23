@@ -99,7 +99,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 軟通過。卡住原因待調：
 
 ## 教訓 → SOP 更新
 
-加進 [`docs/navigation/CLAUDE.md`](../CLAUDE.md)（待補）：
+加進 [`docs/architecture/navigation/CLAUDE.md`](../CLAUDE.md)（待補）：
 
 ### 物理錨定 SOP
 

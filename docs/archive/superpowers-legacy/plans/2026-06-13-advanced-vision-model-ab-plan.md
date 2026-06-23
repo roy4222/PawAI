@@ -13,8 +13,8 @@
 > - open-vocab 線：[`2026-06-11-open-vocab-indoor-classes-result.md`](../../perception/research/2026-06-11-open-vocab-indoor-classes-result.md)（NEEDS_TEST_VOCAB_REPLAY）
 > - **既有排程 lane（引用，不重抄內文）**：[`2026-06-13-lane4-vision-benchmark-model-ab-plan.md`](2026-06-13-lane4-vision-benchmark-model-ab-plan.md)（W1-W5 spike + 上機矩陣日）
 > - baseline 事實：[`docs/runbook/2026-06-13-post-refactor-acceptance-report.md`](../../runbook/2026-06-13-post-refactor-acceptance-report.md) §4（cup 0.7/1.0/1.5m recall 全高、conf 0.35、痛點＝cell_phone/bottle 混淆）
-> - 模組真相：[`docs/pawai-brain/perception/object/README.md`](../../pawai-brain/perception/object/README.md)、其 `CLAUDE.md`（踩坑 #6 input_size、#9 conf 非 runtime param）
-> - nav 對齊：[`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12）、[`2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（F1-F10）
+> - 模組真相：[`docs/architecture/perception/object/README.md`](../../pawai-brain/perception/object/README.md)、其 `CLAUDE.md`（踩坑 #6 input_size、#9 conf 非 runtime param）
+> - nav 對齊：[`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12）、[`2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（F1-F10）
 
 ---
 

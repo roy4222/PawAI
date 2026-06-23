@@ -6,7 +6,7 @@
 
 **Goal:** 解 issue 1 音色（edge-tts 像 google 小姐 / Gemini 6-7s）。三段：(1) Spike-Mini 驗 ElevenLabs 音色 + latency；(2) Spike-Real 接 Megaphone Go2 實機；(3) 雙軌路由 fast/quality lane + audio_format/served_by 重構。
 
-**Spec 來源:** `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` P2-2 (Mini + Real + fallback) + P2-3 (雙軌路由 + Provider format)。
+**Spec 來源:** `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` P2-2 (Mini + Real + fallback) + P2-3 (雙軌路由 + Provider format)。
 
 **前置依賴**: 無（不動主鏈，可與 B/C/D 並行）。Branch A merged 後即可開。
 

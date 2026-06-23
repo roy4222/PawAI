@@ -127,7 +127,7 @@ t=93s   zone slow → danger (front_min=0.57m) → reactive_stop 終於 publish 
 2026-05-11  撞牆
 ```
 
-`docs/navigation/CLAUDE.md` 5/1 寫過：
+`docs/architecture/navigation/CLAUDE.md` 5/1 寫過：
 
 > reactive_stop_node `safety_only=true` 必須用於 mux 模式（priority 200）— **clear zone 會 0.60 m/s 永久 shadow nav**
 
@@ -357,7 +357,7 @@ ros2 param set /reactive_stop_node mode released
 | T16 | B3.2 nav spec threshold 改動 decision log 規範（template + git hook 提醒）| 1h |
 | T17 | B3.3 架構翻案 SOP checklist（list pre-flight check items）| 1h |
 | T18 | reactive_stop subscribe `/cmd_vel_joy` 自動 detect hot-publisher + log（取代 demo discipline）| 2h |
-| T19 | mux input topology 文件化到 `docs/navigation/setup/` | 1h |
+| T19 | mux input topology 文件化到 `docs/architecture/navigation/setup/` | 1h |
 | T20 | nav stack pre-flight smoke test script（驗 mux topics / cmd_vel chain / TF）| 2h |
 
 ---
@@ -406,7 +406,7 @@ ros2 param set /reactive_stop_node mode released
 - [Nav2 Voxel Layer Parameters](https://docs.nav2.org/configuration/packages/costmap-plugins/voxel.html)
 - [Nav2 Setup Sensors Guide](https://docs.nav2.org/setup_guides/sensors/setup_sensors.html) — multi-source obstacle_layer
 - [eppl-erau-db/amigo_ros2](https://github.com/eppl-erau-db/amigo_ros2) — Go2 + Jetson + D435 + RPLIDAR
-- [Nav2 STVL Tutorial](https://docs.nav2.org/tutorials/docs/navigation2_with_stvl.html) — RealSense 對 STVL 比 voxel_layer 穩
+- [Nav2 STVL Tutorial](https://docs.nav2.org/tutorials/docs/architecture/navigation2_with_stvl.html) — RealSense 對 STVL 比 voxel_layer 穩
 - arXiv 2410.00572 — Quadruped reactive avoidance（waverider + RMPs）
 
 ### Commits（5/11）

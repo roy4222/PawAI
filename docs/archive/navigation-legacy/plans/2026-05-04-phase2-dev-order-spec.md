@@ -418,7 +418,7 @@ baseline 結果寫進:`docs/archive/navigation-legacy/research/2026-05-XX-baseli
   nav_capability/nav_capability/nav_action_server_node.py      ← PR 1 (B1+B5)
   go2_robot_sdk/config/nav2_params.yaml                        ← PR 2 (B2) + PR 5 (BT path)
   nav_capability/launch/nav_capability.launch.py               ← PR 5 launch arg
-  docs/navigation/CLAUDE.md                                    ← PR 7 註解(若需)
+  docs/architecture/navigation/CLAUDE.md                                    ← PR 7 註解(若需)
   nav_capability/nav_capability/nav_ready_check.py             ← PR 4-lite(若做)
 ```
 

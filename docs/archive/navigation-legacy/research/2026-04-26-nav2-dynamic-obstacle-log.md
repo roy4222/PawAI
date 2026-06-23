@@ -283,5 +283,5 @@ ros2 param set /reactive_stop_node enable false
 - [ ] 方案 B 4 場景驗收通過
 - [ ] 方案 A 至少 case 確認 + 階梯一試過
 - [ ] `references/project-status.md` 更新進度
-- [ ] `docs/navigation/legacy-readme-from-導航避障.md` 加 Demo 切換說明（Nav2 vs reactive）
+- [ ] `docs/architecture/navigation/legacy-readme-from-導航避障.md` 加 Demo 切換說明（Nav2 vs reactive）
 - [ ] 影片：Nav2 demo + reactive demo 各一段

@@ -1,6 +1,6 @@
 """Tests for PendingConfirm state machine.
 
-Spec: docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md §2
+Spec: docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md §2
 """
 import pytest
 

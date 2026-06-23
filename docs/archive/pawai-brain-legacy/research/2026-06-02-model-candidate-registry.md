@@ -6,7 +6,7 @@
 > Drafted: 2026-06-01 Asia/Taipei  
 > File name follows the requested registry path: `2026-06-02-model-candidate-registry.md`  
 > Status: research registry, not a 6/18 implementation plan  
-> Scope anchor: `docs/mission/2026-06-18-demo-north-star.md` and `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
+> Scope anchor: `docs/mission/2026-06-18-demo-north-star.md` and `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`
 
 This document is a future model candidate registry. It is not a 6/18 promise list, not a Brain mainline contract, and not an instruction to add every listed model to the demo.
 

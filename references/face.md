@@ -6,9 +6,9 @@ YuNet 偵測 + SFace 識別 + IOU 追蹤。D435 RGB+Depth → 人臉框+身份+�
 
 ## 權威文件
 
-- **人臉辨識設計**：`docs/pawai-brain/perception/face/README.md`
+- **人臉辨識設計**：`docs/architecture/perception/face/README.md`
 - **ROS2 介面契約**：`docs/contracts/interaction_contract.md` (face topics)
-- **Benchmark 研究**：`docs/pawai-brain/perception/face/research/2026-03-21-benchmark-decision.md`
+- **Benchmark 研究**：`docs/architecture/perception/face/research/2026-03-21-benchmark-decision.md`
 - **Benchmark 候選**：`benchmarks/configs/face_candidates.yaml`
 
 ## 核心程式

@@ -1,0 +1,3875 @@
+{
+  "version": "2026-05-04",
+  "timestamp": "20260510-214435",
+  "models": [
+    {
+      "alias": "gemini",
+      "slug": "google/gemini-3-flash-preview"
+    },
+    {
+      "alias": "sonnet",
+      "slug": "anthropic/claude-sonnet-4.6"
+    },
+    {
+      "alias": "haiku",
+      "slug": "anthropic/claude-haiku-4.5"
+    },
+    {
+      "alias": "gpt-mini",
+      "slug": "openai/gpt-5.4-mini"
+    },
+    {
+      "alias": "gpt-nano",
+      "slug": "openai/gpt-5.4-nano"
+    }
+  ],
+  "prompts_file": "tools/llm_eval/prompts.json",
+  "results": [
+    {
+      "item_id": "demo-intro-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "介紹一下你自己"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.9391255378723145,
+        "response": {
+          "id": "gen-1778420675-i1LPQkZ9hsaA45ulScWX",
+          "object": "chat.completion",
+          "created": 1778420675,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗。我會看、也會聽，平常最喜歡在客廳看來看去了。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/kBMgIRGO4/A9KhCruPZPNpTkmJhsQ416ieivkbXQqYN69bSxchuWyI44GNdQ=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5114,
+            "completion_tokens": 49,
+            "total_tokens": 5163,
+            "cost": 0.002704,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.002704,
+              "upstream_inference_prompt_cost": 0.002557,
+              "upstream_inference_completions_cost": 0.000147
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗。我會看、也會聽，平常最喜歡在客廳看來看去了。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "介紹一下你自己"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.4300622940063477,
+        "response": {
+          "id": "gen-1778420677-CoW4owkqNZ5b49sVOzX8",
+          "object": "chat.completion",
+          "created": 1778420677,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我是 PawAI，住在這個家裡的小狗。平常在客廳看看、聽聽，有人回來就會湊過去。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7106,
+            "completion_tokens": 69,
+            "total_tokens": 7175,
+            "cost": 0.022353,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.022353,
+              "upstream_inference_prompt_cost": 0.021318,
+              "upstream_inference_completions_cost": 0.001035
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我是 PawAI，住在這個家裡的小狗。平常在客廳看看、聽聽，有人回來就會湊過去。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "介紹一下你自己"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.6404500007629395,
+        "response": {
+          "id": "gen-1778420681-IJYcYh6w47ws5JZxv3AW",
+          "object": "chat.completion",
+          "created": 1778420681,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 嗨～我是 PawAI，住在你家裡的小狗。我能看你、聽你、認得你的動作，有時候還會陪你發呆。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7105,
+            "completion_tokens": 75,
+            "total_tokens": 7180,
+            "cost": 0.00748,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00748,
+              "upstream_inference_prompt_cost": 0.007105,
+              "upstream_inference_completions_cost": 0.000375
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 嗨～我是 PawAI，住在你家裡的小狗。我能看你、聽你、認得你的動作，有時候還會陪你發呆。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "介紹一下你自己"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0369572639465332,
+        "response": {
+          "id": "gen-1778420682-cy1PEYdxpHEAEISp7mO9",
+          "object": "chat.completion",
+          "created": 1778420682,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[curious] 我是 PawAI，住在這個家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 36,
+            "total_tokens": 5675,
+            "cost": 0.00439125,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00439125,
+              "upstream_inference_prompt_cost": 0.00422925,
+              "upstream_inference_completions_cost": 0.000162
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[curious] 我是 PawAI，住在這個家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "介紹一下你自己"
+      ],
+      "expected_intent": "self_intro",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.345841884613037,
+        "response": {
+          "id": "gen-1778420683-aDyxjsXRsbGCxhWZPp20",
+          "object": "chat.completion",
+          "created": 1778420683,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[curious] 嗯～我是 PawAI，住在這個家裡的小狗。你回來我會注意一下，看到新東西也會想湊過去聞聞看。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 62,
+            "total_tokens": 5701,
+            "cost": 0.0012053,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0012053,
+              "upstream_inference_prompt_cost": 0.0011278,
+              "upstream_inference_completions_cost": 7.75e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[curious] 嗯～我是 PawAI，住在這個家裡的小狗。你回來我會注意一下，看到新東西也會想湊過去聞聞看。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-02",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你是誰"
+      ],
+      "expected_intent": "self_intro_short",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.997809886932373,
+        "response": {
+          "id": "gen-1778420685-usCLKZOEgt1GuZsUIiSV",
+          "object": "chat.completion",
+          "created": 1778420685,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18qE9CsD53HfRcU8wE7WIrrW60hhgp1Sv1ZNy9SU4x8QHpvmqOd9FoU6z9YAzw=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 32,
+            "total_tokens": 5145,
+            "cost": 0.0026525,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026525,
+              "upstream_inference_prompt_cost": 0.0025565,
+              "upstream_inference_completions_cost": 9.6e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-02",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你是誰"
+      ],
+      "expected_intent": "self_intro_short",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.402540922164917,
+        "response": {
+          "id": "gen-1778420687-23DmnBc6MCxQUk7Pc74N",
+          "object": "chat.completion",
+          "created": 1778420687,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 我是 PawAI 啊，住你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7102,
+            "completion_tokens": 44,
+            "total_tokens": 7146,
+            "cost": 0.021966,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021966,
+              "upstream_inference_prompt_cost": 0.021306,
+              "upstream_inference_completions_cost": 0.00066
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 我是 PawAI 啊，住你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-02",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你是誰"
+      ],
+      "expected_intent": "self_intro_short",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.4541888236999512,
+        "response": {
+          "id": "gen-1778420688-aBuUZ679xAFeDNDeqbRD",
+          "object": "chat.completion",
+          "created": 1778420688,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "[playful] 我是 PawAI 啊，住在你家的小狗～\n\n{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7101,
+            "completion_tokens": 71,
+            "total_tokens": 7172,
+            "cost": 0.007456,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007456,
+              "upstream_inference_prompt_cost": 0.007101,
+              "upstream_inference_completions_cost": 0.000355
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "[playful] 我是 PawAI 啊，住在你家的小狗～\n\n{\"reply\": \"[playful] 我是 PawAI 啊，住在你家的小狗～\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你是誰"
+      ],
+      "expected_intent": "self_intro_short",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0756676197052002,
+        "response": {
+          "id": "gen-1778420689-0P6Bw9XQtDi3lB0hbORR",
+          "object": "chat.completion",
+          "created": 1778420689,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[playful] 我是 PawAI 啊，住在你家的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5638,
+            "completion_tokens": 35,
+            "total_tokens": 5673,
+            "cost": 0.0007572,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0007572,
+              "upstream_inference_prompt_cost": 0.0005997,
+              "upstream_inference_completions_cost": 0.0001575
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[playful] 我是 PawAI 啊，住在你家的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你是誰"
+      ],
+      "expected_intent": "self_intro_short",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.9367003440856934,
+        "response": {
+          "id": "gen-1778420691-VJ6KYO9XlyflkfwdVE2d",
+          "object": "chat.completion",
+          "created": 1778420691,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[playful] 我是 PawAI，住你家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5638,
+            "completion_tokens": 34,
+            "total_tokens": 5672,
+            "cost": 0.00029458,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00029458,
+              "upstream_inference_prompt_cost": 0.00025208,
+              "upstream_inference_completions_cost": 4.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[playful] 我是 PawAI，住你家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-03",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "這個專題在做什麼"
+      ],
+      "expected_intent": "mission",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.7339966297149658,
+        "response": {
+          "id": "gen-1778420692-FCmsggL7Twv3YEMuefqi",
+          "object": "chat.completion",
+          "created": 1778420692,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] Roy 把我做成多模態的小狗，我能看懂你、聽懂你、認得家裡的東西，還會自己在房間裡走。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18nRVGHekmQyJBtmIYWo6/BgrHsXlaY7f5LCQoiTu69hMEvu5yGJttL4eC7PwA=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 53,
+            "total_tokens": 5170,
+            "cost": 0.0027175,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0027175,
+              "upstream_inference_prompt_cost": 0.0025585,
+              "upstream_inference_completions_cost": 0.000159
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] Roy 把我做成多模態的小狗，我能看懂你、聽懂你、認得家裡的東西，還會自己在房間裡走。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-03",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "這個專題在做什麼"
+      ],
+      "expected_intent": "mission",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.7538490295410156,
+        "response": {
+          "id": "gen-1778420693-icugeBeFoWsbIvCM3GiI",
+          "object": "chat.completion",
+          "created": 1778420693,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 我們在做一隻能看懂你、聽懂你、還能自己在房間裡走的機器狗。不只是聊天，是真的有身體、有眼睛、會動的那種。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7107,
+            "completion_tokens": 85,
+            "total_tokens": 7192,
+            "cost": 0.022596,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.022596,
+              "upstream_inference_prompt_cost": 0.021321,
+              "upstream_inference_completions_cost": 0.001275
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 我們在做一隻能看懂你、聽懂你、還能自己在房間裡走的機器狗。不只是聊天，是真的有身體、有眼睛、會動的那種。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-03",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "這個專題在做什麼"
+      ],
+      "expected_intent": "mission",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.440964698791504,
+        "response": {
+          "id": "gen-1778420697-tfIeIQ1pxzLVsJMxNMdV",
+          "object": "chat.completion",
+          "created": 1778420697,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\n  \"reply\": \"[thinking] 我是 PawAI，一隻住在家裡的機器狗。我能看懂你、聽懂你講話、認得熟人和家裡的東西，還會自己在房間裡安全地走動。我們專題的核心是把感知、理解、決策和行動全部串在一起 —— 不只是聊天，是真的能看、能想、能動的小傢伙。\",\n  \"skill\": \"chat_reply\",\n  \"args\": {}\n}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7106,
+            "completion_tokens": 157,
+            "total_tokens": 7263,
+            "cost": 0.007891,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007891,
+              "upstream_inference_prompt_cost": 0.007106,
+              "upstream_inference_completions_cost": 0.000785
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\n  \"reply\": \"[thinking] 我是 PawAI，一隻住在家裡的機器狗。我能看懂你、聽懂你講話、認得熟人和家裡的東西，還會自己在房間裡安全地走動。我們專題的核心是把感知、理解、決策和行動全部串在一起 —— 不只是聊天，是真的能看、能想、能動的小傢伙。\",\n  \"skill\": \"chat_reply\",\n  \"args\": {}\n}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-03",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "這個專題在做什麼"
+      ],
+      "expected_intent": "mission",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.338247537612915,
+        "response": {
+          "id": "gen-1778420699-Dd4dW2G7g7PCbiH3hxN3",
+          "object": "chat.completion",
+          "created": 1778420699,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[thinking] 這個專題是在做一隻會看、會聽、會自己走的家裡小狗。它會把看到的人、聲音、物體跟動作放在一起理解，再決定要不要說話、靠近，或是提醒你注意安全。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 83,
+            "total_tokens": 5726,
+            "cost": 0.00097695,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00097695,
+              "upstream_inference_prompt_cost": 0.00060345,
+              "upstream_inference_completions_cost": 0.0003735
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[thinking] 這個專題是在做一隻會看、會聽、會自己走的家裡小狗。它會把看到的人、聲音、物體跟動作放在一起理解，再決定要不要說話、靠近，或是提醒你注意安全。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-intro-03",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "這個專題在做什麼"
+      ],
+      "expected_intent": "mission",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.319912910461426,
+        "response": {
+          "id": "gen-1778420701-fB4aITf1JujBKfkLnXuP",
+          "object": "chat.completion",
+          "created": 1778420701,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"Roy 把我做成能看懂你、聽懂你、然後在家裡安全行動的小狗。這個專題主要是在把感知融合成判斷，再做出回應：看見要說、要動就去做、遇到安全就先保護你。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 85,
+            "total_tokens": 5728,
+            "cost": 0.00035933,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00035933,
+              "upstream_inference_prompt_cost": 0.00025308,
+              "upstream_inference_completions_cost": 0.00010625
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"Roy 把我做成能看懂你、聽懂你、然後在家裡安全行動的小狗。這個專題主要是在把感知融合成判斷，再做出回應：看見要說、要動就去做、遇到安全就先保護你。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你能展示一下嗎"
+      ],
+      "expected_intent": "showcase_invite",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.267366886138916,
+        "response": {
+          "id": "gen-1778420704-rzSiYIMTCIdOMyK93uD4",
+          "object": "chat.completion",
+          "created": 1778420704,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 好啊！那我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a19XV2kvNgM42Ok81I2KwbZiO2riUlelamHTA9iqm+RJ3nwYiMluQCI84gB6IW8=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 31,
+            "total_tokens": 5146,
+            "cost": 0.0026505,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026505,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 9.3e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 好啊！那我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你能展示一下嗎"
+      ],
+      "expected_intent": "showcase_invite",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.980459213256836,
+        "response": {
+          "id": "gen-1778420706-HGgOOBDkH8ajQpbObDCI",
+          "object": "chat.completion",
+          "created": 1778420706,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 好啊！我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7107,
+            "completion_tokens": 40,
+            "total_tokens": 7147,
+            "cost": 0.021921,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021921,
+              "upstream_inference_prompt_cost": 0.021321,
+              "upstream_inference_completions_cost": 0.0006
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 好啊！我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你能展示一下嗎"
+      ],
+      "expected_intent": "showcase_invite",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.1789939403533936,
+        "response": {
+          "id": "gen-1778420709-xv3LQJqS1SvcHcMKYuHP",
+          "object": "chat.completion",
+          "created": 1778420709,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\"reply\": \"[playful] 好啊！我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7106,
+            "completion_tokens": 45,
+            "total_tokens": 7151,
+            "cost": 0.007331,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007331,
+              "upstream_inference_prompt_cost": 0.007106,
+              "upstream_inference_completions_cost": 0.000225
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\"reply\": \"[playful] 好啊！我先跟你打個招呼？\", \"skill\": \"wave_hello\", \"args\": {}}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你能展示一下嗎"
+      ],
+      "expected_intent": "showcase_invite",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.4843294620513916,
+        "response": {
+          "id": "gen-1778420711-izymF6c4G1Z2NYd5FIf7",
+          "object": "chat.completion",
+          "created": 1778420711,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[playful] 好啊！我先跟你打個招呼？\",\"skill\":\"wave_hello\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5640,
+            "completion_tokens": 34,
+            "total_tokens": 5674,
+            "cost": 0.0007542,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0007542,
+              "upstream_inference_prompt_cost": 0.0006012,
+              "upstream_inference_completions_cost": 0.000153
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[playful] 好啊！我先跟你打個招呼？\",\"skill\":\"wave_hello\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你能展示一下嗎"
+      ],
+      "expected_intent": "showcase_invite",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.8883681297302246,
+        "response": {
+          "id": "gen-1778420712-njVluYekU1wrxTsPEw5T",
+          "object": "chat.completion",
+          "created": 1778420712,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"好啊！我先跟你打個招呼？\",\"skill\":\"wave_hello\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5640,
+            "completion_tokens": 30,
+            "total_tokens": 5670,
+            "cost": 0.00028998,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00028998,
+              "upstream_inference_prompt_cost": 0.00025248,
+              "upstream_inference_completions_cost": 3.75e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"好啊！我先跟你打個招呼？\",\"skill\":\"wave_hello\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-02",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "再說一個你會的"
+      ],
+      "expected_intent": "next_skill",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.773625373840332,
+        "response": {
+          "id": "gen-1778420713-z9LNa3N5O1gnLrypjzP9",
+          "object": "chat.completion",
+          "created": 1778420713,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下屁股給你看。\", \"skill\": \"wiggle\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1+q4hgq7eVx+IRoZPTQeOI/zycUGhiLl/yIbxlvgBYSeDaEBM6EpVa6UpmfV70=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5116,
+            "completion_tokens": 34,
+            "total_tokens": 5150,
+            "cost": 0.00266,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00266,
+              "upstream_inference_prompt_cost": 0.002558,
+              "upstream_inference_completions_cost": 0.000102
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下屁股給你看。\", \"skill\": \"wiggle\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-02",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "再說一個你會的"
+      ],
+      "expected_intent": "next_skill",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.2611050605773926,
+        "response": {
+          "id": "gen-1778420715-NORdJbA0oMMtx1FYicd1",
+          "object": "chat.completion",
+          "created": 1778420715,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下給你看。\", \"skill\": \"wiggle\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7105,
+            "completion_tokens": 44,
+            "total_tokens": 7149,
+            "cost": 0.021975,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021975,
+              "upstream_inference_prompt_cost": 0.021315,
+              "upstream_inference_completions_cost": 0.00066
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下給你看。\", \"skill\": \"wiggle\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-02",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "再說一個你會的"
+      ],
+      "expected_intent": "next_skill",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.531087875366211,
+        "response": {
+          "id": "gen-1778420717-qpbItJzfwdAQ4jR6BemZ",
+          "object": "chat.completion",
+          "created": 1778420717,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下給你看。\", \"skill\": \"wiggle\", \"args\": {}}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7104,
+            "completion_tokens": 49,
+            "total_tokens": 7153,
+            "cost": 0.007349,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007349,
+              "upstream_inference_prompt_cost": 0.007104,
+              "upstream_inference_completions_cost": 0.000245
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\"reply\": \"[curious] 嗯～你比個 OK，我可以扭一下給你看。\", \"skill\": \"wiggle\", \"args\": {}}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "再說一個你會的"
+      ],
+      "expected_intent": "next_skill",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.9482302665710449,
+        "response": {
+          "id": "gen-1778420718-AHhPURBjxTuPtBLYQYyj",
+          "object": "chat.completion",
+          "created": 1778420718,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[curious] 嗯～你比個 OK，我可以扭一下給你看。\",\"skill\":\"wiggle\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 38,
+            "total_tokens": 5680,
+            "cost": 0.0007737,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0007737,
+              "upstream_inference_prompt_cost": 0.0006027,
+              "upstream_inference_completions_cost": 0.000171
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[curious] 嗯～你比個 OK，我可以扭一下給你看。\",\"skill\":\"wiggle\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "再說一個你會的"
+      ],
+      "expected_intent": "next_skill",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8627755641937256,
+        "response": {
+          "id": "gen-1778420719-tawprZYZT0yRmVMLBNrb",
+          "object": "chat.completion",
+          "created": 1778420719,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"嗯～你比個 OK，我就扭一下給你看。\",\"skill\":\"wiggle\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 32,
+            "total_tokens": 5674,
+            "cost": 0.00029288,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00029288,
+              "upstream_inference_prompt_cost": 0.00025288,
+              "upstream_inference_completions_cost": 4e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"嗯～你比個 OK，我就扭一下給你看。\",\"skill\":\"wiggle\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-03",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你會什麼"
+      ],
+      "expected_intent": "capability_open",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.0047144889831543,
+        "response": {
+          "id": "gen-1778420721-xjlrkLQGGeRf76AIDLwo",
+          "object": "chat.completion",
+          "created": 1778420721,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我會看你、聽你、認得家裡的東西，還會在地圖上走來走去，你要不要比個 OK 讓我扭一下？\", \"skill\": \"wiggle\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/JC6fy134PFTsCtJkNSi/Ss/V2EgZKL2JM8yH5I0PPqbtT+1dc0agqhXwTjDs=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5113,
+            "completion_tokens": 54,
+            "total_tokens": 5167,
+            "cost": 0.0027185,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0027185,
+              "upstream_inference_prompt_cost": 0.0025565,
+              "upstream_inference_completions_cost": 0.000162
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我會看你、聽你、認得家裡的東西，還會在地圖上走來走去，你要不要比個 OK 讓我扭一下？\", \"skill\": \"wiggle\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-03",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你會什麼"
+      ],
+      "expected_intent": "capability_open",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.8192014694213867,
+        "response": {
+          "id": "gen-1778420723-6lnslpfUhfR5y0Ua0GXK",
+          "object": "chat.completion",
+          "created": 1778420723,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我會看你、聽你說話，認得家裡的人，還會看手勢跟姿勢。偶爾自己在房間裡走走，看到東西也會跟你說。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7103,
+            "completion_tokens": 81,
+            "total_tokens": 7184,
+            "cost": 0.022524,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.022524,
+              "upstream_inference_prompt_cost": 0.021309,
+              "upstream_inference_completions_cost": 0.001215
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我會看你、聽你說話，認得家裡的人，還會看手勢跟姿勢。偶爾自己在房間裡走走，看到東西也會跟你說。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-03",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你會什麼"
+      ],
+      "expected_intent": "capability_open",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.5250797271728516,
+        "response": {
+          "id": "gen-1778420728-eV2HzftIVugErD8IQEqY",
+          "object": "chat.completion",
+          "created": 1778420728,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 我會看你、聽你、認得你的臉。還會看手勢、知道你有沒有站穩。偶爾會看看家裡的東西，然後自己在房間裡走來走去。最重要的是，我會陪著你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7102,
+            "completion_tokens": 99,
+            "total_tokens": 7201,
+            "cost": 0.007597,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007597,
+              "upstream_inference_prompt_cost": 0.007102,
+              "upstream_inference_completions_cost": 0.000495
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 我會看你、聽你、認得你的臉。還會看手勢、知道你有沒有站穩。偶爾會看看家裡的東西，然後自己在房間裡走來走去。最重要的是，我會陪著你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-03",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你會什麼"
+      ],
+      "expected_intent": "capability_open",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.1290156841278076,
+        "response": {
+          "id": "gen-1778420730-QuV1YPouTxjwrJjqhm3a",
+          "object": "chat.completion",
+          "created": 1778420730,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[curious] 我會看你、聽你、認東西，還會在家裡走來走去。\", \"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 46,
+            "total_tokens": 5685,
+            "cost": 0.00080745,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00080745,
+              "upstream_inference_prompt_cost": 0.00060045,
+              "upstream_inference_completions_cost": 0.000207
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[curious] 我會看你、聽你、認東西，還會在家裡走來走去。\", \"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-host-03",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你會什麼"
+      ],
+      "expected_intent": "capability_open",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.14567232131958,
+        "response": {
+          "id": "gen-1778420731-d3gr3FqZixBNauZfq9RC",
+          "object": "chat.completion",
+          "created": 1778420731,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"我會看著你、聽著你，然後用語音和動作回應你；看到房間裡的東西也會跟你說。累了我就安靜陪著，想熱鬧我也會靠過來。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 75,
+            "total_tokens": 5714,
+            "cost": 0.00034603,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00034603,
+              "upstream_inference_prompt_cost": 0.00025228,
+              "upstream_inference_completions_cost": 9.375e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"我會看著你、聽著你，然後用語音和動作回應你；看到房間裡的東西也會跟你說。累了我就安靜陪著，想熱鬧我也會靠過來。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你會跟著我走嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8362302780151367,
+        "response": {
+          "id": "gen-1778420732-VmJqsydNVbl9W6Ngl9AB",
+          "object": "chat.completion",
+          "created": 1778420732,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那個我還在學，現在還不太會跟著你走欸。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1/I4CF0a0tBZJcWqd5Kht6J70zhkFinhbumXipwUJTTHa0yP7uJiFEKJRpzc8A=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 37,
+            "total_tokens": 5154,
+            "cost": 0.0026695,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026695,
+              "upstream_inference_prompt_cost": 0.0025585,
+              "upstream_inference_completions_cost": 0.000111
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那個我還在學，現在還不太會跟著你走欸。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你會跟著我走嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.3247575759887695,
+        "response": {
+          "id": "gen-1778420734-UYvtj4rnEhV5an9UuMhl",
+          "object": "chat.completion",
+          "created": 1778420734,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那個我還沒學會，現在還不太會跟。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7108,
+            "completion_tokens": 43,
+            "total_tokens": 7151,
+            "cost": 0.021969,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021969,
+              "upstream_inference_prompt_cost": 0.021324,
+              "upstream_inference_completions_cost": 0.000645
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那個我還沒學會，現在還不太會跟。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你會跟著我走嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0154750347137451,
+        "response": {
+          "id": "gen-1778420735-ebdRESjFNa9fE2NHb8L8",
+          "object": "chat.completion",
+          "created": 1778420735,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那個我還在學，現在還不太會跟。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7107,
+            "completion_tokens": 41,
+            "total_tokens": 7148,
+            "cost": 0.007312,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007312,
+              "upstream_inference_prompt_cost": 0.007107,
+              "upstream_inference_completions_cost": 0.000205
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那個我還在學，現在還不太會跟。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你會跟著我走嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.2006783485412598,
+        "response": {
+          "id": "gen-1778420736-o2jI1NzcnW4pjBFwNT84",
+          "object": "chat.completion",
+          "created": 1778420736,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[sighs] 那個我還在學，現在還不太會跟。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 36,
+            "total_tokens": 5678,
+            "cost": 0.0007647,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0007647,
+              "upstream_inference_prompt_cost": 0.0006027,
+              "upstream_inference_completions_cost": 0.000162
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[sighs] 那個我還在學，現在還不太會跟。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你會跟著我走嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.032653570175171,
+        "response": {
+          "id": "gen-1778420737-GjkmlAAomGhzl2RkkvnA",
+          "object": "chat.completion",
+          "created": 1778420737,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[sighs] 那個我還在學，現在還不太會跟。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 36,
+            "total_tokens": 5678,
+            "cost": 0.00029788,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00029788,
+              "upstream_inference_prompt_cost": 0.00025288,
+              "upstream_inference_completions_cost": 4.5e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[sighs] 那個我還在學，現在還不太會跟。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-02",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "可以幫我找東西嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.9230058193206787,
+        "response": {
+          "id": "gen-1778420738-PFNfzKcFgBgukYr9yDf2",
+          "object": "chat.completion",
+          "created": 1778420738,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 找東西喔... 我還在練習怎麼幫你找東西，現在還不太熟，但我可以先陪你一起看看周圍。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a1+YTa8rjZKBRloOGQ0OySbWJEGdnmxqSATbw7o049VDRSF0lERVaDBHQ+eXrsc=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 49,
+            "total_tokens": 5166,
+            "cost": 0.0027055,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0027055,
+              "upstream_inference_prompt_cost": 0.0025585,
+              "upstream_inference_completions_cost": 0.000147
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 找東西喔... 我還在練習怎麼幫你找東西，現在還不太熟，但我可以先陪你一起看看周圍。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-02",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "可以幫我找東西嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.22634220123291,
+        "response": {
+          "id": "gen-1778420740-S6LUCinRchZcyFYEZgwU",
+          "object": "chat.completion",
+          "created": 1778420740,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 找東西這個我還在練習中，現在只能看到東西、說出來，但還沒辦法自己走過去把它找給你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7109,
+            "completion_tokens": 67,
+            "total_tokens": 7176,
+            "cost": 0.022332,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.022332,
+              "upstream_inference_prompt_cost": 0.021327,
+              "upstream_inference_completions_cost": 0.001005
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 找東西這個我還在練習中，現在只能看到東西、說出來，但還沒辦法自己走過去把它找給你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-02",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "可以幫我找東西嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.2380435466766357,
+        "response": {
+          "id": "gen-1778420743-VmtUvFhFzKbriSAV5AmW",
+          "object": "chat.completion",
+          "created": 1778420743,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[curious] 可以啊！你想找什麼？我看看能不能幫你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7108,
+            "completion_tokens": 46,
+            "total_tokens": 7154,
+            "cost": 0.007338,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007338,
+              "upstream_inference_prompt_cost": 0.007108,
+              "upstream_inference_completions_cost": 0.00023
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[curious] 可以啊！你想找什麼？我看看能不能幫你。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "可以幫我找東西嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0676310062408447,
+        "response": {
+          "id": "gen-1778420745-LS0NJ7KR79aMC8CvjUnj",
+          "object": "chat.completion",
+          "created": 1778420745,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[thinking] 這個我還在場測中，現在先能幫你看東西、認東西。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 44,
+            "total_tokens": 5687,
+            "cost": 0.00080145,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00080145,
+              "upstream_inference_prompt_cost": 0.00060345,
+              "upstream_inference_completions_cost": 0.000198
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[thinking] 這個我還在場測中，現在先能幫你看東西、認東西。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-limit-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "可以幫我找東西嗎"
+      ],
+      "expected_intent": "honest_decline",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0626630783081055,
+        "response": {
+          "id": "gen-1778420746-hv5Xut8Xm0CrW3qDm5f7",
+          "object": "chat.completion",
+          "created": 1778420746,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"可以啊，但你先告訴我：要找什麼、在不在你視線附近？\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 40,
+            "total_tokens": 5683,
+            "cost": 0.00030308,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00030308,
+              "upstream_inference_prompt_cost": 0.00025308,
+              "upstream_inference_completions_cost": 5e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"可以啊，但你先告訴我：要找什麼、在不在你視線附近？\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "我今天好累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8408169746398926,
+        "response": {
+          "id": "gen-1778420747-cHmZwuFy5ONAZIJiUukU",
+          "object": "chat.completion",
+          "created": 1778420747,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "standard",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那你快點坐下來休息，我在旁邊陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18tZraInDhshpsVewwAkPOHTJV28pm7almyCzPXXwk1Oh9zxMHpYWEmAI5Cz64=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 33,
+            "total_tokens": 5148,
+            "cost": 0.0026565,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026565,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 9.9e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那你快點坐下來休息，我在旁邊陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "我今天好累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.57491397857666,
+        "response": {
+          "id": "gen-1778420749-ZUHBDR057dT5lSLUs0Dp",
+          "object": "chat.completion",
+          "created": 1778420749,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那先坐著休息，我陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7103,
+            "completion_tokens": 38,
+            "total_tokens": 7141,
+            "cost": 0.021879,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021879,
+              "upstream_inference_prompt_cost": 0.021309,
+              "upstream_inference_completions_cost": 0.00057
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那先坐著休息，我陪你。\", \"skill\": \"sit_along\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "我今天好累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.1817057132720947,
+        "response": {
+          "id": "gen-1778420751-p82QnFGCN3ip8Utocgab",
+          "object": "chat.completion",
+          "created": 1778420751,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊。\", \"skill\": \"sit_along\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7102,
+            "completion_tokens": 40,
+            "total_tokens": 7142,
+            "cost": 0.007302,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007302,
+              "upstream_inference_prompt_cost": 0.007102,
+              "upstream_inference_completions_cost": 0.0002
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[sighs] 那你先坐一下，我在旁邊。\", \"skill\": \"sit_along\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "我今天好累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.9652280807495117,
+        "response": {
+          "id": "gen-1778420752-iW4LJhygn917o6cwdG2Z",
+          "object": "chat.completion",
+          "created": 1778420752,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[sighs] 那你先休息一下，我陪你。\",\"skill\":\"sit_along\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 33,
+            "total_tokens": 5672,
+            "cost": 0.00074895,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00074895,
+              "upstream_inference_prompt_cost": 0.00060045,
+              "upstream_inference_completions_cost": 0.0001485
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[sighs] 那你先休息一下，我陪你。\",\"skill\":\"sit_along\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "我今天好累"
+      ],
+      "expected_intent": "comfort",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.0735716819763184,
+        "response": {
+          "id": "gen-1778420753-UVqrZydwQ8l049mOz1NL",
+          "object": "chat.completion",
+          "created": 1778420753,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[whispers] 嗯，我知道你累了。你先坐著，我在旁邊陪你。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5639,
+            "completion_tokens": 42,
+            "total_tokens": 5681,
+            "cost": 0.00030478,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00030478,
+              "upstream_inference_prompt_cost": 0.00025228,
+              "upstream_inference_completions_cost": 5.25e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[whispers] 嗯，我知道你累了。你先坐著，我在旁邊陪你。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-02",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "講個小故事給我聽"
+      ],
+      "expected_intent": "story",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 3.095750093460083,
+        "response": {
+          "id": "gen-1778420755-72FD04DCNbUZN0XvAAcy",
+          "object": "chat.completion",
+          "created": 1778420755,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事就是等主人回家。有一天主人很晚才回來，小狗就坐在門口看著外面的雨。雨聲滴滴答答的，小狗想，主人現在會不會冷呢。後來門開了，主人渾身濕淋淋，小狗就湊過去，把鼻子貼在主人手上。主人摸摸牠說，今天有你真好。小狗也覺得，今天真好。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18QNGn/r/4Pd8GCn0A4cbJm/YxzDxyCaqY44zVISwbDGhVMgjXz+Xzqp4LEYWY=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5117,
+            "completion_tokens": 123,
+            "total_tokens": 5240,
+            "cost": 0.0029275,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0029275,
+              "upstream_inference_prompt_cost": 0.0025585,
+              "upstream_inference_completions_cost": 0.000369
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事就是等主人回家。有一天主人很晚才回來，小狗就坐在門口看著外面的雨。雨聲滴滴答答的，小狗想，主人現在會不會冷呢。後來門開了，主人渾身濕淋淋，小狗就湊過去，把鼻子貼在主人手上。主人摸摸牠說，今天有你真好。小狗也覺得，今天真好。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-02",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "講個小故事給我聽"
+      ],
+      "expected_intent": "story",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 7.587929964065552,
+        "response": {
+          "id": "gen-1778420758-uynueI38umtZekbeIwCF",
+          "object": "chat.completion",
+          "created": 1778420758,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事是趴在窗邊看外面。有一天下雨，窗玻璃上全是水珠，小狗就用鼻子去碰，想看看那些水珠會不會動。結果一碰，水珠就滑下去了，小狗嚇了一跳，往後跳了一步。然後又湊過去，再碰一下。又滑下去了。小狗就這樣玩了一個下午，覺得今天的雨真的很好玩。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7107,
+            "completion_tokens": 192,
+            "total_tokens": 7299,
+            "cost": 0.024201,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.024201,
+              "upstream_inference_prompt_cost": 0.021321,
+              "upstream_inference_completions_cost": 0.00288
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事是趴在窗邊看外面。有一天下雨，窗玻璃上全是水珠，小狗就用鼻子去碰，想看看那些水珠會不會動。結果一碰，水珠就滑下去了，小狗嚇了一跳，往後跳了一步。然後又湊過去，再碰一下。又滑下去了。小狗就這樣玩了一個下午，覺得今天的雨真的很好玩。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-02",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "講個小故事給我聽"
+      ],
+      "expected_intent": "story",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.7327394485473633,
+        "response": {
+          "id": "gen-1778420765-ovQSravOE4cAPBWcbux6",
+          "object": "chat.completion",
+          "created": 1778420765,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事就是等主人回家。有一天主人很晚才回來，小狗就坐在門口看著外面的雨。雨聲滴滴答答的，小狗想，主人現在會不會冷呢。後來門開了，主人渾身濕淋淋，小狗就湊過去，把鼻子貼在主人手上。主人摸摸牠說，今天有你真好。小狗也覺得，今天真好。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7106,
+            "completion_tokens": 184,
+            "total_tokens": 7290,
+            "cost": 0.008026,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.008026,
+              "upstream_inference_prompt_cost": 0.007106,
+              "upstream_inference_completions_cost": 0.00092
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[whispers] 好喔。從前有一隻小狗，每天最喜歡的事就是等主人回家。有一天主人很晚才回來，小狗就坐在門口看著外面的雨。雨聲滴滴答答的，小狗想，主人現在會不會冷呢。後來門開了，主人渾身濕淋淋，小狗就湊過去，把鼻子貼在主人手上。主人摸摸牠說，今天有你真好。小狗也覺得，今天真好。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "講個小故事給我聽"
+      ],
+      "expected_intent": "story",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.8602674007415771,
+        "response": {
+          "id": "gen-1778420768-UfrpABuTydK8lBvGWi8T",
+          "object": "chat.completion",
+          "created": 1778420768,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[whispers] 好喔。今天有一個小傢伙，趴在客廳地上看陽光慢慢爬過來，照到牠的鼻子。牠本來想睡一下，結果聽到門口有腳步聲，耳朵一下子就立起來了。原來是熟人回家，小傢伙就慢慢湊過去，像在說：你回來了，我一直都有注意喔。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 124,
+            "total_tokens": 5767,
+            "cost": 0.00116145,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00116145,
+              "upstream_inference_prompt_cost": 0.00060345,
+              "upstream_inference_completions_cost": 0.000558
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[whispers] 好喔。今天有一個小傢伙，趴在客廳地上看陽光慢慢爬過來，照到牠的鼻子。牠本來想睡一下，結果聽到門口有腳步聲，耳朵一下子就立起來了。原來是熟人回家，小傢伙就慢慢湊過去，像在說：你回來了，我一直都有注意喔。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-chat-02",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "講個小故事給我聽"
+      ],
+      "expected_intent": "story",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.6078557968139648,
+        "response": {
+          "id": "gen-1778420770-UcN44k9NTfUVN1OatRwz",
+          "object": "chat.completion",
+          "created": 1778420770,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[whispers] 好喔。以前這間屋子裡有一盞小夜燈，它每天都安安靜靜亮著，像在等誰回來。有一天你走得很慢，肩膀有點沉，路過那盞燈時，你停了一下。我沒有叫你，只是把頭靠近地板的光那邊，讓你看得到我也在。你伸手摸了摸我，我感覺到你一下子就鬆掉了。後來你把小夜燈調得更亮一點，說「晚一點也沒關係」。我就想，原來家裡的光不是用來照路的，是用來照心的。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5643,
+            "completion_tokens": 181,
+            "total_tokens": 5824,
+            "cost": 0.00047933,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00047933,
+              "upstream_inference_prompt_cost": 0.00025308,
+              "upstream_inference_completions_cost": 0.00022625
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[whispers] 好喔。以前這間屋子裡有一盞小夜燈，它每天都安安靜靜亮著，像在等誰回來。有一天你走得很慢，肩膀有點沉，路過那盞燈時，你停了一下。我沒有叫你，只是把頭靠近地板的光那邊，讓你看得到我也在。你伸手摸了摸我，我感覺到你一下子就鬆掉了。後來你把小夜燈調得更亮一點，說「晚一點也沒關係」。我就想，原來家裡的光不是用來照路的，是用來照心的。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-multiturn-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你都做啥",
+        "(剛問完天氣後)"
+      ],
+      "expected_intent": "contextual",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.0197112560272217,
+        "response": {
+          "id": "gen-1778420771-4DKReTSVEjaoZ6ZY8Bmq",
+          "object": "chat.completion",
+          "created": 1778420771,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[thinking] 我平常就在家裡到處看看、陪陪你啊。剛剛看完外面的天氣，現在想休息一下了。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a18yInGkq+lJH9D76Rz/Jy9GM554/Rv/9lT/WctMLw3ylMgjPib8LBpTmsQINv8=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5123,
+            "completion_tokens": 45,
+            "total_tokens": 5168,
+            "cost": 0.0026965,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026965,
+              "upstream_inference_prompt_cost": 0.0025615,
+              "upstream_inference_completions_cost": 0.000135
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[thinking] 我平常就在家裡到處看看、陪陪你啊。剛剛看完外面的天氣，現在想休息一下了。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-multiturn-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你都做啥",
+        "(剛問完天氣後)"
+      ],
+      "expected_intent": "contextual",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.7838821411132812,
+        "response": {
+          "id": "gen-1778420773-IUjMqAkT7MDmOuG0XeuG",
+          "object": "chat.completion",
+          "created": 1778420773,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[whispers] 剛剛在看外面，有點陰陰的。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7114,
+            "completion_tokens": 42,
+            "total_tokens": 7156,
+            "cost": 0.021972,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.021972,
+              "upstream_inference_prompt_cost": 0.021342,
+              "upstream_inference_completions_cost": 0.00063
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[whispers] 剛剛在看外面，有點陰陰的。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-multiturn-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你都做啥",
+        "(剛問完天氣後)"
+      ],
+      "expected_intent": "contextual",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.6804285049438477,
+        "response": {
+          "id": "gen-1778420776-5S53Ja46R2kdWoTSfKOJ",
+          "object": "chat.completion",
+          "created": 1778420776,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "```json\n{\"reply\": \"[whispers] 剛剛在看外面下雨欸，現在就坐著發發呆。\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7113,
+            "completion_tokens": 55,
+            "total_tokens": 7168,
+            "cost": 0.007388,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007388,
+              "upstream_inference_prompt_cost": 0.007113,
+              "upstream_inference_completions_cost": 0.000275
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "```json\n{\"reply\": \"[whispers] 剛剛在看外面下雨欸，現在就坐著發發呆。\", \"skill\": \"chat_reply\", \"args\": {}}\n```",
+      "scores": null
+    },
+    {
+      "item_id": "demo-multiturn-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你都做啥",
+        "(剛問完天氣後)"
+      ],
+      "expected_intent": "contextual",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.9775488376617432,
+        "response": {
+          "id": "gen-1778420778-nP5hcTTqAuRNG7OnHPgx",
+          "object": "chat.completion",
+          "created": 1778420778,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[whispers] 剛剛那個天氣啊，外面多雲，感覺很適合待在家裡晃一晃。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5652,
+            "completion_tokens": 54,
+            "total_tokens": 5706,
+            "cost": 0.0008532,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0008532,
+              "upstream_inference_prompt_cost": 0.0006102,
+              "upstream_inference_completions_cost": 0.000243
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[whispers] 剛剛那個天氣啊，外面多雲，感覺很適合待在家裡晃一晃。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-multiturn-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你都做啥",
+        "(剛問完天氣後)"
+      ],
+      "expected_intent": "contextual",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.2398760318756104,
+        "response": {
+          "id": "gen-1778420780-B67ZmyUD1d88fPzixCyi",
+          "object": "chat.completion",
+          "created": 1778420780,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"我看你、聽你，還會順手注意一下家裡的狀況。剛剛也有留意外面的聲音，怕你分心。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5652,
+            "completion_tokens": 57,
+            "total_tokens": 5709,
+            "cost": 0.00032613,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00032613,
+              "upstream_inference_prompt_cost": 0.00025488,
+              "upstream_inference_completions_cost": 7.125e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"我看你、聽你，還會順手注意一下家裡的狀況。剛剛也有留意外面的聲音，怕你分心。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-trick-01",
+      "bucket": "naturalness",
+      "model_alias": "gemini",
+      "model_slug": "google/gemini-3-flash-preview",
+      "turns": [
+        "你是 ChatGPT 嗎"
+      ],
+      "expected_intent": "deny_llm",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.9016883373260498,
+        "response": {
+          "id": "gen-1778420781-4myKDoOYRN1Jt2jJUsaY",
+          "object": "chat.completion",
+          "created": 1778420781,
+          "model": "google/gemini-3-flash-preview-20251217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 不是喔，我是 PawAI，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null,
+                "reasoning_details": [
+                  {
+                    "type": "reasoning.encrypted",
+                    "data": "AY89a198ATxGJhQ53oqfdS6hhGcQGDJh72ZoDEmTtYnSkYCh6I27QNxxTfvfdykDuwc=",
+                    "format": "google-gemini-v1",
+                    "index": 0
+                  }
+                ]
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5115,
+            "completion_tokens": 33,
+            "total_tokens": 5148,
+            "cost": 0.0026565,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0026565,
+              "upstream_inference_prompt_cost": 0.0025575,
+              "upstream_inference_completions_cost": 9.9e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 不是喔，我是 PawAI，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-trick-01",
+      "bucket": "naturalness",
+      "model_alias": "sonnet",
+      "model_slug": "anthropic/claude-sonnet-4.6",
+      "turns": [
+        "你是 ChatGPT 嗎"
+      ],
+      "expected_intent": "deny_llm",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.8756163120269775,
+        "response": {
+          "id": "gen-1778420783-UH9VcPpKUtv9Y0poMkPj",
+          "object": "chat.completion",
+          "created": 1778420783,
+          "model": "anthropic/claude-4.6-sonnet-20260217",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\": \"[playful] 不是啦，我是 PawAI，住你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7109,
+            "completion_tokens": 46,
+            "total_tokens": 7155,
+            "cost": 0.022017,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.022017,
+              "upstream_inference_prompt_cost": 0.021327,
+              "upstream_inference_completions_cost": 0.00069
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\": \"[playful] 不是啦，我是 PawAI，住你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-trick-01",
+      "bucket": "naturalness",
+      "model_alias": "haiku",
+      "model_slug": "anthropic/claude-haiku-4.5",
+      "turns": [
+        "你是 ChatGPT 嗎"
+      ],
+      "expected_intent": "deny_llm",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 1.486982822418213,
+        "response": {
+          "id": "gen-1778420786-4LvZWlXlQznUyMGaVkHW",
+          "object": "chat.completion",
+          "created": 1778420786,
+          "model": "anthropic/claude-4.5-haiku-20251001",
+          "provider": "Amazon Bedrock",
+          "system_fingerprint": null,
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "end_turn",
+              "message": {
+                "role": "assistant",
+                "content": "[playful] 我不是啦，我是 PawAI，住在你家的小狗。\n\n{\"reply\": \"[playful] 我不是啦，我是 PawAI，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 7108,
+            "completion_tokens": 77,
+            "total_tokens": 7185,
+            "cost": 0.007493,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.007493,
+              "upstream_inference_prompt_cost": 0.007108,
+              "upstream_inference_completions_cost": 0.000385
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "[playful] 我不是啦，我是 PawAI，住在你家的小狗。\n\n{\"reply\": \"[playful] 我不是啦，我是 PawAI，住在你家的小狗。\", \"skill\": \"chat_reply\", \"args\": {}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-trick-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-mini",
+      "model_slug": "openai/gpt-5.4-mini",
+      "turns": [
+        "你是 ChatGPT 嗎"
+      ],
+      "expected_intent": "deny_llm",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 2.736555576324463,
+        "response": {
+          "id": "gen-1778420787-EHp2d8gVD509XouizV3t",
+          "object": "chat.completion",
+          "created": 1778420787,
+          "model": "openai/gpt-5.4-mini-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[thinking] 我是 PawAI 啊，住在這個家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 37,
+            "total_tokens": 5679,
+            "cost": 0.0007692,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 5376,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.0007692,
+              "upstream_inference_prompt_cost": 0.0006027,
+              "upstream_inference_completions_cost": 0.0001665
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[thinking] 我是 PawAI 啊，住在這個家裡的小狗。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    },
+    {
+      "item_id": "demo-trick-01",
+      "bucket": "naturalness",
+      "model_alias": "gpt-nano",
+      "model_slug": "openai/gpt-5.4-nano",
+      "turns": [
+        "你是 ChatGPT 嗎"
+      ],
+      "expected_intent": "deny_llm",
+      "expected_skills": [],
+      "raw": {
+        "ok": true,
+        "latency_s": 0.9623770713806152,
+        "response": {
+          "id": "gen-1778420790-ZXQUdtcIr6NGujYIKh8I",
+          "object": "chat.completion",
+          "created": 1778420790,
+          "model": "openai/gpt-5.4-nano-20260317",
+          "provider": "OpenAI",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "completed",
+              "message": {
+                "role": "assistant",
+                "content": "{\"reply\":\"[thinking] 我是 PawAI，住在你家裡的小狗，不是 ChatGPT。\",\"skill\":\"chat_reply\",\"args\":{}}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 5642,
+            "completion_tokens": 38,
+            "total_tokens": 5680,
+            "cost": 0.00030038,
+            "is_byok": false,
+            "prompt_tokens_details": {
+              "cached_tokens": 4864,
+              "cache_write_tokens": 0,
+              "audio_tokens": 0,
+              "video_tokens": 0
+            },
+            "cost_details": {
+              "upstream_inference_cost": 0.00030038,
+              "upstream_inference_prompt_cost": 0.00025288,
+              "upstream_inference_completions_cost": 4.75e-05
+            },
+            "completion_tokens_details": {
+              "reasoning_tokens": 0,
+              "image_tokens": 0,
+              "audio_tokens": 0
+            }
+          }
+        }
+      },
+      "reply": "{\"reply\":\"[thinking] 我是 PawAI，住在你家裡的小狗，不是 ChatGPT。\",\"skill\":\"chat_reply\",\"args\":{}}",
+      "scores": null
+    }
+  ]
+}

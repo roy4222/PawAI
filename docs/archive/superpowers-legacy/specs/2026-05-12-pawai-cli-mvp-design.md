@@ -178,12 +178,12 @@ Recent freeze: 2026-05-11 N7 (vote_frames 3→5, stable_s 0.5→0.3)
 
 - `nav`：
   - `.claude/skills/nav-avoidance-lane/SKILL.md`
-  - `docs/navigation/CLAUDE.md`
+  - `docs/architecture/navigation/CLAUDE.md`
 
 - `studio`：
   - `.claude/skills/brain-studio-lane/SKILL.md`
   - `.claude/skills/brain-studio-lane/references/runtime-topology.md`
-  - `docs/pawai-brain/studio/README.md`（若存在）
+  - `docs/architecture/studio/README.md`（若存在）
 
 `dev info nav` 輸出範例（fallback 形態）：
 ```
@@ -193,7 +193,7 @@ Architecture: not yet consolidated (post-demo follow-up)
 
 References:
   .claude/skills/nav-avoidance-lane/SKILL.md
-  docs/navigation/CLAUDE.md
+  docs/architecture/navigation/CLAUDE.md
 
 Packages:
   go2_robot_sdk

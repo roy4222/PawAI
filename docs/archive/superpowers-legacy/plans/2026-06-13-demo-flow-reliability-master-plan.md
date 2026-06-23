@@ -11,7 +11,7 @@
 > 4. [s1 low-risk navigation](2026-06-13-s1-low-risk-navigation-plan.md)：第一幕移動段低風險主線 + 三層 fallback。
 > 5. [operator runbook](2026-06-13-demo-operator-runbook-plan.md)：現場逐幕操作手冊規劃 + 平台支援度。
 
-> **既有真相來源（不重寫、只引用）**：[nav-capability-ladder](../navigation/2026-06-13-nav-capability-ladder.md)、[nav-618-claim-wording](../navigation/2026-06-13-nav-618-claim-wording.md)、[roy-hitl-queue](../runbook/2026-06-13-roy-hitl-queue.md)、[post-refactor-acceptance-report](../runbook/2026-06-13-post-refactor-acceptance-report.md)、[Lane 1 ISM](2026-06-13-lane1-brain-ism-staged-enable-plan.md)、[Lane 3 CLI](2026-06-13-lane3-cli-v2-completion-plan.md)、[Lane 6 nav](2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md)。
+> **既有真相來源（不重寫、只引用）**：[nav-capability-ladder](../navigation/2026-06-13-nav-capability-ladder.md)、[nav-618-claim-wording](../navigation/2026-06-13-nav-618-claim-wording.md)、[roy-hitl-queue](../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)、[post-refactor-acceptance-report](../runbook/2026-06-13-post-refactor-acceptance-report.md)、[Lane 1 ISM](2026-06-13-lane1-brain-ism-staged-enable-plan.md)、[Lane 3 CLI](2026-06-13-lane3-cli-v2-completion-plan.md)、[Lane 6 nav](2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md)。
 
 ---
 
@@ -115,7 +115,7 @@ C1、C2、C3、C4、F1、F2、F4、B4(刪 npz 邏輯)、S(解析)、R(全文件)
 
 ## 8. Jetson / Go2 HITL tasks（需 Roy 在場）
 
-> **共通前置**：先確認 Go2 停穩 + `pawai demo stop` 清場；nav 與 brain stack 8GB 互斥不同跑；Go2 motion 項一律 e-stop 就位。對應 [roy-hitl-queue](../runbook/2026-06-13-roy-hitl-queue.md)。
+> **共通前置**：先確認 Go2 停穩 + `pawai demo stop` 清場；nav 與 brain stack 8GB 互斥不同跑；Go2 motion 項一律 e-stop 就位。對應 [roy-hitl-queue](../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)。
 
 | HITL | 內容 | 類型 | 對映 |
 |------|------|:----:|------|
@@ -199,7 +199,7 @@ C1、C2、C3、C4、F1、F2、F4、B4(刪 npz 邏輯)、S(解析)、R(全文件)
 4. s1-nav N2(SOP/sanity 撰寫) + runbook R（全文件骨幹）。
 → 全程 byte-identical 退路 + 單測綠，標 needs-HITL。
 
-**Phase B — HITL（依 [roy-hitl-queue](../runbook/2026-06-13-roy-hitl-queue.md) 時段，Roy 在場）**
+**Phase B — HITL（依 [roy-hitl-queue](../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md) 時段，Roy 在場）**
 5. **demo lane**：H-conductor（五幕詞彙/清理/confirm 差異）+ H-face（face_db 衛生）+ H-offline（offline mode + canned）+ smoke family。
 6. **nav lane（獨立時段，先 `pawai demo stop`）**：H-nav 三步 — indoor_tight 護欄 → initialpose 朝向校正 → **0.3m n=3 重驗（撞牆根因最終裁決）**。
 

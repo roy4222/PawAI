@@ -10,7 +10,7 @@
 
 **Tech Stack:** ROS2 Humble、`depthimage_to_laserscan` package（已 install）、Foxglove Bridge 8765、Foxglove Studio (web)。
 
-**Spec reference:** [`docs/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`](../specs/2026-05-03-d435-rplidar-fusion-detour.md) Phase 1 段。
+**Spec reference:** [`docs/architecture/navigation/specs/2026-05-03-d435-rplidar-fusion-detour.md`](../specs/2026-05-03-d435-rplidar-fusion-detour.md) Phase 1 段。
 
 **對齊 user 提醒**：Foxglove 必須**同時**顯示 `base_link` + `/scan_rplidar` + `/scan_d435`，確認兩個 scan 對同一個 box 位置一致（不能只看 D435 在自己 frame 內對不對）。
 

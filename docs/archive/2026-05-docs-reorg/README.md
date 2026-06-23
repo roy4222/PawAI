@@ -33,17 +33,17 @@
 
 | 新位置 | 來源 |
 |--------|------|
-| `docs/pawai-brain/perception/{face,gesture,pose,object}/` | `docs/{人臉,手勢,姿勢,辨識物體}辨識/` |
-| `docs/pawai-brain/speech/` | `docs/語音功能/` |
-| `docs/pawai-brain/studio/` | `docs/Pawai-studio/` |
-| `docs/pawai-brain/architecture/{overview.md,designs/}` | `docs/architecture/{pawai-brain-studio-overview.md,designs/}` |
-| `docs/pawai-brain/specs/` | `docs/archive/superpowers-legacy/specs/` 中 3 個 active |
+| `docs/architecture/perception/{face,gesture,pose,object}/` | `docs/{人臉,手勢,姿勢,辨識物體}辨識/` |
+| `docs/architecture/speech/` | `docs/語音功能/` |
+| `docs/architecture/studio/` | `docs/Pawai-studio/` |
+| `docs/architecture/brain/{overview.md,designs/}` | `docs/architecture/{pawai-brain-studio-overview.md,designs/}` |
+| `docs/architecture/specs/` | `docs/archive/superpowers-legacy/specs/` 中 3 個 active |
 | `docs/archive/pawai-brain-legacy/plans/` | `docs/archive/superpowers-legacy/plans/` 中 brain-related active |
-| `docs/pawai-brain/studio/plans/` | `docs/archive/superpowers-legacy/plans/` 中 studio active |
-| `docs/navigation/{research,research/lidar-dev,setup}/` | `docs/導航避障/` + `docs/setup/slam_nav/` |
+| `docs/architecture/studio/plans/` | `docs/archive/superpowers-legacy/plans/` 中 studio active |
+| `docs/architecture/navigation/{research,research/lidar-dev,setup}/` | `docs/導航避障/` + `docs/setup/slam_nav/` |
 | `docs/archive/navigation-legacy/plans/` | `docs/archive/superpowers-legacy/plans/` 中 nav active |
-| `docs/navigation/CLAUDE.md` `docs/navigation/AGENT.md` | `docs/導航避障/` 對應檔 |
-| `docs/navigation/legacy-readme-from-導航避障.md` | `docs/導航避障/README.md`（保留待人工 merge） |
+| `docs/architecture/navigation/CLAUDE.md` `docs/architecture/navigation/AGENT.md` | `docs/導航避障/` 對應檔 |
+| `docs/architecture/navigation/legacy-readme-from-導航避障.md` | `docs/導航避障/README.md`（保留待人工 merge） |
 | `docs/contracts/interaction_contract.md` | `docs/architecture/contracts/interaction_contract.md` |
 | `docs/runbook/{jetson,network,gpu-server,go2-operation}.md` | `docs/setup/{hardware,network,software}/...` |
 | `docs/deliverables/thesis/` | `docs/thesis/`（已刪 `__pycache__/`） |

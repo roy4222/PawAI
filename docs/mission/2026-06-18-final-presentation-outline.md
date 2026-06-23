@@ -85,7 +85,7 @@
 
 **可引用的 repo 證據與數據**：
 - 三層系統架構：[`docs/mission/README.md`](README.md)（§5）
-- Brain 建議者 / Executive 決策者單一控制權、三層大腦對應：[`docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md`](../pawai-brain/architecture/0511/brain/brain.md)（§1、§14）
+- Brain 建議者 / Executive 決策者單一控制權、三層大腦對應：[`docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md`](../archive/pawai-brain-legacy/architecture-0511/brain/brain.md)（§1、§14）
 - 真實系統拓撲（13-window）：[`scripts/start_full_demo_tmux.sh`](../../scripts/start_full_demo_tmux.sh)
 - scoreboard-first + Edge AI：[`docs/mission/2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md)（§9、§10）
 
@@ -122,7 +122,7 @@
 - benchmark 選型制度：[`benchmarks/configs/`](../../benchmarks/configs/) + [`benchmarks/results/archive/`](../../benchmarks/results/archive/)（face/gesture/pose/stt `candidates.yaml` + 2026-03-21 archived `raw.jsonl` + `env_snapshot`）
 - 可運作 scoreboard core：[`benchmarks/core/scoreboard_schema.py`](../../benchmarks/core/scoreboard_schema.py)（pass/degraded/fail/insufficient_data 分級）
 - 真實證據檔（最新 trusted）：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（`baseline_result.jsonl` / `baseline_snapshot.json` / `preflight_result.json` / `jetson_manifest.json` / `readiness_output.json`，SHA `78fbf36`；`2026-06-03-first-trusted-face/` 已被取代，僅作歷史）
-- capability-baseline spec：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)
+- capability-baseline spec：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)
 - 文件站責任交接（黃 / 陳）：[`docs/mission/handoff_316.md`](handoff_316.md)（§2.4 / §3.3）
 
 **建議視覺**：
@@ -159,10 +159,10 @@
 
 **可引用的 repo 證據與數據**：
 - 硬體上機 / 供電不穩 / 雙平台架構 / Jetson 操作要點：`CLAUDE.md`
-- RPLIDAR 整合上機：[`docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md`](../navigation/research/2026-04-25-rplidar-a2m12-integration-log.md)
-- LiDAR 座標校正：[`docs/archive/navigation-legacy/research/2026-04-29-mount-measurement.md`](../navigation/research/2026-04-29-mount-measurement.md)
+- RPLIDAR 整合上機：[`docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md`](../archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md)
+- LiDAR 座標校正：[`docs/archive/navigation-legacy/research/2026-04-29-mount-measurement.md`](../archive/navigation-legacy/research/2026-04-29-mount-measurement.md)
 - 六層全套 13-window 啟動：[`scripts/start_full_demo_tmux.sh`](../../scripts/start_full_demo_tmux.sh)
-- 大腦三層對應 + Brain/Executive 分工：[`docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md`](../pawai-brain/architecture/0511/brain/brain.md)
+- 大腦三層對應 + Brain/Executive 分工：[`docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md`](../archive/pawai-brain-legacy/architecture-0511/brain/brain.md)
 - Safety 層程式碼：[`interaction_executive/interaction_executive/safety_layer.py`](../../interaction_executive/interaction_executive/safety_layer.py)
 - 觀察層真實 ROS→WS 橋：[`pawai-studio/gateway/studio_gateway.py`](../../pawai-studio/gateway/studio_gateway.py)
 
@@ -296,7 +296,7 @@
 - cup-only 白名單：[`object_perception/config/object_perception.yaml`](../../object_perception/config/object_perception.yaml)
 - 翻跟斗 BLOCKED 雙 plan + 端到端 reject test：[`interaction_executive/interaction_executive/safety_layer.py`](../../interaction_executive/interaction_executive/safety_layer.py) + [`interaction_executive/test/test_safety_layer.py`](../../interaction_executive/test/test_safety_layer.py)
 - 紅色 blocked_by_safety badge：[`pawai-studio/frontend/components/chat/chat-panel.tsx`](../../pawai-studio/frontend/components/chat/chat-panel.tsx)
-- F7 demo blocker root cause 未定位：[`docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md`](../navigation/research/2026-05-11-nav-avoidance-deep-research.md)
+- F7 demo blocker root cause 未定位：[`docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md`](../archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md)
 - 5/12 night goto_relative 0.3m 誤差 0.2mm、0.5m 在 danger 0.81m 停（唯一一次性 motion 證據）：[`references/project-status.md`](../../references/project-status.md)
 
 > ⚠️ **Studio scoreboard 主畫面誠實修正（reviewer must-fix）**：前端**沒有任何元件 fetch `/api/scoreboard`**（gateway 有 endpoint 在 line 600，但 UI 上不存在 scoreboard pass/fail chip 牆）。開場 / 證據主畫面**不要承諾螢幕有 scoreboard LED**，改用 **dev trace GateChip + 直接秀 git-tracked baseline-evidence JSON 檔**為 primary，旁白講「我們的量測證據全程留痕在 repo」。
@@ -341,7 +341,7 @@
 - 定位 / 禁說清單 / 斷網守望=設計意圖未驗證：[`docs/mission/2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md)（§2、§5、§10）
 - 非接觸守望 POC 定位：[`docs/adr/0001-pawai-2026-06-poc-non-contact-positioning.md`](../adr/0001-pawai-2026-06-poc-non-contact-positioning.md)
 - 互動 70% / 守望 30% 專案方向：[`docs/mission/README.md`](README.md)
-- 各能力 claim_level / nav target 但 pass 前 insufficient_data：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)
+- 各能力 claim_level / nav target 但 pass 前 insufficient_data：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)
 
 **建議視覺**：
 - 近 / 中 / 長期三級時間軸圖，每級標「已驗證能力延伸」或「設計意圖未驗證」色標；巡檢明確掛在「中期 / 延伸」格。

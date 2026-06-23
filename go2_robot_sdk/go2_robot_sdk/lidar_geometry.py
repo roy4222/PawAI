@@ -100,7 +100,7 @@ def decide_velocity(zone, mode, slow_speed, normal_speed):
     Returns:
         Optional[float] — velocity (m/s) 或 None（None = 不 publish）
 
-    See docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.
+    See docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0.
     """
     if mode in ("disabled", "released"):
         return None  # caller skips publish

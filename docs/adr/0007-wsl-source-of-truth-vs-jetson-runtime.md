@@ -56,7 +56,7 @@ PawAI 是雙平台架構：
 ## Related
 
 - 6/04 trusted snapshot（實證本鐵律）：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（README provenance note + `baseline_snapshot.json` 的 `version_mismatch` / `run_trusted` + `jetson_manifest.json` 的 `git_sha`）
-- readiness 路徑覆寫（`PAWAI_SCOREBOARD_PATH`、SSH 讀 Jetson）：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md) §8
+- readiness 路徑覆寫（`PAWAI_SCOREBOARD_PATH`、SSH 讀 Jetson）：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md) §8
 - 真相層級（本 ADR 鞏固 #1 empirical layer 的可信前提）：ADR-0004
 - claim 政策（本鐵律是其證據可信的物理基礎）：ADR-0005 / ADR-0006
 - 未來若改用乾淨 CI freeze 流程，開 ADR-000X supersede 本 ADR 的 dirty 處理段

@@ -1,9 +1,9 @@
 """Skill-first PawAI Brain core types.
 
 Spec:
-  - docs/pawai-brain/specs/2026-04-27-pawai-brain-skill-first-design.md §3
-  - docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md §4 (Skill Inventory v1)
-  - docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md (bucket semantics)
+  - docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md §3
+  - docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md §4 (Skill Inventory v1)
+  - docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md (bucket semantics)
 
 Bucket vs static_enabled vs enabled_when:
   - bucket: 產品/展示分類，Studio 讀（active=enabled、hidden=grayed、disabled=hidden-or-灰、retired=不顯示）

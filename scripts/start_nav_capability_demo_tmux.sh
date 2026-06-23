@@ -107,7 +107,7 @@ echo "[5/9] reactive_stop_node (profile=$REACTIVE_PROFILE, mode=progressive → 
 #
 # Thresholds: danger=1.1m / slow=1.7m（LiDAR 視距，5/11 B0.3 enlarged）。
 # 完整 4-mode 設計見 reactive_stop_node.py module docstring 與
-# docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
+# docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0。
 tmux new-window -t "$SESSION" -n reactive
 tmux send-keys -t "$SESSION:reactive" \
     "$ROS_SETUP && ros2 run go2_robot_sdk reactive_stop_node --ros-args $REACTIVE_PARAMS" Enter

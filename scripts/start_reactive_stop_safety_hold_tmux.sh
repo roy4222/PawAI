@@ -30,7 +30,7 @@
 #
 # Threshold（5/11 B0.3 enlarged）：danger=1.1m / slow=1.7m（LiDAR 視距）
 #
-# Audit：docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0
+# Audit：docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §6 B0
 set -euo pipefail
 
 SESSION="reactive-stop-hold"

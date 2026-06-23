@@ -31,7 +31,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - interaction_executive/interaction_executive/brain_node.py:334-424 (_declare_params: gesture_direct_disabled, peace_direct_stretch, thumbs_up_demo_ack, gesture_enabled, stranger_alert_enabled, peace_wego_confirm, demo_video_cup_compound, demo_video_silent_sit_along, greet_require_sitting, demo_phase, idle_*, capability_gate_enabled)
   - interaction_executive/interaction_executive/brain_node.py:426-453 (_apply_gesture_demo_modes mutates _GESTURE_DIRECT/_GESTURE_CONFIRM)
   - interaction_executive/config/executive.yaml:13-43 (frozen 6/10 demo values)
-  - docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:25-35 (PRD admits flags are symptom bandages)
+  - docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:25-35 (PRD admits flags are symptom bandages)
   - docs/pawai-demo/2026-06-10-demo-snapshot.md:71-84 (each flag listed as demo-only hack)
 - **建議**：Freeze executive.yaml exactly as committed until 6/18. Post-demo, execute PRD Phase 2: collapse all *_enabled/demo_* flags into one declarative policy table read by an InteractionStateMachine; keep per-flag v1 fallback as PRD requires.
 
@@ -42,7 +42,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - interaction_executive/interaction_executive/interaction_executive_node.py:244-253 (_active_step_done: after step_settle_s=0.4s, SAY done when `not tts_playing` or 6s timeout — if synthesis latency >0.4s, tts_playing is still False and the step completes before audio starts, letting the next plan's SAY interleave)
   - speech_processor/speech_processor/tts_node.py:1172,1395-1399 (only Bool /state/tts_playing, no id/ack)
-  - docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:31 (PRD row 「我有沒有講出去」靠 bool 猜 — verified accurate)
+  - docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:31 (PRD row 「我有沒有講出去」靠 bool 猜 — verified accurate)
   - interaction_executive/config/executive.yaml:47-48 (step_settle_s 0.4, tts_idle_timeout_s 6.0)
 - **建議**：PRD Phase 3: add request_id to the /tts envelope and a terminal ack topic from tts_node; IE waits on ack with the existing 6s timeout as backstop. Smallest fix; do not retune settle/timeout before demo — recorded takes depend on current timing.
 
@@ -56,7 +56,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - brain_node.py:1553-1566 (6/10 review blocker: STEP_FAILED must clear active_plan or one NAV failure blacks out cup/greet/gesture/speech — re-enactment risk explicitly documented in-code)
   - brain_node.py:1198-1216 (stranger_alert branch now behind stranger_alert_enabled=false; executive.yaml:28)
   - references/project-status.md:13 (6/10: stranger_alert 真兇, gate 預設 false)
-  - docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:27,34-35 (root cause: all events contend for one active_plan, first-grab wins TTS)
+  - docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:27,34-35 (root cause: all events contend for one active_plan, first-grab wins TTS)
 - **建議**：PRD Phase 1: replace the active_plan dict + scattered gates with an explicit InteractionStateMachine owning a single arbitration point (safety > explicit input > social), with a watchdog on plan lifecycle. 258 IE tests are the regression net.
 
 ### BRAIN-4 — LLM skill gating split across two packages with a circular dependency: canonical allowlist in pawai_brain, mirror + execute-mode map only in brain_node
@@ -231,7 +231,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - pawai-studio/frontend/stores/state-store.ts:143-146 (conversationTraces slice(0,50)), 139-141 (brainResults 200)
   - pawai-studio/frontend/stores/event-store.ts:6 (MAX_EVENTS=200, no persistence)
   - pawai-studio/gateway/studio_gateway.py (no disk logging of broadcast envelopes anywhere; /brain/conversation_trace_shadow merged into the same store, distinguishable only by payload.engine)
-  - docs/pawai-brain/studio/README.md 'Studio claim 邊界' + provenance badge table (Studio is an evidence carrier; trusted evidence must come from baseline files — Studio currently cannot replay or export what it showed)
+  - docs/architecture/studio/README.md 'Studio claim 邊界' + provenance badge table (Studio is an evidence carrier; trusted evidence must come from baseline files — Studio currently cannot replay or export what it showed)
 - **建議**：Smallest step: gateway appends every brain:* envelope to a session JSONL (runtime/studio_traces/YYYYMMDD-HHMM.jsonl) keyed by session_id; frontend gets a 'download trace' button. Additive, off the demo critical path, and turns recordings into citable evidence per the README's provenance rules.
 
 ### STUDIO-10 — Gateway intent path mislabels provider and duplicates speech-lane classification via sys.path hack
@@ -315,7 +315,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `ownership` · **POST_DEMO_ONLY**
 - **查證**：✅ supported — Verified: readiness.py:105-108 does sys.path.insert(repo_root) then imports benchmarks.core.readiness (repo checkout required); readiness/freeze (readiness.py:69-91, writes artifacts/baseline/frozen/<date>/) is a registered CLI command (main.py:20,161) yet grep 'readiness' across docs/pawai_cli/*.md returns 0 hits and the README §3 command table (lines 124-137) omits it; PRD lines 87-102 confirm the pipx/standalone-install v2 goal.
 - **證據**：
-  - tools/pawai_cli/pawai_cli/readiness.py:101-108 (sys.path.insert(repo_root) then `from benchmarks.core.readiness import evaluate_readiness` — breaks if CLI is ever installed standalone/pipx, the explicit v2 goal per docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md §4)
+  - tools/pawai_cli/pawai_cli/readiness.py:101-108 (sys.path.insert(repo_root) then `from benchmarks.core.readiness import evaluate_readiness` — breaks if CLI is ever installed standalone/pipx, the explicit v2 goal per docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md §4)
   - docs/pawai_cli/README.md:124-137 (command table omits readiness entirely; grep 'readiness' across docs/pawai_cli/*.md = 0 hits)
   - tools/pawai_cli/pawai_cli/readiness.py:69-91 (readiness freeze writes artifacts/baseline/frozen/<date>/ — demo-evidence workflow living undocumented)
 - **建議**：Document readiness/freeze in docs/pawai_cli/README.md §3 now (doc-only, safe). In v2, move evaluate_readiness into a shared installable package (or vendor it) so pipx install works without a repo checkout.
@@ -325,7 +325,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `ownership` · **POST_DEMO_ONLY**
 - **查證**：✅ supported — Verified: PRD line 88 contains the quoted text; scripts/obj_matrix_cap.py, under_load_probe.sh, lidar_front_sector.py, send_relative_goal.py all exist and grep for them in tools/pawai_cli returns 0 hits; docs/pawai_cli/README.md:341-350 documents nav motion test as raw `ros2 action send_goal`; counter-evidence accurate (face list/enroll/rebuild/test at main.py:1315-1366, readiness group at readiness.py:22, doctor --deep at main.py:399-418).
 - **證據**：
-  - docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:88 ('face enroll / object A/B / nav goto / smoke 散在各 script，沒收進 CLI')
+  - docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:88 ('face enroll / object A/B / nav goto / smoke 散在各 script，沒收進 CLI')
   - scripts/obj_matrix_cap.py, scripts/under_load_probe.sh, scripts/lidar_front_sector.py, scripts/send_relative_goal.py (referenced in references/project-status.md:56) — none invoked from tools/pawai_cli (grep obj_matrix/under_load/lidar_front in pawai_cli/*.py = 0 hits)
   - docs/pawai_cli/README.md:341-350 (nav motion test documented as raw `ros2 action send_goal`, not a CLI command)
   - Counter-evidence of what IS in the CLI: face enroll/list/rebuild/test main.py:1310-1366; readiness readiness.py:22; doctor --deep main.py:399-418
@@ -339,7 +339,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - docs/pawai_cli/README.md:21-45 (install = clone repo, python3 -m venv, uv pip install -e tools/pawai_cli; Jetson intentionally not installed)
   - tools/pawai_cli/pyproject.toml (no packaging beyond setuptools entry point; deps click+python-dotenv only)
   - Repo-coupled runtime paths: .claude/skills/*/scripts/start.sh (main.py:642,713-715,727), scripts/ci/check_topic_contracts.py (main.py:1271), docs paths in modules.py:24-105, benchmarks.core import (readiness.py:108), shell.repo_root() git-toplevel discovery (shell.py:48-55)
-  - PRD acknowledges: docs/pawai-brain/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:86 ('老師/同學電腦要能裝（目前需 clone repo + WSL）')
+  - PRD acknowledges: docs/architecture/specs/2026-06-10-pawai-brain-v2-cli-v2-prd.md:86 ('老師/同學電腦要能裝（目前需 clone repo + WSL）')
 - **建議**：For pipx v2: split commands into repo-independent (doctor/status/net/lock ops — pure SSH) vs repo-dependent (deploy/demo/docs), and make the latter fail with a clear 'requires repo checkout, set PAWAI_REPO_ROOT' instead of crashing on missing paths.
 
 ### CLI-10 — Inventory of 5/14-hardened invariants v2 must not regress (locations catalogued, all code-verified)
@@ -378,7 +378,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - face_perception/face_perception/face_identity_node.py:31-51 (list_face_images/compute_db_counts iterate ALL subdirs, no blacklist for _backup/.tmp/old)
   - face_perception/face_perception/face_identity_node.py:393-408 (predict_name uses MAX cosine over all stored sample embeddings, not centroid — a backup dir duplicating Roy's photos creates an equal-sim competing name → identity flapping; the 6/8 research doc's 'dilute centroid' wording understates this)
   - face_perception/face_perception/face_identity_node.py:163-181 (retrain trigger compares per-dir PNG counts only — replacing images with same count silently keeps stale pkl)
-  - face_perception/face_perception/face_identity_node.py:38 (glob('*.png') only — README manual-enroll flow docs/pawai-brain/perception/face/README.md:87-90 says 'put 1-3 photos in folder' with no format note; .jpg silently ignored)
+  - face_perception/face_perception/face_identity_node.py:38 (glob('*.png') only — README manual-enroll flow docs/architecture/perception/face/README.md:87-90 says 'put 1-3 photos in folder' with no format note; .jpg silently ignored)
   - docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md:192-195 (documented defect + HITL: stale enrollment dropped Roy sim to ~0.2, re-enroll restored 0.73-0.81)
   - tools/pawai_cli/pawai_cli/main.py:1315-1355 (pawai face list/enroll/rebuild exist as the manual-SOP guard)
 - **建議**：Smallest fix: dirname blacklist (skip names starting with . or _, plus 'old*') in list_face_images/compute_db_counts + accept jpg/jpeg + hash-based (not count-based) staleness. Demo period: rely on documented SOP (ls face_db, pawai face rebuild). Greet's single point of failure per research doc §1.18.
@@ -410,11 +410,11 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `observability` · **SAFE_TO_REFACTOR_NOW**
 - **查證**：✅ supported — All four drift items verified: face CLAUDE.md:8 freezes upper=0.35/lower=0.25 vs yaml:23-24 (0.40/0.22, 5/8 tuning); AGENT.md:16 event schema uses 'identity' while node publishes 'stable_name' (contract 379-397 correct); rate claims 10Hz (contract:63) vs 8Hz (conversation_graph_node.py:530, in pawai_brain not interaction_executive) vs ~6.6Hz (README:104) vs tick_period=0.05 default (node:89); 'mode' recomputed from name only at 583-587/626-631 discarding decide_stable_name's hold/stable return, and README:~75 documents a phantom identity_unknown event the node never emits.
 - **證據**：
-  - docs/pawai-brain/perception/face/CLAUDE.md ('不要改 hysteresis 閾值（upper=0.35, lower=0.25）') vs face_perception/config/face_perception.yaml:23-24 (sim_threshold_upper 0.40 / lower 0.22, 5/8 HITL tuning)
-  - docs/pawai-brain/perception/face/AGENT.md event schema field 'identity' vs face_identity_node.py:471-485 (publishes 'stable_name'; docs/contracts/interaction_contract.md:379-397 is correct)
+  - docs/architecture/perception/face/CLAUDE.md ('不要改 hysteresis 閾值（upper=0.35, lower=0.25）') vs face_perception/config/face_perception.yaml:23-24 (sim_threshold_upper 0.40 / lower 0.22, 5/8 HITL tuning)
+  - docs/architecture/perception/face/AGENT.md event schema field 'identity' vs face_identity_node.py:471-485 (publishes 'stable_name'; docs/contracts/interaction_contract.md:379-397 is correct)
   - rate claims: interaction_contract.md:63 says 10Hz, conversation_graph_node.py:530 comment says 8Hz, README.md:103 says ~6.6Hz debug, code default tick_period=0.05 → 20Hz nominal (face_identity_node.py:89)
   - face_identity_node.py:583-587 and :626-631 ('mode' recomputed as stable/hold from name only, discarding the actual hold/stable mode returned by decide_stable_name:410-447)
-  - docs/pawai-brain/perception/face/README.md:73-79 documents an 'identity_unknown' event type the node never emits (only track_started/identity_stable/identity_changed/track_lost)
+  - docs/architecture/perception/face/README.md:73-79 documents an 'identity_unknown' event type the node never emits (only track_started/identity_stable/identity_changed/track_lost)
 - **建議**：Doc-only sync now: fix CLAUDE.md threshold rule, AGENT.md field name, README phantom 'identity_unknown' event, unify rate claim as 'per-tick, inference-bound (~5-8Hz measured)'. The mode-field code fix is POST_DEMO_ONLY.
 
 ### FACE-6 — Tests cover only 3 pure helpers; tracking lifecycle, hysteresis, train_model, predict_name untested; brain-side tests use doc-shaped payloads, never the real wire schema
@@ -454,7 +454,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `fragile_runtime` · **NEEDS_HITL**
 - **查證**：✅ supported — Verified: face README documents '45 tracks/2min, 目標 ≤5, 根因是 YuNet 偵測不穩定' (lines ~67 and ~116) plus 無人幻覺/低光/多人 known issues (~113-117); yaml:11-18 shows the mitigation stack with det_score_threshold 0.90→0.35 and min_face_area_ratio 0.02→0.001 vs code defaults (node:77,84); brain_node.py ~363-368 comment ties face hallucination → stranger_alert active-plan lockup (6/9 demo 全黑真兇). NEEDS_HITL recommendation is consistent with the 2026-06-04 baseline evidence.
 - **證據**：
-  - docs/pawai-brain/perception/face/README.md:67,116 (documented: '45 tracks/2min, 目標 ≤5, 根因是 YuNet 偵測不穩定')
+  - docs/architecture/perception/face/README.md:67,116 (documented: '45 tracks/2min, 目標 ≤5, 根因是 YuNet 偵測不穩定')
   - face_perception/config/face_perception.yaml:11-18 (mitigation stack: det_score_threshold 0.35, min_face_area_ratio 0.001, track_iou_threshold 0.15, track_max_misses 20, stable_hits 2, unknown_grace_s 2.5)
   - yaml:11-12 det_score_threshold lowered 0.90→0.35 and min_face_area_ratio 0.02→0.001 — this maximizes recall but feeds the hallucinated-track problem that drove the 6/9 stranger_alert lockup (brain_node.py:362-364 comment)
   - README.md:113-115 (known issues: 無人幻覺 / 低光誤判 / 多人追蹤混亂)
@@ -472,7 +472,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - pawai_brain/pawai_brain/rule_fallback.py:8-30 (set 3, docstring admits 'copied verbatim from llm_bridge_node')
   - interaction_executive/interaction_executive/skill_contract.py:173-653 (canned SAY texts — actual demo content)
   - vision_perception/vision_perception/event_action_bridge.py:72-135 (set 5, demo bridge)
-  - docs/pawai-brain/speech/README.md:287 (repo itself flags '架構碎片化警示')
+  - docs/architecture/speech/README.md:287 (repo itself flags '架構碎片化警示')
 - **建議**：Single utterance module: skill_contract as sole canned-text source + one shared RuleBrain template module imported by both llm_bridge and pawai_brain. Delete intent_tts_bridge templates after migrating run_speech_test.sh harness. Demo runtime already has single /tts writer (IE-node) — preserve that invariant.
 
 ### SPEECH-2 — Echo gate stuck-closed: tts_node robot-playback early-returns on WAV conversion failure without resetting /state/tts_playing → mic muted until next TTS
@@ -503,7 +503,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `overclaim_risk` · **SAFE_TO_REFACTOR_NOW**
 - **查證**：✅ supported — Verified: README.md:255-258 and CLAUDE.md say 'sensevoice_cloud' while code provider_name is 'qwen_cloud' (stt_intent_node.py:66); demo script points it at the SenseVoice server (port 8001, qwen_asr.model_name:=sensevoice at line 187) and uses 'qwen_cloud' in ASR_PROVIDER_ORDER (line 70); _build_provider_order (657-664) silently filters unknown names with fallback ['qwen_cloud','whisper_local'], so a docs-faithful order silently drops the cloud tier.
 - **證據**：
-  - docs/pawai-brain/speech/README.md:258 ('sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local → whisper_local') and CLAUDE.md ASR 順序 use 'sensevoice_cloud'
+  - docs/architecture/speech/README.md:258 ('sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local → whisper_local') and CLAUDE.md ASR 順序 use 'sensevoice_cloud'
   - speech_processor/speech_processor/stt_intent_node.py:66 (provider_name='qwen_cloud'), :618-624 (QwenASRProvider pointed at SenseVoice server, model_name='sensevoice')
   - speech_processor/speech_processor/stt_intent_node.py:657-664 (_build_provider_order silently filters unknown names; empty result falls back to ['qwen_cloud','whisper_local'] — a docs-faithful ASR_PROVIDER_ORDER=['sensevoice_cloud',...] yields an unintended chain with no error)
   - scripts/start_full_demo_tmux.sh:70 (real order uses 'qwen_cloud')
@@ -517,7 +517,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - speech_processor/test/ — no test_stt_intent_node.py (15 test files; only pure intent_classifier covered, 15 tests)
   - speech_processor/speech_processor/stt_intent_node.py:1051-1071 (_transcribe_with_fallback — fallback + empty-transcript + degraded flag logic untested)
   - speech_processor/speech_processor/stt_intent_node.py:666-692,807-866 (echo gate + energy VAD untested)
-  - docs/pawai-brain/speech/README.md:255 ('ASR 三級 Fallback（2026-03-29 驗證通過）' — predates SenseVoice-local addition / current tuning)
+  - docs/architecture/speech/README.md:255 ('ASR 三級 Fallback（2026-03-29 驗證通過）' — predates SenseVoice-local addition / current tuning)
   - test_tts_audio_api_only.py: 1 test is the entire Megaphone-protocol safety net
 - **建議**：Add ROS-free tests with fake ASRProvider objects for _transcribe_with_fallback (success/empty/exception/degraded) and a pure echo-gate state test — providers are already injectable via self.providers dict. Adding tests touches no runtime path. Re-HITL the cloud→local ASR transition post-demo.
 
@@ -570,7 +570,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - docs/deliverables/thesis/5-系統限制與可行性分析.md:61 (mid-session restart → all uploads silent fail; only recovery = restart driver or Go2)
   - docs/archive/pawai-brain-legacy/architecture-0511/speech/speech-tts-lanes-megaphone.md:203 (troubleshooting table entry)
-  - docs/pawai-brain/speech/README.md:70 (Megaphone silent fail when Go2 driver not running)
+  - docs/architecture/speech/README.md:70 (Megaphone silent fail when Go2 driver not running)
   - mitigations in code: EXIT always sent + 0.5s cooldown (speech_processor/speech_processor/tts_node.py:1513-1529); demo sidesteps entirely via LOCAL_PLAYBACK=true (start_full_demo_tmux.sh:86)
 - **建議**：Keep LOCAL_PLAYBACK=true as the 6/18 invariant; never restart tts_node mid-session if Megaphone is ever used. Post-demo: move Megaphone protocol ownership into go2_robot_sdk driver (it owns the DataChannel/state machine) so tts_node restarts become safe — tts_node currently speaks raw 4001/4003/4002 via /webrtc_req (tts_node.py:1531-1538).
 
@@ -619,11 +619,11 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🟡 medium · `observability` · **SAFE_TO_REFACTOR_NOW**
 - **查證**：✅ supported — Verified: gesture CLAUDE.md and .claude/rules/vision-perception.md both still say '不要移除 GESTURE_COMPAT_MAP（fist→ok）' while event_builder.py shows the map EMPTIED 2026-05-05 ('routing fist→ok silently corrupted the enum') and gesture_recognizer_backend.py explicitly forbids routing Closed_Fist→ok; contract §4.3 still claims ok comes from Closed_Fist→COMPAT_MAP and '下游收到的一律是 ok' while brain maps fist→enter_mute_mode; pose CLAUDE.md/README state fallen vertical_ratio < 0.4 vs code's N7 5/11 widening to 0.45.
 - **證據**：
-  - docs/pawai-brain/perception/gesture/CLAUDE.md:9 + .claude/rules/vision-perception.md:13 ('不要移除 GESTURE_COMPAT_MAP（fist→ok）')
+  - docs/architecture/perception/gesture/CLAUDE.md:9 + .claude/rules/vision-perception.md:13 ('不要移除 GESTURE_COMPAT_MAP（fist→ok）')
   - vision_perception/vision_perception/event_builder.py:10-17 (map EMPTIED 2026-05-05; routing fist→ok 'silently corrupted the enum')
   - vision_perception/vision_perception/gesture_recognizer_backend.py:47-48 ('do NOT route Closed_Fist→ok')
   - docs/contracts/interaction_contract.md:498,506 (still claims ok comes from Closed_Fist→COMPAT_MAP and 'fist 映射為 ok，下游收到的一律是 ok' — false; brain maps fist→enter_mute_mode at brain_node.py:821)
-  - docs/pawai-brain/perception/pose/CLAUDE.md:7 + docs/pawai-brain/perception/pose/README.md:73 (fallen vertical_ratio < 0.4) vs vision_perception/vision_perception/pose_classifier.py:157-161 (N7 5/11 widened to 0.45)
+  - docs/architecture/perception/pose/CLAUDE.md:7 + docs/architecture/perception/pose/README.md:73 (fallen vertical_ratio < 0.4) vs vision_perception/vision_perception/pose_classifier.py:157-161 (N7 5/11 widened to 0.45)
 - **建議**：Docs-only fix, zero runtime risk: delete the fist→ok preservation rule from both rule files, correct contract §4.3 ok/fist rows, update fallen gate to 0.45 in pose CLAUDE.md/README. These files actively steer AI agents toward reintroducing a known enum-corruption bug.
 
 ### VISION-5 — 138 tests are all pure-logic level; the 608-line node pipeline (voting wiring, stable gate, wave bypass, two-class flow, backend matrix) and WaveDetector have zero tests, and 20 of 138 tests don't run in CI
@@ -635,7 +635,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - .github/workflows/ros_build.yaml:47-57 (CI lists only 7 of 9 files; test_lidar_obstacle_detector + test_obstacle_detector local-only)
   - no test file exists for dynamic_gesture_detector.py / vision_perception_node.py / mock_event_publisher.py / rtmpose_inference.py
   - voting.py tests live inside test_gesture_recognizer_backend.py:137-178 rather than a dedicated file
-  - docs/pawai-brain/perception/gesture/README.md:19-20 (gesture.wave trusted baseline = fail, n=9 recall=0.0 — the only real-camera measurement of the temporal path)
+  - docs/architecture/perception/gesture/README.md:19-20 (gesture.wave trusted baseline = fail, n=9 recall=0.0 — the only real-camera measurement of the temporal path)
 - **建議**：Adding tests is runtime-safe now: dedicated WaveDetector unit tests (reversal/amplitude/window edge cases) and extracting _tick's vote→stable-gate→publish decision into a pure function with tests. Full node refactor (split 608-line class) is post-demo.
 
 ### VISION-6 — ~656 LOC disabled obstacle stack (D435 + LiDAR) lives inside the perception package and duplicates nav-domain reactive_stop_node
@@ -657,7 +657,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - vision_perception/vision_perception/vision_perception_node.py:417-451 (wave bypass: direct publish, only 2.5s cooldown; comments confirm intentional buffer bypass)
   - vision_perception/vision_perception/vision_perception_node.py:494-499 (gesture_min_votes applies only to the static buffer; OK included, wave explicitly excluded)
   - interaction_executive/interaction_executive/brain_node.py:818-836 (wave→wave_hello direct skill; conversation gate + gesture_enabled are the only brakes)
-  - docs/pawai-brain/perception/gesture/README.md:19-21 (6/04 trusted measurement is recall=0.0 at 1.5m — a miss-rate result; FP behavior under venue motion never measured)
+  - docs/architecture/perception/gesture/README.md:19-21 (6/04 trusted measurement is recall=0.0 at 1.5m — a miss-rate result; FP behavior under venue motion never measured)
 - **建議**：Keep Studio gesture toggle OFF outside S4 (already demo SOP per docs/pawai-demo/2026-06-10-demo-snapshot.md:65-67). Post-demo HITL: measure wave FP rate with people walking through frame; if nonzero, route wave through min_votes-style gating or raise min_amplitude_px.
 
 ### VISION-8 — mock_event_publisher cycles legacy gesture names (stop/point/fist) that the production recognizer path never emits — Studio frontend dev tests against a vocabulary production doesn't speak
@@ -678,7 +678,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - vision_perception/vision_perception/pose_classifier.py:46-64 (COARSE_POSE_MAP omits fallen; to_two_class('fallen') → None, test-asserted at vision_perception/test/test_pose_classifier.py:574-575)
   - vision_perception/vision_perception/vision_perception_node.py:309-314 (two_class applied before buffer append)
   - scripts/start_full_demo_tmux.sh:167 (pose_two_class:=true in demo)
-  - docs/mission/2026-06-18-capability-claim-matrix.md pose.fall = future / insufficient_data (cited via docs/pawai-brain/perception/pose/README.md:7,28)
+  - docs/mission/2026-06-18-capability-claim-matrix.md pose.fall = future / insufficient_data (cited via docs/architecture/perception/pose/README.md:7,28)
 - **建議**：Intentional and consistent with claim matrix (pose.fall = future). Keep as-is for 6/18; the synthesizer should note 'sitting' under two_class also means crouch/kneel/bend (broadened semantics), so demo narration must say 「我看到你了」-style wording, never 「偵測到跌倒/守護」.
 
 ### VISION-10 — Documented test invocation fails from repo root: outer package dir shadows inner module (ModuleNotFoundError: vision_perception.lidar_obstacle_detector); CI only passes via explicit PYTHONPATH
@@ -712,7 +712,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - brain_node.py:1348-1356 (det = objects[0]; rest of array discarded)
   - object_perception_node.py:434-463 (event may batch multiple new classes per tick; objects ordered by raw YOLO row order)
   - docs/contracts/interaction_contract.md:659-686 (schema has no instance/track id, no distance)
-  - docs/pawai-brain/perception/object/README.md:20 (6/4 baseline: distance=manual_declared — no depth in pipeline)
+  - docs/architecture/perception/object/README.md:20 (6/4 baseline: distance=manual_declared — no depth in pipeline)
   - object_perception/config/object_perception.yaml:21 (household-7 whitelist: chair/laptop commonly co-visible with cup → cup can land at objects[1] and never be spoken)
 - **建議**：Smallest fix: iterate objects[] in brain and pick first TTS-whitelisted class instead of [0]. Larger: add track/instance id + optional depth from D435 to the event (contract bump), and a continuous /state/perception/object topic like face's.
 
@@ -723,7 +723,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - object_perception_node.py:163,184,441-452 (node-level per-class 5s event cooldown — perception decides eventness)
   - brain_node.py:69-73,1431-1435 (OBJECT_REMARK_DEDUP_S=60 class-key dedup)
-  - interaction_executive/interaction_executive/skill_contract.py (object_remark cooldown_s) + docs/pawai-brain/perception/object/README.md:180-189 (5/7 night: layers added because each lower layer leaked)
+  - interaction_executive/interaction_executive/skill_contract.py (object_remark cooldown_s) + docs/architecture/perception/object/README.md:180-189 (5/7 night: layers added because each lower layer leaked)
   - scripts/obj_matrix_cap.py:37-56 (harness must hardcode OBJECT_EVENT_COOLDOWN_S=5.0 duplicate literal and validate window/gap against it — measurement constrained by perception-side policy)
 - **建議**：Make node cooldown pure rate-limit (or publish continuous state + raw events) and own all 'when to speak' in brain. Export the node cooldown constant from one place so obj_matrix_cap stops duplicating the literal.
 
@@ -735,7 +735,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
   - object_perception/object_perception/coco_classes.py:8-12 ('mirrored (NOT imported)' by studio object-config.ts and brain_node — keep 3 in sync by hand)
   - brain_node.py:41-58 (OBJECT_CLASS_ZH/OBJECT_COLOR_ZH subset copy)
   - pawai-studio/frontend/components/object/object-config.ts:158,204-205
-  - object_perception/launch/object_perception.launch.py:35-39 (launch default ordered after config_file silently overrides yaml; the 0.5-vs-0.35 divergence dropped near-range cup events until commit b1f5058 — docs/pawai-brain/perception/object/CLAUDE.md pitfall 9)
+  - object_perception/launch/object_perception.launch.py:35-39 (launch default ordered after config_file silently overrides yaml; the 0.5-vs-0.35 divergence dropped near-range cup events until commit b1f5058 — docs/architecture/perception/object/CLAUDE.md pitfall 9)
   - object_perception/config/object_perception.yaml:11
 - **建議**：Generate the three zh dicts from one source (JSON in docs/contracts + codegen or CI sync check). Remove the launch-arg duplicate default for confidence_threshold (pass through yaml only) and make it a runtime-settable param.
 
@@ -746,7 +746,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **證據**：
   - object_perception/launch/object_perception.launch.py:25-34 (OBJECT_MODEL/OBJECT_INPUT_SIZE env)
   - scripts/start_full_demo_tmux.sh:277-280 (object window does NOT forward OBJECT_MODEL/OBJECT_INPUT_SIZE explicitly, unlike speech vars; relies on tmux server env inheritance — known tmux env footgun per CLAUDE.md LD_LIBRARY_PATH rule)
-  - docs/pawai-brain/perception/object/CLAUDE.md pitfall 6 (wrong input_size = inference fail + silent restart)
+  - docs/architecture/perception/object/CLAUDE.md pitfall 6 (wrong input_size = inference fail + silent restart)
   - docs/archive/pawai-brain-legacy/research/2026-06-10-model-upgrade-decision-research.md:24-34 (candidates exported on WSL only; Jetson A/B not yet run)
   - docs/pawai-demo/2026-06-10-demo-snapshot.md:108 (YOLO26s A/B 'remains a measurement task')
 - **建議**：Before any A/B session: scp candidates to /home/jetson/models/, run object_model_contract.py on-device, and verify env propagation by launching object_perception standalone (not via full-demo tmux) or add explicit OBJECT_MODEL forwarding into the tmux window command.
@@ -787,7 +787,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **查證**：✅ supported — Verified: _route_object + OBJECT_TTS_MAP exist in state_machine.py (~68, 283-295) with zero wiring in interaction_executive_node.py (grep empty), README documents it as 棄用路徑, and coco_detector/ was deleted in 955b00e (2026-03-25) with ignored __pycache__ residue still on the working copy. Minor wording nit: the residual __pycache__ dirs contain .pyc files rather than being empty — immaterial to the claim.
 - **證據**：
   - interaction_executive/interaction_executive/state_machine.py:68,283-295 (_route_object + OBJECT_TTS_MAP; interaction_executive_node.py has no /event/object_detected subscription — grep empty)
-  - docs/pawai-brain/perception/object/README.md:314-316 (officially documented as 棄用路徑, not wired)
+  - docs/architecture/perception/object/README.md:314-316 (officially documented as 棄用路徑, not wired)
   - coco_detector/ deleted from git in 955b00e (2026-03-25) but 3 untracked empty __pycache__ dirs remain on the WSL working copy (coco_detector/, coco_detector/coco_detector/, coco_detector/test/)
 - **建議**：Delete the untracked coco_detector __pycache__ dirs anytime (zero risk). Remove _route_object/OBJECT_TTS_MAP + its tests after 6/18 since it edits a demo-runtime file and forces a Jetson rebuild.
 
@@ -796,7 +796,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：⚪ low · `overclaim_risk` · **SAFE_TO_REFACTOR_NOW**
 - **查證**：✅ supported — Verified: AGENT.md param table claims confidence_threshold 0.5 and class_whitelist [] all-80, while launch default is 0.35 (b1f5058), yaml is 0.35 with household-7 [39,41,45,56,63,67,73] at line 21, and node declared default is the [-1] INTEGER_ARRAY sentinel (node lines 168-175); obj_matrix_cap.py:108-109 still says 'node 預設已 0.5 過濾'; AGENT.md:3 frames itself as the read-this-first interface contract.
 - **證據**：
-  - docs/pawai-brain/perception/object/AGENT.md:48 (claims confidence_threshold default 0.5; actual launch+yaml are 0.35 since b1f5058) and AGENT.md:53 (claims class_whitelist default [] all-80; actual declared default is [-1] sentinel at object_perception_node.py:168-175 with yaml household-7 [39,41,45,56,63,67,73] at yaml:21)
+  - docs/architecture/perception/object/AGENT.md:48 (claims confidence_threshold default 0.5; actual launch+yaml are 0.35 since b1f5058) and AGENT.md:53 (claims class_whitelist default [] all-80; actual declared default is [-1] sentinel at object_perception_node.py:168-175 with yaml household-7 [39,41,45,56,63,67,73] at yaml:21)
   - scripts/obj_matrix_cap.py:108-109 (--conf-min help says 'node 預設已 0.5 過濾' — stale)
   - AGENT.md is explicitly the read-this-first interface contract for agents (AGENT.md:3)
 - **建議**：One-pass doc sync: fix AGENT.md param table (0.35, [-1] sentinel, household-7 yaml default, runtime-settable=class_whitelist only) and the obj_matrix_cap help string. Docs-only, no demo impact.
@@ -841,7 +841,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **分級**：🔴 high · `fragile_runtime` · **MUST_PRESERVE_FOR_DEMO**
 - **查證**：✅ supported — All cited evidence verified: audit doc reconstructs teleop-100 takeover via mux 0.5s timeout as the corrected root cause; mux priorities 255/200/100/10 in twist_mux.yaml:18-41; demo script's only guards are teleop:=false flags + comments (lines 90-106); FakePublisher in test_mux_priority.py is a real 0.30 m/s publisher with the runaway documented in CLAUDE.md; reactive_stop_node.py:335-345 warns teleop may silently win on resume.
 - **證據**：
-  - docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §0-§1.2 (crash reconstruction; teleop 100 takeover as true root cause)
+  - docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md §0-§1.2 (crash reconstruction; teleop 100 takeover as true root cause)
   - go2_robot_sdk/config/twist_mux.yaml:18-41 (emergency 255 / obstacle 200 / teleop 100 / nav2 10)
   - scripts/start_nav_capability_demo_tmux.sh:90-106 (teleop:=false joystick:=false + 'must kill teleop' comments are the only protection)
   - nav_capability/test/integration/test_mux_priority.py:21,64 (FakePublisher publishes real 0.30 m/s through mux — 4/26 22:30 runaway documented in CLAUDE.md)
@@ -862,12 +862,12 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 ### NAV-6 — Three parallel pause/goal-supervision protocols: route_runner /nav/pause-resume services, nav_action_server's latched-topic cancel-and-resend loop, and the Studio gateway's own idle/running/paused_confirm/done state machine — duplicated policy with divergent resume semantics
 
 - **分級**：🟡 medium · `duplication` · **POST_DEMO_ONLY**
-- **查證**：✅ supported — Three distinct pause/supervision implementations confirmed in code: route_runner's /nav/pause//nav/resume services + latched /state/nav/paused, nav_action_server's auto-resend pause loop, and the gateway's idle/running/paused_confirm/done state machine with an explicit 'NO auto-resume' comment (lines 1134-1137); docs/navigation/CLAUDE.md records the BUG #2 history. Resume semantics demonstrably diverge (auto-resend vs operator-confirm).
+- **查證**：✅ supported — Three distinct pause/supervision implementations confirmed in code: route_runner's /nav/pause//nav/resume services + latched /state/nav/paused, nav_action_server's auto-resend pause loop, and the gateway's idle/running/paused_confirm/done state machine with an explicit 'NO auto-resume' comment (lines 1134-1137); docs/architecture/navigation/CLAUDE.md records the BUG #2 history. Resume semantics demonstrably diverge (auto-resend vs operator-confirm).
 - **證據**：
   - nav_capability/nav_capability/route_runner_node.py:5-13,106-110 (services + latched /state/nav/paused)
   - nav_capability/nav_capability/nav_action_server_node.py:89-99,231-321 (independent pause-aware loop)
   - pawai-studio/gateway/studio_gateway.py:431-458,524-603,1135-1137 (third state machine; deliberately bypasses auto-resume)
-  - docs/navigation/CLAUDE.md ('/nav/pause 只有 route_runner_node 接、nav_action_server 沒接' history of BUG #2)
+  - docs/architecture/navigation/CLAUDE.md ('/nav/pause 只有 route_runner_node 接、nav_action_server 沒接' history of BUG #2)
 - **建議**：Post-demo Brain/CLI v2 work: a single nav-session supervisor owning pause/resume/cancel + reasons, consumed by Studio, IE, and CLI clients. The gateway operator-confirm semantics (HITL-blessed) should become the canonical default.
 
 ### NAV-7 — Covariance policy duplicated with three different numbers: capability_publisher param (lib default 0.20, demo launch 0.45) vs nav_action_server hardcoded 0.3/0.5 — /capability/nav_ready can be true while goto still rejects, and vice versa
@@ -896,10 +896,10 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 ### NAV-9 — start_nav_capability_demo_tmux_detour.sh is a live footgun: safety_only:=true (auto-promotes to hold_brake → nav cannot move, contradicting detour purpose) + danger_distance_m:=0.40 (64% below the 1.1m audited floor), warned against only in docs, with a header that even shows the non-detour script's usage
 
 - **分級**：🟡 medium · `demo_hack` · **SAFE_TO_REFACTOR_NOW**
-- **查證**：✅ supported — Detour script line 86 has safety_only:=true + danger_distance_m:=0.40, header lines 16-18 show copy-pasted non-detour usage text, and the script contains no warning/guard; reactive_stop_node.py:129-130 promotes safety_only=True to hold_brake (nav cannot move, contradicting detour purpose); docs/navigation/CLAUDE.md warns '不要直接用' citing the 5/12 subagent audit's 4 bugs including these two.
+- **查證**：✅ supported — Detour script line 86 has safety_only:=true + danger_distance_m:=0.40, header lines 16-18 show copy-pasted non-detour usage text, and the script contains no warning/guard; reactive_stop_node.py:129-130 promotes safety_only=True to hold_brake (nav cannot move, contradicting detour purpose); docs/architecture/navigation/CLAUDE.md warns '不要直接用' citing the 5/12 subagent audit's 4 bugs including these two.
 - **證據**：
   - scripts/start_nav_capability_demo_tmux_detour.sh:16-18 (header usage text copy-pasted from non-detour script), :86 (safety_only:=true -p danger_distance_m:=0.40)
-  - docs/navigation/CLAUDE.md ('start_nav_capability_demo_tmux_detour.sh 不要直接用' — 4 bugs from 5/12 subagent audit)
+  - docs/architecture/navigation/CLAUDE.md ('start_nav_capability_demo_tmux_detour.sh 不要直接用' — 4 bugs from 5/12 subagent audit)
   - go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py:129-130 (safety_only=True promotes to hold_brake)
 - **建議**：Not in the 6/18 flow — add an immediate `echo WARNING + exit 1` guard (override env to run) or move to scripts/archive/. Five-person shared Jetson + tab-completion makes accidental launch plausible.
 
@@ -944,7 +944,7 @@ NEEDS_HITL = 需 Jetson+Go2 上機確認；NEEDS_RESEARCH = repo 內證據不足
 - **查證**：✅ supported — move_service.py:49-53 publishes raw /cmd_vel, which is the twist_mux output topic (launch remaps /cmd_vel_out->/cmd_vel), so direct publish bypasses arbitration; entry points still in setup.py; no script/launch starts it; commit 955b00e removed ros-mcp-server; stale comment at robot_control_service.py:16 says MAX_LINEAR 0.3 but move_service.py:35 is 0.5.
 - **證據**：
   - go2_robot_sdk/go2_robot_sdk/move_service.py:49-53 (publishes '/cmd_vel' directly — no mux arbitration if ever revived)
-  - go2_robot_sdk/setup.py:52-53 (entry points still registered); no launch script starts move_service (grep: only docs/navigation + AGENTS.md refs)
+  - go2_robot_sdk/setup.py:52-53 (entry points still registered); no launch script starts move_service (grep: only docs/architecture/navigation + AGENTS.md refs)
   - go2_robot_sdk/launch/robot.launch.py:122-124,425-432 (snapshot_service only via mcp_mode arg)
   - git commit 955b00e removed consumer ros-mcp-server
   - go2_robot_sdk/go2_robot_sdk/application/services/robot_control_service.py:16 (stale comment claims move_service.MAX_LINEAR=0.3; actual is 0.5 at move_service.py:35)

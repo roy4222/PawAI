@@ -2,8 +2,8 @@
 
 Phase B B1 工具：用 50 中文 prompt × N 個 LLM × 4 軸打分，選 Brain 主線 + fallback 模型。
 
-> Spec: [`docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md`](../../docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md) §B1
-> Notes: [`docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md`](../../docs/pawai-brain/specs/2026-05-04-phase-b-implementation-notes.md) §4
+> Spec: [`docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md`](../../docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md) §B1
+> Notes: [`docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md`](../../docs/architecture/specs/2026-05-04-phase-b-implementation-notes.md) §4
 
 ## 檔案
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Spec**：[docs/pawai-brain/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md](../specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md)（commit `a1ebdd2`）
+**Spec**：[docs/architecture/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md](../specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md)（commit `a1ebdd2`）
 
 **Goal**：在沒有 Jetson / Go2 條件下，把下週 demo 的 6 個結構性風險（Brain bring-up / persona / TTS 單出口 / gesture gate / pose Brain-side state / preflight 工具）以 4 個 PR（1 → 2A → 2B → 3）依序合入，不回退 `b05205d`~`d9d4879` 之 lock/orphan/env/CRLF 修補與 5/14-15 學校招生 demo 強化（`e9eaac6` school_demo_request / `2714599` ASR 同音字容錯 / `b011b40` demo school ending）。
 
@@ -35,7 +35,7 @@
 |------|------|-----|
 | `pawai_brain/package.xml` | 補可用 rosdep key `python3-requests` | 1 |
 | `requirements-jetson.txt`（repo 根，**非** `pawai_brain/`）| 補 `langgraph` / `langchain-core` 含版本 pin；確認 `requests` 已列 | 1 |
-| `docs/pawai-brain/README.md:18` | 主模型改 `openai/gpt-5.4-mini`，fallback 列 `google/gemini-3-flash-preview` | 1 |
+| `docs/architecture/README.md:18` | 主模型改 `openai/gpt-5.4-mini`，fallback 列 `google/gemini-3-flash-preview` | 1 |
 | `docs/runbook/README.md` | Jetson bring-up 必跑 `uv pip install -r requirements-jetson.txt` | 1 |
 | `docs/pawai_cli/team-onboarding.md` | 加 demo 合法 chain；禁用 legacy launch | 1 |
 | `pawai_brain/personas/v1/CAPABILITIES.md` | 行 22 / 26 / 27 砍誇大字、行 32 / 55 改寫硬數字、結尾新增 STATUS_NOTE | 1 |
@@ -134,7 +134,7 @@ git diff main..HEAD --stat
 對照 Task 1.2-1.10 清單，確認：
 - `pawai_brain/package.xml` 有補 `python3-requests`
 - `requirements-jetson.txt`（repo 根）含 `langgraph` / `langchain-core`
-- `docs/pawai-brain/README.md:18` 主模型已改 `openai/gpt-5.4-mini`
+- `docs/architecture/README.md:18` 主模型已改 `openai/gpt-5.4-mini`
 - `docs/runbook/README.md` 有 Jetson bring-up `uv pip install` 段
 - `docs/pawai_cli/team-onboarding.md` 有 demo 合法 chain
 - `CAPABILITIES.md` 行 22/26/27/32/55 已收斂 + STATUS_NOTE
@@ -373,10 +373,10 @@ git commit -m "spec-a/pr1: requirements-jetson 補 langgraph + langchain-core
 
 ---
 
-## Task 1.4：修 `docs/pawai-brain/README.md:18` 主模型名稱
+## Task 1.4：修 `docs/architecture/README.md:18` 主模型名稱
 
 **Files：**
-- Modify：`docs/pawai-brain/README.md`，line 18
+- Modify：`docs/architecture/README.md`，line 18
 
 - [ ] **Step 1：替換行 18**
 
@@ -395,7 +395,7 @@ git commit -m "spec-a/pr1: requirements-jetson 補 langgraph + langchain-core
 - [ ] **Step 2：驗 markdown 結構沒崩**
 
 ```bash
-head -25 docs/pawai-brain/README.md
+head -25 docs/architecture/README.md
 ```
 
 Expected：行 18 已改、其他行未動。
@@ -403,7 +403,7 @@ Expected：行 18 已改、其他行未動。
 - [ ] **Step 3：commit**
 
 ```bash
-git add docs/pawai-brain/README.md
+git add docs/architecture/README.md
 git commit -m "spec-a/pr1: README — 主模型對齊 code
 
 主線 openai/gpt-5.4-mini（不是 Gemini 3 Flash）；fallback gemini-3-flash-preview；
@@ -776,7 +776,7 @@ Spec A PR 群 1：靜態修補。純 markdown / xml / txt 改動，預期不動 
 對應 spec sections §2 / §3 / Appendix C：
 - `pawai_brain/package.xml`：補 `python3-requests` exec_depend
 - `requirements-jetson.txt`（repo 根）：補 `langgraph` / `langchain-core` 版本 pin
-- `docs/pawai-brain/README.md:18`：主模型對齊 code（`openai/gpt-5.4-mini`）
+- `docs/architecture/README.md:18`：主模型對齊 code（`openai/gpt-5.4-mini`）
 - `docs/runbook/README.md`：Jetson bring-up `uv pip install` 指引
 - `docs/pawai_cli/team-onboarding.md`：demo 唯一合法 chain + legacy 禁用
 - `personas/v1/CAPABILITIES.md`：4 行誇大字句砍除、硬數字 17/18 改寫、結尾新增 STATUS_NOTE 三層
@@ -789,7 +789,7 @@ Spec A PR 群 1：靜態修補。純 markdown / xml / txt 改動，預期不動 
 - [x] EXAMPLES 不含 banned claim
 - [x] 既有 persona test 全綠
 
-Spec：docs/pawai-brain/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
+Spec：docs/architecture/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
 EOF
 )"
 ```
@@ -914,7 +914,7 @@ Mechanical：10 條 check（5 pre-start + 5 post-start），每條標 target
 （local / jetson_ssh）。
 Semantic：6 條語音劇本 dry-run（5 core + 1 persona guard）。
 
-詳見 spec docs/pawai-brain/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md。
+詳見 spec docs/architecture/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md。
 """
 
 from __future__ import annotations
@@ -2856,7 +2856,7 @@ Spec A PR 群 2A — runtime mechanical guard。對應 spec §2 / §4 / §7。
 - 不動 IP override (`8ac67a7`)
 - 不動 CRLF / BOM (`caef6b5`)
 
-Spec：docs/pawai-brain/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
+Spec：docs/architecture/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
 EOF
 )"
 ```
@@ -3975,7 +3975,7 @@ Spec A PR 群 3 — behavior gate（最後一群）。對應 spec §5 / §6。
 - [x] pose simulation 7 case（含「t=20 不重發」痛點 case 6）
 - [x] 既有 pawai_brain / interaction_executive test 全綠
 
-Spec：docs/pawai-brain/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
+Spec：docs/architecture/specs/2026-05-14-spec-a-demo-mainline-stop-bleed.md
 EOF
 )"
 ```

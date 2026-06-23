@@ -275,7 +275,7 @@ class BrainNode(Node):
 
         # D-1/D-2 Attention Machine — 4-state pure Python state machine.
         # Driven by 10Hz tick timer; face callback feeds face_visible + distance.
-        # Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P2-1
+        # Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P2-1
         self._attention = AttentionMachine()
         # Latest face payload for attention tick (updated in _on_face)
         self._attention_face_visible: bool = False

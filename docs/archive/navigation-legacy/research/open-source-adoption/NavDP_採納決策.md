@@ -83,5 +83,5 @@ NavDP 可參考，但定位為「研究/評測與局部技術來源」，不適�
 
 ## 補充
 
-已存在一份更細的轉移路線圖：`docs/navigation/NavDP_採納轉移路線圖.md`。
+已存在一份更細的轉移路線圖：`docs/architecture/navigation/NavDP_採納轉移路線圖.md`。
 本文件作為「決策層摘要」，用於報告與執行邊界對齊。

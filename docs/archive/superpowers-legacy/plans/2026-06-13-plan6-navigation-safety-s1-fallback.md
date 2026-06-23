@@ -2,7 +2,7 @@
 
 > **Plan ID**：plan6　**角色**：Cloud/Fable = planner+reviewer；Codex = builder（依本檔 task packet 實作，**不擴張 scope、不改 runtime claim、未經 Roy 明確授權＋e-stop 就位不得發任何 Go2 motion**）。
 > **狀態**：PLAN（本檔零 code、零 motion）。nav motion 維持 **`NOT_DEMO_READY`**。
-> **權威來源**：根因分析 [`docs/navigation/2026-06-13-nav-motion-incident-root-cause-plan.md`](../../navigation/2026-06-13-nav-motion-incident-root-cause-plan.md)；runbook [`docs/navigation/2026-06-13-nav-incident-runbook.md`](../../navigation/2026-06-13-nav-incident-runbook.md)；能力階梯 [`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)；對外措辭 [`docs/navigation/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)。
+> **權威來源**：根因分析 [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-motion-incident-root-cause-plan.md`](../../navigation/2026-06-13-nav-motion-incident-root-cause-plan.md)；runbook [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-incident-runbook.md`](../../navigation/2026-06-13-nav-incident-runbook.md)；能力階梯 [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)；對外措辭 [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)。
 > **與其他 plan 的關係（不重複，只引用）**：
 > - **plan1（資源 profiling）**：本 plan 的 S1 runtime 佈局（nav stack 能否與 brain 共存）**依賴 plan1 的 no-motion co-run profiling 三組（A brain-only / B brain+raw-LiDAR+Foxglove / C brain+full-nav-stack）結果**。本 plan 不重做 profiling、只在 §5/§11 引用其決策樹。
 > - **plan2/conductor（demo_phase）**：`s1_nav=quiet` phase 的詞表/transition cleanup 屬 conductor plan，本 plan 只負責「s1_nav 這一幕的 nav 行為與 fallback 證據」。
@@ -88,7 +88,7 @@
 9. **Motion HITL gate（H1→H2→H3）規格**（降級為 optional upside，依 plan1 profiling + Roy + e-stop）。
 10. **NS-V1 route_id sanitize 回歸驗證**（覆蓋確認，ownership plan5）。
 
-**精確檔案範圍**：`go2_robot_sdk/urdf/go2.urdf`、`go2_robot_sdk/launch/robot.launch.py`、`nav_capability/`（`nav_action_server_node.py`、`lib/nav_ready_check.py`、`lib/relative_goal_math.py`、`test/`）、`scripts/`（`nav_covariance_probe.py` 新、`start_nav_capability_demo_tmux.sh`、`smoke_test_nav_static.sh`）、`docs/navigation/`。
+**精確檔案範圍**：`go2_robot_sdk/urdf/go2.urdf`、`go2_robot_sdk/launch/robot.launch.py`、`nav_capability/`（`nav_action_server_node.py`、`lib/nav_ready_check.py`、`lib/relative_goal_math.py`、`test/`）、`scripts/`（`nav_covariance_probe.py` 新、`start_nav_capability_demo_tmux.sh`、`smoke_test_nav_static.sh`）、`docs/architecture/navigation/`。
 
 ---
 
@@ -120,13 +120,13 @@
 | **NS-D0** | 證據回收（`pawai evidence pull` 拉當天 `[PR1a]` + reactive status timeline） | pure_software | P0 | — | NO | NO | 定量 R1/R2/R3，無 demo 行為影響 |
 | **NS-D1** | T0 TF authority no-motion 診斷（`echo /tf_static` 等） | jetson | P0 | — | NO | NO | 決定是否做 NS-T0；無行為影響 |
 | **NS-T0** | gated T0 remediation：移除 `go2.urdf` map_joint/odom_joint | pure_software→jetson | P0 | `go2_robot_sdk/urdf/go2.urdf`、`go2_robot_sdk/launch/robot.launch.py`、`go2_robot_sdk/test/` | YES（驗收） | NO | 修 TF 衝突；**有 nav-stack regression 風險，必 D1 confirm 才做** |
-| **NS-D2** | no-motion 診斷集 D2-D5（AMCL yaw / yaw-blind 實證 / LiDAR 軸 / reactive 側向 / covariance） SOP 化 | jetson | P0 | `docs/navigation/2026-06-13-no-motion-diagnostics-sop.md`（新） | NO | NO | 文件，無行為影響 |
+| **NS-D2** | no-motion 診斷集 D2-D5（AMCL yaw / yaw-blind 實證 / LiDAR 軸 / reactive 側向 / covariance） SOP 化 | jetson | P0 | `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-no-motion-diagnostics-sop.md`（新） | NO | NO | 文件，無行為影響 |
 | **NS-1** | goto 前置 yaw/scan sanity 閘 + `nav_ready` 三拆 | pure_software | P1 | `nav_capability/nav_capability/nav_action_server_node.py`、`lib/nav_ready_check.py`、`test/` | NO | NO | additive reject；旗標關＝byte-identical |
 | **NS-2** | goto 限速/限距 watchdog（治 R2 超衝） | pure_software | P1 | `nav_capability/nav_capability/nav_action_server_node.py`、`test/` | NO | NO | additive；旗標關＝byte-identical |
 | **NS-3** | HITL 路徑 fail-closed 前置（zone≠danger + depth_clear） | pure_software | P1 | `nav_capability/nav_capability/nav_action_server_node.py`、`test/` | NO | NO | additive；旗標關＝byte-identical |
-| **NS-4** | covariance probe 腳本（含 c[35]）+ 黃帶決策表 | pure_software→jetson | P1 | `scripts/nav_covariance_probe.py`（新）、`docs/navigation/...sop.md` | NO | NO | 量測工具，無行為影響 |
-| **NS-5** | initialpose yaw 校正 SOP + scan-overlay SOP 文件 | pure_software | P0 | `docs/navigation/2026-06-13-initialpose-yaw-calibration-sop.md`（新） | NO | NO | SOP；S1 fallback② 操作依據 |
-| **NS-6** | S1 三層 fallback 決策 + claim wording 鎖定（綁 S1-S8/F1-F10） | pure_software | P0 | `docs/navigation/2026-06-13-s1-fallback-decision.md`（新，或併入既有 s1-nav plan 引用） | YES（D-1 拍板） | NO | 決定 S1 講什麼、演什麼 |
+| **NS-4** | covariance probe 腳本（含 c[35]）+ 黃帶決策表 | pure_software→jetson | P1 | `scripts/nav_covariance_probe.py`（新）、`docs/architecture/navigation/...sop.md` | NO | NO | 量測工具，無行為影響 |
+| **NS-5** | initialpose yaw 校正 SOP + scan-overlay SOP 文件 | pure_software | P0 | `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-initialpose-yaw-calibration-sop.md`（新） | NO | NO | SOP；S1 fallback② 操作依據 |
+| **NS-6** | S1 三層 fallback 決策 + claim wording 鎖定（綁 S1-S8/F1-F10） | pure_software | P0 | `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md`（新，或併入既有 s1-nav plan 引用） | YES（D-1 拍板） | NO | 決定 S1 講什麼、演什麼 |
 | **NS-7** | DriveOnHeading speed-port 設定（speed≥0.45）— live-motion option | pure_software | P1 | `nav_capability/`（新 thin client 或 action wrapper，**不動 goto_relative**）、`test/` | NO（code）/ YES（啟用） | NO（code） | wired_only，預設不接 demo |
 | **NS-H1** | HITL：indoor_tight ±18° 安全錐驗證（safe-stop/clear/no misblock） | go2_motion | P1 | — | YES | YES | upside：過了才可講 S2/S4 現場版 |
 | **NS-H2** | HITL：initialpose 朝向校正一輪（θ_error<5°） | go2_motion | P1 | — | YES | YES | upside：H3 前置 |
@@ -179,28 +179,28 @@
 
 ### NS-4 — covariance probe 腳本 + 黃帶決策表（P1, pure_software→jetson, demo_impact=none, needs_roy=NO, needs_motion=NO）
 - **做什麼**：新 `scripts/nav_covariance_probe.py`：訂 `/amcl_pose`，每秒記錄 `c[0]+c[7]`（position）**與 `c[35]`（yaw）**，輸出 CSV（time, cov_xy, cov_yaw）；靜止量收斂曲線。產出「黃帶決策表」（該等 / 該重設 / 該推 Go2 0.3m warmup，**含 yaw 維度**）寫進 NS-D2 SOP。
-- **檔案**：`scripts/nav_covariance_probe.py`（新）、`docs/navigation/2026-06-13-no-motion-diagnostics-sop.md`。
+- **檔案**：`scripts/nav_covariance_probe.py`（新）、`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-no-motion-diagnostics-sop.md`。
 - **tests**：`bash -n scripts/nav_covariance_probe.py` 不適用（python）→ 改 `python3 -m py_compile scripts/nav_covariance_probe.py`；新增純函式（covariance 取值 + CSV row 格式）單測 `nav_capability/test/test_nav_covariance_probe.py` 或 `scripts` 旁 test（紅綠）；CSV 輸出可被 re-parse。
 - **rollback**：純新增量測工具，刪檔即回退（`git rm scripts/nav_covariance_probe.py`）。
 
 ### NS-5 — initialpose yaw 校正 SOP + scan-overlay SOP（P0, pure_software, demo_impact=S1 fallback② 操作依據, needs_roy=NO, needs_motion=NO）
-- **做什麼**：寫 `docs/navigation/2026-06-13-initialpose-yaw-calibration-sop.md`，步驟（全 no-motion）：
+- **做什麼**：寫 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-initialpose-yaw-calibration-sop.md`，步驟（全 no-motion）：
   - S5-1 讀外參：`tf2_echo base_link laser`（期望 yaw≈π）+ `ros2 param get /reactive_stop_node front_offset_rad`（須==π）。
   - S5-2 物理錨定（5/1 黃金標準）：**操作員站 Go2 機鼻 0.5m** → `python3 scripts/lidar_front_sector.py` → 應落 ±180° bin；不對則停、先修外參。
   - S5-3 Foxglove fixed frame：讀 scan 用 `base_link`、讀定位用 `map`。
   - S5-4 設 initialpose 後 `ros2 topic echo /amcl_pose --once` 讀完整 covariance，**人工讀 c[35]**；`tf2_echo map base_link` 比現場真值算 `θ_error`。
   - S5-5 判定：`|θ_error|>5-10°` → 重設、**不准發 goal**（這是 sanity hint，human-readable，**不是 auto-gate**）。
-- **檔案**：`docs/navigation/2026-06-13-initialpose-yaw-calibration-sop.md`（新）。
+- **檔案**：`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-initialpose-yaw-calibration-sop.md`（新）。
 - **tests**：dry-run 檢核（no motion）—— 由 NS-D2 SOP 的 checklist 涵蓋；文件無 code 風險。
 - **rollback**：SOP 是流程，刪檔即回退。
 
 ### NS-6 — S1 三層 fallback 決策 + claim wording 鎖定（P0, pure_software, demo_impact=決定 S1 演什麼講什麼, needs_roy=YES 拍板 D-1, needs_motion=NO）
-- **做什麼**：寫 `docs/navigation/2026-06-13-s1-fallback-decision.md`（或併入 s1-nav plan 並從本 plan 引用），內容：
+- **做什麼**：寫 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md`（或併入 s1-nav plan 並從本 plan 引用），內容：
   - **① live 短距（DriveOnHeading）**：僅 T0 修好 + D1-D5 全綠 + θ_error<5° + e-stop + NS-H3 n=3 全過才開；speech 綁 S1-S8。
   - **② 遙控 + Foxglove LiDAR 證據**（**預設主線**）：遙控/Studio 輔助移動，Studio map + LiDAR 點雲 + reactive 狀態作「邊緣端即時感知」證據；可講 S2（safe-stop 配標準說法）、S4（窄場安全錐）、S6（拒絕有理由）。
   - **③ 遙控 + 純影片**（保底）：S1 已錄影片，旁白用保守版。
   - **claim 鎖定表**：每一句台詞對映 [`nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md) 的 S1-S8（可講）；列禁句 F1-F10（自主導航/動態繞障/D435 已融合/auto-resume/「聽懂就走到 Roy 身邊」/「goto 0.3m 就走 0.3m」/「靜態檢查通過＝可安全移動」）。**safe-stop ≠ 繞障** 標準措辭。
-- **檔案**：`docs/navigation/2026-06-13-s1-fallback-decision.md`（新）。
+- **檔案**：`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md`（新）。
 - **tests**：文件 review（Cloud adversarial overclaim 掃描，見 §Cloud Review Checklist）；無 code。
 - **rollback**：刪檔即回退；影片保底永遠在。
 
@@ -261,7 +261,7 @@ AMBIGUOUS（部分輸出 / 只見一條 edge / echo timeout / broadcaster 數讀
 - **tests**：判讀輸出（落哪個 verdict + 原始 echo/monitor log）存檔進 NS-D2 SOP。**rollback**：只讀，無。
 
 ### NS-D2 — no-motion 診斷集 D2-D5 SOP 化（P0, jetson, needs_roy=NO, needs_motion=NO）
-- 把以下唯讀診斷寫成可貼上的 SOP（`docs/navigation/2026-06-13-no-motion-diagnostics-sop.md`）：
+- 把以下唯讀診斷寫成可貼上的 SOP（`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-no-motion-diagnostics-sop.md`）：
   - **D2 AMCL yaw/covariance**：`ros2 topic echo /amcl_pose --once`（讀 c[0]/c[7]/c[35]）+ `tf2_echo map base_link` vs 現場 + `ros2 topic echo /capability/nav_ready --once`（yaw 大錯時是否仍 true → 證 R5）。
   - **D3 LiDAR 前向軸**：`tf2_echo base_link laser` + `ros2 param get /reactive_stop_node front_offset_rad`（須==π）+ `python3 scripts/lidar_front_sector.py`（人站機鼻→±180° bin）+ `python3 scripts/scan_health_check.py`。
   - **D4 reactive 側向幾何**（只移障礙物、零 Go2 motion）：`ros2 param get /reactive_stop_node front_arc_deg` + 移箱到 +25°/1.65m → `ros2 topic echo /state/reactive_stop/status`（預期 slow/active=false）+ `ros2 topic hz /scan_rplidar`。

@@ -16,9 +16,9 @@
 
 | Path | Purpose | Action |
 |---|---|---|
-| `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md` | Operational checklist (v2 from user, with 3 fixes applied) | Create |
-| `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md` | Fail-map result log (per §3 L1 + §12 format) | Create |
-| `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-plan.md` | Spec v1.1 (already committed `8b12cad`) | Possibly bump to v1.2 if §6.2 trace name issue surfaces |
+| `docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md` | Operational checklist (v2 from user, with 3 fixes applied) | Create |
+| `docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md` | Fail-map result log (per §3 L1 + §12 format) | Create |
+| `docs/architecture/specs/2026-05-07-pawai-demo-test-plan.md` | Spec v1.1 (already committed `8b12cad`) | Possibly bump to v1.2 if §6.2 trace name issue surfaces |
 
 **Decomposition principle**: spec stays as the design document; checklist is the operational sheet; fail-map is the result. Three files keep concerns separated and let spec evolve without disturbing today's record.
 
@@ -29,7 +29,7 @@
 ### Task 1: Save operational checklist v2 with 3 fixes applied
 
 **Files:**
-- Create: `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md`
+- Create: `docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md`
 
 **3 fixes to apply** (from cross-check earlier in this conversation):
 1. §6.2 trace stage names → keep checklist v2 wording: `input / safety_gate / world_state / capability / memory / llm_decision / json_validate / repair / skill_gate / output / trace`. **DO NOT** rename to graph internal node names — `/brain/conversation_trace` actually publishes `llm_decision` / `json_validate` strings, not `llm` / `validator`.
@@ -42,7 +42,7 @@ Use the v2 content Roy posted in conversation. Apply the 3 edits above before wr
 ```md
 # PawAI Demo Test Checklist v2.1
 
-> Operational sheet for spec `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-plan.md`
+> Operational sheet for spec `docs/architecture/specs/2026-05-07-pawai-demo-test-plan.md`
 > Use with fail-map `2026-05-07-pawai-demo-test-fail-map.md`
 > Mark: `PASS` / `FAIL→A:BLOCKER` / `FAIL→B:OBS` / `SKIP→C`
 ```
@@ -51,22 +51,22 @@ Use the v2 content Roy posted in conversation. Apply the 3 edits above before wr
 
 Run:
 ```bash
-grep -n "提醒我小心" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
-grep -nE "早晚問候.*OBS" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
-grep -n "llm_decision\|json_validate" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+grep -n "提醒我小心" docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+grep -nE "早晚問候.*OBS" docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+grep -n "llm_decision\|json_validate" docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md
 ```
 Expected: first returns empty; second returns line with `(OBS)` marker; third returns the trace stage names (these are correct, do NOT remove).
 
 - [ ] **Step 3: Commit**
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-checklist-v2.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-checklist-v2.md
 git commit -m "docs(test): add operational checklist v2.1 (Roy's v2 + 3 cross-check fixes)"
 ```
 
 ### Task 2: Create empty fail-map result file
 
 **Files:**
-- Create: `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md`
+- Create: `docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md`
 
 - [ ] **Step 1: Create skeleton with §12 format**
 
@@ -91,7 +91,7 @@ git commit -m "docs(test): add operational checklist v2.1 (Roy's v2 + 3 cross-ch
 
 - [ ] **Step 2: Commit empty skeleton**
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 git commit -m "docs(test): seed fail-map result file"
 ```
 
@@ -342,7 +342,7 @@ Detour / dynamic avoidance → SKIP→C unconditionally.
 - [ ] **Step 1: List all FAIL→A:BLOCKER from fail-map**
 
 ```bash
-grep -E "FAIL→A:BLOCKER" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+grep -E "FAIL→A:BLOCKER" docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 ```
 
 - [ ] **Step 2: Reproduce each once**
@@ -354,7 +354,7 @@ For each blocker, repeat the trigger and record:
 - [ ] **Step 3: Commit fail-map snapshot before triage**
 
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 git commit -m "docs(test): part A fail-map snapshot before triage"
 ```
 
@@ -415,7 +415,7 @@ Subjective only; no PASS/FAIL.
 - [ ] **Step 4: Commit fail-map with full Part B**
 
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 git commit -m "docs(test): part B fail-map (3 rounds + free interaction)"
 ```
 
@@ -430,7 +430,7 @@ Per spec §6 SOP.
 - [ ] **Step 1: List P0 blockers**
 
 ```bash
-grep -B1 -A8 "FAIL→A:BLOCKER" docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+grep -B1 -A8 "FAIL→A:BLOCKER" docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 ```
 
 Classify per spec §13:
@@ -486,7 +486,7 @@ If still BLOCKERs remain → list as "carry-over to 5/13".
 - [ ] **Step 3: Final commit**
 
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-fail-map.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-fail-map.md
 git commit -m "docs(test): final regression after triage — N P0 fixed, M carry-over to 5/13"
 ```
 
@@ -503,7 +503,7 @@ If only operational findings (e.g., wave_hello cooldown actually 60s not 30s) �
 
 - [ ] **Step 2: If bump, edit Changelog**
 
-Append to `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-plan.md`:
+Append to `docs/architecture/specs/2026-05-07-pawai-demo-test-plan.md`:
 ```md
 | v1.2 | 2026-05-07 | Post-fail-map: <list material updates> |
 ```
@@ -511,7 +511,7 @@ Append to `docs/pawai-brain/specs/2026-05-07-pawai-demo-test-plan.md`:
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/pawai-brain/specs/2026-05-07-pawai-demo-test-plan.md
+git add docs/architecture/specs/2026-05-07-pawai-demo-test-plan.md
 git commit -m "docs(test): bump spec v1.2 with post-fail-map findings"
 ```
 

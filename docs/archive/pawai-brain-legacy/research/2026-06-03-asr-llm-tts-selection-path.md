@@ -197,13 +197,13 @@ ElevenLabs 曾作為 quality lane spike 候選，但不是目前主線；MeloTTS
 
 ## 來源文件
 
-- ASR / speech current truth: [`docs/pawai-brain/speech/README.md`](../speech/README.md)
-- STT benchmark: [`docs/pawai-brain/speech/research/2026-03-21-stt-benchmark.md`](../speech/research/2026-03-21-stt-benchmark.md)
+- ASR / speech current truth: [`docs/architecture/speech/README.md`](../speech/README.md)
+- STT benchmark: [`docs/architecture/speech/research/2026-03-21-stt-benchmark.md`](../speech/research/2026-03-21-stt-benchmark.md)
 - STT raw benchmark: [`benchmarks/results/archive/stt/20260321/raw.jsonl`](../../../benchmarks/results/archive/stt/20260321/raw.jsonl)
-- Speech pipeline report: [`docs/pawai-brain/speech/research/2026-03-24-speech-pipeline-report.md`](../speech/research/2026-03-24-speech-pipeline-report.md)
-- TTS benchmark: [`docs/pawai-brain/speech/research/2026-03-21-tts-benchmark.md`](../speech/research/2026-03-21-tts-benchmark.md)
-- TTS rewrite result: [`docs/pawai-brain/specs/2026-05-05-tts-rewrite-result.md`](../specs/2026-05-05-tts-rewrite-result.md)
-- LLM 5/04 eval: [`docs/pawai-brain/specs/2026-05-04-llm-eval-result.md`](../specs/2026-05-04-llm-eval-result.md)
+- Speech pipeline report: [`docs/architecture/speech/research/2026-03-24-speech-pipeline-report.md`](../speech/research/2026-03-24-speech-pipeline-report.md)
+- TTS benchmark: [`docs/architecture/speech/research/2026-03-21-tts-benchmark.md`](../speech/research/2026-03-21-tts-benchmark.md)
+- TTS rewrite result: [`docs/architecture/specs/2026-05-05-tts-rewrite-result.md`](../specs/2026-05-05-tts-rewrite-result.md)
+- LLM 5/04 eval: [`docs/architecture/specs/2026-05-04-llm-eval-result.md`](../specs/2026-05-04-llm-eval-result.md)
 - LLM 5/12 A/B eval: [`docs/archive/pawai-brain-legacy/dev-logs/2026-05-12-llm-naturalness-ab-eval.md`](../dev-logs/2026-05-12-llm-naturalness-ab-eval.md)
 - LLM raw results round 1: [`tools/llm_eval/results/2026-05-12-demo-focused-ab.json`](../../../tools/llm_eval/results/2026-05-12-demo-focused-ab.json)
 - LLM raw results round 2: [`tools/llm_eval/results/2026-05-12-demo-focused-ab-round2-small.json`](../../../tools/llm_eval/results/2026-05-12-demo-focused-ab-round2-small.json)

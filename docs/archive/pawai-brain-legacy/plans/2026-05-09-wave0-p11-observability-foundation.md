@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10 + ROS2 Humble + pytest（speech_processor / interaction_executive / gateway）；Next.js 14 + zustand + TypeScript（frontend）；Vitest（frontend unit tests）。
 
-**Spec 來源:** `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` Wave 0 (P0-1 + P0-2) + Wave 1 P1-1（Phase 1 a/b/c/d + Phase 2-mini）。
+**Spec 來源:** `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` Wave 0 (P0-1 + P0-2) + Wave 1 P1-1（Phase 1 a/b/c/d + Phase 2-mini）。
 
 ---
 
@@ -141,7 +141,7 @@ instead of silent-skipping failed chunks and concatenating partial output.
 
 Resolves demo-level bug where users heard '念一念跳到結尾'.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P0-1
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P0-1
 "
 ```
 
@@ -300,7 +300,7 @@ IE-node sends JSON {text, input_origin, source} when input_origin exists.
 Gateway now parses envelope and extracts text/origin/source for broadcast.
 Plain text backward compat preserved per contract §5.2.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P0-2
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P0-2
 "
 ```
 
@@ -455,7 +455,7 @@ git commit -m "feat(studio): P1-1a add ttsMessages ring buffer to state-store
 200-entry ring buffer with id dedup. Preserves lastTtsText/lastTtsAt for
 other panels. Ready for ChatPanel to subscribe and append all PawAI utterances.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-1a
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-1a
 "
 ```
 
@@ -612,7 +612,7 @@ git commit -m "feat(studio): P1-1b/c/d ChatPanel subscribes ttsMessages
 
 All PawAI utterances now visible in ChatPanel regardless of pending state.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-1
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-1
 "
 ```
 
@@ -741,7 +741,7 @@ Bypass: chat_reply (pending user reply) and skill_say (active skill SAY).
 Bridges 5/10-12 gap before P2-1 attention policy ships, prevents object_remark
 flood when 5+ objects detected. Belt-and-suspenders kept post-P2-1.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 spam scroll
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 spam scroll
 "
 ```
 
@@ -875,7 +875,7 @@ build_plan() now sets args['source'] for SAY steps:
 
 Enables ChatPanel CSS routing without dispatch-time guessing.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 Phase 2-mini
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 Phase 2-mini
 "
 ```
 
@@ -990,7 +990,7 @@ Gateway will parse and forward to Studio for ChatPanel CSS routing.
 
 Backward compat: SAY without source AND without input_origin still publishes plain text.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 Phase 2-mini
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-1 Phase 2-mini
 "
 ```
 

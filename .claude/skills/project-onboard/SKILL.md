@@ -90,7 +90,7 @@ reference 是導覽與摘要，不是第二份真相。詳細內容在它指向�
 | 導航避障（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/nav/` |
 | AI 大腦（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md` |
 | PawAI Studio（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio.md` |
-| Studio 設計文件 | `docs/pawai-brain/studio/README.md` |
+| Studio 設計文件 | `docs/architecture/studio/README.md` |
 | 環境建置 | `docs/runbook/README.md` |
 
 ## 模組文件結構

@@ -236,7 +236,7 @@ ASR 三段 fallback inherently 需現場麥克風 — 排明天到場 5 分鐘�
 - 本機 main reconcile（22 ahead local 個人 commit / 14 behind origin/main）
 
 ### Spec / plan 文件
-- spec：`docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`
+- spec：`docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md`
 - roadmap：`docs/archive/pawai-brain-legacy/plans/2026-05-09-master-execution-roadmap.md`
 - 5 個 branch plans 在 `docs/archive/pawai-brain-legacy/plans/2026-05-09-*` 和 `2026-05-11-*` 和 `2026-05-12-*`
 
@@ -406,7 +406,7 @@ ASR 三段 fallback inherently 需現場麥克風 — 排明天到場 5 分鐘�
 - **升級選項**：DWPose wholebody（精度略優，但 Jetson 上零成功記錄）
 - **備援**：hand-only + body-only 雙模型（wholebody 不達標時啟用）
 - MediaPipe 僅作 x86 概念驗證，不上 Jetson
-- 詳見 `docs/pawai-brain/perception/gesture/README.md`、`docs/pawai-brain/perception/pose/README.md`、`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-18-vision-perception-skeleton-design.md`
+- 詳見 `docs/architecture/perception/gesture/README.md`、`docs/architecture/perception/pose/README.md`、`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-18-vision-perception-skeleton-design.md`
 
 ### vision_perception 架構（3/18 新增）
 

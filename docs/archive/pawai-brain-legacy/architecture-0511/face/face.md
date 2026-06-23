@@ -432,7 +432,7 @@ bash scripts/start_stress_test_tmux.sh 60
 | 核心邏輯 | `face_perception/face_perception/face_identity_node.py` |
 | 設定 | `face_perception/config/face_perception.yaml` |
 | 啟動 | `face_perception/launch/face_perception.launch.py` |
-| 模組文件 | `docs/pawai-brain/perception/face/README.md` + `CLAUDE.md` + `AGENT.md` |
-| Benchmark 決策 | `docs/pawai-brain/perception/face/research/2026-03-21-benchmark-decision.md` |
+| 模組文件 | `docs/architecture/perception/face/README.md` + `CLAUDE.md` + `AGENT.md` |
+| Benchmark 決策 | `docs/architecture/perception/face/research/2026-03-21-benchmark-decision.md` |
 | Contract schema | `docs/contracts/interaction_contract.md` §4.2 + §4.7 |
 | 啟動腳本 | `scripts/start_face_identity_tmux.sh` |

@@ -131,7 +131,7 @@ pawai status --short
 ```
 
 先照
-[`docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md`](../pawai-brain/architecture/0511/nav/nav-field-runbook.md)
+[`docs/archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md`](../archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md)
 建圖或確認 school map，再跑：
 
 ```bash

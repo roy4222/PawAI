@@ -7,7 +7,7 @@
 
 2026-06 docs 重構暴露一個反覆出現的摩擦：同一個能力 / 同一條 claim 散落在多份文件，當它們互相矛盾時，沒有明文的仲裁規則決定誰是最終真相。具體症狀：
 
-- `research/` 子樹（含 `pawai-brain/research`、`navigation/research`）長期被當成真相引用，但它本質是「研究、未驗證」。
+- `research/` 子樹（含 `archive/pawai-brain-legacy/research`、`navigation/research`）長期被當成真相引用，但它本質是「研究、未驗證」。
 - `archive/` 內的歷史 spec 仍被新文件連結為現行設計。
 - mission 敘事文件（demo-flow-plan / final-presentation-outline）引用 6/03 的 face=fail，而 6/04 HITL snapshot 已是更新的 trusted 證據。
 - 多 agent / 接手者每次都得重新辯論「這份算不算數」。
@@ -25,10 +25,10 @@
 | 0 | 程式碼 / runtime topic schema | 永遠是最終真相 |
 | 1 | 實測證據（empirical） | `docs/runbook/baseline-evidence/` 的當前 trusted snapshot — 能力 pass/fail 的最終事實 |
 | 2 | 收斂審計（read-only audit） | `docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` — 經指定升格為 #2，但不覆寫 baseline 數據 |
-| 3 | 能力規格（how to measure） | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` — 怎麼量、怎樣算 pass |
+| 3 | 能力規格（how to measure） | `docs/architecture/specs/2026-06-18-capability-baseline-spec.md` — 怎麼量、怎樣算 pass |
 | 4 | 戰略邊界（what to claim） | `docs/mission/2026-06-18-demo-north-star.md` v2 — 能不能講、屬哪層 |
 | 5 | 介面契約 | `docs/contracts/interaction_contract.md`（ROS2 topic/action/service/message schema） |
-| 6 | 模組設計真相 | `docs/pawai-brain/{specs,plans,perception,speech,studio}/` 與 `docs/navigation/{plans,research,setup,specs}/` |
+| 6 | 模組設計真相 | `docs/architecture/{specs,plans,perception,speech,studio}/` 與 `docs/architecture/navigation/{plans,research,setup,specs}/` |
 | 7 | 產品方向 / Demo 劇本 / 八大功能 | `docs/mission/README.md` |
 | 8 | 持久決策 | `docs/adr/`（ADR，可被新提案 supersede） |
 | 9 | 環境建置與救火 SOP | `docs/runbook/` |

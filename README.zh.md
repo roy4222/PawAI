@@ -187,8 +187,8 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 |------|------|
 | 專案定位與 Demo 範圍 | [`docs/mission/`](docs/mission/README.md) |
 | ROS2 介面契約 | [`docs/contracts/`](docs/contracts/interaction_contract.md) |
-| 大腦 / 感知 / 語音 / Studio | [`docs/pawai-brain/`](docs/pawai-brain/README.md) |
-| 導航與避障 | [`docs/navigation/`](docs/navigation/README.md) |
+| 大腦 / 感知 / 語音 / Studio | [`docs/architecture/`](docs/architecture/README.md) |
+| 導航與避障 | [`docs/architecture/navigation/`](docs/architecture/navigation/README.md) |
 | 操作 runbook（Demo SOP） | [`docs/runbook/`](docs/runbook/README.md) |
 | 架構決策（ADR） | [`docs/adr/`](docs/adr/README.md) |
 

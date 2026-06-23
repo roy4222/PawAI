@@ -214,8 +214,8 @@
 - **誠實鐵律與用詞權威**：[`docs/mission/2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) — §5 禁說 / §7 nav 鐵律 / §9 scoreboard-first / §10 Edge AI / §11 報告原則。
 - **能力分級證據（最新 trusted snapshot + readiness=not_ready）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（SHA `78fbf36`）。`2026-06-03-first-trusted-face/` 已被取代，僅作歷史。
 - **canonical claim 真相源（每能力 Current Claim / Pass-Fail / Non-Claims）**：[`docs/mission/2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md)。
-- **能力 baseline 規格**：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)。
-- **收斂審計（6/05，evidence-hierarchy #2）**：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)。
+- **能力 baseline 規格**：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)。
+- **收斂審計（6/05，evidence-hierarchy #2）**：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)。
 - **canonical demo story 9 步**：North Star §6（本文 S1–S7 即其誠實落地版）。
 
 > **底線**：6/18 demo 的可信度建立在「誠實本身就是可信度」。6/04 量到 3 項窄版 pass + 2 項 fail + 其餘 insufficient_data——**誠實揭露 fail 與窄版邊界**本身就是賣點，系統會揭露不足而非過度宣稱。做得到的（窄版內）秀給你看，量到 fail / 還沒驗證可靠的，scoreboard 會告訴你。

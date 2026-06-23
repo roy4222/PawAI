@@ -89,7 +89,7 @@ pawai demo stop                     # 清 Mac frontend + Jetson tmux/process
 
 ---
 
-> **⚠️ Act1 motion 不從 Mac 觸發**：`--with-lidar` 只起 raw LiDAR 證據窗（**無 motion**）。Act1 短距前進 = motion，**一律在 Jetson 端、由 Roy 手持實體 e-stop 跑**（見 `docs/navigation/2026-06-15-act1-demo-forward-estop-runbook.md`）。Mac 只負責起 brain demo / 看 log / face enroll。**別從 Mac 觸發 Act1**（雙 publisher 撞狗風險的 A-1 blocker 就活在這個 demo stack 上）。
+> **⚠️ Act1 motion 不從 Mac 觸發**：`--with-lidar` 只起 raw LiDAR 證據窗（**無 motion**）。Act1 短距前進 = motion，**一律在 Jetson 端、由 Roy 手持實體 e-stop 跑**（見 `docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`）。Mac 只負責起 brain demo / 看 log / face enroll。**別從 Mac 觸發 Act1**（雙 publisher 撞狗風險的 A-1 blocker 就活在這個 demo stack 上）。
 
 ## 3. ⚠️ 必須在實體 Mac 上跑過才算數（我無法在 WSL 替代）
 

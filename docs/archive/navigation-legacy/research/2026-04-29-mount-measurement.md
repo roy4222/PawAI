@@ -21,7 +21,7 @@ v3-v6（4/24-4/30 上午）皆為背部安裝，v7 起改為**脖子前方 3D �
 
 **5/1 noon 復查方法（不依賴用戶判斷 Go2 朝向）**：用戶站在 Go2 物理頭前 0.5m（看 Go2 的眼睛/感測器），scan 返回應在 angle 0° 附近。實測返回出現在 angle=±180°（laser -X 方向），證明 lidar 物理朝向跟 Go2 nose **相反**。
 
-教訓加進 SOP（[`docs/navigation/CLAUDE.md`](../CLAUDE.md) 待補）：物理錨定測試**用戶站位置法 > 物體放置法**，因為前者用戶可以直接看 Go2 的「臉」識別頭尾，後者依賴用戶腦中的 Go2 朝向認知。
+教訓加進 SOP（[`docs/architecture/navigation/CLAUDE.md`](../CLAUDE.md) 待補）：物理錨定測試**用戶站位置法 > 物體放置法**，因為前者用戶可以直接看 Go2 的「臉」識別頭尾，後者依賴用戶腦中的 Go2 朝向認知。
 
 ## v8 TF 命令
 

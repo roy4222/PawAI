@@ -1502,7 +1502,7 @@ PawAI 透過整合以下元素填補上述空缺：
 
 **問題**：手勢/姿勢辨識模型選型經歷三次推翻：RTMPose wholebody（GPU 滿載）→ DWPose（TensorRT 精度暴跌 + MMPose JetPack 6 零支援）→ MediaPipe（原判定不可行，實測推翻，CPU 即時推理）。
 **解決方法**：最終採用 MediaPipe CPU-only 方案，手勢可達即時推理速度，GPU 佔用 0%。
-<!-- source: docs/pawai-brain/perception/gesture/research/選型過程.md, docs/pawai-brain/perception/pose/README.md -->
+<!-- source: docs/architecture/perception/gesture/research/選型過程.md, docs/architecture/perception/pose/README.md -->
 **教訓**：文獻調查不能替代實測，Jetson 生態碎片化嚴重。
 
 ### 7. ASR 三級 Fallback 的逐步演進
@@ -1516,7 +1516,7 @@ PawAI 透過整合以下元素填補上述空缺：
 
 **問題**：使用者正面站在鏡頭前時被錯誤判定為「跌倒」（肩膀展開導致 bbox 寬高比觸發條件）。
 **解決方法**：新增 vertical_ratio 防護條件（肩膀到髖部垂直距離 / 軀幹長度），相對尺度不受距離影響。
-<!-- source: docs/pawai-brain/perception/pose/README.md, sprint-b-prime.md Day 3-6 -->
+<!-- source: docs/architecture/perception/pose/README.md, sprint-b-prime.md Day 3-6 -->
 **教訓**：基於 bbox 的簡單規則在邊界情況易失效，需多維度防護。
 
 ### 9. Jetson 環境污染事件

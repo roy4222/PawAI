@@ -219,7 +219,7 @@
   - 台詞禁 F1-F10（自主導航/動態繞障/D435 已融合/auto-resume）；safe-stop≠繞障標準說法。
 - **Evidence**:
   - Live HITL：Act1 ❌ 沒成功。
-  - `docs/navigation/2026-06-13-s1-fallback-decision.md:20`
+  - `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md:20`
   - `docs/archive/navigation-legacy/research/2026-06-08-trackB-hitl-results.md:14`
   - `scripts/start_reactive_stop_tmux.sh:74-79`
 - **Acceptance criteria**:
@@ -823,7 +823,7 @@
 - **Evidence**:
   - `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py:5-51`
   - `go2_robot_sdk/config/nav2_params.yaml:220-238`（footprint 0.6×0.3）
-  - `docs/navigation/2026-06-13-nav-motion-incident-root-cause-plan.md:274`
+  - `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-motion-incident-root-cause-plan.md:274`
 - **Acceptance criteria**:
   - 升級計畫記錄（opt-in param + 卡尺實測待辦）。
 - **Tests**:

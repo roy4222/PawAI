@@ -239,7 +239,7 @@ Abort：brain 套起不來（多 driver 殘留）→ 再 pkill 一輪 + 多等�
 ## §9 誠實 claim（對外措辭）
 
 - **可講**：低速前進 + LiDAR 即時偵測前方障礙、安全停下等待；本地即時人臉辨識 + 平安確認；物體辨識轉照護語境（杯子→補水，未來可延伸藥盒/鑰匙/外出提醒）；手勢二階段意圖確認降低誤觸；高風險指令經 Safety Layer 攔截。
-- **不可講**：自主導航到 Roy / 動態繞障 / D435+LiDAR 已融合 / 靠深度避障 / 可靠走滿 2m / 跌倒偵測 / 2m 物體 / 可靠顏色 / 19 色 / 即時恢復（實際 ~10s 自癒）。nav 句綁 `docs/navigation/2026-06-13-nav-618-claim-wording.md` S1-S8 / F1-F10。
+- **不可講**：自主導航到 Roy / 動態繞障 / D435+LiDAR 已融合 / 靠深度避障 / 可靠走滿 2m / 跌倒偵測 / 2m 物體 / 可靠顏色 / 19 色 / 即時恢復（實際 ~10s 自癒）。nav 句綁 `docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md` S1-S8 / F1-F10。
 - 結語：「以上不僅讓 AI 走進真實世界，從感知到行動，從行動到守護。」
 
 ---

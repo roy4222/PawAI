@@ -6,7 +6,7 @@
 > - **Owner lane**：ops（搭配 [`../runbook/`](../runbook/) 救火 SOP 使用）。
 > - **Source-of-truth priority**：本檔是 CLI **指令行為**的真相；但任何「某能力是否 pass / 能不能講 / demo 該怎麼解讀」一律回 [`../README.md` §衝突仲裁](../README.md#衝突仲裁誰是真相來源) 的 EVIDENCE_AUTHORITY 順序（baseline-evidence ＞ convergence audit ＞ capability-baseline-spec ＞ north-star）。
 > - **Maintained child files**：[`usage-guide.md`](usage-guide.md)（日常）、[`team-onboarding.md`](team-onboarding.md)（上手）、[`troubleshooting.md`](troubleshooting.md)（踩坑）、[`modules.md`](modules.md)（8 module 對照）。
-> - **Routing**：本資料夾在 [`docs/README.md`](../README.md) 列為「支援性資料夾 → PawAI CLI」。CLI 設計背景的長版 spec / plan 在 [`../superpowers/`](../superpowers/)（historical/research-only）。
+> - **Routing**：本資料夾在 [`docs/README.md`](../README.md) 列為「支援性資料夾 → PawAI CLI」。CLI 設計背景的長版 spec / plan 在 [`../superpowers/`](../archive/superpowers-legacy/)（historical/research-only）。
 > - **What this README is NOT**：不是 capability scoreboard、不是 demo 劇本（劇本見 [`../mission/README.md`](../mission/README.md)）、不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）。CLI 印出的 nav action 能跑 ≠ 真實移動/動態避障（nav 能力一律以 baseline-evidence 的 insufficient_data 為準）。
 
 `pawai` 是 5 人團隊的單一入口工具，把分散的 `scripts/`、`tmux`、`ssh jetson`、
@@ -406,7 +406,7 @@ healthcheck 通過、且 demo lock 已轉成 `running` 之後，SSH 到 Jetson �
 - ❌ detour / fallback / amcl / mapping 透過 `pawai demo start`
 
 到新場地不要直接用家裡 map `/home/jetson/maps/home_living_room_v8.yaml`。先照
-[`nav-field-runbook.md`](../pawai-brain/architecture/0511/nav/nav-field-runbook.md)
+[`nav-field-runbook.md`](../archive/pawai-brain-legacy/architecture-0511/nav/nav-field-runbook.md)
 建圖或確認場地 map，再跑 capability。
 
 第一個移動測試只做短距離：
@@ -595,7 +595,7 @@ pawai evidence pull --dest /tmp/traces   # 自訂目的地
 ```
 
 把 Jetson gateway trace store 的 `runtime/traces/*.jsonl`（Evidence Center 落盤，
-見 `docs/pawai-brain/studio/README.md`）rsync 回本機並印摘要
+見 `docs/architecture/studio/README.md`）rsync 回本機並印摘要
 （files / events / suppressed）。**只讀**：無 `--delete`、不動 Jetson 端、不改寫
 JSONL（Roy D5：CLI 只負責讀取與匯出）。失敗訊息附修法（`pawai doctor` 看
 Tailscale；Jetson 端沒檔案 = gateway 沒跑或 `PAWAI_TRACE_STORE_ENABLED=0`）。

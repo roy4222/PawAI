@@ -4,7 +4,7 @@
 
 **Goal:** 解 issue 4（路過/同物體重複觸發干擾）。4 狀態 attention machine + emit gate + dedup key 改 class_name + `_has_active_skill_or_sequence` 修 SKILL 不擋 SKILL。
 
-**Spec 來源:** `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` P2-1 Attention Policy。
+**Spec 來源:** `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` P2-1 Attention Policy。
 
 **前置依賴**: Branch B merged（B 改 brain_node.py:447-456 LLM_PROPOSAL_EXECUTE，避免衝突）。
 

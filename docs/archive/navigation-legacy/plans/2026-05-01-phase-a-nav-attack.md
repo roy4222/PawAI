@@ -10,7 +10,7 @@
 
 **Tech Stack:** ROS2 Humble + rclpy + Python 3.10 / pytest TDD / **Nav2 BT + AMCL + map_server**(runtime stack — map 由 cartographer 離線建立並存 pbstream/yaml,**slam_toolbox 在本硬體永久棄用**;5/12 demo 不跑 SLAM,只跑 AMCL 載入既有 map)/ RealSense D435 + rplidar_ros2 / Brain MVS dataclasses(SkillContract / SkillPlan / SkillStep / WorldState)。
 
-**Spec:** `docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md` §6 (Safety Gate) + §7 (Phase A) + §12 (Stop-loss).
+**Spec:** `docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md` §6 (Safety Gate) + §7 (Phase A) + §12 (Stop-loss).
 
 ---
 
@@ -111,7 +111,7 @@ Expected:看到 `goto_relative` action handler 的進入點,大致 line ~200 左
 
 ```bash
 # [WSL OK] 純檔案 grep
-grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capability/ go2_robot_sdk/config/nav2_params.yaml docs/navigation/ | head -20
+grep -rn "K2-lite\|WP.*start\|distance.*tolerance\|xy_goal_tolerance" nav_capability/ go2_robot_sdk/config/nav2_params.yaml docs/architecture/navigation/ | head -20
 ```
 記錄 BUG #4 root cause 候選位置給 Task 3 使用
 

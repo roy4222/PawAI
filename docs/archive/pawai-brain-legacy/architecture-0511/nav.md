@@ -36,9 +36,9 @@
 | 主題 | 檔案 |
 |------|------|
 | 5/11 深度研究 | `docs/archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md` |
-| 5/11 修法 roadmap | `docs/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md` |
-| Navigation 工作規則 | `docs/navigation/CLAUDE.md` |
-| Navigation 入口 | `docs/navigation/README.md` |
+| 5/11 修法 roadmap | `docs/architecture/navigation/2026-05-11-architecture-deep-audit-and-fix-roadmap.md` |
+| Navigation 工作規則 | `docs/architecture/navigation/CLAUDE.md` |
+| Navigation 入口 | `docs/architecture/navigation/README.md` |
 | reactive_stop node | `go2_robot_sdk/go2_robot_sdk/reactive_stop_node.py` |
 | LiDAR 幾何 helper | `go2_robot_sdk/go2_robot_sdk/lidar_geometry.py` |
 | twist mux priority | `go2_robot_sdk/config/twist_mux.yaml` |

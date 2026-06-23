@@ -10,7 +10,7 @@ Order matters: safety > school_demo_request > school_demo_college
 given ASR-typo tolerance via homophone character classes — live ASR mis-hears
 both the school name and the keyword itself (資管→直管, 資訊→資詢).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 N4 (2026-05-11): split `self_intro_request` from `identity` — the former
 demands a full demo-host performance with scaffold; the latter is the casual
 "你是誰" terse reply path. Pattern matched BEFORE identity so the more

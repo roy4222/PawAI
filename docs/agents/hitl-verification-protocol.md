@@ -3,7 +3,7 @@
 > **Scope**：Issue #86 的 HITL 驗證分級、逐能力硬體對照、Go2 motion sign-off 與 artifact layout / schema。
 > **Status**：active / agent-config（取證流程，非能力真相）。
 > **Owner lane**：agents。
-> **Source-of-truth priority**：本檔定義**怎麼取證 / 怎麼簽核**，**不裁定**能力是否 pass。量測結果的最終事實依據是 [`../runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（trusted snapshot）；路徑 / readiness fail-closed 規則引用 [`../pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md) §9。
+> **Source-of-truth priority**：本檔定義**怎麼取證 / 怎麼簽核**，**不裁定**能力是否 pass。量測結果的最終事實依據是 [`../runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（trusted snapshot）；路徑 / readiness fail-closed 規則引用 [`../architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md) §9。
 > **詞彙**：trusted snapshot / readiness / HITL / fail-closed 等共用定義見 [`domain.md`](domain.md) §Glossary。
 > **What this file is NOT**：不是能力 grade、不是 CI gate（不做 T3/T4 自動 gate）、不是 dashboard。
 
@@ -13,7 +13,7 @@
 
 - #73 `demo.yaml`：Layer-0 preflight checks 的內容與 runner 由 #73 定義；本文件只消費其輸出 `artifacts/baseline/preflight_result.json`。
 - #87 freeze：frozen demo snapshot、readiness freeze 流程與 demo 當天讀取策略由 #87 定義；本文件只要求 sign-off 與 snapshot 綁定 commit。
-- SPEC §9：路徑與 readiness fail-closed 規則引用 `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md:380` 到 `:420`，不在此重寫。
+- SPEC §9：路徑與 readiness fail-closed 規則引用 `docs/architecture/specs/2026-06-18-capability-baseline-spec.md:380` 到 `:420`，不在此重寫。
 
 ## 驗證分級
 

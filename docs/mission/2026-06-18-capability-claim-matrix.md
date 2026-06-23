@@ -2,12 +2,12 @@
 
 > **Status**: active / **canonical claim source** ｜ **Created**: 2026-06-05 ｜ **Owner lane**: mission（戰略邊界）
 > **這頁是什麼**：6/18 demo / 簡報 / 文件對「每一項能力能講什麼、不能講什麼、屬哪個分級、證據在哪」的**單一真相源（canonical）**。任何 mission 文件（demo-flow-plan / final-presentation-outline / README）提到能力 claim，一律**連結到本頁**，不重複整份散文。
-> **這頁不是什麼**：不是量測協定（怎麼量見 [`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)）；不是能力 grade 的原始數據（grade 與 caveats 的最終事實依據是 baseline-evidence snapshot，見下方權威鏈）。本頁是把 evidence + audit 的判決收斂成「能不能講」的對照表。
+> **這頁不是什麼**：不是量測協定（怎麼量見 [`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)）；不是能力 grade 的原始數據（grade 與 caveats 的最終事實依據是 baseline-evidence snapshot，見下方權威鏈）。本頁是把 evidence + audit 的判決收斂成「能不能講」的對照表。
 >
 > **證據權威鏈（最新優先）**：
 > 1. **實測證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/) — 6/04 HITL trusted snapshot，SHA `78fbf36`，`run_trusted=true`，readiness=`not_ready`。grade + honesty caveats 凌駕一切敘事。
-> 2. **收斂審計（read-only）**：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../pawai-brain/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) §2 — claim-scope / 換不換模型 / docs-drift 裁定。
-> 3. **能力規格（怎麼量）**：[`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`](../pawai-brain/specs/2026-06-18-capability-baseline-spec.md)。
+> 2. **收斂審計（read-only）**：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) §2 — claim-scope / 換不換模型 / docs-drift 裁定。
+> 3. **能力規格（怎麼量）**：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)。
 > 4. **戰略邊界（能不能講）**：[`docs/mission/2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) v2 — §5 禁說 / §7 nav 鐵律 / §9 scoreboard-first。
 >
 > `2026-06-03-first-trusted-face/` 已被 6/04 取代，僅作歷史。

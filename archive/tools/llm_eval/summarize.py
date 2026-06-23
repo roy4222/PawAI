@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Auto-summarize an eval results JSON — produces markdown tables ready to
-paste into docs/pawai-brain/specs/2026-05-04-llm-eval-result.md.
+paste into docs/architecture/specs/2026-05-04-llm-eval-result.md.
 
 Usage:
     python tools/llm_eval/summarize.py results/stage3-full-2026-05-04.json

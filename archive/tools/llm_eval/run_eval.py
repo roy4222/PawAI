@@ -10,7 +10,7 @@ Usage:
     python tools/llm_eval/run_eval.py --models gemini --bucket chat
     python tools/llm_eval/run_eval.py --output results/2026-05-04-run.json
 
-Spec: docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md §B1
+Spec: docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md §B1
 """
 from __future__ import annotations
 

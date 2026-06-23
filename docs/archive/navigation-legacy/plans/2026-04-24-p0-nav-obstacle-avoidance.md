@@ -47,7 +47,7 @@
 | `go2_robot_sdk/config/nav2_params.yaml` | `controller_frequency: 10.0` / `FollowPath.max_vel_x: 0.2` / `general_goal_checker.xy_goal_tolerance: 0.30` + `yaw_goal_tolerance: 0.30` / `behavior_server.behavior_plugins: []` |
 | `go2_robot_sdk/launch/robot.launch.py` | Nav2 `/cmd_vel` remap 為 `/cmd_vel_nav` |
 | `docs/mission/README.md` | P0 定義更新 |
-| `docs/navigation/legacy-readme-from-導航避障.md` | 狀態卡更新 |
+| `docs/architecture/navigation/legacy-readme-from-導航避障.md` | 狀態卡更新 |
 
 **驗證策略**：
 - Pure Python modules（safety_layer, patrol_route_handler, safety_tts）走完整 TDD
@@ -2011,9 +2011,9 @@ git commit -m "feat(studio): Emergency Button + /safety/{trigger,reset} endpoint
 
 **Files:**
 - Modify: `docs/mission/README.md`
-- Modify: `docs/navigation/legacy-readme-from-導航避障.md`
+- Modify: `docs/architecture/navigation/legacy-readme-from-導航避障.md`
 
-- [ ] **Step 1: 更新 `docs/navigation/legacy-readme-from-導航避障.md` 狀態卡**
+- [ ] **Step 1: 更新 `docs/architecture/navigation/legacy-readme-from-導航避障.md` 狀態卡**
 
 - 原 "Status: D435 停用 / 外接 LiDAR 評估中" → "Status: **RPLIDAR A2M12 已驗證，P0 劇本式導航開發中**"
 - 「架構決策（2026-04-01 最終判定）」章節加註：「**Supersedes: 本章節由 2026-04-24 P0 設計翻案 — Full SLAM / Nav2 路線從『永久關閉』改為 P0 主線，基於 RPLIDAR A2M12 實測 10.5Hz > 7Hz SLAM 門檻**」
@@ -2038,7 +2038,7 @@ git commit -m "feat(studio): Emergency Button + /safety/{trigger,reset} endpoint
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/mission/README.md docs/navigation/legacy-readme-from-導航避障.md
+git add docs/mission/README.md docs/architecture/navigation/legacy-readme-from-導航避障.md
 git commit -m "docs: 狀態卡同步 — P0 導航避障翻案，LiDAR 主線"
 ```
 

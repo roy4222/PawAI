@@ -11,8 +11,8 @@
 //     working unchanged.
 //   - Dark mode only — no light mode this round.
 //
-// Spec: docs/pawai-brain/studio/specs/2026-05-04-studio-chat-first-redesign-design.md
-// Rationale: docs/pawai-brain/studio/specs/2026-05-04-design-tokens.md
+// Spec: docs/architecture/studio/specs/2026-05-04-studio-chat-first-redesign-design.md
+// Rationale: docs/architecture/studio/specs/2026-05-04-design-tokens.md
 
 export const designTokens = {
   // ─────────────────────────────────────────────────────────────

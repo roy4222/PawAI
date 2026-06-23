@@ -193,8 +193,8 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 |------|-------------|
 | Project mission & demo scope | [`docs/mission/`](docs/mission/README.md) |
 | ROS2 interface contracts | [`docs/contracts/`](docs/contracts/interaction_contract.md) |
-| Brain / perception / speech / studio | [`docs/pawai-brain/`](docs/pawai-brain/README.md) |
-| Navigation & obstacle avoidance | [`docs/navigation/`](docs/navigation/README.md) |
+| Brain / perception / speech / studio | [`docs/architecture/`](docs/architecture/README.md) |
+| Navigation & obstacle avoidance | [`docs/architecture/navigation/`](docs/architecture/navigation/README.md) |
 | Operation runbooks (demo SOPs) | [`docs/runbook/`](docs/runbook/README.md) |
 | Architecture decisions (ADRs) | [`docs/adr/`](docs/adr/README.md) |
 

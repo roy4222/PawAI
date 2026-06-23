@@ -183,7 +183,7 @@
 
 ## §4. 模型錦標賽 + 上機重測 + 測試擴充矩陣
 
-> **審計性質**：唯讀。下方所有裁定均對齊 6/4 HITL baseline（`docs/runbook/baseline-evidence/2026-06-04-hitl/README.md`）、6/18 capability spec（`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`）、demo north-star（`docs/mission/2026-06-18-demo-north-star.md`）、demo-flow-plan（`docs/mission/2026-06-18-demo-flow-plan.md`），並逐條核對程式碼。
+> **審計性質**：唯讀。下方所有裁定均對齊 6/4 HITL baseline（`docs/runbook/baseline-evidence/2026-06-04-hitl/README.md`）、6/18 capability spec（`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`）、demo north-star（`docs/mission/2026-06-18-demo-north-star.md`）、demo-flow-plan（`docs/mission/2026-06-18-demo-flow-plan.md`），並逐條核對程式碼。
 > **硬規則遵守**：不為「存在更大模型」而建議換；現役 pass 一律 KEEP_CURRENT；需上機才能裁的明確標 `EMPIRICAL_TEST_REQUIRED`。
 
 ---
@@ -353,7 +353,7 @@
 
 **相關檔案路徑（絕對）**：
 - HITL baseline 證據：`/home/roy422/newLife/elder_and_dog/docs/runbook/baseline-evidence/2026-06-04-hitl/README.md`
-- 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`/home/roy422/newLife/elder_and_dog/docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
+- 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`/home/roy422/newLife/elder_and_dog/docs/architecture/specs/2026-06-18-capability-baseline-spec.md`
 - demo north-star（§5 禁守護、§7 nav 鐵律、能力宣稱前提）：`/home/roy422/newLife/elder_and_dog/docs/mission/2026-06-18-demo-north-star.md`
 - demo-flow-plan（S3/S4/S5 旁白、R3 gate、wave 語音觸發、launch override 真相源）：`/home/roy422/newLife/elder_and_dog/docs/mission/2026-06-18-demo-flow-plan.md`
 - PINTO 可部署模型清單（黃金標準錨點、CONFIRMED/SPIKE tier）：`/home/roy422/newLife/elder_and_dog/docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-jetson-deployable-models.md`
@@ -379,7 +379,7 @@
 
 **權威證據檔（絕對路徑）**
 - 6/4 HITL baseline：`docs/runbook/baseline-evidence/2026-06-04-hitl/`（`baseline_result.jsonl` 55 筆 / `baseline_snapshot.json` 15 能力 / `readiness_output.json` / `README.md`）
-- 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
+- 6/18 capability spec（換模型修法順序 §10、pose §3a、nav §6/§7）：`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`
 - demo north-star（§5 禁守護、§7 nav 鐵律、§9 誠實 scoreboard）：`docs/mission/2026-06-18-demo-north-star.md`
 - demo-flow-plan / final-presentation-outline：`docs/mission/2026-06-18-*.md`（本審計指出的 face stale drift **已於 2026-06-05 docs 架構重構修復**；claim 真相源見 `docs/mission/2026-06-18-capability-claim-matrix.md`）
 - pinto model zoo：`docs/archive/pawai-brain-legacy/research/2026-06-04-pinto-model-zoo-full-analysis.md`、`2026-06-04-pinto-jetson-deployable-models.md`、`2026-06-02-model-candidate-registry.md`

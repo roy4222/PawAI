@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10 + ROS2 Humble + pytest（pawai_brain / interaction_executive）；Markdown（personas/v1/）。
 
-**Spec 來源:** `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md` P1-4 OpenClaw-lite Persona Architecture（1A-1I 共 9 子任務）。
+**Spec 來源:** `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md` P1-4 OpenClaw-lite Persona Architecture（1A-1I 共 9 子任務）。
 
 **前置依賴**: Branch A (`feat/wave0-p11-observability`) 已 merged to main。
 
@@ -250,7 +250,7 @@ for lazy inject (Task 4 1D).
 
 Missing file → FileNotFoundError (no silent fallback).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1A
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1A
 "
 ```
 
@@ -381,7 +381,7 @@ L65 'self-intro 2-4 sentences' length rule (was forcing template).
 
 Backward compat: legacy single persona.txt still works via _load_persona file mode.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1B
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1B
 "
 ```
 
@@ -522,7 +522,7 @@ capability_question / action_request / chat (default).
 Inserted as graph node between input and safety_gate.
 state.mode flows to _build_user_message (Task 4) for lazy inject.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1C
 "
 ```
 
@@ -710,7 +710,7 @@ current_speaker inject as [眼前的人] (omit on 'unknown').
 capability_context still built every turn for skill_policy_gate v2 (lazy is prompt-level only).
 system prompt unchanged (llm_decision.configure interface preserved).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1D + 1E
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1D + 1E
 "
 ```
 
@@ -741,7 +741,7 @@ OpenClaw chat models recommend 0.7-1.0; PawAI compromise 0.6 keeps
 JSON schema stability + improves naturalness vs 0.2 (which forced
 templated, deterministic answers).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1E
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1E
 "
 ```
 
@@ -836,7 +836,7 @@ Wiggle 3 + Stretch 3 + Negatives 3 — every LLM-proposable skill ≥ 3 cases ha
 Resolves issue 3 (LLM not chaining): EXAMPLES teaches LLM to output 'skill: wiggle'
 when user says '扭一下', triggering PendingConfirm flow.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1F
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1F
 "
 ```
 
@@ -906,7 +906,7 @@ Buckets:
   3 trace_only: self_introduce / greet_known_person
   4 block: dance / follow_me / etc (skill_policy_gate rejects)
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1G
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1G
 "
 ```
 
@@ -1029,7 +1029,7 @@ _build_user_message (Task 4 1D) injects [眼前的人] line when not unknown.
 
 EXAMPLES.md adds 3 cases: Roy (playful) / grama (gentle) / unknown (curious).
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1H
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1H
 "
 ```
 
@@ -1060,7 +1060,7 @@ git commit -m "feat(scripts): switch start_pawai_brain_tmux to conversation_grap
 Replace legacy llm_bridge_node window with pawai_conversation_graph launch.
 Smoke verified /brain/chat_candidate publishes from new node.
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1A
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1A
 Roy review #5: runtime topology change separate from loader patch.
 "
 ```
@@ -1152,7 +1152,7 @@ Gemini-3 temp 0.2 (baseline) vs 0.6 (demo main) vs 0.9 (explore) vs DeepSeek-V4 
 Demo 主線：Gemini-3 + 0.6（1A-1H 完成後）。
 DeepSeek 切主線決策：5/16 demo 後若 ≥3 維度明顯贏才切。
 
-Spec: docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1I
+Spec: docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md P1-4 1I
 "
 ```
 

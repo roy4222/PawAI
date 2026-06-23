@@ -22,9 +22,9 @@
 |---|---|---|
 | **plan2 Conductor**（`2026-06-13-demo-phase-conductor-plan.md`）| ① 五幕 phase 詞彙表 `PHASE_ALLOWED_KINDS`（含 `s1_nav/s2_greet/s3_pose_object/s4_gesture/s5_safety` + alias）；② brain 端 `/brain/demo_phase` 控制契約 + `_apply_phase_transition` 清理 helper；③ `_publish_brain_state` 加 `demo_phase` 欄位 | **不**改 `interaction_state.py` 表、**不**寫 brain-side phase 清理邏輯 |
 | **plan-fallback**（`2026-06-13-online-offline-fallback-plan.md`）| ① brain `offline_mode` param 語義；② 五幕 canned 表；③ timeout 收緊值 | **不**改 `tts_node.py`/`llm_bridge_node.py`/`brain_node.py` 的 offline 短路邏輯 |
-| **plan-s1-nav**（`2026-06-13-s1-low-risk-navigation-plan.md`）+ **nav incident**（`docs/navigation/2026-06-13-nav-motion-incident-root-cause-plan.md`）| ① nav T0/R1/R2/R5 根因與修法歸屬；② initialpose yaw SOP；③ S1 三層 fallback 階梯；④ NOT_DEMO_READY 標籤 | **不**改 nav code、**不**送 goto/cmd_vel |
+| **plan-s1-nav**（`2026-06-13-s1-low-risk-navigation-plan.md`）+ **nav incident**（`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-motion-incident-root-cause-plan.md`）| ① nav T0/R1/R2/R5 根因與修法歸屬；② initialpose yaw SOP；③ S1 三層 fallback 階梯；④ NOT_DEMO_READY 標籤 | **不**改 nav code、**不**送 goto/cmd_vel |
 | **plan-lane3-cli**（`2026-06-13-lane3-cli-v2-completion-plan.md`）| `pawai demo phase` / `pawai demo mode` / `pawai status` brain 區塊 / `pawai face delete` 的 CLI 實作 | **本 plan 的 P4-12 face delete .npz 修法是 runbook+HITL SOP，CLI 落地歸 Lane 3** |
-| **nav claim wording**（`docs/navigation/2026-06-13-nav-618-claim-wording.md`）| S1–S8 可講句 / F1–F10 禁講句 | 不新增 claim 詞彙 |
+| **nav claim wording**（`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md`）| S1–S8 可講句 / F1–F10 禁講句 | 不新增 claim 詞彙 |
 
 > **本 plan 唯一新寫 runtime code 的範圍**：Studio gateway 的 `/api/demo_phase`（POST/GET）+ `/api/offline_mode`（POST/GET）publisher、對應 frontend HIDDEN 五幕按鈕 + offline toggle + phase chip、以及 runbook markdown 文件。**brain 端 subscriber 由 plan2 提供契約**（本 plan 的 gateway publisher 對該契約發布）。
 

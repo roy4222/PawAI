@@ -2,7 +2,7 @@
 
 更新日期：2026-03-02
 **版本：** v2.2 (D435 整合版)  
-**基於：** `docs/navigation/落地計畫_v2.md`
+**基於：** `docs/architecture/navigation/落地計畫_v2.md`
 
 ---
 

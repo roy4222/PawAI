@@ -211,7 +211,7 @@
 
 | 文件 | 動作 |
 |---|---|
-| `docs/pawai-brain/specs/2026-05-10-demo-quality-roadmap-index.md` | demo 改 5/18 final + 5/16 dry-run；Spec 1 範圍標 superseded by Brain Minimum |
+| `docs/architecture/specs/2026-05-10-demo-quality-roadmap-index.md` | demo 改 5/18 final + 5/16 dry-run；Spec 1 範圍標 superseded by Brain Minimum |
 | `docs/archive/pawai-brain-legacy/plans/2026-05-10-spec1-llm-naturalness-plan.md` | 加 banner：5/12 移交，本 plan §3-§7 superseded by Brain Minimum + master plan |
 | `references/project-status.md` | 寫進 5/11–5/18 v2 倒數 |
 | `CLAUDE.md` | 修「Studio start.sh port 8001 → 8080」過時項；補 `config/school_demo.env` 用法 |

@@ -36,8 +36,8 @@
 
 | 主線 | 內容 | 主要檔案面 |
 |---|---|---|
-| 4A | gateway secure-default flip（hardening P0-1）、foxglove clientPublish 降權（hardening P0-2）、CycloneDDS 收斂（hardening P1-1）、`/webrtc_req` whitelist + rate limit（hardening P1-2）、nav action 授權 + route_id 消毒（hardening P1-3）、twist_mux/cmd_vel 來源收斂（hardening P1-4）、reactive_stop 文件債（hardening P3-4） | `pawai-studio/gateway/studio_gateway.py`、`pawai-studio/frontend/`、`.claude/skills/brain-studio-lane/scripts/start.sh`、各 `scripts/start_*.sh` 的 foxglove 行、新 `cyclonedds.xml`、`config/school_demo.env`、`go2_robot_sdk/.../robot_control_service.py`、`nav_capability/`、`go2_robot_sdk/config/twist_mux.yaml`、`CLAUDE.md` / `docs/navigation/CLAUDE.md` |
-| 4B | capability ladder 標籤定義 + 逐能力標級表、stop-resume 終局決策落地、orphaned-goal client 根治、REACTIVE_PROFILE 制度化文件 + 驗收矩陣、研究線 spec（fusion / patrol / approach）、AMCL covariance 黃帶診斷 + goal rejection reason server 側分流 | `scripts/send_relative_goal.py`、`nav_capability/nav_action_server_node.py`（message 分流）、`scripts/start_nav_capability_demo_tmux.sh`（REACTIVE_PROFILE 已有）、`docs/navigation/` 新 ladder 文件與 research spec |
+| 4A | gateway secure-default flip（hardening P0-1）、foxglove clientPublish 降權（hardening P0-2）、CycloneDDS 收斂（hardening P1-1）、`/webrtc_req` whitelist + rate limit（hardening P1-2）、nav action 授權 + route_id 消毒（hardening P1-3）、twist_mux/cmd_vel 來源收斂（hardening P1-4）、reactive_stop 文件債（hardening P3-4） | `pawai-studio/gateway/studio_gateway.py`、`pawai-studio/frontend/`、`.claude/skills/brain-studio-lane/scripts/start.sh`、各 `scripts/start_*.sh` 的 foxglove 行、新 `cyclonedds.xml`、`config/school_demo.env`、`go2_robot_sdk/.../robot_control_service.py`、`nav_capability/`、`go2_robot_sdk/config/twist_mux.yaml`、`CLAUDE.md` / `docs/architecture/navigation/CLAUDE.md` |
+| 4B | capability ladder 標籤定義 + 逐能力標級表、stop-resume 終局決策落地、orphaned-goal client 根治、REACTIVE_PROFILE 制度化文件 + 驗收矩陣、研究線 spec（fusion / patrol / approach）、AMCL covariance 黃帶診斷 + goal rejection reason server 側分流 | `scripts/send_relative_goal.py`、`nav_capability/nav_action_server_node.py`（message 分流）、`scripts/start_nav_capability_demo_tmux.sh`（REACTIVE_PROFILE 已有）、`docs/architecture/navigation/` 新 ladder 文件與 research spec |
 
 ### 與系統 Phase 2 的分工（避免重工，依賴圖互補）
 
@@ -96,7 +96,7 @@ main 永遠可部署；每刀小 PR + CI 綠 + 紅綠驗證才 merge；搬家與
 | **T4A-4** | **P1-2** | **go2_driver `/webrtc_req` api_id 白名單 + rate limit**：`robot_control_service.py` 的 `handle_webrtc_request` 目前**零過濾、直接轉發**（ledger MOT-01「無 api_id 白名單」位置即此處）；**新增 whitelist 模式**（明列 demo/nav 需要的 api_id，其餘拒絕 + log），並參考 brain 層 `BANNED_API_IDS`（`speech_processor/llm_contract.py`，3 條：1030/1031/1301，現由 `interaction_executive/safety_layer.py` 引用、不在 driver）確保該三條永在拒絕清單；加速率限制防 DataChannel buffer flood（MOT-08，曾觀測 86KB+ backlog）。此檔 routing 權威測試 `test_robot_control_service.py`（11 條）必同步擴充 | Codex 實作（TDD：先紅後綠） | 單測：whitelist 內放行 / 外拒絕 / StopMove(1003) 永遠放行 / rate limit 不擋 1 Hz dedupe StopMove；實機：Go2 動作 demo 全流程不破（MOT-01 封閉） |
 | **T4A-5** | **P1-3** | **nav_capability action server 授權 + route_id 路徑消毒**：① `/nav/goto_*`、`/nav/run_route`、`/log_pose` 動作入口加授權（demo lock owner / token，或限定只接受 Brain Executive 轉發）；② `route_id` / `name` 用 `os.path.basename` + 白名單字元過濾，拒絕 `../`（MOT-04 路徑穿越）。對應 **MOT-05（critical，critic 升級）**：同 LAN 主機可命令機器人導航到任意座標 | Codex 實作 | 單測：惡意 route_id 全拒；實機：合法 goto/run_route 流程不破、未授權 action send_goal 被 reject（MOT-05 封閉） |
 | **T4A-6** | **P1-4** | **twist_mux / cmd_vel 來源收斂 + emergency 速度 clamp**：driver 改訂 mux 輸出專屬 topic（裸 `/cmd_vel` 不直連 driver，封 MOT-02 繞 mux 注入）；emergency lane（priority 255）加速度 clamp（MOT-03：emergency 不驗速度值）；`/lock/emergency` 來源治理（MOT-10）。**hardening plan 明標「需 nav lane 實機回歸」**——會動 reactive_stop / nav 既有行為鏈（mux priority 200 / teleop 100 / 4-mode 狀態機） | Fable spec → Codex 實作 → **Roy HITL（nav lane 實機回歸 session 必須）** | 隔離 mux 環境先驗 priority 行為；實機回歸：danger 停 → clear 放行 → nav goto 通 → emergency engage/release 全鏈不變；clamp 後 emergency lane 注入超速值被截 |
-| **T4A-7** | **P3-4** | **reactive_stop 文件債（防誤設 `hold_brake` 鎖死 nav）**：修正 CLAUDE.md 過時宣稱「`safety_only=true` 必須用於 mux 模式」（GAP3-01：與實際腳本 `mode:=progressive` 矛盾；`safety_only=true` 會 promote 成 `hold_brake` 永久煞車）；腳本 REACTIVE_PARAMS 旁加 inline 註解；demo-preflight 加「遮 LiDAR 驗 `/cmd_vel_obstacle` 發 0」檢項。GAP3-02（主線無 safety-hold 腳本）作觀察記錄一併寫清 | Fable 撰寫（doc PR）；preflight 檢項 Codex 實作 | 文件與 `reactive_stop_node.py` 4-mode 實作逐字對照無矛盾；preflight 新檢項在 Jetson 實跑一次通過。**doc 部分（CLAUDE.md / docs/navigation 修正）可凍結期先做；preflight 檢項碰 `.claude/skills/`（demo-preflight skill 位於凍結面）、腳本 inline 註解碰 `scripts/`，皆排 G5 後**（與 §6/18 freeze constraint 措辭一致） |
+| **T4A-7** | **P3-4** | **reactive_stop 文件債（防誤設 `hold_brake` 鎖死 nav）**：修正 CLAUDE.md 過時宣稱「`safety_only=true` 必須用於 mux 模式」（GAP3-01：與實際腳本 `mode:=progressive` 矛盾；`safety_only=true` 會 promote 成 `hold_brake` 永久煞車）；腳本 REACTIVE_PARAMS 旁加 inline 註解；demo-preflight 加「遮 LiDAR 驗 `/cmd_vel_obstacle` 發 0」檢項。GAP3-02（主線無 safety-hold 腳本）作觀察記錄一併寫清 | Fable 撰寫（doc PR）；preflight 檢項 Codex 實作 | 文件與 `reactive_stop_node.py` 4-mode 實作逐字對照無矛盾；preflight 新檢項在 Jetson 實跑一次通過。**doc 部分（CLAUDE.md / docs/architecture/navigation 修正）可凍結期先做；preflight 檢項碰 `.claude/skills/`（demo-preflight skill 位於凍結面）、腳本 inline 註解碰 `scripts/`，皆排 G5 後**（與 §6/18 freeze constraint 措辭一致） |
 
 #### 4A findings 對照表（ledger 編號 → 本 phase 歸屬）
 
@@ -129,7 +129,7 @@ main 永遠可部署；每刀小 PR + CI 綠 + 紅綠驗證才 merge；搬家與
 ## Tests / verification
 
 1. **每項 hardening 變更＝獨立 PR + 紅綠驗證**：先在隔離環境（WSL 單測 / isolated mux）證明會抓（紅）、修後過（綠），才排實機。
-2. **nav lane 實機回歸 session**：T4A-6（twist_mux/cmd_vel）**必須**完整 nav lane 回歸（danger 停 → clear 放行 → goto → emergency engage/release）；T4A-3 / T4A-4 / T4A-5 各需一次 Go2 連線回歸；T4B-2 / T4B-3 / T4B-4 / T4B-6 各有實機驗證項（見各 task 驗證欄）。**本 phase 並須把上述 nav 回歸清單固化為可重複執行的腳本／檢查表 artifact**（落 `docs/navigation/` 或 `scripts/`），明標 handoff 給系統 Phase 5 `pawai smoke nav`（T5A-2）直接包裝——對照系統 Phase 3 V3-3 的 handoff 模式，不留散文。
+2. **nav lane 實機回歸 session**：T4A-6（twist_mux/cmd_vel）**必須**完整 nav lane 回歸（danger 停 → clear 放行 → goto → emergency engage/release）；T4A-3 / T4A-4 / T4A-5 各需一次 Go2 連線回歸；T4B-2 / T4B-3 / T4B-4 / T4B-6 各有實機驗證項（見各 task 驗證欄）。**本 phase 並須把上述 nav 回歸清單固化為可重複執行的腳本／檢查表 artifact**（落 `docs/architecture/navigation/` 或 `scripts/`），明標 handoff 給系統 Phase 5 `pawai smoke nav`（T5A-2）直接包裝——對照系統 Phase 3 V3-3 的 handoff 模式，不留散文。
 3. **滲透式安全驗收清單（4A exit gate）**：以**同 LAN 未授權主機**逐項嘗試，全部必須被擋並留紀錄——
    - 直 pub `/brain/skill_request`（偽造 `source=studio_button`）→ DDS 面到不了 bus（T4A-3）；
    - `curl` gateway 各狀態變更 endpoint（無 token）→ 401/403（T4A-1）；
@@ -139,7 +139,7 @@ main 永遠可部署；每刀小 PR + CI 綠 + 紅綠驗證才 merge；搬家與
    - 直 pub `/webrtc_req` whitelist 外 api_id（如 backflip）→ 拒絕 + log（T4A-4）；
    - `ros2 action send_goal /nav/goto_relative`（未授權）→ reject（T4A-5）；
    - `route_id: "../../etc/x"` → 消毒拒絕（T4A-5）。
-4. **回歸不破網**：`test_robot_control_service.py`（11 條 routing 權威）+ `test_reactive_stop_node.py`（27 cases；`docs/navigation/CLAUDE.md` 仍載舊數 17，T4A-7 文件債一併同步）+ 既有 fast-gate 全綠；auth-on 模式 demo 全流程（Studio 操作 → brain → Go2 動作 → trace 可見）真機走一輪。
+4. **回歸不破網**：`test_robot_control_service.py`（11 條 routing 權威）+ `test_reactive_stop_node.py`（27 cases；`docs/architecture/navigation/CLAUDE.md` 仍載舊數 17，T4A-7 文件債一併同步）+ 既有 fast-gate 全綠；auth-on 模式 demo 全流程（Studio 操作 → brain → Go2 動作 → trace 可見）真機走一輪。
 5. **ladder 驗收**：T4B-1 表逐格抽查——每個 `hardware_proven`/`demo_ready` 格能指出具體 HITL 文件路徑；`research_prototype` 格在對外材料 grep 不到對應 claim。
 
 ---

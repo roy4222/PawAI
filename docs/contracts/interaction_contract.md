@@ -4,7 +4,7 @@
 **適用範圍**：Layer 1-3 所有模組
 **版本**：v2.5
 **凍結日期**：2026-04-28
-**對齊來源**：[mission/README.md](../mission/README.md) v2.0、[event-schema.md](../pawai-brain/studio/specs/event-schema.md) v1.0
+**對齊來源**：[mission/README.md](../mission/README.md) v2.0、[event-schema.md](../architecture/studio/specs/event-schema.md) v1.0
 
 > **v2.5 變更摘要**：
 > - 新增 PawAI Brain MVS topics：`/brain/text_input`、`/brain/skill_request`、`/brain/proposal`、`/brain/skill_result`
@@ -782,7 +782,7 @@ idle_wakeword → wake_ack → loading_local_stack → listening
 | `conversation_graph_node._on_reset_context` | `self._memory.clear()`（ConversationMemory deque）+ `with self._seen_lock: self._seen_sessions.clear()`（session ID dedup set） |
 | `brain_node._on_reset_context` | `self._pending_confirm.cancel(reason="page_reset")` + **(v2.11, 6/10)** 清 `_object_remark_seen`（60s per-class dedup）、`last_alert_ts["object_remark"]`、上一段 `active_plan`（重錄 take 時 cup/greet 不被上一段卡住）；**不**清 `_state.attention` / `_state.idle_emit_history` |
 
-Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=true` 才開（demo 預設 false 靠手動按鈕）。詳見 `docs/pawai-brain/studio/README.md` §「新對話」按鈕。
+Frontend dev-only F5 hybrid auto-detect：env `NEXT_PUBLIC_AUTO_RESET_ON_REFRESH=true` 才開（demo 預設 false 靠手動按鈕）。詳見 `docs/architecture/studio/README.md` §「新對話」按鈕。
 
 #### `/brain/gesture_enabled`（v2.11，6/10 加）
 
@@ -1051,7 +1051,7 @@ self.publisher.publish(msg)
 
 tts_node 行為：parse envelope，`input_origin == "studio_text"` 時改走 studio chain（`[gemini, edge_tts, piper]` dedup）；其他值或缺欄位則退回 default chain。`source` 欄位由 gateway `_parse_tts_payload` 解析後 forward 到 ws/events broadcast，frontend 用 source 決定 ChatPanel bubble CSS class。Parse 失敗（malformed JSON）退回純文字 path（fail-safe）— 純文字 = no source = ChatPanel 顯示淡灰 spontaneous + ⏰ icon。
 
-**`interaction_executive_node._dispatch_step` 在 `step.args["input_origin"]` OR `step.args["source"]` 存在時發 envelope**（5/9 加 source 條件）。`source` 由 `skill_contract.py:_resolve_say_source(skill_name)` 在 `build_plan` 時注入 SAY step args（`chat_reply` → "chat_reply"，`say_canned` → "say_canned"，其他 skill SAY → "skill_say"）。其他 publisher（`event_action_bridge`、`llm_bridge_node`、`intent_tts_bridge_node`、`route_runner_node`、人手 `ros2 topic pub`）byte-for-byte 維持純文字。詳見 `docs/pawai-brain/speech/README.md` §TTS dual-route。
+**`interaction_executive_node._dispatch_step` 在 `step.args["input_origin"]` OR `step.args["source"]` 存在時發 envelope**（5/9 加 source 條件）。`source` 由 `skill_contract.py:_resolve_say_source(skill_name)` 在 `build_plan` 時注入 SAY step args（`chat_reply` → "chat_reply"，`say_canned` → "say_canned"，其他 skill SAY → "skill_say"）。其他 publisher（`event_action_bridge`、`llm_bridge_node`、`intent_tts_bridge_node`、`route_runner_node`、人手 `ros2 topic pub`）byte-for-byte 維持純文字。詳見 `docs/architecture/speech/README.md` §TTS dual-route。
 
 ---
 
@@ -1258,15 +1258,15 @@ if not required.issubset(payload.keys()):
 | v2.7 | 2026-05-06 | Phase 0.5 Conversation Engine：`/brain/chat_candidate` 新增 4 欄位（`proposed_skill` / `proposed_args` / `proposal_reason` / `engine`）；新增 `/brain/conversation_trace` 與 `/brain/conversation_trace_shadow` topics | System Architect |
 | v2.8 | 2026-05-08 | Phase A.6 Capability Awareness：`/brain/conversation_trace.stage` enum 把 `context` 換成 `world_state` + `capability`（langgraph engine）；`skill_gate.status` 加 `needs_confirm` / `demo_guide`；`/state/perception/face` 的 `sim_threshold_upper` 從 0.30 拉高到 **0.40**（5/8 demo 期陌生人誤觸抑制）；`/brain/chat_candidate` schema 不變（DemoGuide 只進 conversation_trace，Brain contract 維持乾淨） | System Architect |
 | v2.9 | 2026-05-07 | Per-message TTS routing：`/brain/chat_candidate` 加 `input_origin: str \| null` 欄位（plumbed from `studio_gateway POST /api/text_input` → `pawai_brain` LangGraph → IE-node SAY）；`/tts` payload 雙模化（純文字 backwards-compat OR JSON envelope `{"text", "input_origin"}`）。Studio chat 文字輸入路徑 → tts_node Gemini chain；其他全部 → edge_tts default chain。Plan: `~/.claude/plans/polished-questing-starlight.md`；commit `10829ca` | System Architect |
-| v2.10 | 2026-05-09 | 互動品質改善 8 issue 主線落地：(1) 新 topic `/brain/reset_context` (std_msgs/Empty) — Studio「新對話」按鈕 → POST `/api/reset` → 清 `_memory + _seen_sessions` + cancel pending_confirm；(2) `/tts` envelope 加 `source` 欄位（`chat_reply` / `say_canned` / `skill_say`）— gateway forward 給 ChatPanel CSS 三色 routing；純文字 backward compat 維持。Spec: `docs/pawai-brain/specs/2026-05-09-interaction-quality-improvements-design.md`；PRs #51-#62 + #64 | System Architect |
+| v2.10 | 2026-05-09 | 互動品質改善 8 issue 主線落地：(1) 新 topic `/brain/reset_context` (std_msgs/Empty) — Studio「新對話」按鈕 → POST `/api/reset` → 清 `_memory + _seen_sessions` + cancel pending_confirm；(2) `/tts` envelope 加 `source` 欄位（`chat_reply` / `say_canned` / `skill_say`）— gateway forward 給 ChatPanel CSS 三色 routing；純文字 backward compat 維持。Spec: `docs/architecture/specs/2026-05-09-interaction-quality-improvements-design.md`；PRs #51-#62 + #64 | System Architect |
 
 ---
 
 ## 11. 相關文件
 
 - [mission/README.md](../mission/README.md) — 專案總覽與功能閉環設計
-- [Pawai-studio/specs/event-schema.md](../pawai-brain/studio/specs/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
-- [Pawai-studio/specs/brain-adapter.md](../pawai-brain/studio/specs/brain-adapter.md) — Brain Adapter 介面與四級降級
+- [Pawai-studio/specs/event-schema.md](../architecture/studio/specs/event-schema.md) — Studio Gateway JSON schema（WebSocket 層）
+- [Pawai-studio/specs/brain-adapter.md](../architecture/studio/specs/brain-adapter.md) — Brain Adapter 介面與四級降級
 
 ---
 

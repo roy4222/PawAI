@@ -7,7 +7,7 @@
 > **不放**：架構決策（見 Master Plan）、逐功能門檻（見 Capability Baseline Spec）、上機步驟（見 Runbook）。
 > **關係**：
 > - 架構決策 / 三軸定義 / 15 能力 index → `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md`（Master Plan）
-> - 逐功能門檻（門檻數字的真相源）→ `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md`
+> - 逐功能門檻（門檻數字的真相源）→ `docs/architecture/specs/2026-06-18-capability-baseline-spec.md`
 > - 上機跑 → `docs/runbook/2026-06-18-baseline-runbook.md`
 
 **Goal:** 6 個 Python deliverable，dry-run 全綠：`scoreboard_schema` / `grader` / `scoreboard`(聚合器) / `perception_baseline_observer`(gesture+object) / `face_baseline_observer`(face state) / `build_scoreboard`(CLI)。

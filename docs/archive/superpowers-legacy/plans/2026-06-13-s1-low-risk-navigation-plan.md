@@ -15,9 +15,9 @@
 - 操作 SOP：[`2026-06-13-demo-operator-runbook-plan.md`](2026-06-13-demo-operator-runbook-plan.md)（本份產的 nav 安全前置 / e-stop / initialpose SOP 會被 runbook 收編）。
 
 **權威關係（不可繞過）**：
-- nav 能力等級的真相層 = [`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12，本份**只引用、不自定義** label）。
-- nav 對外台詞的真相層 = [`docs/navigation/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（S1-S8 可講句 / F1-F10 禁講 / safe-stop≠繞障標準說法 / 三層 fallback）。
-- HITL 場測項 = [`docs/runbook/2026-06-13-roy-hitl-queue.md`](../../runbook/2026-06-13-roy-hitl-queue.md) C 段 N1-N8。
+- nav 能力等級的真相層 = [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)（C1-C12，本份**只引用、不自定義** label）。
+- nav 對外台詞的真相層 = [`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)（S1-S8 可講句 / F1-F10 禁講 / safe-stop≠繞障標準說法 / 三層 fallback）。
+- HITL 場測項 = [`docs/archive/runbook-legacy/2026-06-13-roy-hitl-queue.md`](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md) C 段 N1-N8。
 - nav 實作工項歸 [`2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md`](2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md)（T6-*）。**本份不重複 Lane 6 的實作工項**，只做「demo 五幕第一幕的可靠執行 + 場測編排 + 誠實 claim 收斂 + fallback 鎖定」。
 
 > 命名澄清：文件標題的「S1」= **demo 第一幕 s1_nav**（移動段）；claim wording 裡的「S1」= **可講句第 1 句**（「室內已知地圖、操作員下令的短距自主移動 0.3-0.5m」）。兩者剛好同號是巧合，本份內文一律寫「s1_nav 幕」或「可講句 S1」以免混淆。
@@ -96,7 +96,7 @@
 
 1. **s1_nav 主線定義**：indoor_tight ±18° + 低速 ≤0.2 m/s + goto_relative 0.3-0.5m / short forward，operator-assisted，safe-stop 護欄。
 2. **nav 安全前置清單**（給 operator runbook 收編）：開工先 stop 清場、e-stop 待命、reactive_stop kill 重啟帶 indoor_tight、initialpose 朝向校正 SOP、goto 前朝向 sanity。
-3. **HITL 場測編排**：把 [roy-hitl-queue C 段 N1-N8](../../runbook/2026-06-13-roy-hitl-queue.md) 中與 s1_nav 直接相關的項（N8 profile / 朝向校正 / N3 短距 n=3 / N6 operator-confirm / N5 patrol stretch）排成「先安全護欄、再短距重驗、最後 stretch」的順序。
+3. **HITL 場測編排**：把 [roy-hitl-queue C 段 N1-N8](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md) 中與 s1_nav 直接相關的項（N8 profile / 朝向校正 / N3 短距 n=3 / N6 operator-confirm / N5 patrol stretch）排成「先安全護欄、再短距重驗、最後 stretch」的順序。
 4. **claim 收斂**：把 s1_nav 對外措辭逐句綁 [claim wording S1-S8 / F1-F10](../../navigation/2026-06-13-nav-618-claim-wording.md)，並寫死「6/18 前未重驗成功 → 退保守版 + 影片 fallback」。
 5. **純軟體輔助（不當主依賴）**：goto 前朝向 sanity 提示文字、initialpose 朝向校正 SOP 文件、Studio initialpose 證據面板的「證據定位」（明確標記為證據輔助，非主功能）。
 6. **三層 fallback 鎖定** + done/rollback。
@@ -192,7 +192,7 @@
 > 全部需 Roy 在場 + Go2 + Jetson nav stack。**每項前置 = T-S1-2 安全前置 + e-stop 待命**。執行順序：先安全護欄（N8 + 朝向校正）→ 再短距重驗（N3）→ 最後 stretch（N6 / N5）。
 
 ### H1：N8 profile 矩陣重跑（indoor_tight）— **先做，建立安全護欄**
-- 對映 [roy-hitl-queue N8](../../runbook/2026-06-13-roy-hitl-queue.md)、ladder [C4/C6](../../navigation/2026-06-13-nav-capability-ladder.md)。
+- 對映 [roy-hitl-queue N8](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)、ladder [C4/C6](../../navigation/2026-06-13-nav-capability-ladder.md)。
 - 標記：`[Jetson needed]` + `[Go2 motion needed]`（safe-stop 場景含 Go2 接近障礙）。
 - 能力分級：**proven（重驗護航）**。
 - 步驟：indoor_tight 起 stack → danger 停 / clear 放行 / 無誤擋各一輪，`lidar_front_sector.py` 佐證。
@@ -200,7 +200,7 @@
 - rollback：誤擋鎖死 → 收更窄錐或退遙控；safe-stop 失效 → **立即 e-stop**、停 s1_nav live。
 
 ### H2：initialpose 朝向校正 + covariance（N2 引用）— **撞牆根因直擊**
-- 對映 ladder [C7](../../navigation/2026-06-13-nav-capability-ladder.md)、依賴 [roy-hitl-queue N2 covariance SOP](../../runbook/2026-06-13-roy-hitl-queue.md)（Lane 6 T6-5 軟體，本份引用）。
+- 對映 ladder [C7](../../navigation/2026-06-13-nav-capability-ladder.md)、依賴 [roy-hitl-queue N2 covariance SOP](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)（Lane 6 T6-5 軟體，本份引用）。
 - 標記：`[Jetson needed]` + `[Go2 motion needed]`。
 - 能力分級：**needs-HITL（C7 low-sample；今日撞牆根因）**。
 - 步驟：執行 T-S1-3 SOP（LiDAR 紅點對齊牆）→ 讀 covariance → 按黃帶決策表（等 / 0.3m warmup / 重設）→ 進黃帶（≤0.5m 可發）或更好。
@@ -208,7 +208,7 @@
 - rollback：朝向/covariance 不過 → **不進 H3**，s1_nav 退 fallback 層②/③。
 
 ### H3：N3 短距可靠性 n=3（**s1_nav 主線升級的唯一閘門**）
-- 對映 [roy-hitl-queue N3](../../runbook/2026-06-13-roy-hitl-queue.md)、ladder [C1/C2](../../navigation/2026-06-13-nav-capability-ladder.md)。
+- 對映 [roy-hitl-queue N3](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)、ladder [C1/C2](../../navigation/2026-06-13-nav-capability-ladder.md)。
 - 標記：`[Jetson needed]` + `[Go2 motion needed]`。
 - 能力分級：**needs-HITL（今日 FAILED，必須重驗）**。
 - 步驟：`scripts/send_relative_goal.py` 0.3m × n=3（每發前過 T-S1-4 sanity + H2 朝向校正）；全 `reached` 且 **0 撞 0 暴衝**再考慮 0.5m × n=3；**1.0m 不做**（C3 不進主線）。每發記 covariance / actual_distance / 結果 → 回填 ladder proven table。
@@ -216,13 +216,13 @@
 - rollback：**任一發撞牆或走歪 → 立即 e-stop、停 H3、s1_nav 退影片 fallback、claim 退保守版（S1 去「可靠」、不講「自主短距移動」）**。
 
 ### H4（stretch）：N6 stop-resume operator-confirm
-- 對映 [roy-hitl-queue N6](../../runbook/2026-06-13-roy-hitl-queue.md)、ladder [C5](../../navigation/2026-06-13-nav-capability-ladder.md)。
+- 對映 [roy-hitl-queue N6](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)、ladder [C5](../../navigation/2026-06-13-nav-capability-ladder.md)。
 - 標記：`[Jetson needed]` + `[Go2 motion needed]`。能力分級：needs-HITL。
 - 步驟：goto/route 中置障 → danger 停 → Studio 按「繼續」→ 續走。**禁 auto-resume**（P7 lunge）。
 - rollback：resume lunge → e-stop；只講 operator-confirm（S3）、禁 F4/F5。
 
 ### H5（stretch only，非 s1_nav 主線）：N5 patrol 單圈
-- 對映 [roy-hitl-queue N5](../../runbook/2026-06-13-roy-hitl-queue.md)、ladder [C9](../../navigation/2026-06-13-nav-capability-ladder.md)、依賴 N1（poses/routes 重錄）。
+- 對映 [roy-hitl-queue N5](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)、ladder [C9](../../navigation/2026-06-13-nav-capability-ladder.md)、依賴 N1（poses/routes 重錄）。
 - 標記：`[Jetson needed]` + `[Go2 motion needed]`。能力分級：**research_prototype**（routes 已遺失、從未跑過單圈）。
 - 步驟：N1 重錄 poses/routes → `run_route` 單圈（操作員監督 + e-stop 待命）+ Studio 三層同框錄證據。
 - rollback：不過 → **patrol 整段不講**（S7 鎖死、N5 未過不解鎖）；s1_nav 主線不依賴 patrol。
@@ -309,9 +309,9 @@ s1_nav 幕視為「demo-ready（在其誠實級別內）」當且僅當：
 - conductor：[`2026-06-13-demo-phase-conductor-plan.md`](2026-06-13-demo-phase-conductor-plan.md)
 - online/offline：[`2026-06-13-online-offline-fallback-plan.md`](2026-06-13-online-offline-fallback-plan.md)
 - operator runbook：[`2026-06-13-demo-operator-runbook-plan.md`](2026-06-13-demo-operator-runbook-plan.md)
-- nav 能力階梯：[`docs/navigation/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
-- nav claim wording：[`docs/navigation/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)
-- Roy HITL queue（C 段 N1-N8）：[`docs/runbook/2026-06-13-roy-hitl-queue.md`](../../runbook/2026-06-13-roy-hitl-queue.md)
+- nav 能力階梯：[`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-capability-ladder.md`](../../navigation/2026-06-13-nav-capability-ladder.md)
+- nav claim wording：[`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md`](../../navigation/2026-06-13-nav-618-claim-wording.md)
+- Roy HITL queue（C 段 N1-N8）：[`docs/archive/runbook-legacy/2026-06-13-roy-hitl-queue.md`](../../archive/runbook-legacy/2026-06-13-roy-hitl-queue.md)
 - Lane 6 nav 實作工項：[`2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md`](2026-06-13-lane6-navigation-obstacle-avoidance-v2-plan.md)
 - Lane 1 ISM staged enable：[`2026-06-13-lane1-brain-ism-staged-enable-plan.md`](2026-06-13-lane1-brain-ism-staged-enable-plan.md)
 - Lane 3 CLI v2：[`2026-06-13-lane3-cli-v2-completion-plan.md`](2026-06-13-lane3-cli-v2-completion-plan.md)

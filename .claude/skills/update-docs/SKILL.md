@@ -47,7 +47,7 @@ git diff --cached
 
 **Studio 層**
 - 改了 Gateway、event schema、brain adapter、面板行為
-- 對應更新 `docs/pawai-brain/studio/` 下的相關文件
+- 對應更新 `docs/architecture/studio/` 下的相關文件
 
 **Sprint 層**（Sprint 期間每日必做）
 - 今天的開發對應 sprint-b-prime.md 的哪個 Day
@@ -66,7 +66,7 @@ git diff --cached
 ```
 今天建議同步 N 份文件：
 
-1. `docs/pawai-brain/speech/README.md`
+1. `docs/architecture/speech/README.md`
    - 補充新的啟動腳本
    - 更新 fallback 行為
 
@@ -85,7 +85,7 @@ git diff --cached
 **先提案再改**（大改模式）：
 - 會改 `mission/README.md`
 - 會改 `interaction_contract.md`
-- 會改 `pawai-brain/studio/specs/event-schema.md`
+- 會改 `architecture/studio/specs/event-schema.md`
 - 會改 docs 結構、導航、archive
 - 會跨 3 份以上主幹文件
 
@@ -104,7 +104,7 @@ git diff --cached
 
 ```
 已更新：
-- docs/pawai-brain/speech/README.md — 補充 energy VAD 參數說明
+- docs/architecture/speech/README.md — 補充 energy VAD 參數說明
 - docs/archive/2026-05-docs-reorg/architecture-misc/data_flow.md — 更新 banner 偏差描述
 
 未更新：
@@ -165,13 +165,13 @@ git diff --cached
 
 | 程式碼變更 | 對應文件 |
 |-----------|---------|
-| `speech_processor/`、語音相關腳本 | `docs/pawai-brain/speech/README.md` |
-| `face_perception/`、`scripts/face_*` | `docs/pawai-brain/perception/face/README.md` |
-| 手勢/姿勢相關程式、`gesture_*`、`pose_*`、DWPose、RTMPose | `docs/pawai-brain/perception/gesture/README.md`、`docs/pawai-brain/perception/pose/README.md` |
+| `speech_processor/`、語音相關腳本 | `docs/architecture/speech/README.md` |
+| `face_perception/`、`scripts/face_*` | `docs/architecture/perception/face/README.md` |
+| 手勢/姿勢相關程式、`gesture_*`、`pose_*`、DWPose、RTMPose | `docs/architecture/perception/gesture/README.md`、`docs/architecture/perception/pose/README.md` |
 | `go2_robot_sdk/` | `docs/contracts/interaction_contract.md`（如涉及 topic/command） |
 | `go2_interfaces/msg/`、`go2_interfaces/srv/` | `docs/contracts/interaction_contract.md` |
-| `interaction_executive/` | `docs/contracts/interaction_contract.md`、`docs/pawai-brain/studio/specs/brain-adapter.md` |
-| `face_dashboard_fastapi/`、`face_dashboard_nextjs/` | `docs/pawai-brain/studio/` 相關文件 |
+| `interaction_executive/` | `docs/contracts/interaction_contract.md`、`docs/architecture/studio/specs/brain-adapter.md` |
+| `face_dashboard_fastapi/`、`face_dashboard_nextjs/` | `docs/architecture/studio/` 相關文件 |
 | `scripts/start_*.sh` | 對應模組的 README + `CLAUDE.md` 常用指令區 |
 | `go2_robot_sdk/config/` | `CLAUDE.md` 配置檔區塊 |
 | `go2_robot_sdk/launch/` | `CLAUDE.md` 啟動指令區塊 |
@@ -195,7 +195,7 @@ git diff --cached
 |---------|---------|
 | 專案方向、P0/P1/P2、分工、Demo | `mission/` |
 | ROS2 介面、schema、QoS、跨模組契約 | `contracts/` |
-| Studio / Gateway / Brain / Frontend | `pawai-brain/studio/`、`pawai-brain/` |
+| Studio / Gateway / Brain / Frontend | `architecture/studio/`、`pawai-brain/` |
 | 模組內部設計 | 各模組 README |
 | 安裝、部署、操作步驟 | `runbook/` |
 | `CLAUDE.md` vs `runbook/` 衝突 | 以 `runbook/` 為準 |

@@ -136,9 +136,9 @@
 ## 9. 文件定位
 
 本文件是研究決策索引，不取代：
-- `docs/navigation/README.MD`（總覽）
-- `docs/navigation/weekly_plan.md`（週執行）
-- `docs/navigation/落地計畫_v2.md`（落地路線）
+- `docs/architecture/navigation/README.MD`（總覽）
+- `docs/architecture/navigation/weekly_plan.md`（週執行）
+- `docs/architecture/navigation/落地計畫_v2.md`（落地路線）
 
 若本文件與上述文件衝突，以「安全 gate 較嚴格者」為準。
 

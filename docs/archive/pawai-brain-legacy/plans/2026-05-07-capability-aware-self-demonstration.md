@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10, ROS2 Humble, LangGraph 1.1.10, langchain-core 1.3.3, pytest 6+, PyYAML, Next.js (Studio frontend).
 
-**Spec:** `docs/pawai-brain/specs/2026-05-07-capability-aware-self-demonstration-design.md`
+**Spec:** `docs/architecture/specs/2026-05-07-capability-aware-self-demonstration-design.md`
 
 ---
 
@@ -2610,10 +2610,10 @@ git commit -m "feat(studio): add needs_confirm + demo_guide chip colors"
 
 ---
 
-### Task 18: Update `docs/pawai-brain/architecture/overview.md`
+### Task 18: Update `docs/architecture/brain/overview.md`
 
 **Files:**
-- Modify: `docs/pawai-brain/architecture/overview.md`
+- Modify: `docs/architecture/brain/overview.md`
 
 - [ ] **Step 1: Update the SkillContract section**
 
@@ -2628,7 +2628,7 @@ Find the section describing SKILL_REGISTRY (around §5.1). Replace the line abou
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/pawai-brain/architecture/overview.md
+git add docs/architecture/brain/overview.md
 git commit -m "docs(architecture): three-tier capability layer (SkillContract + DemoGuide + CapabilityContext)"
 ```
 

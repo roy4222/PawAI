@@ -18,7 +18,7 @@ Deferred to Phase A day 2 (NOT in this version):
 **Threshold note**: default covariance_threshold=0.20 is the spec target, but
 empirical Go2 + v8 map after `/initialpose` settles around 0.30-0.40. For demo
 stack startup pass --ros-args -p covariance_threshold:=0.40 until AMCL has
-moved enough to converge. See docs/navigation/CLAUDE.md for runbook.
+moved enough to converge. See docs/architecture/navigation/CLAUDE.md for runbook.
 
 Manual launch (no integration into interaction_executive.launch.py yet):
 

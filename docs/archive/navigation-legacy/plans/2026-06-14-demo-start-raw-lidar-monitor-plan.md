@@ -125,7 +125,7 @@ pawai demo stop / 重啟 cleanup / force-takeover cleanup
 **交接點：** post-6/18 unified stack 接手時，`start_lidar_monitor_tmux.sh` 的 sllidar + static TF 拓撲可被 unified stack 直接吸收/取代；屆時 `--with-lidar` 旗標應**收斂進** unified stack 的單一 driver 共用設計，避免兩套各自起 sllidar。本計畫刻意**不**碰單一 driver 共用問題（那是 unified plan 的範疇），只保證「不起第二個 driver」。
 
 > 引用：post-6/18 整合主文件 `docs/archive/navigation-legacy/plans/2026-06-14-unified-demo-stack-single-go2-driver-plan.md`（由 Cloud 端產出 / 整合；本 worktree 不建立該檔，僅標記為前向交接目標）。
-> 6/13 撞牆根因：`docs/navigation/2026-06-13-nav-motion-incident-root-cause-plan.md` + `2026-06-13-nav-incident-runbook.md`。
+> 6/13 撞牆根因：`docs/archive/navigation-legacy/incident-runbooks/2026-06-13-nav-motion-incident-root-cause-plan.md` + `2026-06-13-nav-incident-runbook.md`。
 
 ---
 

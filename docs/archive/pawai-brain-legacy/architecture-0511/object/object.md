@@ -494,6 +494,6 @@ tmux send-keys -t "$SESSION:object" \
 | 設定 | `object_perception/config/object_perception.yaml` |
 | 啟動 | `object_perception/launch/object_perception.launch.py` |
 | Contract schema | `docs/contracts/interaction_contract.md` §4.8 |
-| 模組文件 | `docs/pawai-brain/perception/object/README.md` + `CLAUDE.md` |
-| 選型研究 | `docs/pawai-brain/perception/object/research/2026-03-25-object-detection-feasibility.md` |
+| 模組文件 | `docs/architecture/perception/object/README.md` + `CLAUDE.md` |
+| 選型研究 | `docs/architecture/perception/object/research/2026-03-25-object-detection-feasibility.md` |
 | N5 scene spec | `docs/archive/superpowers-legacy/specs/2026-05-11-n5-scene-perception-design.md` |

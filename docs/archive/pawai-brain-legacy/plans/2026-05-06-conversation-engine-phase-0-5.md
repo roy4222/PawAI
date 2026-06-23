@@ -2,15 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Phase 0.5 of `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` — extend `/brain/chat_candidate` with optional skill proposal, gate it in `brain_node` with a 2-skill allowlist + execute/trace-only policy, light up Studio trace UI, and stand up a `pawai_brain` ROS2 shadow package running a minimal LangGraph that does not touch the production path.
+**Goal:** Ship Phase 0.5 of `docs/architecture/specs/2026-05-06-conversation-engine-langgraph-design.md` — extend `/brain/chat_candidate` with optional skill proposal, gate it in `brain_node` with a 2-skill allowlist + execute/trace-only policy, light up Studio trace UI, and stand up a `pawai_brain` ROS2 shadow package running a minimal LangGraph that does not touch the production path.
 
 **Architecture:** Three cuts, each independently demoable. Cut 1 = schema + brain allowlist + Studio trace + model default sync (the actual demo value). Cut 2 = `pawai_brain` ROS2 package with a 4-node LangGraph shadow that subscribes the same ASR input but only publishes `/brain/conversation_trace_shadow`. Cut 3 = slim `llm_bridge_node.py` by moving pure logic into `speech_processor/conversation/` (zero behavior change). All three cuts preserve the contract: legacy `llm_bridge_node` remains the sole `/brain/chat_candidate` publisher; `brain_node` remains the sole arbiter; `interaction_executive_node` remains the sole action sink.
 
 **Tech Stack:** ROS2 Humble (rclpy), Python 3.10 (Jetson) / 3.11 (WSL Studio backend), pytest, colcon, LangGraph 0.2+ (`langgraph` + `langchain-core`), OpenRouter (Gemini 3 Flash + DeepSeek V4 Flash fallback), edge-tts / Piper TTS, FastAPI + websockets gateway, Next.js 14 + React 18 Studio frontend.
 
 **Reference docs to keep open while executing:**
-- Spec: `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md`
-- Overview: `docs/pawai-brain/architecture/overview.md` §3.5
+- Spec: `docs/architecture/specs/2026-05-06-conversation-engine-langgraph-design.md`
+- Overview: `docs/architecture/brain/overview.md` §3.5
 - Contract: `docs/contracts/interaction_contract.md`
 - llm_bridge entry: `speech_processor/speech_processor/llm_bridge_node.py:296` (parse) / `:1047` (publish)
 - brain entry: `interaction_executive/interaction_executive/brain_node.py:296` (`_on_chat_candidate`)
@@ -866,7 +866,7 @@ Verify:
 ssh jetson-nano "python3 -c 'import langgraph, langchain_core; print(langgraph.__version__)'"
 ```
 
-If install fails (Jetson Python wheel issue), abort Cut 2 and proceed to Cut 3 — Cut 1 already delivers demo value. Document the failure in `docs/pawai-brain/specs/2026-05-06-conversation-engine-langgraph-design.md` §10 risk row.
+If install fails (Jetson Python wheel issue), abort Cut 2 and proceed to Cut 3 — Cut 1 already delivers demo value. Document the failure in `docs/architecture/specs/2026-05-06-conversation-engine-langgraph-design.md` §10 risk row.
 
 - [ ] **Step 3: Note the version**
 

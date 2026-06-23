@@ -333,7 +333,7 @@ scripts/
 
 ## 17. 引用
 
-- **5/2 Phase A 主線設計**:`docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md`
+- **5/2 Phase A 主線設計**:`docs/architecture/specs/2026-05-01-pawai-11day-sprint-design.md`
 - **5/2 Phase A 實作**:`docs/archive/navigation-legacy/plans/2026-05-01-phase-a-nav-attack.md`
 - **5/3 D435 fusion 嘗試紀錄**:`docs/archive/navigation-legacy/plans/2026-05-03-d435-fusion-phase1-plan.md`
 - **5/3 Stage 1 + recovery 紀錄**:`docs/archive/navigation-legacy/plans/2026-05-03-stage1-and-recovery.md`

@@ -104,7 +104,7 @@ ros2 run go2_robot_sdk reactive_stop_node --ros-args \
 
 **最小步驟(0 code,0.5 天)**:
 1. Mac 開 `app.foxglove.dev` → Open connection → Foxglove WebSocket → `ws://<jetson-tailscale-ip>:8765`(nav stack 已內建 8765,start_nav2_amcl_demo_tmux.sh:73 / start_nav_capability_demo_tmux.sh:106)。
-2. 存 layout `.json` 含三 panel:Map(`/map`)、LaserScan(`/scan_rplidar`,**非 Go2 driver 的 /scan 120 點**)、pose(`/amcl_pose` 或 TF map→base_link 箭頭)。存進 `docs/navigation/foxglove_layouts/nav_demo.json` + 一頁 SOP。
+2. 存 layout `.json` 含三 panel:Map(`/map`)、LaserScan(`/scan_rplidar`,**非 Go2 driver 的 /scan 120 點**)、pose(`/amcl_pose` 或 TF map→base_link 箭頭)。存進 `docs/architecture/navigation/foxglove_layouts/nav_demo.json` + 一頁 SOP。
 3. **這已滿足「不在 Mac 裝桌面 Foxglove」**(web 版免裝)。
 4. **分鏡硬規矩**:map/lidar 視覺只放 nav 場測那一鏡,brain 互動主鏡不擺地圖卡。
 
@@ -209,7 +209,7 @@ go2_ros2_sdk 的 coco_detector(torchvision `fasterrcnn_mobilenet_v3_large_320_fp
 12. `pawai-studio/frontend/.../navigation-panel.tsx:86–94`(placeholder)
 13. `docs/contracts/interaction_contract.md` §4.8(凍結 v2.5,80 類)、:1108(depth topic)
 14. `docs/mission/2026-06-18-demo-production-plan.md:138`(KEEP_CURRENT)、`2026-06-18-demo-flow-plan.md:43/78/110`(H6/S4/S3 口白)
-15. `docs/pawai-brain/perception/object/CLAUDE.md:15/17/47–51`(torch-wheel/凍結契約/input_size trap#6)
+15. `docs/architecture/perception/object/CLAUDE.md:15/17/47–51`(torch-wheel/凍結契約/input_size trap#6)
 16. `docs/.../research/2026-03-25-object-detection-feasibility.md §3.1/§11.1(line 730/737)/§11.2–11.3`(mAP/coco 棄用/YOLOE 雲端)
 17. `docs/.../thesis/背景知識/4-8-Navigation.md:7`(4/3 避障失敗根因)、`4-10-D435.md:69/80`(深色吸 IR/感知不受安裝角度影響)
 18. `docs/.../2026-04-26-nav2-dynamic-obstacle-log.md:38–52/96–106/172/243–244/250`(5/2 摔狗/DWB 不可重現/淨空)

@@ -124,7 +124,7 @@ nav-baseline    : sllidar_node + go2_driver_node + twist_mux + reactive_stop_nod
 | 文件 | 路徑 | 放什麼 |
 |---|---|---|
 | **Master Plan（本檔）** | `docs/archive/pawai-brain-legacy/plans/2026-05-31-capability-baseline-scoreboard-plan.md` | goal / scope / 6 deliverable / Layer-0 Preflight / 15 能力 canonical 表 / 三軸定義 / dependency map / fail-closed 設計 / Known Findings / issue 入口 |
-| **Capability Baseline Spec** | `docs/pawai-brain/specs/2026-06-18-capability-baseline-spec.md` | 15 能力逐功能 9+1 問（門檻數字的**唯一真相源**）|
+| **Capability Baseline Spec** | `docs/architecture/specs/2026-06-18-capability-baseline-spec.md` | 15 能力逐功能 9+1 問（門檻數字的**唯一真相源**）|
 | **Scoreboard Implementation Plan** | `docs/archive/pawai-brain-legacy/plans/2026-06-01-scoreboard-implementation-plan.md` | 6 deliverable 的 TDD skeleton（test→impl→commit）|
 | **Baseline Runbook** | `docs/runbook/2026-06-18-baseline-runbook.md` | 上機跑 baseline / JSONL / snapshot freeze / demo 當天用 |
 

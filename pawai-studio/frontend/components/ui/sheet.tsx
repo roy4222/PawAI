@@ -14,7 +14,7 @@ export interface SheetProps {
   /**
    * Visual side. Kept for backward compat — the actual layout is center modal
    * regardless of this prop. The old "right-side drawer" mode is retired
-   * (see `docs/pawai-brain/studio/README.md` §「跳窗模式遷移」).
+   * (see `docs/architecture/studio/README.md` §「跳窗模式遷移」).
    */
   side?: "right" | "center";
   /** Optional className appended to the inner Popup card. */

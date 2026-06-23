@@ -16,7 +16,7 @@ import { LocalCameraCard } from './local-camera-card'
 // 9-gesture mapping (MOC §4 + sprint design §4 Skill Registry)
 //
 // 3 groups: System Control / Interaction & Emotion / Dynamic
-// Active 5 / Hidden 2 / Future 2 — see docs/pawai-brain/perception/gesture/README.md
+// Active 5 / Hidden 2 / Future 2 — see docs/architecture/perception/gesture/README.md
 // ──────────────────────────────────────────────
 
 const GESTURE_LABELS: Record<string, string> = {

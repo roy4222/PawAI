@@ -452,5 +452,5 @@ bash scripts/start_stress_test_tmux.sh 60
 | Brain handler | `pawai_brain/pawai_brain/conversation_graph_node.py::_on_gesture_detected` |
 | 設定 | `vision_perception/config/vision_perception.yaml` |
 | Contract schema | `docs/contracts/interaction_contract.md` §4.3 |
-| 模組文件 | `docs/pawai-brain/perception/gesture/README.md` + `AGENT.md` + `CLAUDE.md` |
-| Benchmark 決策 | `docs/pawai-brain/perception/gesture/research/2026-03-21-benchmark-decision.md` |
+| 模組文件 | `docs/architecture/perception/gesture/README.md` + `AGENT.md` + `CLAUDE.md` |
+| Benchmark 決策 | `docs/architecture/perception/gesture/research/2026-03-21-benchmark-decision.md` |
