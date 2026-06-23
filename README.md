@@ -96,6 +96,22 @@ flowchart TD
 > gate first). The two never import each other — both depend only on
 > `pawai_contracts`.
 
+<div align="center">
+
+**System**
+
+<img src="docs/assets/architecture-system.png" alt="PawAI system architecture" width="820">
+
+**PawAI Brain**
+
+<img src="docs/assets/architecture-brain.png" alt="PawAI Brain architecture" width="820">
+
+**PawAI Studio**
+
+<img src="docs/assets/architecture-studio.png" alt="PawAI Studio architecture" width="820">
+
+</div>
+
 ### Packages
 
 | Package | Layer | Responsibility |

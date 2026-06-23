@@ -92,6 +92,22 @@ flowchart TD
 > `pawai_brain` 只提案，executive 才執行（安全閘優先）。兩者互不 import，
 > 皆只依賴 `pawai_contracts`。
 
+<div align="center">
+
+**系統架構**
+
+<img src="docs/assets/architecture-system.png" alt="PawAI 系統架構" width="820">
+
+**PawAI Brain 架構**
+
+<img src="docs/assets/architecture-brain.png" alt="PawAI Brain 架構" width="820">
+
+**PawAI Studio 架構**
+
+<img src="docs/assets/architecture-studio.png" alt="PawAI Studio 架構" width="820">
+
+</div>
+
 ### 套件一覽
 
 | 套件 | 層 | 職責 |
