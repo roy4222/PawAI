@@ -4,7 +4,7 @@
 > - **Scope**：產品方向 / Demo 劇本 / 八大功能的入口頁與摘要（不放技術細節，那是各模組 README 的事）。
 > - **Status**：active / source-of-truth（mission lane）。**注意**：本頁 §2 定位文字（v2.3, 2026-04-08）仍是「居家互動 + 守護」舊框架；**6/18 專題驗收的定位、禁說清單、能力分級以 [`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) v2 與 [`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md) 為準（後者勝出）**——6/18 一律用「守望」，不用「守護 / 陌生人警報」。
 > - **Owner lane**：mission（戰略邊界）。
-> - **Source-of-truth priority**：實測證據 ([`runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)) ＞ 收斂審計 ([`archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)) ＞ 能力規格 ([`architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)) ＞ 戰略邊界 (north-star v2) ＞ 本頁敘事。
+> - **Source-of-truth priority**：實測證據 ([`runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)) ＞ 收斂審計 (`archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`) ＞ 能力規格 ([`architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)) ＞ 戰略邊界 (north-star v2) ＞ 本頁敘事。
 > - **Maintained child files**：[`2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md)、[`2026-06-18-capability-claim-matrix.md`](2026-06-18-capability-claim-matrix.md)、[`2026-06-18-demo-flow-plan.md`](2026-06-18-demo-flow-plan.md)、[`2026-06-18-final-presentation-outline.md`](2026-06-18-final-presentation-outline.md)、[`sprint-b-prime.md`](sprint-b-prime.md)、[`demo-scope.md`](demo-scope.md)、[`handoff_316.md`](handoff_316.md)、[`meetings/`](meetings/)。
 > - **Archived / legacy boundary**：`meetings/*` 為歷史會議快照（各檔頂部已標 historical）；`archive/` 全 frozen。
 > - **What this README is NOT**：不是介面契約（見 [`../contracts/interaction_contract.md`](../contracts/interaction_contract.md)）、不是技術細節（見各模組 README）、不是能力 pass/fail 的最終事實依據（見 claim matrix + baseline-evidence）。
@@ -57,8 +57,8 @@
 - **主案（無雷達）**：定點互動 — 多模態觸發、熟人個人化問候、陌生人警告、Studio 遠端觀測
 - **升級案（有雷達）**：增加巡邏 + 短距靠近能力（雷達確定採購，時程待老師跑國科會流程）
 
-> **系統設計規格（current）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)
-> 4/10 守護犬 spec 已 superseded：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md)
+> **系統設計規格（current）**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`
+> 4/10 守護犬 spec 已 superseded：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`
 
 **PawAI Studio** 是系統的控制台與 Demo 觀測入口：
 
@@ -236,7 +236,7 @@ Brain 不直接執行，Executive 才執行。
 | 0:45-2:30 | **互動主秀（TBD 4/15）** | 手勢模式切換 + 語音對話 + 物體情境 + 熟人問候 + 姿勢感知 |
 | 2:30-3:00 | 陌生人警告 + 收尾 | 未註冊進場 → 警戒 + Studio 推播 + 口頭補巡邏/跟隨 |
 
-> 互動主秀細節由下週會議（4/15）四人設計回報後補齊。完整劇本見 [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md) §7。
+> 互動主秀細節由下週會議（4/15）四人設計回報後補齊。完整劇本見 `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md` §7。
 
 ### 5.2 功能 1：語音功能
 
@@ -838,7 +838,7 @@ docs/
 
 > **來源**：2026-03-15 語音模組 30 輪驗收，踩了 36 個坑（30 個在驗收工具，6 個在語音主線）。本 SOP 將教訓制度化，適用於所有模組。
 >
-> **完整設計文件**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-15-module-dev-sop-design.md`](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-15-module-dev-sop-design.md)
+> **完整設計文件**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-15-module-dev-sop-design.md`
 
 ### 11.1 環境同步規範
 
@@ -862,7 +862,7 @@ docs/
 **人臉專屬**：D435 連線、YuNet 模型存在。
 **LLM 專屬**：RTX server 連線、vLLM health。
 
-> 完整指令與通過條件見 [SOP 設計文件](../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-15-module-dev-sop-design.md)。
+> 完整指令與通過條件見 SOP 設計文件。
 
 ### 11.3 跨 Node 協調設計原則
 

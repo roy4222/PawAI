@@ -1,6 +1,6 @@
 # Studio 前端測試劇本
 
-> 規格來源：[../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md](../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md)
+> 規格來源：../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md
 
 ---
 

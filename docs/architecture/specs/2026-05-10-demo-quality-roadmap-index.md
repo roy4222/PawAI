@@ -6,12 +6,12 @@
 > **Owner**: Roy
 >
 > ⚠️ **5/10 night 重構**：因 5/12 晚 Go2 移交學校，本 roadmap 由 6 spec 改為 1 master + 5 plan：
-> - [`Demo Readiness Master Plan`](../../archive/pawai-brain-legacy/plans/2026-05-10-demo-readiness-master-plan.md)（**主入口**：5/11–5/18 排程 + 依賴）
-> - [`A. Brain Minimum`](../../archive/pawai-brain-legacy/plans/2026-05-10-brain-minimum-checklist.md)（取代 Spec 1 完整版）
-> - [`B. Nav Root-Cause Burndown`](../../archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md)
-> - [`C. Runtime Fallback`](../../archive/pawai-brain-legacy/plans/2026-05-12-runtime-fallback-readiness.md)
-> - [`D. Audio Readiness`](../../archive/pawai-brain-legacy/plans/2026-05-12-free-conversation-audio-readiness.md)
-> - [`E. Mac × School Network`](../../archive/pawai-brain-legacy/plans/2026-05-12-mac-school-network-readiness.md)
+> - `Demo Readiness Master Plan`（**主入口**：5/11–5/18 排程 + 依賴）
+> - `A. Brain Minimum`（取代 Spec 1 完整版）
+> - `B. Nav Root-Cause Burndown`
+> - `C. Runtime Fallback`
+> - `D. Audio Readiness`
+> - `E. Mac × School Network`
 >
 > 本檔保留作 6 spec 設計背景參考。實際執行請看 Master Plan。
 
@@ -43,8 +43,8 @@ PawAI 不是長者陪伴專案。是**多模態感知融合的具身互動機器
 > 本節的「Spec 1 5.5 天 / SAY 解綁 / 5/16 剩 6 天」**全部不再執行**。
 >
 > 5/10 night 因 5/12 晚 Go2 移交學校重排，實際執行請看：
-> - [`Demo Readiness Master Plan`](../../archive/pawai-brain-legacy/plans/2026-05-10-demo-readiness-master-plan.md) §3 逐日排程
-> - [`Brain Minimum Checklist`](../../archive/pawai-brain-legacy/plans/2026-05-10-brain-minimum-checklist.md)（取代 Spec 1 完整版）
+> - `Demo Readiness Master Plan` §3 逐日排程
+> - `Brain Minimum Checklist`（取代 Spec 1 完整版）
 >
 > 不要回頭照本節做。本檔只保留作 6 spec 設計背景參考。
 

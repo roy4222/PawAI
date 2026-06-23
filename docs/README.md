@@ -31,7 +31,6 @@
 | **PawAI CLI** | [pawai_cli/README.md](pawai_cli/README.md) | 五人共用 Jetson 單一入口 CLI 手冊（搭配 runbook 使用） |
 | **PawAI Demo** | [pawai-demo/](pawai-demo/) | Demo 製作 / 簡報 / 影片 / 報告撰寫指南（製作流程，非能力真相） |
 | **Research** | [research/](research/) | 通用研究（非 lane 綁定）。research-not-truth，不覆寫 baseline-evidence / contracts |
-| **Superpowers** | [superpowers/](archive/superpowers-legacy/) | 長版 spec / plan 背景（CLI / nav / object 等）。spec=背景，決策精煉版見 adr/ |
 
 ## 歷史
 
@@ -49,7 +48,7 @@
 |:-:|------|---------|
 | 0 | **程式碼 / runtime topic schema** | 永遠是最終真相 |
 | 1 | **實測證據（empirical, TOP）** | [runbook/baseline-evidence/2026-06-04-hitl/](runbook/baseline-evidence/2026-06-04-hitl/) — 當前唯一 trusted snapshot（SHA 78fbf36, readiness=not_ready）。其 README 的 capability grades + honesty caveats 是能力 pass/degraded/fail/insufficient 的最終事實。READ-ONLY 證據資料。`2026-06-03-first-trusted-face/` 已被取代，僅作歷史 |
-| 2 | **收斂審計（read-only）** | [archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md](archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) — 6/18 claim-scope / 換不換模型 / docs-drift 裁定的權威。本身是 research，不覆寫 baseline 數據 |
+| 2 | **收斂審計（read-only）** | （6/05 convergence audit — 已移出公開版，見內部歷史） — 6/18 claim-scope / 換不換模型 / docs-drift 裁定的權威。本身是 research，不覆寫 baseline 數據 |
 | 3 | **能力規格（how to measure）** | [architecture/specs/2026-06-18-capability-baseline-spec.md](architecture/specs/2026-06-18-capability-baseline-spec.md) — 15 capability 怎麼量、怎樣算 pass 的唯一真相源（門檻 provisional）。grade 結果以 #1 為準 |
 | 4 | **戰略邊界（what to claim）** | [mission/2026-06-18-demo-north-star.md](mission/2026-06-18-demo-north-star.md) v2 — 6/18 定位、禁說清單、scoreboard-first、scope 分層。amend ADR-0001/0002。能力是否 pass 仍回 #1 |
 | 5 | **介面契約** | [contracts/interaction_contract.md](contracts/interaction_contract.md)（ROS2 topic / action / service / message schema，v2.5 凍結） |
@@ -62,7 +61,7 @@
 
 **canonical claim matrix**：每能力的 Current Claim / Claim Level / Evidence-Provenance / Pass-Degraded-Fail-Insufficient / Fallback / Non-Claims / Model Candidates / Next Retest 以上述 #1–#4 為準，**不在各檔重複整份散文**——一律連結回 baseline-evidence README + convergence audit。
 
-**關鍵原則**：實測 ＞ 審計 ＞ 規格 ＞ 敘事。`research/`、`archive/pawai-brain-legacy/research/`、`archive/navigation-legacy/research/` 一律 research-not-truth（除 6/05 convergence audit 經指定升格為 #2）；`archive/` 全 frozen。
+**關鍵原則**：實測 ＞ 審計 ＞ 規格 ＞ 敘事。`research/` 一律 research-not-truth（除 6/05 convergence audit 經指定升格為 #2）；`archive/` 全 frozen。
 
 ---
 
@@ -73,7 +72,7 @@
 - **每日收工** → 更新 `references/project-status.md`（在 repo 根目錄 `references/`，不在 `docs/`）
 - **命名約定**：`YYYY-MM-DD-description.md`（plan / spec / research）
 
-詳見本檔 commit 紀錄與 [`archive/2026-05-docs-reorg/README.md`](archive/2026-05-docs-reorg/README.md)（本次重組來源）。
+詳見本檔 commit 紀錄。
 
 ---
 

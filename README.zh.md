@@ -192,7 +192,7 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 | 操作 runbook（Demo SOP） | [`docs/runbook/`](docs/runbook/README.md) |
 | 架構決策（ADR） | [`docs/adr/`](docs/adr/README.md) |
 
-歷史 / 已被取代的素材在 [`docs/archive/`](docs/archive/)；
+歷史 / 已被取代的素材在 `docs/archive/`；
 已退役的套件與腳本在 [`archive/`](archive/README.md)。
 
 ---

@@ -12,7 +12,7 @@
 
 ## 不能做
 
-- **不要對移動中的 Go2 送 `Damp` (api_id=1001)**（5/2 摔倒事件）— Damp 是馬達軟鬆弛、僅限 idle 站穩後使用。移動中的 emergency stop 必須用 `emergency_stop.py engage`（mux pri 255 + lock）+ `StopMove` (api_id=1003, **topic 必填 `rt/api/sport/request`**)。詳 [`docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md`](../../archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md)
+- **不要對移動中的 Go2 送 `Damp` (api_id=1001)**（5/2 摔倒事件）— Damp 是馬達軟鬆弛、僅限 idle 站穩後使用。移動中的 emergency stop 必須用 `emergency_stop.py engage`（mux pri 255 + lock）+ `StopMove` (api_id=1003, **topic 必填 `rt/api/sport/request`**)。詳 `docs/archive/navigation-legacy/plans/2026-05-02-dynamic-obstacle-demo.md`
 - **不要 hand-write 不完整 `WebRtcReq`**（5/2 教訓）— `api_id=1003` 在 `rt/api/sport/request` 是 StopMove，在 `rt/api/obstacles_avoid/request` 是 obstacle Move（不是停車！）。publish 時 5 個欄位都要寫
 - 不要修改 D435 camera launch 參數（那是 face_perception 的領域）
 - 不要動 `nav2_params.yaml` 的 footprint（60×30cm 短於 Go2 真實 70×31cm，但 4/26 實機驗證仍 work；正式校正排到 5/13 demo 後）
@@ -27,7 +27,7 @@
 
 ### 2026-05-04 新增 3 條(Demo Scope Freeze)
 
-詳見 [`plans/2026-05-04-demo-scope-freeze.md`](../../archive/navigation-legacy/plans/2026-05-04-demo-scope-freeze.md)。
+詳見 `plans/2026-05-04-demo-scope-freeze.md`。
 
 - **不要直接 `ros2 topic pub /goal_pose`** — bt_navigator subscriber QoS 是 BEST_EFFORT,直接 pub 會 race。所有 demo goal 走 `nav_action_server`(`/nav/goto_relative` / `/nav/goto_named` / `/nav/run_route`)。手動測試的 `scripts/send_relative_goal.py` Phase 2 PR 7 會改寫成走 action,在那之前**僅供開發機 debug 用,不進 demo 流程**
 - **不要在 demo 週(5/4–5/12)動硬體** — LiDAR mount / D435 angle / Jetson 供電 / Go2 背包線材 / 場地佈置全部凍結。精校排 5/13 後
@@ -118,7 +118,7 @@ zone 離 danger 時不發 `/nav/resume`（mux 仍鎖死，發 resume 會造成 n
 
 #### 5/12 night 落地與新發現（demo 最低目標 3/3 + 1 個 demo blocker）
 
-**Demo 最低目標全打勾 ✅✅✅**：goto 0.3m 通（誤差 0.2mm）、障礙在 0.81m 進 danger 停下 (B0 1.1m threshold 比 5/11 舊 0.6m 早 0.21m 觸發)、SLAM/Nav2 stack 36 node 全跑。詳細見 [`research/2026-05-11-nav-avoidance-deep-research.md` §10`](../../archive/navigation-legacy/research/2026-05-11-nav-avoidance-deep-research.md)。
+**Demo 最低目標全打勾 ✅✅✅**：goto 0.3m 通（誤差 0.2mm）、障礙在 0.81m 進 danger 停下 (B0 1.1m threshold 比 5/11 舊 0.6m 早 0.21m 觸發)、SLAM/Nav2 stack 36 node 全跑。詳細見 `research/2026-05-11-nav-avoidance-deep-research.md` §10`。
 
 **B0 launch.py mux flag bug 修法**（commit `2ce02fa`）：
 `robot.launch.py` 之前把 `twist_mux` Node 綁在 `with_teleop` flag 上 → safety_hold / nav_capability script 用 `teleop:=false` 會連 mux 一起 disable，hold_brake 完全不生效（`/cmd_vel_obstacle` 0 sub）。修法把 `mux` 拆出獨立 `DeclareLaunchArgument`（default true）。今後**自寫 launch 命令時，如果要 `teleop:=false` 但保留 reactive 控制權，不需要明示 `mux:=true`（已是 default）；只有故意全停 mux 才用 `mux:=false`**。

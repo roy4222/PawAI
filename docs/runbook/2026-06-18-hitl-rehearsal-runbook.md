@@ -6,11 +6,11 @@
 >
 > 交叉文件（同次 sprint 產出，merge 後同在 main）：
 > - 操作員現場手冊：[`2026-06-18-operator-runbook.md`](2026-06-18-operator-runbook.md)（plan4）
-> - S1 三層 fallback 決策 + claim wording：[`../navigation/2026-06-13-s1-fallback-decision.md`](../archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md)（plan6 NS-6）
-> - no-motion 診斷 SOP：[`../navigation/2026-06-13-no-motion-diagnostics-sop.md`](../archive/navigation-legacy/incident-runbooks/2026-06-13-no-motion-diagnostics-sop.md)（plan6 NS-D2）
-> - initialpose yaw 校正 SOP：[`../navigation/2026-06-13-initialpose-yaw-calibration-sop.md`](../archive/navigation-legacy/incident-runbooks/2026-06-13-initialpose-yaw-calibration-sop.md)（plan6 NS-5）
-> - co-run profiling 程序：[`../navigation/2026-06-13-corun-profiling-procedure.md`](../archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md)（plan1）
-> - 總綱 / 憲法（Q1–Q6）：[`../archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md`](../archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md)
+> - S1 三層 fallback 決策 + claim wording：`../navigation/2026-06-13-s1-fallback-decision.md`（plan6 NS-6）
+> - no-motion 診斷 SOP：`../navigation/2026-06-13-no-motion-diagnostics-sop.md`（plan6 NS-D2）
+> - initialpose yaw 校正 SOP：`../navigation/2026-06-13-initialpose-yaw-calibration-sop.md`（plan6 NS-5）
+> - co-run profiling 程序：`../navigation/2026-06-13-corun-profiling-procedure.md`（plan1）
+> - 總綱 / 憲法（Q1–Q6）：`../archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md`
 
 ---
 
@@ -40,7 +40,7 @@
 
 ## §2 co-run profiling（plan1，Roy 在場、**全程 no-motion**）
 
-> 決定 S1 runtime layout（不是用猜的）。詳見 [`corun-profiling-procedure.md`](../archive/navigation-legacy/incident-runbooks/2026-06-13-corun-profiling-procedure.md)。
+> 決定 S1 runtime layout（不是用猜的）。詳見 `corun-profiling-procedure.md`。
 
 1. [ ] 起 brain full demo（face/object/pose/gesture/brain/Studio/gateway/ASR/TTS）。
 2. [ ] **配置 A**（brain baseline）：`bash scripts/corun_profile.sh --config A --duration 240 --interval 5` → `corun_profile_parse.py --config A`。
@@ -63,7 +63,7 @@
 
 | 幕 | 觸發信號 | manual floor 驗 | auto 驗 | canned fallback | 能力 | 備註 |
 |---|---|---|---|---|---|---|
-| **S1 nav** | operator-arrived | 切 `s1_nav` → brain quiet（不社交） | — | 「我正在移動到巡檢位置」 | **FAILED→fallback** | **不發 goto_relative**；演法見 [s1-fallback-decision](../archive/navigation-legacy/incident-runbooks/2026-06-13-s1-fallback-decision.md) |
+| **S1 nav** | operator-arrived | 切 `s1_nav` → brain quiet（不社交） | — | 「我正在移動到巡檢位置」 | **FAILED→fallback** | **不發 goto_relative**；演法見 s1-fallback-decision |
 | **S2 greet** | face known 0.5–1s | 切 `s2_greet`（Roy 已 known 也 greet＝gotcha #1）；不坐也問候（gotcha #2 sitting=false） | `auto_advance_phases:=["s2_greet"]` | 「Roy，歡迎回來」 | needs-HITL | 重現 greet 需遮臉~5s 再回 |
 | **S3 pose+object** | cup 0.5–1s | 切 `s3_pose_object` → cup remind；sitting=bonus | — | 「記得多喝水」 | needs-HITL | sitting 不到不卡 |
 | **S4 gesture confirm** | 一次高信心 gesture（**僅 S4**） | 切 `s4_gesture` → 手勢→OK→**Go2 wiggle** | — | 「比 OK 我就開始」 | needs-HITL | **★ Go2 motion：需 e-stop**；目標 thumbs_up→OK→wiggle，失敗退 proven peace→OK→WeGo |
@@ -98,7 +98,7 @@
 
 > 序列 LOCKED：nav 段（D1→D2→D3，互為前置）先；confirm-wiggle（D4，無 nav 依賴）獨立分支。**T0 URDF authority 未排除前禁一切 motion。**
 
-- [ ] **前置**：先跑 [no-motion 診斷 SOP](../archive/navigation-legacy/incident-runbooks/2026-06-13-no-motion-diagnostics-sop.md) D1（`echo /tf_static` 確認 map→odom / odom→base_link 無雙 authority 衝突）；plan1 profiling 允許 nav 共存。
+- [ ] **前置**：先跑 no-motion 診斷 SOP D1（`echo /tf_static` 確認 map→odom / odom→base_link 無雙 authority 衝突）；plan1 profiling 允許 nav 共存。
 - [ ] **D4 confirm→wiggle**（gate S4）：gesture→OK→Go2 wiggle；目標 thumbs_up→OK→wiggle，30s 試不過退 proven **peace→OK→WeGo**；pending_confirm 30s timeout 不黑洞。
 - [ ] **D1–D3 nav（upside，非 6/18 依賴）**：indoor_tight ±18° 安全錐 → initialpose θ_error<5° → 短距 **DriveOnHeading** n=3（0.3m 0撞0超衝）。**全程不發 `goto_relative`。**
 - **e-stop / abort 條件**：非指令方向動作 / 停不下來 / 機鼻 <0.3m 仍動 → `emergency_stop.py engage` 或 `StopMove(1003)`。
@@ -128,4 +128,4 @@
 
 - AFK 完成 = 「code merged + 單測綠（**needs-HITL**）」；只有本檔逐項真機過 = `proven`。
 - S1 = FAILED→fallback；S5 = proven（6/10）；S2/S3/S4 = needs-HITL；S8 route_id = 已實作 byte-identical。
-- **不 claim**：autonomous navigation / 全自動 live demo / 動態繞障 / D435+LiDAR 已融合 / fallen 偵測 / 2m 物體 / 可靠色彩。所有 nav 對外句綁 [`nav-618-claim-wording`](../archive/navigation-legacy/incident-runbooks/2026-06-13-nav-618-claim-wording.md) S1-S8 / F1-F10。
+- **不 claim**：autonomous navigation / 全自動 live demo / 動態繞障 / D435+LiDAR 已融合 / fallen 偵測 / 2m 物體 / 可靠色彩。所有 nav 對外句綁 `nav-618-claim-wording` S1-S8 / F1-F10。

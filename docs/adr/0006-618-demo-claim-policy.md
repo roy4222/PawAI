@@ -66,7 +66,7 @@
 - claim 真相源 canonical：[`docs/mission/2026-06-18-capability-claim-matrix.md`](../mission/2026-06-18-capability-claim-matrix.md)
 - 戰略邊界：[`docs/mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) v2 §5 禁說 / §7 nav 鐵律 / §9 scoreboard-first
 - 證據：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（grade + honesty caveats）
-- 收斂審計：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) §2 / §G
+- 收斂審計：`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §2 / §G
 - 上層政策：ADR-0005（evidence-first）；定位邊界：ADR-0001 / ADR-0002（被 North Star v2 amend，見各 ADR amendment note）
 - 互動入口：ADR-0003（Studio PTT）
 - 未來能力翻盤後 amend：開 ADR-000X supersede 本 ADR A / B 表對應列

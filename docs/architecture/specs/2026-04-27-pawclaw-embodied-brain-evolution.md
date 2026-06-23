@@ -4,7 +4,7 @@
 > **Date**: 2026-04-27
 > **Builds on**:
 > - [`2026-04-27-pawai-brain-skill-first-design.md`](2026-04-27-pawai-brain-skill-first-design.md)（Brain MVS）
-> - [`2026-04-11-pawai-home-interaction-design.md`](../../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)（PawAI 系統定位）
+> - `2026-04-11-pawai-home-interaction-design.md`（PawAI 系統定位）
 > **Inspired by**: [openclaw/openclaw](https://github.com/openclaw/openclaw) — capability registry / agent loop / per-session queue / workspace files
 > **Scope**: 把 PawAI Brain 從「demo script player」演進為「懂 Go2 身體的通用 robot agent」。命名為 **PawClaw**：PawAI body × OpenClaw-style harness engineering。
 

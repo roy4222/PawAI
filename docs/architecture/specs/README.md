@@ -7,7 +7,7 @@
 > - 「能不能講、屬哪個分級」的對照表 → [`docs/mission/2026-06-18-capability-claim-matrix.md`](../../mission/2026-06-18-capability-claim-matrix.md)（canonical claim matrix，**勿在本層重複整份散文，一律連結**）。
 > - 本資料夾管的是「**怎麼量、怎麼設計**」（measurement / design truth），grade 結果不在這裡定。
 > **Maintained child files**：見下表。**Archived-legacy boundary**：標 `legacy` 者為 5 月 sprint 期設計，保留作歷史，**不再更新、不得當 6/18 真相**；要查 6/18 怎麼量請看 current 那一份。
-> **What this index is NOT**：不是 plan（實作步驟在 [`../plans/README.md`](../../archive/pawai-brain-legacy/plans/README.md)）、不是 research（模型候選/調查在 [`../research/README.md`](../../archive/pawai-brain-legacy/research/README.md)）、不是 contract（ROS2 schema 在 [`../../contracts/interaction_contract.md`](../../contracts/interaction_contract.md)）。
+> **What this index is NOT**：不是 plan（實作步驟在 `../plans/README.md`）、不是 research（模型候選/調查在 `../research/README.md`）、不是 contract（ROS2 schema 在 [`../../contracts/interaction_contract.md`](../../contracts/interaction_contract.md)）。
 
 ---
 

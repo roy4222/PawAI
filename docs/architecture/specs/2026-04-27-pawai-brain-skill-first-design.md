@@ -4,7 +4,7 @@
 > **Date**: 2026-04-27
 > **Author**: 盧柏宇（Roy）
 > **Scope**: PawAI Brain 三層架構落地（Skill-first reframe）+ Studio Brain Skill Console + Action Outlet Refactor
-> **Builds on**: [`2026-04-11-pawai-home-interaction-design.md`](../../archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)（Skill 提到核心；4/11 spec 中的「PawAI Brain 三層」、「Skill Contract」、「Skill Queue」、「self_introduce meta skill」都被本設計細化與重新組織）
+> **Builds on**: `2026-04-11-pawai-home-interaction-design.md`（Skill 提到核心；4/11 spec 中的「PawAI Brain 三層」、「Skill Contract」、「Skill Queue」、「self_introduce meta skill」都被本設計細化與重新組織）
 > **Defers**: 四個 PawAI repo PR（#38/#40/#41/#42）整併 — Brain MVS 穩定後再做（§9 Phase 3 hooks）
 
 ---

@@ -6,7 +6,7 @@
 >
 > **證據權威鏈（最新優先）**：
 > 1. **實測證據（最終事實）**：[`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/) — 6/04 HITL trusted snapshot，SHA `78fbf36`，`run_trusted=true`，readiness=`not_ready`。grade + honesty caveats 凌駕一切敘事。
-> 2. **收斂審計（read-only）**：[`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) §2 — claim-scope / 換不換模型 / docs-drift 裁定。
+> 2. **收斂審計（read-only）**：`docs/archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md` §2 — claim-scope / 換不換模型 / docs-drift 裁定。
 > 3. **能力規格（怎麼量）**：[`docs/architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)。
 > 4. **戰略邊界（能不能講）**：[`docs/mission/2026-06-18-demo-north-star.md`](2026-06-18-demo-north-star.md) v2 — §5 禁說 / §7 nav 鐵律 / §9 scoreboard-first。
 >

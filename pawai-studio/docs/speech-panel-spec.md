@@ -9,7 +9,7 @@
 | 文件 | 用途 |
 |------|------|
 | [testing-playbook.md](testing-playbook.md) | 啟動方式、觸發指令、常見問題 |
-| [../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md](../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md) | 交接規則、責任切分、placeholder 規格 |
+| ../../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-16-studio-handoff-design.md | 交接規則、責任切分、placeholder 規格 |
 
 ### Placeholder 圖
 

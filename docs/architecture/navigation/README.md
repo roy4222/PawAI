@@ -41,7 +41,7 @@ Phase A Step 4(Executive 接線)同日完成:WorldState 訂三個 capability(fai
 
 5/3 夜間拆解確認 detour 反覆失敗的根因是 **B1**(`nav_action_server` 不 enforce max_speed,0.5m goal 走 1.04m)+ **B2**(AMCL `update_min_d=0.10` 靜止不收斂)兩 bug 串連,**不是 DWB 設計問題、不是場地、不是感測器**。
 
-詳見 [`plans/2026-05-04-demo-scope-freeze.md`](../../archive/navigation-legacy/plans/2026-05-04-demo-scope-freeze.md) — 含戰略 framing、完整 bug backlog(B1-B5)、環境陷阱(E1-E10)、操作教訓(O1-O4)、物理極限(P1-P4)、驗收 V1-V9、答辯 framing。
+詳見 `plans/2026-05-04-demo-scope-freeze.md` — 含戰略 framing、完整 bug backlog(B1-B5)、環境陷阱(E1-E10)、操作教訓(O1-O4)、物理極限(P1-P4)、驗收 V1-V9、答辯 framing。
 
 Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**。
 
@@ -60,7 +60,7 @@ Phase 2 code 改動將拆獨立小 PR(PR 1-7),**不在本 scope freeze 之內**�
 
 ## 5/12 Demo 必做(5 項生死線)
 
-> Scope Freeze 詳見 [`plans/2026-05-04-demo-scope-freeze.md`](../../archive/navigation-legacy/plans/2026-05-04-demo-scope-freeze.md)
+> Scope Freeze 詳見 `plans/2026-05-04-demo-scope-freeze.md`
 
 1. **`nav_demo_point` 5/5 PASS** — 對應 Storyboard Scene 2 ★Wow A
    *條件*:B1(`nav_action_server` max_speed enforce)+ B2(AMCL plateau)修完

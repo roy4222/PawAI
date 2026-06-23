@@ -9,7 +9,7 @@
 docs/ 累積大量幽靈文件（無對應程式碼）、重複內容散佈在多個入口、缺乏文件治理規則。
 本輪重構目標：消除幽靈文件、建立責任邊界與衝突仲裁、讓所有入口指向單一真相來源。
 
-設計規格（已歸檔）：[`archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md`](./archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md)
+設計規格（已歸檔）：`archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-13-docs-restructure-design.md`
 
 ### 1. 主幹入口重寫
 

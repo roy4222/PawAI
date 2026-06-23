@@ -1,7 +1,7 @@
 # Object A/B Test Matrix — n@640 baseline confusion harness + yolo26s feasibility
 
 > **日期**：2026-06-14　**狀態**：HARNESS_READY / DATA_PENDING_CLIPS
-> **上游**：[lane4 plan](../../archive/superpowers-legacy/plans/2026-06-13-lane4-vision-benchmark-model-ab-plan.md)（W1 export / 測試矩陣）、[objdet synthesis](2026-06-11-objdet-upgrade-synthesis-result.md)（矩陣 A-E、conf 0.35、imgsz-1280-superseded）、[5-20 benchmark protocol](../../archive/superpowers-legacy/specs/2026-05-20-object-perception-benchmark-protocol.md)（門檻 §5）
+> **上游**：lane4 plan（W1 export / 測試矩陣）、[objdet synthesis](2026-06-11-objdet-upgrade-synthesis-result.md)（矩陣 A-E、conf 0.35、imgsz-1280-superseded）、5-20 benchmark protocol（門檻 §5）
 > **鐵律繼承**：demo 錄影**絕不餵 LLM**（量測輸入 ≠ 理解輸入）；supervision/cv2/onnxruntime **不進 Jetson runtime**；6/18 前**不換任何 runtime 模型/參數**；數據只進決策不進部署。
 
 ---

@@ -13,7 +13,7 @@ paired with SROS2 and domain planning. It is defense in depth alongside the
 The threat model calls out the R2/DDS root cause: PawAI currently relies on an
 open ROS2 DDS bus without SROS2, while CycloneDDS can bind interfaces beyond the
 intended robot ethernet segment. See
-[2026-06-11-pawai-threat-model.md](2026-06-11-pawai-threat-model.md) for the DDS
+2026-06-11-pawai-threat-model.md for the DDS
 section and R2 context.
 
 ## CYCLONEDDS_URI

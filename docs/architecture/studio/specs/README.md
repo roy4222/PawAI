@@ -4,7 +4,7 @@
 > - **Scope**：PawAI Studio `specs/` 目錄索引 — 標明每份 spec 是 **current（仍是設計真相）/ legacy（部分 superseded）/ superseded（已被取代）**，避免讀者誤把舊架構當現況。
 > - **Status**：active / index。
 > - **Owner lane**：brain-studio-lane。
-> - **Source-of-truth priority**：Studio 模組設計真相在各 spec；但**架構是否反映實作**以 [`../README.md`](../README.md)（current Studio 真相）+ gateway 程式碼（`pawai-studio/gateway/studio_gateway.py`）為準。**能力是否 pass** 一律回 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) ＞ [`convergence audit`](../../../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md) ＞ [`capability-baseline-spec`](../../specs/2026-06-18-capability-baseline-spec.md)。能力 claim 邊界綁 [`capability-claim-matrix`](../../../mission/2026-06-18-capability-claim-matrix.md)。ROS2 schema 真相在 [`docs/contracts/interaction_contract.md`](../../../contracts/interaction_contract.md)。
+> - **Source-of-truth priority**：Studio 模組設計真相在各 spec；但**架構是否反映實作**以 [`../README.md`](../README.md)（current Studio 真相）+ gateway 程式碼（`pawai-studio/gateway/studio_gateway.py`）為準。**能力是否 pass** 一律回 [`docs/runbook/baseline-evidence/2026-06-04-hitl/`](../../../runbook/baseline-evidence/2026-06-04-hitl/README.md) ＞ `convergence audit` ＞ [`capability-baseline-spec`](../../specs/2026-06-18-capability-baseline-spec.md)。能力 claim 邊界綁 [`capability-claim-matrix`](../../../mission/2026-06-18-capability-claim-matrix.md)。ROS2 schema 真相在 [`docs/contracts/interaction_contract.md`](../../../contracts/interaction_contract.md)。
 > - **What this index is NOT**：不是能力 pass 證明、不是 ROS2 contract、不是實作計畫（plans 在 `../plans/`）。
 
 ## Specs 清單（current / legacy / superseded）

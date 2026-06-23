@@ -282,7 +282,7 @@ ChatPanel header 加「新對話」按鈕（`handleNewConversation`），點擊�
 - empty state 不變（hero + composer 置中）
 
 設計 plan：`~/.claude/plans/subagent-pawai-studio-frontend-vectorized-bunny.md`
-驗收文件：[Spec 6 checklist](../../archive/pawai-brain-legacy/plans/2026-05-10-spec6-scroll-verification-checklist.md) §4
+驗收文件：Spec 6 checklist §4
 
 驗證：4/4 case pass + composer 永遠貼底 + 長訊息打字 composer 變高 / scroll bottom 跟著縮 + DevButton z-30 不被擋。
 

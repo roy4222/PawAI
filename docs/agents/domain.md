@@ -66,7 +66,7 @@ If your output contradicts an existing ADR, surface it explicitly rather than si
 > **權威鏈（最新優先，衝突時由高到低仲裁）**：
 > 0. 程式碼 / runtime topic schema（最終真相）
 > 1. **實測證據**：[`../runbook/baseline-evidence/2026-06-04-hitl/`](../runbook/baseline-evidence/2026-06-04-hitl/)（trusted snapshot, SHA `78fbf36`, `run_trusted=true`, readiness=`not_ready`）—— grade + honesty caveats 凌駕一切敘事。
-> 2. **收斂審計（read-only）**：[`../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`](../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md)
+> 2. **收斂審計（read-only）**：`../archive/pawai-brain-legacy/research/2026-06-05-618-demo-convergence-audit-and-model-tournament.md`
 > 3. **能力規格（怎麼量）**：[`../architecture/specs/2026-06-18-capability-baseline-spec.md`](../architecture/specs/2026-06-18-capability-baseline-spec.md)
 > 4. **戰略邊界（能不能講）**：[`../mission/2026-06-18-demo-north-star.md`](../mission/2026-06-18-demo-north-star.md) v2
 > 5. **canonical claim matrix（每能力對照）**：[`../mission/2026-06-18-capability-claim-matrix.md`](../mission/2026-06-18-capability-claim-matrix.md)

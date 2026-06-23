@@ -38,8 +38,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **守護輔助（30%）**：陌生人警告、巡邏（需雷達）、跟隨（文件級 future work）
 
 > 完整專案定位見 [`docs/mission/README.md`](docs/mission/README.md)
-> **系統設計規格（current）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)
-> 4/10 守護犬 spec 已 superseded（保留作歷史）：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`](docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md)
+> **系統設計規格（current）**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`
+> 4/10 守護犬 spec 已 superseded（保留作歷史）：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`
 
 ---
 
@@ -66,7 +66,7 @@ pawai evidence pull                       # 拉回 runtime/traces/*.jsonl 證據
 
 **6/14 HITL demo 調校（已持久化進 `interaction_executive/config/executive.yaml`，重啟自動帶）**：`chat_wait_ms 2000`（原 20000=LLM 慢時 dead-air）、`greet_cooldown_s 90`、`gesture_enabled true`、`object_remark_attention_min NOTICED`、`object_remark_priority`=飲水類、`demo_video_cup_compound true`（**drink-merge**：cup/bottle/bowl/wine_glass 講通用「手邊有飲水用品，記得補充水分」**不糾結物名**、recent sitting 在 `drink_sitting_window_s` 內加坐姿複合句、**pose 缺席不卡**）。**6/15 HITL**：`drink_sitting_window_s` 新 param（default 10.0 byte-identical、demo 設 **45.0**）——`/event/pose_detected` 是 **edge-triggered**（穩坐時 sitting event 稀疏、且無連續 `/state/perception/pose`），寫死 10s 窗抓不到那唯一事件 → 複合句永遠 sitting=False；放寬 45s 後實機驗 `sitting=True` 端到端（**6/15 已 merge 進 main `1dec417`**、deploy 後 `param get` 確認 live=45.0）。
 - **防「打架」（社交事件互搶 TTS）**：每幕 `ros2 param set /brain_node demo_phase {s2_greet|s3_pose_object|s4_gesture}` 讓該幕只剩一個模組講話（`demo_phase=all` = greet/object/gesture 三者全搶＝最易卡）。更治本的 `social_pending_enabled`（one-slot pending+TTL+flush，PR #191 default-off）讓 all 模式也不丟話 — **尚待上機驗**。操作細節見 [`docs/runbook/2026-06-18-operator-runbook.md`](docs/runbook/2026-06-18-operator-runbook.md)。
-- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/architecture/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ **（6/15 更正，原判「雷達硬體」是錯的）** `--with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` 多半是 `start_lidar_monitor_tmux.sh` **漏 `--ros-args`** → `serial_baudrate:=256000` 被當 remap rule 沒套用（pane 出現「Found remap rule」WARN 即是），已修 `af18a64`。先用 `scripts/start_scan_only_tmux.sh` **隔離測**：`/scan_rplidar` ~11Hz＋health OK ＝硬體沒事、是整合命令的鍋。④ **Act1 motion 根因已查清 + 已修回 standalone（6/15，NEEDS_ROY_ESTOP_TEST）**：撞車真因＝`twist_mux` **無 output timer + 0.5s input timeout** → reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默/被殺/enable 開太久結尾才 force-stop），mux 停輸出 → driver 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞牆；standalone 直連無此中介層。已把 demo_forward 改回 **standalone `/cmd_vel` 直連**（每個 0 直達 driver→StopMove，6/15 已實機驗會停）+ 保證唯一 publisher（**預設**殺 mux/teleop/joy + 啟動後驗 `/cmd_vel` publisher==1 否則**拒絕進 motion**；brain 走 `/webrtc_req` 不受影響）+ force-stop 由 **`trap EXIT/TERM/INT` 保證執行** + 定時放行（對抗複查抓到 A-1 雙 publisher fail-open / A-2 force-stop 不保證、皆已修）。**6/15 整合測「會走但撞」後加大停障餘裕**：demo_forward `danger 1.1→1.5m`、手動前進預設 `2s→1s`（停車邊緣太緊＝撞因；env `ACT1_DANGER_M` 可調），demo 主線改 **Studio「短距前進」鈕**（不押語音）。單元邏輯 42 tests 綠，**真機 motion 待 Roy 手持 e-stop 驗**（流程見 [`docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`](docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md)）。⑤ **offline 預設 demo_phase=all 會吐「我聽不太懂」footgun（6/15 修 G2）**：`offline_mode=true` 時若沒先切 phase，canned fallback 變「我聽不太懂」（同源「手動切 phase footgun」）→ 已加 `OFFLINE_GENERIC_FALLBACK` 溫和 filler（online-timeout 路徑保持 byte-identical）。offline 鏈端到端已接通（param/topic/Studio toggle）、S5 安全 rule-first offline 免疫。
+- **坑**：① **雲端 ASR（sensevoice 8001）server 進程會死** → Studio 語音 `processing_failed`/`Connection reset`（tunnel 仍活、LLM 8000 正常），重啟程序見 [speech README](docs/architecture/speech/README.md) §ASR；Studio `/ws/speech` 路徑**無 local fallback**，臨時改文字輸入。② **list param 宣告給空 `[]` 預設會被 rclpy 推成 BYTE_ARRAY**（`param set` 報 expected BYTE_ARRAY）→ 用 `ParameterDescriptor(dynamic_typing=True)`（declare-by-type 不行：NOT_SET 的 `get_parameter().value` 會 raise）。③ **（6/15 更正，原判「雷達硬體」是錯的）** `--with-lidar` 的 sllidar `SL_RESULT_OPERATION_TIMEOUT` 多半是 `start_lidar_monitor_tmux.sh` **漏 `--ros-args`** → `serial_baudrate:=256000` 被當 remap rule 沒套用（pane 出現「Found remap rule」WARN 即是），已修 `af18a64`。先用 `scripts/start_scan_only_tmux.sh` **隔離測**：`/scan_rplidar` ~11Hz＋health OK ＝硬體沒事、是整合命令的鍋。④ **Act1 motion 根因已查清 + 已修回 standalone（6/15，NEEDS_ROY_ESTOP_TEST）**：撞車真因＝`twist_mux` **無 output timer + 0.5s input timeout** → reactive 對 `/cmd_vel_obstacle` 供給一中斷（enable=false 沉默/被殺/enable 開太久結尾才 force-stop），mux 停輸出 → driver 維持上一個 Move(0.6) 滑行 2-3s（sport timeout）撞牆；standalone 直連無此中介層。已把 demo_forward 改回 **standalone `/cmd_vel` 直連**（每個 0 直達 driver→StopMove，6/15 已實機驗會停）+ 保證唯一 publisher（**預設**殺 mux/teleop/joy + 啟動後驗 `/cmd_vel` publisher==1 否則**拒絕進 motion**；brain 走 `/webrtc_req` 不受影響）+ force-stop 由 **`trap EXIT/TERM/INT` 保證執行** + 定時放行（對抗複查抓到 A-1 雙 publisher fail-open / A-2 force-stop 不保證、皆已修）。**6/15 整合測「會走但撞」後加大停障餘裕**：demo_forward `danger 1.1→1.5m`、手動前進預設 `2s→1s`（停車邊緣太緊＝撞因；env `ACT1_DANGER_M` 可調），demo 主線改 **Studio「短距前進」鈕**（不押語音）。單元邏輯 42 tests 綠，**真機 motion 待 Roy 手持 e-stop 驗**（流程見 `docs/archive/navigation-legacy/incident-runbooks/2026-06-15-act1-demo-forward-estop-runbook.md`）。⑤ **offline 預設 demo_phase=all 會吐「我聽不太懂」footgun（6/15 修 G2）**：`offline_mode=true` 時若沒先切 phase，canned fallback 變「我聽不太懂」（同源「手動切 phase footgun」）→ 已加 `OFFLINE_GENERIC_FALLBACK` 溫和 filler（online-timeout 路徑保持 byte-identical）。offline 鏈端到端已接通（param/topic/Studio toggle）、S5 安全 rule-first offline 免疫。
 
 ### 基本建構
 
@@ -329,7 +329,7 @@ sudo bash benchmarks/scripts/prepare_env.sh --drop-cache  # 含清 page cache
 
 **制度流程**：Research Brief (`docs/archive/2026-05-docs-reorg/research-misc/{task}.md`) → Candidate Shortlist (`benchmarks/configs/{task}_candidates.yaml`) → Benchmark → Decision
 
-**Spec**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`](docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md)
+**Spec**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`
 
 **3/21 決策摘要**（完整數據見 `benchmarks/results/archive/` + `docs/archive/2026-05-docs-reorg/research-misc/`）：
 
@@ -529,7 +529,7 @@ Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet �
 
 - **greet 觸發條件已改**（commit `f2a0df4`，`interaction_executive/brain_node.py` `_on_face`）：原本 gate 在 attention `ENGAGED`（D435 depth ≤1.6m + dwell，深度在 1.5-2m 抖到逼使用者貼鏡頭不動、幾乎不觸發）→ 改成 **known face stable（`/event/face_identity` 的 `identity_stable` 事件）+ 最近 `greet_sitting_window_s`(預設 3s) 內偵測到 pose=sitting + `greet_cooldown_s`(預設 20s)/人 cooldown**。新 param `greet_require_sitting`/`greet_sitting_window_s`/`greet_cooldown_s` 全 declare 預設、不需 yaml。⟹ **pose=sitting 成為 greet 硬依賴**：sitting 不穩就 `ros2 param set /brain_node greet_require_sitting false` + 台詞去掉「坐下來了」。
 - **只在「進場（unknown→known 轉變）」觸發**，非 steady-state；要重現 greet 需遮臉/離框 ~5s 再回來。
-- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 [`docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`](docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md)。
+- **face_db 衛生**：enrollment 過期會讓 sim 掉到 ~0.2 被判 unknown（6/8 Roy 舊圖即如此，re-enroll 後 0.73-0.81）。`face_identity_node.train_model` 會把 `/home/jetson/face_db/` 內**所有子目錄**當人名訓進 `model_sface.pkl` → `_backup*`/`old*` 會變幽靈身份稀釋 centroid。**SOP**：`pawai face enroll --person-name roy`（訂 `/camera/.../color/image_raw`，與 demo camera 不衝突）→ `pawai face rebuild`（刪 pkl）→ 重啟 face node 重訓；備份資料夾務必移到 `face_db` **外**。完整研究見 `docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`。
 
 ---
 
@@ -547,7 +547,7 @@ Go2 連上有外網的 Wi-Fi 會自動背景更新韌體。建議用 Ethernet �
 | 姿勢辨識 | [`docs/architecture/perception/pose/README.md`](docs/architecture/perception/pose/README.md) |
 | 環境建置 | [`docs/runbook/README.md`](docs/runbook/README.md) |
 | 模型選型調查 | `docs/archive/2026-05-docs-reorg/research-misc/{task}.md`（face 已建） |
-| Benchmark 框架規格 | [`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md`](docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md) |
+| Benchmark 框架規格 | `docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-03-19-unified-benchmark-framework-design.md` |
 
 ### 配置檔
 - `go2_robot_sdk/config/` — SLAM/Nav2/CycloneDDS/Joystick 參數

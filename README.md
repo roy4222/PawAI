@@ -198,7 +198,7 @@ bash pawai-studio/start.sh      # → http://localhost:3000/studio
 | Operation runbooks (demo SOPs) | [`docs/runbook/`](docs/runbook/README.md) |
 | Architecture decisions (ADRs) | [`docs/adr/`](docs/adr/README.md) |
 
-Historical / superseded material lives under [`docs/archive/`](docs/archive/);
+Historical / superseded material lives under `docs/archive/`;
 deprecated packages and scripts live under [`archive/`](archive/README.md).
 
 ---

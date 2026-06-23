@@ -14,7 +14,7 @@
 - **VIS-2 object runtime 切換 ✅ 實機驗證**：`ros2 param set class_whitelist` 不重啟生效——`[56]`→只 chair、家用7類→cup、`[-1]`→cup+**person**（person 只在全類出現＝白名單動態套用坐實）。
 - **VIS-7 後端確認**：gateway `/health` subs=10（face/object/gesture/pose/speech + brain conversation_trace 全訂）、Studio frontend `:3001` 連上（ws_clients=1）；正式截圖證據明天補。
 - **VIS-8 idle baseline**（13-window 全 stack、無人/物入框）：RAM 3.65/7.6GB、CPU ~80%(6核)、GPU 0-74% bursty、溫度 58.7°C、功耗 10.2W、MAXN_SUPER。under-load + per-stage latency 待測。
-- **夜間研究（2 份，明日養分）**：[`docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`](../../../docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md)（object切換/VIS-3矩陣/VIS-8瓶頸/pose-gesture demo-safe/greet 後續 + open questions）、[`docs/archive/pawai-brain-legacy/research/2026-06-08-supervision-vis3a-research.md`](../../../docs/archive/pawai-brain-legacy/research/2026-06-08-supervision-vis3a-research.md)（Supervision 只當離線分析庫、VIS-3A harness Layer A+B 設計、PINTO 列 bonus）。
+- **夜間研究（2 份，明日養分）**：`docs/archive/pawai-brain-legacy/research/2026-06-08-night-vision-brain-research.md`（object切換/VIS-3矩陣/VIS-8瓶頸/pose-gesture demo-safe/greet 後續 + open questions）、`docs/archive/pawai-brain-legacy/research/2026-06-08-supervision-vis3a-research.md`（Supervision 只當離線分析庫、VIS-3A harness Layer A+B 設計、PINTO 列 bonus）。
 - **最大缺口（明天）**：物體辨識矩陣（chair/laptop/cup × 距離 × 光線 × 角度，4/5 判定）尚未系統化收數據；sitting 可靠度未量。臨時 harness `obj_matrix_cap.py` 已就緒，正式 VIS-3A 進 `benchmarks/object_eval/`。
 
 ## 2026-05-11 — N3 ~ N8 全日 brain demo-host 收尾

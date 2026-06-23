@@ -4,7 +4,7 @@
 
 > **撰寫日**：2026-05-23
 > **目的**：把三場驗收的訊號收斂成共同決議 + 衝突點 + 必修 demo 改動，作為 5/26 sprint kickoff 對齊文件、6/18 demo 影片腳本來源、與教授後續對話依據。
-> **與 v2 spec 的關係**：本文件不取代 [`docs/archive/superpowers-legacy/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`](../archive/superpowers-legacy/specs/2026-05-22-pawai-may-june-north-star-v2-design.md)，而是補它沒涵蓋的「**對外敘事 / 報告心態 / 安全聲明**」三塊。
+> **與 v2 spec 的關係**：本文件不取代 `docs/archive/superpowers-legacy/specs/2026-05-22-pawai-may-june-north-star-v2-design.md`，而是補它沒涵蓋的「**對外敘事 / 報告心態 / 安全聲明**」三塊。
 
 ---
 

@@ -165,7 +165,7 @@
 **主軸**：把三條規劃線（Cloud A 保守 demo flow、Cloud B 進階能力、Nav 撞牆根因）先收斂成單一 final plan，再經 Q1-Q6 grill 拍板，最後用 17-agent / 6-phase dynamic workflow（reader×4→writer×6→integrator→reviewer×5→fixer）產出 **1 總綱 + 6 子計畫**。**零 code、全部 untracked（待 Roy 審；commit/freeze 是 plan 內 P0-2、Roy 決定）。**
 
 ### 產出 7 份（`docs/archive/superpowers-legacy/plans/`）
-- **總綱**：[`2026-06-13-pawai-pre618-final-execution-plan.md`](../docs/archive/superpowers-legacy/plans/2026-06-13-pawai-pre618-final-execution-plan.md)（Q1-Q6 憲法 §3、merged board §4、shared-file merge order §8、6/17 gate、6/18 live path；§2 supersede 所有 source）。
+- **總綱**：`2026-06-13-pawai-pre618-final-execution-plan.md`（Q1-Q6 憲法 §3、merged board §4、shared-file merge order §8、6/17 gate、6/18 live path；§2 supersede 所有 source）。
 - **plan1** runtime-layout-corun-profiling / **plan2** demo-conductor-auto-advance / **plan3** online-offline-llm-hybrid-speech / **plan4** operator-controls-studio-runbook / **plan5** post-refactor-hitl-rehearsal / **plan6** navigation-safety-s1-fallback。每份含 Codex Implementation Packet + Cloud Review Checklist + Stop Conditions + Required Evidence + Rollback。
 
 ### Q1-Q6 拍板（憲法，不再辯）
@@ -327,7 +327,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 ## 6/9：nav HITL 實機 + WSL 工具上線（commit `a38ca96`）+ 下午轉 vision
 
-**當日主軸**：把 6/9 早上寫的 nav 工具（orphan fix / indoor-tight profile / lidar sector / object matrix harness）上 Jetson 跑 HITL，誠實鎖定 nav demo 台詞。完整 HITL Log + 台詞見 [`docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md)；執行研究報告 [`docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md`](../docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md)。
+**當日主軸**：把 6/9 早上寫的 nav 工具（orphan fix / indoor-tight profile / lidar sector / object matrix harness）上 Jetson 跑 HITL，誠實鎖定 nav demo 台詞。完整 HITL Log + 台詞見 `docs/archive/superpowers-legacy/plans/2026-06-09-nav-vision-hitl-execution.md`；執行研究報告 `docs/archive/pawai-brain-legacy/research/2026-06-09-nav-vision-execution-research.md`。
 
 ### 1. WSL 工具上線（commit `a38ca96`，9 檔，pre-commit 綠）
 - `send_relative_goal.py` cancel-on-interrupt + guarded shutdown；`nav_action_server` 加 `goto_max_duration_s=120` orphan safety net；`start_nav_capability_demo_tmux.sh` 加 `REACTIVE_PROFILE=open_space|indoor_tight`；新 `scripts/lidar_front_sector.py`（±15/20/30° 扇區 debug）；新 `scripts/obj_matrix_cap.py` + `benchmarks/core/object_matrix.py`（object 矩陣 per-cell PASS/DEGRADED/FAIL CSV，11 tests）。
@@ -353,7 +353,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 - **object `b1f5058`**：launch `confidence_threshold` 預設 0.5→**0.35**（原 0.5 靜默蓋 yaml 害 cup 不出）；推論 blob **BGR→RGB**（YOLO 吃 RGB；HSV 顏色仍用 BGR）。cup @0.7m 5/5 conf 0.42-0.64。
 - **brain `932b74e`**：cup 台詞加天氣句、greet/cup **分開觸發**（`demo_video_cup_compound=false`）、thumbs_up **兩步 WeGo**（`thumbs_up_demo_ack=false`）、新 `gesture_enabled` runtime gate（param callback，可 `ros2 param set` 即時關手勢）。
 - **studio `b2d6500`**（Task A）：nav map 面板 — gateway 訂 `/amcl_pose`(**latched TRANSIENT_LOCAL**)+`/state/reactive_stop/status`+`/state/nav/paused` 轉 `source=nav` envelope；前端 `nav-map-canvas.tsx`（v8 map PNG+pose 三角形+固定 goal+直線+chip，Canvas2D 不引 ros3djs）。**未上機驗真實 pose**（需 nav stack）。
-- 施工圖：[`2026-06-09-demo-recording-impl.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-demo-recording-impl.md)（3 task）、[`2026-06-09-studio-nav-panel-buildspec.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-studio-nav-panel-buildspec.md)、brain 設計深挖 [`2026-06-09-pawai-brain-design-deepdive.md`](../docs/archive/superpowers-legacy/plans/2026-06-09-pawai-brain-design-deepdive.md)。
+- 施工圖：`2026-06-09-demo-recording-impl.md`（3 task）、`2026-06-09-studio-nav-panel-buildspec.md`、brain 設計深挖 `2026-06-09-pawai-brain-design-deepdive.md`。
 
 **HITL 定位（晚，0 build，3 test）**：
 - ✅ **cup/object 沒壞**（偵測 0.45-0.64、runtime log 有 `object:orangecup` 台詞）；✅ **face 沒壞**（framing 對時 roy sim 0.70-0.78 鐵穩；face_count=0 是 Go2 D435 太低 + 背景第二張臉）。
@@ -635,7 +635,7 @@ D1 解鎖但 main 永遠可部署、demo 參數 6/18 前不亂翻｜D2 **CI 先�
 
 3 個並行 chunk 對同一個 whisper Despina persona 回來的 RMS 階梯式跳動（782→1139→1529，2x range），peak 也差 2.4x — 這就是「跳句」實質聽到的「越念越大聲又突然變小」。
 
-**下輪 fix 方向（保留為 Phase 2 / N9 plan）**：sequential synthesis 取代 parallel，或 post-synth RMS normalize across chunks。詳見 [`memory/project_tts_skip_diagnosis_0511_night.md`](../.claude/projects/-Users-lubaiyu-elder-and-dog/memory/project_tts_skip_diagnosis_0511_night.md)。
+**下輪 fix 方向（保留為 Phase 2 / N9 plan）**：sequential synthesis 取代 parallel，或 post-synth RMS normalize across chunks。詳見 `memory/project_tts_skip_diagnosis_0511_night.md`。
 
 ### Speech 動作 / 說話併發（**設計凍結，不執行**）
 
@@ -849,7 +849,7 @@ pawai demo start              # 重啟拿新 lock
 
 ### Nav Burndown：B1-B4 全綠、B5 訊號通但 motion 階段撞牆
 
-詳見 [`nav-root-cause-burndown.md §4`](../docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md)。
+詳見 `nav-root-cause-burndown.md §4`。
 
 - B1 LiDAR ✅ 11.98 Hz / 1800 pts / 94% valid / 單 publisher（`/scan_rplidar`，避免 `/scan` 雙 publisher 衝突）
 - B2 D435 ✅ color 30 Hz / aligned_depth 30 Hz / 98% valid / 中心 ROI 1.11m vs LiDAR 180° 1.18m（兩感測器交叉驗證一致）
@@ -915,12 +915,12 @@ pawai demo start              # 重啟拿新 lock
 
 | 代號 | Plan | 主題 | 視窗 |
 |:---:|---|---|---|
-| **M** | [demo-readiness-master-plan](../docs/archive/pawai-brain-legacy/plans/2026-05-10-demo-readiness-master-plan.md) | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
-| **A** | [brain-minimum-checklist](../docs/archive/pawai-brain-legacy/plans/2026-05-10-brain-minimum-checklist.md) | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
-| **B** | [nav-root-cause-burndown](../docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md) | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
-| **C** | [runtime-fallback-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-runtime-fallback-readiness.md) | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
-| **D** | [free-conversation-audio-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-free-conversation-audio-readiness.md) | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
-| **E** | [mac-school-network-readiness](../docs/archive/pawai-brain-legacy/plans/2026-05-12-mac-school-network-readiness.md) | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
+| **M** | demo-readiness-master-plan | 總 orchestration + 5/11-5/18 排程 | 全 sprint |
+| **A** | brain-minimum-checklist | persona 6 檔 + 10-prompt eval + 60s 自介 freeze | 5/11–5/12 中 |
+| **B** | nav-root-cause-burndown | 家裡 7 項排除：LiDAR / D435 / TF / mux / AMCL / goto 0.3-0.5m | 5/11 晚–5/12 |
+| **C** | runtime-fallback-readiness | 三啟動模式：Normal / No-AI / Mac-as-operator | 5/12 PM |
+| **D** | free-conversation-audio-readiness | USB 麥 + AirPods + 自由對話 5min | 5/12 PM |
+| **E** | mac-school-network-readiness | `config/school_demo.env` + 寫死 IP 抓出 + Mac wrapper | 5/12 PM |
 
 ### 戰略收斂
 
@@ -2102,7 +2102,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 
 ### 唯一文件入口
 
-從今天起：[`docs/archive/pawai-brain-legacy/plans/2026-04-28-pawclaw-master-integration.md`](../docs/archive/pawai-brain-legacy/plans/2026-04-28-pawclaw-master-integration.md)（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
+從今天起：`docs/archive/pawai-brain-legacy/plans/2026-04-28-pawclaw-master-integration.md`（master 只管 north-star/scope/phase ordering；topic schema/API/施工細節以下游 spec/plan 為準）。
 
 ### 下一步（4/29 雙軌開發）
 
@@ -2134,7 +2134,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 
 Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensity 全部 = 15（max），jitter < 3mm。左側完全空（2-3m）。**完全不對稱、極穩、強反射** → 不是 ghost / 雜訊，是真實物體被 RPLIDAR 看到，最可能是 **Go2 自身揹包 / 拓展模組 / 電池蓋** 或 **mount yaw 偏 ~70°**（文件明寫 mount xyz yaw 從 4/25 起就沒量過）。
 
-完整證據與三假設見 [`docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md)。
+完整證據與三假設見 `docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`。
 
 ### 同步發現的平台 latent bug
 
@@ -2142,7 +2142,7 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 
 ### 三天 KPI 卡關真因（Linus 風格回顧）
 
-1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。[4/25 log §3](../docs/archive/navigation-legacy/research/2026-04-25-rplidar-a2m12-integration-log.md) 寫「待精確量測」但延宕至今
+1. **mount 從 4/25 第一天就沒量過** — `z=0.10` 估測，xyz yaw 全沒量。4/25 log §3 寫「待精確量測」但延宕至今
 2. **4/25 桌上 10.4Hz 通過 → 直接上機，沒做 scan angular audit** — 30 樣本角度分布該是 day-1 sanity，到今天才跑
 3. **4/26 上午判定「lethal 是暫態 / map 髒污」 → 整下午重建地圖** — 但根因是 scan 本身有 phantom，新 map 一樣會被污染
 4. **4/26 下午+晚上做 nav_capability S2 平台抽象（4 actions / 70 unit tests / 22+ commits）** — 抽象層 K9/K10 過了，但 K1 從沒成功一次。底層沒打穩，平台層蓋再多都是空中樓閣
@@ -2192,14 +2192,14 @@ Go2 右側 +15°~+100° 範圍（85° 寬）整片 0.82-0.99m reading，intensit
 
 ### 新增/修改檔案
 
-- 新增 [`docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`](../docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md)
+- 新增 `docs/archive/navigation-legacy/research/2026-04-27-rplidar-rightside-cluster-investigation.md`
 - 新增 [`docs/mission/meetings/2026-04-27-annie.md`](../docs/mission/meetings/2026-04-27-annie.md)
-- 新增 [`docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md) — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
+- 新增 `docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md` — **支架印好後完整 7 階段開發路徑（v2.2）+ 歷史踩坑彙總**
 - 個人 plan：`~/.claude/plans/snug-seeking-cascade.md`（plan-mode 產物，不入版控）
 
 ### LiDAR 開發藍圖（5/9 起執行）
 
-完整 plan：[`docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`](../docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md)
+完整 plan：`docs/archive/navigation-legacy/research/lidar-dev/2026-04-27-lidar-dev-roadmap.md`
 
 7 階段路徑（user 已選好 mount STL，等支架印好開工）：
 
@@ -2311,7 +2311,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 ### 新增/修改檔案
 
 - 新增 [`docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md`](../docs/architecture/specs/2026-04-27-pawai-brain-skill-first-design.md) — Brain MVS spec（Phase A）
-- 新增 [`docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md`](../docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md) — 34-task implementation plan
+- 新增 `docs/archive/pawai-brain-legacy/plans/2026-04-27-pawai-brain-skill-first.md` — 34-task implementation plan
 - 新增 [`docs/architecture/specs/2026-04-27-pawclaw-embodied-brain-evolution.md`](../docs/architecture/specs/2026-04-27-pawclaw-embodied-brain-evolution.md) — Phase B PawClaw 演進
 - 新增 [`docs/architecture/brain/overview.md`](../docs/architecture/brain/overview.md) — 對外整合總覽（466 行，含 Phase A/B 兩段）
 
@@ -2382,7 +2382,7 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 新 nodes：`nav_action_server_node` / `route_runner_node` / `log_pose_node` / `state_broadcaster_node`。共 70 unit/integration tests pass（WSL）。
 
-**Spec / Plan**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md) / [`docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md`](../docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md)
+**Spec / Plan**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-26-nav-capability-s2-design.md` / `docs/archive/navigation-legacy/plans/2026-04-26-nav-capability-s2.md`
 
 ### 兩個重大修法（commit 8ec9a59 + e2b3932）
 
@@ -2583,8 +2583,8 @@ Phase 2（3-4 天）: Studio Brain Skill Console 8 components
 
 **雷達狀態**：**確定採購**，老師跑國科會流程中，到貨時程未定
 
-**新 spec（current）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md)
-**舊 spec（superseded）**：[`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`](../docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md)
+**新 spec（current）**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-11-pawai-home-interaction-design.md`
+**舊 spec（superseded）**：`docs/archive/2026-05-docs-reorg/superpowers-legacy/specs/2026-04-10-guardian-dog-design.md`
 
 ---
 
