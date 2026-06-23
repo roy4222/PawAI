@@ -346,7 +346,6 @@ class Go2NodeFactory:
             "publish_compressed_image", default="false"
         )
         with_publish_raw_voxel = LaunchConfiguration("publish_raw_voxel", default="false")
-        with_lidar_processing = LaunchConfiguration("lidar_processing", default="false")
         with_enable_tts = LaunchConfiguration("enable_tts", default="false")
         with_minimal_state_topics = LaunchConfiguration(
             "minimal_state_topics", default="false"
@@ -372,37 +371,6 @@ class Go2NodeFactory:
                         "publish_raw_voxel": with_publish_raw_voxel,
                         "minimal_state_topics": with_minimal_state_topics,
                         "lidar_point_stride": with_lidar_point_stride,
-                    }
-                ],
-            ),
-            Node(
-                package="lidar_processor",
-                executable="lidar_to_pointcloud",
-                name="lidar_to_pointcloud",
-                condition=IfCondition(with_lidar_processing),
-                parameters=[
-                    {
-                        "robot_ip_lst": self.config.robot_ip_list
-                        if self.config.robot_ip_list
-                        else [""],
-                        "map_name": self.config.map_name,
-                        "map_save": self.config.save_map,
-                    }
-                ],
-            ),
-            Node(
-                package="lidar_processor",
-                executable="pointcloud_aggregator",
-                name="pointcloud_aggregator",
-                condition=IfCondition(with_lidar_processing),
-                parameters=[
-                    {
-                        "max_range": 20.0,
-                        "min_range": 0.1,
-                        "height_filter_min": -0.25,
-                        "height_filter_max": 2.0,
-                        "downsample_rate": 5,
-                        "publish_rate": 10.0,
                     }
                 ],
             ),
