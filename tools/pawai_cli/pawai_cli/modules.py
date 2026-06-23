@@ -21,7 +21,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="face",
         title="人臉辨識",
         packages=("face_perception",),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/face.md",),
+        docs=("docs/architecture/perception/face/README.md",),
         tests=("python3 -m pytest face_perception/test -v",),
         logs=("demo:face",),
         go2_access="none",
@@ -31,7 +31,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="speech",
         title="語音功能",
         packages=("go2_interfaces", "speech_processor"),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/speech.md",),
+        docs=("docs/architecture/speech/README.md",),
         tests=("python3 -m pytest speech_processor/test -v",),
         logs=("demo:asr", "demo:tts"),
         go2_access="TTS via Megaphone",
@@ -41,7 +41,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="gesture",
         title="手勢辨識",
         packages=("go2_interfaces", "vision_perception"),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/gesture.md",),
+        docs=("docs/architecture/perception/gesture/README.md",),
         tests=("python3 -m pytest vision_perception/test -v -k gesture",),
         logs=("demo:vision",),
         go2_access="indirect via interaction skills",
@@ -51,7 +51,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="pose",
         title="姿勢辨識",
         packages=("go2_interfaces", "vision_perception"),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/pose.md",),
+        docs=("docs/architecture/perception/pose/README.md",),
         tests=("python3 -m pytest vision_perception/test -v -k pose",),
         logs=("demo:vision",),
         go2_access="fallen_alert can stop Go2",
@@ -61,7 +61,7 @@ MODULES: dict[str, ModuleInfo] = {
         key="object",
         title="辨識物體",
         packages=("object_perception",),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/object.md",),
+        docs=("docs/architecture/perception/object/README.md",),
         tests=("python3 -m pytest object_perception/test -v",),
         logs=("demo:object",),
         go2_access="none",
@@ -71,17 +71,21 @@ MODULES: dict[str, ModuleInfo] = {
         key="nav",
         title="導航避障功能",
         packages=("go2_interfaces", "go2_robot_sdk"),
-        docs=(".claude/skills/nav-avoidance-lane/SKILL.md", "docs/architecture/navigation/CLAUDE.md"),
+        docs=(
+            "docs/architecture/navigation/README.md",
+            ".claude/skills/nav-avoidance-lane/SKILL.md",
+            "docs/architecture/navigation/CLAUDE.md",
+        ),
         tests=("python3 -m pytest go2_robot_sdk/test -v",),
         logs=("demo:go2", "nav-cap-demo:nav_action", "reactive-stop:reactive"),
         go2_access="direct motion",
-        notes=("Architecture doc not consolidated yet; using lane references.",),
+        notes=("Consolidated under docs/architecture/navigation/.",),
     ),
     "brain": ModuleInfo(
         key="brain",
         title="PawAI Brain",
         packages=("go2_interfaces", "pawai_contracts", "pawai_brain", "interaction_executive"),
-        docs=("docs/archive/pawai-brain-legacy/architecture-0511/brain.md",),
+        docs=("docs/architecture/brain/README.md",),
         tests=(
             "python3 -m pytest pawai_brain/test -v",
             "python3 -m pytest interaction_executive/test -v",
@@ -95,8 +99,8 @@ MODULES: dict[str, ModuleInfo] = {
         title="PawAI Brain x PawAI Studio",
         packages=(),
         docs=(
+            "docs/architecture/studio/README.md",
             ".claude/skills/brain-studio-lane/SKILL.md",
-            ".claude/skills/brain-studio-lane/references/runtime-topology.md",
             "pawai-studio/docs",
         ),
         tests=("cd pawai-studio/frontend && npm run lint",),
@@ -134,19 +138,20 @@ _DOC_ALIASES: dict[str, str] = {
 
 
 def arch_doc_path(name: str, root: Path) -> Path | None:
-    """Map module name to its architecture/0511/<name>/<name>.md (or alias target)."""
+    """Resolve a module / alias name to its current architecture doc under docs/architecture/."""
     if name in _DOC_ALIASES:
         path = root / _DOC_ALIASES[name]
         return path if path.exists() else None
 
-    # Module: try architecture/0511/<name>/<name>.md, then architecture/0511/<name>.md
-    candidates = [
-        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}/{name}.md",
-        root / f"docs/archive/pawai-brain-legacy/architecture-0511/{name}.md",
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
+    try:
+        module = get_module(name)
+    except KeyError:
+        return None
+
+    for doc in module.docs:
+        candidate = root / doc
+        if candidate.exists():
+            return candidate
     return None
 
 

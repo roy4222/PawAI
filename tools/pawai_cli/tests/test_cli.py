@@ -1339,7 +1339,7 @@ def test_demo_stop_nav_lane_does_not_touch_lidar_monitor(monkeypatch):
 def test_pawai_docs_brain_resolves_path():
     runner = CliRunner()
     result = runner.invoke(cli, ["docs", "brain"])
-    assert "architecture/0511" in result.output
+    assert "architecture/brain" in result.output
     assert "brain" in result.output
     assert result.exit_code == 0
 

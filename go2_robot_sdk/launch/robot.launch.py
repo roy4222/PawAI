@@ -145,11 +145,6 @@ class Go2NodeFactory:
                 description="Publish raw voxel map",
             ),
             DeclareLaunchArgument(
-                "lidar_processing",
-                default_value="false",
-                description="Enable lidar post-processing nodes",
-            ),
-            DeclareLaunchArgument(
                 "enable_tts", default_value="false", description="Enable TTS node"
             ),
             DeclareLaunchArgument(
