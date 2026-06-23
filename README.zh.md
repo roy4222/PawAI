@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/logo.png" alt="PawAI logo" width="220">
+
 # 🐾 PawAI — 居家互動機器狗
 
 [English](./README.md) | **中文**
