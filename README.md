@@ -1,118 +1,221 @@
-# PawAI — 老人與狗
+<div align="center">
 
-> 基於多模態感知融合的具身互動機器狗。
-> D435 + RPLIDAR 整合：能看懂人、理解語音、辨識物體，並安全地做出語音、動作與導航回應。
+# 🐾 PawAI — Home Companion Robot Dog
 
-**硬底線**：2026/5/12 學校 Demo
-**5/12 主作戰地圖**：[`docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md`](docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md)
-**Phase A 導航攻堅執行計畫**：[`docs/navigation/plans/2026-05-01-phase-a-nav-attack.md`](docs/navigation/plans/2026-05-01-phase-a-nav-attack.md)
+**English** | [中文](./README.zh.md)
 
----
+*A multimodal, embodied-interaction robot dog built on the Unitree Go2 Pro.*
 
-## 一句話定位
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
+[![Python](https://img.shields.io/badge/python-3.10-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/edge-Jetson%20Orin%20Nano-76B900?logo=nvidia&logoColor=white)](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/)
+[![Robot](https://img.shields.io/badge/robot-Unitree%20Go2%20Pro-orange.svg)](https://www.unitree.com/go2)
+[![Architecture](https://img.shields.io/badge/architecture-Clean-brightgreen.svg)](#-architecture)
+[![License](https://img.shields.io/badge/license-BSD--2-yellow.svg)](./LICENSE)
 
-> LiDAR 讓 PawAI 走得穩，D435 讓 PawAI 看得懂與停得安全，Brain 讓 PawAI 知道為什麼要走。
+</div>
 
-不是聊天機器人，也不是各功能分開展示的辨識系統，而是「**看懂 → 理解 → 決策 → 行動**」串起來的具身互動機器狗：
+> **PawAI sees, understands, decides and acts.** It recognises familiar faces,
+> reads hand gestures and body posture, understands spoken language, detects
+> everyday objects, and responds safely with voice, motion and navigation —
+> all orchestrated on the edge by a three-layer decision engine
+> (**Safety → Policy → Expression**).
 
-1. **看懂** — D435 RGB（人臉/手勢/姿勢/物體）+ D435 Depth（safety stop）+ RPLIDAR（2D map / Nav2 障礙）
-2. **理解** — PawAI Brain 接事件，LLM 產生 intent / skill / reply_text；Persona 是「PawAI 感」：活潑、好奇、有在場感、有守護溫度
-3. **決策** — Skill Registry ~25 條，Brain 只提 SkillPlan，Executive 做 safety gate
-4. **行動** — 說話（Gemini TTS / fallback）+ 動作（Go2 sport API）+ 導航（RPLIDAR + Nav2）+ 安全（D435 emergency stop）
-
----
-
-## 四大核心難點
-
-1. **跨層耦合** — ASR/LLM/TTS/ROS2/WebRTC/Go2 firmware 任一層偏差都表現成「沒聲音」或「不好用」
-2. **可觀測性不足** — 多層只看到 `send success`，看不到裝置端真實狀態
-3. **環境不穩定且不可完全控** — Jetson 資源、網路、韌體、裝置回應都會漂移
-4. **整合成本遠高於功能開發** — 寫新 node 一天，真機 30 分鐘穩定跑常常更久
+PawAI is not a chatbot, and not a pile of disconnected demos. It is an
+**embodied interaction loop** — *See → Understand → Decide → Act* — running on a
+Unitree Go2 Pro with an NVIDIA Jetson Orin Nano. The codebase follows
+**Clean Architecture**: perception, decision and driver layers are cleanly
+separated with a single, unidirectional dependency direction.
 
 ---
 
-## 硬體規格
+## ✨ Highlights
 
-- **載體**：Unitree Go2 Pro
-- **邊緣運算**：NVIDIA Jetson Orin Nano SUPER 8GB
-- **視覺感測**：Intel RealSense D435（RGB-D）
-- **光達**：RPLIDAR-A2M12（12 m，16000 次/秒）
-- **遠端算力**：5× Quadro RTX 8000（48 GB × 5 = 240 GB VRAM）+ 2× Xeon Gold 6248R（96 threads）+ 754 GiB RAM
-- **架構原則**：Clean Architecture（分層、單向依賴、感知/決策/驅動分離）
-
----
-
-## 八大功能模組
-
-| # | 模組 | 主線文件 | 5/12 主線 |
-|:-:|------|---------|-----------|
-| 1 | 人臉辨識 | [`docs/pawai-brain/perception/face/`](docs/pawai-brain/perception/face/README.md) | 認熟人打招呼、陌生人警報（YuNet + SFace + IOU 追蹤，本地 < 30ms） |
-| 2 | 語音 / LLM / TTS | [`docs/pawai-brain/speech/`](docs/pawai-brain/speech/README.md) | 雲端 LLM（Gemini 3 Flash / DeepSeek / Qwen 候選）+ Gemini 3.1 Flash TTS；本地 fallback：VAD + faster-whisper + RuleBrain + Piper |
-| 3 | 手勢辨識 | [`docs/pawai-brain/perception/gesture/`](docs/pawai-brain/perception/gesture/README.md) | 7 種手勢（Palm/OK/Wave/Thumb/Peace/Fist/Index），高風險動作 OK 二次確認 |
-| 4 | 姿勢辨識 | [`docs/pawai-brain/perception/pose/`](docs/pawai-brain/perception/pose/README.md) | 坐下→`sit_along`、彎腰→`careful_remind`；可選跌倒警報 |
-| 5 | 物體辨識 | [`docs/pawai-brain/perception/object/`](docs/pawai-brain/perception/object/README.md) | YOLO26n 本地（< 200ms）+ HSV 顏色 + D435 3D 座標（0.3-3 m）；Demo 後升級 YOLO26x / Qwen-VL 雲端 |
-| 6 | 導航避障 | [`docs/navigation/`](docs/navigation/README.md) | RPLIDAR + slam_toolbox 建圖、AMCL 定位、Nav2 規劃、D435 reactive safety stop |
-| 7 | PawAI Brain × Studio | [`docs/pawai-brain/`](docs/pawai-brain/README.md) | Skill Registry 26 條（Active 17 / Hidden 5 / Disabled 4 / Retired 1）、Brain 只提案、Executive 唯一出口；Studio = ChatGPT/OpenClaw 風格 + AI 版 Foxglove |
-| 8 | 文件網站 | （組員主責，5/12 後產出） | — |
+| Capability | What it does | Stack |
+|------------|--------------|-------|
+| 👤 **Face** | Greets known people, flags strangers | YuNet + SFace + IOU tracking (local, < 30 ms) |
+| ✋ **Gesture** | 7 gestures → actions, OK as confirm | MediaPipe Gesture Recognizer / RTMPose |
+| 🧍 **Pose** | Sit / crouch / fall cues | MediaPipe Pose |
+| 🥤 **Object** | 80-class detection + 3D position | YOLO26n ONNX + D435 depth |
+| 🗣️ **Speech** | ASR → LLM intent → TTS reply | SenseVoice / Whisper · LangGraph · Gemini / edge-tts / Piper |
+| 🧠 **Brain** | Persona + skill policy + safety gate | LangGraph decision engine |
+| 🧭 **Navigation** *(experimental)* | Relative goals, routes, reactive stop | RPLIDAR + Nav2 + AMCL + D435 safety stop |
 
 ---
 
-## 5/12 Demo Storyboard（4:30，8 scene）
+## 🏗️ Architecture
 
-System Ready → Nav Backbone → Personality → 熟人 → 手勢 → 物體 → Sensor Fusion → safety stop
+PawAI is a single ROS2 workspace of **10 focused packages**, layered so that
+dependencies only ever point *inward* toward the shared contracts.
 
-詳見 [`docs/pawai-brain/README.md`](docs/pawai-brain/README.md) 與 [Sprint design](docs/pawai-brain/specs/2026-05-01-pawai-11day-sprint-design.md)。
+```mermaid
+flowchart TD
+    subgraph Perception["👁️ Perception Layer"]
+        FACE[face_perception]
+        VISION[vision_perception<br/>gesture · pose]
+        OBJ[object_perception]
+        SPEECH_IN[speech_processor<br/>ASR · intent]
+    end
+
+    subgraph Decision["🧠 Decision Layer"]
+        BRAIN[pawai_brain<br/>LangGraph engine]
+        EXEC[interaction_executive<br/>ISM · safety gate · single action arbiter]
+    end
+
+    subgraph Action["🦿 Action Layer"]
+        SPEECH_OUT[speech_processor<br/>TTS]
+        DRIVER[go2_robot_sdk<br/>WebRTC driver · reactive stop]
+        NAV[nav_capability]
+    end
+
+    subgraph Contracts["📜 Shared Contracts"]
+        IFACE[go2_interfaces<br/>msg · srv · action]
+        PCON[pawai_contracts<br/>skill registry · policy · trace schema]
+    end
+
+    Perception --> Decision --> Action
+    Decision -. depends on .-> Contracts
+    Action -. depends on .-> Contracts
+    Perception -. depends on .-> Contracts
+```
+
+> **One rule, strictly enforced:** `interaction_executive` is the *only* exit
+> to the robot's body. `pawai_brain` proposes; the executive disposes (safety
+> gate first). The two never import each other — both depend only on
+> `pawai_contracts`.
+
+### Packages
+
+| Package | Layer | Responsibility |
+|---------|-------|----------------|
+| [`go2_interfaces`](go2_interfaces/) | Contracts | ROS2 message / service / action definitions for the Go2 |
+| [`pawai_contracts`](pawai_contracts/) | Contracts | ROS-free domain contracts: skill registry, LLM policy, trace schema |
+| [`go2_robot_sdk`](go2_robot_sdk/) | Driver | Go2 WebRTC driver (Clean Arch: domain / application / infrastructure / presentation), reactive safety stop |
+| [`face_perception`](face_perception/) | Perception | Face detection + identity recognition + tracking |
+| [`vision_perception`](vision_perception/) | Perception | Hand-gesture and body-pose recognition |
+| [`object_perception`](object_perception/) | Perception | YOLO26n object detection with 3D positioning |
+| [`speech_processor`](speech_processor/) | Speech I/O | ASR, intent, LLM bridge, TTS |
+| [`pawai_brain`](pawai_brain/) | Decision | LangGraph conversation / decision engine + persona |
+| [`interaction_executive`](interaction_executive/) | Decision | State machine, safety gate, single action arbiter |
+| [`nav_capability`](nav_capability/) | Capability | Relative-goal / route navigation actions *(experimental, HITL)* |
 
 ---
 
-## 三層降級鏈（Demo 不能斷）
+## 🤖 Hardware
 
-| 層 | 主線 | Fallback 1 | Fallback 2 |
-|----|------|-----------|-----------|
-| **LLM** | OpenRouter (Gemini 3 Flash / DeepSeek V4) | Ollama qwen2.5:1.5b 本地 | RuleBrain 規則式 |
-| **TTS** | Gemini 3.1 Flash TTS（含 audio tag） | edge-tts 雲端 | Piper 本地離線 |
-| **ASR** | SenseVoice cloud (FunASR) | SenseVoice local (sherpa-onnx int8) | faster-whisper local |
-| **Plan** | Plan A 8 場景動態 | Plan B 固定台詞 | — |
-
----
-
-## 文件入口
-
-| 路線 | 入口 | 用途 |
-|------|------|------|
-| [`docs/README.md`](docs/README.md) | 7 主線導覽 | 找不到時看這裡 |
-| [`docs/pawai-brain/`](docs/pawai-brain/README.md) | 互動主線 | 感知 / 語音 / Studio / Brain |
-| [`docs/navigation/`](docs/navigation/README.md) | 移動主線 | LiDAR / Nav2 / AMCL / D435 depth |
-| [`docs/contracts/`](docs/contracts/README.md) | 跨主線契約 | ROS2 topic / action schema |
-| [`docs/runbook/`](docs/runbook/README.md) | Demo 救火 SOP | Jetson / Network / GPU / Go2 操作 |
-| [`docs/mission/`](docs/mission/README.md) | 專案定位 | Demo 劇本 / 八大功能 SoT / 會議紀錄 |
-| [`docs/deliverables/thesis/`](docs/deliverables/thesis/) | 學期繳交素材 | 論文 / 報告 |
+| Part | Spec |
+|------|------|
+| Body | Unitree **Go2 Pro** |
+| Edge compute | NVIDIA **Jetson Orin Nano Super 8 GB** |
+| Vision | Intel RealSense **D435** (RGB-D) |
+| LiDAR | **RPLIDAR A2M12** (12 m, 16 000 samples/s) |
+| Audio | USB microphone + USB speaker |
 
 ---
 
-## Quick Start
+## 📋 System Requirements
+
+| System | ROS2 distro |
+|--------|-------------|
+| Ubuntu 22.04 (Jetson / x86) | Humble |
+
+---
+
+## ⚙️ Installation
 
 ```bash
-# Jetson 上建構（zsh）
-source /opt/ros/humble/setup.zsh
-colcon build
-source install/setup.zsh
+# Clone into a colcon workspace (this repo root *is* the workspace src)
+git clone --recurse-submodules https://github.com/roy4222/PawAI.git src
+cd src
 
-# 啟動 Go2 驅動（最小模式）
+# Python deps (project uses uv)
+uv pip install -r requirements.txt          # add requirements-jetson.txt on the Jetson
+
+# Build
+source /opt/ros/humble/setup.bash           # use setup.zsh on the Jetson
+colcon build
+source install/setup.bash
+```
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Minimal Go2 driver
 export ROBOT_IP="192.168.123.161"
 export CONN_TYPE="webrtc"
 ros2 launch go2_robot_sdk robot.launch.py \
   enable_tts:=false nav2:=false slam:=false rviz2:=false foxglove:=false
 
-# 一鍵 Demo（語音 + LLM 主線）
+# Speech + LLM end-to-end (one-shot tmux)
 bash scripts/start_llm_e2e_tmux.sh
 
-# 一鍵 Demo（nav_capability 平台層）
-bash scripts/start_nav_capability_demo_tmux.sh
+# Full multimodal demo (perception + brain + Studio)
+bash scripts/start_full_demo_tmux.sh
 
-# 一鍵 Demo（人臉辨識）
+# Face-recognition pipeline
 bash scripts/start_face_identity_tmux.sh
 ```
 
-詳細環境建置與救火 SOP 見 [`docs/runbook/`](docs/runbook/README.md)。
-完整建構/執行 / 已知陷阱見 [`CLAUDE.md`](CLAUDE.md)。
+See [`CLAUDE.md`](CLAUDE.md) for the full build / run matrix and known pitfalls,
+and [`docs/runbook/`](docs/runbook/README.md) for demo operation SOPs.
+
+---
+
+## 🛟 Reliability — Graceful Degradation
+
+Every cloud-first capability falls back to a local path, so a demo never goes
+dark:
+
+| Stage | Primary | Fallback 1 | Fallback 2 |
+|-------|---------|-----------|-----------|
+| **LLM** | OpenRouter (Gemini / GPT-mini) | local Qwen | RuleBrain |
+| **TTS** | Gemini Flash TTS | edge-tts | Piper (offline) |
+| **ASR** | SenseVoice cloud | SenseVoice local | faster-whisper local |
+
+---
+
+## 🖥️ PawAI Studio
+
+An operator web UI (a "ChatGPT-style console meets AI Foxglove") for driving and
+observing the robot.
+
+```bash
+bash pawai-studio/start.sh      # → http://localhost:3000/studio
+```
+
+---
+
+## 📚 Documentation
+
+| Area | Entry point |
+|------|-------------|
+| Project mission & demo scope | [`docs/mission/`](docs/mission/README.md) |
+| ROS2 interface contracts | [`docs/contracts/`](docs/contracts/interaction_contract.md) |
+| Brain / perception / speech / studio | [`docs/pawai-brain/`](docs/pawai-brain/README.md) |
+| Navigation & obstacle avoidance | [`docs/navigation/`](docs/navigation/README.md) |
+| Operation runbooks (demo SOPs) | [`docs/runbook/`](docs/runbook/README.md) |
+| Architecture decisions (ADRs) | [`docs/adr/`](docs/adr/README.md) |
+
+Historical / superseded material lives under [`docs/archive/`](docs/archive/);
+deprecated packages and scripts live under [`archive/`](archive/README.md).
+
+---
+
+## 🙏 Built on go2_ros2_sdk
+
+PawAI began as a fork of [**abizovnuralem/go2_ros2_sdk**](https://github.com/abizovnuralem/go2_ros2_sdk)
+— the excellent ROS2 / WebRTC integration for the Unitree Go2 by
+[@abizovnuralem](https://github.com/abizovnuralem) and [@tfoldi](https://github.com/tfoldi).
+The `go2_robot_sdk`, `go2_interfaces` and driver layers descend from that work;
+PawAI adds the perception, brain, speech, navigation and Studio layers on top.
+
+> 🧭 *Future work:* containerised deployment (`docker/`) and a documentation
+> website are planned but not yet shipped.
+
+---
+
+## License
+
+[BSD 2-Clause](./LICENSE) — inherited from the upstream `go2_ros2_sdk` project.
