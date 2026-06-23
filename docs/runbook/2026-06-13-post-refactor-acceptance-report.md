@@ -10,7 +10,7 @@
 
 | 項 | 值 |
 |---|---|
-| Jetson | `jetson-nano`（Tailscale 100.64.0.1），ROS 2 Humble |
+| Jetson | `jetson-nano`（Tailscale YOUR_JETSON_IP），ROS 2 Humble |
 | Go2 | 已開機（本輪**未做 motion**，僅感知觀測）|
 | 部署版本 | main `6b36b0c`（batch 1+2 全 merged；deploy `--all` 9 套件 colcon build 成功、install tree rebuild 生效、`.env` md5 不變 32a6453）|
 | Demo stack | `pawai demo start -y` full mode，13 windows，**healthcheck 8/8 全綠** |

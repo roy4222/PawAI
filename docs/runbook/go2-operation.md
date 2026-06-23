@@ -105,7 +105,7 @@ go2_perform_action(action='FingerHeart')
 ### 檔案位置
 
 ```
-/home/roy422/ros2_ws/src/elder_and_dog/TEST.sh
+$HOME/ros2_ws/src/elder_and_dog/TEST.sh
 ```
 
 ---
@@ -117,7 +117,7 @@ go2_perform_action(action='FingerHeart')
 1. **啟動機器人驅動**（終端 1）
 
 ```zsh
-cd /home/roy422/ros2_ws/src/elder_and_dog
+cd $HOME/ros2_ws/src/elder_and_dog
 zsh start_go2_simple.sh
 ```
 
@@ -140,7 +140,7 @@ zsh start_go2_simple.sh
 
 ```zsh
 source /opt/ros/humble/setup.zsh
-cd /home/roy422/ros2_ws
+cd $HOME/ros2_ws
 source install/setup.zsh
 cd src/elder_and_dog
 ```
@@ -461,7 +461,7 @@ zsh TEST.sh load-preset     # 載入配置
 **解決方案**：
 ```zsh
 source /opt/ros/humble/setup.zsh
-cd /home/roy422/ros2_ws
+cd $HOME/ros2_ws
 source install/setup.zsh
 cd src/elder_and_dog
 ```
@@ -476,7 +476,7 @@ cd src/elder_and_dog
 **解決方案**：
 先在另一個終端啟動驅動：
 ```zsh
-cd /home/roy422/ros2_ws/src/elder_and_dog
+cd $HOME/ros2_ws/src/elder_and_dog
 zsh start_go2_simple.sh
 ```
 
@@ -754,7 +754,7 @@ rviz2
 ### 目錄結構
 
 ```
-/home/roy422/ros2_ws/src/elder_and_dog/
+$HOME/ros2_ws/src/elder_and_dog/
 ├── TEST.sh                    # 主測試腳本（370 行）
 ├── start_go2_simple.sh        # 快速啟動驅動
 ├── install/                   # ROS2 編譯結果

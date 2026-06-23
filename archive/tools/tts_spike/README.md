@@ -26,7 +26,7 @@ Scripts for evaluating new TTS providers before integrating into main chain.
 4. **Run**:
 
    ```bash
-   cd /home/roy422/newLife/elder_and_dog
+   cd $WORKSPACE
    python3 tools/tts_spike/elevenlabs_mini.py
    ```
 

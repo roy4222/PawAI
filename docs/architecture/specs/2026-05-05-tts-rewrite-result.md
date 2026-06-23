@@ -1,7 +1,7 @@
 # B1 Plan D — TTS Provider 換血結果
 
 **完成日期**：2026-05-04 evening（22:00 收尾）
-**Plan 來源**：`/home/roy422/.claude/plans/jetson-kind-book.md`
+**Plan 來源**：`$HOME/.claude/plans/jetson-kind-book.md`
 **前置條件**：commit `3c3a933`（A+B：audio tag strip hack + OpenRouter timeout default 提升 + CLAUDE.md 修正）
 
 ---

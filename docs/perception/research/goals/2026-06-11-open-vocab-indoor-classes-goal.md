@@ -26,7 +26,7 @@ This goal exists to produce a falsifiable verdict on this specific bottleneck. I
 2. https://docs.ultralytics.com/models/yolo-world/ — YOLO-World 同款 set-vocab-then-export 機制與尺寸/精度表
 3. LVIS 1203 類 closed-set 路線：WebSearch `LVIS trained detector ONNX edge deployment`（找可直接 export 的權重）
 4. Grounding DINO / OWL-ViT 級的反面證據：WebSearch `Grounding DINO Jetson Orin Nano fps`（預期太重，要有數字佐證出局）
-5. 本地 `/home/roy422/newLife/PINTO_model_zoo`：`grep -ril "yolo-world\|yoloe\|open.vocab\|grounding" */README.md` 確認 zoo 供給
+5. 本地 `$HOME/newLife/PINTO_model_zoo`：`grep -ril "yolo-world\|yoloe\|open.vocab\|grounding" */README.md` 確認 zoo 供給
 6. 居家長者場景類別需求：從 `docs/mission/README.md` 與 demo 腳本（S1-S5）反推目標類別清單
 
 For each source, cite specific evidence — claims without citations are rejected.

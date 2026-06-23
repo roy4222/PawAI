@@ -5,8 +5,8 @@
 import os
 import sys
 
-BASE = "/home/roy422/newLife/elder_and_dog/docs/deliverables/thesis/背景知識"
-MERGED = "/home/roy422/newLife/elder_and_dog/docs/deliverables/thesis/Ch4-背景知識-合併版.md"
+BASE = "$WORKSPACE/docs/deliverables/thesis/背景知識"
+MERGED = "$WORKSPACE/docs/deliverables/thesis/Ch4-背景知識-合併版.md"
 
 FILES = [
     "4-1-ROS2.md",

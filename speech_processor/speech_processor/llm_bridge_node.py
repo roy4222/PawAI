@@ -196,7 +196,7 @@ class LlmBridgeNode(Node):
         )
 
     def _declare_parameters(self) -> None:
-        self.declare_parameter("llm_endpoint", "http://140.136.155.5:8000/v1/chat/completions")
+        self.declare_parameter("llm_endpoint", "http://localhost:8000/v1/chat/completions")
         self.declare_parameter("llm_model", "Qwen/Qwen2.5-7B-Instruct")
         # plan3 T2 (2026-06-13): demo fuse — tightened 15.0 -> 6.0 so a slow
         # vLLM/local LLM falls through within 6s and brain's _on_chat_timeout

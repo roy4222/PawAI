@@ -22,11 +22,11 @@ llm_bridge_node 是語音+人臉觸發 → LLM → TTS+動作的中樞。
 ## 雲端 LLM
 
 - **模型**：Qwen2.5-7B-Instruct（純文字 CausalLM）
-- **伺服器**：RTX 8000 @ 140.136.155.5:8000（vLLM 0.17.1）
+- **伺服器**：RTX 8000 @ YOUR_GPU_HOST:8000（vLLM 0.17.1）
 - **API**：OpenAI-compatible
 - **延遲**：~1.5s（vLLM Prefix Cache 生效）
 - **max_tokens**：120，prompt 限 reply 25 字
-- **SSH tunnel**：`ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5`
+- **SSH tunnel**：`ssh -f -N -L 8000:localhost:8000 YOUR_USER@YOUR_GPU_HOST`
 
 ## 本地 LLM（備援）
 
@@ -53,7 +53,7 @@ llm_bridge_node 是語音+人臉觸發 → LLM → TTS+動作的中樞。
 
 ```bash
 # SSH tunnel（必要）
-ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5
+ssh -f -N -L 8000:localhost:8000 YOUR_USER@YOUR_GPU_HOST
 
 # 啟動 llm_bridge_node
 ros2 run speech_processor llm_bridge_node --ros-args \

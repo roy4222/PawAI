@@ -79,7 +79,7 @@ interaction_executive_node → fallen = EMERGENCY（內部 routing 標籤）
 > - `knee_kneel` 新增 kneel-side ankle.y ≈ knee.y 區分 kneel-vs-lunge（社群 yoga-pose 規則）；ankle 隱藏視為 kneel 訊號。
 > - 順序：fallen → standing/akimbo → knee_kneel → sitting → crouching → bending → None。
 > 26/26 unit tests 全綠（synthetic）；上機 5/7 動作 PASS，akimbo + knee_kneel 真實 MediaPipe 數據仍待調校。
-> 完整 plan：`/home/roy422/.claude/plans/pose-validated-harp.md`。
+> 完整 plan：`$HOME/.claude/plans/pose-validated-harp.md`。
 
 ## 操作限制與已知問題
 

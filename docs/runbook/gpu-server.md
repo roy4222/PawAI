@@ -9,7 +9,7 @@
 
 | 項目 | 數值 |
 |------|------|
-| **IP** | `140.136.155.5` |
+| **IP** | `YOUR_GPU_HOST` |
 | **Port** | `8022` |
 | **帳號** | `roy422` |
 
@@ -22,7 +22,7 @@
 ### 基本連線
 
 ```bash
-ssh roy422@140.136.155.5 -p 8022
+ssh YOUR_USER@YOUR_GPU_HOST -p 8022
 ```
 
 第一次連線會問是否信任主機，輸入 `yes`，然後輸入密碼（密碼不會顯示）。
@@ -47,7 +47,7 @@ ssh -L 8050:localhost:8050 GPUServer
 
 ```
 Host GPUServer
-    HostName 140.136.155.5
+    HostName YOUR_GPU_HOST
     User roy422
     Port 8022
 ```
@@ -157,7 +157,7 @@ CUDA_VISIBLE_DEVICES=2,3 python train.py
 
 ```
 Host School_GPU
-    HostName 140.136.155.5
+    HostName YOUR_GPU_HOST
     User roy422
     Port 8022
 ```

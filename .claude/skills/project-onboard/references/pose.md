@@ -39,7 +39,7 @@ fallen（跌倒）是守護輔助（30%）的關鍵觸發，Brain world_state_bu
 ## 已知陷阱
 
 - **fallen 閾值 5/11 已調整**：trunk_angle 60°（守住），vertical_ratio + ankle 有放寬（見 `pose-classifier-rules.md`）。舊 rules 文件（`docs/archive/` 下）可能有衝突，以 0511 版為準
-- **Vision rule 例外**：`/home/roy422/newLife/elder_and_dog/.claude/rules/vision-perception.md` 有「fallen 閾值不要動」舊規則 — 5/11 user 明示已例外覆寫（`docs/runbook/demo-frozen-backlog.md` §Vision rule 例外）
+- **Vision rule 例外**：`$WORKSPACE/.claude/rules/vision-perception.md` 有「fallen 閾值不要動」舊規則 — 5/11 user 明示已例外覆寫（`docs/runbook/demo-frozen-backlog.md` §Vision rule 例外）
 - **fallen cooldown 10s**：event_action_bridge 中 fallen 的 cooldown 是 10s（一般動作是 3s），防止誤觸發連發
 - **RTMPose balanced mode GPU 91-99% 滿載**：pose + face 同跑考慮改 pose_backend:=mediapipe 走 CPU
 - **L3 三感知壓測**（3/23）：face(CPU)+pose(CPU)+gesture(CPU) 同跑 60s → RAM 1.2GB, temp 52°C，GPU 0%，安全

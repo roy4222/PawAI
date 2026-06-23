@@ -84,5 +84,5 @@ scp jetson-nano:'~/elder_and_dog/.pawai-last-deploy' /tmp/jetson_manifest.json
 python3 -m benchmarks.core.build_scoreboard /tmp/baseline_result.jsonl \
   --manifest /tmp/jetson_manifest.json --preflight /tmp/preflight_result.json \
   --out /tmp/baseline_snapshot.json
-PAWAI_SCOREBOARD_PATH=/tmp/baseline_snapshot.json /home/roy422/.venv/bin/pawai readiness --json
+PAWAI_SCOREBOARD_PATH=/tmp/baseline_snapshot.json $HOME/.venv/bin/pawai readiness --json
 ```

@@ -16,7 +16,7 @@
 #   CAPTURE_SAMPLE_RATE — mic native sample rate (default: 48000)
 #
 # Requires SSH tunnel if using localhost:
-#   ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5
+#   ssh -f -N -L 8000:localhost:8000 YOUR_USER@YOUR_GPU_HOST
 
 set -euo pipefail
 

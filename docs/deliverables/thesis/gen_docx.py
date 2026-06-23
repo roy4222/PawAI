@@ -709,7 +709,7 @@ for i, ref in enumerate(refs, 1):
     add_para(f'{i}. {ref}')
 
 # ── Save ──
-output_path = '/home/roy422/newLife/elder_and_dog/docs/deliverables/thesis/114-thesis.docx'
+output_path = '$WORKSPACE/docs/deliverables/thesis/114-thesis.docx'
 doc.save(output_path)
 print(f'Saved to {output_path}')
 print(f'Pages estimated: ~{len(doc.paragraphs) // 30 + len(doc.tables) * 2}')

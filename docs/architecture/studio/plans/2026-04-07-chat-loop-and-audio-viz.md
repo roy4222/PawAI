@@ -78,7 +78,7 @@
 - [ ] 執行測試確認通過
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_gateway.py::TestROS2Transform::test_tts_plain_text_to_event pawai-studio/gateway/test_gateway.py::TestROS2Transform::test_tts_source_is_not_speech -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_gateway.py::TestROS2Transform::test_tts_plain_text_to_event pawai-studio/gateway/test_gateway.py::TestROS2Transform::test_tts_source_is_not_speech -v
 ```
 
 Expected: 2 passed
@@ -131,7 +131,7 @@ python3 -c "import py_compile; py_compile.compile('pawai-studio/gateway/studio_g
 - [ ] 執行全部 gateway 測試
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
 ```
 
 Expected: 全部通過（30 tests）
@@ -623,7 +623,7 @@ import { AudioVisualizer } from "@/components/chat/audio-visualizer"
 - [ ] 執行 gateway 全測試
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
 ```
 
 Expected: 全部通過
@@ -633,7 +633,7 @@ Expected: 全部通過
 - [ ] 執行 Next.js build
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog/pawai-studio/frontend && npx next build
+cd $WORKSPACE/pawai-studio/frontend && npx next build
 ```
 
 Expected: build 成功

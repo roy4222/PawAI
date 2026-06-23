@@ -14,7 +14,7 @@
 
 - `vision_perception/vision_perception/pose_classifier.py`
 - `docs/architecture/perception/pose/README.md`
-- `/home/roy422/.claude/plans/pose-validated-harp.md`（5/6 演算法升級設計）
+- `$HOME/.claude/plans/pose-validated-harp.md`（5/6 演算法升級設計）
 
 ## 常見陷阱
 

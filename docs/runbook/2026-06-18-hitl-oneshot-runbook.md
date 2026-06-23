@@ -19,7 +19,7 @@
 
 # PawAI HITL Capability Baseline — 一次坐定 Runbook（Roy 回到 Jetson+Go2 後自己執行）
 
-**Repo HEAD:** main @ `885728f` · **pawai 路徑：** `/home/roy422/.venv/bin/pawai`（**不在 PATH**）
+**Repo HEAD:** main @ `885728f` · **pawai 路徑：** `$HOME/.venv/bin/pawai`（**不在 PATH**）
 **治理文件（嚴格遵守）：** `docs/mission/2026-06-18-demo-north-star.md`（North Star v2，fail-closed，誠實分級）
 **涵蓋：** #80 voice、#81 face、#82 gesture+object、#83 pose、#84 nav → build_scoreboard → readiness → freeze
 **估 Roy 體力時間：約 70 分鐘連續**（30 輪語音 ~12min 為最大宗；五次場景重配；idle 60s 窗 ×5；其餘 8s 窗）
@@ -186,7 +186,7 @@ ssh jetson-nano 'zsh -lic "cd ~/elder_and_dog && source /opt/ros/humble/setup.zs
 
 ## STEP 6 — BUILD SNAPSHOT + READINESS + FREEZE（全 WSL，Roy 在鍵盤前）~10 min
 ```bash
-cd /home/roy422/newLife/elder_and_dog
+cd $WORKSPACE
 # 6a. 轉 voice CSV → JSONL（tag voice.command / voice.stop）。先找最新 CSV：
 NEWEST=$(ssh jetson-nano 'ls -t ~/elder_and_dog/test_results/*.csv | head -1')
 scp "jetson-nano:$NEWEST" /tmp/voice.csv
@@ -204,16 +204,16 @@ python3 -m benchmarks.core.build_scoreboard /tmp/baseline_result.jsonl --manifes
 # 6e. 看你關心的 graded rows：
 python3 -c "import json;c=json.load(open('/tmp/baseline_snapshot.json'))['capabilities'];print(json.dumps({k:c[k] for k in ['face.recognition','voice.command','voice.stop','gesture.wave','object.cup']},ensure_ascii=False,indent=2))"
 # 6f. readiness verdict（需 SSH up — 經 SSH 讀 live deploy SHA）：
-PAWAI_SCOREBOARD_PATH=/tmp/baseline_snapshot.json /home/roy422/.venv/bin/pawai readiness --json
+PAWAI_SCOREBOARD_PATH=/tmp/baseline_snapshot.json $HOME/.venv/bin/pawai readiness --json
 # 6g. freeze 給 demo day（複製 artifacts/baseline/baseline_snapshot.json → frozen/2026-06-18/）：
 cp /tmp/baseline_snapshot.json artifacts/baseline/baseline_snapshot.json
-/home/roy422/.venv/bin/pawai readiness freeze --date 2026-06-18
+$HOME/.venv/bin/pawai readiness freeze --date 2026-06-18
 # 6h. 把 evidence 凍進 git-tracked 資料夾（artifacts/baseline 在 gitignore）：
 mkdir -p docs/runbook/baseline-evidence/2026-06-04-hitl && cp /tmp/baseline_result.jsonl /tmp/baseline_snapshot.json /tmp/preflight_result.json /tmp/jetson_manifest.json docs/runbook/baseline-evidence/2026-06-04-hitl/
 ```
 **verdict 數學：** `ready` 只在 run_trusted=True AND preflight pass AND snapshot SHA == Jetson `.pawai-last-deploy`（WSL HEAD `885728f` 對得上）AND 15 caps 全在 AND 每個 mainline cap pass、非 pass 者帶 failure_reason。**本輪預期 NOT-ready**（face 可能轉 pass，但 nav/pose 仍 insufficient_data）— 這是正確的、誠實的 fail-closed 結果，不是失敗。
 
-**清掉 schema_validator_unavailable：** 已驗證**本輪非 blocker** — jsonschema 4.26.0 可在 `/home/roy422/.venv` import；對 stale snapshot 跑 readiness 第一個 reason 是 `sha_mismatch` 不是 schema_validator。**在 WSL 用該 venv 跑 build+readiness 就不會觸發。** 永久鎖法（Codex follow-up，非本輪）：把 jsonschema 釘進 pawai/benchmarks runtime deps + 加 ImportError 測試。若真看到 `schema_validator_unavailable:ModuleNotFoundError`：WSL 端 `uv pip install jsonschema`（裝進 `/home/roy422/.venv`，不要用裸 pip）。
+**清掉 schema_validator_unavailable：** 已驗證**本輪非 blocker** — jsonschema 4.26.0 可在 `$HOME/.venv` import；對 stale snapshot 跑 readiness 第一個 reason 是 `sha_mismatch` 不是 schema_validator。**在 WSL 用該 venv 跑 build+readiness 就不會觸發。** 永久鎖法（Codex follow-up，非本輪）：把 jsonschema 釘進 pawai/benchmarks runtime deps + 加 ImportError 測試。若真看到 `schema_validator_unavailable:ModuleNotFoundError`：WSL 端 `uv pip install jsonschema`（裝進 `$HOME/.venv`，不要用裸 pip）。
 
 ---
 

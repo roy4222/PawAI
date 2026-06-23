@@ -188,7 +188,7 @@ pawai doctor --verbose # SSH 失敗時印出 stderr 細節
 
 ```
 == Network topology ==
-  ✓ local → Jetson Tailscale: OK 100.64.0.1
+  ✓ local → Jetson Tailscale: OK YOUR_JETSON_IP
   ✓ Jetson internet route: wlan0
   ✓ Jetson Go2 link: eth0 192.168.123.X/24
   ✓ Jetson → Go2 ping: OK 192.168.123.161
@@ -354,7 +354,7 @@ pawai demo start --skip-healthcheck # 逃生口：跳過 post-start healthcheck 
 成功時最後印：
 
 ```
-✅ Gateway reachable from local: http://100.64.0.1:8080
+✅ Gateway reachable from local: http://YOUR_JETSON_IP:8080
 ✅ Frontend: http://localhost:3000/studio
 ```
 
@@ -684,7 +684,7 @@ CLI 讀順序：`.env` → `.env.local`（後者覆寫前者）。
 |------|------|-----|
 | `JETSON_HOST` | `jetson-nano` | SSH alias / hostname |
 | `JETSON_REPO` | `/home/jetson/elder_and_dog` | Jetson 上的 repo 路徑 |
-| `JETSON_TAILSCALE_IP` | `100.64.0.1` | 本機 browser 連 Studio Gateway 用 |
+| `JETSON_TAILSCALE_IP` | `YOUR_JETSON_IP` | 本機 browser 連 Studio Gateway 用 |
 | `ROBOT_IP` | `192.168.123.161` | Go2 IP |
 | `OPENROUTER_KEY` / `OPENROUTER_API_KEY` | （無） | LLM cloud key |
 | `PAWAI_LLM_MODEL` | `openai/gpt-5.4-mini` | 主線 LLM |

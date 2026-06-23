@@ -3,7 +3,7 @@
 > **日期**：2026-06-11
 > **Verdict**：**ADOPT_AS_CANDIDATE_SOURCE**（按能力線分層進候選池；3 個 BENCHMARK_CANDIDATE、9 個附觸發條件的 MAYBE；任何模型上線前仍走 benchmark 制度）
 > **研究方法**：ultracode workflow——第一輪 6 路平行盤點（object/face/pose/gesture/other/repo 機制）+ 14 個候選深查（預設懷疑視角）+ 完整性批判者；批判者抓出缺口後第二輪補查 4 個（478_SC / 475_VSDLM / 477_PGC / 451_DAN 表情家族）；481_WHC / 431_NITEC 由主線直接對本地 clone 補證。共 25 個 subagents、~400 次工具呼叫。
-> **本地 clone**：`/home/roy422/newLife/PINTO_model_zoo`（commit `1ed3508`，2026-06-07，depth-1）
+> **本地 clone**：`$HOME/newLife/PINTO_model_zoo`（commit `1ed3508`，2026-06-07，depth-1）
 > **本研究為 read-only**：未改 code、未 commit、未在任何機器安裝模型。
 
 ---

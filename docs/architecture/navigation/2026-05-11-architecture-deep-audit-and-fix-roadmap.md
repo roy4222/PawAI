@@ -340,7 +340,7 @@ local_costmap:
 
 ```bash
 # Step 0: 處理 working tree 殘留（5/11 沒解的）
-cd /home/roy422/newLife/elder_and_dog
+cd $WORKSPACE
 git status
 # M docs/archive/pawai-brain-legacy/plans/2026-05-11-nav-root-cause-burndown.md（drift，待 Roy 決定）
 # D docs/archive/pawai-brain-legacy/plans/2026-05-12-reactive-stop-safety-fix-plan.md（68fe29b 創、被刪）

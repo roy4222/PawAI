@@ -2,7 +2,7 @@
 
 Eight cases, all with inline fixtures; no hardware, no ROS, no heavy deps. Run:
 
-    cd /home/roy422/newLife/elder_and_dog && \
+    cd $WORKSPACE && \
         python3 -m pytest scripts/test_corun_profile_parse.py -v
 """
 import os

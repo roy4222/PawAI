@@ -2,7 +2,7 @@
 # GPU Server Health Check — 每分鐘 ping healthchecks.io
 # 部署方式：在 RTX 8000 上加到 crontab
 #   crontab -e
-#   * * * * * HC_PING_URL="https://hc-ping.com/YOUR-UUID" /home/roy422/gpu-server-healthcheck.sh
+#   * * * * * HC_PING_URL="https://hc-ping.com/YOUR-UUID" $HOME/gpu-server-healthcheck.sh
 #
 # healthchecks.io 設定建議：Period=1min, Grace=5min
 

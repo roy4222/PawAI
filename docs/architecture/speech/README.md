@@ -281,8 +281,8 @@ sensevoice_cloud (RTX 8000, FunASR) → sensevoice_local (Jetson, sherpa-onnx in
 ```bash
 # 1. 確認是 server 進程死（非 tunnel）：Jetson 上 curl 8001 = 000/reset，但 8000(LLM) 正常
 ssh jetson-nano "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/health"   # 200=活
-# 2. 在 RTX 8000（roy422@140.136.155.5）重啟（掛 tmux 持久化、用 pawai_gpu env、GPU1）
-ssh roy422@140.136.155.5 "tmux new-session -d -s sensevoice 'cd ~ && CUDA_VISIBLE_DEVICES=1 ~/miniconda3/envs/pawai_gpu/bin/python sensevoice_server.py --port 8001 > ~/sensevoice_restart.log 2>&1'"
+# 2. 在 RTX 8000（YOUR_USER@YOUR_GPU_HOST）重啟（掛 tmux 持久化、用 pawai_gpu env、GPU1）
+ssh YOUR_USER@YOUR_GPU_HOST "tmux new-session -d -s sensevoice 'cd ~ && CUDA_VISIBLE_DEVICES=1 ~/miniconda3/envs/pawai_gpu/bin/python sensevoice_server.py --port 8001 > ~/sensevoice_restart.log 2>&1'"
 # 3. ~15-40s model 載入後，Jetson curl 8001/health 應回 200（FunASR log 那句 "Loading remote code failed: No module named 'model'" 是無害 warning）
 ```
 

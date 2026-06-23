@@ -57,7 +57,7 @@ bash .claude/skills/brain-studio-lane/scripts/cleanup.sh [--handoff nav|none]
 
 `--studio` overlay：在 Jetson 起 `studio_gateway`（port 8080，full mode 已內建），在當前環境起 Next.js
 frontend（port 3000，被占用自動 fallback 3001/3002）。frontend env `NEXT_PUBLIC_GATEWAY_URL`
-自動指向 Jetson Tailscale IP `100.64.0.1:8080`。
+自動指向 Jetson Tailscale IP `YOUR_JETSON_IP:8080`。
 
 ## 推薦：`demo` mode 一鍵流程
 

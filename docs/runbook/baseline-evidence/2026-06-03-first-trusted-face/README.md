@@ -42,8 +42,8 @@ python3 -m benchmarks.core.build_scoreboard <jsonl> \
   --preflight artifacts/baseline/preflight_result.json \
   --out artifacts/baseline/baseline_snapshot.json
 
-# 4) readiness（pawai 在 WSL /home/roy422/.venv/bin/pawai，不在 PATH）
-PAWAI_SCOREBOARD_PATH=baseline_snapshot.json /home/roy422/.venv/bin/pawai readiness --json
+# 4) readiness（pawai 在 WSL $HOME/.venv/bin/pawai，不在 PATH）
+PAWAI_SCOREBOARD_PATH=baseline_snapshot.json $HOME/.venv/bin/pawai readiness --json
 ```
 
 ## 已知關鍵坑（寫進工程筆記）

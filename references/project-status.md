@@ -713,7 +713,7 @@ T3 hold_brake smoke 發現 `/cmd_vel_obstacle` 0 subscriber、`twist_mux` 不在
 | F6 | `nav_capability` 腳本 `NAV_PARAMS` env override | P1 | 15 min |
 | **F7** | **🔴 nav_action_server no_progress_timeout root cause 調查**（goal accept 但 controller 完全不發 cmd_vel）| **P0 場測前必修** | 2-3h |
 
-**Plan A research 落檔**：`/home/roy422/.claude/plans/graceful-twirling-cloud.md`（含 3 subagent findings 詳細）
+**Plan A research 落檔**：`$HOME/.claude/plans/graceful-twirling-cloud.md`（含 3 subagent findings 詳細）
 
 ### Stack state at end of session
 
@@ -1203,7 +1203,7 @@ Branch plans：B/C/D/E 各一份在 `docs/archive/pawai-brain-legacy/plans/`
 - `685c97d` `fix(brain): per-(class,color) dedup for object_remark — 60s window` — SkillContract.cooldown_s=5 只擋 SAY skill 不擋同物重發，YOLO 持續偵測同一張椅子每 5s 喊一次「看到咖啡色的椅子了」。`brain_node._on_object` 加 `_object_remark_seen[(class, color)]` 60s 窗口
 - `10829ca` `feat(brain,tts): per-message TTS routing — Studio chat → Gemini, others → edge_tts` — Plumbing 6 file。`pawai_brain` 訂閱 `/brain/text_input`（補主鏈斷）+ ChatCandidatePayload 加 `input_origin` 欄位 + `build_plan` 把 input_origin 帶進 step args + IE-node SAY 條件包 JSON envelope + tts_node 預 build studio chain（gemini → edge_tts → piper, dedup）+ tts_callback parse envelope 選 chain。Plan: `~/.claude/plans/polished-questing-starlight.md` v1.4
 - `e1363c8` `fix(brain): silence stranger_alert TTS + skip object_remark for person class` — `stranger_alert` SAY text → 空字串（IE-node SAY return `empty_tts_text`，trace 留 chip 但 /tts 不發）+ `build_object_tts` 對 class==`person` return None（避開 stranger / greet 路徑衝突）。同 fall_alert b224217 模式
-- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（100.64.0.2），Gateway 在 Jetson（192.168.0.222）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
+- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（YOUR_LAPTOP_IP），Gateway 在 Jetson（192.168.x.x）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
 
 ### Smoke 結果（Jetson 實機）
 | Smoke | 結果 |
@@ -1270,7 +1270,7 @@ Branch plans：B/C/D/E 各一份在 `docs/archive/pawai-brain-legacy/plans/`
 
 ## 5/8 進度（Brain Allowlist Expansion + needs_confirm Handoff）
 
-LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 仍只有 2 條 + pawai_brain `skill_policy_gate.v2` 在 needs_confirm 分支把 proposed_skill 吃掉，導致 wiggle / stretch 永遠到不了 brain_node、wave_hello / sit_along / careful_remind / greet_known_person 永遠被擋。本次修齊以解鎖 5/18 driver-less demo「PAI 自己介紹自己 + 自己選功能展示」主軸。完整 plan：`/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md`。
+LLM 透過 capability_context 看得到 33 條能力，但 brain_node allowlist 仍只有 2 條 + pawai_brain `skill_policy_gate.v2` 在 needs_confirm 分支把 proposed_skill 吃掉，導致 wiggle / stretch 永遠到不了 brain_node、wave_hello / sit_along / careful_remind / greet_known_person 永遠被擋。本次修齊以解鎖 5/18 driver-less demo「PAI 自己介紹自己 + 自己選功能展示」主軸。完整 plan：`$HOME/.claude/plans/langgraph-cut-2-wise-waterfall.md`。
 
 ### 落地內容
 
@@ -1349,7 +1349,7 @@ B1-B5 全部從 `2bc6566` 起；B5 4 個 commit 把 plan 收尾。
 
 | 項目 | 結果 |
 |---|---|
-| Plan | `/home/roy422/.claude/plans/langgraph-cut-2-wise-waterfall.md` — 5 step waterfall |
+| Plan | `$HOME/.claude/plans/langgraph-cut-2-wise-waterfall.md` — 5 step waterfall |
 | 新 package | `pawai_brain/` — package.xml / setup.py / launch / 11 graph nodes / wrapper / 4 test files |
 | LangGraph 版本 | langgraph 1.1.10 + langchain-core 1.3.3（WSL；Jetson 待部署日驗） |
 | 純 module 移植 | `llm_client.py`（OpenRouter chain）/ `memory.py` / `validator.py` / `repair.py` / `rule_fallback.py` / `schemas.py` / `state.py`（全 copy 自 llm_bridge_node，原檔保留） |
@@ -1436,7 +1436,7 @@ Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦
 | 辨識物體 | `object_perception_node`（YOLO26n + 12 色 HSV） | `/event/object_detected` → `object_remark` zh + 顏色 | edge_tts |
 | 導航避障 | `nav2_bringup` + RPLIDAR + AMCL | Foxglove `/initialpose` 設位姿 → `/goal_pose` 1m / 0.8m,-0.4m | n/a |
 
-Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://100.64.0.1:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
+Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://YOUR_JETSON_IP:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
 
 `brain_node` 改用 ROS param `unknown_face_accumulate_s=99999.0` 暫時關掉 stranger_alert 干擾錄影；正式環境改回 3.0。
 `llm_bridge_node` 在 Jetson 上 sed 掉 `FAST_PATH_INTENTS = set()`（demo 期讓所有 intent 都走 LLM；目前 WSL 仍是 `{greet, stop, sit, stand}`，回 demo 後同步決定要不要正式落 ROS param）。
@@ -1482,7 +1482,7 @@ frisbee     → None                          (whitelist 外，UI 顯示但 brai
 | `/event/object_detected` JSON | 含 `color` / `color_confidence`（saturation 過低 omit）|
 | `/brain/proposal` `object_remark` 模板 | colour preamble + zh class + suffix 正確渲染 |
 | Jetson tmux fv | 6 window：camera / object / vision / fox / gateway / brain 全跑 |
-| Studio Live `/studio/live` | 連 ws://100.64.0.1:8080，2 ws_clients |
+| Studio Live `/studio/live` | 連 ws://YOUR_JETSON_IP:8080，2 ws_clients |
 | 真實顏色觀察 | brown 0.367 / black 0.309 / cyan 0.471 / gray 0.549（confidence 偏低正常，HSV 規則式本質）|
 
 ### 衍生 backlog
@@ -2025,7 +2025,7 @@ K1 spec 是 ≥ 4/5，目前 3/5 = 軟通過。但 AMCL 主鏈跑通、Go2 實�
 - 雷達 motor 朝下 → 排除物理倒裝
 - initialpose 拖箭頭對齊 Go2 真實前方 → 排除 initialpose 方向錯
 
-**新路徑（user 定）**：物理錨定測試 — 在 Go2 正前方 0.8m 放物體，跑 scan_health_check.py 看物體落在哪個 angle bin，直接判讀 yaw。**完整 plan**：`/home/roy422/.claude/plans/abstract-sleeping-hoare.md`
+**新路徑（user 定）**：物理錨定測試 — 在 Go2 正前方 0.8m 放物體，跑 scan_health_check.py 看物體落在哪個 angle bin，直接判讀 yaw。**完整 plan**：`$HOME/.claude/plans/abstract-sleeping-hoare.md`
 
 ### 供電升級（demo blocker → 已解）
 

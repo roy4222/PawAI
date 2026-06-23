@@ -112,7 +112,7 @@ Trace/topic：dance-01 trace = memory → llm_decision → json_validate → rep
 分類：feature (Roy 5/7 night 加 demo 需求)
 觸發：5 步 smoke
 - Smoke 1: `ros2 topic pub --once /tts std_msgs/String 'data: 測試純文字一'`
-- Smoke 2: `curl -X POST http://192.168.0.222:8080/api/text_input -d '{"text":"小狗你今天好嗎"}'`
+- Smoke 2: `curl -X POST http://192.168.x.x:8080/api/text_input -d '{"text":"小狗你今天好嗎"}'`
 - Smoke 3: 麥克風講「你好」（待 Roy 確認）
 - Smoke 4: 物體偵測 → object_remark
 - Smoke 5: 拔 OPENROUTER_KEY fallback（待跑）

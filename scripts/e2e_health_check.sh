@@ -40,7 +40,7 @@ if curl -sf --max-time 3 "$LLM_HEALTH_URL" >/dev/null 2>&1; then
   ok "LLM reachable ($LLM_HEALTH_URL) — model: $MODEL_INFO"
 else
   fail "LLM unreachable: $LLM_HEALTH_URL"
-  info "Try: ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5"
+  info "Try: ssh -f -N -L 8000:localhost:8000 YOUR_USER@YOUR_GPU_HOST"
 fi
 
 # ── Layer 1: ROS2 Nodes ──

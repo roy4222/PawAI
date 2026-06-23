@@ -1,7 +1,7 @@
 # Jetson 真機 Smoke 結果（Phase B Day 2 開頭）
 
 **日期**：2026-05-04 evening（執行於 5/4 20:03–20:30 WSL+Jetson）
-**Plan 來源**：`/home/roy422/.claude/plans/jetson-kind-book.md`
+**Plan 來源**：`$HOME/.claude/plans/jetson-kind-book.md`
 **目的**：驗證 Phase B Day 1 commits（OpenRouter Gemini 鏈、Skill Registry、Studio chat-first）能在 Jetson 實機跑起來，再決定後續是否進 B1 TTS 換血 / self_introduce / B6 PR port。
 
 ---
@@ -19,7 +19,7 @@
 
 ## 環境
 
-- WSL：`/home/roy422/newLife/elder_and_dog`，commit `a55f83a`（5/4 chat-first redesign 結尾）
+- WSL：`$WORKSPACE`，commit `a55f83a`（5/4 chat-first redesign 結尾）
 - Jetson：`~/elder_and_dog`，rsync 同步（無 git history）
 - 網路：Jetson 直接外網 OK；同時有 SSH tunnel 到 RTX 8000 (`localhost:8000` vLLM, `:8001` ASR)
 - USB 硬體：喇叭 CD002-AUDIO 在 **card 2**（`plughw:2,0`）— **CLAUDE.md 寫 card 3 是錯的**，需改

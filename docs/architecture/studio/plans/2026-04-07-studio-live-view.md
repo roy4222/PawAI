@@ -109,7 +109,7 @@ class TestVideoClients:
 - [ ] 執行測試確認失敗
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_video_bridge.py -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_video_bridge.py -v
 ```
 
 Expected: FAIL（`video_bridge` 不存在）
@@ -205,7 +205,7 @@ class VideoClients:
 - [ ] 執行測試確認全部通過
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_video_bridge.py -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_video_bridge.py -v
 ```
 
 Expected: 8 passed
@@ -256,7 +256,7 @@ class TestVideoEndpointConfig:
 - [ ] 執行測試確認通過
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_gateway.py::TestVideoEndpointConfig -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_gateway.py::TestVideoEndpointConfig -v
 ```
 
 Expected: 2 passed
@@ -573,7 +573,7 @@ export function useVideoStream({
 - [ ] TypeScript 語法檢查
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog/pawai-studio/frontend && npx tsc --noEmit --strict hooks/use-video-stream.ts 2>&1 | head -20
+cd $WORKSPACE/pawai-studio/frontend && npx tsc --noEmit --strict hooks/use-video-stream.ts 2>&1 | head -20
 ```
 
 Expected: 無錯誤（或只有 path alias 相關，不影響）
@@ -1113,7 +1113,7 @@ class TestVideoBridgeIntegration:
 - [ ] 執行全部 gateway 測試
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
+cd $WORKSPACE && python3 -m pytest pawai-studio/gateway/test_gateway.py pawai-studio/gateway/test_video_bridge.py -v
 ```
 
 Expected: 全部通過

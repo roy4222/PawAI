@@ -42,7 +42,7 @@ ssh jetson-nano "grep '.env' ~/elder_and_dog/scripts/start_pawai_brain_tmux.sh |
 # SOURCE_CMD="... && { [[ -f $WORKSPACE/.env ]] && set -a && source $WORKSPACE/.env && set +a; } || true"
 
 # 沒有 → rsync 從 WSL 推：
-rsync -a /home/roy422/newLife/elder_and_dog/scripts/start_pawai_brain_tmux.sh jetson-nano:~/elder_and_dog/scripts/
+rsync -a $WORKSPACE/scripts/start_pawai_brain_tmux.sh jetson-nano:~/elder_and_dog/scripts/
 
 # 重啟 brain
 ssh jetson-nano "tmux kill-session -t pawai_brain"
@@ -100,11 +100,11 @@ ssh jetson-nano "tmux capture-pane -t pawai_brain:conv_graph -p -S -100 | grep -
 ssh jetson-nano "curl -s http://localhost:8080/health"
 
 # 從本機通嗎
-curl -s http://100.64.0.1:8080/health
+curl -s http://YOUR_JETSON_IP:8080/health
 
 # Frontend env 對嗎
 grep NEXT_PUBLIC_GATEWAY_URL /tmp/studio_frontend.log
-# 應該看到 http://100.64.0.1:8080
+# 應該看到 http://YOUR_JETSON_IP:8080
 ```
 
 ## Frontend 卡在編譯 / 慢

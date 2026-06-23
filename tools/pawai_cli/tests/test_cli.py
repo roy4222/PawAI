@@ -58,7 +58,7 @@ def test_unknown_module_exits_nonzero() -> None:
 
 
 def test_ssh_config_matches_exact_alias() -> None:
-    cfg = "Host jetson-nano\n    HostName 100.64.0.1\n"
+    cfg = "Host jetson-nano\n    HostName 203.0.113.1\n"
     assert _ssh_config_has_host(cfg, "jetson-nano")
     # substring should NOT match — this was the original bug
     assert not _ssh_config_has_host(cfg, "jetson")
@@ -126,12 +126,12 @@ def test_doctor_warns_on_tailscale_ip_mismatch(monkeypatch, tmp_path):
     monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")  # wrong on purpose
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
 
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
         runner = CliRunner()
         result = runner.invoke(cli, ["doctor"])
 
-    assert "mismatch" in result.output.lower() or "100.64.0.1" in result.output
+    assert "mismatch" in result.output.lower() or "203.0.113.1" in result.output
 
 
 def test_doctor_warns_when_no_jetson_peer(monkeypatch):
@@ -145,7 +145,7 @@ def test_doctor_warns_when_no_jetson_peer(monkeypatch):
 
 def test_doctor_topology_block_printed(monkeypatch):
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
@@ -168,7 +168,7 @@ def test_doctor_topology_block_printed(monkeypatch):
 def test_doctor_treats_offline_tailscale_peer_as_fail(monkeypatch):
     """When Tailscale peer is matched but online=False, doctor must fail."""
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    offline_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": False}
+    offline_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": False}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=offline_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value=None), \
@@ -198,7 +198,7 @@ def test_doctor_gateway_fails_when_running_lock_and_8080_down(monkeypatch):
         start_time="2026-05-13T10:00:00+00:00",
         demo_mode="full", tmux_session="demo", lane="brain",
     )
-    online_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    online_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=online_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
@@ -224,7 +224,7 @@ def test_doctor_gateway_fails_when_running_lock_and_8080_down(monkeypatch):
 def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
     """If Jetson internet route uses eth0 (likely Go2 link stolen for uplink), warn."""
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="eth0"), \
@@ -240,7 +240,7 @@ def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
 def test_doctor_expect_demo_gateway_fail_is_blocking(monkeypatch):
     """When demo is expected, Gateway 8080 down must make doctor fail."""
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
@@ -380,7 +380,7 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
     monkeypatch.setenv("PAWAI_REPO_ROOT", str(tmp_path))
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
 
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
         runner = CliRunner()
         # Default — should NOT mutate
@@ -393,14 +393,14 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
 
         # --fix with 'y' — should write detected IP
         runner.invoke(cli, ["doctor", "--fix"], input="y\n")
-        assert "100.64.0.1" in env_path.read_text(), "--fix y must write detected IP"
+        assert "203.0.113.1" in env_path.read_text(), "--fix y must write detected IP"
 
 
 def _invoke_doctor_with_ros_env_probe(monkeypatch, run_remote_result):
     from pawai_cli.shell import Result
 
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     def fake_run(argv, cwd=None, timeout=None):
         argv = list(argv)
@@ -696,16 +696,16 @@ def test_health_brain_passes_jetson_host_env(monkeypatch):
     with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
          patch("pawai_cli.main.shell.jetson_host", return_value="jetson"), \
          patch("pawai_cli.network.find_jetson_peer",
-               return_value={"hostname": "jetson", "ip": "100.64.0.1", "online": True}):
+               return_value={"hostname": "jetson", "ip": "203.0.113.1", "online": True}):
         runner = CliRunner()
         result = runner.invoke(cli, ["health", "brain"])
 
     assert result.exit_code == 0
     assert captured_env.get("JETSON_HOST") == "jetson"
-    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.64.0.1", \
+    assert captured_env.get("JETSON_TAILSCALE_IP") == "203.0.113.1", \
         "detected live peer must override stale env value"
     # Operator should see WHY the IP changed (avoid silent override).
-    assert "100.99.99.99" in result.output and "100.64.0.1" in result.output
+    assert "100.99.99.99" in result.output and "203.0.113.1" in result.output
 
 
 def test_build_demo_env_trust_env_opt_out(monkeypatch):
@@ -718,7 +718,7 @@ def test_build_demo_env_trust_env_opt_out(monkeypatch):
     called_detection = []
     with patch("pawai_cli.network.find_jetson_peer",
                side_effect=lambda **kw: called_detection.append(1) or
-                                          {"hostname": "j", "ip": "100.64.0.1", "online": True}):
+                                          {"hostname": "j", "ip": "203.0.113.1", "online": True}):
         env = cli_main._build_demo_env()
 
     assert env["JETSON_TAILSCALE_IP"] == "100.99.99.99", \
@@ -735,7 +735,7 @@ def test_build_demo_env_keeps_env_when_peer_offline(monkeypatch):
     monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")
     monkeypatch.delenv("PAWAI_TRUST_ENV_IP", raising=False)
     with patch("pawai_cli.network.find_jetson_peer",
-               return_value={"hostname": "j", "ip": "100.64.0.1", "online": False}):
+               return_value={"hostname": "j", "ip": "203.0.113.1", "online": False}):
         env = cli_main._build_demo_env()
 
     assert env["JETSON_TAILSCALE_IP"] == "100.99.99.99"
@@ -1106,13 +1106,13 @@ def test_invoke_start_sh_injects_jetson_tailscale_ip(monkeypatch):
 
     monkeypatch.delenv("JETSON_TAILSCALE_IP", raising=False)
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
+    peer = {"hostname": "jetson", "ip": "203.0.113.1", "online": True}
 
     with patch("pawai_cli.main.shell.stream", side_effect=fake_stream), \
          patch("pawai_cli.network.find_jetson_peer", return_value=peer):
         assert cli_main._invoke_start_sh(no_studio=False, brain_only=False) == 0
 
-    assert captured_env.get("JETSON_TAILSCALE_IP") == "100.64.0.1"
+    assert captured_env.get("JETSON_TAILSCALE_IP") == "203.0.113.1"
 
 
 def test_demo_start_nav_capability_invokes_nav_start(monkeypatch):

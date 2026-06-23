@@ -335,7 +335,7 @@ pip install ultralytics -e yolov11
 
 # 下載 Jetson 優化權重
 # 在 GPU Server 下載後，透過 SFTP 傳輸到 Jetson
-# 權重路徑：/home/roy422/yolo_weights/yolov11n_jetson.pt
+# 權重路徑：$HOME/yolo_weights/yolov11n_jetson.pt
 
 # 驗證安裝
 python3 -c "from ultralytics import YOLO11; model = YOLO11('yolov11n_jetson.pt'); print('Model loaded successfully')"

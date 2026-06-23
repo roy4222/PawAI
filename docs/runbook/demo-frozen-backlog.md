@@ -188,7 +188,7 @@ review post-N3 抓到：`_on_demo_segment` 對 truthy 非 list (`shown_skills=1`
 
 **為什麼必須現在動**：fist 完全沒觸發（user 5/11 night 反饋）；跌倒太嚴只認標準直挺平躺；lane 重啟流程手動 cleanup 太麻煩（每次都要打兩條命令）。
 
-**Vision rule 例外**：`/home/roy422/newLife/elder_and_dog/.claude/rules/vision-perception.md` 寫「fallen 閾值不要動」— user 5/11 明示要動，本 hotfix 列入例外紀錄。trunk_angle 60° 守住，只放寬 vertical_ratio + ankle，最低面積擾動。
+**Vision rule 例外**：`$WORKSPACE/.claude/rules/vision-perception.md` 寫「fallen 閾值不要動」— user 5/11 明示要動，本 hotfix 列入例外紀錄。trunk_angle 60° 守住，只放寬 vertical_ratio + ankle，最低面積擾動。
 
 **工時**：~1.5h（含 vision 36 tests + 4 regression）
 

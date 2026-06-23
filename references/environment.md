@@ -17,11 +17,11 @@ Jetson Orin Nano 開發環境、colcon build、部署流程、網路配置。
 | Windows/Mac（開發機） | VS Code SSH → Jetson，程式碼編輯 | |
 | Jetson Orin Nano 8GB | ROS2 runtime、模型推理、Go2 連線 | Shell 用 zsh |
 | Go2 Pro | 運動控制、音訊播放 | 192.168.12.1 (Wi-Fi) / 192.168.123.161 (Ethernet) |
-| RTX 8000 (x5) | Cloud LLM (vLLM) | 140.136.155.5 |
+| RTX 8000 (x5) | Cloud LLM (vLLM) | YOUR_GPU_HOST |
 
 ## Jetson 連線
 
-- SSH：`jetson-nano`（Tailscale IP 100.64.0.1）
+- SSH：`jetson-nano`（Tailscale IP YOUR_JETSON_IP）
 - Repo 路徑：`~/elder_and_dog`（不是 `~/newLife/elder_and_dog`）
 
 ## Build 流程

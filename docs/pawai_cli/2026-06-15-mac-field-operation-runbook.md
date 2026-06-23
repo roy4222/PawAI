@@ -48,7 +48,7 @@ tailscale status                    # 應看到 hostname 含 jetson/orin 的 nod
 
 # 6) SSH config：~/.ssh/config 加 Host 區塊（指向 Jetson Tailscale IP）
 #    Host jetson-nano
-#        HostName 100.64.0.1
+#        HostName YOUR_JETSON_IP
 #        User jetson
 ssh-copy-id jetson-nano             # 推 Mac 公鑰上 Jetson（一次性）
 ssh jetson-nano "echo ok"           # 應印 ok（SSH 通了）
@@ -57,7 +57,7 @@ ssh jetson-nano "echo ok"           # 應印 ok（SSH 通了）
 cp .env.local.example .env.local 2>/dev/null || true
 $EDITOR .env.local
 #   JETSON_HOST=jetson-nano
-#   JETSON_TAILSCALE_IP=100.64.0.1   （留空 CLI 會從 tailscale status 偵測）
+#   JETSON_TAILSCALE_IP=YOUR_JETSON_IP   （留空 CLI 會從 tailscale status 偵測）
 #   OPENROUTER_KEY=...                   （跟 Roy 拿）
 ```
 

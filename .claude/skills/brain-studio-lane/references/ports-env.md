@@ -6,7 +6,7 @@
 |---|---|---|---|
 | 8000 | LLM API endpoint | Jetson localhost (SSH tunnel) | Cloud LLM (vLLM Qwen2.5-7B on RTX 8000) |
 | 8001 | ASR API endpoint | Jetson localhost (SSH tunnel) | SenseVoice cloud ASR |
-| 8080 | studio_gateway | Jetson (Tailscale 100.64.0.1) | Studio API + WebSocket |
+| 8080 | studio_gateway | Jetson (Tailscale YOUR_JETSON_IP) | Studio API + WebSocket |
 | 3000 | Next.js frontend | WSL/Mac localhost | Studio UI；占用時自動 fallback 3001/3002 |
 | 8765 | foxglove_bridge | Jetson | RViz/Foxglove 可視化（可選） |
 | 11434 | Ollama local LLM | Jetson | LLM cloud 斷線 fallback（可選） |
@@ -28,7 +28,7 @@ ssh jetson-nano "ss -tlnp | grep -E ':8000|:8001'"
 
 | Var | WSL | Jetson |
 |---|---|---|
-| `WORKSPACE` | `/home/roy422/newLife/elder_and_dog` | `/home/jetson/elder_and_dog` |
+| `WORKSPACE` | `$WORKSPACE` | `/home/jetson/elder_and_dog` |
 | repo path | 同 WORKSPACE | 同 WORKSPACE |
 | persona dir | `$WORKSPACE/install/pawai_brain/share/pawai_brain/personas/v1/` | 同 |
 | .env | `$WORKSPACE/.env` | 同 |
@@ -78,8 +78,8 @@ ASR_PROVIDER_ORDER='["sensevoice_cloud","sensevoice_local","whisper_local"]'
 
 ```bash
 GATEWAY_PORT=8080
-GATEWAY_HOST=100.64.0.1             # Jetson Tailscale IP
-NEXT_PUBLIC_GATEWAY_URL=http://100.64.0.1:8080  # frontend env
+GATEWAY_HOST=YOUR_JETSON_IP             # Jetson Tailscale IP
+NEXT_PUBLIC_GATEWAY_URL=http://YOUR_JETSON_IP:8080  # frontend env
 LLM_HOST=localhost                     # Jetson 上 cloud LLM tunnel
 ASR_HOST=localhost                     # Jetson 上 cloud ASR tunnel
 ```

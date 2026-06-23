@@ -57,7 +57,7 @@ set -a && . ./.env && set +a
 MOCK_OPENROUTER=1 bash pawai-studio/start-live.sh --mock
 
 # Jetson 模式
-GATEWAY_HOST=100.64.0.1 bash pawai-studio/start-live.sh --live
+GATEWAY_HOST=YOUR_JETSON_IP bash pawai-studio/start-live.sh --live
 
 # TypeScript 檢查
 cd pawai-studio/frontend && npx tsc --noEmit

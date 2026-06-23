@@ -138,10 +138,10 @@ model.export(format="onnx")                 # 之後可加 imgsz=960 與 goal 1 
 
 ### 4b. PINTO zoo 供給查證（Q5 的證據）
 
-- `grep -ril "yolo-world\|yoloe\|open.vocab\|grounding" /home/roy422/newLife/PINTO_model_zoo/*/README.md` → **0 命中**（grep exit 1）。
+- `grep -ril "yolo-world\|yoloe\|open.vocab\|grounding" $HOME/newLife/PINTO_model_zoo/*/README.md` → **0 命中**（grep exit 1）。
 - 目錄名掃描（world|yoloe|owl|ground|lvis|detic|glip）只有 2 個**假陽性**：`138_BackgroundMattingV2`（"ground" 撞 "Background"）、`336_PP-YOLOE-Plus`（Paddle 的閉集 COCO 偵測器，與清華 YOLOE 同名不同物；目錄內僅 demo/convert_script.txt/download.sh/LICENSE/url.txt，無 README.md）。
 - **結論：PINTO 報告盤點「未被任何角度撈出」是真缺席不是漏掃**——zoo 內無 open-vocab、無 LVIS 級 closed-set 供給。
-- 但 guardian 場景有**屬性級替代**：`472_DEIMv2-Wholebody34` 含 `body_with_wheelchair`（per-class mAP 0.4186→0.9288 隨尺寸）與 `body_with_crutches`（0.4764→0.9487）（`/home/roy422/newLife/PINTO_model_zoo/472_DEIMv2-Wholebody34/README.md` per-class mAP 表）——「坐輪椅的人/拄拐的人」用人體屬性偵測比「偵測拐杖物體」更貼 guardian 語意，**拐杖/輪椅可以不靠 open-vocab**（觸發條件照 PINTO 報告 §4.2：guardian 能力線立項才動）。
+- 但 guardian 場景有**屬性級替代**：`472_DEIMv2-Wholebody34` 含 `body_with_wheelchair`（per-class mAP 0.4186→0.9288 隨尺寸）與 `body_with_crutches`（0.4764→0.9487）（`$HOME/newLife/PINTO_model_zoo/472_DEIMv2-Wholebody34/README.md` per-class mAP 表）——「坐輪椅的人/拄拐的人」用人體屬性偵測比「偵測拐杖物體」更貼 guardian 語意，**拐杖/輪椅可以不靠 open-vocab**（觸發條件照 PINTO 報告 §4.2：guardian 能力線立項才動）。
 
 ### 4c. 負面結論搜尋紀錄（2026-06-11 WebSearch，供復查）
 
@@ -228,7 +228,7 @@ model.export(format="onnx")                 # 之後可加 imgsz=960 與 goal 1 
 15. Roy 6/9 已點名「發揮 COCO 更多類別、別只 cup-only」+「object 鎖 1m 內、遠距降 bonus」 — `project_demo_flow_0609.md` 待辦 #2、修法 #6
 16. 互動 70% / 守護 30% 定位，類別清單對齊場景而非貪多 — `docs/mission/README.md:50-52`
 17. mission 既有待辦「組員篩選適合室內場景的 COCO 類別」（COCO 內篩選）— `docs/mission/README.md:459`；本研究 v0 是其 superset
-18. PINTO zoo README 全文 grep open-vocab 關鍵詞 **0 命中**（exit 1）— 本研究實測 `grep -ril` on `/home/roy422/newLife/PINTO_model_zoo/*/README.md`
+18. PINTO zoo README 全文 grep open-vocab 關鍵詞 **0 命中**（exit 1）— 本研究實測 `grep -ril` on `$HOME/newLife/PINTO_model_zoo/*/README.md`
 19. 目錄名僅 2 假陽性：`138_BackgroundMattingV2`、`336_PP-YOLOE-Plus`（Paddle 閉集，無 README.md）— 本研究 `ls` + 目錄內容查證
 20. PINTO `472_DEIMv2-Wholebody34` 有 `body_with_wheelchair` mAP 0.4186-0.9288 / `body_with_crutches` 0.4764-0.9487（隨尺寸）— `472_DEIMv2-Wholebody34/README.md` per-class mAP 表
 21. PINTO 報告裁定「object 線此 zoo 無解」針對 cup 遠距 — `2026-06-11-pinto-model-zoo-pawai-fit-report.md:63,130-135`；本研究確認**類別擴充同樣無解**（兩結論獨立成立）

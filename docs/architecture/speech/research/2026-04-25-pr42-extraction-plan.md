@@ -62,7 +62,7 @@
   ```
   LLM 輸出 `"; rm -rf ~; #` 就重灌 Jetson。
   正確做法：用 `create_subprocess_exec` + argv list，不要 shell。
-- `connect_gpu.sh` hardcode `roy422@140.136.155.5`（內網 IP + 個人帳號）入版控
+- `connect_gpu.sh` hardcode `YOUR_USER@YOUR_GPU_HOST`（內網 IP + 個人帳號）入版控
 
 ### 架構違規
 - `studio_api.py` 是 FastAPI WebSocket，**繞過整個 ROS2 stack**

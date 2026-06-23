@@ -184,7 +184,7 @@
 
 從初級保守升進階誠實的條件——**每一項都要有對應 chip grade=pass 背書才放寬旁白**：
 
-- [ ] **R0**：WSL 跑出 frozen `baseline_snapshot.json`，sha 對得上 deploy code（消除 6/04 readiness 第一個 blocker `sha_mismatch`）；在 `/home/roy422/.venv` 跑 build+readiness 即不觸發 `schema_validator_unavailable`（jsonschema 已可 import，見 `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`）。
+- [ ] **R0**：WSL 跑出 frozen `baseline_snapshot.json`，sha 對得上 deploy code（消除 6/04 readiness 第一個 blocker `sha_mismatch`）；在 `$HOME/.venv` 跑 build+readiness 即不觸發 `schema_validator_unavailable`（jsonschema 已可 import，見 `docs/runbook/2026-06-18-hitl-oneshot-runbook.md`）。
 - [ ] **R1（face 邊界擴張）**：6/04 已是窄版 pass；#81 乾淨重跑（≥2 註冊者 + 多光照 + 真實陌生人樣本）→ 才可從「窄版（僅 Roy/空景）」擴張到更廣 framing。**重跑前不得宣稱拒絕陌生人 / 2m+ / 通用人臉辨識。**
 - [ ] **R2（object 邊界擴張）**：6/04 已是 ~1m 窄版 pass；多距離（1/1.5/2m）重跑 → 才可說「2m 也可靠」。**重跑前只講 ~1m 近距杯子。**
 - [ ] **R3（gesture 升級）**：gesture.wave baseline **pass**（含 idle 誤觸 ground-truth）——**6/04 仍 fail（recall=0.0）** → 才可說「揮手互動可靠」；未 pass 前 camera 動態 wave 不演、誠實標 fail。

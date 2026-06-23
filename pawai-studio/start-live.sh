@@ -32,7 +32,7 @@ case "${1:-}" in
 esac
 
 # ── Gateway 位置（live / auto 用） ─────────────────────────────
-GATEWAY_HOST="${GATEWAY_HOST:-100.64.0.1}"
+GATEWAY_HOST="${GATEWAY_HOST:?set GATEWAY_HOST to your Jetson IP/host (no silent default)}"
 GATEWAY_PORT="${GATEWAY_PORT:-8080}"
 GATEWAY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
 

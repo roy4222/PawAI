@@ -472,6 +472,6 @@ for i, ref in enumerate([
     para(f'{i}. {ref}')
 
 # ── Save ──
-output = '/home/roy422/newLife/elder_and_dog/docs/deliverables/thesis/114-thesis.docx'
+output = '$WORKSPACE/docs/deliverables/thesis/114-thesis.docx'
 doc.save(output)
 print(f'Saved: {output}')

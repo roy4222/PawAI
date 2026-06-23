@@ -1113,8 +1113,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PawAI Studio Gateway", lifespan=lifespan)
 
-# CORS — Studio frontend at laptop IP (e.g. 100.64.0.2:3000) POSTs to
-# Gateway at Jetson IP (192.168.0.222:8080). WebSocket bypasses CORS so
+# CORS — Studio frontend at laptop IP (e.g. YOUR_LAPTOP_IP:3000) POSTs to
+# Gateway at Jetson IP (192.168.x.x:8080). WebSocket bypasses CORS so
 # /ws/* worked, but /api/text_input was blocked by browser preflight.
 # 5/7 night fix per Roy's "Brain 文字通道未連線" report.
 # S0 hardening: allow_origins is the GATEWAY_ALLOWED_ORIGINS allowlist when set,

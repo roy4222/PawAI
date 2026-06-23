@@ -84,7 +84,7 @@ MOCK_OPENROUTER=1 bash pawai-studio/start-live.sh --mock
 # 已偵測真實 port 顯示，不再寫死 3000）
 ```
 
-> Live mode 預設 Gateway = `http://100.64.0.1:8080`（Tailscale），可用 `GATEWAY_HOST=<ip>` override。
+> Live mode 預設 Gateway = `http://YOUR_JETSON_IP:8080`（Tailscale），可用 `GATEWAY_HOST=<ip>` override。
 
 ## 核心流程
 
@@ -193,7 +193,7 @@ Foxglove 替代展示牆。三欄即時影像 + 精簡 overlay + 事件 ticker�
 
 ## Gateway / Mock 端點
 
-> Gateway 5/7 night 起加 CORS middleware (`allow_origins=["*"]`)，Studio frontend 在筆電（如 `100.64.0.2:3000`）POST 到 Jetson Gateway（`192.168.0.222:8080`）不會被瀏覽器擋。WebSocket 不受 CORS 限制，所有 `/ws/*` 一律可用。Demo 內網 acceptable risk（commit `67c28ce`）。
+> Gateway 5/7 night 起加 CORS middleware (`allow_origins=["*"]`)，Studio frontend 在筆電（如 `YOUR_LAPTOP_IP:3000`）POST 到 Jetson Gateway（`192.168.x.x:8080`）不會被瀏覽器擋。WebSocket 不受 CORS 限制，所有 `/ws/*` 一律可用。Demo 內網 acceptable risk（commit `67c28ce`）。
 
 
 | 端點 | 方向 | 用途 | live | mock |

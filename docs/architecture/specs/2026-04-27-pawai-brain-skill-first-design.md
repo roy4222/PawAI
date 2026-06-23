@@ -546,14 +546,14 @@ bash scripts/start_llm_e2e_tmux.sh
 
 # 2. brain 模式下，sport /webrtc_req 來源限制
 bash scripts/start_pawai_brain_tmux.sh   # Phase 1 完成後
-grep -rn "create_publisher" --include="*.py" /home/roy422/newLife/elder_and_dog/ \
+grep -rn "create_publisher" --include="*.py" $WORKSPACE/ \
   | grep "WebRtcReq" \
   | grep -v "^.*tts_node.py:" \
   | grep -v "^.*interaction_executive_node.py:"
 # 預期：no output
 
 # 3. tts_node 只發 audio api 4001-4004，不發 sport
-grep -n "WebRtcReq" /home/roy422/newLife/elder_and_dog/speech_processor/speech_processor/tts_node.py \
+grep -n "WebRtcReq" $WORKSPACE/speech_processor/speech_processor/tts_node.py \
   | head -20
 # 手動審視 api_id 賦值，應只見 {4001, 4002, 4003, 4004}（Megaphone enter/upload/exit/cleanup）
 # 補一個 source-level test：speech_processor/test/test_tts_audio_api_only.py

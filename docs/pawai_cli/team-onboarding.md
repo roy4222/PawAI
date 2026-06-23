@@ -59,7 +59,7 @@ $EDITOR .env.local
 `.env.local` 需要填的：
 - `OPENROUTER_KEY` — 跟 Roy 拿
 - `JETSON_TAILSCALE_IP` — 可留空讓 CLI 從 `tailscale status` 偵測；如果 doctor
-  找不到 peer 但你知道 IP，就填 `100.64.0.1`
+  找不到 peer 但你知道 IP，就填 `YOUR_JETSON_IP`
 - `JETSON_HOSTNAME_HINT` — 預設 `orin`；如果 share hostname 不匹配，就填
   `orinnano-super`
 
@@ -70,9 +70,9 @@ pawai doctor
 ```
 
 預期看到：
-- `== Tailscale ==` 區塊：`✓ Tailscale peer 'orinnano-super' online=true ip=100.64.0.1`
+- `== Tailscale ==` 區塊：`✓ Tailscale peer 'orinnano-super' online=true ip=YOUR_JETSON_IP`
 - `== Network topology ==` 區塊：
-  - `✓ local → Jetson Tailscale: OK 100.64.0.1`
+  - `✓ local → Jetson Tailscale: OK YOUR_JETSON_IP`
   - `✓ Jetson internet route: wlan0`（**不能是 eth0**，否則 Go2 線被搶用）
   - `✓ Jetson Go2 link: eth0 192.168.123.X/24`
   - `✓ Jetson → Go2 ping: OK 192.168.123.161`

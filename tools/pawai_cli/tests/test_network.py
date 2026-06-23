@@ -6,7 +6,7 @@ def _fake_status_json() -> str:
     return """{
       "Self": {"HostName": "Roy-MBP", "TailscaleIPs": ["100.64.0.5"]},
       "Peer": {
-        "n1": {"HostName": "jetson", "TailscaleIPs": ["100.64.0.1"], "Online": true},
+        "n1": {"HostName": "jetson", "TailscaleIPs": ["203.0.113.1"], "Online": true},
         "n2": {"HostName": "other", "TailscaleIPs": ["100.64.0.6"], "Online": false}
       }
     }"""
@@ -22,7 +22,7 @@ def test_find_jetson_peer_matches_hint():
     with patch("pawai_cli.network._run_tailscale_status_json", return_value=_fake_status_json()):
         peer = find_jetson_peer(hint="jetson")
     assert peer is not None
-    assert peer["ip"] == "100.64.0.1"
+    assert peer["ip"] == "203.0.113.1"
 
 
 def test_find_jetson_peer_returns_none_when_no_match():

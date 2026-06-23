@@ -51,14 +51,14 @@ pawai --version                        # 能印版本 = 平台閘門已放行 Wi
 
 # 7) SSH config：%USERPROFILE%\.ssh\config 加（指向 Jetson Tailscale IP）
 #    Host jetson-nano
-#        HostName 100.64.0.1
+#        HostName YOUR_JETSON_IP
 #        User jetson
 type $env:USERPROFILE\.ssh\config      # 確認
 ssh jetson-nano "echo ok"              # 應印 ok（SSH 通；第一次會問 fingerprint→yes）
 
 # 8) 環境變數（PowerShell session 設，或寫進 repo 的 .env）
 $env:JETSON_HOST = "jetson-nano"
-$env:JETSON_TAILSCALE_IP = "100.64.0.1"   # 留空也行，doctor 會從 tailscale 偵測
+$env:JETSON_TAILSCALE_IP = "YOUR_JETSON_IP"   # 留空也行，doctor 會從 tailscale 偵測
 $env:OPENROUTER_KEY = "..."                    # 跟 Roy 拿（doctor / demo 才需要）
 ```
 

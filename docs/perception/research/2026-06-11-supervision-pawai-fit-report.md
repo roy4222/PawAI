@@ -3,7 +3,7 @@
 > **日期**：2026-06-11
 > **Verdict**：**GO_ADOPT_FOR_EVIDENCE**（offline/WSL evidence + evaluation tooling）；Jetson runtime 採用另案，前置條件為 benchmark（見 §5、§8）
 > **研究方法**：deep-research workflow（5 角度 × 22 來源 × 104 claims）+ 本地 clone source 逐項查證。
-> workflow 驗證階段撞 session limit，6 條 claims 完成 3 票對抗驗證（標 ✅3-0），其餘關鍵 claims 由本報告直接對本地 clone（`/home/roy422/newLife/supervision`，commit `b8ebc14`，2026-06-10，version `0.29.0.dev`）逐行查證（標 📍file:line）。
+> workflow 驗證階段撞 session limit，6 條 claims 完成 3 票對抗驗證（標 ✅3-0），其餘關鍵 claims 由本報告直接對本地 clone（`$HOME/newLife/supervision`，commit `b8ebc14`，2026-06-10，version `0.29.0.dev`）逐行查證（標 📍file:line）。
 > **本研究為 read-only**：未改任何 PawAI code、未 commit、未安裝任何套件。
 
 ---
