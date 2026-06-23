@@ -28,7 +28,7 @@ PawAI CLI MVP already exists with `doctor` / `status` / `dev info` / `jetson dep
 - No demo lock → silent overwrite of someone else's running install
 - `.pawai-last-deploy` lacks branch / dirty / sha-full → unclear what is actually running
 - `doctor` does not auto-detect Tailscale-shared Jetson, does not probe Go2 from Jetson, does not surface network topology
-- `.env.local.example` hardcodes the home Tailscale IP `100.83.109.89`
+- `.env.local.example` hardcodes the home Tailscale IP `100.64.0.1`
 - No standalone team-onboarding doc
 
 The single most likely failure mode tomorrow morning: a teammate accepts the Tailscale share link, runs `pawai doctor`, and sees a red light they cannot interpret. This design makes that path green.
@@ -104,7 +104,7 @@ Rationale: `rsync` excludes `.git/`, so Jetson git state does not reflect what w
 
 - `.env.local.example` change:
   ```diff
-  - JETSON_TAILSCALE_IP=100.83.109.89
+  - JETSON_TAILSCALE_IP=100.64.0.1
   + # JETSON_TAILSCALE_IP=
   + # leave blank — CLI auto-detects via `tailscale status` using JETSON_HOSTNAME_HINT
   + JETSON_HOSTNAME_HINT=jetson
@@ -117,7 +117,7 @@ Rationale: `rsync` excludes `.git/`, so Jetson git state does not reflect what w
 
 - **Only Jetson is shared**, not Go2. Go2 lives on the Jetson↔Go2 Ethernet link at `192.168.123.161` and is reached *through* Jetson.
 - Sharing path: Tailscale console → Jetson node → Share → produce link → distribute to four teammates → each accepts on their own free Tailscale account.
-- IP from teammate's view is **expected to be the same `100.83.109.89`** (Tailscale CGNAT is globally unique within Tailscale infrastructure under normal conditions). Treat this as the expected/current shared-node IP — **do not hardcode**. CLI must always resolve via `tailscale status` auto-detect to tolerate node re-creation, IP reallocation, or share-link reissue.
+- IP from teammate's view is **expected to be the same `100.64.0.1`** (Tailscale CGNAT is globally unique within Tailscale infrastructure under normal conditions). Treat this as the expected/current shared-node IP — **do not hardcode**. CLI must always resolve via `tailscale status` auto-detect to tolerate node re-creation, IP reallocation, or share-link reissue.
 - ACL not required for share model (sharee sees only the shared node).
 
 ### Network topology check
@@ -126,7 +126,7 @@ Rationale: `rsync` excludes `.git/`, so Jetson git state does not reflect what w
 
 ```
 Network topology:
-  local → Jetson Tailscale: OK 100.83.109.89 latency=12ms
+  local → Jetson Tailscale: OK 100.64.0.1 latency=12ms
   Jetson internet route:    OK wlan0
   Jetson Go2 link:          OK eth0 192.168.123.X
   Jetson → Go2 ping:        OK 192.168.123.161

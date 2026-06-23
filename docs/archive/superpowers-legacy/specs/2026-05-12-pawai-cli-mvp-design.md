@@ -61,7 +61,7 @@ PawAI environment doctor
 ✓ Repo root: /Users/roy422/newLife/elder_and_dog (clean)
 ✓ .env.local loaded (12 vars)
 ✓ JETSON_HOST=jetson-nano reachable (ssh OK, 89ms)
-✓ Tailscale up (100.83.109.89)
+✓ Tailscale up (100.64.0.1)
 ✓ ROBOT_IP=192.168.123.161 (not pinged)
 ⚠ tmux 3.4 (Jetson is 3.4a — minor diff OK)
 ✗ Node 18 missing (Studio frontend won't run locally)

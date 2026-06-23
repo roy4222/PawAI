@@ -85,7 +85,7 @@ doctor 會自動偵測原因並印 hint。常見三種：
 
 ```sshconfig
 Host jetson
-    HostName 100.83.109.89   # Tailscale IP
+    HostName 100.64.0.1   # Tailscale IP
     User jetson
 ```
 
@@ -403,7 +403,7 @@ PAWAI_SYNC_CMD=1 pawai jetson deploy --module brain
 ### G1. Jetson 從家裡搬到學校 — 我該擔心什麼？
 
 短答：
-- **Tailscale IP `100.83.109.89` 通常不變** — 跨網路一致
+- **Tailscale IP `100.64.0.1` 通常不變** — 跨網路一致
 - **Jetson 本地 LAN/Wi-Fi IP 會變** — 但 CLI 不依賴它
 - **Go2 IP 應該不變** — 還是 `192.168.123.161`，前提是 Jetson↔Go2 Ethernet 線還插著
 

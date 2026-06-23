@@ -2,7 +2,7 @@
 # pawai-studio/start-school-live.sh — Mac 操作端 demo 啟動 wrapper（學校場地）
 #
 # 跟 start-live.sh 不同：
-#   - GATEWAY_HOST 必填（不允許 silent default 成家裡 Tailscale IP 100.83.109.89）
+#   - GATEWAY_HOST 必填（不允許 silent default 成家裡 Tailscale IP 100.64.0.1）
 #   - ping + /health pre-check 必過才啟動
 #   - 失敗給可執行的 Jetson 端啟動指令提示
 #

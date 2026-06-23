@@ -22,7 +22,7 @@
 | **Jetson Orin Nano 8GB**（邊緣端）| `~/elder_and_dog` | ROS2 runtime、colcon build、推理、Go2 連線 |
 | **Go2 Pro** | 192.168.12.1（Wi-Fi）/ 192.168.123.161（Ethernet）| 運動控制、音訊播放 |
 
-**Tailscale**：Jetson IP 100.83.109.89（`jetson-nano` hostname），可從任何網路 SSH。
+**Tailscale**：Jetson IP 100.64.0.1（`jetson-nano` hostname），可從任何網路 SSH。
 
 ## pawai-cli 主入口（5/11 後）
 

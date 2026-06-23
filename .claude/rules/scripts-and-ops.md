@@ -23,7 +23,7 @@ paths:
 
 ## Jetson 操作
 - Shell 用 zsh：`source install/setup.zsh`（不是 .bash）
-- SSH：`ssh jetson-nano`（Tailscale IP 100.83.109.89）
+- SSH：`ssh jetson-nano`（Tailscale IP 100.64.0.1）
 - Jetson repo 路徑：`~/elder_and_dog`（不是 `~/newLife/elder_and_dog`）
 - 同時間只允許一套 speech session（禁止多 tmux 混跑）
 - 修改 Python 後必須 `colcon build` + `source install/setup.zsh`

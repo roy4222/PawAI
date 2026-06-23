@@ -76,7 +76,7 @@ def _fake_status_json() -> str:
     return """{
       "Self": {"HostName": "Roy-MBP", "TailscaleIPs": ["100.64.0.5"]},
       "Peer": {
-        "n1": {"HostName": "jetson", "TailscaleIPs": ["100.83.109.89"], "Online": true},
+        "n1": {"HostName": "jetson", "TailscaleIPs": ["100.64.0.1"], "Online": true},
         "n2": {"HostName": "other", "TailscaleIPs": ["100.64.0.6"], "Online": false}
       }
     }"""
@@ -92,7 +92,7 @@ def test_find_jetson_peer_matches_hint():
     with patch("pawai_cli.network._run_tailscale_status_json", return_value=_fake_status_json()):
         peer = find_jetson_peer(hint="jetson")
     assert peer is not None
-    assert peer["ip"] == "100.83.109.89"
+    assert peer["ip"] == "100.64.0.1"
 
 
 def test_find_jetson_peer_returns_none_when_no_match():
@@ -433,7 +433,7 @@ git commit -m "feat(cli): add DoctorCache TTL-backed JSON cache"
 
 - [ ] **Step 1: Patch `.env.local.example`**
 
-Find the line `JETSON_TAILSCALE_IP=100.83.109.89` and replace that block with:
+Find the line `JETSON_TAILSCALE_IP=100.64.0.1` and replace that block with:
 
 ```
 # JETSON_TAILSCALE_IP=
@@ -500,12 +500,12 @@ def test_doctor_warns_on_tailscale_ip_mismatch(monkeypatch, tmp_path):
     monkeypatch.setenv("JETSON_TAILSCALE_IP", "100.99.99.99")  # wrong on purpose
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
 
-    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
         runner = CliRunner()
         result = runner.invoke(cli, ["doctor"])
 
-    assert "mismatch" in result.output.lower() or "100.83.109.89" in result.output
+    assert "mismatch" in result.output.lower() or "100.64.0.1" in result.output
 
 
 def test_doctor_warns_when_no_jetson_peer(monkeypatch):
@@ -574,7 +574,7 @@ Append to `tools/pawai_cli/tests/test_cli.py`:
 ```python
 def test_doctor_topology_block_printed(monkeypatch):
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
@@ -597,7 +597,7 @@ def test_doctor_topology_block_printed(monkeypatch):
 def test_doctor_topology_flags_ethernet_hijack(monkeypatch):
     """If Jetson internet route uses eth0 (likely Go2 link stolen for uplink), warn."""
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
-    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="eth0"), \
@@ -769,7 +769,7 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
     monkeypatch.setenv("PAWAI_REPO_ROOT", str(tmp_path))
     monkeypatch.setenv("JETSON_HOSTNAME_HINT", "jetson")
 
-    fake_peer = {"hostname": "jetson", "ip": "100.83.109.89", "online": True}
+    fake_peer = {"hostname": "jetson", "ip": "100.64.0.1", "online": True}
     with patch("pawai_cli.network.find_jetson_peer", return_value=fake_peer):
         runner = CliRunner()
         # Default — should NOT mutate
@@ -782,7 +782,7 @@ def test_doctor_fix_requires_prompt(monkeypatch, tmp_path):
 
         # --fix with 'y' — should write detected IP
         runner.invoke(cli, ["doctor", "--fix"], input="y\n")
-        assert "100.83.109.89" in env_path.read_text(), "--fix y must write detected IP"
+        assert "100.64.0.1" in env_path.read_text(), "--fix y must write detected IP"
 ```
 
 - [ ] **Step 2: Run tests, verify fail**
@@ -993,9 +993,9 @@ pawai doctor
 ```
 
 預期看到：
-- `== Tailscale ==` 區塊：`✓ Tailscale peer 'jetson' online=true ip=100.83.109.89`
+- `== Tailscale ==` 區塊：`✓ Tailscale peer 'jetson' online=true ip=100.64.0.1`
 - `== Network topology ==` 區塊：
-  - `✓ local → Jetson Tailscale: OK 100.83.109.89`
+  - `✓ local → Jetson Tailscale: OK 100.64.0.1`
   - `✓ Jetson internet route: wlan0`（**不能是 eth0**，否則 Go2 線被搶用）
   - `✓ Jetson Go2 link: eth0 192.168.123.X/24`
   - `✓ Jetson → Go2 ping: OK 192.168.123.161`
@@ -1020,7 +1020,7 @@ Append to `docs/pawai_cli/troubleshooting.md`:
 ### G1. Jetson 從家裡搬到學校 — 我該擔心什麼？
 
 短答：
-- **Tailscale IP `100.83.109.89` 通常不變** — 跨網路一致
+- **Tailscale IP `100.64.0.1` 通常不變** — 跨網路一致
 - **Jetson 本地 LAN/Wi-Fi IP 會變** — 但 CLI 不依賴它
 - **Go2 IP 應該不變** — 還是 `192.168.123.161`，前提是 Jetson↔Go2 Ethernet 線還插著
 
@@ -1091,7 +1091,7 @@ In `docs/pawai_cli/README.md`, find the `doctor` section and append:
 
 ```
 Network topology:
-  local → Jetson Tailscale: OK 100.83.109.89 latency=Xms
+  local → Jetson Tailscale: OK 100.64.0.1 latency=Xms
   Jetson internet route:    OK wlan0
   Jetson Go2 link:          OK eth0 192.168.123.X
   Jetson → Go2 ping:        OK 192.168.123.161
@@ -2442,4 +2442,4 @@ git commit -m "chore(cli): team-prep round complete (L1+L2+L3 + docs)"
 - [ ] `pawai status` shows lock + branch mismatch + topology summary
 - [ ] All four troubleshooting chapters (G/H/I/J) are present
 - [ ] `team-onboarding.md` covers steps 0-5 + rules
-- [ ] `.env.local.example` no longer hardcodes `100.83.109.89`
+- [ ] `.env.local.example` no longer hardcodes `100.64.0.1`

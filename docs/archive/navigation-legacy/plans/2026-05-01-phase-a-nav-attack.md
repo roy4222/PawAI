@@ -17,7 +17,7 @@
 ## Execution Environment(WSL ↔ Jetson 邊界)
 
 > **WSL = source of truth for code edits + 純 Python unit test(用 Mock 不啟 rclpy)。**
-> **Jetson(`jetson-nano` Tailscale 100.83.109.89,repo path `~/elder_and_dog`)= ROS2 runtime + colcon build + 上機 validation 唯一執行端。**
+> **Jetson(`jetson-nano` Tailscale 100.64.0.1,repo path `~/elder_and_dog`)= ROS2 runtime + colcon build + 上機 validation 唯一執行端。**
 
 ### 工作流程(每個 task 通用)
 

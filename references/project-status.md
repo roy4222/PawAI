@@ -1203,7 +1203,7 @@ Branch plans：B/C/D/E 各一份在 `docs/pawai-brain/plans/`
 - `685c97d` `fix(brain): per-(class,color) dedup for object_remark — 60s window` — SkillContract.cooldown_s=5 只擋 SAY skill 不擋同物重發，YOLO 持續偵測同一張椅子每 5s 喊一次「看到咖啡色的椅子了」。`brain_node._on_object` 加 `_object_remark_seen[(class, color)]` 60s 窗口
 - `10829ca` `feat(brain,tts): per-message TTS routing — Studio chat → Gemini, others → edge_tts` — Plumbing 6 file。`pawai_brain` 訂閱 `/brain/text_input`（補主鏈斷）+ ChatCandidatePayload 加 `input_origin` 欄位 + `build_plan` 把 input_origin 帶進 step args + IE-node SAY 條件包 JSON envelope + tts_node 預 build studio chain（gemini → edge_tts → piper, dedup）+ tts_callback parse envelope 選 chain。Plan: `~/.claude/plans/polished-questing-starlight.md` v1.4
 - `e1363c8` `fix(brain): silence stranger_alert TTS + skip object_remark for person class` — `stranger_alert` SAY text → 空字串（IE-node SAY return `empty_tts_text`，trace 留 chip 但 /tts 不發）+ `build_object_tts` 對 class==`person` return None（避開 stranger / greet 路徑衝突）。同 fall_alert b224217 模式
-- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（100.101.41.4），Gateway 在 Jetson（192.168.0.222）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
+- `67c28ce` `fix(studio): add CORS middleware so Studio chat panel POST works` — Studio frontend 在 laptop（100.64.0.2），Gateway 在 Jetson（192.168.0.222）。WebSocket 不需要 CORS 所以 `/ws/*` 通；POST `/api/text_input` 被瀏覽器擋 → 「Brain 文字通道未連線」。FastAPI app 加 `CORSMiddleware(allow_origins=["*"])`
 
 ### Smoke 結果（Jetson 實機）
 | Smoke | 結果 |
@@ -1436,7 +1436,7 @@ Studio text input / face / pose / object 接 graph、`llm_bridge_node` 真的瘦
 | 辨識物體 | `object_perception_node`（YOLO26n + 12 色 HSV） | `/event/object_detected` → `object_remark` zh + 顏色 | edge_tts |
 | 導航避障 | `nav2_bringup` + RPLIDAR + AMCL | Foxglove `/initialpose` 設位姿 → `/goal_pose` 1m / 0.8m,-0.4m | n/a |
 
-Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://100.83.109.89:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
+Nav demo 用 `scripts/start_nav2_amcl_demo_tmux.sh`（`home_living_room_v8` 地圖 + sllidar + go2_driver + nav2 全套），Foxglove `ws://100.64.0.1:8765` 設 initial pose → 發 goal_pose → 障礙物擋前面 demo Stage 1 reactive_stop。
 
 `brain_node` 改用 ROS param `unknown_face_accumulate_s=99999.0` 暫時關掉 stranger_alert 干擾錄影；正式環境改回 3.0。
 `llm_bridge_node` 在 Jetson 上 sed 掉 `FAST_PATH_INTENTS = set()`（demo 期讓所有 intent 都走 LLM；目前 WSL 仍是 `{greet, stop, sit, stand}`，回 demo 後同步決定要不要正式落 ROS param）。
@@ -1482,7 +1482,7 @@ frisbee     → None                          (whitelist 外，UI 顯示但 brai
 | `/event/object_detected` JSON | 含 `color` / `color_confidence`（saturation 過低 omit）|
 | `/brain/proposal` `object_remark` 模板 | colour preamble + zh class + suffix 正確渲染 |
 | Jetson tmux fv | 6 window：camera / object / vision / fox / gateway / brain 全跑 |
-| Studio Live `/studio/live` | 連 ws://100.83.109.89:8080，2 ws_clients |
+| Studio Live `/studio/live` | 連 ws://100.64.0.1:8080，2 ws_clients |
 | 真實顏色觀察 | brown 0.367 / black 0.309 / cyan 0.471 / gray 0.549（confidence 偏低正常，HSV 規則式本質）|
 
 ### 衍生 backlog

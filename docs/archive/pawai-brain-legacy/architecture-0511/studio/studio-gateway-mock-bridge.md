@@ -207,7 +207,7 @@ MOCK_OPENROUTER=1 bash pawai-studio/start-live.sh --mock
 
 # Jetson 模式（需 source ROS2 + colcon build）
 bash pawai-studio/start-live.sh --live
-# GATEWAY_HOST override（預設 Tailscale 100.83.109.89:8080）
+# GATEWAY_HOST override（預設 Tailscale 100.64.0.1:8080）
 GATEWAY_HOST=192.168.0.222 bash pawai-studio/start-live.sh --live
 
 # Gateway 單獨啟動（Jetson 上）

@@ -61,7 +61,7 @@ Persona 走 `tools/llm_eval/persona.txt`（單檔），不是新 6 檔架構。�
 ```
 Jetson:                    本機 (WSL/Mac):
   studio_gateway      ←──  Next.js dev server (port 3000/3001)
-  (port 8080)              env: NEXT_PUBLIC_GATEWAY_URL=http://100.83.109.89:8080
+  (port 8080)              env: NEXT_PUBLIC_GATEWAY_URL=http://100.64.0.1:8080
   ↑
   訂閱 11 ROS topics:
     /state/perception/face

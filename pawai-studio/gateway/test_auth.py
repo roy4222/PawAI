@@ -35,13 +35,13 @@ def test_env_overrides():
     cfg = load_auth_config({
         "GATEWAY_HOST": "127.0.0.1",
         "GATEWAY_AUTH_TOKEN": TOKEN,
-        "GATEWAY_ALLOWED_ORIGINS": "http://localhost:3001, http://100.83.109.89:3001 ",
+        "GATEWAY_ALLOWED_ORIGINS": "http://localhost:3001, http://100.64.0.1:3001 ",
     })
     assert cfg.host == "127.0.0.1"
     assert cfg.auth_enabled is True
     assert cfg.origin_check_enabled is True
-    assert cfg.allowed_origins == ("http://localhost:3001", "http://100.83.109.89:3001")
-    assert cfg.cors_origins == ["http://localhost:3001", "http://100.83.109.89:3001"]
+    assert cfg.allowed_origins == ("http://localhost:3001", "http://100.64.0.1:3001")
+    assert cfg.cors_origins == ["http://localhost:3001", "http://100.64.0.1:3001"]
 
 
 def test_blank_env_values_treated_as_unset():
@@ -99,9 +99,9 @@ def test_origin_disabled_allows_any():
 
 
 def test_origin_allowlist():
-    allowed = ("http://localhost:3001", "http://100.83.109.89:3001")
+    allowed = ("http://localhost:3001", "http://100.64.0.1:3001")
     assert origin_ok("http://localhost:3001", allowed) is True
-    assert origin_ok("http://100.83.109.89:3001", allowed) is True
+    assert origin_ok("http://100.64.0.1:3001", allowed) is True
     assert origin_ok("http://evil.example", allowed) is False
     assert origin_ok(None, allowed) is True             # curl/probe (no Origin) allowed
 

@@ -21,7 +21,7 @@ Jetson Orin Nano 開發環境、colcon build、部署流程、網路配置。
 
 ## Jetson 連線
 
-- SSH：`jetson-nano`（Tailscale IP 100.83.109.89）
+- SSH：`jetson-nano`（Tailscale IP 100.64.0.1）
 - Repo 路徑：`~/elder_and_dog`（不是 `~/newLife/elder_and_dog`）
 
 ## Build 流程

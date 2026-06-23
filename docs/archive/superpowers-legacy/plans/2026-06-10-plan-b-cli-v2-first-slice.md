@@ -390,7 +390,7 @@ git add -u tools/ && git commit -m "feat(cli): demo start hard-blocks on lane he
 - [x] **Step 4: healthcheck.sh fallback IP 修正（獨立 commit）**
 
 `.claude/skills/brain-studio-lane/scripts/healthcheck.sh:8` 的
-`JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"` 改為：
+`JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.64.0.1}"` 改為：
 
 ```bash
 JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:?JETSON_TAILSCALE_IP not set — run via pawai (env injected) or export it}"

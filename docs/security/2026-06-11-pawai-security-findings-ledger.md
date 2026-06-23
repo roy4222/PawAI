@@ -1544,14 +1544,14 @@ Severity 維持 low（原評正確）：這本質是 defense-in-depth / 隱私 h
 - **阻擋 Plan**：無　— 與 Plan B-E 檔案範圍無交集；純文件衛生問題。
 - **證據**：
   ```
-  NEXT_PUBLIC_GATEWAY_HOST=100.83.109.89
-  # 另: 第10行 NEXT_PUBLIC_GATEWAY_URL=http://100.83.109.89:8080
-  #     第16行 NEXT_PUBLIC_WS_URL=ws://100.83.109.89:8080/ws/events
+  NEXT_PUBLIC_GATEWAY_HOST=100.64.0.1
+  # 另: 第10行 NEXT_PUBLIC_GATEWAY_URL=http://100.64.0.1:8080
+  #     第16行 NEXT_PUBLIC_WS_URL=ws://100.64.0.1:8080/ws/events
   ```
-- **影響**：example 範本（已 commit、開源化用途）內嵌團隊實際 Jetson Tailscale IP 100.83.109.89（與 MEMORY 記錄一致）。雖然 tailnet IP 本身需 tailnet 授權才可達，但把確切目標位址寫進倉庫，搭配 SEC-02 無認證 gateway，等於替任何取得 tailnet 存取者標好攻擊目標。
-- **Exploit 情境**：取得 repo 讀取權（5 人協作或開源後任何人）→ 看到 example 內的 100.83.109.89:8080 → 若再取得 tailnet 連線，直接知道 gateway/WS 確切位址無需掃描。
+- **影響**：example 範本（已 commit、開源化用途）內嵌團隊實際 Jetson Tailscale IP 100.64.0.1（與 MEMORY 記錄一致）。雖然 tailnet IP 本身需 tailnet 授權才可達，但把確切目標位址寫進倉庫，搭配 SEC-02 無認證 gateway，等於替任何取得 tailnet 存取者標好攻擊目標。
+- **Exploit 情境**：取得 repo 讀取權（5 人協作或開源後任何人）→ 看到 example 內的 100.64.0.1:8080 → 若再取得 tailnet 連線，直接知道 gateway/WS 確切位址無需掃描。
 - **防禦性修法**：example 檔改用佔位字串（如 100.x.y.z 或 <jetson-tailscale-ip>），真實 IP 只留在各人 gitignored 的 .env.local。
-- **🔬 驗證**：Evidence 完全屬實。Read 確認 /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/.env.local.example 第 13 行為 active 值 `NEXT_PUBLIC_GATEWAY_HOST=100.83.109.89`，第 10、16 行為註解掉的 GATEWAY_URL / WS_URL（皆含同 IP），與 evidence 逐字相符，行號正確。git ls-files 確認此檔已 tracked、commit 8302ee8 提交。MEMORY 與 27 個 tracked 檔交叉比對證實 100.83.109.89 確為團隊 Jetson 的真實 Tailscale IP。
+- **🔬 驗證**：Evidence 完全屬實。Read 確認 /home/roy422/newLife/elder_and_dog/pawai-studio/frontend/.env.local.example 第 13 行為 active 值 `NEXT_PUBLIC_GATEWAY_HOST=100.64.0.1`，第 10、16 行為註解掉的 GATEWAY_URL / WS_URL（皆含同 IP），與 evidence 逐字相符，行號正確。git ls-files 確認此檔已 tracked、commit 8302ee8 提交。MEMORY 與 27 個 tracked 檔交叉比對證實 100.64.0.1 確為團隊 Jetson 的真實 Tailscale IP。
 
 維持 low（不升不降）的理由：
 1) 該 IP 屬 Tailscale CGNAT 100.64.0.0/10（RFC 6598，已用 ipaddress 驗證為 True），internet 不可路由——無 tailnet 授權者拿到 IP 毫無用處。Tailscale IP 本身不是 secret、不是憑證、不給任何存取權，屬純 info-hygiene / defense-in-depth。
@@ -1794,22 +1794,22 @@ severity 維持 low：能力確實存在（/cmd_vel publish + CycloneDDS 無認�
 - **阻擋 Plan**：B　— Plan B 的 status 會做 gateway/tailscale probe 並解析 JETSON_TAILSCALE_IP；此 share 存取模型與硬編預設 IP 直接影響 status 探測與 demo healthcheck 的主機解析，動工前須一併釐清。
 - **證據**：
   ```
-  GATEWAY_HOST="${GATEWAY_HOST:-100.83.109.89}"   # 個人 tailnet IP 硬編為預設
+  GATEWAY_HOST="${GATEWAY_HOST:-100.64.0.1}"   # 個人 tailnet IP 硬編為預設
   GATEWAY_PORT="${GATEWAY_PORT:-8080}"
   GATEWAY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}"
   ```
-- **影響**：Tailscale 用法為個人 tailnet + 把 Jetson node share 給隊員個人帳號（troubleshooting.md H 節），未見 funnel（即未對公網曝光，較佳）。但 share link 一旦被接受/轉發，該 peer 即可達 Jetson 上所有 0.0.0.0 服務（8080 gateway、8765 foxglove），而這些服務本身無認證（見 EXP-01/02），等於 share = 機器人控制面存取。另 start-live.sh:35 將 Roy 個人 tailnet IP 100.83.109.89 硬編為 silent default，洩漏私有位址且隊員 browser 可能誤連舊/錯主機。
-- **Exploit 情境**：攻擊者位置：曾收到或轉發 share link 的人（含離隊隊員）。前提：其 Tailscale 仍有 share 授權、demo 跑著。動作：直接 curl http://100.83.109.89:8080/api/nav/start。結果：因 gateway 無認證，share 存取即等於遠端遙控 Go2。
+- **影響**：Tailscale 用法為個人 tailnet + 把 Jetson node share 給隊員個人帳號（troubleshooting.md H 節），未見 funnel（即未對公網曝光，較佳）。但 share link 一旦被接受/轉發，該 peer 即可達 Jetson 上所有 0.0.0.0 服務（8080 gateway、8765 foxglove），而這些服務本身無認證（見 EXP-01/02），等於 share = 機器人控制面存取。另 start-live.sh:35 將 Roy 個人 tailnet IP 100.64.0.1 硬編為 silent default，洩漏私有位址且隊員 browser 可能誤連舊/錯主機。
+- **Exploit 情境**：攻擊者位置：曾收到或轉發 share link 的人（含離隊隊員）。前提：其 Tailscale 仍有 share 授權、demo 跑著。動作：直接 curl http://100.64.0.1:8080/api/nav/start。結果：因 gateway 無認證，share 存取即等於遠端遙控 Go2。
 - **防禦性修法**：Tailscale 用 ACL/tag 限定誰可達 Jetson 的 8080/8765，並定期審查 share 名單、離隊即撤；服務層補認證（見 EXP-01）使 tailnet 達到不等於控制權；移除原始碼中硬編個人 IP，改強制由 env/設定檔提供（如 school-live 已要求 GATEWAY_HOST 必填）。
-- **🔬 驗證**：Evidence 完全屬實。親自 Read /home/roy422/newLife/elder_and_dog/pawai-studio/start-live.sh：第 35-37 行與 evidence 引用逐字相符（`GATEWAY_HOST="${GATEWAY_HOST:-100.83.109.89}"` 等），行號正確（line_start 應為 35，與 evidence 一致；finding 給的 35 正確）。
+- **🔬 驗證**：Evidence 完全屬實。親自 Read /home/roy422/newLife/elder_and_dog/pawai-studio/start-live.sh：第 35-37 行與 evidence 引用逐字相符（`GATEWAY_HOST="${GATEWAY_HOST:-100.64.0.1}"` 等），行號正確（line_start 應為 35，與 evidence 一致；finding 給的 35 正確）。
 
 反證查核（積極找不成立理由）：
 1. 是否真部署路徑？start-live.sh 是 live/auto demo 啟動的正式 wrapper（README 列為主入口之一），非 test/example。確認為真實路徑。
-2. 程式他處有防護？反而相反——同目錄 start-school-live.sh 第 5 行明文「GATEWAY_HOST 必填（不允許 silent default 成家裡 Tailscale IP 100.83.109.89）」並在 line 19 硬檢查 -z 即 exit 1，證明團隊自己已認定此 silent default 為缺陷，school demo 路徑已修，start-live.sh dev 路徑未修。fix 欄位引用 school-live 正確。
+2. 程式他處有防護？反而相反——同目錄 start-school-live.sh 第 5 行明文「GATEWAY_HOST 必填（不允許 silent default 成家裡 Tailscale IP 100.64.0.1）」並在 line 19 硬檢查 -z 即 exit 1，證明團隊自己已認定此 silent default 為缺陷，school demo 路徑已修，start-live.sh dev 路徑未修。fix 欄位引用 school-live 正確。
 3. exploit chain 是否成立？驗證 gateway studio_gateway.py:1333 `uvicorn.run(app, host="0.0.0.0", ...)` 綁全介面；`/api/nav/start` endpoint 確實存在（line 1146）且無 auth（無 Depends/中介層；grep 到的 goal_token 是 nav goal 關聯 token，非認證憑證）；nav_start → _nav_send_goto 會對 Go2 派發真實 GotoRelative action goal。故「tailnet peer → curl /api/nav/start → Go2 移動」鏈在此部署下確實可行。
 
 Severity 維持 low（同意 finding 自評）：
-- 硬編 IP 部分：100.83.109.89 是 Tailscale CGNAT 私有位址、非公網可路由、非 secret/credential，僅屬資訊洩漏 + 不良預設 → hardening。
+- 硬編 IP 部分：100.64.0.1 是 Tailscale CGNAT 私有位址、非公網可路由、非 secret/credential，僅屬資訊洩漏 + 不良預設 → hardening。
 - share=控制權的真正危險原始物件（0.0.0.0 + 無認證的機器人控制面）歸屬於 EXP-01/02 兩個獨立 finding。本 finding 正確將自己定位為其上的 access-management/hardening 層（Tailscale ACL、share 名單審查、移除硬編 IP）。單看 start-live.sh 本身只貢獻「洩漏私有 IP 預設 + ACL 建議」，符合量表 low（hardening 缺口、不良預設）。不升 high——避免與 EXP-01/02 重複計算同一個無認證 primitive。
 confidence 同意 medium。
 

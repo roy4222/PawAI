@@ -6,7 +6,7 @@
 
 **Goal:** Land 11 surgical fixes that promote `pawai` CLI from tool collection to Jetson on-site collaboration console, before 2026-05-16 (5/18 demo prep buffer).
 
-**Architecture:** Each task is one Item from the umbrella spec (`docs/superpowers/specs/2026-05-13-pawai-cli-collab-console-design.md`). Items are grouped into 5 batches by file-touch locality to minimize merge conflicts during landing. Each task = 1 commit. Tests run via `python3 -m pytest tools/pawai_cli`. Smoke verification runs against actual Jetson over SSH alias `jetson` (Tailscale 100.83.109.89).
+**Architecture:** Each task is one Item from the umbrella spec (`docs/superpowers/specs/2026-05-13-pawai-cli-collab-console-design.md`). Items are grouped into 5 batches by file-touch locality to minimize merge conflicts during landing. Each task = 1 commit. Tests run via `python3 -m pytest tools/pawai_cli`. Smoke verification runs against actual Jetson over SSH alias `jetson` (Tailscale 100.64.0.1).
 
 **Tech Stack:** Python 3.10+ click CLI, pytest, bash 4+ scripts, Jetson Orin Nano (Ubuntu 22.04 + ROS2 Humble) over SSH.
 
@@ -433,7 +433,7 @@ def test_doctor_treats_offline_tailscale_peer_as_fail():
     from click.testing import CliRunner
     from pawai_cli import main as cli_main
 
-    offline_peer = {"hostname": "orinnano-super", "ip": "100.83.109.89", "online": False}
+    offline_peer = {"hostname": "orinnano-super", "ip": "100.64.0.1", "online": False}
     with patch("pawai_cli.network.find_jetson_peer", return_value=offline_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value=None), \
          patch("pawai_cli.network.jetson_go2_link", return_value=None), \
@@ -595,7 +595,7 @@ def test_doctor_gateway_fails_when_running_lock_and_8080_down():
         start_time="2026-05-13T10:00:00+00:00",
         demo_mode="full", tmux_session="demo", lane="brain",
     )
-    online_peer = {"hostname": "orinnano-super", "ip": "100.83.109.89", "online": True}
+    online_peer = {"hostname": "orinnano-super", "ip": "100.64.0.1", "online": True}
 
     with patch("pawai_cli.network.find_jetson_peer", return_value=online_peer), \
          patch("pawai_cli.network.jetson_internet_iface", return_value="wlan0"), \
@@ -1012,12 +1012,12 @@ EOF
 
 The current line 47 reads:
 ```bash
-JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"
+JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.64.0.1}"
 ```
 
 This means: if env is unset, fall back to hardcoded IP. The CLI calls start.sh via `shell.stream(args, cwd=...)` which inherits the CLI process env (`os.environ`). If the CLI properly loads `.env.local` (it does, via `_load_env`), then `JETSON_TAILSCALE_IP` should be in env. The fix is:
 
-1. start.sh fails loudly if `JETSON_TAILSCALE_IP` is unset (not silently fall back to 100.83.109.89)
+1. start.sh fails loudly if `JETSON_TAILSCALE_IP` is unset (not silently fall back to 100.64.0.1)
 2. CLI explicitly passes the detected/configured IP via env to start.sh, even if `.env.local` didn't set it
 
 - [ ] **Step 1: Manual reproduction first (no test needed, this is a bash script)**
@@ -1025,8 +1025,8 @@ This means: if env is unset, fall back to hardcoded IP. The CLI calls start.sh v
 ```bash
 # Reproduce current bug:
 unset JETSON_TAILSCALE_IP
-bash -c 'JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"; echo "$JETSON_TAILSCALE_IP"'
-# expect: 100.83.109.89  (the hardcoded fallback — bug)
+bash -c 'JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.64.0.1}"; echo "$JETSON_TAILSCALE_IP"'
+# expect: 100.64.0.1  (the hardcoded fallback — bug)
 ```
 
 - [ ] **Step 2: Modify `start.sh` to require env**
@@ -1034,7 +1034,7 @@ bash -c 'JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"; echo "$JET
 Edit `.claude/skills/brain-studio-lane/scripts/start.sh`. Around line 47, replace:
 
 ```bash
-JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.83.109.89}"
+JETSON_TAILSCALE_IP="${JETSON_TAILSCALE_IP:-100.64.0.1}"
 ```
 
 with:
@@ -1165,7 +1165,7 @@ git add .claude/skills/brain-studio-lane/scripts/start.sh \
 git commit -m "$(cat <<'EOF'
 fix(start.sh): require JETSON_TAILSCALE_IP, drop hardcoded fallback (Phase 1 item 3)
 
-start.sh used to silently fall back to 100.83.109.89 when env was unset.
+start.sh used to silently fall back to 100.64.0.1 when env was unset.
 If the Tailscale IP ever rotated (Tailscale generally pins them but does
 not contractually guarantee), demos would break silently in confusing
 ways. Now:

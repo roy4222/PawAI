@@ -79,5 +79,5 @@ ssh jetson-nano "cd ~/elder_and_dog && python3 .claude/skills/demo-preflight/scr
 - USB device index 重開機後會飄（mic 24→0, speaker hw:3,0→hw:1,0）— preflight 只檢查設備存在，不檢查 index
 - Go2 ping 可能因 Wi-Fi AP 模式需用 192.168.12.1 而非 192.168.123.161
 - LLM endpoint 需要先開 SSH tunnel：`ssh -f -N -L 8000:localhost:8000 roy422@140.136.155.5`
-- Jetson SSH host 是 `jetson-nano`（Tailscale IP 100.83.109.89）
+- Jetson SSH host 是 `jetson-nano`（Tailscale IP 100.64.0.1）
 - 殘留 process 檢查：0 是 clean state，>0 表示上次 session 未正確清理

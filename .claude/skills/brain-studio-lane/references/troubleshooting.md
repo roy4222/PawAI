@@ -100,11 +100,11 @@ ssh jetson-nano "tmux capture-pane -t pawai_brain:conv_graph -p -S -100 | grep -
 ssh jetson-nano "curl -s http://localhost:8080/health"
 
 # 從本機通嗎
-curl -s http://100.83.109.89:8080/health
+curl -s http://100.64.0.1:8080/health
 
 # Frontend env 對嗎
 grep NEXT_PUBLIC_GATEWAY_URL /tmp/studio_frontend.log
-# 應該看到 http://100.83.109.89:8080
+# 應該看到 http://100.64.0.1:8080
 ```
 
 ## Frontend 卡在編譯 / 慢
