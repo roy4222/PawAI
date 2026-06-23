@@ -4,10 +4,10 @@ from pawai_cli.network import tailscale_status_peers, find_jetson_peer
 
 def _fake_status_json() -> str:
     return """{
-      "Self": {"HostName": "Roy-MBP", "TailscaleIPs": ["100.64.0.5"]},
+      "Self": {"HostName": "dev-laptop", "TailscaleIPs": ["203.0.113.5"]},
       "Peer": {
         "n1": {"HostName": "jetson", "TailscaleIPs": ["203.0.113.1"], "Online": true},
-        "n2": {"HostName": "other", "TailscaleIPs": ["100.64.0.6"], "Online": false}
+        "n2": {"HostName": "other", "TailscaleIPs": ["203.0.113.6"], "Online": false}
       }
     }"""
 

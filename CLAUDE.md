@@ -43,7 +43,7 @@ The removed internal document archive is not part of the public tree.
 Source of truth is the WSL workspace:
 
 ```bash
-cd /home/roy422/newLife/elder_and_dog
+cd $WORKSPACE
 ```
 
 Runtime, GPU and ROS2 hardware checks run on the Jetson:
