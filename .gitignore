@@ -30,6 +30,12 @@ coverage.xml
 tts_cache/
 .tmp/
 
+## Serena MCP tooling state (per-developer cache + memories)
+.serena/
+
+## Untracked local asset working area
+/assets/
+
 ## Claude Code
 .claude/test_results/*.csv
 .claude/settings.local.json
