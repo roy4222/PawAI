@@ -1,132 +1,20 @@
 ---
 name: project-onboard
-description: >
-  PawAI 專案快速上手 — 讓任何 AI 在新 session 中立即理解專案全貌、
-  當前進度、功能架構與開發慣例。每次開新對話、接手不熟悉的模組、
-  或需要理解專案上下文時都應觸發。觸發詞包括但不限於：
-  "onboard"、"上手"、"了解專案"、"project context"、"/onboard"、
-  "這個專案是做什麼的"、"幫我看一下專案"、"我是新來的"、
-  "給我專案背景"。即使使用者只是問了一個看起來簡單的功能問題，
-  如果你對專案缺乏上下文，也應該先觸發這個 skill 建立基礎認知。
+description: 接手 PawAI、查專案架構或跨模組工作入口時使用。
 ---
 
-# PawAI 專案快速上手
+# PawAI 上車
 
-## 這個專案是什麼
+先讀根 AGENTS；依本次問題從 `docs/README.md`、`docs/architecture/README.md` 與相關模組 README 定位來源。不要求為單檔修正讀完專案。
 
-以 Unitree Go2 Pro 機器狗為載體的 embodied AI 互動陪伴平台。
-核心是「人臉辨識 + 中文語音互動 + AI 大腦決策」，不是導航或尋物。
-硬底線：2026/4/13 展示。
+| 問題 | 按需入口 |
+|---|---|
+| Brain／Studio | [brain](references/brain.md)、[studio](references/studio.md) |
+| 感知 | [face](references/face.md)、[gesture](references/gesture.md)、[pose](references/pose.md)、[object](references/object.md) |
+| 語音 | [speech](references/speech.md) |
+| 導航避障 | [nav](references/nav.md) |
+| 環境／驗證 | [environment](references/environment.md)、[validation](references/validation.md) |
 
-## 三層架構
+Reference 是定位提示；規格看 `docs/contracts/`、`docs/architecture/`、`docs/adr/`，現況看程式及實際 artifact。`references/project-status.md` 是歷史快照，只在追溯舊事時查，不代表本輪優先序。日期、主機、GPU、部署版本從本次證據確認。
 
-```
-Layer 3（中控）：Interaction Executive + AI Brain
-  事件聚合、高階決策、技能分派、安全仲裁
-  部署：Jetson (Executive) + RTX 8000 (Brain)
-
-Layer 2（感知）：人臉 / 語音 / 手勢 / 姿勢模組
-  各自發布 event（觸發式）+ state（持續式）到 ROS2 topics
-  部署：Jetson
-
-Layer 1（驅動）：Go2 Driver + D435 + Jetson + ROS2
-  硬體抽象、WebRTC DataChannel、模型推理 runtime
-  部署：Jetson + Go2 Pro
-```
-
-所有動作唯一出口在 Layer 3。大腦提建議、Executive 做決策、Runtime 安全執行。
-
-## 硬體拓撲
-
-- **Jetson Orin Nano 8GB**（邊緣端）：ROS2 runtime、本地推理、感知模組
-- **Go2 Pro**（機器人）：運動控制、音訊播放（WebRTC DataChannel api_id 4001-4004）
-- **5x RTX 8000 48GB**（雲端）：LLM 推理（vLLM）、FastAPI Gateway
-- **Intel RealSense D435**：RGB-D 攝影機（人臉偵測 + 深度估計）
-- **HyperX SoloCast**：USB 麥克風（stereo-only，node 內手動 downmix to mono）
-
-## 當前進度
-
-讀 `references/project-status.md` 取得最新進度。
-那份檔案會頻繁更新，不要依賴快取。
-
-## 功能路由
-
-根據你的任務，讀對應的 reference 檔案。每個 reference 包含：
-模組定位、權威文件指標、核心程式、已知陷阱、開發入口、驗收方式。
-
-reference 是導覽與摘要，不是第二份真相。詳細內容在它指向的權威文件裡。
-如果 reference 和權威文件衝突，以權威文件為準。
-
-| 你的任務涉及... | 讀這個 reference |
-|----------------|-----------------|
-| 人臉、face、YuNet、SFace、D435、追蹤、identity | references/face.md |
-| 手勢、gesture、MediaPipe Hands、Recognizer、ok、wave、stop | references/gesture.md |
-| 姿勢、pose、跌倒、fallen、MediaPipe Pose、trunk_angle | references/pose.md |
-| 物體、object、YOLO、COCO、HSV、顏色、cup、chair | references/object.md |
-| 語音、ASR、TTS、Whisper、SenseVoice、Piper、Gemini、Megaphone | references/speech.md |
-| 導航、nav、SLAM、AMCL、reactive_stop、Nav2、cartographer | references/nav.md |
-| Brain、LLM、LangGraph、persona、conv graph、OpenRouter | references/brain.md |
-| Studio、前端、Next.js、WebSocket、Chat、Gateway、Mock | references/studio.md |
-| Jetson、部署、build、CLI、pawai cli、環境、colcon | references/environment.md |
-| 測試、驗收、E2E、ros2-test-suite、contract check、CI | references/validation.md |
-
-如果任務跨多個模組，依序讀相關的 references。
-如果不確定從哪開始，先讀 `references/project-status.md` 看當前焦點。
-
-## 權威文件索引
-
-這些是各領域的 single source of truth：
-
-| 領域 | 真相來源 |
-|------|---------|
-| 專案方向、Demo 目標 | `docs/mission/README.md` |
-| ROS2 介面契約 | `docs/contracts/interaction_contract.md` |
-| **0511 架構 freeze-snapshot（七大模組 + Studio）** | `docs/archive/pawai-brain-legacy/architecture-0511/` |
-| 人臉辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/face/face.md` |
-| 手勢辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/gesture/gesture.md` |
-| 姿勢辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/pose/pose.md` |
-| 物體辨識（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/object/object.md` |
-| 語音模組（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/speech/speech.md` |
-| 導航避障（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/nav/` |
-| AI 大腦（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/brain/brain.md` |
-| PawAI Studio（0511） | `docs/archive/pawai-brain-legacy/architecture-0511/studio/studio.md` |
-| Studio 設計文件 | `docs/architecture/studio/README.md` |
-| 環境建置 | `docs/runbook/README.md` |
-
-## 模組文件結構
-
-每個模組資料夾根目錄有 3 個入口檔案：
-
-| 檔案 | 用途 | 誰看 |
-|------|------|------|
-| `README.md` | 模組當前真相（狀態卡 + 核心流程 + 已知問題） | 所有人 |
-| `CLAUDE.md` | Claude Code 工作規則（禁止事項 + 陷阱 + 驗證指令） | Claude Code |
-| `AGENT.md` | 介面契約 + 接手摘要（topic schema + 事件流 + 確認清單） | 任何 agent / 接手者 |
-
-子資料夾：`research/`（選型研究）、`archive/`（歷史記錄）、`specs/`（設計規格）。
-
-## 開發慣例速記
-
-這些是跨模組通用的規則，不管做哪個功能都要知道：
-
-- `pip install` → 一律用 `uv pip install`
-- 改 Python 後必須 `colcon build --packages-select <pkg>` + `source install/setup.zsh`
-- Jetson 用 zsh，source 時用 `.zsh` 不是 `.bash`，兩者不可混用
-- HyperX 麥克風是 stereo-only，必須 `channels:=2` + 手動 downmix，不要用 `channels:=1`
-- TTS WAV：16kHz/16bit/mono（Megaphone 路徑），+16dB gain boost
-- 同時間只允許一套 speech session（禁止多 tmux 混跑）
-- Go2 Megaphone 播放：`4001`(enter) → `4003`(upload chunks, 4096 base64) → `4002`(exit)，msg type 必須 `"req"`
-- `ROS_DOMAIN_ID` 必須所有 node 一致，否則互相看不到
-- Launch 檔案改動不需 rebuild，重啟即可
-
-## 給非 Claude Code 平台的 AI
-
-如果你不是在 Claude Code 的 skill 系統中被觸發，
-請改讀 repo 根目錄的 `PROJECT_MAP.md`，裡面有依序閱讀指引。
-那份檔案不假設任何 skill 機制存在，純粹用檔案路徑引導你。
-
-## 觸發邊界
-
-不需要觸發這個 skill 的情況：
-- 任務已明確限定在單一檔案且不需要專案上下文
-- 純 build / lint / format 等工具類操作（CLAUDE.md 已覆蓋）
+完成後直接回答使用者的問題，指出影響結論的未知與下一個可執行步驟。

@@ -26,12 +26,9 @@ When taking over with `--force`, the old lane must be cleaned before the lock is
 released and the new lane is acquired. Deleting only the lock can leave a Go2
 driver, D435, teleop, or nav process alive.
 
-Expected stale policy:
+Stale thresholds are implementation-specific. Check the current lock implementation and status receipt; elapsed time alone does not authorize taking over another user’s resources.
 
-- `starting` older than 10 minutes: likely failed startup; prompt before clearing.
-- `running` older than 4 hours: stale warning only; do not delete automatically.
-
-## Owner-Aware Release (Phase 1, item 6)
+## Owner-Aware Release
 
 `Lock.release_if_owned(user, host)` is the safe path used by `pawai demo stop`:
 
@@ -63,7 +60,7 @@ Keep these meanings separate:
 - `--force`: take over or stop another user's demo lock. Implies a takeover and
   should be preceded by out-of-band coordination (Slack, in-person).
 
-`--force` is **not** required to clear your own stale lock (Phase 1 item 6).
+`--force` is **not** required to clear your own stale lock.
 Reserve it for the legitimate takeover case.
 
 ## Branch Awareness
