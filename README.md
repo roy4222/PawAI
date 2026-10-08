@@ -61,7 +61,7 @@ separated with a single, unidirectional dependency direction.
 
 This repository is the reference implementation of the manuscript *"A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration"* (P.-Y. Lu and W.-F. Tung, *IEEE Access*, under review).
 
-- **Evaluated version:** tag [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) = commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605) (`81e50185d82caa52ccee8652ab97e0e4d7db6605`). To reproduce the paper, `git checkout ieee-access-2026`.
+- **Evaluated code:** commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605) (`81e50185d82caa52ccee8652ab97e0e4d7db6605`). Release [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) adds documentation only (this section, `docs/paper/`, `CITATION.cff`); its code is identical to 81e5018. To reproduce the paper, `git checkout ieee-access-2026`.
 - `main` keeps evolving after that commit; later changes are not covered by the paper's evaluation.
 - The configuration evaluated in the paper differs from the defaults described in this README (for example, the LLM chain, the single-tier speech recognition, and the 7 object classes). See **[docs/paper/](docs/paper/README.md)** for the evaluated configuration, a map from the paper's terms and sections to source files, and the differences from this README.
 - Evaluation harness, utterance bank, injected cases, analysis scripts, and per-run summaries: [roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts).

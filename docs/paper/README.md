@@ -4,9 +4,9 @@ This page is the entry point for readers of the manuscript
 
 > P.-Y. Lu and W.-F. Tung, "A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration," *IEEE Access* [under review].
 
-**Evaluated revision:** commit `81e50185d82caa52ccee8652ab97e0e4d7db6605` (tag `ieee-access-2026`). All links below are permanent links to that commit; line numbers refer to it. `main` continues to change after this commit.
+**Evaluated code = commit `81e50185d82caa52ccee8652ab97e0e4d7db6605` (81e5018); release `ieee-access-2026` adds documentation only** (the paper section of the top-level README, this `docs/paper/` folder, and `CITATION.cff`); no source, launch, or configuration file differs from 81e5018. All links below are permanent links to 81e5018; line numbers refer to it. `main` continues to change after the release.
 
-**Evaluation artifacts** (measurement harness, utterance bank, injected cases, analysis scripts, per-run summaries behind Tables VI–IX): [roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts).
+**Evaluation artifacts** (measurement harness, utterance bank, injected cases, analysis and plotting scripts, per-run summaries behind Tables VII–XVI and Figs. 6–15): [roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts).
 
 Contents: [1. Terminology](#1-terminology) · [2. Section-to-code map](#2-section-to-code-map) · [3. Evaluated configuration](#3-evaluated-configuration) · [4. Differences from the top-level README](#4-differences-from-the-top-level-readme) · [5. Known gaps stated in the paper](#5-known-gaps-stated-in-the-paper) · [中文摘要](#中文摘要)
 
@@ -92,7 +92,7 @@ The top-level README describes the product and its optional components. The pape
 
 | Topic | Top-level README | Paper (evaluated configuration) |
 |---|---|---|
-| LLM fallback | OpenRouter → local Qwen → RuleBrain (Reliability table) | GPT-5.4 mini → Gemini 3 Flash → rule-based responder; local and remote open models were only benchmarked (Table VII) |
+| LLM fallback | OpenRouter → local Qwen → RuleBrain (Reliability table) | GPT-5.4 mini → Gemini 3 Flash → rule-based responder; local and remote open models were only benchmarked (Tables IX and XIV) |
 | Speech recognition | SenseVoice cloud → SenseVoice local → faster-whisper | Remote SenseVoiceSmall only; the on-board node is stopped, so there is no fallback |
 | Object detection | 80-class detection | 7 household classes (`object_perception.yaml#L21`) |
 | "Three layers" | Safety → Policy → Expression decision engine | Three arbitration layers (policy gate → dialogue manager → safety layer); see Section 1 |
@@ -103,14 +103,14 @@ These are disclosed in the paper; they are listed here so that readers of the co
 
 - The arbitration layer subscribes to the reactive-stop status topic, but the fields it reads are not present in the published message, so the LiDAR state never reaches arbitration ([`world_state.py#L92`](https://github.com/roy4222/PawAI/blob/81e50185d82caa52ccee8652ab97e0e4d7db6605/interaction_executive/interaction_executive/world_state.py#L92)).
 - Network loss is not detected automatically; offline mode is switched by an operator, and it affects dialogue only.
-- Some early-exit paths do not yet emit trace events, and timer-driven fallbacks can be mis-attributed (Section IV-C of the paper; Section VI quantifies trace completeness).
+- Some early-exit paths do not yet emit trace events, and timer-driven fallbacks can be mis-attributed (Section IV-C of the paper; Table XII quantifies trace coverage).
 - The executive reports a motion step as successful about 0.5 s after publishing the Sport API request; it receives no acknowledgement from the robot (Section VI-E).
 
 ---
 
 ## 中文摘要
 
-- 本頁對應論文第 III–V 章；評估版本為 commit `81e5018`（tag `ieee-access-2026`），上方所有連結都固定在這個 commit。
+- 本頁對應論文第 III–V 章。**評估的程式碼 = commit `81e5018`；release `ieee-access-2026` 只新增文件**（README 論文段、`docs/paper/`、`CITATION.cff`），程式碼與 81e5018 相同；上方所有連結都固定在 81e5018。
 - **名稱落差：** 論文的 dialogue manager 是 `interaction_executive` 套件裡的 `brain_node.py`，不在 `pawai_brain`；dialogue graph 才是 `pawai_brain` 的 LangGraph。
 - **兩種「三層」：** 論文的三層仲裁＝對話圖的 policy gate → dialogue manager 的 LLM 提案檢查 → executive 的 safety layer；README 的「Safety → Policy → Expression」是整體行為邏輯的設計分層，兩者不是同一件事。
 - **評估組態不在節點預設值：** reactive-stop 的 ±18°／1.5 m／1.8 m 來自 `scripts/start_reactive_forward_demo.sh`（節點預設 30°／1.1 m／1.7 m）；5.5 s 等候來自 `executive.yaml`（節點預設 1.5 s）；物件 7 類來自 `object_perception.yaml`（節點預設 80 類）；LLM 模型與 2,000 tokens 來自 `start_full_demo_tmux.sh`。

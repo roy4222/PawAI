@@ -58,7 +58,7 @@ NVIDIA Jetson Orin Nano 上。整個程式庫遵循 **Clean Architecture**：感
 
 本 repo 是論文〈*A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration*〉（P.-Y. Lu、W.-F. Tung，*IEEE Access*，審查中）的參考實作。
 
-- **評估版本：** tag [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) = commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605)（`81e50185d82caa52ccee8652ab97e0e4d7db6605`）。要重現論文請 `git checkout ieee-access-2026`。
+- **評估的程式碼：** commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605)（`81e50185d82caa52ccee8652ab97e0e4d7db6605`）。Release [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) 只新增文件（本節、`docs/paper/`、`CITATION.cff`），程式碼與 81e5018 相同。要重現論文請 `git checkout ieee-access-2026`。
 - `main` 在這個 commit 之後會繼續演進；之後的修改不在論文評估範圍內。
 - 論文評估使用的組態與本 README 描述的預設不同（例如 LLM 備援鏈、語音辨識只有單一層、物件偵測 7 類）。評估組態、論文用語與章節到原始碼的對照、以及與本 README 的差異，見 **[docs/paper/](docs/paper/README.md)**。
 - 評估工具、句庫、注入案例、分析腳本與各實驗彙整：[roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts)。
