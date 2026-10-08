@@ -54,6 +54,53 @@ NVIDIA Jetson Orin Nano 上。整個程式庫遵循 **Clean Architecture**：感
 
 ---
 
+## 📄 論文與評估版本
+
+本 repo 是論文〈*A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration*〉（P.-Y. Lu、W.-F. Tung，*IEEE Access*，審查中）的參考實作。
+
+- **評估版本：** tag [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) = commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605)（`81e50185d82caa52ccee8652ab97e0e4d7db6605`）。要重現論文請 `git checkout ieee-access-2026`。
+- `main` 在這個 commit 之後會繼續演進；之後的修改不在論文評估範圍內。
+- 論文評估使用的組態與本 README 描述的預設不同（例如 LLM 備援鏈、語音辨識只有單一層、物件偵測 7 類）。評估組態、論文用語與章節到原始碼的對照、以及與本 README 的差異，見 **[docs/paper/](docs/paper/README.md)**。
+- 評估工具、句庫、注入案例、分析腳本與各實驗彙整：[roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts)。
+
+## 🔖 引用
+
+使用 PawAI 時請引用論文（審查結束後更新書目資訊）：
+
+```bibtex
+@article{lu2026pawai,
+  author  = {Lu, Po-Yu and Tung, Wei-Feng},
+  title   = {A Multimodal Quadruped Robot with Hybrid Edge--Cloud Deployment and Deterministic {LLM} Skill Arbitration},
+  journal = {IEEE Access},
+  year    = {2026},
+  note    = {[under review]}
+}
+```
+
+根目錄另有 [`CITATION.cff`](CITATION.cff)（GitHub 的「Cite this repository」會讀它）。
+
+## 🗂️ Repo 結構
+
+| 路徑 | 內容 |
+|---|---|
+| `face_perception/`、`vision_perception/`、`object_perception/` | ROS 2 感知套件（人臉身分、手勢與姿態、物件偵測） |
+| `speech_processor/` | ROS 2 語音套件（語音意圖節點、TTS 節點、意圖分類器） |
+| `pawai_brain/` | 產生對話候選的 LangGraph 對話圖（論文的 *dialogue graph*） |
+| `interaction_executive/` | `brain_node`（論文的 *dialogue manager*）、interaction executive、safety layer、world state、技能佇列 |
+| `pawai_contracts/` | 共用契約：技能註冊表、LLM 政策、trace schema |
+| `go2_robot_sdk/`、`go2_interfaces/` | Go2 WebRTC 驅動（go2_ros2_sdk 的 fork，Apache-2.0）、深度安全與 reactive-stop 節點 |
+| `nav_capability/` | 實驗性導航能力（不在論文評估範圍） |
+| `pawai-studio/` | PawAI Studio 網頁主控台：前端與 gateway（語音、trace、離線模式） |
+| `scripts/` | 啟動腳本（例如 `start_full_demo_tmux.sh`）與遠端 ASR 伺服器 `sensevoice_server.py` |
+| `config/`、`foxglove/` | 部署設定範本與 Foxglove 版面 |
+| `tools/pawai_cli/`、`benchmarks/`、`tests/` | 操作 CLI、模型基準測試、機上驗證 |
+| `docs/` | 架構、契約、runbook、ADR；`docs/paper/` 給論文讀者；`docs/deliverables/` 是課程繳交物 |
+| `archive/` | 退役程式，不參與 build（`COLCON_IGNORE`） |
+| `.claude/`、`AGENTS.md`、`CLAUDE.md`、`CONTEXT.md`、`references/`、`docs/agents/` | 給 AI coding agent 的工作規則；建置與執行 PawAI 不需要 |
+| `logs/`、`test_results/`、`test_scripts/` | 執行時輸出位置與臨時測試輸入 |
+
+---
+
 ## 🏗️ 架構
 
 PawAI 是單一 ROS2 workspace，由 **10 個職責單一的套件**組成，依賴方向永遠

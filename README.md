@@ -57,6 +57,53 @@ separated with a single, unidirectional dependency direction.
 
 ---
 
+## 📄 Paper & Evaluated Version
+
+This repository is the reference implementation of the manuscript *"A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration"* (P.-Y. Lu and W.-F. Tung, *IEEE Access*, under review).
+
+- **Evaluated version:** tag [`ieee-access-2026`](https://github.com/roy4222/PawAI/tree/ieee-access-2026) = commit [`81e5018`](https://github.com/roy4222/PawAI/tree/81e50185d82caa52ccee8652ab97e0e4d7db6605) (`81e50185d82caa52ccee8652ab97e0e4d7db6605`). To reproduce the paper, `git checkout ieee-access-2026`.
+- `main` keeps evolving after that commit; later changes are not covered by the paper's evaluation.
+- The configuration evaluated in the paper differs from the defaults described in this README (for example, the LLM chain, the single-tier speech recognition, and the 7 object classes). See **[docs/paper/](docs/paper/README.md)** for the evaluated configuration, a map from the paper's terms and sections to source files, and the differences from this README.
+- Evaluation harness, utterance bank, injected cases, analysis scripts, and per-run summaries: [roy4222/pawai-ieee-access-artifacts](https://github.com/roy4222/pawai-ieee-access-artifacts).
+
+## 🔖 Citation
+
+If you use PawAI, please cite the paper (details will be updated after review):
+
+```bibtex
+@article{lu2026pawai,
+  author  = {Lu, Po-Yu and Tung, Wei-Feng},
+  title   = {A Multimodal Quadruped Robot with Hybrid Edge--Cloud Deployment and Deterministic {LLM} Skill Arbitration},
+  journal = {IEEE Access},
+  year    = {2026},
+  note    = {[under review]}
+}
+```
+
+A machine-readable [`CITATION.cff`](CITATION.cff) is provided (GitHub's "Cite this repository").
+
+## 🗂️ Repository Layout
+
+| Path | What it is |
+|---|---|
+| `face_perception/`, `vision_perception/`, `object_perception/` | ROS 2 perception packages (face identity, gesture and pose, object detection) |
+| `speech_processor/` | ROS 2 speech package (speech-intent node, TTS node, intent classifier) |
+| `pawai_brain/` | LangGraph conversation graph that produces dialogue candidates (the paper's *dialogue graph*) |
+| `interaction_executive/` | `brain_node` (the paper's *dialogue manager*), the interaction executive, safety layer, world state, skill queue |
+| `pawai_contracts/` | Shared contracts: skill registry, LLM policy, trace schema |
+| `go2_robot_sdk/`, `go2_interfaces/` | Go2 WebRTC driver (fork of go2_ros2_sdk, Apache-2.0), depth-safety and reactive-stop nodes |
+| `nav_capability/` | Experimental navigation capability (not part of the paper's evaluation) |
+| `pawai-studio/` | PawAI Studio web console: frontend and gateway (speech, traces, offline mode) |
+| `scripts/` | Startup scripts (e.g., `start_full_demo_tmux.sh`) and the remote ASR server `sensevoice_server.py` |
+| `config/`, `foxglove/` | Deployment configuration templates and Foxglove layouts |
+| `tools/pawai_cli/`, `benchmarks/`, `tests/` | Operator CLI, model benchmarks, on-device verification |
+| `docs/` | Architecture, contracts, runbooks, ADRs; `docs/paper/` for paper readers; `docs/deliverables/` holds course deliverables (Chinese) |
+| `archive/` | Retired code, excluded from the build (`COLCON_IGNORE`) |
+| `.claude/`, `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `references/`, `docs/agents/` | Working rules for AI coding agents; not needed to build or run PawAI |
+| `logs/`, `test_results/`, `test_scripts/` | Runtime output locations and ad-hoc test inputs |
+
+---
+
 ## 🏗️ Architecture
 
 PawAI is a single ROS2 workspace of **10 focused packages**, layered so that

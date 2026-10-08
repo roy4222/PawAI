@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the paper listed under preferred-citation."
+title: "PawAI: Home Companion Robot Dog"
+type: software
+authors:
+  - family-names: Lu
+    given-names: Po-Yu
+license: BSD-2-Clause
+repository-code: "https://github.com/roy4222/PawAI"
+commit: 81e50185d82caa52ccee8652ab97e0e4d7db6605
+version: ieee-access-2026
+keywords:
+  - ROS 2
+  - Unitree Go2
+  - Jetson Orin Nano
+  - large language models
+  - human-robot interaction
+preferred-citation:
+  type: article
+  title: "A Multimodal Quadruped Robot with Hybrid Edge–Cloud Deployment and Deterministic LLM Skill Arbitration"
+  authors:
+    - family-names: Lu
+      given-names: Po-Yu
+    - family-names: Tung
+      given-names: Wei-Feng
+  journal: "IEEE Access"
+  status: submitted
+  year: 2026
